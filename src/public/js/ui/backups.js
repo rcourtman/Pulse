@@ -737,15 +737,26 @@ PulseApp.ui.backups = (() => {
             });
         }
         
-        // Auto-focus search on keypress (like main dashboard)
+        // Auto-focus search on keypress and handle ESC key
         document.addEventListener('keydown', (e) => {
             // Check if backups tab is active
             const backupsTab = document.getElementById('backups');
             if (!backupsTab || backupsTab.classList.contains('hidden')) return;
             
+            // Handle ESC key to clear all filters
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                resetFiltersAndSort();
+                // Blur any focused input
+                if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                    document.activeElement.blur();
+                }
+                return;
+            }
+            
             // Don't interfere with input fields or special keys
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
-                e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab' || e.key === 'Escape') {
+                e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab') {
                 return;
             }
             
@@ -970,17 +981,30 @@ PulseApp.ui.backups = (() => {
         
         // Reset time range to default (30 days)
         currentFilters.timeRange = '30';
-        const timeRangeSelect = document.getElementById('backup-time-range');
-        if (timeRangeSelect) {
-            timeRangeSelect.value = '30';
+        const time30Radio = document.getElementById('time-30');
+        if (time30Radio) {
+            time30Radio.checked = true;
         }
         
         // Clear selected date
         currentFilters.selectedDate = null;
         
+        // Reset grouping to 'none'
+        currentGrouping = 'none';
+        const groupNoneRadio = document.getElementById('group-none');
+        if (groupNoneRadio) {
+            groupNoneRadio.checked = true;
+        }
+        
         // Reset sort to default (creation time descending)
         currentSort.field = 'ctime';
         currentSort.ascending = false;
+        
+        // Update visual state of all radio buttons
+        updateRadioButtonStyles('backup-type');
+        updateRadioButtonStyles('backup-node');
+        updateRadioButtonStyles('backup-time');
+        updateRadioButtonStyles('backup-group');
         
         // Update the table with reset filters and sort
         const tbody = document.querySelector('#backups-content tbody');
@@ -999,6 +1023,12 @@ PulseApp.ui.backups = (() => {
         renderBackupTrendChart();
         // Update summary
         updateSummary();
+        
+        // Update time range text
+        const timeRangeText = document.getElementById('time-range-text');
+        if (timeRangeText) {
+            timeRangeText.textContent = 'Showing: Last 30 days';
+        }
     }
 
     function aggregateBackupsByDay() {
