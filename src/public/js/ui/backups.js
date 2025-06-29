@@ -216,15 +216,15 @@ PulseApp.ui.backups = (() => {
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer/all" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
-                            <label for="backup-type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                            <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
+                            <label for="backup-type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.backupType === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
                             
-                            <input type="radio" id="backup-type-pve" name="backup-type" value="pve" class="hidden peer/pve" ${currentFilters.backupType === 'pve' ? 'checked' : ''}>
-                            <label for="backup-type-pve" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/pve:bg-gray-100 dark:peer-checked/pve:bg-gray-700 peer-checked/pve:text-blue-600 dark:peer-checked/pve:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
+                            <input type="radio" id="backup-type-pve" name="backup-type" value="pve" class="hidden peer" ${currentFilters.backupType === 'pve' ? 'checked' : ''}>
+                            <label for="backup-type-pve" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.backupType === 'pve' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
                             
                             ${backupsData.pbsEnabled ? `
-                                <input type="radio" id="backup-type-pbs" name="backup-type" value="pbs" class="hidden peer/pbs" ${currentFilters.backupType === 'pbs' ? 'checked' : ''}>
-                                <label for="backup-type-pbs" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/pbs:bg-gray-100 dark:peer-checked/pbs:bg-gray-700 peer-checked/pbs:text-blue-600 dark:peer-checked/pbs:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
+                                <input type="radio" id="backup-type-pbs" name="backup-type" value="pbs" class="hidden peer" ${currentFilters.backupType === 'pbs' ? 'checked' : ''}>
+                                <label for="backup-type-pbs" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.backupType === 'pbs' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
                             ` : ''}
                         </div>
                     </div>
@@ -233,12 +233,12 @@ PulseApp.ui.backups = (() => {
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Node:</span>
                             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                                <input type="radio" id="node-all" name="backup-node" value="all" class="hidden peer/all" ${currentFilters.node === 'all' ? 'checked' : ''}>
-                                <label for="node-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                                <input type="radio" id="node-all" name="backup-node" value="all" class="hidden peer" ${currentFilters.node === 'all' ? 'checked' : ''}>
+                                <label for="node-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.node === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
                                 
                                 ${uniqueNodes.map((node, idx) => `
-                                    <input type="radio" id="node-${node}" name="backup-node" value="${node}" class="hidden peer/${node}" ${currentFilters.node === node ? 'checked' : ''}>
-                                    <label for="node-${node}" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/${node}:bg-gray-100 dark:peer-checked/${node}:bg-gray-700 peer-checked/${node}:text-blue-600 dark:peer-checked/${node}:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">${node}</label>
+                                    <input type="radio" id="node-${node}" name="backup-node" value="${node}" class="hidden peer" ${currentFilters.node === node ? 'checked' : ''}>
+                                    <label for="node-${node}" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.node === node ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">${node}</label>
                                 `).join('')}
                             </div>
                         </div>
@@ -247,17 +247,17 @@ PulseApp.ui.backups = (() => {
                     <div class="flex items-center gap-2 ml-auto">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Group:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <input type="radio" id="group-none" name="backup-group" value="none" class="hidden peer/none" ${currentGrouping === 'none' ? 'checked' : ''}>
-                            <label for="group-none" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/none:bg-gray-100 dark:peer-checked/none:bg-gray-700 peer-checked/none:text-blue-600 dark:peer-checked/none:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">None</label>
+                            <input type="radio" id="group-none" name="backup-group" value="none" class="hidden peer" ${currentGrouping === 'none' ? 'checked' : ''}>
+                            <label for="group-none" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'none' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">None</label>
                             
-                            <input type="radio" id="group-guest" name="backup-group" value="guest" class="hidden peer/guest" ${currentGrouping === 'guest' ? 'checked' : ''}>
-                            <label for="group-guest" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/guest:bg-gray-100 dark:peer-checked/guest:bg-gray-700 peer-checked/guest:text-blue-600 dark:peer-checked/guest:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Guest</label>
+                            <input type="radio" id="group-guest" name="backup-group" value="guest" class="hidden peer" ${currentGrouping === 'guest' ? 'checked' : ''}>
+                            <label for="group-guest" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'guest' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Guest</label>
                             
-                            <input type="radio" id="group-node" name="backup-group" value="node" class="hidden peer/node" ${currentGrouping === 'node' ? 'checked' : ''}>
-                            <label for="group-node" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/node:bg-gray-100 dark:peer-checked/node:bg-gray-700 peer-checked/node:text-blue-600 dark:peer-checked/node:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Node</label>
+                            <input type="radio" id="group-node" name="backup-group" value="node" class="hidden peer" ${currentGrouping === 'node' ? 'checked' : ''}>
+                            <label for="group-node" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'node' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Node</label>
                             
-                            <input type="radio" id="group-date" name="backup-group" value="date" class="hidden peer/date" ${currentGrouping === 'date' ? 'checked' : ''}>
-                            <label for="group-date" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/date:bg-gray-100 dark:peer-checked/date:bg-gray-700 peer-checked/date:text-blue-600 dark:peer-checked/date:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Date</label>
+                            <input type="radio" id="group-date" name="backup-group" value="date" class="hidden peer" ${currentGrouping === 'date' ? 'checked' : ''}>
+                            <label for="group-date" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'date' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Date</label>
                         </div>
                     </div>
                 </div>
