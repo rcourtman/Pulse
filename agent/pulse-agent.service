@@ -1,0 +1,24 @@
+[Unit]
+Description=Pulse PBS Monitoring Agent
+After=network.target
+
+[Service]
+Type=simple
+User=pulse
+WorkingDirectory=/opt/pulse-agent
+ExecStart=/usr/bin/node /opt/pulse-agent/pulse-agent.js
+Restart=always
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pulse-agent
+
+# Environment variables (configure in /etc/pulse-agent/pulse-agent.env)
+EnvironmentFile=-/etc/pulse-agent/pulse-agent.env
+
+[Install]
+WantedBy=multi-user.target

@@ -941,6 +941,11 @@ show_final_instructions() {
     echo "Useful commands:"
     echo "  • systemctl status $SERVICE_NAME"
     echo "  • journalctl -u $SERVICE_NAME -f"
+    echo ""
+    echo "For isolated PBS servers (push mode):"
+    echo "  • Set PULSE_PUSH_API_KEY in /opt/pulse/config/.env"
+    echo "  • Download agent installer on PBS server:"
+    echo "    curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse-agent.sh"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 }
