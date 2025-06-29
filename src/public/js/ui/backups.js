@@ -646,8 +646,8 @@ PulseApp.ui.backups = (() => {
                 // Get the first backup from each group to extract the timestamp
                 const firstBackupA = a[1].backups[0];
                 const firstBackupB = b[1].backups[0];
-                // Sort by ctime (timestamp) ascending
-                return (firstBackupA.ctime || 0) - (firstBackupB.ctime || 0);
+                // Sort by ctime (timestamp) descending (newest first)
+                return (firstBackupB.ctime || 0) - (firstBackupA.ctime || 0);
             });
         } else {
             // For other groupings, use alphabetical sort
