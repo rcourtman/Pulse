@@ -1060,16 +1060,16 @@ PulseApp.ui.backups = (() => {
             activeFilters.unshift(`Date: ${dateText}`);
         }
         
-        if (activeFilters.length > 0 || currentFilters.selectedDate) {
+        if (activeFilters.length > 0) {
             indicator.innerHTML = `
                 <span class="text-amber-600 dark:text-amber-400">
                     <i class="fas fa-filter text-xs mr-1"></i>
-                    ${currentFilters.selectedDate ? activeFilters.join(' • ') : timeRangeText + (activeFilters.length ? ' • ' + activeFilters.join(' • ') : '')}
+                    ${activeFilters.join(' • ')}
                     ${currentFilters.selectedDate ? ' <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Clear date filter">✕</button>' : ''}
                 </span>
             `;
         } else {
-            indicator.textContent = timeRangeText;
+            indicator.textContent = '';
         }
     }
 
