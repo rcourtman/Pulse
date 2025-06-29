@@ -179,12 +179,16 @@ PulseApp.ui.backups = (() => {
                     <div>
                         <div class="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                             <i class="fas fa-hard-drive text-xs"></i>
-                            Total Size
+                            ${summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate ? 'Disk Usage' : 'Total Size'}
                         </div>
-                        <div class="text-xl font-semibold">${formatBytes(summary.totalSize).text}</div>
-                        ${summary.pbsDedupInfo && summary.pbs > 0 ? `
+                        <div class="text-xl font-semibold">
+                            ${summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate 
+                                ? summary.pbsDedupInfo.actualSize 
+                                : formatBytes(summary.totalSize).text}
+                        </div>
+                        ${summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate ? `
                             <div class="text-xs text-green-600 dark:text-green-400 mt-0.5">
-                                ${summary.pbsDedupInfo.actualSize} actual
+                                ${summary.pbsDedupInfo.ratio} dedup
                             </div>
                         ` : ''}
                         <div class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
@@ -286,29 +290,69 @@ PulseApp.ui.backups = (() => {
         if (!container) return;
         
         const summary = calculateSummary();
-        const summaryElements = container.querySelectorAll('.text-xl.font-semibold');
-        if (summaryElements.length >= 3) {
-            summaryElements[0].textContent = summary.total;
-            summaryElements[1].textContent = summary.pve;
-            if (backupsData.pbsEnabled && summaryElements.length >= 4) {
-                summaryElements[2].textContent = summary.pbs;
-                summaryElements[3].textContent = formatBytes(summary.totalSize).text;
-                
-                // Add dedup info below total size
-                const sizeContainer = container.querySelector('.grid > div:last-child');
-                if (sizeContainer && summary.pbsDedupInfo && summary.pbs > 0) {
-                    const dedupDiv = sizeContainer.querySelector('.text-xs.text-green-600') || 
-                                    sizeContainer.querySelector('.text-xs.text-green-600');
-                    if (dedupDiv) {
-                        dedupDiv.textContent = `${summary.pbsDedupInfo.actualSize} actual`;
-                    }
+        
+        // Find and update each summary card
+        const summaryCards = container.querySelectorAll('.grid > div');
+        
+        // Total backups
+        if (summaryCards[0]) {
+            const totalValue = summaryCards[0].querySelector('.text-xl.font-semibold');
+            const lastBackupText = summaryCards[0].querySelector('.text-xs.text-gray-600');
+            if (totalValue) totalValue.textContent = summary.total;
+            if (lastBackupText) lastBackupText.textContent = summary.lastBackup;
+        }
+        
+        // PVE backups
+        if (summaryCards[1]) {
+            const pveValue = summaryCards[1].querySelector('.text-xl.font-semibold');
+            const successText = summaryCards[1].querySelector('.text-xs.text-gray-600');
+            if (pveValue) pveValue.textContent = summary.pve;
+            if (successText) successText.textContent = `${summary.successRate}% success`;
+        }
+        
+        // PBS backups (if enabled)
+        let sizeCardIndex = 2;
+        if (backupsData.pbsEnabled && summaryCards[2]) {
+            const pbsValue = summaryCards[2].querySelector('.text-xl.font-semibold');
+            const verifiedText = summaryCards[2].querySelector('.text-xs.text-green-600');
+            if (pbsValue) pbsValue.textContent = summary.pbs;
+            if (verifiedText) verifiedText.textContent = `${summary.verifiedCount} verified`;
+            sizeCardIndex = 3;
+        }
+        
+        // Size card - update both label and value
+        if (summaryCards[sizeCardIndex]) {
+            const sizeLabel = summaryCards[sizeCardIndex].querySelector('.text-gray-500');
+            const sizeValue = summaryCards[sizeCardIndex].querySelector('.text-xl.font-semibold');
+            const dedupText = summaryCards[sizeCardIndex].querySelector('.text-xs.text-green-600');
+            const growthText = summaryCards[sizeCardIndex].querySelectorAll('.text-xs')[1] || summaryCards[sizeCardIndex].querySelector('.text-xs.text-gray-600');
+            
+            if (sizeLabel) {
+                const labelText = sizeLabel.childNodes[sizeLabel.childNodes.length - 1];
+                labelText.textContent = summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate ? 'Disk Usage' : 'Total Size';
+            }
+            
+            if (sizeValue) {
+                sizeValue.textContent = summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate 
+                    ? summary.pbsDedupInfo.actualSize 
+                    : formatBytes(summary.totalSize).text;
+            }
+            
+            if (dedupText) {
+                if (summary.pbsDedupInfo && summary.pbs > 0 && !currentFilters.selectedDate) {
+                    dedupText.textContent = `${summary.pbsDedupInfo.ratio} dedup`;
+                    dedupText.style.display = '';
+                } else {
+                    dedupText.style.display = 'none';
                 }
-            } else {
-                summaryElements[2].textContent = formatBytes(summary.totalSize).text;
+            }
+            
+            if (growthText) {
+                growthText.textContent = summary.growthRate;
             }
         }
         
-        // Update table rows to refresh dedup info
+        // Update table rows
         const tbody = container.querySelector('tbody');
         if (tbody) {
             tbody.innerHTML = renderBackupRows();
