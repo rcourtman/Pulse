@@ -41,8 +41,6 @@ function createServer() {
     const healthRoutes = require('./routes/health');
     app.use('/api/health', healthRoutes);
 
-    const debugRoutes = require('./routes/debug');
-    app.use('/api/debug', debugRoutes);
 
     const alertRoutes = require('./routes/alerts');
     app.use('/api/alerts', alertRoutes);
