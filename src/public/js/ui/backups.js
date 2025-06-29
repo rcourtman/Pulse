@@ -637,7 +637,24 @@ PulseApp.ui.backups = (() => {
         
         // Render grouped rows
         let html = '';
-        Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])).forEach(([groupName, group]) => {
+        
+        // Sort groups based on grouping type
+        let sortedEntries;
+        if (currentGrouping === 'date') {
+            // For date grouping, parse dates and sort chronologically
+            sortedEntries = Object.entries(groups).sort((a, b) => {
+                // Get the first backup from each group to extract the timestamp
+                const firstBackupA = a[1].backups[0];
+                const firstBackupB = b[1].backups[0];
+                // Sort by ctime (timestamp) ascending
+                return (firstBackupA.ctime || 0) - (firstBackupB.ctime || 0);
+            });
+        } else {
+            // For other groupings, use alphabetical sort
+            sortedEntries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+        }
+        
+        sortedEntries.forEach(([groupName, group]) => {
             // Group header
             html += `
                 <tr class="bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600">
