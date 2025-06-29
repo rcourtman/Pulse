@@ -19,12 +19,28 @@ PulseApp.ui.backups = (() => {
         pbsEnabled: false,
         pbsStorageInfo: null
     };
+    let resizeTimeout = null;
 
     function init() {
         if (isInitialized) return;
         isInitialized = true;
         
+        // Add window resize handler
+        window.addEventListener('resize', handleWindowResize);
+        
         updateBackupsInfo();
+    }
+    
+    function handleWindowResize() {
+        // Debounce resize events
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            // Only redraw chart if backups tab is visible
+            const backupsTab = document.getElementById('backups');
+            if (backupsTab && !backupsTab.classList.contains('hidden')) {
+                renderBackupTrendChart();
+            }
+        }, 250); // Wait 250ms after resize stops
     }
 
     function updateBackupsInfo() {
@@ -101,8 +117,8 @@ PulseApp.ui.backups = (() => {
         container.innerHTML = `
             <!-- Backup Trend Chart -->
             <div class="mb-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="mb-3 flex items-center justify-between">
-                    <div class="flex items-center gap-4">
+                <div class="mb-3 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center sm:justify-between">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup History</h3>
                         <!-- Chart type tabs -->
                         <div class="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
@@ -125,12 +141,12 @@ PulseApp.ui.backups = (() => {
 
             <!-- Filters -->
             <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
-                <div class="flex flex-wrap items-center gap-3">
+                <div class="flex flex-row flex-wrap items-center gap-2 sm:gap-3">
                     <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
                         value="${currentFilters.searchTerm}"
-                        class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        class="flex-1 min-w-[150px] sm:min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                             <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
@@ -147,7 +163,7 @@ PulseApp.ui.backups = (() => {
                     </div>
                     
                     ${uniqueNodes.length > 1 ? `
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Node:</span>
                             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                                 <input type="radio" id="node-all" name="backup-node" value="all" class="hidden peer" ${currentFilters.node === 'all' ? 'checked' : ''}>
@@ -978,7 +994,7 @@ PulseApp.ui.backups = (() => {
                 month: 'long', 
                 day: 'numeric' 
             });
-            activeFilters.unshift(`Date: ${dateText}`);
+            activeFilters.unshift(dateText);
         }
         
         if (activeFilters.length > 0) {
@@ -1039,29 +1055,34 @@ PulseApp.ui.backups = (() => {
             return;
         }
         
-        // Chart dimensions - adjust left margin based on chart type
-        const margin = { 
-            top: 20, 
-            right: 60, 
-            bottom: 55, 
-            left: currentChartType === 'storage' ? 70 : 40  // More space for storage labels
-        };
+        // Chart dimensions - adapt for mobile
         const containerWidth = container.offsetWidth;
-        const containerHeight = container.offsetHeight;
+        // Use clientHeight and cap at 192px (h-48) to prevent growing too tall
+        const containerHeight = Math.min(container.offsetHeight, 192);
+        const isMobile = containerWidth < 640; // sm breakpoint
+        
+        // Responsive margins
+        const margin = { 
+            top: isMobile ? 15 : 20, 
+            right: isMobile ? 30 : 60, 
+            bottom: isMobile ? 40 : 55, 
+            left: currentChartType === 'storage' ? (isMobile ? 45 : 70) : (isMobile ? 30 : 40)
+        };
         
         // Ensure minimum dimensions
-        const width = Math.max(200, containerWidth - margin.left - margin.right);
+        const width = Math.max(150, containerWidth - margin.left - margin.right);
         const height = Math.max(100, containerHeight - margin.top - margin.bottom);
         
         // Clear existing content
         container.innerHTML = '';
         
-        // Create SVG
+        // Create SVG - constrain height to prevent growing too tall
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('width', containerWidth);
         svg.setAttribute('height', containerHeight);
         svg.style.width = '100%';
         svg.style.height = '100%';
+        svg.style.maxHeight = '192px'; // Match h-48 class (12rem)
         
         // Create main group with margins
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1158,7 +1179,7 @@ PulseApp.ui.backups = (() => {
             text.setAttribute('y', y + 3);
             text.setAttribute('text-anchor', 'end');
             text.setAttribute('fill', 'currentColor');
-            text.setAttribute('class', 'text-xs text-gray-600 dark:text-gray-300');
+            text.setAttribute('class', isMobile ? 'text-[10px] text-gray-600 dark:text-gray-300' : 'text-xs text-gray-600 dark:text-gray-300');
             
             if (currentChartType === 'storage') {
                 // Format as size - ensure consistent formatting
@@ -1238,7 +1259,7 @@ PulseApp.ui.backups = (() => {
                 selectedLabel.setAttribute('y', -5);
                 selectedLabel.setAttribute('text-anchor', 'middle');
                 selectedLabel.setAttribute('fill', 'currentColor');
-                selectedLabel.setAttribute('class', 'text-xs font-medium text-amber-600 dark:text-amber-400');
+                selectedLabel.setAttribute('class', isMobile ? 'text-[10px] font-medium text-amber-600 dark:text-amber-400' : 'text-xs font-medium text-amber-600 dark:text-amber-400');
                 selectedLabel.textContent = new Date(data[selectedIndex].timestamp).toLocaleDateString(undefined, {
                     month: 'short',
                     day: 'numeric'
@@ -1276,7 +1297,7 @@ PulseApp.ui.backups = (() => {
                 const totalSizeLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 totalSizeLineEl.setAttribute('d', totalSizePath);
                 totalSizeLineEl.setAttribute('stroke', '#8b5cf6'); // purple
-                totalSizeLineEl.setAttribute('stroke-width', '3');
+                totalSizeLineEl.setAttribute('stroke-width', isMobile ? '2' : '3');
                 totalSizeLineEl.setAttribute('fill', 'none');
                 g.appendChild(totalSizeLineEl);
                 
@@ -1286,7 +1307,7 @@ PulseApp.ui.backups = (() => {
                     const actualLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     actualLineEl.setAttribute('d', actualPath);
                     actualLineEl.setAttribute('stroke', '#10b981'); // green
-                    actualLineEl.setAttribute('stroke-width', '3');
+                    actualLineEl.setAttribute('stroke-width', isMobile ? '2' : '3');
                     actualLineEl.setAttribute('fill', 'none');
                     g.appendChild(actualLineEl);
                 }
@@ -1342,7 +1363,7 @@ PulseApp.ui.backups = (() => {
         nowText.setAttribute('y', height + 20);
         nowText.setAttribute('text-anchor', 'end');
         nowText.setAttribute('fill', 'currentColor');
-        nowText.setAttribute('class', 'text-xs text-gray-600 dark:text-gray-300');
+        nowText.setAttribute('class', isMobile ? 'text-[10px] text-gray-600 dark:text-gray-300' : 'text-xs text-gray-600 dark:text-gray-300');
         nowText.textContent = 'now';
         g.appendChild(nowText);
         
@@ -1352,16 +1373,28 @@ PulseApp.ui.backups = (() => {
             const lastDate = new Date(data[data.length - 1].timestamp);
             const dayRange = (lastDate - firstDate) / (1000 * 60 * 60 * 24);
             
-            // Determine label frequency based on time range
+            // Determine label frequency based on time range and screen size
             let labelInterval;
-            if (dayRange <= 7) {
-                labelInterval = 1; // Daily labels for week view
-            } else if (dayRange <= 30) {
-                labelInterval = 7; // Weekly labels for month view
-            } else if (dayRange <= 90) {
-                labelInterval = 14; // Bi-weekly for quarter
+            if (isMobile) {
+                // Show fewer labels on mobile
+                if (dayRange <= 7) {
+                    labelInterval = 2; // Every other day for week view
+                } else if (dayRange <= 30) {
+                    labelInterval = 10; // Every 10 days for month view
+                } else {
+                    labelInterval = 30; // Monthly for longer ranges
+                }
             } else {
-                labelInterval = 30; // Monthly for longer ranges
+                // Desktop label intervals
+                if (dayRange <= 7) {
+                    labelInterval = 1; // Daily labels for week view
+                } else if (dayRange <= 30) {
+                    labelInterval = 7; // Weekly labels for month view
+                } else if (dayRange <= 90) {
+                    labelInterval = 14; // Bi-weekly for quarter
+                } else {
+                    labelInterval = 30; // Monthly for longer ranges
+                }
             }
             
             // Add time labels
@@ -1376,7 +1409,7 @@ PulseApp.ui.backups = (() => {
                 label.setAttribute('y', height + 20);
                 label.setAttribute('text-anchor', 'middle');
                 label.setAttribute('fill', 'currentColor');
-                label.setAttribute('class', 'text-xs text-gray-500 dark:text-gray-400');
+                label.setAttribute('class', isMobile ? 'text-[10px] text-gray-500 dark:text-gray-400' : 'text-xs text-gray-500 dark:text-gray-400');
                 
                 // Format based on locale and range
                 if (dayRange <= 30) {
@@ -1422,10 +1455,10 @@ PulseApp.ui.backups = (() => {
             return true;
         });
         
-        // Calculate spacing for centered legend
-        const itemWidth = currentChartType === 'storage' ? 120 : 80; // More space for storage legend
+        // Calculate spacing for centered legend - adjust for mobile
+        const itemWidth = isMobile ? (currentChartType === 'storage' ? 100 : 65) : (currentChartType === 'storage' ? 120 : 80);
         const totalWidth = activeLegendItems.length * itemWidth;
-        const startX = (width - totalWidth) / 2; // Center the legend
+        const startX = Math.max(0, (width - totalWidth) / 2); // Center the legend but ensure it doesn't go negative
         
         activeLegendItems.forEach((item, index) => {
             const x = startX + (index * itemWidth);
@@ -1448,7 +1481,7 @@ PulseApp.ui.backups = (() => {
             text.setAttribute('x', x + 25);
             text.setAttribute('y', 4);
             text.setAttribute('fill', 'currentColor');
-            text.setAttribute('class', 'text-xs text-gray-700 dark:text-gray-200');
+            text.setAttribute('class', isMobile ? 'text-[10px] text-gray-700 dark:text-gray-200' : 'text-xs text-gray-700 dark:text-gray-200');
             text.textContent = item.label;
             legendGroup.appendChild(text);
         });
