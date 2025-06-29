@@ -1247,10 +1247,48 @@ PulseApp.ui.pbs = (() => {
         const section = document.createElement('div');
         section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4';
         
+        // Create heading with connection type badge
+        const headingContainer = document.createElement('div');
+        headingContainer.className = 'flex items-center justify-between mb-3';
+        
         const heading = document.createElement('h4');
-        heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
+        heading.className = 'text-md font-semibold text-gray-700 dark:text-gray-300';
         heading.textContent = 'Server Status';
-        section.appendChild(heading);
+        headingContainer.appendChild(heading);
+        
+        // Add connection type badge
+        const connectionBadge = document.createElement('span');
+        const isPushMode = instance.pushMode || instance.source === 'push';
+        const isOnline = instance.online !== false;
+        
+        if (isPushMode) {
+            connectionBadge.className = isOnline ? 
+                'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+            connectionBadge.innerHTML = `
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" class="${isOnline ? 'animate-pulse' : ''}">
+                    <circle cx="4" cy="4" r="3"/>
+                </svg>
+                Push Mode ${isOnline ? '(Online)' : '(Offline)'}
+            `;
+            
+            // Add tooltip with last push time
+            if (instance.lastPushReceived) {
+                const lastPushTime = new Date(instance.lastPushReceived);
+                connectionBadge.title = `Last data received: ${lastPushTime.toLocaleString()}`;
+            }
+        } else {
+            connectionBadge.className = 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+            connectionBadge.innerHTML = `
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+                    <circle cx="4" cy="4" r="3"/>
+                </svg>
+                Pull Mode
+            `;
+        }
+        
+        headingContainer.appendChild(connectionBadge);
+        section.appendChild(headingContainer);
         
         // Add table container with overflow-x-auto for mobile scrolling
         const tableContainer = document.createElement('div');
@@ -1276,10 +1314,17 @@ PulseApp.ui.pbs = (() => {
         
         // PBS Version
         const versionInfo = instance.versionInfo || {};
-        const versionText = versionInfo.version ? (versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version) : '-';
+        const versionText = versionInfo.version ? (versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version) : instance.version || '-';
         const versionCell = document.createElement('td');
         versionCell.className = 'py-2 pr-4 text-gray-700 dark:text-gray-300';
-        versionCell.textContent = versionText;
+        
+        // Add agent version if available
+        if (instance.agentVersion) {
+            versionCell.innerHTML = `${versionText}<br><span class="text-xs text-gray-500 dark:text-gray-400">Agent v${instance.agentVersion}</span>`;
+        } else {
+            versionCell.textContent = versionText;
+        }
+        
         row.appendChild(versionCell);
         
         // Uptime
