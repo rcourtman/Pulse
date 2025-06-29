@@ -150,6 +150,27 @@ router.get('/backups/unified', (req, res) => {
         const allBackups = [];
         const vmidCollisions = new Map();
         
+        // Get all guests (VMs and containers) for coverage calculation
+        const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+        const guestMap = new Map(); // Map of vmid -> guest info
+        
+        
+        // Build guest map for quick lookup
+        allGuests.forEach(guest => {
+            // Store by VMID, tracking all nodes where this VMID exists
+            if (!guestMap.has(guest.vmid)) {
+                guestMap.set(guest.vmid, []);
+            }
+            guestMap.get(guest.vmid).push({
+                vmid: guest.vmid,
+                name: guest.name,
+                type: guest.type === 'qemu' ? 'VM' : 'CT',
+                node: guest.node,
+                status: guest.status,
+                endpointId: guest.endpointId
+            });
+        });
+        
         // Get PVE backups
         if (currentState.pveBackups && currentState.pveBackups.storageBackups) {
             // storageBackups is an array
@@ -267,6 +288,91 @@ router.get('/backups/unified', (req, res) => {
             }
         }
         
+        // Calculate backup coverage
+        const now = Date.now() / 1000; // Current time in seconds
+        const oneDayAgo = now - (24 * 60 * 60);
+        const twoDaysAgo = now - (48 * 60 * 60);
+        const sevenDaysAgo = now - (7 * 24 * 60 * 60);
+        
+        const guestsWithBackups = new Map(); // vmid -> latest backup time
+        
+        // Find latest backup for each guest
+        allBackups.forEach(backup => {
+            const vmid = parseInt(backup.vmid, 10);
+            const backupTime = backup.ctime;
+            
+            if (!isNaN(vmid) && (!guestsWithBackups.has(vmid) || backupTime > guestsWithBackups.get(vmid))) {
+                guestsWithBackups.set(vmid, backupTime);
+            }
+        });
+        
+        
+        // Calculate coverage statistics
+        let totalGuests = 0;
+        let backedUp24h = 0;
+        let backedUp48h = 0;
+        let backedUp7d = 0;
+        let neverBackedUp = 0;
+        const missingBackups = [];
+        
+        guestMap.forEach((guestInstances, vmid) => {
+            // Count each unique VMID once
+            totalGuests++;
+            
+            const lastBackupTime = guestsWithBackups.get(vmid);
+            const guestInfo = guestInstances[0]; // Use first instance for display info
+            
+            if (lastBackupTime) {
+                if (lastBackupTime >= oneDayAgo) backedUp24h++;
+                if (lastBackupTime >= twoDaysAgo) backedUp48h++;
+                if (lastBackupTime >= sevenDaysAgo) backedUp7d++;
+                
+                // If no backup in last 24h, add to missing list
+                if (lastBackupTime < oneDayAgo) {
+                    const daysSinceBackup = Math.floor((now - lastBackupTime) / (24 * 60 * 60));
+                    missingBackups.push({
+                        vmid: vmid,
+                        name: guestInfo.name || `Guest ${vmid}`,
+                        type: guestInfo.type,
+                        nodes: guestInstances.map(g => g.node),
+                        lastBackup: lastBackupTime,
+                        daysSinceBackup: daysSinceBackup,
+                        status: guestInfo.status
+                    });
+                }
+            } else {
+                neverBackedUp++;
+                missingBackups.push({
+                    vmid: vmid,
+                    name: guestInfo.name || `Guest ${vmid}`,
+                    type: guestInfo.type,
+                    nodes: guestInstances.map(g => g.node),
+                    lastBackup: null,
+                    daysSinceBackup: null,
+                    status: guestInfo.status
+                });
+            }
+        });
+        
+        // Sort missing backups by days since backup (never backed up first)
+        missingBackups.sort((a, b) => {
+            if (a.lastBackup === null) return -1;
+            if (b.lastBackup === null) return 1;
+            return b.daysSinceBackup - a.daysSinceBackup;
+        });
+        
+        const coverage = {
+            totalGuests: totalGuests,
+            backedUp24h: backedUp24h,
+            backedUp48h: backedUp48h,
+            backedUp7d: backedUp7d,
+            neverBackedUp: neverBackedUp,
+            percentage24h: totalGuests > 0 ? Math.round((backedUp24h / totalGuests) * 100) : 0,
+            percentage48h: totalGuests > 0 ? Math.round((backedUp48h / totalGuests) * 100) : 0,
+            percentage7d: totalGuests > 0 ? Math.round((backedUp7d / totalGuests) * 100) : 0,
+            missingBackups: missingBackups
+        };
+        
         res.json({
             backups: allBackups,
             pbs: {
@@ -275,6 +381,7 @@ router.get('/backups/unified', (req, res) => {
                 storageInfo: pbsStorageInfo
             },
             collisions: collisions,
+            coverage: coverage,
             timestamp: Date.now()
         });
     } catch (error) {
