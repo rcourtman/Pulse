@@ -65,6 +65,7 @@ PulseApp.state = (() => {
         sortState: {
             main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
             backups: { column: 'ctime', direction: 'desc', ...(savedSortState.backups || {}) },
+            snapshots: { column: 'snaptime', direction: 'desc', ...(savedSortState.snapshots || {}) },
         },
         thresholdState: {
             cpu: { value: 0 },

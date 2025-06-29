@@ -20,6 +20,7 @@ PulseApp.ui.backups = (() => {
         pbsStorageInfo: null
     };
     let resizeTimeout = null;
+    let currentTimeRange = '30d'; // Default to 30 days
 
     function init() {
         if (isInitialized) return;
@@ -38,7 +39,26 @@ PulseApp.ui.backups = (() => {
             // Only redraw chart if backups tab is visible
             const backupsTab = document.getElementById('backups');
             if (backupsTab && !backupsTab.classList.contains('hidden')) {
-                renderBackupTrendChart();
+                // Force a clean redraw by clearing the container first
+                const chartContainer = document.getElementById('backup-trend-chart');
+                if (chartContainer) {
+                    // Store current dimensions before clearing
+                    const currentWidth = chartContainer.offsetWidth;
+                    
+                    // Clear and reset container
+                    chartContainer.innerHTML = '';
+                    
+                    // Force layout recalculation
+                    void chartContainer.offsetHeight;
+                    
+                    // Only redraw if container has valid dimensions
+                    if (currentWidth > 0) {
+                        renderBackupTrendChart();
+                    } else {
+                        // If dimensions are invalid, try again after a short delay
+                        setTimeout(() => renderBackupTrendChart(), 100);
+                    }
+                }
             }
         }, 250); // Wait 250ms after resize stops
     }
@@ -116,25 +136,25 @@ PulseApp.ui.backups = (() => {
 
         container.innerHTML = `
             <!-- Backup Trend Chart -->
-            <div class="mb-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="mb-3 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center sm:justify-between">
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup History</h3>
-                        <!-- Chart type tabs -->
-                        <div class="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <button class="chart-tab px-3 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400" data-chart="count">
-                                Count
-                            </button>
-                            <button class="chart-tab px-3 py-1 text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" data-chart="storage">
-                                Storage
-                            </button>
-                        </div>
-                    </div>
+            <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
+                <div class="flex items-center justify-between p-3 pb-0">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup History</h3>
                     <div id="chart-filter-indicator" class="text-xs text-gray-500 dark:text-gray-400"></div>
                 </div>
-                <div id="backup-trend-chart" class="h-48 relative" style="min-height: 12rem;">
-                    <div class="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
-                        <span class="text-sm">Loading chart...</span>
+                <!-- Chart type tabs -->
+                <div class="flex border-b border-gray-200 dark:border-gray-700 px-3">
+                    <div class="chart-tab cursor-pointer px-3 py-2 text-xs font-medium border-b-2 -mb-px ${currentChartType === 'count' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}" data-chart="count">
+                        Backup Count
+                    </div>
+                    <div class="chart-tab cursor-pointer px-3 py-2 text-xs font-medium border-b-2 -mb-px ml-4 ${currentChartType === 'storage' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}" data-chart="storage">
+                        Storage Usage
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div id="backup-trend-chart" class="h-48 relative" style="min-height: 12rem;">
+                        <div class="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
+                            <span class="text-sm">Loading chart...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -176,6 +196,27 @@ PulseApp.ui.backups = (() => {
                             </div>
                         </div>
                     ` : ''}
+                    
+                    <!-- Time range selector -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Range:</span>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="range-7d" name="time-range" value="7d" class="hidden peer" ${currentTimeRange === '7d' ? 'checked' : ''}>
+                            <label for="range-7d" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentTimeRange === '7d' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+                            
+                            <input type="radio" id="range-30d" name="time-range" value="30d" class="hidden peer" ${currentTimeRange === '30d' ? 'checked' : ''}>
+                            <label for="range-30d" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentTimeRange === '30d' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30d</label>
+                            
+                            <input type="radio" id="range-90d" name="time-range" value="90d" class="hidden peer" ${currentTimeRange === '90d' ? 'checked' : ''}>
+                            <label for="range-90d" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentTimeRange === '90d' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">90d</label>
+                            
+                            <input type="radio" id="range-1y" name="time-range" value="1y" class="hidden peer" ${currentTimeRange === '1y' ? 'checked' : ''}>
+                            <label for="range-1y" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentTimeRange === '1y' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1y</label>
+                            
+                            <input type="radio" id="range-all" name="time-range" value="all" class="hidden peer" ${currentTimeRange === 'all' ? 'checked' : ''}>
+                            <label for="range-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentTimeRange === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -205,6 +246,13 @@ PulseApp.ui.backups = (() => {
 
         // Setup event listeners
         setupEventListeners();
+        
+        // Update radio button styles to show current selection
+        updateRadioButtonStyles('backup-type');
+        updateRadioButtonStyles('time-range');
+        if (uniqueNodes.length > 1) {
+            updateRadioButtonStyles('backup-node');
+        }
         
         // Setup sortable headers
         const table = document.querySelector('#backups-content table');
@@ -371,6 +419,34 @@ PulseApp.ui.backups = (() => {
                 if (!backup.ctime) return false;
                 const backupDate = new Date(backup.ctime * 1000).toLocaleDateString('en-CA'); // YYYY-MM-DD format for comparison
                 if (backupDate !== currentFilters.selectedDate) return false;
+            } else {
+                // Time range filter (only if no specific date is selected)
+                if (backup.ctime) {
+                    const now = Date.now() / 1000;
+                    let minTime = 0;
+                    
+                    switch (currentTimeRange) {
+                        case '7d':
+                            minTime = now - (7 * 24 * 60 * 60);
+                            break;
+                        case '30d':
+                            minTime = now - (30 * 24 * 60 * 60);
+                            break;
+                        case '90d':
+                            minTime = now - (90 * 24 * 60 * 60);
+                            break;
+                        case '1y':
+                            minTime = now - (365 * 24 * 60 * 60);
+                            break;
+                        case 'all':
+                            minTime = 0;
+                            break;
+                        default:
+                            minTime = now - (30 * 24 * 60 * 60); // Default to 30d
+                    }
+                    
+                    if (backup.ctime < minTime) return false;
+                }
             }
             
             // Type filter
@@ -539,10 +615,10 @@ PulseApp.ui.backups = (() => {
             // Group header
             html += `
                 <tr class="bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300">
-                    <td colspan="9" class="p-2 px-3 text-sm">
+                    <td colspan="9" class="p-1 px-2 text-xs">
                         <div class="flex items-center justify-between">
-                            <span>${groupName} <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(${group.count} backups)</span></span>
-                            <span class="text-xs font-normal text-gray-600 dark:text-gray-400">Total: ${formatBytes(group.totalSize).text}</span>
+                            <span>${groupName} <span class="font-normal text-gray-500 dark:text-gray-400">(${group.count} backups)</span></span>
+                            <span class="font-normal text-gray-600 dark:text-gray-400">Total: ${formatBytes(group.totalSize).text}</span>
                         </div>
                     </td>
                 </tr>
@@ -679,15 +755,45 @@ PulseApp.ui.backups = (() => {
                     
                     // Update tab styles
                     document.querySelectorAll('.chart-tab').forEach(t => {
+                        const isStorage = t.getAttribute('data-chart') === 'storage';
+                        const marginClass = isStorage ? 'ml-4' : '';
+                        
                         if (t.getAttribute('data-chart') === chartType) {
-                            t.className = 'chart-tab px-3 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400';
+                            t.className = `chart-tab cursor-pointer px-3 py-2 text-xs font-medium border-b-2 -mb-px ${marginClass} border-blue-500 text-blue-600 dark:text-blue-400`;
                         } else {
-                            t.className = 'chart-tab px-3 py-1 text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700';
+                            t.className = `chart-tab cursor-pointer px-3 py-2 text-xs font-medium border-b-2 -mb-px ${marginClass} border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200`;
                         }
                     });
                     
                     // Render the appropriate chart
                     renderBackupTrendChart();
+                }
+            });
+        });
+        
+        // Time range radio buttons
+        document.querySelectorAll('input[name="time-range"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const range = e.target.value;
+                if (range && range !== currentTimeRange) {
+                    currentTimeRange = range;
+                    
+                    // Update radio button styles using the updateRadioButtonStyles function
+                    updateRadioButtonStyles('time-range');
+                    
+                    // Clear selected date when changing time range
+                    currentFilters.selectedDate = null;
+                    
+                    // Render the chart with new time range
+                    renderBackupTrendChart();
+                    
+                    // Update the table to show filtered data
+                    const tbody = document.querySelector('#backups-content tbody');
+                    if (tbody) {
+                        tbody.innerHTML = renderBackupRows();
+                    }
+                    updateFilterIndicator();
+                    updateSummary();
                 }
             });
         });
@@ -781,6 +887,13 @@ PulseApp.ui.backups = (() => {
         // Clear selected date
         currentFilters.selectedDate = null;
         
+        // Reset time range to default (30d)
+        currentTimeRange = '30d';
+        const range30dRadio = document.getElementById('range-30d');
+        if (range30dRadio) {
+            range30dRadio.checked = true;
+        }
+        
         // Reset sort to default (creation time descending)
         currentSort.field = 'ctime';
         currentSort.ascending = false;
@@ -788,6 +901,7 @@ PulseApp.ui.backups = (() => {
         // Update visual state of all radio buttons
         updateRadioButtonStyles('backup-type');
         updateRadioButtonStyles('backup-node');
+        updateRadioButtonStyles('time-range');
         
         // Update the table with reset filters and sort
         const tbody = document.querySelector('#backups-content tbody');
@@ -820,8 +934,34 @@ PulseApp.ui.backups = (() => {
             };
         }
         
+        // Calculate time range filter
+        let minTime = 0;
+        const now = Date.now() / 1000;
+        
+        switch (currentTimeRange) {
+            case '7d':
+                minTime = now - (7 * 24 * 60 * 60);
+                break;
+            case '30d':
+                minTime = now - (30 * 24 * 60 * 60);
+                break;
+            case '90d':
+                minTime = now - (90 * 24 * 60 * 60);
+                break;
+            case '1y':
+                minTime = now - (365 * 24 * 60 * 60);
+                break;
+            case 'all':
+                minTime = 0;
+                break;
+            default:
+                minTime = now - (30 * 24 * 60 * 60); // Default to 30d
+        }
+        
         // For chart aggregation, ignore the selectedDate filter but respect others
         const filteredBackups = backupsData.unified.filter(backup => {
+            // Time range filter
+            if (backup.ctime && backup.ctime < minTime) return false;
             // Type filter
             if (currentFilters.backupType !== 'all') {
                 if (backup.source !== currentFilters.backupType) return false;
@@ -910,11 +1050,38 @@ PulseApp.ui.backups = (() => {
             let startDate = new Date(sortedDays[0].timestamp);
             const endDate = new Date();
             
-            // Always show last 30 days in chart for readability
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            if (startDate < thirtyDaysAgo) {
-                startDate = new Date(thirtyDaysAgo.getTime());
+            // Adjust start date based on selected time range
+            const now = new Date();
+            let rangeStartDate;
+            
+            switch (currentTimeRange) {
+                case '7d':
+                    rangeStartDate = new Date(now);
+                    rangeStartDate.setDate(rangeStartDate.getDate() - 7);
+                    break;
+                case '30d':
+                    rangeStartDate = new Date(now);
+                    rangeStartDate.setDate(rangeStartDate.getDate() - 30);
+                    break;
+                case '90d':
+                    rangeStartDate = new Date(now);
+                    rangeStartDate.setDate(rangeStartDate.getDate() - 90);
+                    break;
+                case '1y':
+                    rangeStartDate = new Date(now);
+                    rangeStartDate.setFullYear(rangeStartDate.getFullYear() - 1);
+                    break;
+                case 'all':
+                    rangeStartDate = startDate; // Use data start date
+                    break;
+                default:
+                    rangeStartDate = new Date(now);
+                    rangeStartDate.setDate(rangeStartDate.getDate() - 30);
+            }
+            
+            // Use the later of data start or range start
+            if (startDate < rangeStartDate) {
+                startDate = new Date(rangeStartDate.getTime());
             }
             
             // Track cumulative values for storage chart
@@ -1048,12 +1215,20 @@ PulseApp.ui.backups = (() => {
             const retries = parseInt(container.dataset.retryCount);
             if (retries < 10) {
                 container.dataset.retryCount = (retries + 1).toString();
-                setTimeout(() => renderBackupTrendChart(), 100);
+                // Use requestAnimationFrame for better timing
+                requestAnimationFrame(() => {
+                    setTimeout(() => renderBackupTrendChart(), 50);
+                });
             } else {
                 console.error('[renderBackupTrendChart] Container never got dimensions after 10 retries');
+                // Reset retry count for next attempt
+                delete container.dataset.retryCount;
             }
             return;
         }
+        
+        // Reset retry count on successful render
+        delete container.dataset.retryCount;
         
         // Chart dimensions - adapt for mobile
         const containerWidth = container.offsetWidth;
