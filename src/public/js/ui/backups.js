@@ -324,8 +324,16 @@ PulseApp.ui.backups = (() => {
         let verifiedCount = 0;
         let lastBackupTime = 0;
 
-        // Always use all backups for summary (current state)
-        backupsData.unified.forEach(backup => {
+        // Filter backups based on selected date if any
+        const backupsToCount = currentFilters.selectedDate 
+            ? backupsData.unified.filter(backup => {
+                if (!backup.ctime) return false;
+                const backupDate = new Date(backup.ctime * 1000).toLocaleDateString('en-CA');
+                return backupDate === currentFilters.selectedDate;
+              })
+            : backupsData.unified;
+
+        backupsToCount.forEach(backup => {
             total++;
             totalSize += backup.size || 0;
             if (backup.source === 'pve') {
@@ -350,20 +358,28 @@ PulseApp.ui.backups = (() => {
         // Calculate success rate (simplified - assume all are successful for now)
         const successRate = 100;
 
-        // Calculate growth rate (simplified - last 7 days)
-        let growthRate = '+0 GB/day';
-        const sevenDaysAgo = Date.now() / 1000 - (7 * 24 * 60 * 60);
-        let recentSize = 0;
-        let recentCount = 0;
-        backupsData.unified.forEach(backup => {
-            if (backup.ctime > sevenDaysAgo) {
-                recentSize += backup.size || 0;
-                recentCount++;
+        // Calculate growth rate
+        let growthRate = '';
+        if (currentFilters.selectedDate) {
+            // For single day, just show the total size
+            growthRate = formatBytes(totalSize).text;
+        } else {
+            // For all backups, show average daily growth over last 7 days
+            const sevenDaysAgo = Date.now() / 1000 - (7 * 24 * 60 * 60);
+            let recentSize = 0;
+            let recentCount = 0;
+            backupsData.unified.forEach(backup => {
+                if (backup.ctime > sevenDaysAgo) {
+                    recentSize += backup.size || 0;
+                    recentCount++;
+                }
+            });
+            if (recentCount > 0) {
+                const dailyGrowth = recentSize / 7;
+                growthRate = '+' + formatBytes(dailyGrowth).text + '/day';
+            } else {
+                growthRate = '+0 GB/day';
             }
-        });
-        if (recentCount > 0) {
-            const dailyGrowth = recentSize / 7;
-            growthRate = '+' + formatBytes(dailyGrowth).text + '/day';
         }
 
         // Calculate PBS deduplication info if available
@@ -371,17 +387,30 @@ PulseApp.ui.backups = (() => {
         
         if (pbs > 0 && backupsData.pbsStorageInfo) {
             const dedupFactor = backupsData.pbsStorageInfo.deduplicationFactor || 11.46;
-            const actualUsed = backupsData.pbsStorageInfo.actualUsed || 126380015616;
             
-            // For summary, always show the actual total disk usage
-            const savings = pbsSize > actualUsed ? Math.round(((pbsSize - actualUsed) / pbsSize) * 100) : 0;
-            
-            pbsDedupInfo = {
-                actualSize: formatBytes(actualUsed).text,
-                logicalSize: formatBytes(pbsSize).text,
-                ratio: dedupFactor.toFixed(1) + ':1',
-                savings: savings
-            };
+            if (currentFilters.selectedDate && pbsSize > 0) {
+                // For selected date, calculate actual size based on dedup factor
+                const estimatedActual = pbsSize / dedupFactor;
+                const savings = Math.round(((pbsSize - estimatedActual) / pbsSize) * 100);
+                
+                pbsDedupInfo = {
+                    actualSize: formatBytes(estimatedActual).text,
+                    logicalSize: formatBytes(pbsSize).text,
+                    ratio: dedupFactor.toFixed(1) + ':1',
+                    savings: savings
+                };
+            } else if (!currentFilters.selectedDate) {
+                // For all backups, show the actual total disk usage
+                const actualUsed = backupsData.pbsStorageInfo.actualUsed || 126380015616;
+                const savings = pbsSize > actualUsed ? Math.round(((pbsSize - actualUsed) / pbsSize) * 100) : 0;
+                
+                pbsDedupInfo = {
+                    actualSize: formatBytes(actualUsed).text,
+                    logicalSize: formatBytes(pbsSize).text,
+                    ratio: dedupFactor.toFixed(1) + ':1',
+                    savings: savings
+                };
+            }
         }
 
         return { total, pve, pbs, totalSize, pbsDedupInfo, lastBackup, successRate, verifiedCount, growthRate };
