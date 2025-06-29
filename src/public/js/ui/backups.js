@@ -10,7 +10,7 @@ PulseApp.ui.backups = (() => {
         selectedDate: null // YYYY-MM-DD format when a day is clicked
     };
     let currentChartType = 'count'; // 'count' or 'storage'
-    let currentGrouping = 'none'; // 'none', 'guest', 'node', 'date'
+    const currentGrouping = 'date'; // Always group by date
     let currentSort = {
         field: 'ctime',
         ascending: false
@@ -252,23 +252,6 @@ PulseApp.ui.backups = (() => {
                             </div>
                         </div>
                     ` : ''}
-                    
-                    <div class="flex items-center gap-2 ml-auto">
-                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Group:</span>
-                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <input type="radio" id="group-none" name="backup-group" value="none" class="hidden peer" ${currentGrouping === 'none' ? 'checked' : ''}>
-                            <label for="group-none" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'none' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">None</label>
-                            
-                            <input type="radio" id="group-guest" name="backup-group" value="guest" class="hidden peer" ${currentGrouping === 'guest' ? 'checked' : ''}>
-                            <label for="group-guest" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'guest' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Guest</label>
-                            
-                            <input type="radio" id="group-node" name="backup-group" value="node" class="hidden peer" ${currentGrouping === 'node' ? 'checked' : ''}>
-                            <label for="group-node" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'node' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Node</label>
-                            
-                            <input type="radio" id="group-date" name="backup-group" value="date" class="hidden peer" ${currentGrouping === 'date' ? 'checked' : ''}>
-                            <label for="group-date" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentGrouping === 'date' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Date</label>
-                        </div>
-                    </div>
                 </div>
             </div>
             
@@ -451,42 +434,8 @@ PulseApp.ui.backups = (() => {
             `;
         }
 
-        // Group backups if needed
-        if (currentGrouping !== 'none') {
-            return renderGroupedBackups(sorted);
-        }
-
-        return sorted.map(backup => {
-            const age = getRelativeTime(backup.ctime);
-            const typeLabel = backup.type === 'vm' ? 'VM' : 'LXC';
-            const statusIcon = getBackupStatusIcon(backup);
-            
-            return `
-                <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="p-1 px-2 align-middle text-center">${statusIcon}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.vmid}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
-                        <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${backup.notes || ''}">
-                            ${backup.notes || '-'}
-                        </div>
-                    </td>
-                    <td class="p-1 px-2 align-middle">
-                        <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
-                            backup.type === 'vm' 
-                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                        }">${typeLabel}</span>
-                    </td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.node || '-'}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.storage || backup.datastore || '-'}</td>
-                    <td class="p-1 px-2 align-middle ${formatBytes(backup.size).colorClass} whitespace-nowrap">${formatBytes(backup.size).text}</td>
-                    <td class="p-1 px-2 align-middle ${age.colorClass} whitespace-nowrap">${age.text}</td>
-                    <td class="p-1 px-2 align-middle">
-                        <span class="text-xs">${backup.source.toUpperCase()}</span>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        // Always group by date
+        return renderGroupedBackups(sorted);
     }
 
     function filterBackups() {
@@ -615,28 +564,15 @@ PulseApp.ui.backups = (() => {
     function renderGroupedBackups(backups) {
         const groups = {};
         
-        // Group backups based on current grouping
+        // Group backups by date
         backups.forEach(backup => {
-            let groupKey;
-            switch (currentGrouping) {
-                case 'guest':
-                    groupKey = `${backup.vmid} - ${backup.notes || 'No description'}`;
-                    break;
-                case 'node':
-                    groupKey = backup.node || 'Unknown';
-                    break;
-                case 'date':
-                    const date = new Date(backup.ctime * 1000);
-                    // Use a more explicit format that respects locale better
-                    groupKey = date.toLocaleDateString(navigator.language || undefined, { 
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                    });
-                    break;
-                default:
-                    groupKey = 'All';
-            }
+            const date = new Date(backup.ctime * 1000);
+            // Use a more explicit format that respects locale better
+            const groupKey = date.toLocaleDateString(navigator.language || undefined, { 
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
             
             if (!groups[groupKey]) {
                 groups[groupKey] = {
@@ -654,21 +590,14 @@ PulseApp.ui.backups = (() => {
         // Render grouped rows
         let html = '';
         
-        // Sort groups based on grouping type
-        let sortedEntries;
-        if (currentGrouping === 'date') {
-            // For date grouping, parse dates and sort chronologically
-            sortedEntries = Object.entries(groups).sort((a, b) => {
-                // Get the first backup from each group to extract the timestamp
-                const firstBackupA = a[1].backups[0];
-                const firstBackupB = b[1].backups[0];
-                // Sort by ctime (timestamp) descending (newest first)
-                return (firstBackupB.ctime || 0) - (firstBackupA.ctime || 0);
-            });
-        } else {
-            // For other groupings, use alphabetical sort
-            sortedEntries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-        }
+        // Sort date groups chronologically (newest first)
+        const sortedEntries = Object.entries(groups).sort((a, b) => {
+            // Get the first backup from each group to extract the timestamp
+            const firstBackupA = a[1].backups[0];
+            const firstBackupB = b[1].backups[0];
+            // Sort by ctime (timestamp) descending (newest first)
+            return (firstBackupB.ctime || 0) - (firstBackupA.ctime || 0);
+        });
         
         sortedEntries.forEach(([groupName, group]) => {
             // Group header
@@ -871,19 +800,6 @@ PulseApp.ui.backups = (() => {
             });
         });
         
-        // Grouping radio buttons
-        document.querySelectorAll('input[name="backup-group"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    currentGrouping = e.target.value;
-                    updateRadioButtonStyles('backup-group');
-                    const tbody = document.querySelector('#backups-content tbody');
-                    if (tbody) {
-                        tbody.innerHTML = renderBackupRows();
-                    }
-                }
-            });
-        });
     }
 
     function sortBackups(backups) {
@@ -989,13 +905,6 @@ PulseApp.ui.backups = (() => {
         // Clear selected date
         currentFilters.selectedDate = null;
         
-        // Reset grouping to 'none'
-        currentGrouping = 'none';
-        const groupNoneRadio = document.getElementById('group-none');
-        if (groupNoneRadio) {
-            groupNoneRadio.checked = true;
-        }
-        
         // Reset sort to default (creation time descending)
         currentSort.field = 'ctime';
         currentSort.ascending = false;
@@ -1004,7 +913,6 @@ PulseApp.ui.backups = (() => {
         updateRadioButtonStyles('backup-type');
         updateRadioButtonStyles('backup-node');
         updateRadioButtonStyles('backup-time');
-        updateRadioButtonStyles('backup-group');
         
         // Update the table with reset filters and sort
         const tbody = document.querySelector('#backups-content tbody');
