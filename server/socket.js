@@ -2,8 +2,10 @@
 const { Server } = require('socket.io');
 const stateManager = require('./state');
 
+let io = null;
+
 function initializeSocket(server) {
-    const io = new Server(server, {
+    io = new Server(server, {
         cors: {
             origin: "*",
             methods: ["GET", "POST"]
@@ -100,4 +102,8 @@ function initializeSocket(server) {
     return io;
 }
 
-module.exports = { initializeSocket };
+function getIO() {
+    return io;
+}
+
+module.exports = { initializeSocket, getIO };
