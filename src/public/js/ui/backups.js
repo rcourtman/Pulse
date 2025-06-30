@@ -342,9 +342,14 @@ PulseApp.ui.backups = (() => {
             <!-- Filters -->
             <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
                 <div class="flex flex-row flex-wrap items-center gap-2 sm:gap-3">
-                    <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
-                        value="${currentFilters.searchTerm}"
-                        class="flex-1 min-w-[150px] sm:min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <div class="filter-controls-wrapper flex items-center gap-2 flex-1 min-w-[180px] sm:min-w-[240px]">
+                        <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
+                            value="${currentFilters.searchTerm}"
+                            class="flex-1 p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <button id="reset-backups-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-7 w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                        </button>
+                    </div>
                     
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
@@ -465,6 +470,7 @@ PulseApp.ui.backups = (() => {
         setTimeout(() => {
             renderBackupTrendChart();
             updateSummary(); // Update summary to add deduplication info
+            updateResetButtonState(); // Initialize reset button state
         }, 100);
     }
 
@@ -871,6 +877,16 @@ PulseApp.ui.backups = (() => {
                 renderBackupTrendChart();
                 // Update summary
                 updateSummary();
+                // Update reset button state
+                updateResetButtonState();
+            });
+        }
+        
+        // Reset button
+        const resetButton = document.getElementById('reset-backups-button');
+        if (resetButton) {
+            resetButton.addEventListener('click', () => {
+                resetFiltersAndSort();
             });
         }
         
@@ -923,6 +939,8 @@ PulseApp.ui.backups = (() => {
                 renderBackupTrendChart();
                 // Update summary
                 updateSummary();
+                // Update reset button state
+                updateResetButtonState();
             });
         });
         
@@ -939,6 +957,8 @@ PulseApp.ui.backups = (() => {
                 renderBackupTrendChart();
                 // Update summary
                 updateSummary();
+                // Update reset button state
+                updateResetButtonState();
             });
         });
         
@@ -955,6 +975,8 @@ PulseApp.ui.backups = (() => {
                 renderBackupTrendChart();
                 // Update summary
                 updateSummary();
+                // Update reset button state
+                updateResetButtonState();
             });
         });
         
@@ -1006,6 +1028,8 @@ PulseApp.ui.backups = (() => {
                     }
                     updateFilterIndicator();
                     updateSummary();
+                    // Update reset button state
+                    updateResetButtonState();
                 }
             });
         });
@@ -1061,6 +1085,9 @@ PulseApp.ui.backups = (() => {
                 PulseApp.ui.common.updateSortUI('backups-table', clickedHeader, 'backups');
             }
         }
+        
+        // Update reset button state
+        updateResetButtonState();
     }
 
     function clearDateFilter() {
@@ -1071,7 +1098,7 @@ PulseApp.ui.backups = (() => {
         }
         renderBackupTrendChart();
         updateSummary();
-        
+        updateResetButtonState();
     }
 
     function resetFiltersAndSort() {
@@ -1096,6 +1123,13 @@ PulseApp.ui.backups = (() => {
             currentFilters.node = 'all';
         }
         
+        // Reset guest type filter to 'all'
+        const guestTypeAllRadio = document.getElementById('guest-type-all');
+        if (guestTypeAllRadio) {
+            guestTypeAllRadio.checked = true;
+            currentFilters.guestType = 'all';
+        }
+        
         // Clear selected date
         currentFilters.selectedDate = null;
         
@@ -1113,6 +1147,7 @@ PulseApp.ui.backups = (() => {
         // Update visual state of all radio buttons
         updateRadioButtonStyles('backup-type');
         updateRadioButtonStyles('backup-node');
+        updateRadioButtonStyles('guest-type');
         updateRadioButtonStyles('time-range');
         
         // Update the table with reset filters and sort
@@ -1132,7 +1167,39 @@ PulseApp.ui.backups = (() => {
         renderBackupTrendChart();
         // Update summary
         updateSummary();
+        // Update reset button state
+        updateResetButtonState();
+    }
+    
+    function hasActiveFilters() {
+        // Check search input
+        if (currentFilters.searchTerm && currentFilters.searchTerm.trim() !== '') return true;
         
+        // Check filters
+        if (currentFilters.backupType !== 'all') return true;
+        if (currentFilters.node !== 'all') return true;
+        if (currentFilters.guestType !== 'all') return true;
+        if (currentFilters.selectedDate !== null) return true;
+        if (currentTimeRange !== '30d') return true;
+        
+        // Check sort
+        if (currentSort.field !== 'ctime' || currentSort.ascending !== false) return true;
+        
+        return false;
+    }
+    
+    function updateResetButtonState() {
+        const resetButton = document.getElementById('reset-backups-button');
+        if (!resetButton) return;
+        
+        const hasActiveStates = hasActiveFilters();
+        
+        if (hasActiveStates) {
+            resetButton.className = 'flex items-center justify-center p-1 h-7 w-7 text-xs border border-blue-400 dark:border-blue-500 rounded bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors flex-shrink-0';
+        } else {
+            // Default state - button is inactive
+            resetButton.className = 'flex items-center justify-center p-1 h-7 w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0';
+        }
     }
 
     function aggregateBackupsByDay() {
@@ -2132,7 +2199,8 @@ PulseApp.ui.backups = (() => {
                 renderBackupTrendChart();
                 // Update summary
                 updateSummary();
-                
+                // Update reset button state
+                updateResetButtonState();
             }
         });
         
