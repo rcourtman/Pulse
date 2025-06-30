@@ -129,6 +129,12 @@ PulseApp.charts = (() => {
     // Visibility tracking for charts
     let visibleCharts = new Set();
     let visibilityObserver = null;
+    
+    // Track time range changes to skip transitions
+    let isTimeRangeChange = false;
+    
+    // Track active fetch to cancel on rapid clicks
+    let activeFetchController = null;
 
     function formatValue(value, metric) {
         if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
@@ -283,7 +289,7 @@ PulseApp.charts = (() => {
         }
 
         // Update the chart with new color
-        updateChartPath(svg, chartData, config, metric, isNewChart, color);
+        updateChartPath(svg, chartData, config, metric, isNewChart, color, isTimeRangeChange);
         return svg;
     }
 
@@ -413,7 +419,7 @@ PulseApp.charts = (() => {
         // Remove the touch indicator - charts are discoverable enough without it
     }
 
-    function updateChartPath(svg, chartData, config, metric, isNewChart = false, color) {
+    function updateChartPath(svg, chartData, config, metric, isNewChart = false, color, skipTransition = false) {
         const chartGroup = svg.querySelector('.chart-group');
         const path = chartGroup?.querySelector('.chart-line');
         const area = chartGroup?.querySelector('.chart-area');
@@ -494,8 +500,26 @@ PulseApp.charts = (() => {
         }
 
         // Update paths immediately to prevent blinking
-        path.setAttribute('d', lineData);
-        if (area) area.setAttribute('d', areaData);
+        if (skipTransition) {
+            // Temporarily disable transitions for instant updates
+            const pathTransition = path.style.transition;
+            const areaTransition = area ? area.style.transition : null;
+            
+            path.style.transition = 'none';
+            if (area) area.style.transition = 'none';
+            
+            path.setAttribute('d', lineData);
+            if (area) area.setAttribute('d', areaData);
+            
+            // Re-enable transitions after a brief delay
+            requestAnimationFrame(() => {
+                path.style.transition = pathTransition;
+                if (area) area.style.transition = areaTransition;
+            });
+        } else {
+            path.setAttribute('d', lineData);
+            if (area) area.setAttribute('d', areaData);
+        }
     }
 
     function updateAxisLabels(svg, minValue, maxValue, config, metric) {
@@ -519,6 +543,14 @@ PulseApp.charts = (() => {
 
     async function fetchChartData() {
         try {
+            // Cancel any pending fetch
+            if (activeFetchController) {
+                activeFetchController.abort();
+            }
+            
+            // Create new abort controller for this fetch
+            activeFetchController = new AbortController();
+            
             // Get current time range from dropdown
             const timeRangeSelect = document.getElementById('time-range-select');
             const timeRange = timeRangeSelect ? timeRangeSelect.value : '60';
@@ -526,15 +558,22 @@ PulseApp.charts = (() => {
             // Clear the processed data cache when fetching new data with different time range
             processedDataCache.clear();
             
+            // Mark this as a time range change to skip transitions
+            isTimeRangeChange = true;
+            
             // Reset debug flags
             firstTimeAgoCall = true;
             timeAgoCallCount = 0;
             
-            const response = await fetch(`/api/charts?range=${timeRange}`);
+            const fetchStart = performance.now();
+            const response = await fetch(`/api/charts?range=${timeRange}`, {
+                signal: activeFetchController.signal
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
+            const fetchTime = performance.now() - fetchStart;
             
             // Update time range availability based on oldest data timestamp
             if (data.stats && data.stats.oldestDataTimestamp) {
@@ -586,8 +625,21 @@ PulseApp.charts = (() => {
             chartDataCache = data.data;
             nodeChartDataCache = data.nodeData || {};
             lastChartFetch = Date.now();
+            
+            // Reset time range change flag after a delay
+            setTimeout(() => {
+                isTimeRangeChange = false;
+            }, 100);
+            
+            // Clear the controller since fetch completed successfully
+            activeFetchController = null;
+            
             return { guestData: data.data, nodeData: data.nodeData || {} };
         } catch (error) {
+            // Ignore abort errors - they're expected when rapidly switching
+            if (error.name === 'AbortError') {
+                return null;
+            }
             console.error('Failed to fetch chart data:', error);
             return null;
         }
@@ -671,9 +723,9 @@ PulseApp.charts = (() => {
     function showChartPlaceholders() {
         // Show loading placeholders in all visible chart containers
         document.querySelectorAll('.usage-chart-container, .sparkline-container').forEach(container => {
-            if (container.offsetParent !== null && !container.querySelector('svg')) {
-                // Container is visible but has no chart yet
-                container.innerHTML = '<div class="w-full h-full bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>';
+            if (container.offsetParent !== null) {
+                // Show spinner for better feedback
+                container.innerHTML = '<div class="w-full h-full flex items-center justify-center"><div class="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 dark:border-t-blue-400 rounded-full animate-spin"></div></div>';
             }
         });
     }
@@ -1111,6 +1163,7 @@ PulseApp.charts = (() => {
         calculateImportanceScores,
         createOrUpdateChart,
         updateTimeRangeAvailability,
+        showChartPlaceholders,
         // Expose for testing
         cleanupProcessedCache,
         observeChartVisibility

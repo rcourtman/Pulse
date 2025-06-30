@@ -34,16 +34,36 @@ PulseApp.ui.chartsControls = (() => {
             radio.addEventListener('change', (e) => {
                 if (e.target.checked) {
                     const timeRange = e.target.value;
-                    updateTimeRangeRadio(timeRange); // Update styling
+                    updateTimeRangeRadio(timeRange); // Update styling immediately
                     setTimeRange(timeRange);
                 }
             });
         });
         
-        // Set initial styling for the default selected radio
-        const checkedRadio = document.querySelector('input[name="time-range"]:checked');
-        if (checkedRadio) {
-            updateTimeRangeRadio(checkedRadio.value);
+        // Try to restore saved time range on init
+        let savedTimeRange = null;
+        try {
+            savedTimeRange = localStorage.getItem('pulseChartTimeRange');
+        } catch (e) {
+            // Ignore localStorage errors
+        }
+        
+        // If we have a saved time range and it's valid, use it
+        if (savedTimeRange && document.querySelector(`input[name="time-range"][value="${savedTimeRange}"]`)) {
+            const savedRadio = document.querySelector(`input[name="time-range"][value="${savedTimeRange}"]`);
+            if (savedRadio) {
+                savedRadio.checked = true;
+                updateTimeRangeRadio(savedTimeRange);
+                if (timeRangeSelect) {
+                    timeRangeSelect.value = savedTimeRange;
+                }
+            }
+        } else {
+            // Otherwise set initial styling for the default selected radio
+            const checkedRadio = document.querySelector('input[name="time-range"]:checked');
+            if (checkedRadio) {
+                updateTimeRangeRadio(checkedRadio.value);
+            }
         }
     }
 
@@ -51,6 +71,13 @@ PulseApp.ui.chartsControls = (() => {
         // Update the hidden select element
         if (timeRangeSelect) {
             timeRangeSelect.value = timeRange;
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('pulseChartTimeRange', timeRange);
+            } catch (e) {
+                // Ignore localStorage errors
+            }
             
             // Trigger change event for compatibility
             const event = new Event('change', { bubbles: true });
@@ -60,12 +87,8 @@ PulseApp.ui.chartsControls = (() => {
         // Update radio button to match
         updateTimeRangeRadio(timeRange);
         
-        // Fetch new chart data
-        if (PulseApp.charts && PulseApp.charts.getChartData) {
-            PulseApp.charts.getChartData().then(() => {
-                PulseApp.charts.updateAllCharts(true);
-            });
-        }
+        // Don't fetch data here - let dashboard.js handle it via the select change event
+        // This prevents duplicate API calls
     }
     
     function updateTimeRangeRadio(timeRange) {
@@ -125,9 +148,22 @@ PulseApp.ui.chartsControls = (() => {
             if (thresholdControls) thresholdControls.classList.add('hidden');
             if (alertControls) alertControls.classList.add('hidden');
             
-            // Sync radio button with current time range
-            if (timeRangeSelect) {
-                updateTimeRangeRadio(timeRangeSelect.value);
+            // Try to restore saved time range from localStorage
+            let savedTimeRange = null;
+            try {
+                savedTimeRange = localStorage.getItem('pulseChartTimeRange');
+            } catch (e) {
+                // Ignore localStorage errors
+            }
+            
+            // If we have a saved time range and it's valid, use it
+            if (savedTimeRange && document.querySelector(`input[name="time-range"][value="${savedTimeRange}"]`)) {
+                setTimeRange(savedTimeRange);
+            } else {
+                // Otherwise sync radio button with current time range
+                if (timeRangeSelect) {
+                    updateTimeRangeRadio(timeRangeSelect.value);
+                }
             }
             
             // Update time range availability when showing charts controls

@@ -1520,10 +1520,28 @@ PulseApp.ui.dashboard = (() => {
         
         // Update the chart data with new time range
         if (PulseApp.charts) {
+            // Clear existing charts immediately for instant feedback
+            document.querySelectorAll('.usage-chart-container svg, .sparkline-container svg').forEach(svg => {
+                svg.style.opacity = '0.3';
+            });
+            
             // Force a fresh fetch with the new time range
-            PulseApp.charts.fetchChartData().then(() => {
-                // Update all charts with the new data
-                PulseApp.charts.updateAllCharts();
+            PulseApp.charts.fetchChartData().then((result) => {
+                // Only update if we got valid data (not aborted)
+                if (result) {
+                    // Update all charts with the new data
+                    PulseApp.charts.updateAllCharts(true); // Use immediate mode for faster updates
+                    
+                    // Restore chart opacity
+                    document.querySelectorAll('.usage-chart-container svg, .sparkline-container svg').forEach(svg => {
+                        svg.style.opacity = '';
+                    });
+                }
+            }).catch(error => {
+                // Only log non-abort errors
+                if (error.name !== 'AbortError') {
+                    console.error('[Dashboard] Failed to fetch chart data:', error);
+                }
             });
         }
     }

@@ -6,6 +6,8 @@ class MetricsHistory {
     constructor() {
         this.guestMetrics = new Map(); // guestId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
         this.nodeMetrics = new Map(); // nodeId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
+        this.chartDataCache = new Map(); // cacheKey -> { data, timestamp }
+        this.CACHE_TTL = 30000; // 30 second cache for chart data
         this.startCleanupTimer();
     }
 
@@ -34,6 +36,38 @@ class MetricsHistory {
                 const tail = this.head;
                 return [...this.buffer.slice(tail), ...this.buffer.slice(0, tail)]
                     .filter(item => item !== undefined);
+            },
+            filterToArray(predicate) {
+                // Optimized method to filter without creating intermediate array
+                const result = [];
+                if (this.size === 0) return result;
+                
+                if (this.size < this.maxSize) {
+                    // Buffer not full yet
+                    for (let i = 0; i < this.size; i++) {
+                        const item = this.buffer[i];
+                        if (item && predicate(item)) {
+                            result.push(item);
+                        }
+                    }
+                } else {
+                    // Buffer is full, iterate in chronological order
+                    const tail = this.head;
+                    for (let i = tail; i < this.maxSize; i++) {
+                        const item = this.buffer[i];
+                        if (item && predicate(item)) {
+                            result.push(item);
+                        }
+                    }
+                    for (let i = 0; i < tail; i++) {
+                        const item = this.buffer[i];
+                        if (item && predicate(item)) {
+                            result.push(item);
+                        }
+                    }
+                }
+                
+                return result;
             },
             filter(fn) {
                 return this.toArray().filter(fn);
@@ -375,25 +409,66 @@ class MetricsHistory {
     }
 
     getAllGuestChartData(guestInfoMap = null, timeRangeMinutes = 60) {
+        // Check cache first
+        const cacheKey = `guest_${timeRangeMinutes}_${JSON.stringify(Object.keys(guestInfoMap || {}).sort())}`;
+        const cached = this.chartDataCache.get(cacheKey);
+        
+        if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+            return cached.data;
+        }
+        
+        const startTime = performance.now();
         const result = {};
         const timeRangeMs = timeRangeMinutes * 60 * 1000;
         const cutoffTime = Date.now() - timeRangeMs;
+        
+        // Calculate downsample target based on time range
+        // Much more aggressive downsampling for performance
+        let downsampleTarget = null;
+        if (timeRangeMinutes >= 10080) { // >= 7 days
+            downsampleTarget = 200;
+        } else if (timeRangeMinutes >= 1440) { // >= 24 hours
+            downsampleTarget = 150;
+        } else if (timeRangeMinutes >= 720) { // >= 12 hours
+            downsampleTarget = 120;
+        } else if (timeRangeMinutes >= 240) { // >= 4 hours
+            downsampleTarget = 100;
+        } else if (timeRangeMinutes > 60) { // > 1 hour
+            downsampleTarget = 80;
+        }
+        
 
         for (const [guestId, guestHistory] of this.guestMetrics) {
-            const validDataPoints = guestHistory.dataPoints
-                .filter(point => point && point.timestamp >= cutoffTime);
-
+            // Use optimized filter method that doesn't create intermediate array
+            const validDataPoints = guestHistory.dataPoints.filterToArray(
+                point => point && point.timestamp >= cutoffTime
+            );
+            
             if (validDataPoints.length > 0) {
                 const guestInfo = guestInfoMap ? guestInfoMap[guestId] : null;
-                result[guestId] = {
-                    cpu: this.extractMetricSeriesWithContext(validDataPoints, 'cpu', guestInfo),
-                    memory: this.extractMetricSeriesWithContext(validDataPoints, 'memory', guestInfo),
-                    disk: this.extractMetricSeriesWithContext(validDataPoints, 'disk', guestInfo),
-                    diskread: this.extractMetricSeriesWithContext(validDataPoints, 'diskread', guestInfo),
-                    diskwrite: this.extractMetricSeriesWithContext(validDataPoints, 'diskwrite', guestInfo),
-                    netin: this.extractMetricSeriesWithContext(validDataPoints, 'netin', guestInfo),
-                    netout: this.extractMetricSeriesWithContext(validDataPoints, 'netout', guestInfo)
-                };
+                
+                // Optimize: Process all metrics in one pass
+                const processedData = this.extractAllMetricsOptimized(validDataPoints, guestInfo, downsampleTarget);
+                
+                result[guestId] = processedData;
+            }
+        }
+        
+        const processingTime = performance.now() - startTime;
+        
+        // Cache the result
+        this.chartDataCache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now()
+        });
+        
+        // Clean up old cache entries
+        if (this.chartDataCache.size > 10) {
+            const now = Date.now();
+            for (const [key, value] of this.chartDataCache) {
+                if (now - value.timestamp > this.CACHE_TTL * 2) {
+                    this.chartDataCache.delete(key);
+                }
             }
         }
 
@@ -404,6 +479,14 @@ class MetricsHistory {
         const result = {};
         const timeRangeMs = timeRangeMinutes * 60 * 1000;
         const cutoffTime = Date.now() - timeRangeMs;
+        
+        // Use same downsample targets as guest data
+        let downsampleTarget = null;
+        if (timeRangeMinutes > 240) { // > 4 hours
+            downsampleTarget = 500;
+        } else if (timeRangeMinutes > 60) { // > 1 hour
+            downsampleTarget = 300;
+        }
 
         for (const [nodeId, nodeHistory] of this.nodeMetrics) {
             const validDataPoints = nodeHistory.dataPoints
@@ -411,9 +494,9 @@ class MetricsHistory {
 
             if (validDataPoints.length > 0) {
                 result[nodeId] = {
-                    cpu: this.extractNodeMetricSeries(validDataPoints, 'cpu'),
-                    memory: this.extractNodeMetricSeries(validDataPoints, 'memory'),
-                    disk: this.extractNodeMetricSeries(validDataPoints, 'disk')
+                    cpu: this.extractNodeMetricSeries(validDataPoints, 'cpu', downsampleTarget),
+                    memory: this.extractNodeMetricSeries(validDataPoints, 'memory', downsampleTarget),
+                    disk: this.extractNodeMetricSeries(validDataPoints, 'disk', downsampleTarget)
                 };
             }
         }
@@ -421,8 +504,8 @@ class MetricsHistory {
         return result;
     }
 
-    extractNodeMetricSeries(dataPoints, metric) {
-        return dataPoints
+    extractNodeMetricSeries(dataPoints, metric, downsampleTarget = null) {
+        let series = dataPoints
             .map(point => {
                 return {
                     timestamp: point.timestamp,
@@ -430,12 +513,19 @@ class MetricsHistory {
                 };
             })
             .filter(point => point.value !== null && point.value !== undefined);
+        
+        // Apply downsampling if needed
+        if (downsampleTarget && series.length > downsampleTarget) {
+            return this.downsampleSeries(series, downsampleTarget);
+        }
+        
+        return series;
     }
 
-    extractMetricSeriesWithContext(dataPoints, metric, guestInfo = null) {
+    extractMetricSeriesWithContext(dataPoints, metric, guestInfo = null, downsampleTarget = null) {
         // Reconstruct full data points from compressed storage
         let lastCompletePoint = null;
-        return dataPoints
+        let series = dataPoints
             .map(point => {
                 // Fill in missing cumulative values from last complete point
                 const fullPoint = { ...point };
@@ -457,6 +547,148 @@ class MetricsHistory {
                 };
             })
             .filter(point => point.value !== null && point.value !== undefined);
+        
+        // Apply server-side downsampling for large datasets
+        if (downsampleTarget && series.length > downsampleTarget) {
+            return this.downsampleSeries(series, downsampleTarget);
+        }
+        
+        return series;
+    }
+    
+    downsampleSeries(series, targetPoints) {
+        if (series.length <= targetPoints) return series;
+        
+        const result = [];
+        const bucketSize = series.length / targetPoints;
+        
+        for (let i = 0; i < targetPoints; i++) {
+            const start = Math.floor(i * bucketSize);
+            const end = Math.floor((i + 1) * bucketSize);
+            const bucket = series.slice(start, end);
+            
+            if (bucket.length > 0) {
+                // Use LTTB-inspired logic: keep first, last, and most significant point
+                if (i === 0) {
+                    result.push(bucket[0]);
+                } else if (i === targetPoints - 1) {
+                    result.push(bucket[bucket.length - 1]);
+                } else {
+                    // Find point with largest deviation from average
+                    const avg = bucket.reduce((sum, p) => sum + p.value, 0) / bucket.length;
+                    let maxDev = 0;
+                    let selectedPoint = bucket[Math.floor(bucket.length / 2)];
+                    
+                    for (const point of bucket) {
+                        const dev = Math.abs(point.value - avg);
+                        if (dev > maxDev) {
+                            maxDev = dev;
+                            selectedPoint = point;
+                        }
+                    }
+                    
+                    result.push(selectedPoint);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    extractAllMetricsOptimized(dataPoints, guestInfo, downsampleTarget) {
+        // If we need heavy downsampling, do it early to reduce processing
+        let pointsToProcess = dataPoints;
+        if (downsampleTarget && dataPoints.length > downsampleTarget * 2) {
+            // Pre-downsample to 2x target to preserve quality while reducing processing
+            const skipFactor = Math.floor(dataPoints.length / (downsampleTarget * 2));
+            pointsToProcess = [];
+            for (let i = 0; i < dataPoints.length; i += skipFactor) {
+                pointsToProcess.push(dataPoints[i]);
+            }
+            // Always include the last point
+            if (pointsToProcess[pointsToProcess.length - 1] !== dataPoints[dataPoints.length - 1]) {
+                pointsToProcess.push(dataPoints[dataPoints.length - 1]);
+            }
+        }
+        
+        // Process all data points once to extract all metrics
+        const metrics = {
+            cpu: [],
+            memory: [],
+            disk: [],
+            diskread: [],
+            diskwrite: [],
+            netin: [],
+            netout: []
+        };
+        
+        let lastCompletePoint = null;
+        
+        // Single pass through data points
+        for (const point of pointsToProcess) {
+            // Fill in missing cumulative values
+            const fullPoint = { ...point };
+            if (lastCompletePoint) {
+                fullPoint.diskread = point.diskread !== undefined ? point.diskread : lastCompletePoint.diskread;
+                fullPoint.diskwrite = point.diskwrite !== undefined ? point.diskwrite : lastCompletePoint.diskwrite;
+                fullPoint.netin = point.netin !== undefined ? point.netin : lastCompletePoint.netin;
+                fullPoint.netout = point.netout !== undefined ? point.netout : lastCompletePoint.netout;
+                fullPoint.guest_mem_actual_used_bytes = point.guest_mem_actual_used_bytes !== undefined ? 
+                    point.guest_mem_actual_used_bytes : lastCompletePoint.guest_mem_actual_used_bytes;
+                fullPoint.guest_mem_total_bytes = point.guest_mem_total_bytes !== undefined ? 
+                    point.guest_mem_total_bytes : lastCompletePoint.guest_mem_total_bytes;
+            }
+            lastCompletePoint = fullPoint;
+            
+            // Extract all metric values at once
+            const timestamp = fullPoint.timestamp;
+            
+            const cpuValue = this.getMetricValueWithContext(fullPoint, 'cpu', guestInfo);
+            if (cpuValue !== null && cpuValue !== undefined) {
+                metrics.cpu.push({ timestamp, value: cpuValue });
+            }
+            
+            const memValue = this.getMetricValueWithContext(fullPoint, 'memory', guestInfo);
+            if (memValue !== null && memValue !== undefined) {
+                metrics.memory.push({ timestamp, value: memValue });
+            }
+            
+            const diskValue = this.getMetricValueWithContext(fullPoint, 'disk', guestInfo);
+            if (diskValue !== null && diskValue !== undefined) {
+                metrics.disk.push({ timestamp, value: diskValue });
+            }
+            
+            const diskreadValue = this.getMetricValueWithContext(fullPoint, 'diskread', guestInfo);
+            if (diskreadValue !== null && diskreadValue !== undefined) {
+                metrics.diskread.push({ timestamp, value: diskreadValue });
+            }
+            
+            const diskwriteValue = this.getMetricValueWithContext(fullPoint, 'diskwrite', guestInfo);
+            if (diskwriteValue !== null && diskwriteValue !== undefined) {
+                metrics.diskwrite.push({ timestamp, value: diskwriteValue });
+            }
+            
+            const netinValue = this.getMetricValueWithContext(fullPoint, 'netin', guestInfo);
+            if (netinValue !== null && netinValue !== undefined) {
+                metrics.netin.push({ timestamp, value: netinValue });
+            }
+            
+            const netoutValue = this.getMetricValueWithContext(fullPoint, 'netout', guestInfo);
+            if (netoutValue !== null && netoutValue !== undefined) {
+                metrics.netout.push({ timestamp, value: netoutValue });
+            }
+        }
+        
+        // Apply downsampling to each metric if needed
+        if (downsampleTarget) {
+            for (const metric in metrics) {
+                if (metrics[metric].length > downsampleTarget) {
+                    metrics[metric] = this.downsampleSeries(metrics[metric], downsampleTarget);
+                }
+            }
+        }
+        
+        return metrics;
     }
 
     cleanupOldData(guestHistory) {

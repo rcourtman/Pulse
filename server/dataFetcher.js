@@ -21,13 +21,28 @@ const nodeConnectionCache = new Map();
 const nodeConnectionTimestamps = new Map();
 const NODE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes TTL
 
-// Cleanup old connections periodically
+// Track failed guest agent calls to avoid repeated attempts
+const failedGuestAgents = new Map(); // Key: endpointId-nodeId-vmid, Value: { failCount, lastFailTime }
+const AGENT_RETRY_DELAY = 5 * 60 * 1000; // 5 minutes before retrying failed agents
+const MAX_AGENT_FAIL_COUNT = 3; // After 3 failures, skip for longer period
+
+// Cleanup old connections and agent failure tracking periodically
 setInterval(() => {
     const now = Date.now();
+    
+    // Clean up node connections
     for (const [key, timestamp] of nodeConnectionTimestamps.entries()) {
         if (now - timestamp > NODE_CACHE_TTL) {
             nodeConnectionCache.delete(key);
             nodeConnectionTimestamps.delete(key);
+        }
+    }
+    
+    // Clean up old agent failure records
+    for (const [key, info] of failedGuestAgents.entries()) {
+        // Remove entries older than 30 minutes to allow retries
+        if (now - info.lastFailTime > 30 * 60 * 1000) {
+            failedGuestAgents.delete(key);
         }
     }
 }, 60000); // Run cleanup every minute
@@ -131,6 +146,52 @@ async function getDirectNodeConnection(node, clusterConfig) {
     }
 }
 
+/**
+ * Check if we should skip guest agent calls for a specific VM
+ * @param {string} endpointId - The endpoint ID
+ * @param {string} nodeName - The node name
+ * @param {string} vmid - The VM ID
+ * @returns {boolean} - True if we should skip the agent call
+ */
+function shouldSkipGuestAgent(endpointId, nodeName, vmid) {
+    const key = `${endpointId}-${nodeName}-${vmid}`;
+    const failInfo = failedGuestAgents.get(key);
+    
+    if (!failInfo) return false;
+    
+    const now = Date.now();
+    const timeSinceLastFail = now - failInfo.lastFailTime;
+    
+    // If failed too many times, skip for longer period
+    if (failInfo.failCount >= MAX_AGENT_FAIL_COUNT) {
+        return timeSinceLastFail < AGENT_RETRY_DELAY * 3; // 15 minutes for repeated failures
+    }
+    
+    // Otherwise use normal retry delay
+    return timeSinceLastFail < AGENT_RETRY_DELAY;
+}
+
+/**
+ * Record a failed guest agent call
+ * @param {string} endpointId - The endpoint ID
+ * @param {string} nodeName - The node name
+ * @param {string} vmid - The VM ID
+ */
+function recordGuestAgentFailure(endpointId, nodeName, vmid) {
+    const key = `${endpointId}-${nodeName}-${vmid}`;
+    const existing = failedGuestAgents.get(key);
+    
+    if (existing) {
+        existing.failCount++;
+        existing.lastFailTime = Date.now();
+    } else {
+        failedGuestAgents.set(key, {
+            failCount: 1,
+            lastFailTime: Date.now()
+        });
+    }
+}
+
 async function initializePLimit() {
   if (pLimitInitialized) return;
   // Adding a try-catch for robustness, though module resolution should handle not found.
@@ -190,53 +251,8 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
   let finalVms = (vms.status === 'fulfilled' ? vms.value : []) || [];
   let finalContainers = (containers.status === 'fulfilled' ? containers.value : []) || [];
 
-  // Fetch current status for accurate uptime for all VMs and containers
-  if (finalVms.length > 0 || finalContainers.length > 0) {
-    const uptimePromises = [];
-    
-    // Fetch current status for VMs
-    finalVms.forEach((vm, index) => {
-      // Only fetch uptime for running VMs
-      if (vm.status === 'running') {
-        uptimePromises.push(
-          apiClient.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`, { timeout: 2000 })
-            .then(response => {
-              if (response?.data?.data?.uptime !== undefined) {
-                finalVms[index].uptime = response.data.data.uptime;
-              }
-            })
-            .catch((error) => {
-              console.warn(`[DataFetcher] Failed to fetch uptime for VM ${vm.vmid}: ${error.message}`);
-              // Keep original uptime
-            })
-        );
-      }
-    });
-    
-    // Fetch current status for containers
-    finalContainers.forEach((ct, index) => {
-      // Only fetch uptime for running containers
-      if (ct.status === 'running') {
-        uptimePromises.push(
-          apiClient.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`, { timeout: 2000 })
-            .then(response => {
-              if (response?.data?.data?.uptime !== undefined) {
-                finalContainers[index].uptime = response.data.data.uptime;
-              }
-            })
-            .catch((error) => {
-              console.warn(`[DataFetcher] Failed to fetch uptime for container ${ct.vmid}: ${error.message}`);
-              // Keep original uptime
-            })
-        );
-      }
-    });
-    
-    if (uptimePromises.length > 0) {
-      console.log(`[DataFetcher] Fetching accurate uptime for ${uptimePromises.length} running guests...`);
-      await Promise.allSettled(uptimePromises);
-    }
-  }
+  // Uptime is already included in the VM/container data from the API
+  // No need for separate API calls - this reduces API calls significantly
 
   return {
     vms: finalVms,
@@ -623,7 +639,7 @@ function deduplicateStorageBackups(allStorageBackups) {
 
 // Cache for cluster membership detection
 const clusterMembershipCache = new Map();
-const CLUSTER_CACHE_TTL = 300000; // 5 minutes
+const CLUSTER_CACHE_TTL = 1800000; // 30 minutes - cluster membership rarely changes
 
 /**
  * Detects cluster membership for endpoints and returns prioritized endpoint groups
@@ -2004,6 +2020,8 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
             });
             const bulkData = bulkResponse?.data?.data || [];
             
+            // Note: The bulk endpoint automatically excludes offline nodes, preventing unnecessary API calls
+            
             // Create a map for quick lookup
             const bulkDataMap = new Map();
             bulkData.forEach(vm => {
@@ -2068,6 +2086,10 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
 
                             // --- QEMU Guest Agent Memory Fetch ---
                             if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
+                                // Check if we should skip this agent due to previous failures
+                                if (shouldSkipGuestAgent(endpointId, nodeName, vmid)) {
+                                    console.log(`[Metrics Cycle - ${endpointName}] Skipping guest agent call for VM ${vmid} due to previous failures`);
+                                } else {
                                 try {
                                     // Prefer get-memory-block-info if available, fallback to get-osinfo for memory as some agents might provide it there.
                                     // Proxmox API typically wraps agent command results in {"data": {"result": ...}} or {"data": ...}
@@ -2114,12 +2136,16 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                          console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' did not return expected data structure. Response:`, agentMemInfoResponse.data);
                                     }
                                 } catch (agentError) {
+                                    // Record the failure for tracking
+                                    recordGuestAgentFailure(endpointId, nodeName, vmid);
+                                    
                                     if (agentError.response && agentError.response.status === 500 && agentError.response.data && agentError.response.data.data && agentError.response.data.data.exitcode === -2) {
                                          // Expected error if agent is not running or command not supported.
                                          console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported. Error: ${agentError.message}`);
                                     } else {
                                          console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory info: ${agentError.message}. Status: ${agentError.response?.status}`);
                                     }
+                                }
                                 }
                             }
                             // --- End QEMU Guest Agent Memory Fetch ---
@@ -2171,6 +2197,10 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 let currentMetrics = currentDataResponse?.data?.data || null;
 
                                 if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
+                                    // Check if we should skip this agent due to previous failures
+                                    if (shouldSkipGuestAgent(endpointId, nodeName, vmid)) {
+                                        console.log(`[Metrics Cycle - ${endpointName}] Skipping guest agent call for VM ${vmid} due to previous failures`);
+                                    } else {
                                     try {
                                         const agentMemInfoResponse = await apiClientInstance.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
                                         
@@ -2200,7 +2230,10 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                             }
                                         }
                                     } catch (agentError) {
+                                        // Record the failure for tracking
+                                        recordGuestAgentFailure(endpointId, nodeName, vmid);
                                         // Silently ignore guest agent errors
+                                    }
                                     }
                                 }
 
