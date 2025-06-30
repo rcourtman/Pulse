@@ -91,7 +91,7 @@ PulseApp.ui.snapshots = (() => {
 
         container.innerHTML = `
             <!-- Summary -->
-            <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+            <div class="mb-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                 <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
                         <div class="text-gray-500 dark:text-gray-400">Active Snapshots</div>
@@ -105,7 +105,7 @@ PulseApp.ui.snapshots = (() => {
             </div>
 
             <!-- Filters -->
-            <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+            <div class="mb-3 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                 <div class="flex flex-wrap items-center gap-3">
                     <input type="search" id="snapshot-search" placeholder="Search snapshots..." 
                         value="${currentFilters.searchTerm}"
