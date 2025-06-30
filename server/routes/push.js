@@ -165,12 +165,10 @@ router.post('/metrics', authenticatePushRequest, async (req, res) => {
         // Store metrics in history
         if (nodeStatus) {
             const nodeId = `pbs-${pbsId}`;
-            metricsHistory.addNodeMetrics(nodeId, {
-                cpuUsage: nodeStatus.cpu || 0,
-                memUsage: nodeStatus.memory?.used || 0,
-                memTotal: nodeStatus.memory?.total || 0,
-                diskUsage: nodeStatus.rootfs?.used || 0,
-                diskTotal: nodeStatus.rootfs?.total || 0,
+            metricsHistory.addNodeMetricData(nodeId, {
+                cpu: nodeStatus.cpu || 0,
+                memory: nodeStatus.memory || { used: 0, total: 0 },
+                rootfs: nodeStatus.rootfs || { used: 0, total: 0 },
                 swap: nodeStatus.swap || { used: 0, total: 0 }
             });
         }
