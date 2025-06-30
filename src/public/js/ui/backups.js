@@ -1810,8 +1810,8 @@ PulseApp.ui.backups = (() => {
                 }
             } else {
                 // Count chart - show backup counts
-                const pvePath = createPath(data, 'pve', xScale, yScale, height);
-                const pveArea = createArea(data, 'pve', xScale, yScale, height);
+                const pvePath = createPath(data, 'pve', xScale, yScale, height, null, true);
+                const pveArea = createArea(data, 'pve', xScale, yScale, height, true);
                 
                 const pveAreaEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 pveAreaEl.setAttribute('d', pveArea);
@@ -1826,8 +1826,8 @@ PulseApp.ui.backups = (() => {
                 g.appendChild(pveLineEl);
                 
                 if (backupsData.pbsEnabled) {
-                    const pbsPath = createPath(data, 'pbs', xScale, yScale, height);
-                    const pbsArea = createArea(data, 'pbs', xScale, yScale, height);
+                    const pbsPath = createPath(data, 'pbs', xScale, yScale, height, null, true);
+                    const pbsArea = createArea(data, 'pbs', xScale, yScale, height, true);
                     
                     const pbsAreaEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     pbsAreaEl.setAttribute('d', pbsArea);
@@ -1843,7 +1843,7 @@ PulseApp.ui.backups = (() => {
                 }
                 
                 // Guests line (dashed)
-                const guestsPath = createPath(data, 'guests', xScale, yScale, height);
+                const guestsPath = createPath(data, 'guests', xScale, yScale, height, null, true);
                 const guestsLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 guestsLineEl.setAttribute('d', guestsPath);
                 guestsLineEl.setAttribute('stroke', '#10b981'); // emerald-500
@@ -2002,7 +2002,7 @@ PulseApp.ui.backups = (() => {
         }
     }
 
-    function createPath(data, key, xScale, yScale, height, dedupFactor) {
+    function createPath(data, key, xScale, yScale, height, dedupFactor, useStepInterpolation = false) {
         let path = '';
         data.forEach((d, i) => {
             const x = i * xScale;
@@ -2022,13 +2022,19 @@ PulseApp.ui.backups = (() => {
             if (i === 0) {
                 path += `M ${x} ${y}`;
             } else {
-                path += ` L ${x} ${y}`;
+                if (useStepInterpolation) {
+                    // Step interpolation: horizontal line to new x, then vertical to new y
+                    path += ` H ${x} V ${y}`;
+                } else {
+                    // Linear interpolation: straight line to new point
+                    path += ` L ${x} ${y}`;
+                }
             }
         });
         return path;
     }
 
-    function createArea(data, key, xScale, yScale, height) {
+    function createArea(data, key, xScale, yScale, height, useStepInterpolation = false) {
         let path = '';
         data.forEach((d, i) => {
             const x = i * xScale;
@@ -2043,7 +2049,13 @@ PulseApp.ui.backups = (() => {
             if (i === 0) {
                 path += `M ${x} ${height} L ${x} ${y}`;
             } else {
-                path += ` L ${x} ${y}`;
+                if (useStepInterpolation) {
+                    // Step interpolation: horizontal then vertical
+                    path += ` H ${x} V ${y}`;
+                } else {
+                    // Linear interpolation
+                    path += ` L ${x} ${y}`;
+                }
             }
         });
         path += ` L ${(data.length - 1) * xScale} ${height} Z`;
