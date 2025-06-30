@@ -424,19 +424,6 @@ config_file() {
     fi
   fi
 
-  if [[ "${DISABLEIP6-}" == "yes" ]]; then
-    echo -e "${DISABLEIPV6}${BOLD}${DGN}Disable IPv6: ${BGN}Yes${CL}"
-  elif [[ "${DISABLEIP6-}" == "no" ]]; then
-    echo -e "${DISABLEIPV6}${BOLD}${DGN}Disable IPv6: ${BGN}No${CL}"
-  else
-    if (whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "IPv6" --yesno "Disable IPv6?" 10 58); then
-      DISABLEIP6="yes"
-    else
-      DISABLEIP6="no"
-    fi
-    echo -e "${DISABLEIPV6}${BOLD}${DGN}Disable IPv6: ${BGN}$DISABLEIP6${CL}"
-  fi
-
   if [[ -n "${MTU-}" ]]; then
     if [[ "$MTU" =~ ^-?[0-9]+$ ]]; then
       echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}$MTU${CL}"
