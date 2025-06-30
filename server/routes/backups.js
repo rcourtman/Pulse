@@ -227,7 +227,8 @@ router.get('/backups/unified', (req, res) => {
                                     verified: backup.verification && backup.verification.state === 'ok',
                                     protected: backup.protected || false,
                                     notes: backup.comment || '',
-                                    source: 'pbs'
+                                    source: 'pbs',
+                                    deduplicationFactor: datastore.deduplicationFactor || null
                                 };
                                 
                                 allBackups.push(backupData);
