@@ -10,43 +10,32 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 ### 📸 Screenshots
 
-> **Note:** Some screenshots may not reflect the latest UI updates in v3.33.0, particularly the new separated Snapshots and Backups tabs. New screenshots will be added in the next update.
-
 <details>
 <summary><strong>Click to view more screenshots</strong></summary>
 
-**Desktop Views:**
 <div align="center">
 <table>
 <tr>
-<td align="center"><strong>Storage Tab</strong></td>
-<td align="center"><strong>PBS Tab</strong></td>
+<td align="center"><strong>Real-time Charts</strong></td>
+<td align="center"><strong>Alert Thresholds</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/04-storage-view.png" alt="Storage View" width="400"/></td>
-<td><img src="docs/images/02-pbs-view.png" alt="PBS View" width="400"/></td>
+<td><img src="docs/images/05-charts-view.png" alt="Real-time performance charts" width="400"/></td>
+<td><img src="docs/images/06-alerts-view.png" alt="Alert threshold configuration" width="400"/></td>
 </tr>
 <tr>
-<td align="center"><strong>Line Graph Toggle</strong></td>
-<td align="center"><strong>Dashboard View</strong></td>
+<td align="center"><strong>Storage Overview</strong></td>
+<td align="center"><strong>Backup Management</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/05-line-graph-toggle.png" alt="Line Graph Toggle View" width="400"/></td>
-<td><img src="docs/images/01-dashboard.png" alt="Dashboard" width="400"/></td>
-</tr>
-</table>
-</div>
-
-**Mobile Views:**
-<div align="center">
-<table>
-<tr>
-<td align="center"><strong>Mobile Dashboard</strong></td>
-<td align="center"><strong>Mobile PBS View</strong></td>
+<td><img src="docs/images/03-storage-view.png" alt="Storage overview" width="400"/></td>
+<td><img src="docs/images/04-backups-view.png" alt="Backup management" width="400"/></td>
 </tr>
 <tr>
-<td><img src="docs/images/06-mobile-dashboard.png" alt="Mobile Dashboard" width="250"/></td>
-<td><img src="docs/images/07-mobile-pbs-view.png" alt="Mobile PBS View" width="250"/></td>
+<td align="center" colspan="2"><strong>Proxmox Backup Server Integration</strong></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/images/02-pbs-view.png" alt="PBS integration" width="600"/></td>
 </tr>
 </table>
 </div>
