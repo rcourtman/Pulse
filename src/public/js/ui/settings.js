@@ -1693,6 +1693,7 @@ PulseApp.ui.settings = (() => {
         const updateVersion = document.getElementById('update-version');
         const updatePublishedBadge = document.getElementById('update-published-badge');
         const updateReleaseNotes = document.getElementById('update-release-notes');
+        const applyUpdateButton = document.getElementById('apply-update-button');
         
         if (updateVersion) {
             updateVersion.textContent = releaseData.tag_name;
@@ -1713,6 +1714,40 @@ PulseApp.ui.settings = (() => {
                 .replace(/\n/g, '<br>');
             
             updateReleaseNotes.innerHTML = htmlContent;
+        }
+        
+        // Handle Docker deployments - hide apply button and show message
+        if (applyUpdateButton) {
+            if (releaseData.isDocker) {
+                applyUpdateButton.style.display = 'none';
+                // Add Docker update instructions if not already present
+                const dockerMsg = document.getElementById('docker-update-message');
+                if (!dockerMsg) {
+                    const dockerMessage = document.createElement('div');
+                    dockerMessage.id = 'docker-update-message';
+                    dockerMessage.className = 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3';
+                    dockerMessage.innerHTML = `
+                        <div class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div class="text-sm">
+                                <p class="font-medium text-amber-800 dark:text-amber-200">Docker Deployment Detected</p>
+                                <p class="text-amber-700 dark:text-amber-300 mt-1">To update, pull the latest Docker image:</p>
+                                <pre class="bg-amber-100 dark:bg-amber-900/30 rounded p-2 mt-2 text-xs overflow-x-auto"><code>docker pull rcourtman/pulse:${releaseData.tag_name}
+docker compose up -d</code></pre>
+                            </div>
+                        </div>
+                    `;
+                    applyUpdateButton.parentElement.appendChild(dockerMessage);
+                }
+            } else {
+                applyUpdateButton.style.display = '';
+                const dockerMsg = document.getElementById('docker-update-message');
+                if (dockerMsg) {
+                    dockerMsg.remove();
+                }
+            }
         }
         
         // Set up toggle functionality
