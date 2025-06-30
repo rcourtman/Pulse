@@ -27,6 +27,7 @@ PulseApp.ui.backups = (() => {
         searchTerm: '',
         backupType: 'all', // 'all', 'pve', 'pbs'
         node: 'all',
+        guestType: 'all', // 'all', 'vm', 'lxc'
         selectedDate: null, // YYYY-MM-DD format when a day is clicked
         showMissingBackups: false
     };
@@ -361,6 +362,20 @@ PulseApp.ui.backups = (() => {
                         </div>
                     </div>
                     
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Guest:</span>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="guest-type-all" name="guest-type" value="all" class="hidden peer" ${currentFilters.guestType === 'all' ? 'checked' : ''}>
+                            <label for="guest-type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.guestType === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                            
+                            <input type="radio" id="guest-type-vm" name="guest-type" value="vm" class="hidden peer" ${currentFilters.guestType === 'vm' ? 'checked' : ''}>
+                            <label for="guest-type-vm" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.guestType === 'vm' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">VM</label>
+                            
+                            <input type="radio" id="guest-type-lxc" name="guest-type" value="lxc" class="hidden peer" ${currentFilters.guestType === 'lxc' ? 'checked' : ''}>
+                            <label for="guest-type-lxc" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.guestType === 'lxc' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXC</label>
+                        </div>
+                    </div>
+                    
                     ${uniqueNodes.length > 1 ? `
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Node:</span>
@@ -636,6 +651,13 @@ PulseApp.ui.backups = (() => {
             // Node filter
             if (currentFilters.node !== 'all') {
                 if (backup.node !== currentFilters.node) return false;
+            }
+            
+            // Guest type filter
+            if (currentFilters.guestType !== 'all') {
+                // PBS uses 'ct' for containers, but we display 'lxc' in UI
+                const guestType = currentFilters.guestType === 'lxc' ? 'ct' : currentFilters.guestType;
+                if (backup.type !== guestType) return false;
             }
             
             // Search filter
@@ -920,6 +942,22 @@ PulseApp.ui.backups = (() => {
             });
         });
         
+        // Guest type filter radio buttons
+        document.querySelectorAll('input[name="guest-type"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentFilters.guestType = e.target.value;
+                updateRadioButtonStyles('guest-type');
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+                // Update chart with filtered data
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
+            });
+        });
+        
         // Chart type tabs
         document.querySelectorAll('.chart-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -1144,6 +1182,13 @@ PulseApp.ui.backups = (() => {
             // Node filter
             if (currentFilters.node !== 'all') {
                 if (backup.node !== currentFilters.node) return false;
+            }
+            
+            // Guest type filter
+            if (currentFilters.guestType !== 'all') {
+                // PBS uses 'ct' for containers, but we display 'lxc' in UI
+                const guestType = currentFilters.guestType === 'lxc' ? 'ct' : currentFilters.guestType;
+                if (backup.type !== guestType) return false;
             }
             
             // Search filter
