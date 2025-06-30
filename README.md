@@ -55,26 +55,6 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
-## 🚀 Recent Major Updates (v3.33.0)
-
-### Backup System Overhaul
-- **Separated Tabs**: Snapshots and Backups now have dedicated tabs for cleaner organization
-- **Simplified UI**: Replaced complex cards with efficient table-based design
-- **Enhanced Performance**: Unified API endpoints and WebSocket updates without UI flashing
-- **Better Search**: Real-time search and column sorting across all backup data
-
-### Code Quality Improvements
-- Major codebase refactoring and cleanup
-- Reduced code duplication with shared utilities
-- Improved type safety and error handling
-- Modularized server architecture
-
-### UI/UX Enhancements
-- Standardized table styling across all tabs
-- Improved mobile responsiveness
-- Consistent filter and toggle designs
-- Fixed keyboard input capture issues
-
 ## 🚀 Quick Start
 
 Choose your preferred installation method:
