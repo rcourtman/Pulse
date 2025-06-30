@@ -752,37 +752,16 @@ async function runMetricCycle() {
                nodesByEndpoint.get(guest.endpointId).add(guest.node);
            });
            
-           // Fetch fresh node status for each unique node that has running guests
-           const nodeStatusPromises = [];
+           // Node status is already fetched during discovery cycle (every 30s)
+           // Use existing node data from state instead of fetching again
+           const currentNodes = stateManager.getState().nodes || [];
            
-           for (const [endpointId, nodes] of nodesByEndpoint) {
-               if (!currentApiClients[endpointId]) continue;
-               const { client: apiClientInstance } = currentApiClients[endpointId];
-               
-               for (const nodeName of nodes) {
-                   nodeStatusPromises.push(
-                       apiClientInstance.get(`/nodes/${nodeName}/status`)
-                           .then(response => ({
-                               endpointId,
-                               node: nodeName,
-                               data: response.data.data
-                           }))
-                           .catch(err => {
-                               console.error(`[Metrics] Failed to fetch node status for ${nodeName}:`, err.message);
-                               return null;
-                           })
-                   );
-               }
-           }
-           
-           // Fetch all node statuses in parallel
-           const nodeStatuses = await Promise.all(nodeStatusPromises);
-           
-           // Add fresh node metrics to history
-           nodeStatuses.forEach(nodeStatus => {
-               if (nodeStatus && nodeStatus.data) {
-                   const nodeId = `node-${nodeStatus.node}`;
-                   metricsHistory.addNodeMetricData(nodeId, nodeStatus.data);
+           // Add node metrics to history from existing data
+           currentNodes.forEach(node => {
+               if (node && node.status) {
+                   const nodeId = `node-${node.node}`;
+                   // Use the existing node status data that was fetched during discovery
+                   metricsHistory.addNodeMetricData(nodeId, node.status);
                }
            });
            
