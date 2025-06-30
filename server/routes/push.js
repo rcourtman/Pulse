@@ -131,7 +131,7 @@ router.post('/metrics', authenticatePushRequest, async (req, res) => {
         const currentState = stateManager.getState();
         
         // Find or create PBS entry
-        let pbsEntry = currentState.pbsServers?.find(pbs => pbs.id === pbsId);
+        let pbsEntry = currentState.pbs?.find(pbs => pbs.id === pbsId);
         
         if (!pbsEntry) {
             // Create new PBS entry if it doesn't exist
@@ -143,10 +143,10 @@ router.post('/metrics', authenticatePushRequest, async (req, res) => {
                 lastPushReceived: Date.now()
             };
             
-            if (!currentState.pbsServers) {
-                currentState.pbsServers = [];
+            if (!currentState.pbs) {
+                currentState.pbs = [];
             }
-            currentState.pbsServers.push(pbsEntry);
+            currentState.pbs.push(pbsEntry);
         }
         
         // Update PBS data - explicit property assignment to prevent pollution
@@ -174,7 +174,7 @@ router.post('/metrics', authenticatePushRequest, async (req, res) => {
         }
         
         // Update state
-        stateManager.updatePbsServers(currentState.pbsServers);
+        stateManager.updatePbsServers(currentState.pbs);
         
         // Calculate next expected push based on agent's push interval
         const pushInterval = req.body.pushInterval || 30000; // Default 30s
@@ -202,7 +202,7 @@ router.post('/metrics', authenticatePushRequest, async (req, res) => {
 router.get('/agents', authenticatePushRequest, (req, res) => {
     try {
         const currentState = stateManager.getState();
-        const pushAgents = (currentState.pbsServers || [])
+        const pushAgents = (currentState.pbs || [])
             .filter(pbs => pbs.pushMode)
             .map(pbs => ({
                 id: pbs.id,
