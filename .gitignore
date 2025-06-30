@@ -152,3 +152,4 @@ data/metrics-snapshot.json.gz
 !data/*.json.template
 !data/*.json.example
 debug-archive/
+/.filebrowser/
