@@ -310,6 +310,12 @@ PulseApp.ui.pbs = (() => {
         const datastoresSection = createDatastoresSection(instance, instanceIndex);
         container.appendChild(datastoresSection);
         
+        // Storage efficiency section
+        const efficiencySection = createStorageEfficiencySection(instance, instanceIndex);
+        if (efficiencySection) {
+            container.appendChild(efficiencySection);
+        }
+        
         // Task summary table
         const summaryTable = createTaskSummaryTable(instance, instanceIndex);
         container.appendChild(summaryTable);
@@ -1654,6 +1660,147 @@ PulseApp.ui.pbs = (() => {
         } else {
             return `<span class="text-gray-600 dark:text-gray-400 text-xs">${gcStatus}</span>`;
         }
+    }
+    
+    // Create storage efficiency section
+    function createStorageEfficiencySection(instance, instanceIndex) {
+        // Skip if no datastores or no deduplication data
+        if (!instance.datastores || instance.datastores.length === 0) {
+            return null;
+        }
+        
+        // Calculate aggregate storage efficiency metrics
+        let totalLogicalSize = 0;
+        let totalActualSize = 0;
+        let totalSaved = 0;
+        let totalCapacity = 0;
+        let datastoresWithDedup = 0;
+        
+        // Get backup count from snapshots
+        let totalBackups = 0;
+        let totalVMs = new Set();
+        
+        instance.datastores.forEach(ds => {
+            if (ds.deduplicationFactor && ds.deduplicationFactor > 1) {
+                datastoresWithDedup++;
+                
+                // Calculate logical size from actual size and dedup factor
+                const actualSize = ds.used || 0;
+                const logicalSize = actualSize * ds.deduplicationFactor;
+                const savedSpace = logicalSize - actualSize;
+                
+                totalActualSize += actualSize;
+                totalLogicalSize += logicalSize;
+                totalSaved += savedSpace;
+            }
+            
+            // Add total capacity
+            totalCapacity += ds.total || 0;
+            
+            // Count backups and unique VMs
+            if (ds.snapshots && Array.isArray(ds.snapshots)) {
+                totalBackups += ds.snapshots.length;
+                ds.snapshots.forEach(snap => {
+                    if (snap['backup-id']) {
+                        totalVMs.add(snap['backup-id']);
+                    }
+                });
+            }
+        });
+        
+        // Don't show section if no deduplication data
+        if (datastoresWithDedup === 0) {
+            return null;
+        }
+        
+        // Calculate metrics
+        const savingsPercent = totalLogicalSize > 0 ? ((totalSaved / totalLogicalSize) * 100) : 0;
+        const utilizationPercent = totalCapacity > 0 ? ((totalActualSize / totalCapacity) * 100) : 0;
+        const avgBackupsPerVM = totalVMs.size > 0 ? Math.round(totalBackups / totalVMs.size) : 0;
+        
+        // Create section
+        const section = document.createElement('div');
+        section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4';
+        
+        const heading = document.createElement('h4');
+        heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
+        heading.textContent = 'Storage Impact';
+        section.appendChild(heading);
+        
+        // Create metrics grid
+        const metricsGrid = document.createElement('div');
+        metricsGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4';
+        
+        // Space saved
+        const savedCard = createMetricCard(
+            'Space Saved',
+            PulseApp.utils.formatBytes(totalSaved),
+            'text-green-600 dark:text-green-400',
+            `${savingsPercent.toFixed(1)}% reduction`
+        );
+        metricsGrid.appendChild(savedCard);
+        
+        // Logical data protected
+        const logicalCard = createMetricCard(
+            'Data Protected',
+            PulseApp.utils.formatBytes(totalLogicalSize),
+            'text-blue-600 dark:text-blue-400',
+            `Logical size`
+        );
+        metricsGrid.appendChild(logicalCard);
+        
+        // Storage utilization
+        const utilizationCard = createMetricCard(
+            'PBS Utilization',
+            `${utilizationPercent.toFixed(1)}%`,
+            utilizationPercent > 80 ? 'text-orange-600 dark:text-orange-400' : 'text-purple-600 dark:text-purple-400',
+            `${PulseApp.utils.formatBytes(totalActualSize)} of ${PulseApp.utils.formatBytes(totalCapacity)}`
+        );
+        metricsGrid.appendChild(utilizationCard);
+        
+        // Backup density
+        const densityCard = createMetricCard(
+            'Backup Density',
+            `${avgBackupsPerVM} per VM`,
+            'text-indigo-600 dark:text-indigo-400',
+            `${totalBackups} backups, ${totalVMs.size} VMs`
+        );
+        metricsGrid.appendChild(densityCard);
+        
+        section.appendChild(metricsGrid);
+        
+        // Add explanation text
+        const explanation = document.createElement('p');
+        explanation.className = 'text-xs text-gray-500 dark:text-gray-400 mt-3';
+        explanation.textContent = 'Shows the storage impact of deduplication across all PBS datastores. Space saved represents the difference between logical (uncompressed) and actual (deduplicated) storage usage.';
+        section.appendChild(explanation);
+        
+        return section;
+    }
+    
+    // Helper function to create metric cards
+    function createMetricCard(label, value, valueClass, subtext) {
+        const card = document.createElement('div');
+        card.className = 'bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3';
+        
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'text-xs text-gray-600 dark:text-gray-400 mb-1';
+        labelDiv.textContent = label;
+        card.appendChild(labelDiv);
+        
+        const valueDiv = document.createElement('div');
+        valueDiv.className = `text-lg font-semibold ${valueClass}`;
+        valueDiv.textContent = value;
+        card.appendChild(valueDiv);
+        
+        if (subtext) {
+            const subtextDiv = document.createElement('div');
+            subtextDiv.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1';
+            subtextDiv.textContent = subtext;
+            card.appendChild(subtextDiv);
+        }
+        
+        return card;
     }
     
     // Show task details modal
