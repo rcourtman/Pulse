@@ -5,6 +5,12 @@ const UpdateManager = require('../updateManager');
 const router = express.Router();
 const updateManager = new UpdateManager();
 
+// Get the socket.io instance
+const getIO = () => {
+    const { getIO: getSocketIO } = require('../socket');
+    return getSocketIO();
+};
+
 // Check for updates endpoint
 router.get('/check', async (req, res) => {
     try {
@@ -63,17 +69,21 @@ router.post('/apply', async (req, res) => {
             try {
                 // Download update
                 const updateFile = await updateManager.downloadUpdate(downloadUrl, (progress) => {
-                    io.emit('updateProgress', progress);
+                    const io = getIO();
+                    if (io) io.emit('updateProgress', progress);
                 });
 
                 await updateManager.applyUpdate(updateFile, (progress) => {
-                    io.emit('updateProgress', progress);
+                    const io = getIO();
+                    if (io) io.emit('updateProgress', progress);
                 }, downloadUrl);
 
-                io.emit('updateComplete', { success: true });
+                const io = getIO();
+                if (io) io.emit('updateComplete', { success: true });
             } catch (error) {
                 console.error('Error applying update:', error);
-                io.emit('updateError', { error: error.message });
+                const io = getIO();
+                if (io) io.emit('updateError', { error: error.message });
             }
         }, 100);
 
