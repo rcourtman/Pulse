@@ -310,11 +310,6 @@ PulseApp.ui.pbs = (() => {
         const datastoresSection = createDatastoresSection(instance, instanceIndex);
         container.appendChild(datastoresSection);
         
-        // Storage efficiency section
-        const efficiencySection = createStorageEfficiencySection(instance, instanceIndex);
-        if (efficiencySection) {
-            container.appendChild(efficiencySection);
-        }
         
         // Task summary table
         const summaryTable = createTaskSummaryTable(instance, instanceIndex);
@@ -1664,59 +1659,72 @@ PulseApp.ui.pbs = (() => {
     
     // Create storage efficiency section
     function createStorageEfficiencySection(instance, instanceIndex) {
-        // Skip if no datastores or no deduplication data
+        // Skip if no datastores
         if (!instance.datastores || instance.datastores.length === 0) {
             return null;
         }
         
-        // Calculate aggregate storage efficiency metrics
-        let totalLogicalSize = 0;
-        let totalActualSize = 0;
-        let totalSaved = 0;
+        // Calculate storage metrics
+        let totalUsed = 0;
         let totalCapacity = 0;
-        let datastoresWithDedup = 0;
-        
-        // Get backup count from snapshots
-        let totalBackups = 0;
-        let totalVMs = new Set();
+        let oldestBackup = Infinity;
+        let newestBackup = 0;
+        let historicalSizes = [];
         
         instance.datastores.forEach(ds => {
-            if (ds.deduplicationFactor && ds.deduplicationFactor > 1) {
-                datastoresWithDedup++;
-                
-                // Calculate logical size from actual size and dedup factor
-                const actualSize = ds.used || 0;
-                const logicalSize = actualSize * ds.deduplicationFactor;
-                const savedSpace = logicalSize - actualSize;
-                
-                totalActualSize += actualSize;
-                totalLogicalSize += logicalSize;
-                totalSaved += savedSpace;
-            }
-            
-            // Add total capacity
+            totalUsed += ds.used || 0;
             totalCapacity += ds.total || 0;
             
-            // Count backups and unique VMs
+            // Track backup times and sizes for growth calculation
             if (ds.snapshots && Array.isArray(ds.snapshots)) {
-                totalBackups += ds.snapshots.length;
                 ds.snapshots.forEach(snap => {
-                    if (snap['backup-id']) {
-                        totalVMs.add(snap['backup-id']);
+                    const backupTime = snap['backup-time'];
+                    if (backupTime) {
+                        if (backupTime < oldestBackup) oldestBackup = backupTime;
+                        if (backupTime > newestBackup) newestBackup = backupTime;
+                        
+                        // Collect size data for growth rate calculation
+                        let snapSize = 0;
+                        if (snap.files && Array.isArray(snap.files)) {
+                            snapSize = snap.files.reduce((sum, file) => sum + (file.size || 0), 0);
+                        }
+                        historicalSizes.push({ time: backupTime, size: snapSize });
                     }
                 });
             }
         });
         
-        // Don't show section if no deduplication data
-        if (datastoresWithDedup === 0) {
-            return null;
+        // Calculate growth rate over last 7 days
+        const now = Date.now() / 1000;
+        const sevenDaysAgo = now - (7 * 24 * 60 * 60);
+        const recentBackups = historicalSizes.filter(b => b.time >= sevenDaysAgo);
+        
+        let growthRate = 0;
+        if (recentBackups.length > 0) {
+            const totalRecentSize = recentBackups.reduce((sum, b) => sum + b.size, 0);
+            growthRate = totalRecentSize / 7; // Daily average
         }
         
-        // Calculate metrics
-        const savingsPercent = totalLogicalSize > 0 ? ((totalSaved / totalLogicalSize) * 100) : 0;
-        const utilizationPercent = totalCapacity > 0 ? ((totalActualSize / totalCapacity) * 100) : 0;
-        const avgBackupsPerVM = totalVMs.size > 0 ? Math.round(totalBackups / totalVMs.size) : 0;
+        // Calculate days until full
+        const spaceRemaining = totalCapacity - totalUsed;
+        const daysUntilFull = growthRate > 0 ? Math.floor(spaceRemaining / growthRate) : null;
+        
+        // Calculate success rate from tasks
+        let successRate = 100;
+        let totalTasks = 0;
+        let successfulTasks = 0;
+        
+        if (instance.tasks && instance.tasks.backup) {
+            instance.tasks.backup.forEach(task => {
+                if (task.starttime >= sevenDaysAgo) {
+                    totalTasks++;
+                    if (task.status === 'OK') successfulTasks++;
+                }
+            });
+            if (totalTasks > 0) {
+                successRate = Math.round((successfulTasks / totalTasks) * 100);
+            }
+        }
         
         // Create section
         const section = document.createElement('div');
@@ -1724,55 +1732,68 @@ PulseApp.ui.pbs = (() => {
         
         const heading = document.createElement('h4');
         heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
-        heading.textContent = 'Storage Impact';
+        heading.textContent = 'Storage Health';
         section.appendChild(heading);
         
         // Create metrics grid
         const metricsGrid = document.createElement('div');
-        metricsGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4';
+        metricsGrid.className = 'grid grid-cols-1 sm:grid-cols-3 gap-4';
         
-        // Space saved
-        const savedCard = createMetricCard(
-            'Space Saved',
-            PulseApp.utils.formatBytes(totalSaved),
-            'text-green-600 dark:text-green-400',
-            `${savingsPercent.toFixed(1)}% reduction`
+        // Growth rate
+        const growthCard = createMetricCard(
+            'Growth Rate',
+            growthRate > 0 ? `+${PulseApp.utils.formatBytes(growthRate)}/day` : 'No growth',
+            growthRate > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
+            'Last 7 days average'
         );
-        metricsGrid.appendChild(savedCard);
+        metricsGrid.appendChild(growthCard);
         
-        // Logical data protected
-        const logicalCard = createMetricCard(
-            'Data Protected',
-            PulseApp.utils.formatBytes(totalLogicalSize),
-            'text-blue-600 dark:text-blue-400',
-            `Logical size`
-        );
-        metricsGrid.appendChild(logicalCard);
+        // Days until full
+        let daysText, daysColor;
+        if (daysUntilFull === null) {
+            daysText = 'N/A';
+            daysColor = 'text-gray-600 dark:text-gray-400';
+        } else if (daysUntilFull < 30) {
+            daysText = `~${daysUntilFull} days`;
+            daysColor = 'text-red-600 dark:text-red-400';
+        } else if (daysUntilFull < 90) {
+            daysText = `~${daysUntilFull} days`;
+            daysColor = 'text-orange-600 dark:text-orange-400';
+        } else if (daysUntilFull > 365) {
+            daysText = '>1 year';
+            daysColor = 'text-green-600 dark:text-green-400';
+        } else {
+            daysText = `~${daysUntilFull} days`;
+            daysColor = 'text-green-600 dark:text-green-400';
+        }
         
-        // Storage utilization
-        const utilizationCard = createMetricCard(
-            'PBS Utilization',
-            `${utilizationPercent.toFixed(1)}%`,
-            utilizationPercent > 80 ? 'text-orange-600 dark:text-orange-400' : 'text-purple-600 dark:text-purple-400',
-            `${PulseApp.utils.formatBytes(totalActualSize)} of ${PulseApp.utils.formatBytes(totalCapacity)}`
+        const daysCard = createMetricCard(
+            'Days Until Full',
+            daysText,
+            daysColor,
+            `At current growth rate`
         );
-        metricsGrid.appendChild(utilizationCard);
+        metricsGrid.appendChild(daysCard);
         
-        // Backup density
-        const densityCard = createMetricCard(
-            'Backup Density',
-            `${avgBackupsPerVM} per VM`,
-            'text-indigo-600 dark:text-indigo-400',
-            `${totalBackups} backups, ${totalVMs.size} VMs`
+        // Success rate
+        const successColor = successRate === 100 ? 'text-green-600 dark:text-green-400' : 
+                           successRate >= 95 ? 'text-blue-600 dark:text-blue-400' : 
+                           'text-orange-600 dark:text-orange-400';
+        
+        const successCard = createMetricCard(
+            'Backup Success',
+            `${successRate}%`,
+            successColor,
+            `${successfulTasks}/${totalTasks} last 7d`
         );
-        metricsGrid.appendChild(densityCard);
+        metricsGrid.appendChild(successCard);
         
         section.appendChild(metricsGrid);
         
         // Add explanation text
         const explanation = document.createElement('p');
         explanation.className = 'text-xs text-gray-500 dark:text-gray-400 mt-3';
-        explanation.textContent = 'Shows the storage impact of deduplication across all PBS datastores. Space saved represents the difference between logical (uncompressed) and actual (deduplicated) storage usage.';
+        explanation.textContent = 'Storage health metrics based on actual usage patterns and growth trends from the last 7 days.';
         section.appendChild(explanation);
         
         return section;
