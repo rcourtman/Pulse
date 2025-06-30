@@ -134,7 +134,7 @@ class DiagnosticTool {
                     host: this.sanitizeUrl(pbs.host),
                     name: this.sanitizeUrl(pbs.name),
                     // Sanitize node_name
-                    node_name: pbs.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
+                    node_name: (pbs.node_name === 'NOT SET' || pbs.node_name === 'auto-discovered') ? pbs.node_name : `pbs-node-${index + 1}`,
                     // Keep namespace if configured
                     namespace: pbs.namespace || null,
                     // Remove potentially sensitive fields, keep only structure info
@@ -174,7 +174,7 @@ class DiagnosticTool {
                     host: this.sanitizeUrl(perm.host),
                     name: this.sanitizeUrl(perm.name),
                     // Sanitize node_name
-                    node_name: perm.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
+                    node_name: (perm.node_name === 'NOT SET' || perm.node_name === 'auto-discovered') ? perm.node_name : `pbs-node-${index + 1}`,
                     // Keep namespace if configured
                     namespace: perm.namespace || null,
                     // Keep namespace test results
@@ -543,7 +543,7 @@ class DiagnosticTool {
                     id: id,
                     name: clientObj.config?.name || id,
                     host: clientObj.config?.host,
-                    node_name: clientObj.config?.nodeName || clientObj.config?.node_name || 'NOT SET',
+                    node_name: clientObj.config?.nodeName || clientObj.config?.node_name || 'auto-discovered',
                     namespace: clientObj.config?.namespace || null,
                     canConnect: false,
                     canListDatastores: false,
@@ -710,7 +710,7 @@ class DiagnosticTool {
                         host: clientObj.config.host,
                         name: clientObj.config.name || id,
                         port: clientObj.config.port || '8007',
-                        node_name: nodeName || 'NOT SET',
+                        node_name: nodeName || 'auto-discovered',
                         namespace: clientObj.config.namespace || null,
                         tokenConfigured: !!clientObj.config.tokenId,
                         selfSignedCerts: clientObj.config.allowSelfSignedCerts || false
@@ -1023,13 +1023,7 @@ class DiagnosticTool {
                         }
                     }
                     
-                    if (perm.node_name === 'NOT SET') {
-                        report.recommendations.push({
-                            severity: 'critical',
-                            category: 'PBS Configuration',
-                            message: `PBS instance "${perm.name}" is missing PBS_NODE_NAME. This is required for the backups tab to work. SSH to your PBS server and run 'hostname' to get the correct value, then add PBS_NODE_NAME=<hostname> to your .env file.`
-                        });
-                    }
+                    // Node name is now auto-discovered, no need to check for it
                     
                     // Check namespace configuration and access
                     if (perm.namespace && perm.namespaceAccess) {
@@ -1106,21 +1100,7 @@ class DiagnosticTool {
         }
 
         if (report.configuration && report.configuration.pbs && Array.isArray(report.configuration.pbs)) {
-            report.configuration.pbs.forEach((pbs, index) => {
-            if (pbs.node_name === 'NOT SET') {
-                // Only add if we haven't already added this from permissions check
-                const alreadyAdded = report.recommendations.some(r => 
-                    r.category === 'PBS Configuration' && r.message.includes(pbs.name)
-                );
-                if (!alreadyAdded) {
-                    report.recommendations.push({
-                        severity: 'critical',
-                        category: 'PBS Configuration',
-                        message: `PBS instance "${pbs.name}" is missing PBS_NODE_NAME. This is required for the backups tab to work. SSH to your PBS server and run 'hostname' to get the correct value, then add PBS_NODE_NAME=<hostname> to your .env file.`
-                    });
-                }
-            }
-        });
+            // Node name is now auto-discovered, no need to check for it
         }
 
         // Check if there are backups but no guests
