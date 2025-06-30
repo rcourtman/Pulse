@@ -135,6 +135,18 @@ PulseApp.ui.backups = (() => {
                             coverageContainer.outerHTML = renderBackupCoverage();
                         }
                         
+                        // Update PBS storage info
+                        const pbsStorageContainer = container.querySelector('.pbs-storage-container');
+                        if (pbsStorageContainer) {
+                            pbsStorageContainer.outerHTML = renderPBSStorageInfo();
+                        } else if (backupsData.pbsEnabled && backupsData.pbsStorageInfo) {
+                            // Insert after coverage if it doesn't exist yet
+                            const coverageEl = container.querySelector('.backup-coverage-container');
+                            if (coverageEl) {
+                                coverageEl.insertAdjacentHTML('afterend', renderPBSStorageInfo());
+                            }
+                        }
+                        
                         // Update chart
                         renderBackupTrendChart();
                     } else {
@@ -301,6 +313,66 @@ PulseApp.ui.backups = (() => {
                             </div>
                         </div>
                     ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderPBSStorageInfo() {
+        if (!backupsData.pbsEnabled || !backupsData.pbsStorageInfo) {
+            return '';
+        }
+        
+        const info = backupsData.pbsStorageInfo;
+        
+        // Calculate logical size from all PBS backups
+        let logicalSize = 0;
+        backupsData.unified.forEach(backup => {
+            if (backup.source === 'pbs') {
+                logicalSize += backup.size || 0;
+            }
+        });
+        
+        const actualUsed = info.actualUsed || 0;
+        const dedupFactor = info.deduplicationFactor || 1;
+        const savings = logicalSize > actualUsed ? Math.round(((logicalSize - actualUsed) / logicalSize) * 100) : 0;
+        
+        return `
+            <!-- PBS Storage Summary -->
+            <div class="pbs-storage-container mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
+                <div class="p-3">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">PBS Storage Efficiency</h3>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                            Deduplication: ${dedupFactor.toFixed(1)}x
+                        </span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-gray-800 dark:text-gray-100">${formatBytes(logicalSize).text}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Logical Size</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500">Total data protected</div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-green-600 dark:text-green-400">${formatBytes(actualUsed).text}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Actual Used</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500">After deduplication</div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-blue-600 dark:text-blue-400">${savings}%</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Space Saved</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500">By deduplication</div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-gray-800 dark:text-gray-100">${formatBytes(info.available || 0).text}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Available</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500">Remaining capacity</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
