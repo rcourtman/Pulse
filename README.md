@@ -783,6 +783,8 @@ The update process:
 - Preserves your settings
 - Automatically restarts the application
 
+**Note:** If the in-app updater fails or crashes, use the manual update method below.
+
 ### Community Scripts LXC Installation
 
 If you installed using the Community Scripts method, simply re-run the original installation command:
@@ -807,14 +809,25 @@ This pulls the latest image and recreates the container with the new version.
 
 **Note:** The web-based update feature will detect Docker deployments and provide these instructions instead of attempting an in-place update.
 
-### Manual LXC Installation
+### Manual Installation Updates
 
-If you used the manual installation script, update by re-running it:
+If you installed Pulse manually (not using Docker or Community Scripts):
+
+#### Using the Update Flag (Recommended)
+```bash
+sudo /opt/pulse/scripts/install-pulse.sh --update
+```
+
+This will automatically download and install the latest version while preserving your configuration.
+
+#### Alternative Method
+If the above doesn't work, you can re-download and run the installer:
 
 ```bash
-# Navigate to where you downloaded the script
-cd /path/to/script/directory
-./install-pulse.sh
+# Download the latest installer
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh > install-pulse.sh
+chmod +x install-pulse.sh
+sudo ./install-pulse.sh
 ```
 
 Or run non-interactively (useful for automated updates):
