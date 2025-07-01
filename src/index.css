@@ -21,13 +21,13 @@
   /* Default slider thumb (handle) - override custom-slider blue styles */
   input[type="range"]::-webkit-slider-thumb,
   input[type="range"].custom-slider::-webkit-slider-thumb {
-    @apply appearance-none w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer;
+    @apply appearance-none w-3 h-3 bg-gray-400 dark:bg-gray-400 rounded-full cursor-pointer;
     margin-top: 0;
   }
   
   input[type="range"]::-moz-range-thumb,
   input[type="range"].custom-slider::-moz-range-thumb {
-    @apply appearance-none w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer border-0;
+    @apply appearance-none w-3 h-3 bg-gray-400 dark:bg-gray-400 rounded-full cursor-pointer border-0;
   }
   
   /* Custom threshold slider thumb - blue to indicate custom value */
