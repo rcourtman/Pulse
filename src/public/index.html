@@ -776,6 +776,51 @@
         -webkit-backface-visibility: hidden;
     }
     
+    /* Add border to toggle switch tracks for better visibility in light mode */
+    .relative.w-9.h-5.bg-gray-200 {
+        border: 1px solid #d1d5db; /* gray-300 */
+    }
+    
+    .relative.w-11.h-6.bg-gray-200 {
+        border: 1px solid #d1d5db; /* gray-300 */
+    }
+    
+    /* Ensure dark mode tracks don't have unnecessary borders */
+    .dark .relative.w-9.h-5.bg-gray-700,
+    .dark .relative.w-11.h-6.bg-gray-700 {
+        border: 1px solid transparent;
+    }
+    
+    /* Add outline to range input sliders for better visibility in light mode */
+    input[type="range"].bg-gray-300,
+    input[type="range"].custom-slider {
+        outline: 1px solid #d1d5db; /* gray-300 */
+        outline-offset: -1px;
+    }
+    
+    /* Darker outline for better contrast in light mode */
+    input[type="range"]::-webkit-slider-track {
+        box-shadow: inset 0 0 0 1px #d1d5db; /* gray-300 */
+    }
+    
+    input[type="range"]::-moz-range-track {
+        box-shadow: inset 0 0 0 1px #d1d5db; /* gray-300 */
+    }
+    
+    /* Remove outline in dark mode where contrast is already good */
+    .dark input[type="range"].bg-gray-600,
+    .dark input[type="range"].custom-slider {
+        outline: none;
+    }
+    
+    .dark input[type="range"]::-webkit-slider-track {
+        box-shadow: none;
+    }
+    
+    .dark input[type="range"]::-moz-range-track {
+        box-shadow: none;
+    }
+    
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
