@@ -1,0 +1,19 @@
+{
+  "name": "Pulse - Proxmox Monitoring",
+  "short_name": "Pulse",
+  "description": "Lightweight monitoring dashboard for Proxmox VE and PBS",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "orientation": "portrait-primary"
+}

@@ -4,7 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
+  
+  <!-- Modern favicon setup -->
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="apple-touch-icon" href="/logo.svg">
+  
+  <!-- PWA & Modern Web App -->
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: dark)">
+  
   <link rel="stylesheet" href="/output.css">
   <style>
     @keyframes pulse {
@@ -21,10 +31,14 @@
       animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       transform-origin: center;
     }
-    .pulse-logo-outer { fill: #2563eb; }
-    .pulse-logo-inner { fill: #ffffff; }
-    .dark .pulse-logo-outer { fill: #3b82f6; }
-    .dark .pulse-logo-inner { fill: #dbeafe; }
+    /* Updated to match new logo design */
+    .pulse-logo { width: 100%; height: 100%; }
+    .pulse-bg { fill: #2563eb; }
+    .pulse-ring { fill: none; stroke: #ffffff; stroke-width: 14; opacity: 0.92; }
+    .pulse-center { fill: #ffffff; }
+    .dark .pulse-bg { fill: #3b82f6; }
+    .dark .pulse-ring { stroke: #dbeafe; }
+    .dark .pulse-center { fill: #dbeafe; }
     
     /* Fixed table column widths to prevent shifting */
     #main-table {
@@ -826,10 +840,11 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
   <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80">
     <div class="text-center">
-       <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo mx-auto mb-2">
+       <svg width="40" height="40" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" class="pulse-logo mx-auto mb-2">
         <title>Pulse Logo</title>
-        <circle class="pulse-logo-outer" cx="50" cy="50" r="45"/>
-        <circle class="pulse-logo-inner pulse-logo-circle" cx="50" cy="50" r="25"/>
+        <circle class="pulse-bg" cx="128" cy="128" r="122"/>
+        <circle class="pulse-ring pulse-logo-circle" cx="128" cy="128" r="84"/>
+        <circle class="pulse-center pulse-logo-circle" cx="128" cy="128" r="26"/>
       </svg>
       <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading data...</p>
     </div>
@@ -838,10 +853,11 @@
     <div class="header flex flex-row justify-between items-center mb-2">
       <div class="hidden md:block md:flex-1"></div>
       <div class="flex items-center gap-1 flex-none">
-          <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
+          <svg width="20" height="20" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
             <title>Pulse Logo</title>
-            <circle class="pulse-logo-outer" cx="50" cy="50" r="45"/>
-            <circle class="pulse-logo-inner pulse-logo-circle" cx="50" cy="50" r="25"/>
+            <circle class="pulse-bg" cx="128" cy="128" r="122"/>
+            <circle class="pulse-ring pulse-logo-circle" cx="128" cy="128" r="84"/>
+            <circle class="pulse-center pulse-logo-circle" cx="128" cy="128" r="26"/>
           </svg>
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
           <span id="version-badge" class="text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900 px-1 py-0.5 rounded ml-1 hidden"></span>
