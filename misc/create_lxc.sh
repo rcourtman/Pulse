@@ -116,6 +116,7 @@ function select_storage() {
   local -a MENU
   local -A STORAGE_MAP
   local COL_WIDTH=0
+
   while read -r TAG TYPE _ TOTAL USED FREE _; do
     [[ -n "$TAG" && -n "$TYPE" ]] || continue
     local DISPLAY="${TAG} (${TYPE})"
@@ -134,20 +135,15 @@ function select_storage() {
 
   if [ $((${#MENU[@]} / 3)) -eq 1 ]; then
     STORAGE_RESULT="${STORAGE_MAP[${MENU[0]}]}"
-
     return 0
   fi
 
   local WIDTH=$((COL_WIDTH + 42))
-
   while true; do
-    local DISPLAY_SELECTED=$(
-      whiptail --backtitle "Proxmox VE Helper Scripts" \
-        --title "Storage Pools" \
-        --radiolist "Which storage pool for ${CONTENT_LABEL,,}?\n(Spacebar to select)"
-
-      16 "$WIDTH" 6 "${MENU[@]}" 3>&1 1>&2 2>&3
-    )
+    local DISPLAY_SELECTED=$(whiptail --backtitle "Proxmox VE Helper Scripts" \
+      --title "Storage Pools" \
+      --radiolist "Which storage pool for ${CONTENT_LABEL,,}?\n(Spacebar to select)" \
+      16 "$WIDTH" 6 "${MENU[@]}" 3>&1 1>&2 2>&3)
 
     [[ $? -ne 0 ]] && return 3
 
@@ -160,6 +156,7 @@ function select_storage() {
     return 0
   done
 }
+
 # Test if required variables are set
 [[ "${CTID:-}" ]] || {
   msg_error "You need to set 'CTID' variable."
