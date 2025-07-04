@@ -123,6 +123,7 @@ network_check() {
   trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 }
 
+
 # This function updates the Container OS by running apt-get update and upgrade
 update_os() {
   msg_info "Updating Container OS"
