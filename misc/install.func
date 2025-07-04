@@ -65,12 +65,14 @@ setting_up_container() {
 }
 
 # This function checks the network connection by pinging a known IP address and prompts the user to continue if the internet is not connected
+# This function checks the network connection by pinging a known IP address and prompts the user to continue if the internet is not connected
 network_check() {
   set +e
   trap - ERR
   ipv4_connected=false
   ipv6_connected=false
   sleep 1
+
   # Check IPv4 connectivity to Google, Cloudflare & Quad9 DNS servers.
   if ping -c 1 -W 1 1.1.1.1 &>/dev/null || ping -c 1 -W 1 8.8.8.8 &>/dev/null || ping -c 1 -W 1 9.9.9.9 &>/dev/null; then
     msg_ok "IPv4 Internet Connected"
@@ -122,7 +124,6 @@ network_check() {
   set -e
   trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 }
-
 
 # This function updates the Container OS by running apt-get update and upgrade
 update_os() {
