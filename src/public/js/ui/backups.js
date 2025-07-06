@@ -2278,31 +2278,45 @@ PulseApp.ui.backups = (() => {
         const tbody = document.getElementById('missing-backups-tbody');
         if (!tbody || !backupsData.coverage) return;
         
-        const missingBackups = backupsData.coverage.missingBackups || [];
-        console.log('[Missing Backups] Populating table with:', missingBackups);
-        
-        if (missingBackups.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No missing backups data</td></tr>';
+        // Only populate if the dropdown is visible to avoid flicker
+        const dropdownList = document.getElementById('missing-backups-list');
+        if (dropdownList && dropdownList.classList.contains('hidden') && tbody.innerHTML !== '') {
+            // Dropdown is hidden and already has content, skip update
             return;
         }
         
-        tbody.innerHTML = missingBackups.map(guest => 
-            `<tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                <td class="p-2">
-                    <span class="font-medium">${guest.vmid}</span>
-                    ${guest.name ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${guest.name}</span>` : ''}
-                </td>
-                <td class="p-2">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${guest.type === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
-                        ${guest.type || 'Unknown'}
-                    </span>
-                </td>
-                <td class="p-2 text-xs">${guest.nodes ? guest.nodes.join(', ') : 'N/A'}</td>
-                <td class="p-2 text-xs ${guest.lastBackup === null ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
-                    ${guest.lastBackup === null ? 'Never' : `${guest.daysSinceBackup} day${guest.daysSinceBackup !== 1 ? 's' : ''} ago`}
-                </td>
-            </tr>`
-        ).join('');
+        const missingBackups = backupsData.coverage.missingBackups || [];
+        
+        // Check if content has actually changed to avoid unnecessary redraws
+        const currentContent = tbody.innerHTML;
+        let newContent;
+        
+        if (missingBackups.length === 0) {
+            newContent = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No missing backups data</td></tr>';
+        } else {
+            newContent = missingBackups.map(guest => 
+                `<tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="p-2">
+                        <span class="font-medium">${guest.vmid}</span>
+                        ${guest.name ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${guest.name}</span>` : ''}
+                    </td>
+                    <td class="p-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${guest.type === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                            ${guest.type || 'Unknown'}
+                        </span>
+                    </td>
+                    <td class="p-2 text-xs">${guest.nodes ? guest.nodes.join(', ') : 'N/A'}</td>
+                    <td class="p-2 text-xs ${guest.lastBackup === null ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
+                        ${guest.lastBackup === null ? 'Never' : `${guest.daysSinceBackup} day${guest.daysSinceBackup !== 1 ? 's' : ''} ago`}
+                    </td>
+                </tr>`
+            ).join('');
+        }
+        
+        // Only update if content has changed
+        if (currentContent !== newContent) {
+            tbody.innerHTML = newContent;
+        }
     }
 
     function toggleMissingBackups() {
@@ -2313,6 +2327,15 @@ PulseApp.ui.backups = (() => {
         
         if (list) {
             list.classList.toggle('hidden');
+            
+            // If we're showing the dropdown, ensure it's populated with latest data
+            if (currentFilters.showMissingBackups) {
+                const tbody = document.getElementById('missing-backups-tbody');
+                if (tbody) {
+                    tbody.innerHTML = ''; // Force refresh
+                    populateMissingBackupsTable();
+                }
+            }
         }
         
         if (chevron) {
