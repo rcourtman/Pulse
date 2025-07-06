@@ -133,6 +133,8 @@ PulseApp.ui.backups = (() => {
                         const coverageContainer = container.querySelector('.backup-coverage-container');
                         if (coverageContainer) {
                             coverageContainer.outerHTML = renderBackupCoverage();
+                            // Re-populate missing backups table after updating coverage
+                            setTimeout(() => populateMissingBackupsTable(), 50);
                         }
                         
                         // Update PBS storage info
@@ -280,7 +282,7 @@ PulseApp.ui.backups = (() => {
                                         Missing Guests (${coverage.missingBackups.length})
                                     </div>
                                     <div class="max-h-40 overflow-y-auto bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                                        <table class="w-full text-sm">
+                                        <table class="w-full text-sm" id="missing-backups-table">
                                             <thead class="sticky top-0 bg-gray-50 dark:bg-gray-700/50">
                                                 <tr>
                                                     <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Guest</th>
@@ -289,27 +291,8 @@ PulseApp.ui.backups = (() => {
                                                     <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Last Backup</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                ${coverage.missingBackups.length === 0 
-                                                    ? '<tr><td colspan="4" class="p-4 text-center text-gray-500">No missing backups data</td></tr>'
-                                                    : coverage.missingBackups.map(guest => 
-                                                        `<tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                                            <td class="p-2">
-                                                                <span class="font-medium">${guest.vmid}</span>
-                                                                ${guest.name ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${guest.name}</span>` : ''}
-                                                            </td>
-                                                            <td class="p-2">
-                                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${guest.type === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
-                                                                    ${guest.type || 'Unknown'}
-                                                                </span>
-                                                            </td>
-                                                            <td class="p-2 text-xs">${guest.nodes ? guest.nodes.join(', ') : 'N/A'}</td>
-                                                            <td class="p-2 text-xs ${guest.lastBackup === null ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
-                                                                ${guest.lastBackup === null ? 'Never' : `${guest.daysSinceBackup} day${guest.daysSinceBackup !== 1 ? 's' : ''} ago`}
-                                                            </td>
-                                                        </tr>`
-                                                    ).join('')
-                                                }
+                                            <tbody id="missing-backups-tbody">
+                                                <!-- Missing backups will be rendered here -->
                                             </tbody>
                                     </table>
                                     </div>
@@ -542,6 +525,7 @@ PulseApp.ui.backups = (() => {
             renderBackupTrendChart();
             updateSummary(); // Update summary to add deduplication info
             updateResetButtonState(); // Initialize reset button state
+            populateMissingBackupsTable(); // Populate missing backups dropdown
         }, 100);
     }
 
@@ -2288,6 +2272,37 @@ PulseApp.ui.backups = (() => {
         });
         
         g.appendChild(overlay);
+    }
+
+    function populateMissingBackupsTable() {
+        const tbody = document.getElementById('missing-backups-tbody');
+        if (!tbody || !backupsData.coverage) return;
+        
+        const missingBackups = backupsData.coverage.missingBackups || [];
+        console.log('[Missing Backups] Populating table with:', missingBackups);
+        
+        if (missingBackups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No missing backups data</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = missingBackups.map(guest => 
+            `<tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td class="p-2">
+                    <span class="font-medium">${guest.vmid}</span>
+                    ${guest.name ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${guest.name}</span>` : ''}
+                </td>
+                <td class="p-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${guest.type === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                        ${guest.type || 'Unknown'}
+                    </span>
+                </td>
+                <td class="p-2 text-xs">${guest.nodes ? guest.nodes.join(', ') : 'N/A'}</td>
+                <td class="p-2 text-xs ${guest.lastBackup === null ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
+                    ${guest.lastBackup === null ? 'Never' : `${guest.daysSinceBackup} day${guest.daysSinceBackup !== 1 ? 's' : ''} ago`}
+                </td>
+            </tr>`
+        ).join('');
     }
 
     function toggleMissingBackups() {
