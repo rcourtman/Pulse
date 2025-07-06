@@ -259,27 +259,28 @@ router.get('/backups/unified', (req, res) => {
             let totalUsed = 0;
             let totalAvailable = 0;
             let totalCapacity = 0;
-            let avgDedupFactor = 0;
-            let datastoreCount = 0;
+            let totalLogicalSize = 0;
             
             pbsDataArray.forEach(pbsInstance => {
                 if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
                     pbsInstance.datastores.forEach(datastore => {
                         if (datastore.used !== undefined && datastore.total !== undefined) {
-                            totalUsed += datastore.used;
+                            // Use gc-status disk-bytes if available for actual physical usage
+                            const physicalUsed = datastore.gcDetails?.['disk-bytes'] || datastore.used;
+                            const logicalData = datastore.gcDetails?.['index-data-bytes'] || (physicalUsed * (datastore.deduplicationFactor || 1));
+                            
+                            totalUsed += physicalUsed;
                             totalAvailable += datastore.available || 0;
                             totalCapacity += datastore.total;
-                            if (datastore.deduplicationFactor) {
-                                avgDedupFactor += datastore.deduplicationFactor;
-                                datastoreCount++;
-                            }
+                            totalLogicalSize += logicalData;
                         }
                     });
                 }
             });
             
-            if (totalUsed > 0 || datastoreCount > 0) {
-                avgDedupFactor = datastoreCount > 0 ? avgDedupFactor / datastoreCount : 1;
+            if (totalUsed > 0) {
+                // Calculate weighted average deduplication factor
+                const avgDedupFactor = totalUsed > 0 ? totalLogicalSize / totalUsed : 1;
                 pbsStorageInfo = {
                     actualUsed: totalUsed,
                     totalCapacity: totalCapacity,

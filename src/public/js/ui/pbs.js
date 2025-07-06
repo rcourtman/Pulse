@@ -226,20 +226,33 @@ PulseApp.ui.pbs = (() => {
             input.id = safeId;
             input.name = `pbs-namespace-${instanceId}`;
             input.value = namespace;
-            input.className = `hidden peer/${safeId}`;
+            input.className = 'hidden';
             input.checked = namespace === selectedNamespace;
             
             const label = document.createElement('label');
             label.htmlFor = safeId;
-            label.className = 'flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 ' +
-                (idx > 0 ? 'border-l border-gray-300 dark:border-gray-600 ' : '') +
-                `peer-checked/${safeId}:bg-gray-100 dark:peer-checked/${safeId}:bg-gray-700 ` +
-                `peer-checked/${safeId}:text-blue-600 dark:peer-checked/${safeId}:text-blue-400 ` +
-                'hover:bg-gray-50 dark:hover:bg-gray-700 select-none';
+            
+            // Apply selected styles based on checked state
+            const baseClasses = 'flex items-center justify-center px-3 py-1 text-xs cursor-pointer select-none transition-colors ' +
+                (idx > 0 ? 'border-l border-gray-300 dark:border-gray-600 ' : '');
+            
+            const stateClasses = input.checked
+                ? 'bg-blue-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700';
+            
+            label.className = baseClasses + stateClasses;
             label.textContent = namespace;
             
             input.addEventListener('change', () => {
                 if (input.checked) {
+                    // Update all labels in this group
+                    const allLabels = segmentedControl.querySelectorAll('label');
+                    allLabels.forEach(lbl => {
+                        lbl.className = baseClasses + 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700';
+                    });
+                    // Highlight the selected label
+                    label.className = baseClasses + 'bg-blue-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400';
+                    
                     state.selectedNamespaceByInstance.set(state.activeInstanceIndex, namespace);
                     renderActiveInstance();
                 }
@@ -270,6 +283,25 @@ PulseApp.ui.pbs = (() => {
                 };
             }
         });
+        
+        // Filter datastores to only show snapshots from selected namespace
+        if (filtered.datastores && Array.isArray(filtered.datastores)) {
+            filtered.datastores = filtered.datastores.map(datastore => ({
+                ...datastore,
+                snapshots: datastore.snapshots ? datastore.snapshots.filter(snapshot => 
+                    (snapshot.namespace || 'root') === namespace
+                ) : [],
+                backupCount: datastore.snapshots ? datastore.snapshots.filter(snapshot => 
+                    (snapshot.namespace || 'root') === namespace
+                ).length : 0
+            }));
+        }
+        
+        // Filter backup count
+        if (filtered.backupCount !== undefined) {
+            filtered.backupCount = filtered.datastores ? 
+                filtered.datastores.reduce((sum, ds) => sum + (ds.backupCount || 0), 0) : 0;
+        }
         
         return filtered;
     }
@@ -310,6 +342,11 @@ PulseApp.ui.pbs = (() => {
         const datastoresSection = createDatastoresSection(instance, instanceIndex);
         container.appendChild(datastoresSection);
         
+        // Storage efficiency section
+        const storageEfficiencySection = createStorageEfficiencySection(instance, instanceIndex);
+        if (storageEfficiencySection) {
+            container.appendChild(storageEfficiencySection);
+        }
         
         // Task summary table
         const summaryTable = createTaskSummaryTable(instance, instanceIndex);
@@ -1664,66 +1701,48 @@ PulseApp.ui.pbs = (() => {
             return null;
         }
         
-        // Calculate storage metrics
-        let totalUsed = 0;
-        let totalCapacity = 0;
-        let oldestBackup = Infinity;
-        let newestBackup = 0;
-        let historicalSizes = [];
+        // Calculate overall deduplication factor and space saved
+        let totalLogicalSize = 0;
+        let totalPhysicalSize = 0;
+        let avgDeduplicationFactor = 0;
+        let datastoreCount = 0;
         
         instance.datastores.forEach(ds => {
-            totalUsed += ds.used || 0;
-            totalCapacity += ds.total || 0;
-            
-            // Track backup times and sizes for growth calculation
-            if (ds.snapshots && Array.isArray(ds.snapshots)) {
-                ds.snapshots.forEach(snap => {
-                    const backupTime = snap['backup-time'];
-                    if (backupTime) {
-                        if (backupTime < oldestBackup) oldestBackup = backupTime;
-                        if (backupTime > newestBackup) newestBackup = backupTime;
-                        
-                        // Collect size data for growth rate calculation
-                        let snapSize = 0;
-                        if (snap.files && Array.isArray(snap.files)) {
-                            snapSize = snap.files.reduce((sum, file) => sum + (file.size || 0), 0);
-                        }
-                        historicalSizes.push({ time: backupTime, size: snapSize });
-                    }
-                });
+            if (ds.gcDetails) {
+                // Use gc-status values if available for accurate deduplication stats
+                const diskBytes = ds.gcDetails['disk-bytes'];
+                const indexDataBytes = ds.gcDetails['index-data-bytes'];
+                
+                if (diskBytes && indexDataBytes) {
+                    totalPhysicalSize += diskBytes;
+                    totalLogicalSize += indexDataBytes;
+                    
+                    const dedupFactor = indexDataBytes / diskBytes;
+                    avgDeduplicationFactor += dedupFactor;
+                    datastoreCount++;
+                }
+            } else if (ds.deduplicationFactor && ds.deduplicationFactor > 0) {
+                // Fallback to calculated values if gc-status not available
+                avgDeduplicationFactor += parseFloat(ds.deduplicationFactor);
+                datastoreCount++;
+                
+                const physicalSize = ds.used || 0;
+                const logicalSize = physicalSize * parseFloat(ds.deduplicationFactor);
+                
+                totalLogicalSize += logicalSize;
+                totalPhysicalSize += physicalSize;
             }
         });
         
-        // Calculate growth rate over last 7 days
-        const now = Date.now() / 1000;
-        const sevenDaysAgo = now - (7 * 24 * 60 * 60);
-        const recentBackups = historicalSizes.filter(b => b.time >= sevenDaysAgo);
-        
-        let growthRate = 0;
-        if (recentBackups.length > 0) {
-            const totalRecentSize = recentBackups.reduce((sum, b) => sum + b.size, 0);
-            growthRate = totalRecentSize / 7; // Daily average
+        // Calculate average deduplication factor
+        if (datastoreCount > 0) {
+            avgDeduplicationFactor = avgDeduplicationFactor / datastoreCount;
         }
         
-        // Calculate days until full
-        const spaceRemaining = totalCapacity - totalUsed;
-        const daysUntilFull = growthRate > 0 ? Math.floor(spaceRemaining / growthRate) : null;
-        
-        // Calculate success rate from tasks
-        let successRate = 100;
-        let totalTasks = 0;
-        let successfulTasks = 0;
-        
-        if (instance.tasks && instance.tasks.backup) {
-            instance.tasks.backup.forEach(task => {
-                if (task.starttime >= sevenDaysAgo) {
-                    totalTasks++;
-                    if (task.status === 'OK') successfulTasks++;
-                }
-            });
-            if (totalTasks > 0) {
-                successRate = Math.round((successfulTasks / totalTasks) * 100);
-            }
+        // Calculate space saved percentage
+        let spaceSavedPercent = 0;
+        if (totalLogicalSize > 0) {
+            spaceSavedPercent = ((totalLogicalSize - totalPhysicalSize) / totalLogicalSize) * 100;
         }
         
         // Create section
@@ -1732,68 +1751,65 @@ PulseApp.ui.pbs = (() => {
         
         const heading = document.createElement('h4');
         heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
-        heading.textContent = 'Storage Health';
+        heading.textContent = 'PBS Storage Efficiency';
         section.appendChild(heading);
         
         // Create metrics grid
         const metricsGrid = document.createElement('div');
         metricsGrid.className = 'grid grid-cols-1 sm:grid-cols-3 gap-4';
         
-        // Growth rate
-        const growthCard = createMetricCard(
-            'Growth Rate',
-            growthRate > 0 ? `+${PulseApp.utils.formatBytes(growthRate)}/day` : 'No growth',
-            growthRate > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
-            'Last 7 days average'
+        // Space Saved
+        const spaceSavedText = spaceSavedPercent > 0 ? `${Math.round(spaceSavedPercent)}%` : '0%';
+        const spaceSavedColor = spaceSavedPercent > 50 ? 'text-green-600 dark:text-green-400' : 
+                               spaceSavedPercent > 25 ? 'text-blue-600 dark:text-blue-400' : 
+                               spaceSavedPercent > 0 ? 'text-yellow-600 dark:text-yellow-400' :
+                               'text-gray-600 dark:text-gray-400';
+        
+        const spaceSavedCard = createMetricCard(
+            'Space Saved',
+            spaceSavedText,
+            spaceSavedColor,
+            totalLogicalSize > 0 ? `${PulseApp.utils.formatBytes(totalLogicalSize - totalPhysicalSize)} saved` : 'No deduplication data'
         );
-        metricsGrid.appendChild(growthCard);
+        metricsGrid.appendChild(spaceSavedCard);
         
-        // Days until full
-        let daysText, daysColor;
-        if (daysUntilFull === null) {
-            daysText = 'N/A';
-            daysColor = 'text-gray-600 dark:text-gray-400';
-        } else if (daysUntilFull < 30) {
-            daysText = `~${daysUntilFull} days`;
-            daysColor = 'text-red-600 dark:text-red-400';
-        } else if (daysUntilFull < 90) {
-            daysText = `~${daysUntilFull} days`;
-            daysColor = 'text-orange-600 dark:text-orange-400';
-        } else if (daysUntilFull > 365) {
-            daysText = '>1 year';
-            daysColor = 'text-green-600 dark:text-green-400';
-        } else {
-            daysText = `~${daysUntilFull} days`;
-            daysColor = 'text-green-600 dark:text-green-400';
-        }
+        // Deduplication Factor
+        const dedupText = avgDeduplicationFactor > 0 ? `${avgDeduplicationFactor.toFixed(1)}x` : 'N/A';
+        const dedupColor = avgDeduplicationFactor > 2 ? 'text-green-600 dark:text-green-400' : 
+                          avgDeduplicationFactor > 1.5 ? 'text-blue-600 dark:text-blue-400' : 
+                          avgDeduplicationFactor > 0 ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-gray-600 dark:text-gray-400';
         
-        const daysCard = createMetricCard(
-            'Days Until Full',
-            daysText,
-            daysColor,
-            `At current growth rate`
+        const dedupCard = createMetricCard(
+            'Avg Deduplication',
+            dedupText,
+            dedupColor,
+            avgDeduplicationFactor > 0 ? 'Across all datastores' : 'No data available'
         );
-        metricsGrid.appendChild(daysCard);
+        metricsGrid.appendChild(dedupCard);
         
-        // Success rate
-        const successColor = successRate === 100 ? 'text-green-600 dark:text-green-400' : 
-                           successRate >= 95 ? 'text-blue-600 dark:text-blue-400' : 
-                           'text-orange-600 dark:text-orange-400';
+        // Storage Ratio
+        const ratioText = totalLogicalSize > 0 ? 
+            `${PulseApp.utils.formatBytes(totalPhysicalSize)} / ${PulseApp.utils.formatBytes(totalLogicalSize)}` : 
+            'No data';
+        const ratioColor = spaceSavedPercent > 25 ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400';
         
-        const successCard = createMetricCard(
-            'Backup Success',
-            `${successRate}%`,
-            successColor,
-            `${successfulTasks}/${totalTasks} last 7d`
+        const ratioCard = createMetricCard(
+            'Physical / Logical',
+            totalLogicalSize > 0 ? PulseApp.utils.formatBytes(totalPhysicalSize) : 'N/A',
+            ratioColor,
+            totalLogicalSize > 0 ? `of ${PulseApp.utils.formatBytes(totalLogicalSize)} logical` : 'No deduplication data'
         );
-        metricsGrid.appendChild(successCard);
+        metricsGrid.appendChild(ratioCard);
         
         section.appendChild(metricsGrid);
         
         // Add explanation text
         const explanation = document.createElement('p');
         explanation.className = 'text-xs text-gray-500 dark:text-gray-400 mt-3';
-        explanation.textContent = 'Storage health metrics based on actual usage patterns and growth trends from the last 7 days.';
+        explanation.textContent = avgDeduplicationFactor > 0 ? 
+            'Storage efficiency shows how much space is saved through PBS deduplication and compression.' :
+            'No deduplication data available. PBS may need to run garbage collection to calculate deduplication factors.';
         section.appendChild(explanation);
         
         return section;
