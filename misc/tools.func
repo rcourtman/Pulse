@@ -759,6 +759,7 @@ function fetch_and_deploy_gh_release() {
   local mode="${3:-tarball}" # tarball | binary | prebuild | singlefile
   local version="${4:-latest}"
   local target="${5:-/opt/$app}"
+  local asset_pattern="${6:-}"
 
   local app_lc=$(echo "${app,,}" | tr -d ' ')
   local version_file="$HOME/.${app_lc}"
