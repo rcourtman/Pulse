@@ -917,14 +917,24 @@ async function fetchPbsDatastoreData({ client, config }) {
         if (usageData.length > 0) {
             // Map usage data correctly with deduplication factor
             datastores = usageData.map(ds => {
-                let deduplicationFactor = null;
+                // Get deduplication factor directly from the API response
+                let deduplicationFactor = ds['deduplication-factor'] || null;
                 
-                // Calculate deduplication factor if available
-                const diskBytes = ds['gc-status']?.['disk-bytes'];
-                const indexDataBytes = ds['gc-status']?.['index-data-bytes'];
+                // If no deduplication factor in the response, try to calculate from gc-status
+                if (!deduplicationFactor) {
+                    const diskBytes = ds['gc-status']?.['disk-bytes'];
+                    const indexDataBytes = ds['gc-status']?.['index-data-bytes'];
+                    
+                    if (diskBytes && indexDataBytes && diskBytes > 0) {
+                        deduplicationFactor = (indexDataBytes / diskBytes).toFixed(2);
+                    }
+                }
                 
-                if (diskBytes && indexDataBytes && diskBytes > 0) {
-                    deduplicationFactor = (indexDataBytes / diskBytes).toFixed(2);
+                // Debug logging for deduplication factor
+                if (deduplicationFactor) {
+                    console.log(`[DataFetcher] Datastore ${ds.store} has deduplication factor: ${deduplicationFactor}`);
+                } else {
+                    console.log(`[DataFetcher] Datastore ${ds.store} has no deduplication factor available`);
                 }
                 
                 return {

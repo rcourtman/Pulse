@@ -325,16 +325,10 @@ PulseApp.ui.backups = (() => {
         
         const info = backupsData.pbsStorageInfo;
         
-        // Calculate logical size from all PBS backups
-        let logicalSize = 0;
-        backupsData.unified.forEach(backup => {
-            if (backup.source === 'pbs') {
-                logicalSize += backup.size || 0;
-            }
-        });
-        
+        // Calculate logical size from physical size and deduplication factor
         const actualUsed = info.actualUsed || 0;
         const dedupFactor = info.deduplicationFactor || 1;
+        const logicalSize = actualUsed * dedupFactor;
         const savings = logicalSize > actualUsed ? Math.round(((logicalSize - actualUsed) / logicalSize) * 100) : 0;
         
         return `
@@ -386,6 +380,7 @@ PulseApp.ui.backups = (() => {
 
         container.innerHTML = `
             ${renderBackupCoverage()}
+            ${renderPBSStorageInfo()}
             
             <!-- Backup Trend Chart -->
             <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">

@@ -12,6 +12,17 @@ class ResilientApiClient {
     this.hostname = this.extractHostname(baseConfig.baseURL);
     this.clients = new Map(); // Map of IP -> axios instance
     this.lastWorkingIp = null;
+    
+    // Add interceptors property for compatibility with axios API
+    this.requestInterceptors = [];
+    this.interceptors = {
+      request: {
+        use: (interceptor) => {
+          this.requestInterceptors.push(interceptor);
+          return this.requestInterceptors.length - 1;
+        }
+      }
+    };
   }
 
   extractHostname(url) {
@@ -53,6 +64,11 @@ class ResilientApiClient {
     if (this.authInterceptor) {
       client.interceptors.request.use(this.authInterceptor);
     }
+    
+    // Apply any additional request interceptors
+    this.requestInterceptors.forEach(interceptor => {
+      client.interceptors.request.use(interceptor);
+    });
 
     // Add response interceptor to track working IPs
     client.interceptors.response.use(
