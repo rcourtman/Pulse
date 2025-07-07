@@ -52,12 +52,11 @@ PulseApp.ui.snapshots = (() => {
                             tbody.innerHTML = renderSnapshotRows();
                         }
                         
-                        // Update summary
+                        // Update summary cards
                         const summary = calculateSummary();
-                        const summaryElements = container.querySelectorAll('.text-xl.font-semibold');
-                        if (summaryElements.length >= 2) {
-                            summaryElements[0].textContent = summary.totalCount;
-                            summaryElements[1].textContent = summary.uniqueGuests;
+                        const summaryContainer = container.querySelector('.grid');
+                        if (summaryContainer) {
+                            summaryContainer.innerHTML = renderSummaryCards(summary);
                         }
                     } else {
                         // First load - render full UI
@@ -89,18 +88,17 @@ PulseApp.ui.snapshots = (() => {
 
         const summary = calculateSummary();
 
+        const nodeCount = Object.keys(summary.nodeStats).length;
+        const gridCols = nodeCount === 1 ? 'grid-cols-1' : 
+                        nodeCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 
+                        nodeCount === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
+                        'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+        
         container.innerHTML = `
-            <!-- Snapshot Summary -->
-            <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="p-2">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Snapshot Summary</h3>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                            <span class="font-semibold ${summary.totalCount === 0 ? 'text-gray-600 dark:text-gray-400' : summary.totalCount <= 10 ? 'text-green-600 dark:text-green-400' : summary.totalCount <= 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${summary.totalCount}</span> active snapshots
-                            <span class="mx-1">•</span>
-                            <span class="font-semibold ${summary.uniqueGuests === 0 ? 'text-gray-600 dark:text-gray-400' : summary.uniqueGuests <= 5 ? 'text-green-600 dark:text-green-400' : summary.uniqueGuests <= 20 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${summary.uniqueGuests}</span> guests with snapshots
-                        </div>
-                    </div>
+            <!-- Snapshot Summary Cards -->
+            <div class="mb-3">
+                <div class="grid ${gridCols} gap-3">
+                    ${renderSummaryCards(summary)}
                 </div>
             </div>
 
@@ -174,15 +172,163 @@ PulseApp.ui.snapshots = (() => {
     function calculateSummary() {
         let totalCount = 0;
         const uniqueGuests = new Set();
+        const nodeStats = {};
+        const ageDistribution = { day: 0, week: 0, month: 0, older: 0 };
+        let oldestSnapshot = null;
+        let newestSnapshot = null;
+        let totalSize = 0;
+        const now = Date.now() / 1000;
 
         snapshotsData.forEach(snapshot => {
             totalCount++;
             uniqueGuests.add(`${snapshot.node}:${snapshot.vmid}`);
+            
+            // Node statistics
+            if (!nodeStats[snapshot.node]) {
+                nodeStats[snapshot.node] = {
+                    count: 0,
+                    vmCount: 0,
+                    lxcCount: 0,
+                    guests: new Set()
+                };
+            }
+            nodeStats[snapshot.node].count++;
+            nodeStats[snapshot.node].guests.add(snapshot.vmid);
+            if (snapshot.type === 'qemu') {
+                nodeStats[snapshot.node].vmCount++;
+            } else {
+                nodeStats[snapshot.node].lxcCount++;
+            }
+            
+            // Age distribution
+            const age = now - (snapshot.snaptime || 0);
+            if (age < 86400) ageDistribution.day++;
+            else if (age < 604800) ageDistribution.week++;
+            else if (age < 2592000) ageDistribution.month++;
+            else ageDistribution.older++;
+            
+            // Track oldest and newest
+            if (!oldestSnapshot || (snapshot.snaptime && snapshot.snaptime < oldestSnapshot.snaptime)) {
+                oldestSnapshot = snapshot;
+            }
+            if (!newestSnapshot || (snapshot.snaptime && snapshot.snaptime > newestSnapshot.snaptime)) {
+                newestSnapshot = snapshot;
+            }
+            
+            // Size (if available)
+            if (snapshot.size) totalSize += snapshot.size;
         });
 
-        return { totalCount, uniqueGuests: uniqueGuests.size };
+        // Convert node stats guests sets to counts
+        Object.keys(nodeStats).forEach(node => {
+            nodeStats[node].uniqueGuests = nodeStats[node].guests.size;
+            delete nodeStats[node].guests;
+        });
+
+        return { 
+            totalCount, 
+            uniqueGuests: uniqueGuests.size,
+            nodeStats,
+            ageDistribution,
+            oldestSnapshot,
+            newestSnapshot,
+            totalSize
+        };
     }
 
+    function renderSummaryCards(summary) {
+        const nodeNames = Object.keys(summary.nodeStats).sort();
+        
+        if (nodeNames.length === 0) {
+            return '';
+        }
+        
+        return nodeNames.map(nodeName => {
+            const node = summary.nodeStats[nodeName];
+            const now = Date.now() / 1000;
+            
+            // Find newest and oldest snapshots for this node
+            let nodeNewest = null;
+            let nodeOldest = null;
+            snapshotsData.forEach(snapshot => {
+                if (snapshot.node === nodeName) {
+                    if (!nodeNewest || snapshot.snaptime > nodeNewest.snaptime) {
+                        nodeNewest = snapshot;
+                    }
+                    if (!nodeOldest || snapshot.snaptime < nodeOldest.snaptime) {
+                        nodeOldest = snapshot;
+                    }
+                }
+            });
+            
+            // Format age for newest
+            let newestText = 'Never';
+            let newestColorClass = 'text-gray-500 dark:text-gray-400';
+            if (nodeNewest && nodeNewest.snaptime) {
+                const age = now - nodeNewest.snaptime;
+                if (age < 3600) {
+                    newestText = Math.floor(age / 60) + 'm ago';
+                    newestColorClass = 'text-green-600 dark:text-green-400';
+                } else if (age < 86400) {
+                    newestText = Math.floor(age / 3600) + 'h ago';
+                    newestColorClass = age < 43200 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400';
+                } else {
+                    newestText = Math.floor(age / 86400) + 'd ago';
+                    newestColorClass = age < 172800 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                }
+            }
+            
+            // Count critical/warning based on age
+            let oldCount = 0;
+            let veryOldCount = 0;
+            snapshotsData.forEach(snapshot => {
+                if (snapshot.node === nodeName && snapshot.snaptime) {
+                    const age = now - snapshot.snaptime;
+                    if (age > 2592000) veryOldCount++; // > 30 days
+                    else if (age > 604800) oldCount++; // > 7 days
+                }
+            });
+            
+            return `
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">${nodeName}</h3>
+                        <div class="flex items-center gap-3">
+                            ${veryOldCount > 0 ? `<span class="text-xs font-medium text-red-600 dark:text-red-400" title="${veryOldCount} snapshots older than 30 days">● ${veryOldCount}</span>` : ''}
+                            ${oldCount > 0 ? `<span class="text-xs font-medium text-yellow-600 dark:text-yellow-400" title="${oldCount} snapshots 7-30 days old">● ${oldCount}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Total Snapshots:</span>
+                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                        </div>
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Unique Guests:</span>
+                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.uniqueGuests}</span>
+                        </div>
+                        ${node.vmCount > 0 ? `
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">VM Snapshots:</span>
+                            <span class="ml-1 font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
+                        </div>
+                        ` : ''}
+                        ${node.lxcCount > 0 ? `
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">LXC Snapshots:</span>
+                            <span class="ml-1 font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
+                        </div>
+                        ` : ''}
+                        <div class="col-span-2 pt-1 border-t border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Latest Snapshot:</span>
+                            <span class="ml-1 font-semibold ${newestColorClass}">${newestText}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
     function renderSnapshotRows() {
         const filtered = filterSnapshots();
         const sorted = sortSnapshots(filtered);

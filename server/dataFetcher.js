@@ -513,19 +513,38 @@ function deduplicateClusterNodes(allNodes) {
                 
             if (shouldReplace) {
                 mergedNode = node;
+                // Preserve storage data from existing node if new node doesn't have it
+                if ((!node.storage || node.storage.length === 0) && existingNode.storage && existingNode.storage.length > 0) {
+                    mergedNode = {
+                        ...node,
+                        storage: existingNode.storage
+                    };
+                }
                 // Update cache if node is online
                 if (node.status === 'online') {
-                    nodeStateCache.set(nodeKey, { node, timestamp: now });
+                    nodeStateCache.set(nodeKey, { node: mergedNode, timestamp: now });
                 }
-            } else if (existingNode.status === 'online' && node.status !== 'online') {
-                // Handle transition states - if we had an online node but now getting offline status,
-                // it might be a temporary glitch during endpoint switching
-                // Keep the online status but mark it as potentially stale
-                mergedNode = {
-                    ...existingNode,
-                    _lastSeen: now,
-                    _possibleTransition: true
-                };
+            } else {
+                // Keep existing node but merge storage data if needed
+                mergedNode = existingNode;
+                // If new node has storage data and existing doesn't, add it
+                if (node.storage && node.storage.length > 0 && (!existingNode.storage || existingNode.storage.length === 0)) {
+                    mergedNode = {
+                        ...existingNode,
+                        storage: node.storage
+                    };
+                }
+                
+                if (existingNode.status === 'online' && node.status !== 'online') {
+                    // Handle transition states - if we had an online node but now getting offline status,
+                    // it might be a temporary glitch during endpoint switching
+                    // Keep the online status but mark it as potentially stale
+                    mergedNode = {
+                        ...mergedNode,
+                        _lastSeen: now,
+                        _possibleTransition: true
+                    };
+                }
             }
             
             nodeMap.set(nodeKey, mergedNode);
@@ -1919,7 +1938,6 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     await Promise.allSettled([...nodeBackupPromises, ...guestSnapshotPromises]);
     
     const deduplicatedStorageBackups = deduplicateStorageBackups(allStorageBackups);
-    
     
     return {
         backupTasks: allBackupTasks,

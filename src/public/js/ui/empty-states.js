@@ -44,8 +44,8 @@ PulseApp.ui.emptyStates = (() => {
                     <line x1="12" y1="8" x2="12" y2="12"/>
                     <line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>`,
-                title: 'No Proxmox Backup Servers',
-                message: 'No PBS instances are configured or available.',
+                title: 'No Remote Backup Servers',
+                message: 'No remote backup servers (PBS) are configured or available.',
                 actions: []
             },
             'loading': {

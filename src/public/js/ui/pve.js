@@ -36,7 +36,7 @@ PulseApp.ui.pve = (() => {
         if (!isInitialized || pveData.backups.length === 0) {
             container.innerHTML = `
                 <div class="p-4 text-center text-gray-500 dark:text-gray-400">
-                    Loading PVE backups...
+                    Loading local backups...
                 </div>
             `;
         }
@@ -181,7 +181,83 @@ PulseApp.ui.pve = (() => {
         `;
     }
     
-    // Render backup summary
+    // Calculate comprehensive backup statistics
+    function calculateBackupStats() {
+        const backups = pveData.backups || [];
+        
+        let totalSize = 0;
+        let oldestBackup = null;
+        let newestBackup = null;
+        const nodeStats = {};
+        const storageStats = {};
+        const typeStats = { vm: 0, lxc: 0 };
+        const ageDistribution = { day: 0, week: 0, month: 0, older: 0 };
+        const now = Date.now() / 1000;
+        
+        backups.forEach(backup => {
+            totalSize += backup.size || 0;
+            
+            // Track oldest/newest
+            if (!oldestBackup || backup.ctime < oldestBackup.ctime) {
+                oldestBackup = backup;
+            }
+            if (!newestBackup || backup.ctime > newestBackup.ctime) {
+                newestBackup = backup;
+            }
+            
+            // Node statistics
+            if (!nodeStats[backup.node]) {
+                nodeStats[backup.node] = {
+                    count: 0,
+                    size: 0,
+                    vmCount: 0,
+                    lxcCount: 0
+                };
+            }
+            nodeStats[backup.node].count++;
+            nodeStats[backup.node].size += backup.size || 0;
+            
+            // Storage statistics
+            if (!storageStats[backup.storage]) {
+                storageStats[backup.storage] = {
+                    count: 0,
+                    size: 0
+                };
+            }
+            storageStats[backup.storage].count++;
+            storageStats[backup.storage].size += backup.size || 0;
+            
+            // Type statistics
+            const isVM = backup.volid && backup.volid.includes('qemu');
+            if (isVM) {
+                typeStats.vm++;
+                nodeStats[backup.node].vmCount++;
+            } else {
+                typeStats.lxc++;
+                nodeStats[backup.node].lxcCount++;
+            }
+            
+            // Age distribution
+            const age = now - backup.ctime;
+            if (age < 86400) ageDistribution.day++;
+            else if (age < 604800) ageDistribution.week++;
+            else if (age < 2592000) ageDistribution.month++;
+            else ageDistribution.older++;
+        });
+        
+        return {
+            totalCount: backups.length,
+            totalSize,
+            oldestBackup,
+            newestBackup,
+            nodeStats,
+            storageStats,
+            typeStats,
+            ageDistribution
+        };
+    }
+    
+    // Render backup summary cards
     function renderBackupSummary() {
         const backups = pveData.backups || [];
         
@@ -189,45 +265,128 @@ PulseApp.ui.pve = (() => {
             return '';
         }
         
-        // Calculate total size and age statistics
-        let totalSize = 0;
-        let oldestBackup = null;
-        let newestBackup = null;
+        const stats = calculateBackupStats();
         
-        backups.forEach(backup => {
-            totalSize += backup.size || 0;
-            
-            if (!oldestBackup || backup.ctime < oldestBackup.ctime) {
-                oldestBackup = backup;
-            }
-            if (!newestBackup || backup.ctime > newestBackup.ctime) {
-                newestBackup = backup;
-            }
-        });
-        
-        const now = Date.now() / 1000;
-        const oldestAge = oldestBackup ? Math.floor((now - oldestBackup.ctime) / (24 * 60 * 60)) : 0;
-        const newestAge = newestBackup ? Math.floor((now - newestBackup.ctime) / (24 * 60 * 60)) : 0;
+        const nodeCount = Object.keys(stats.nodeStats).length;
+        const gridCols = nodeCount === 1 ? 'grid-cols-1' : 
+                        nodeCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 
+                        nodeCount === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
+                        'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
         
         return `
-            <!-- Backup Summary -->
-            <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="p-2">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">PVE Backup Summary</h3>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                            <span class="font-semibold text-gray-800 dark:text-gray-100">${backups.length}</span> backups
-                            <span class="mx-1">•</span>
-                            <span class="font-semibold ${getSizeColorClass(totalSize)}">${formatBytes(totalSize).text}</span>
-                            <span class="mx-1">•</span>
-                            Newest: <span class="font-semibold ${newestAge === 0 ? 'text-green-600 dark:text-green-400' : newestAge <= 3 ? 'text-blue-600 dark:text-blue-400' : newestAge <= 7 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${newestAge}d ago</span>
-                            <span class="mx-1">•</span>
-                            Oldest: <span class="font-semibold ${oldestAge <= 30 ? 'text-green-600 dark:text-green-400' : oldestAge <= 90 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${oldestAge}d ago</span>
-                        </div>
-                    </div>
+            <!-- Backup Summary Cards -->
+            <div class="mb-3">
+                <div class="grid ${gridCols} gap-3">
+                    ${renderBackupSummaryCards(stats)}
                 </div>
             </div>
         `;
+    }
+    
+    // Render individual summary cards per node
+    function renderBackupSummaryCards(stats) {
+        const nodeNames = Object.keys(stats.nodeStats).sort();
+        
+        if (nodeNames.length === 0) {
+            return '';
+        }
+        
+        // Single node shows as a single card, multiple nodes show per-node cards
+        return nodeNames.map(nodeName => {
+            const node = stats.nodeStats[nodeName];
+            const now = Date.now() / 1000;
+            
+            // Find newest and oldest backups for this node
+            let nodeNewest = null;
+            let nodeOldest = null;
+            let oldBackups = 0;
+            let veryOldBackups = 0;
+            
+            pveData.backups.forEach(backup => {
+                if (backup.node === nodeName) {
+                    if (!nodeNewest || backup.ctime > nodeNewest.ctime) {
+                        nodeNewest = backup;
+                    }
+                    if (!nodeOldest || backup.ctime < nodeOldest.ctime) {
+                        nodeOldest = backup;
+                    }
+                    
+                    // Count old backups
+                    const age = now - backup.ctime;
+                    if (age > 7776000) veryOldBackups++; // > 90 days
+                    else if (age > 2592000) oldBackups++; // > 30 days
+                }
+            });
+            
+            // Format age for newest
+            let newestText = 'Never';
+            let newestColorClass = 'text-gray-500 dark:text-gray-400';
+            if (nodeNewest) {
+                const age = now - nodeNewest.ctime;
+                if (age < 86400) {
+                    newestText = Math.floor(age / 3600) + 'h ago';
+                    newestColorClass = 'text-green-600 dark:text-green-400';
+                } else {
+                    const days = Math.floor(age / 86400);
+                    newestText = days + 'd ago';
+                    if (days === 0) newestColorClass = 'text-green-600 dark:text-green-400';
+                    else if (days <= 3) newestColorClass = 'text-blue-600 dark:text-blue-400';
+                    else if (days <= 7) newestColorClass = 'text-yellow-600 dark:text-yellow-400';
+                    else newestColorClass = 'text-red-600 dark:text-red-400';
+                }
+            }
+            
+            // Storage distribution for this node
+            const nodeStorages = {};
+            pveData.backups.forEach(backup => {
+                if (backup.node === nodeName) {
+                    if (!nodeStorages[backup.storage]) {
+                        nodeStorages[backup.storage] = 0;
+                    }
+                    nodeStorages[backup.storage]++;
+                }
+            });
+            const storageCount = Object.keys(nodeStorages).length;
+            
+            return `
+                <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">${nodeName}</h3>
+                        <div class="flex items-center gap-3">
+                            ${veryOldBackups > 0 ? `<span class="text-xs font-medium text-red-600 dark:text-red-400" title="${veryOldBackups} backups older than 90 days">● ${veryOldBackups}</span>` : ''}
+                            ${oldBackups > 0 ? `<span class="text-xs font-medium text-yellow-600 dark:text-yellow-400" title="${oldBackups} backups 30-90 days old">● ${oldBackups}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Total Backups:</span>
+                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                        </div>
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Total Size:</span>
+                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${formatBytes(node.size).text}</span>
+                        </div>
+                        ${node.vmCount > 0 ? `
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">VM Backups:</span>
+                            <span class="ml-1 font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
+                        </div>
+                        ` : ''}
+                        ${node.lxcCount > 0 ? `
+                        <div class="text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">LXC Backups:</span>
+                            <span class="ml-1 font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
+                        </div>
+                        ` : ''}
+                        <div class="col-span-2 pt-1 border-t border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
+                            <span class="text-gray-500 dark:text-gray-500">Latest Backup:</span>
+                            <span class="ml-1 font-semibold ${newestColorClass}">${newestText}</span>
+                            ${storageCount > 1 ? `<span class="ml-3 text-gray-500 dark:text-gray-500">Storages: <span class="font-semibold text-gray-800 dark:text-gray-200">${storageCount}</span></span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
     
     // Render table header

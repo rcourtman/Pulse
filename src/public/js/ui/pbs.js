@@ -34,7 +34,7 @@ PulseApp.ui.pbs = (() => {
         if (!isInitialized || pbsData.length === 0) {
             container.innerHTML = `
                 <div class="p-4 text-center text-gray-500 dark:text-gray-400">
-                    Loading PBS data...
+                    Loading remote backups...
                 </div>
             `;
         }
@@ -46,7 +46,7 @@ PulseApp.ui.pbs = (() => {
             container.innerHTML = `
                 <div class="p-8 text-center">
                     <div class="text-gray-500 dark:text-gray-400">
-                        Proxmox Backup Server integration is not configured
+                        Remote backup server integration is not configured
                     </div>
                 </div>
             `;
@@ -193,10 +193,22 @@ PulseApp.ui.pbs = (() => {
         const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
         const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
 
-        // Render instance tabs if multiple instances
+        // Render instance summary cards
         let html = '';
-        if (pbsInstances.length > 1) {
-            html += renderInstanceTabs();
+        if (pbsInstances.length >= 1) {
+            const instanceCount = pbsInstances.length;
+            const gridCols = instanceCount === 1 ? 'grid-cols-1' : 
+                            instanceCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 
+                            instanceCount === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
+                            'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+            
+            html += `
+                <div class="mb-3">
+                    <div class="grid ${gridCols} gap-3">
+                        ${pbsInstances.map((instance, index) => createPBSInstanceCard(instance, index)).join('')}
+                    </div>
+                </div>
+            `;
         }
         html += renderPBSContent();
         
@@ -214,28 +226,6 @@ PulseApp.ui.pbs = (() => {
         updateResetButtonState();
     }
 
-    // Render instance tabs for multiple PBS servers
-    function renderInstanceTabs() {
-        return `
-            <div class="border-b border-gray-200 dark:border-gray-700 mb-4">
-                <nav class="-mb-px flex space-x-4">
-                    ${pbsInstances.map((instance, index) => {
-                        const isActive = index === activeInstance;
-                        const instanceName = instance.pbsInstanceName || instance.nodeName || `PBS ${index + 1}`;
-                        return `
-                            <button 
-                                class="py-2 px-1 border-b-2 ${isActive ? 
-                                    'border-blue-500 font-medium text-sm text-blue-600 dark:text-blue-400' : 
-                                    'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm'}"
-                                onclick="PulseApp.ui.pbs.switchInstance(${index})">
-                                ${instanceName}
-                            </button>
-                        `;
-                    }).join('')}
-                </nav>
-            </div>
-        `;
-    }
 
     // Switch to a different PBS instance
     function switchInstance(index) {
@@ -456,6 +446,141 @@ PulseApp.ui.pbs = (() => {
         `;
     }
 
+    // Create PBS instance summary card
+    function createPBSInstanceCard(instance, instanceIndex) {
+        const instanceData = pbsData.filter(backup => backup.instanceIndex === instanceIndex);
+        const instanceName = instance.pbsInstanceName || instance.nodeName || `PBS ${instanceIndex + 1}`;
+        
+        // Calculate statistics for this instance
+        let totalSize = 0;
+        let verifiedCount = 0;
+        let failedTasks = 0;
+        let runningTasks = 0;
+        const uniqueGuests = new Set();
+        
+        instanceData.forEach(backup => {
+            totalSize += backup.size || 0;
+            if (backup.verified) verifiedCount++;
+            uniqueGuests.add(backup.vmid);
+        });
+        
+        // Get task stats for this instance
+        const now = Date.now() / 1000;
+        const last24h = now - (24 * 60 * 60);
+        
+        if (instance.tasks) {
+            instance.tasks.forEach(task => {
+                const taskTime = task.starttime || 0;
+                if (taskTime >= last24h) {
+                    if (!task.status || task.status.toLowerCase().includes('running')) {
+                        runningTasks++;
+                    } else if (task.status !== 'OK') {
+                        failedTasks++;
+                    }
+                }
+            });
+        }
+        
+        const verificationRate = instanceData.length > 0 ? (verifiedCount / instanceData.length) * 100 : 0;
+        
+        // Get storage info - show all datastores with sizes
+        let storageInfo = '';
+        if (instance.datastores && instance.datastores.length > 0) {
+            // Sort datastores by usage percentage (highest first)
+            const sortedDatastores = [...instance.datastores]
+                .filter(ds => ds.total && ds.used)
+                .sort((a, b) => {
+                    const percentA = (a.used / a.total) * 100;
+                    const percentB = (b.used / b.total) * 100;
+                    return percentB - percentA;
+                });
+            
+            if (sortedDatastores.length > 0) {
+                storageInfo = sortedDatastores.map(ds => {
+                    const usagePercent = (ds.used / ds.total) * 100;
+                    const color = usagePercent >= 90 ? 'red' : usagePercent >= 80 ? 'yellow' : 'green';
+                    const progressColorClass = {
+                        red: 'bg-red-500/60 dark:bg-red-500/50',
+                        yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
+                        green: 'bg-green-500/60 dark:bg-green-500/50'
+                    }[color];
+                    
+                    const usedFormatted = PulseApp.utils.formatBytesCompact(ds.used);
+                    const totalFormatted = PulseApp.utils.formatBytesCompact(ds.total);
+                    const displayText = `${usedFormatted}/${totalFormatted}`;
+                    
+                    return `
+                        <div class="text-sm">
+                            <div class="flex items-center justify-between mb-0.5">
+                                <span class="text-gray-500 dark:text-gray-500 truncate">${ds.name || 'Storage'}:</span>
+                                <span class="text-xs font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">${displayText} (${usagePercent.toFixed(0)}%)</span>
+                            </div>
+                            <div class="relative w-full h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                <div class="absolute top-0 left-0 h-full ${progressColorClass} rounded-full" style="width: ${usagePercent}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+        
+        // Format last backup time
+        let lastBackupTime = 0;
+        instanceData.forEach(backup => {
+            const backupTime = backup['backup-time'] || 0;
+            if (backupTime > lastBackupTime) lastBackupTime = backupTime;
+        });
+        
+        let lastBackupText = 'Never';
+        let lastBackupColorClass = 'text-gray-500 dark:text-gray-400';
+        if (lastBackupTime) {
+            const diff = now - lastBackupTime;
+            if (diff < 3600) {
+                lastBackupText = Math.floor(diff / 60) + 'm ago';
+                lastBackupColorClass = 'text-green-600 dark:text-green-400';
+            } else if (diff < 86400) {
+                lastBackupText = Math.floor(diff / 3600) + 'h ago';
+                lastBackupColorClass = diff < 43200 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400';
+            } else {
+                lastBackupText = Math.floor(diff / 86400) + 'd ago';
+                lastBackupColorClass = diff < 172800 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+            }
+        }
+        
+        const isActive = instanceIndex === activeInstance;
+        
+        return `
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'} cursor-pointer hover:shadow-lg transition-all" onclick="PulseApp.ui.pbs.switchInstance(${instanceIndex})">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">${instanceName}</h3>
+                    <div class="flex items-center gap-3">
+                        ${failedTasks > 0 ? `<span class="text-xs font-medium text-red-600 dark:text-red-400" title="${failedTasks} failed tasks in last 24h">● ${failedTasks}</span>` : ''}
+                        ${runningTasks > 0 ? `<span class="text-xs font-medium text-blue-600 dark:text-blue-400 animate-pulse" title="${runningTasks} running tasks">▶ ${runningTasks}</span>` : ''}
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="text-gray-500 dark:text-gray-500">Total Backups:</span>
+                        <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${instanceData.length}</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="text-gray-500 dark:text-gray-500">Total Size:</span>
+                        <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${PulseApp.utils.formatBytesCompact(totalSize)}</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="text-gray-500 dark:text-gray-500">Verified:</span>
+                        <span class="ml-1 font-semibold ${verificationRate === 100 ? 'text-green-600 dark:text-green-400' : verificationRate >= 80 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${verificationRate.toFixed(0)}%</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="text-gray-500 dark:text-gray-500">Latest Backup:</span>
+                        <span class="ml-1 font-semibold ${lastBackupColorClass}">${lastBackupText}</span>
+                    </div>
+                </div>
+                ${storageInfo ? `<div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">${storageInfo}</div>` : ''}
+            </div>
+        `;
+    }
+
     // Render backup summary
     function renderBackupSummary() {
         const backups = getActiveInstanceData();
@@ -525,7 +650,7 @@ PulseApp.ui.pbs = (() => {
                         <div class="relative h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600" style="min-width: fit-content;">
                             <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${storageUsedPercent}%;"></div>
                             <span class="relative flex items-center justify-center h-full px-2 text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                ${displayText}
+                                ${displayText} (${storageUsedPercent}%)
                             </span>
                         </div>
                     </div>
@@ -533,30 +658,8 @@ PulseApp.ui.pbs = (() => {
             }
         }
         
-        return `
-            <!-- PBS Summary -->
-            <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="p-2">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">PBS Backup Summary</h3>
-                        <div class="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2 flex-wrap">
-                            <span><span class="font-semibold text-gray-800 dark:text-gray-100">${backups.length}</span> backups</span>
-                            ${storageDisplay ? `<span class="mx-1">•</span>${storageDisplay}` : ''}
-                            <span><span class="mx-1">•</span>
-                            <span class="font-semibold ${verificationRate === 100 ? 'text-green-600 dark:text-green-400' : verificationRate >= 80 ? 'text-blue-600 dark:text-blue-400' : verificationRate >= 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${verificationRate}%</span> verified</span>
-                            ${protectedCount > 0 ? `<span><span class="mx-1">•</span>
-                            <span class="font-semibold text-blue-600 dark:text-blue-400">${protectedCount}</span> protected</span>` : ''}
-                            ${stats.failedTasks24h > 0 ? `<span><span class="mx-1">•</span>
-                            <span class="font-semibold text-red-600 dark:text-red-400">${stats.failedTasks24h}</span> failed</span>` : ''}
-                            ${stats.runningTasks > 0 ? `<span><span class="mx-1">•</span>
-                            <span class="font-semibold text-blue-600 dark:text-blue-400">${stats.runningTasks}</span> running</span>` : ''}
-                            <span><span class="mx-1">•</span>
-                            Last: <span class="font-semibold ${getTimeAgoColorClass(stats.lastBackupTime)}">${lastBackupText}</span></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Don't show inline summary since we're using cards
+        return '';
     }
 
     // Render table header
