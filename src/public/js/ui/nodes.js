@@ -90,7 +90,7 @@ PulseApp.ui.nodes = (() => {
         }
 
         const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1';
+        card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[250px]';
         // Node summary cards don't participate in alerts mode
 
         // Check if we can make the node name clickable
@@ -210,7 +210,7 @@ PulseApp.ui.nodes = (() => {
             const xlCols = calculateOptimalColumns(numNodes, 4);
             
             const gridDiv = document.createElement('div');
-            gridDiv.className = `grid grid-cols-1 sm:grid-cols-${smCols} md:grid-cols-${mdCols} lg:grid-cols-${lgCols} xl:grid-cols-${xlCols} gap-3`;
+            gridDiv.className = 'flex flex-wrap gap-3';
 
             sortedNodes.forEach(node => {
                 const cardElement = createNodeSummaryCard(node);

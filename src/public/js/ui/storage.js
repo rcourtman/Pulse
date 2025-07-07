@@ -295,7 +295,7 @@ PulseApp.ui.storage = (() => {
         summaryCardsContainer.className = 'mb-3';
         
         const cardsGrid = document.createElement('div');
-        cardsGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+        cardsGrid.className = 'flex flex-wrap gap-3';
         
         sortedNodeNames.forEach(nodeName => {
             const nodeStorageData = storageByNode[nodeName];
@@ -450,7 +450,7 @@ PulseApp.ui.storage = (() => {
 
     function createNodeStorageSummaryCard(nodeName, storageList) {
         const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1';
+        card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[280px]';
         
         // Get active storages and sort by usage percentage
         const activeStorages = [];
