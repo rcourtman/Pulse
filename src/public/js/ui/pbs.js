@@ -196,15 +196,9 @@ PulseApp.ui.pbs = (() => {
         // Render instance summary cards
         let html = '';
         if (pbsInstances.length >= 1) {
-            const instanceCount = pbsInstances.length;
-            const gridCols = instanceCount === 1 ? 'grid-cols-1' : 
-                            instanceCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 
-                            instanceCount === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
-                            'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-            
             html += `
                 <div class="mb-3">
-                    <div class="grid ${gridCols} gap-3">
+                    <div class="flex flex-wrap gap-3">
                         ${pbsInstances.map((instance, index) => createPBSInstanceCard(instance, index)).join('')}
                     </div>
                 </div>
@@ -550,7 +544,7 @@ PulseApp.ui.pbs = (() => {
         const isActive = instanceIndex === activeInstance;
         
         return `
-            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'} cursor-pointer hover:shadow-lg transition-all" onclick="PulseApp.ui.pbs.switchInstance(${instanceIndex})">
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'} cursor-pointer hover:shadow-lg transition-all flex-1 min-w-0 sm:min-w-[280px]" onclick="PulseApp.ui.pbs.switchInstance(${instanceIndex})">
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">${instanceName}</h3>
                     <div class="flex items-center gap-3">
