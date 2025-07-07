@@ -121,5 +121,32 @@
       ],
       "excludeGlobs": []
     }
+  ],
+  "addon": [
+    {
+      "fileStatus": null,
+      "includeGlobs": [
+        "tools/addon/**"
+      ],
+      "excludeGlobs": []
+    }
+  ],
+  "pve-tool": [
+    {
+      "fileStatus": null,
+      "includeGlobs": [
+        "tools/pve/**"
+      ],
+      "excludeGlobs": []
+    }
+  ],
+  "vm": [
+    {
+      "fileStatus": null,
+      "includeGlobs": [
+        "vm/**"
+      ],
+      "excludeGlobs": []
+    }
   ]
 }
