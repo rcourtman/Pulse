@@ -951,13 +951,28 @@ function fetch_and_deploy_gh_release() {
     }
 
     mkdir -p "$target"
-    if [[ "$filename" == *.zip ]]; then
+        if [[ "$filename" == *.zip ]]; then
       if ! command -v unzip &>/dev/null; then
         $STD apt-get install -y unzip
       fi
-      $STD unzip "$tmpdir/$filename" -d "$target"
+
+      local top_level_entries
+      top_level_entries=$(unzip -l "$tmpdir/$filename" | awk '{print $4}' | grep -v '^$' | cut -d/ -f1 | sort -u)
+
+      if [[ $(wc -l <<<"$top_level_entries") -eq 1 ]]; then
+        unzip -q "$tmpdir/$filename" -d "$tmpdir/unzip"
+        shopt -s dotglob nullglob
+        cp -r "$tmpdir/unzip/"* "$target/"
+        shopt -u dotglob nullglob
+      else
+        unzip -q "$tmpdir/$filename" -d "$target"
+      fi
+
     elif [[ "$filename" == *.tar.* ]]; then
-      if tar -tf "$tmpdir/$filename" | grep -qE '^([^/]+/){2}'; then
+      local top_level_entries
+      top_level_entries=$(tar -tf "$tmpdir/$filename" | cut -d/ -f1 | sort -u)
+
+      if [[ $(wc -l <<<"$top_level_entries") -eq 1 ]]; then
         tar --strip-components=1 -xf "$tmpdir/$filename" -C "$target"
       else
         tar -xf "$tmpdir/$filename" -C "$target"
