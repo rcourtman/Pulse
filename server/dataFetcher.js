@@ -870,25 +870,39 @@ async function fetchPbsNodeName({ client, config }) {
     // But we can discover the real node name by fetching a task and extracting it from the UPID
     
     try {
-        // Try to get any task - we just need one to extract the node name
+        // Try to get any task - prefer verification tasks as they tend to have proper UPIDs
         const response = await client.get('/nodes/localhost/tasks', { 
-            params: { limit: 1 },
+            params: { limit: 10 },  // Get more tasks to find one with a proper UPID
             timeout: 5000 
         });
         
         if (response.data && response.data.data && response.data.data.length > 0) {
-            const task = response.data.data[0];
-            
-            // Method 1: Use the node field if present
-            if (task.node) {
-                console.log(`[DataFetcher] Discovered PBS node name '${task.node}' from task data`);
-                return task.node;
+            // Search through tasks to find one with a non-localhost node name
+            for (const task of response.data.data) {
+                // Try to extract from UPID first (more reliable)
+                if (task.upid && task.upid.startsWith('UPID:')) {
+                    const nodeName = task.upid.split(':')[1];
+                    if (nodeName && nodeName !== 'localhost') {
+                        console.log(`[DataFetcher] Discovered PBS node name '${nodeName}' from task UPID`);
+                        return nodeName;
+                    }
+                }
             }
             
-            if (task.upid) {
-                const nodeName = task.upid.split(':')[1];
+            // If no non-localhost name found in UPIDs, check node fields
+            for (const task of response.data.data) {
+                if (task.node && task.node !== 'localhost') {
+                    console.log(`[DataFetcher] Discovered PBS node name '${task.node}' from task data`);
+                    return task.node;
+                }
+            }
+            
+            // If still no good name, just use the first UPID we find
+            const firstTask = response.data.data[0];
+            if (firstTask.upid && firstTask.upid.startsWith('UPID:')) {
+                const nodeName = firstTask.upid.split(':')[1];
                 if (nodeName) {
-                    console.log(`[DataFetcher] Discovered PBS node name '${nodeName}' from task UPID`);
+                    console.log(`[DataFetcher] Using PBS node name '${nodeName}' from task UPID`);
                     return nodeName;
                 }
             }

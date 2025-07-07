@@ -886,7 +886,7 @@
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups" role="tab" aria-selected="false" aria-controls="backups" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-          <span class="hidden md:inline">Backups</span>
+          <span class="hidden md:inline">PVE</span>
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs" role="tab" aria-selected="false" aria-controls="pbs" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -1327,9 +1327,12 @@
       </div>
     </div>
     
-    <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
-      <div id="pbs-instances-container" class="space-y-6">
-        <p id="pbs-loading-message" class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
+    
+    <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <div class="p-3">
+        <div id="pbs-content">
+          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading PBS data...</p>
+        </div>
       </div>
     </div>
   <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
@@ -1351,9 +1354,6 @@
         <nav class="flex space-x-8 px-6" id="settings-tabs">
           <button class="settings-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="proxmox">
             Proxmox VE
-          </button>
-          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="pbs">
-            Backup Server
           </button>
           <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
             Notifications
@@ -1417,7 +1417,7 @@
   <script src="/js/ui/dashboard.js" defer></script>
   <script src="/js/ui/storage.js" defer></script>
   <script src="/js/ui/snapshots.js" defer></script>
-  <script src="/js/ui/backups.js" defer></script>
+  <script src="/js/ui/pve.js" defer></script>
   <script src="/js/ui/pbs.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
   <script src="/js/ui/chartsControls.js" defer></script>

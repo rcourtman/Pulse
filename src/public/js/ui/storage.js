@@ -199,13 +199,9 @@ PulseApp.ui.storage = (() => {
                                 <div class="text-gray-500 dark:text-gray-400">Total Capacity</div>
                                 <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalCapacity)}</div>
                             </div>
-                            <div>
-                                <div class="text-gray-500 dark:text-gray-400">Used</div>
-                                <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalUsed)}</div>
-                            </div>
-                            <div>
-                                <div class="text-gray-500 dark:text-gray-400">Available</div>
-                                <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalAvailable)}</div>
+                            <div class="col-span-2">
+                                <div class="text-gray-500 dark:text-gray-400">Storage Usage</div>
+                                <div class="font-medium ${usageColorClass}">${PulseApp.utils.formatBytes(summary.totalUsed)} / ${PulseApp.utils.formatBytes(summary.totalCapacity)} (${summary.usagePercent.toFixed(0)}%)</div>
                             </div>
                         </div>
                     </div>

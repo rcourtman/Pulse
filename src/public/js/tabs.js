@@ -108,7 +108,7 @@ PulseApp.ui.tabs = (() => {
             if (tabId === 'pbs') {
                 if (PulseApp.ui && PulseApp.ui.pbs) {
                     const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
-                    PulseApp.ui.pbs.updatePbsInfo(pbsDataArray);
+                    PulseApp.ui.pbs.updatePBSInfo();
                 }
             }
 
