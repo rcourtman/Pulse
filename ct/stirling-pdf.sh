@@ -38,10 +38,12 @@ function update_script() {
   tar -xzf v$RELEASE.tar.gz
   cd Stirling-PDF-$RELEASE
   chmod +x ./gradlew
-  $STD ./gradlew build
+  $STD ./gradlew build -x spotlessApply -x spotlessCheck -x test -x sonarqube
   rm -rf /opt/Stirling-PDF/Stirling-PDF-*.jar
-  cp -r ./build/libs/Stirling-PDF-*.jar /opt/Stirling-PDF/
+  cp -r ./stirling-pdf/build/libs/*.jar /opt/Stirling-PDF/Stirling-PDF-$RELEASE.jar
   cp -r scripts /opt/Stirling-PDF/
+  cp -r pipeline /opt/Stirling-PDF/
+  cp -r stirling-pdf/src/main/resources/static/fonts/*.ttf /usr/share/fonts/opentype/noto/
   cd ~
   rm -rf Stirling-PDF-$RELEASE v$RELEASE.tar.gz
   ln -sf /opt/Stirling-PDF/Stirling-PDF-$RELEASE.jar /opt/Stirling-PDF/Stirling-PDF.jar
