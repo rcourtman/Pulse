@@ -162,6 +162,21 @@ update_installation() {
   generate_service >/lib/systemd/system/iptag.service
   msg_ok "Updated service file"
 
+  msg_info "Creating manual run command"
+  cat <<'EOF' >/usr/local/bin/iptag-run
+#!/usr/bin/env bash
+CONFIG_FILE="/opt/iptag/iptag.conf"
+SCRIPT_FILE="/opt/iptag/iptag"
+if [[ ! -f "$SCRIPT_FILE" ]]; then
+  echo "❌ Main script not found: $SCRIPT_FILE"
+  exit 1
+fi
+export FORCE_SINGLE_RUN=true
+exec "$SCRIPT_FILE"
+EOF
+  chmod +x /usr/local/bin/iptag-run
+  msg_ok "Created iptag-run executable - You can execute this manually by entering “iptag-run” in the Proxmox host, so the script is executed by hand."
+
   msg_info "Restarting service"
   systemctl daemon-reload &>/dev/null
   systemctl enable -q --now iptag.service &>/dev/null
@@ -195,7 +210,7 @@ FORCE_UPDATE_INTERVAL=7200
 
 # Performance optimizations
 VM_IP_CACHE_TTL=300
-MAX_PARALLEL_VM_CHECKS=2
+MAX_PARALLEL_VM_CHECKS=1
 
 # LXC performance optimizations  
 LXC_IP_CACHE_TTL=300
@@ -206,6 +221,7 @@ LXC_BATCH_SIZE=3
 LXC_STATUS_CACHE_TTL=300
 LXC_AGGRESSIVE_CACHING=true
 LXC_SKIP_SLOW_METHODS=true
+LXC_ALLOW_FORCED_COMMANDS=false
 
 # Debug settings (set to true to enable debugging)
 DEBUG=false
@@ -576,7 +592,9 @@ update_tags() {
 
     if [[ "$type" == "lxc" ]]; then
         current_ips_full=$(get_lxc_ips "${vmid}")
-        local current_tags_raw=$(pct config "${vmid}" 2>/dev/null | grep tags | awk '{print $2}')
+        while IFS= read -r line; do
+          [[ "$line" == tags:* ]] && current_tags_raw="${line#tags: }" && break
+        done < <(pct config "$vmid" 2>/dev/null)
     else
         current_ips_full=$(get_vm_ips "${vmid}")
         local vm_config="/etc/pve/qemu-server/${vmid}.conf"
@@ -789,7 +807,10 @@ check_status_changed() {
 check() {
     local current_time changes_detected=false
     current_time=$(date +%s)
-    
+
+    local update_lxc=false
+    local update_vm=false
+
     # Periodic cache cleanup (every 10 minutes)
     local time_since_last_cleanup=$((current_time - ${last_cleanup_time:-0}))
     if [[ $time_since_last_cleanup -ge 600 ]]; then
@@ -801,60 +822,56 @@ check() {
     # Check LXC status
     local time_since_last_lxc_check=$((current_time - last_lxc_status_check_time))
     if [[ "${LXC_STATUS_CHECK_INTERVAL:-60}" -gt 0 ]] && \
-       [[ "${time_since_last_lxc_check}" -ge "${LXC_STATUS_CHECK_INTERVAL:-60}" ]]; then
-        last_lxc_status_check_time=${current_time}
+       [[ "$time_since_last_lxc_check" -ge "${LXC_STATUS_CHECK_INTERVAL:-60}" ]]; then
+        last_lxc_status_check_time=$current_time
         if check_status_changed "lxc"; then
-            changes_detected=true
-            log_warning "LXC status changes detected, updating tags"
-            update_all_tags "lxc"
-            last_update_lxc_time=${current_time}
+            update_lxc=true
+            log_warning "LXC status changes detected"
         fi
     fi
 
     # Check VM status
     local time_since_last_vm_check=$((current_time - last_vm_status_check_time))
     if [[ "${VM_STATUS_CHECK_INTERVAL:-60}" -gt 0 ]] && \
-       [[ "${time_since_last_vm_check}" -ge "${VM_STATUS_CHECK_INTERVAL:-60}" ]]; then
-        last_vm_status_check_time=${current_time}
+       [[ "$time_since_last_vm_check" -ge "${VM_STATUS_CHECK_INTERVAL:-60}" ]]; then
+        last_vm_status_check_time=$current_time
         if check_status_changed "vm"; then
-            changes_detected=true
-            log_warning "VM status changes detected, updating tags"
-            update_all_tags "vm"
-            last_update_vm_time=${current_time}
+            update_vm=true
+            log_warning "VM status changes detected"
         fi
     fi
 
     # Check network interface changes
     local time_since_last_fw_check=$((current_time - last_fw_net_interface_check_time))
     if [[ "${FW_NET_INTERFACE_CHECK_INTERVAL:-60}" -gt 0 ]] && \
-       [[ "${time_since_last_fw_check}" -ge "${FW_NET_INTERFACE_CHECK_INTERVAL:-60}" ]]; then
-        last_fw_net_interface_check_time=${current_time}
+       [[ "$time_since_last_fw_check" -ge "${FW_NET_INTERFACE_CHECK_INTERVAL:-60}" ]]; then
+        last_fw_net_interface_check_time=$current_time
         if check_status_changed "fw"; then
-            changes_detected=true
-            log_warning "Network interface changes detected, updating all tags"
-            update_all_tags "lxc"
-            update_all_tags "vm"
-            last_update_lxc_time=${current_time}
-            last_update_vm_time=${current_time}
+            update_lxc=true
+            update_vm=true
+            log_warning "Network interface changes detected"
         fi
     fi
 
-    # Force update if needed
+    # Force update if interval exceeded
     for type in "lxc" "vm"; do
         local last_update_var="last_update_${type}_time"
         local time_since_last_update=$((current_time - ${!last_update_var}))
-        if [[ ${time_since_last_update} -ge ${FORCE_UPDATE_INTERVAL:-1800} ]]; then
-            changes_detected=true
-            local minutes=$((${FORCE_UPDATE_INTERVAL:-1800} / 60))
+        if [[ $time_since_last_update -ge ${FORCE_UPDATE_INTERVAL:-1800} ]]; then
             if [[ "$type" == "lxc" ]]; then
-                log_info "Scheduled LXC update (every ${minutes} minutes)"
+                update_lxc=true
+                log_info "Scheduled LXC update (every $((FORCE_UPDATE_INTERVAL / 60)) minutes)"
             else
-                log_info "Scheduled VM update (every ${minutes} minutes)"
+                update_vm=true
+                log_info "Scheduled VM update (every $((FORCE_UPDATE_INTERVAL / 60)) minutes)"
             fi
-            update_all_tags "$type"
             eval "${last_update_var}=${current_time}"
         fi
     done
+
+    # Final execution
+    $update_lxc && update_all_tags "lxc"
+    $update_vm && update_all_tags "vm"
 }
 
 # Initialize time variables
@@ -872,12 +889,18 @@ main() {
     echo -e "${BLUE}ℹ${NC} Tag format: ${WHITE}${TAG_FORMAT:-$DEFAULT_TAG_FORMAT}${NC}"
     echo -e "${BLUE}ℹ${NC} Allowed CIDRs: ${WHITE}${CIDR_LIST[*]}${NC}"
     echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-    
+
+    if [[ "$FORCE_SINGLE_RUN" == "true" ]]; then
+        check
+        exit 0
+    fi
+
     while true; do
         check
         sleep "${LOOP_INTERVAL:-300}"
     done
 }
+
 
 # Cache cleanup function
 cleanup_vm_cache() {
@@ -1001,7 +1024,7 @@ process_vms_parallel() {
 # Parallel LXC processing function
 process_lxc_parallel() {
     local lxc_list=("$@")
-    local max_parallel=${MAX_PARALLEL_LXC_CHECKS:-7}
+    local max_parallel=${MAX_PARALLEL_LXC_CHECKS:-2}
     local batch_size=${LXC_BATCH_SIZE:-20}
     local job_count=0
     local pids=()
@@ -1177,7 +1200,7 @@ get_lxc_ips() {
     fi
     
     # Fallback: always do lxc-attach/pct exec with timeout if nothing found
-    if [[ -z "$ips" ]]; then
+    if [[ -z "$ips" && "${LXC_ALLOW_FORCED_COMMANDS:-true}" == "true" ]]; then
         debug_log "lxc $vmid: trying fallback lxc-attach (forced)"
         local attach_ip=""
         attach_ip=$(timeout 7s lxc-attach -n "$vmid" -- ip -4 addr show 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | grep -v '127.0.0.1' | head -1)
@@ -1192,7 +1215,7 @@ get_lxc_ips() {
             method_used="lxc_attach_forced"
         fi
     fi
-    if [[ -z "$ips" ]]; then
+    if [[ -z "$ips" && "${LXC_ALLOW_FORCED_COMMANDS:-true}" == "true" ]]; then
         debug_log "lxc $vmid: trying fallback pct exec (forced)"
         local pct_ip=""
         pct_ip=$(timeout 7s pct exec "$vmid" -- ip -4 addr show 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | grep -v '127.0.0.1' | head -1)
