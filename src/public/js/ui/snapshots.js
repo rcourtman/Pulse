@@ -90,26 +90,31 @@ PulseApp.ui.snapshots = (() => {
         const summary = calculateSummary();
 
         container.innerHTML = `
-            <!-- Summary -->
-            <div class="mb-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <div class="text-gray-500 dark:text-gray-400">Active Snapshots</div>
-                        <div class="text-xl font-semibold">${summary.totalCount}</div>
-                    </div>
-                    <div>
-                        <div class="text-gray-500 dark:text-gray-400">Guests with Snapshots</div>
-                        <div class="text-xl font-semibold">${summary.uniqueGuests}</div>
+            <!-- Snapshot Summary -->
+            <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
+                <div class="p-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Snapshot Summary</h3>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                            <span class="font-semibold ${summary.totalCount === 0 ? 'text-gray-600 dark:text-gray-400' : summary.totalCount <= 10 ? 'text-green-600 dark:text-green-400' : summary.totalCount <= 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${summary.totalCount}</span> active snapshots
+                            <span class="mx-1">•</span>
+                            <span class="font-semibold ${summary.uniqueGuests === 0 ? 'text-gray-600 dark:text-gray-400' : summary.uniqueGuests <= 5 ? 'text-green-600 dark:text-green-400' : summary.uniqueGuests <= 20 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${summary.uniqueGuests}</span> guests with snapshots
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Filters -->
             <div class="mb-3 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
-                <div class="flex flex-wrap items-center gap-3">
-                    <input type="search" id="snapshot-search" placeholder="Search snapshots..." 
-                        value="${currentFilters.searchTerm}"
-                        class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                <div class="flex flex-row flex-wrap items-center gap-2 sm:gap-3">
+                    <div class="filter-controls-wrapper flex items-center gap-2 flex-1 min-w-[180px] sm:min-w-[240px]">
+                        <input type="search" id="snapshot-search" placeholder="Search snapshots..." 
+                            value="${currentFilters.searchTerm}"
+                            class="flex-1 p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <button id="reset-snapshots-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-7 w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                        </button>
+                    </div>
                     
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
@@ -132,12 +137,12 @@ PulseApp.ui.snapshots = (() => {
                 <table class="w-full text-xs sm:text-sm">
                     <thead class="bg-gray-100 dark:bg-gray-800">
                         <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                            <th class="p-1 px-2 whitespace-nowrap text-center">Status</th>
                             <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="vmid">VMID</th>
-                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="name">Guest Name</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="name">Name</th>
                             <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="type">Type</th>
-                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="snapname">Snapshot Name</th>
                             <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="node">Node</th>
-                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="snaptime">Age</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="snapname">Snapshot</th>
                             <th class="p-1 px-2 whitespace-nowrap">Description</th>
                         </tr>
                     </thead>
@@ -150,6 +155,7 @@ PulseApp.ui.snapshots = (() => {
 
         // Setup event listeners
         setupEventListeners();
+        updateResetButtonState();
         
         // Setup sortable headers
         const table = document.querySelector('#snapshots-content table');
@@ -191,40 +197,68 @@ PulseApp.ui.snapshots = (() => {
             `;
         }
 
-        return sorted.map(snapshot => {
-            const age = getRelativeTime(snapshot.snaptime);
-            const typeLabel = snapshot.type === 'qemu' ? 'VM' : 'LXC';
+        // Group snapshots by date
+        const groupedSnapshots = {};
+        sorted.forEach(snapshot => {
+            const dateKey = formatDateKey(snapshot.snaptime);
+            if (!groupedSnapshots[dateKey]) {
+                groupedSnapshots[dateKey] = [];
+            }
+            groupedSnapshots[dateKey].push(snapshot);
+        });
+        
+        // Sort dates (newest first)
+        const sortedDates = Object.keys(groupedSnapshots).sort().reverse();
+        
+        let html = '';
+        sortedDates.forEach(dateKey => {
+            const snapshots = groupedSnapshots[dateKey];
+            const displayDate = formatDateDisplay(dateKey);
             
-            return `
-                <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${snapshot.vmid}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
-                        <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.name}">
-                            ${snapshot.name}
-                        </div>
-                    </td>
-                    <td class="p-1 px-2 align-middle">
-                        <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
-                            snapshot.type === 'qemu' 
-                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                        }">${typeLabel}</span>
-                    </td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
-                        <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.snapname}">
-                            ${snapshot.snapname}
-                        </div>
-                    </td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${snapshot.node}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300 whitespace-nowrap">${age}</td>
-                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
-                        <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${snapshot.description || ''}">
-                            ${snapshot.description || '-'}
-                        </div>
+            // Add date header
+            html += `
+                <tr class="bg-gray-50 dark:bg-gray-700/50">
+                    <td colspan="7" class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                        ${displayDate} (${snapshots.length} snapshot${snapshots.length > 1 ? 's' : ''})
                     </td>
                 </tr>
             `;
-        }).join('');
+            
+            // Add snapshots for this date
+            snapshots.forEach(snapshot => {
+                const typeLabel = snapshot.type === 'qemu' ? 'VM' : 'LXC';
+                
+                html += `
+                    <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td class="p-1 px-2 whitespace-nowrap text-center">
+                            <span class="inline-flex items-center justify-center w-4 h-4">
+                                <svg class="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                            </span>
+                        </td>
+                        <td class="p-1 px-2 whitespace-nowrap font-medium">${snapshot.vmid}</td>
+                        <td class="p-1 px-2 max-w-[200px] truncate" title="${snapshot.name || ''}">
+                            ${snapshot.name || '-'}
+                        </td>
+                        <td class="p-1 px-2 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeLabel === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                                ${typeLabel}
+                            </span>
+                        </td>
+                        <td class="p-1 px-2 whitespace-nowrap">${snapshot.node}</td>
+                        <td class="p-1 px-2 max-w-[150px] truncate" title="${snapshot.snapname || ''}">
+                            ${snapshot.snapname || '-'}
+                        </td>
+                        <td class="p-1 px-2 max-w-[200px] truncate" title="${snapshot.description || ''}">
+                            ${snapshot.description || '-'}
+                        </td>
+                    </tr>
+                `;
+            });
+        });
+        
+        return html;
     }
 
     function filterSnapshots() {
@@ -259,6 +293,40 @@ PulseApp.ui.snapshots = (() => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
+    // Format date for grouping (YYYY-MM-DD)
+    function formatDateKey(timestamp) {
+        const date = new Date(timestamp * 1000);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    // Format date for display
+    function formatDateDisplay(dateKey) {
+        const [year, month, day] = dateKey.split('-');
+        const date = new Date(year, month - 1, day);
+        
+        // Check if it's today or yesterday
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        if (dateKey === formatDateKey(today.getTime() / 1000)) {
+            return 'Today';
+        } else if (dateKey === formatDateKey(yesterday.getTime() / 1000)) {
+            return 'Yesterday';
+        }
+        
+        // Otherwise return formatted date
+        return date.toLocaleDateString(undefined, { 
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    }
+
     function getRelativeTime(timestamp) {
         if (!timestamp) return 'Unknown';
         
@@ -276,6 +344,8 @@ PulseApp.ui.snapshots = (() => {
     function setupEventListeners() {
         // Search
         const searchInput = document.getElementById('snapshot-search');
+        const resetButton = document.getElementById('reset-snapshots-button');
+        
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 currentFilters.searchTerm = e.target.value;
@@ -284,32 +354,24 @@ PulseApp.ui.snapshots = (() => {
                 if (tbody) {
                     tbody.innerHTML = renderSnapshotRows();
                 }
+                updateResetButtonState();
+            });
+            
+            // ESC key handler
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    resetFiltersAndSort();
+                }
             });
         }
         
-        // Auto-focus search on keypress (like main dashboard)
-        document.addEventListener('keydown', (e) => {
-            // Check if snapshots tab is active
-            const snapshotsTab = document.getElementById('snapshots');
-            if (!snapshotsTab || snapshotsTab.classList.contains('hidden')) return;
-            
-            // Don't interfere with input fields or special keys
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
-                e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab' || e.key === 'Escape') {
-                return;
-            }
-            
-            // Focus search on alphanumeric keys
-            if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
-                const searchInput = document.getElementById('snapshot-search');
-                if (searchInput && document.activeElement !== searchInput) {
-                    e.preventDefault();
-                    searchInput.focus();
-                    searchInput.value = searchInput.value + e.key;
-                    searchInput.dispatchEvent(new Event('input'));
-                }
-            }
-        });
+        // Reset button
+        if (resetButton) {
+            resetButton.addEventListener('click', resetFiltersAndSort);
+        }
+        
+        // Set up keyboard navigation for auto-focus search
+        setupKeyboardNavigation();
         
         // Guest type radio buttons
         document.querySelectorAll('input[name="guest-type"]').forEach(radio => {
@@ -320,8 +382,98 @@ PulseApp.ui.snapshots = (() => {
                 if (tbody) {
                     tbody.innerHTML = renderSnapshotRows();
                 }
+                updateResetButtonState();
             });
         });
+    }
+    
+    // Setup keyboard navigation to auto-focus search
+    function setupKeyboardNavigation() {
+        // Remove any existing listener to avoid duplicates
+        if (window.snapshotsKeyboardHandler) {
+            document.removeEventListener('keydown', window.snapshotsKeyboardHandler);
+        }
+        
+        // Define the handler
+        window.snapshotsKeyboardHandler = (event) => {
+            // Only handle if snapshots tab is active
+            const activeTab = document.querySelector('.tab.active');
+            if (!activeTab || activeTab.getAttribute('data-tab') !== 'snapshots') {
+                return;
+            }
+            
+            const searchInput = document.getElementById('snapshot-search');
+            if (!searchInput) return;
+            
+            // Handle Escape for resetting filters
+            if (event.key === 'Escape') {
+                const resetButton = document.getElementById('reset-snapshots-button');
+                if (resetButton) {
+                    resetButton.click();
+                }
+                return;
+            }
+            
+            // Ignore if already typing in an input, textarea, or select
+            const targetElement = event.target;
+            const targetTagName = targetElement.tagName;
+            if (targetTagName === 'INPUT' || targetTagName === 'TEXTAREA' || targetTagName === 'SELECT') {
+                return;
+            }
+            
+            // Ignore if any modal is open
+            const modals = document.querySelectorAll('.modal:not(.hidden)');
+            if (modals.length > 0) {
+                return;
+            }
+            
+            // For single character keys (letters, numbers, etc.)
+            if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                if (document.activeElement !== searchInput) {
+                    searchInput.focus();
+                    event.preventDefault();
+                    searchInput.value += event.key;
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                }
+            } 
+            // For Backspace
+            else if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                if (document.activeElement !== searchInput) {
+                    searchInput.focus();
+                    event.preventDefault();
+                }
+            }
+        };
+        
+        // Add the listener
+        document.addEventListener('keydown', window.snapshotsKeyboardHandler);
+    }
+    
+    // Update reset button state
+    function updateResetButtonState() {
+        const hasFilters = hasActiveFilters();
+        const resetButton = document.getElementById('reset-snapshots-button');
+        
+        if (resetButton) {
+            if (hasFilters) {
+                resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                resetButton.classList.add('hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                resetButton.disabled = false;
+            } else {
+                resetButton.classList.add('opacity-50', 'cursor-not-allowed');
+                resetButton.classList.remove('hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                resetButton.disabled = true;
+            }
+        }
+    }
+    
+    // Check if any filters are active
+    function hasActiveFilters() {
+        const isDefaultSort = currentSort.field === 'snaptime' && !currentSort.ascending;
+        
+        return currentFilters.searchTerm !== '' ||
+               currentFilters.guestType !== 'all' ||
+               !isDefaultSort;
     }
 
     function sortSnapshots(snapshots) {
@@ -372,6 +524,9 @@ PulseApp.ui.snapshots = (() => {
                 PulseApp.ui.common.updateSortUI('snapshots-table', clickedHeader, 'snapshots');
             }
         }
+        
+        // Update reset button state  
+        updateResetButtonState();
     }
 
     function resetFiltersAndSort() {

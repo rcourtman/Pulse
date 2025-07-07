@@ -13,6 +13,16 @@ router.get('/backups/pve', (req, res) => {
             // storageBackups is an array
             if (Array.isArray(currentState.pveBackups.storageBackups)) {
                 currentState.pveBackups.storageBackups.forEach(backup => {
+                    // Extract guest type from volid (e.g., "vzdump-qemu-100" or "vzdump-lxc-100")
+                    let guestType = 'unknown';
+                    if (backup.volid) {
+                        if (backup.volid.includes('vzdump-qemu-')) {
+                            guestType = 'VM';
+                        } else if (backup.volid.includes('vzdump-lxc-')) {
+                            guestType = 'LXC';
+                        }
+                    }
+                    
                     backups.push({
                         node: backup.node || 'unknown',
                         storage: backup.storage || 'unknown',
@@ -23,7 +33,8 @@ router.get('/backups/pve', (req, res) => {
                         size: backup.size || 0,
                         content: backup.content,
                         notes: backup.notes || '',
-                        type: 'pve'
+                        type: 'pve',
+                        guestType: guestType
                     });
                 });
             }
@@ -73,7 +84,7 @@ router.get('/backups/pbs', (req, res) => {
                             }
                             
                             backups.push({
-                                server: pbsInstance.pbsInstanceName || 'PBS',
+                                server: pbsInstance.nodeName || pbsInstance.pbsInstanceName || 'PBS',
                                 datastore: datastore.name,
                                 namespace: backup.namespace || 'root',
                                 vmid: backup['backup-id'],
@@ -150,8 +161,21 @@ router.get('/backups/unified', (req, res) => {
         const allBackups = [];
         const vmidCollisions = new Map();
         
+        // Get source filter from query params
+        const sourceFilter = req.query.source;
+        
         // Get all guests (VMs and containers) for coverage calculation
-        const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+        let allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+        
+        // Filter guests by source if specified
+        if (sourceFilter && sourceFilter !== 'all') {
+            if (sourceFilter.startsWith('pve_')) {
+                const endpointId = sourceFilter.substring(4); // Remove 'pve_' prefix
+                allGuests = allGuests.filter(guest => guest.endpointId === endpointId);
+            }
+            // For PBS sources, we'll filter the backups but guests remain for coverage calculation
+        }
+        
         const guestMap = new Map(); // Map of vmid -> guest info
         
         
@@ -176,6 +200,24 @@ router.get('/backups/unified', (req, res) => {
             // storageBackups is an array
             if (Array.isArray(currentState.pveBackups.storageBackups)) {
                 currentState.pveBackups.storageBackups.forEach(backup => {
+                    // Filter by source if specified
+                    if (sourceFilter && sourceFilter !== 'all') {
+                        if (sourceFilter === 'pbs' || sourceFilter.startsWith('pbs_')) {
+                            // Skip PVE backups when PBS source is selected
+                            return;
+                        }
+                        if (sourceFilter.startsWith('pve_')) {
+                            const endpointId = sourceFilter.substring(4);
+                            // Skip if backup doesn't match the selected endpoint
+                            // Note: We need to match backup.node to endpoint somehow
+                            // For now, we'll need to enhance backup data with endpointId
+                            if (backup.endpointId && backup.endpointId !== endpointId) {
+                                return;
+                            }
+                        }
+                        // If sourceFilter is just 'pve', include all PVE backups
+                    }
+                    
                     const backupData = {
                         node: backup.node || 'unknown',
                         storage: backup.storage || 'unknown',
@@ -187,7 +229,8 @@ router.get('/backups/unified', (req, res) => {
                         content: backup.content,
                         notes: backup.notes || '',
                         type: 'pve',
-                        source: 'pve'
+                        source: 'pve',
+                        endpointId: backup.endpointId
                     };
                     
                     allBackups.push(backupData);
@@ -205,8 +248,27 @@ router.get('/backups/unified', (req, res) => {
         const pbsDataArray = currentState.pbs || [];
         const pbsEnabled = pbsDataArray.length > 0;
         
-        if (pbsEnabled) {
+        // Only process PBS backups if not filtering for PVE only
+        if (pbsEnabled && sourceFilter !== 'pve' && !(sourceFilter && sourceFilter.startsWith('pve_'))) {
             pbsDataArray.forEach(pbsInstance => {
+                // Filter by source if specified
+                if (sourceFilter && sourceFilter !== 'all') {
+                    if (sourceFilter === 'pve' || sourceFilter.startsWith('pve_')) {
+                        // Skip PBS backups when PVE source is selected
+                        return;
+                    }
+                    if (sourceFilter.startsWith('pbs_')) {
+                        const pbsId = sourceFilter.substring(4);
+                        // Skip if this PBS instance doesn't match the selected one
+                        // Check both pbsId and pbsEndpointId for compatibility
+                        const instanceId = pbsInstance.pbsId || pbsInstance.pbsEndpointId;
+                        if (!instanceId || instanceId !== pbsId) {
+                            return;
+                        }
+                    }
+                    // If sourceFilter is just 'pbs', include all PBS backups
+                }
+                
                 if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
                     pbsInstance.datastores.forEach(datastore => {
                         if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
@@ -217,7 +279,7 @@ router.get('/backups/unified', (req, res) => {
                                 }
                                 
                                 const backupData = {
-                                    server: pbsInstance.pbsInstanceName || 'PBS',
+                                    server: pbsInstance.nodeName || pbsInstance.pbsInstanceName || 'PBS',
                                     datastore: datastore.name,
                                     namespace: backup.namespace || 'root',
                                     vmid: backup['backup-id'],
@@ -228,7 +290,8 @@ router.get('/backups/unified', (req, res) => {
                                     protected: backup.protected || false,
                                     notes: backup.comment || '',
                                     source: 'pbs',
-                                    deduplicationFactor: datastore.deduplicationFactor || null
+                                    deduplicationFactor: datastore.deduplicationFactor || null,
+                                    pbsId: pbsInstance.pbsId || pbsInstance.pbsEndpointId
                                 };
                                 
                                 allBackups.push(backupData);
@@ -262,6 +325,24 @@ router.get('/backups/unified', (req, res) => {
             let totalLogicalSize = 0;
             
             pbsDataArray.forEach(pbsInstance => {
+                // Filter by source if specified
+                if (sourceFilter && sourceFilter !== 'all') {
+                    if (sourceFilter === 'pve' || sourceFilter.startsWith('pve_')) {
+                        // Skip PBS storage info when PVE source is selected
+                        return;
+                    }
+                    if (sourceFilter.startsWith('pbs_')) {
+                        const pbsId = sourceFilter.substring(4);
+                        // Skip if this PBS instance doesn't match the selected one
+                        // Check both pbsId and pbsEndpointId for compatibility
+                        const instanceId = pbsInstance.pbsId || pbsInstance.pbsEndpointId;
+                        if (!instanceId || instanceId !== pbsId) {
+                            return;
+                        }
+                    }
+                    // If sourceFilter is just 'pbs', include all PBS storage
+                }
+                
                 if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
                     pbsInstance.datastores.forEach(datastore => {
                         if (datastore.used !== undefined && datastore.total !== undefined) {

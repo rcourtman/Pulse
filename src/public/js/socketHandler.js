@@ -242,8 +242,13 @@ PulseApp.socketHandler = (() => {
                     }
                     break;
                 case 'backups':
-                    if (PulseApp.ui && PulseApp.ui.backups && PulseApp.ui.backups.updateBackupsInfo) {
-                        PulseApp.ui.backups.updateBackupsInfo();
+                    if (PulseApp.ui && PulseApp.ui.pve && PulseApp.ui.pve.updatePVEInfo) {
+                        PulseApp.ui.pve.updatePVEInfo();
+                    }
+                    break;
+                case 'pbs':
+                    if (PulseApp.ui && PulseApp.ui.pbs && PulseApp.ui.pbs.updatePBSInfo) {
+                        PulseApp.ui.pbs.updatePBSInfo();
                     }
                     break;
             }
@@ -324,7 +329,7 @@ PulseApp.socketHandler = (() => {
     function updatePbsTab(data) {
         try {
             if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) {
-                PulseApp.ui.pbs.updatePbsInfo(data.pbs);
+                PulseApp.ui.pbs.updatePBSInfo();
             }
         } catch (error) {
             console.error('[Socket] Error updating PBS tab:', error);
