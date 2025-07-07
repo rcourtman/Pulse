@@ -434,6 +434,7 @@ function setup_php() {
     $STD apt-get update
   fi
 
+  local MODULE_LIST="php${PHP_VERSION}"
   for pkg in $MODULE_LIST; do
     if ! apt-cache show "$pkg" >/dev/null 2>&1; then
       msg_error "Package not found: $pkg"
@@ -441,7 +442,7 @@ function setup_php() {
     fi
   done
 
-  local MODULE_LIST="php${PHP_VERSION}"
+  
   IFS=',' read -ra MODULES <<<"$COMBINED_MODULES"
   for mod in "${MODULES[@]}"; do
     MODULE_LIST+=" php${PHP_VERSION}-${mod}"
