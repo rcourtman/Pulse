@@ -11,8 +11,7 @@ PulseApp.ui.pbs = (() => {
         searchTerm: '',
         datastore: 'all',
         backupType: 'all', // 'all', 'vm', 'ct'
-        verificationStatus: 'all', // 'all', 'verified', 'unverified'
-        sizeDisplay: 'logical' // 'logical' or 'actual'
+        verificationStatus: 'all' // 'all', 'verified', 'unverified'
     };
     let currentSort = {
         field: 'backupTime',
@@ -423,17 +422,6 @@ PulseApp.ui.pbs = (() => {
                         </div>
                     </div>
                     
-                    <!-- Size Display Filter -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Size:</span>
-                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <input type="radio" id="pbs-size-logical" name="pbs-size" value="logical" class="hidden" ${filters.sizeDisplay === 'logical' ? 'checked' : ''}>
-                            <label for="pbs-size-logical" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${filters.sizeDisplay === 'logical' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors" title="Size before deduplication">Logical</label>
-                            
-                            <input type="radio" id="pbs-size-actual" name="pbs-size" value="actual" class="hidden" ${filters.sizeDisplay === 'actual' ? 'checked' : ''}>
-                            <label for="pbs-size-actual" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${filters.sizeDisplay === 'actual' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors" title="Estimated size after deduplication">Actual</label>
-                        </div>
-                    </div>
                     
                 </div>
             </div>
@@ -648,27 +636,8 @@ PulseApp.ui.pbs = (() => {
 
     // Render deduplication explanation
     function renderDedupExplanation() {
-        if (!pbsInstances || pbsInstances.length === 0 || activeInstance >= pbsInstances.length) {
-            return '';
-        }
-        
-        const currentInstance = pbsInstances[activeInstance];
-        if (!currentInstance) return '';
-        
-        // Check if any datastore has deduplication data
-        let hasDedup = false;
-        if (currentInstance.datastores) {
-            hasDedup = currentInstance.datastores.some(ds => ds.deduplicationFactor && ds.deduplicationFactor > 1);
-        }
-        
-        if (!hasDedup) return '';
-        
-        return `
-            <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-600 dark:text-gray-400">
-                <span class="text-gray-500 dark:text-gray-400">💡</span> 
-                Hover over backup sizes to see actual disk usage after deduplication
-            </div>
-        `;
+        // Removed - no longer showing per-backup deduplication estimates
+        return '';
     }
 
     // Render backup summary
@@ -824,25 +793,8 @@ PulseApp.ui.pbs = (() => {
                 const typeLabel = backup.backupType === 'vm' ? 'VM' : 'LXC';
                 const guestName = getGuestName(backup.vmid, backup.backupType);
                 
-                // Create size display - simpler approach with consistent formatting
-                let sizeHtml = '';
-                if (backup.deduplicationFactor && backup.deduplicationFactor > 1 && filters.sizeDisplay === 'actual') {
-                    // Show actual size with color based on actual size
-                    const effectiveSize = backup.size / backup.deduplicationFactor;
-                    const effectiveSizeFormatted = formatBytes(effectiveSize);
-                    const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
-                    sizeHtml = `<span class="${getSizeColorClass(effectiveSize)}" title="Logical size: ${size.text} (${backup.deduplicationFactor.toFixed(1)}x deduplication saves ${savingsPercent}%)">~${effectiveSizeFormatted.text}</span>`;
-                } else {
-                    // Show logical size
-                    if (backup.deduplicationFactor && backup.deduplicationFactor > 1) {
-                        const effectiveSize = backup.size / backup.deduplicationFactor;
-                        const effectiveSizeFormatted = formatBytes(effectiveSize);
-                        const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
-                        sizeHtml = `<span class="${getSizeColorClass(backup.size)}" title="~${effectiveSizeFormatted.text} on disk (${savingsPercent}% saved by ${backup.deduplicationFactor.toFixed(1)}x deduplication)">${size.text}</span>`;
-                    } else {
-                        sizeHtml = `<span class="${getSizeColorClass(backup.size)}">${size.text}</span>`;
-                    }
-                }
+                // Show logical size only
+                const sizeHtml = `<span class="${getSizeColorClass(backup.size)}">${size.text}</span>`;
                 
                 html += `
                     <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
@@ -978,7 +930,7 @@ PulseApp.ui.pbs = (() => {
         }
         
         // Radio button filters
-        document.querySelectorAll('input[name="pbs-server"], input[name="pbs-datastore"], input[name="pbs-type"], input[name="pbs-verified"], input[name="pbs-size"]').forEach(radio => {
+        document.querySelectorAll('input[name="pbs-server"], input[name="pbs-datastore"], input[name="pbs-type"], input[name="pbs-verified"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const filterName = e.target.name.replace('pbs-', '');
                 if (filterName === 'server') {
@@ -989,8 +941,6 @@ PulseApp.ui.pbs = (() => {
                     filters.backupType = e.target.value;
                 } else if (filterName === 'verified') {
                     filters.verificationStatus = e.target.value;
-                } else if (filterName === 'size') {
-                    filters.sizeDisplay = e.target.value;
                 }
                 
                 // Always re-render the full UI for any filter change to ensure consistency
@@ -1095,8 +1045,7 @@ PulseApp.ui.pbs = (() => {
             searchTerm: '',
             datastore: 'all',
             backupType: 'all',
-            verificationStatus: 'all',
-            sizeDisplay: 'logical'
+            verificationStatus: 'all'
         };
         
         // Reset sort
@@ -1134,7 +1083,6 @@ PulseApp.ui.pbs = (() => {
                filters.datastore !== 'all' ||
                filters.backupType !== 'all' ||
                filters.verificationStatus !== 'all' ||
-               filters.sizeDisplay !== 'logical' ||
                !isDefaultSort;
     }
 
