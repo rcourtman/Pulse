@@ -405,6 +405,7 @@ PulseApp.ui.pve = (() => {
             { field: 'type', label: 'Type', width: 'w-16' },
             { field: 'node', label: 'Node', width: 'w-24' },
             { field: 'storage', label: 'Storage', width: 'w-24' },
+            { field: 'ctime', label: 'Time', width: 'w-20' },
             { field: 'size', label: 'Size', width: 'w-24' }
         ];
         
@@ -427,7 +428,7 @@ PulseApp.ui.pve = (() => {
         if (filteredBackups.length === 0) {
             return `
                 <tr>
-                    <td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">
+                    <td colspan="8" class="p-4 text-center text-gray-500 dark:text-gray-400">
                         No backups found
                     </td>
                 </tr>
@@ -455,7 +456,7 @@ PulseApp.ui.pve = (() => {
             // Add date header
             html += `
                 <tr class="bg-gray-50 dark:bg-gray-700/50">
-                    <td colspan="7" class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                    <td colspan="8" class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400">
                         ${displayDate} (${backups.length} backup${backups.length > 1 ? 's' : ''})
                     </td>
                 </tr>
@@ -486,6 +487,7 @@ PulseApp.ui.pve = (() => {
                         </td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.node}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.storage}</td>
+                        <td class="p-1 px-2 whitespace-nowrap text-xs ${getTimeAgoColorClass(backup.ctime)}" title="${formatBackupTime(backup.ctime)}">${formatTimeAgo(backup.ctime)}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${size.text}</td>
                     </tr>
                 `;
@@ -765,6 +767,55 @@ PulseApp.ui.pve = (() => {
             month: 'short',
             year: 'numeric'
         });
+    }
+    
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) return 'Never';
+        
+        const now = Date.now() / 1000;
+        const diff = now - timestamp;
+        
+        if (diff < 3600) {
+            return Math.floor(diff / 60) + 'm ago';
+        } else if (diff < 86400) {
+            return Math.floor(diff / 3600) + 'h ago';
+        } else {
+            return Math.floor(diff / 86400) + 'd ago';
+        }
+    }
+    
+    // Format backup time
+    function formatBackupTime(timestamp) {
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString(undefined, { 
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    // Get color class based on time ago
+    function getTimeAgoColorClass(timestamp) {
+        if (!timestamp) return 'text-gray-600 dark:text-gray-400';
+        
+        const now = Date.now() / 1000;
+        const diff = now - timestamp;
+        const hours = diff / 3600;
+        
+        if (hours < 24) {
+            // Less than 1 day - green (fresh)
+            return 'text-green-600 dark:text-green-400';
+        } else if (hours < 72) {
+            // 1-3 days - blue (recent)
+            return 'text-blue-600 dark:text-blue-400';
+        } else if (hours < 168) {
+            // 3-7 days - yellow (getting old)
+            return 'text-yellow-600 dark:text-yellow-400';
+        } else {
+            // Over 7 days - red (old)
+            return 'text-red-600 dark:text-red-400';
+        }
     }
     
     function formatBytes(bytes) {
