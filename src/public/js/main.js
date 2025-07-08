@@ -11,8 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.table-container'), // Main dashboard table
             document.querySelector('#node-summary-cards-container'), // Node cards
             document.querySelector('#storage-info-content'), // Storage tab
-            document.querySelector('#pbs-instances-container'), // PBS tab
-            document.querySelector('#backups-table-container'), // Backups tab
+            document.querySelector('#unified-table'), // Unified backups tab
             // Also find any overflow-x-auto or overflow-y-auto containers that might be scrolled
             ...Array.from(document.querySelectorAll('.overflow-x-auto, .overflow-y-auto, [style*="overflow"]'))
         ];
@@ -47,7 +46,6 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.nodes?.updateNodeSummaryCards(nodesData);
         PulseApp.ui.dashboard?.updateDashboardTable();
         PulseApp.ui.storage?.updateStorageInfo();
-        PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
         
         // Restore the original function
         PulseApp.utils.preserveScrollPosition = originalPreserveScrollPosition;
