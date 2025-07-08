@@ -458,6 +458,8 @@ Optional numbered variables also exist for additional PBS instances (e.g., `PBS_
 
 ### Creating a Proxmox API Token
 
+> ⚠️ **IMPORTANT:** Creating an API token is a two-step process. Many users experience blank dashboards because they skip step 4 (Add Token Permission). The token will connect successfully but show no data without proper permissions.
+
 Using an API token is the recommended authentication method.
 
 <details>
@@ -474,11 +476,17 @@ Using an API token is the recommended authentication method.
     *   Enter a `Token ID` (e.g., "pulse").
     *   Leave `Privilege Separation` checked. Click `Add`.
     *   **Important:** Copy the `Secret` value immediately. It's shown only once.
-4.  **Assign permissions (to User and Token):**
+    *   **Note:** Creating a token does NOT automatically grant it permissions. You MUST complete step 4 below.
+4.  **Assign permissions (CRITICAL STEP - Often Missed):**
     *   Go to `Datacenter` → `Permissions`.
     *   **Add User Permission:** Click `Add` → `User Permission`. Path: `/`, User: `pulse-monitor@pam`, Role: `PVEAuditor`, check `Propagate`. Click `Add`.
-    *   **Add Token Permission:** Click `Add` → `API Token Permission`. Path: `/`, API Token: `pulse-monitor@pam!pulse`, Role: `PVEAuditor`, check `Propagate`. Click `Add`.
-    *   *Note: The `PVEAuditor` role at the root path (`/`) with `Propagate` is crucial.*
+    *   **Add Token Permission (REQUIRED):** Click `Add` → `API Token Permission`.
+        - Path: `/` (must be root path, NOT `/access`)
+        - API Token: `pulse-monitor@pam!pulse` (format: `username@realm!tokenname`)
+        - Role: `PVEAuditor`
+        - **Propagate: MUST be checked**
+        - Click `Add`
+    *   **Common Mistake:** Many users skip the "Add Token Permission" step, which results in a blank dashboard even though the connection shows as successful.
 5.  **Update `.env`:** Set `PROXMOX_TOKEN_ID` (e.g., `pulse-monitor@pam!pulse`) and `PROXMOX_TOKEN_SECRET` (the secret you copied).
 
 </details>
@@ -944,9 +952,27 @@ sudo journalctl -u pulse-monitor.service -f
 ```
 
 **Empty dashboard or "No data" errors?**
-1. **Check API Token:** Verify your `PROXMOX_TOKEN_ID` and `PROXMOX_TOKEN_SECRET` are correct
-2. **Test connectivity:** Can you ping your Proxmox host from where Pulse is running?
-3. **Check permissions:** Ensure token has `PVEAuditor` role on path `/` with `Propagate` enabled
+1. **Check API Token Permissions (Most Common Issue):**
+   ```bash
+   # On your Proxmox host, verify token permissions:
+   pveum user permissions <username>@pam!<tokenname>
+   # Example: pveum user permissions pulse-monitor@pam!pulse
+   ```
+   - Look for `VM.Audit` permission at path `/`
+   - If missing, you likely skipped the "Add Token Permission" step
+   
+2. **Verify Token Configuration:**
+   - Token format must be: `username@realm!tokenname` (e.g., `pulse-monitor@pam!pulse`)
+   - Path must be `/` (root), NOT `/access` or other paths
+   - Propagate must be enabled (checked)
+   - Role must be `PVEAuditor` or higher
+   
+3. **Test connectivity:** Can you ping your Proxmox host from where Pulse is running?
+
+4. **Alternative: Disable Privilege Separation (Not Recommended):**
+   - Edit your API token in Proxmox
+   - Uncheck "Privilege Separation"
+   - This makes the token inherit ALL user permissions (security risk)
 
 **"Empty Backups Tab" with PBS configured?**
 - Ensure `PBS Node Name` is configured in the settings modal
