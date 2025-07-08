@@ -325,15 +325,6 @@ function renderUnifiedTable() {
     
     let html = `
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-            <style>
-                /* Override global CSS to match row hover colors exactly */
-                #unified-table-inner tr:hover td.sticky.left-0 {
-                    background-color: rgb(249, 250, 251) !important; /* gray-50 */
-                }
-                .dark #unified-table-inner tr:hover td.sticky.left-0 {
-                    background-color: rgba(55, 65, 81, 0.3) !important; /* gray-700/30 - match row hover */
-                }
-            </style>
             <table class="w-full text-xs sm:text-sm" id="unified-table-inner">
                 <thead class="bg-gray-100 dark:bg-gray-800">
                     <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -387,7 +378,7 @@ function renderUnifiedTable() {
             const typeIcon = getTypeIcon(item.type);
             
             html += `
-                <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td class="sticky left-0 z-10 p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
