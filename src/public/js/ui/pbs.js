@@ -14,7 +14,7 @@ PulseApp.ui.pbs = (() => {
         verificationStatus: 'all' // 'all', 'verified', 'unverified'
     };
     let currentSort = {
-        field: 'backup-time',
+        field: 'backupTime',
         ascending: false
     };
 
@@ -116,7 +116,8 @@ PulseApp.ui.pbs = (() => {
                                 verificationTime: snapshot.verification && snapshot.verification.upid ? snapshot['backup-time'] : null,
                                 protected: snapshot.protected || false,
                                 owner: snapshot.owner || '',
-                                comment: snapshot.comment || ''
+                                comment: snapshot.comment || '',
+                                deduplicationFactor: datastore.deduplicationFactor || null
                             };
                             newBackups.push(backup);
                         });
@@ -479,6 +480,10 @@ PulseApp.ui.pbs = (() => {
         
         // Get storage info - show all datastores with sizes
         let storageInfo = '';
+        let avgDedupFactor = null;
+        let totalLogicalData = 0;
+        let totalPhysicalData = 0;
+        
         if (instance.datastores && instance.datastores.length > 0) {
             // Sort datastores by usage percentage (highest first)
             const sortedDatastores = [...instance.datastores]
@@ -488,6 +493,20 @@ PulseApp.ui.pbs = (() => {
                     const percentB = (b.used / b.total) * 100;
                     return percentB - percentA;
                 });
+            
+            // Calculate average deduplication factor
+            sortedDatastores.forEach(ds => {
+                if (ds.deduplicationFactor && ds.gcDetails) {
+                    const physicalBytes = ds.gcDetails['disk-bytes'] || ds.used;
+                    const logicalBytes = ds.gcDetails['index-data-bytes'] || (physicalBytes * ds.deduplicationFactor);
+                    totalPhysicalData += physicalBytes;
+                    totalLogicalData += logicalBytes;
+                }
+            });
+            
+            if (totalPhysicalData > 0 && totalLogicalData > 0) {
+                avgDedupFactor = totalLogicalData / totalPhysicalData;
+            }
             
             if (sortedDatastores.length > 0) {
                 storageInfo = sortedDatastores.map(ds => {
@@ -503,13 +522,17 @@ PulseApp.ui.pbs = (() => {
                     const totalFormatted = PulseApp.utils.formatBytesCompact(ds.total);
                     const displayText = `${usedFormatted}/${totalFormatted}`;
                     
+                    const dedupTooltip = ds.deduplicationFactor && ds.deduplicationFactor > 1 
+                        ? `Deduplication: ${ds.deduplicationFactor.toFixed(1)}x (${((1 - (1/ds.deduplicationFactor)) * 100).toFixed(0)}% saved)` 
+                        : '';
+                    
                     return `
                         <div class="text-sm">
                             <div class="flex items-center justify-between mb-0.5">
                                 <span class="text-gray-500 dark:text-gray-500 truncate">${ds.name || 'Storage'}:</span>
                                 <span class="text-xs font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">${displayText} (${usagePercent.toFixed(0)}%)</span>
                             </div>
-                            <div class="relative w-full h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
+                            <div class="relative w-full h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600" ${dedupTooltip ? `title="${dedupTooltip}"` : ''}>
                                 <div class="absolute top-0 left-0 h-full ${progressColorClass} rounded-full" style="width: ${usagePercent}%;"></div>
                             </div>
                         </div>
@@ -521,8 +544,9 @@ PulseApp.ui.pbs = (() => {
         // Format last backup time
         let lastBackupTime = 0;
         instanceData.forEach(backup => {
-            const backupTime = backup['backup-time'] || 0;
-            if (backupTime > lastBackupTime) lastBackupTime = backupTime;
+            if (backup.backupTime > lastBackupTime) {
+                lastBackupTime = backup.backupTime;
+            }
         });
         
         let lastBackupText = 'Never';
@@ -552,25 +576,48 @@ PulseApp.ui.pbs = (() => {
                         ${runningTasks > 0 ? `<span class="text-xs font-medium text-blue-600 dark:text-blue-400 animate-pulse" title="${runningTasks} running tasks">▶ ${runningTasks}</span>` : ''}
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                    <div class="text-gray-600 dark:text-gray-400">
-                        <span class="text-gray-500 dark:text-gray-500">Total Backups:</span>
-                        <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${instanceData.length}</span>
+                <div class="space-y-1 text-sm">
+                    <div class="flex justify-between">
+                        <div class="flex gap-2">
+                            <span class="text-gray-500 dark:text-gray-500">Total:</span>
+                            <span class="font-semibold text-gray-800 dark:text-gray-200">${instanceData.length}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="text-gray-500 dark:text-gray-500">Verified:</span>
+                            <span class="font-semibold ${verificationRate === 100 ? 'text-green-600 dark:text-green-400' : verificationRate >= 80 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${verificationRate.toFixed(0)}%</span>
+                        </div>
                     </div>
-                    <div class="text-gray-600 dark:text-gray-400">
-                        <span class="text-gray-500 dark:text-gray-500">Total Size:</span>
-                        <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${PulseApp.utils.formatBytesCompact(totalSize)}</span>
-                    </div>
-                    <div class="text-gray-600 dark:text-gray-400">
-                        <span class="text-gray-500 dark:text-gray-500">Verified:</span>
-                        <span class="ml-1 font-semibold ${verificationRate === 100 ? 'text-green-600 dark:text-green-400' : verificationRate >= 80 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${verificationRate.toFixed(0)}%</span>
-                    </div>
-                    <div class="text-gray-600 dark:text-gray-400">
-                        <span class="text-gray-500 dark:text-gray-500">Latest Backup:</span>
-                        <span class="ml-1 font-semibold ${lastBackupColorClass}">${lastBackupText}</span>
+                    <div class="flex gap-2">
+                        <span class="text-gray-500 dark:text-gray-500">Latest:</span>
+                        <span class="font-semibold ${lastBackupColorClass}">${lastBackupText}</span>
                     </div>
                 </div>
                 ${storageInfo ? `<div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">${storageInfo}</div>` : ''}
+            </div>
+        `;
+    }
+
+    // Render deduplication explanation
+    function renderDedupExplanation() {
+        if (!pbsInstances || pbsInstances.length === 0 || activeInstance >= pbsInstances.length) {
+            return '';
+        }
+        
+        const currentInstance = pbsInstances[activeInstance];
+        if (!currentInstance) return '';
+        
+        // Check if any datastore has deduplication data
+        let hasDedup = false;
+        if (currentInstance.datastores) {
+            hasDedup = currentInstance.datastores.some(ds => ds.deduplicationFactor && ds.deduplicationFactor > 1);
+        }
+        
+        if (!hasDedup) return '';
+        
+        return `
+            <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-600 dark:text-gray-400">
+                <span class="text-gray-500 dark:text-gray-400">💡</span> 
+                Hover over backup sizes to see actual disk usage after deduplication
             </div>
         `;
     }
@@ -666,7 +713,7 @@ PulseApp.ui.pbs = (() => {
             { field: 'backupTime', label: 'Backup Time', width: 'w-24' },
             { field: 'datastore', label: 'Datastore', width: 'w-20' },
             { field: 'namespace', label: 'Namespace', width: 'w-20' },
-            { field: 'size', label: 'Size', width: 'w-20' }
+            { field: 'size', label: 'Size', width: 'w-24' }
         ];
         
         return headers.map(header => {
@@ -728,6 +775,17 @@ PulseApp.ui.pbs = (() => {
                 const typeLabel = backup.backupType === 'vm' ? 'VM' : 'LXC';
                 const guestName = getGuestName(backup.vmid, backup.backupType);
                 
+                // Create size display with deduplication info in tooltip
+                let sizeHtml = '';
+                if (backup.deduplicationFactor && backup.deduplicationFactor > 1) {
+                    const effectiveSize = backup.size / backup.deduplicationFactor;
+                    const effectiveSizeFormatted = formatBytes(effectiveSize);
+                    const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
+                    sizeHtml = `<span class="${getSizeColorClass(backup.size)}" title="~${effectiveSizeFormatted.text} on disk (${savingsPercent}% saved by ${backup.deduplicationFactor.toFixed(1)}x deduplication)">${size.text}</span>`;
+                } else {
+                    sizeHtml = `<span class="${getSizeColorClass(backup.size)}">${size.text}</span>`;
+                }
+                
                 html += `
                     <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                         <td class="p-1 px-2 whitespace-nowrap text-center">
@@ -752,11 +810,11 @@ PulseApp.ui.pbs = (() => {
                                 ${typeLabel}
                             </span>
                         </td>
-                        <td class="p-1 px-2 whitespace-nowrap text-xs">${formatBackupTime(backup.backupTime)}</td>
+                        <td class="p-1 px-2 whitespace-nowrap text-xs ${getTimeAgoColorClass(backup.backupTime)}" title="${formatBackupTime(backup.backupTime)}">${formatTimeAgo(backup.backupTime)}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.datastore}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.namespace}</td>
-                        <td class="p-1 px-2 whitespace-nowrap ${getSizeColorClass(backup.size)}">
-                            ${size.text}
+                        <td class="p-1 px-2 whitespace-nowrap">
+                            ${sizeHtml}
                         </td>
                     </tr>
                 `;
@@ -980,7 +1038,7 @@ PulseApp.ui.pbs = (() => {
         };
         
         // Reset sort
-        currentSort.field = 'backup-time';
+        currentSort.field = 'backupTime';
         currentSort.ascending = false;
         
         // Re-render the UI to reset all radio buttons

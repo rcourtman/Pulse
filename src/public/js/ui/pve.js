@@ -357,31 +357,38 @@ PulseApp.ui.pve = (() => {
                             ${oldBackups > 0 ? `<span class="text-xs font-medium text-yellow-600 dark:text-yellow-400" title="${oldBackups} backups 30-90 days old">● ${oldBackups}</span>` : ''}
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Total Backups:</span>
-                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">Total:</span>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">Size:</span>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">${formatBytes(node.size).text}</span>
+                            </div>
                         </div>
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Total Size:</span>
-                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${formatBytes(node.size).text}</span>
-                        </div>
-                        ${node.vmCount > 0 ? `
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">VM Backups:</span>
-                            <span class="ml-1 font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
-                        </div>
-                        ` : ''}
-                        ${node.lxcCount > 0 ? `
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">LXC Backups:</span>
-                            <span class="ml-1 font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
-                        </div>
-                        ` : ''}
-                        <div class="col-span-2 pt-1 border-t border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Latest Backup:</span>
-                            <span class="ml-1 font-semibold ${newestColorClass}">${newestText}</span>
-                            ${storageCount > 1 ? `<span class="ml-3 text-gray-500 dark:text-gray-500">Storages: <span class="font-semibold text-gray-800 dark:text-gray-200">${storageCount}</span></span>` : ''}
+                        ${(node.vmCount > 0 || node.lxcCount > 0) ? `
+                        <div class="flex justify-between">
+                            ${node.vmCount > 0 ? `
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">VMs:</span>
+                                <span class="font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
+                            </div>` : '<div></div>'}
+                            ${node.lxcCount > 0 ? `
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">LXCs:</span>
+                                <span class="font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
+                            </div>` : '<div></div>'}
+                        </div>` : ''}
+                        <div class="pt-1 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between">
+                                <div class="flex gap-2">
+                                    <span class="text-gray-500 dark:text-gray-500">Latest:</span>
+                                    <span class="font-semibold ${newestColorClass}">${newestText}</span>
+                                </div>
+                                ${storageCount > 1 ? `<div class="flex gap-2"><span class="text-gray-500 dark:text-gray-500">Stores:</span><span class="font-semibold text-gray-800 dark:text-gray-200">${storageCount}</span></div>` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
