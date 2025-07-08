@@ -334,14 +334,14 @@ function renderUnifiedTable() {
                     <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
                         Backup ${getSortIndicator('backupType')}
                     </th>
-                    <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('vmid')">
-                        VMID ${getSortIndicator('vmid')}
-                    </th>
                     <th class="p-1 px-2 whitespace-nowrap">
                         Name
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('type')">
                         Type ${getSortIndicator('type')}
+                    </th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('vmid')">
+                        VMID ${getSortIndicator('vmid')}
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('node')">
                         Node ${getSortIndicator('node')}
@@ -380,9 +380,9 @@ function renderUnifiedTable() {
                 <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
-                    <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 max-w-[200px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
+                    <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
                     <td class="p-1 px-2 whitespace-nowrap ${getSizeColor(item.size)}">${item.size ? formatBytes(item.size) : '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-400">
