@@ -10,8 +10,8 @@
     "start": "node pulse-agent.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1"
+    "axios": "^1.10.0",
+    "dotenv": "^17.1.0"
   },
   "engines": {
     "node": ">=14.0.0"
