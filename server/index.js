@@ -89,7 +89,21 @@ const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
-const PORT = parseInt(process.env.PORT, 10) || 7655;
+const PORT = (() => {
+    const envPort = process.env.PORT;
+    if (!envPort) return 7655;
+    
+    const parsed = parseInt(envPort, 10);
+    if (isNaN(parsed)) {
+        console.warn(`WARNING: Invalid PORT value "${envPort}" - using default port 7655`);
+        return 7655;
+    }
+    if (parsed < 1 || parsed > 65535) {
+        console.warn(`WARNING: PORT ${parsed} is out of valid range (1-65535) - using default port 7655`);
+        return 7655;
+    }
+    return parsed;
+})();
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
 const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds
