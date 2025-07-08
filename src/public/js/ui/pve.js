@@ -329,9 +329,9 @@ PulseApp.ui.pve = (() => {
                 } else {
                     const days = Math.floor(age / 86400);
                     newestText = days + 'd ago';
-                    if (days === 0) newestColorClass = 'text-green-600 dark:text-green-400';
-                    else if (days <= 3) newestColorClass = 'text-blue-600 dark:text-blue-400';
+                    if (days <= 3) newestColorClass = 'text-green-600 dark:text-green-400';
                     else if (days <= 7) newestColorClass = 'text-yellow-600 dark:text-yellow-400';
+                    else if (days <= 30) newestColorClass = 'text-orange-600 dark:text-orange-400';
                     else newestColorClass = 'text-red-600 dark:text-red-400';
                 }
             }
@@ -488,7 +488,7 @@ PulseApp.ui.pve = (() => {
                         <td class="p-1 px-2 whitespace-nowrap">${backup.node}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.storage}</td>
                         <td class="p-1 px-2 whitespace-nowrap text-xs ${getTimeAgoColorClass(backup.ctime)}" title="${formatBackupTime(backup.ctime)}">${formatTimeAgo(backup.ctime)}</td>
-                        <td class="p-1 px-2 whitespace-nowrap">${size.text}</td>
+                        <td class="p-1 px-2 whitespace-nowrap"><span class="${getSizeColorClass(backup.size)}">${size.text}</span></td>
                     </tr>
                 `;
             });
@@ -801,19 +801,22 @@ PulseApp.ui.pve = (() => {
         
         const now = Date.now() / 1000;
         const diff = now - timestamp;
-        const hours = diff / 3600;
+        const days = diff / 86400;
         
-        if (hours < 24) {
+        if (days < 1) {
             // Less than 1 day - green (fresh)
             return 'text-green-600 dark:text-green-400';
-        } else if (hours < 72) {
-            // 1-3 days - blue (recent)
-            return 'text-blue-600 dark:text-blue-400';
-        } else if (hours < 168) {
+        } else if (days < 3) {
+            // 1-3 days - green (still recent)
+            return 'text-green-600 dark:text-green-400';
+        } else if (days < 7) {
             // 3-7 days - yellow (getting old)
             return 'text-yellow-600 dark:text-yellow-400';
+        } else if (days < 30) {
+            // 7-30 days - orange (old)
+            return 'text-orange-600 dark:text-orange-400';
         } else {
-            // Over 7 days - red (old)
+            // Over 30 days - red (very old)
             return 'text-red-600 dark:text-red-400';
         }
     }
@@ -837,17 +840,20 @@ PulseApp.ui.pve = (() => {
     function getSizeColorClass(sizeInBytes) {
         const gb = sizeInBytes / (1024 * 1024 * 1024);
         
-        if (gb < 50) {
-            // Less than 50 GB - green
+        if (gb < 1) {
+            // Less than 1 GB - green (small)
             return 'text-green-600 dark:text-green-400';
-        } else if (gb < 200) {
-            // 50-200 GB - blue
-            return 'text-blue-600 dark:text-blue-400';
-        } else if (gb < 500) {
-            // 200-500 GB - yellow
+        } else if (gb < 5) {
+            // 1-5 GB - green (still small)
+            return 'text-green-600 dark:text-green-400';
+        } else if (gb < 20) {
+            // 5-20 GB - yellow (medium)
             return 'text-yellow-600 dark:text-yellow-400';
+        } else if (gb < 50) {
+            // 20-50 GB - orange (large)
+            return 'text-orange-600 dark:text-orange-400';
         } else {
-            // 500+ GB - red
+            // 50+ GB - red (very large)
             return 'text-red-600 dark:text-red-400';
         }
     }
