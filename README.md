@@ -468,7 +468,8 @@ Using an API token is the recommended authentication method.
 1.  **Log in to the Proxmox VE web interface.**
 2.  **Create a dedicated user** (optional but recommended):
     *   Go to `Datacenter` → `Permissions` → `Users`.
-    *   Click `Add`. Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Linux PAM standard authentication` (`pam`), set a password, ensure `Enabled`. Click `Add`.
+    *   Click `Add`. Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Linux PAM standard authentication` (`pam`), ensure `Enabled` is checked. Click `Add`.
+    *   Note: PAM users don't need a password for API token usage. The token will authenticate independently.
 3.  **Create an API token:**
     *   Go to `Datacenter` → `Permissions` → `API Tokens`.
     *   Click `Add`.
@@ -501,7 +502,8 @@ If monitoring PBS, create a token within the PBS interface.
 1.  **Log in to the Proxmox Backup Server web interface.**
 2.  **Create a dedicated user** (optional but recommended):
     *   Go to `Configuration` → `Access Control` → `User Management`.
-    *   Click `Add`. Enter `User ID` (e.g., "pulse-monitor@pbs"), set Realm (likely `pbs`), add password. Click `Add`.
+    *   Click `Add`. Enter `User ID` (e.g., "pulse-monitor"), set Realm to `Proxmox Backup authentication server` (`pbs`). Click `Add`.
+    *   Note: For PBS realm users, you'll need to set a password. For PAM users, no password is needed for API token usage.
 3.  **Create an API token:**
     *   Go to `Configuration` → `Access Control` → `API Token`.
     *   Click `Add`.
