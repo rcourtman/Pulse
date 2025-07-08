@@ -346,9 +346,6 @@ function renderUnifiedTable() {
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('node')">
                         Node ${getSortIndicator('node')}
                     </th>
-                    <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
-                        Time ${getSortIndicator('backupTime')}
-                    </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('size')">
                         Size ${getSortIndicator('size')}
                     </th>
@@ -357,6 +354,9 @@ function renderUnifiedTable() {
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap">
                         Details
+                    </th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
+                        Time ${getSortIndicator('backupTime')}
                     </th>
                 </tr>
             </thead>
@@ -384,7 +384,6 @@ function renderUnifiedTable() {
                     <td class="p-1 px-2 max-w-[200px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
-                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
                     <td class="p-1 px-2 whitespace-nowrap ${getSizeColor(item.size)}">${item.size ? formatBytes(item.size) : '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-400">
                         ${getLocationDisplay(item)}
@@ -392,6 +391,7 @@ function renderUnifiedTable() {
                     <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate max-w-[200px]" title="${escapeHtml(getDetails(item))}">
                         ${escapeHtml(getDetails(item))}
                     </td>
+                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
                 </tr>
             `;
         });
