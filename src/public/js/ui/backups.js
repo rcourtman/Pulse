@@ -328,14 +328,14 @@ function renderUnifiedTable() {
             <table class="w-full text-xs sm:text-sm">
                 <thead class="bg-gray-100 dark:bg-gray-800">
                     <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                    <th class="sticky left-0 z-10 p-1 px-2 whitespace-nowrap w-[150px] bg-gray-100 dark:bg-gray-700 border-r border-gray-300 dark:border-gray-600">
+                        Name
+                    </th>
                     <th class="p-1 px-2 whitespace-nowrap text-center w-12">
                         Status
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
                         Backup ${getSortIndicator('backupType')}
-                    </th>
-                    <th class="p-1 px-2 whitespace-nowrap w-[150px]">
-                        Name
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('type')">
                         Type ${getSortIndicator('type')}
@@ -365,10 +365,11 @@ function renderUnifiedTable() {
     
     Object.entries(grouped).forEach(([dateLabel, items]) => {
         html += `
-            <tr>
-                <td colspan="10" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
+                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border-r border-gray-300 dark:border-gray-600">
                     ${dateLabel} (${items.length})
                 </td>
+                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
             </tr>
         `;
         
@@ -377,10 +378,10 @@ function renderUnifiedTable() {
             const typeIcon = getTypeIcon(item.type);
             
             html += `
-                <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <tr class="group border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="sticky left-0 z-10 p-1 px-2 w-[150px] max-w-[150px] truncate bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/30 border-r border-gray-200 dark:border-gray-700" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
-                    <td class="p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
