@@ -93,24 +93,6 @@ PulseApp.ui.tabs = (() => {
                 }
             }
 
-            if (tabId === 'snapshots') {
-                if (PulseApp.ui && PulseApp.ui.snapshots) {
-                    PulseApp.ui.snapshots.updateSnapshotsInfo();
-                }
-            }
-
-            if (tabId === 'backups') {
-                if (PulseApp.ui && PulseApp.ui.backups) {
-                    PulseApp.ui.backups.updateBackupsInfo();
-                }
-            }
-
-            if (tabId === 'pbs') {
-                if (PulseApp.ui && PulseApp.ui.pbs) {
-                    const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
-                    PulseApp.ui.pbs.updatePBSInfo();
-                }
-            }
             
             if (tabId === 'unified') {
                 if (PulseApp.ui && PulseApp.ui.unifiedBackups) {
@@ -222,43 +204,7 @@ PulseApp.ui.tabs = (() => {
     }
 
     function updateTabAvailability() {
-        const pbsTab = document.querySelector('.tab[data-tab="pbs"]');
-
-        if (!pbsTab) {
-            console.warn("PBS tab element not found for availability update.");
-            return;
-        }
-
-        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
-        const isPbsAvailable = pbsDataArray.length > 0 && pbsDataArray.some(pbs => pbs.status === 'ok');
-
-        styleTabAvailability(pbsTab, isPbsAvailable);
-
-        // Ensure correct active/inactive styling after availability change
-        const currentActiveTab = document.querySelector('.tab.active');
-
-        [pbsTab].forEach(tab => {
-            if (!tab) return; // Skip if tab element doesn't exist
-
-            if (isPbsAvailable) {
-                // Tab is now considered available
-                if (tab === currentActiveTab) {
-                    // If it's the current active tab, ensure it's styled as active
-                    styleMainTab(tab, true);
-                } else {
-                    // If it's available but not active, ensure it's styled as inactive
-                    styleMainTab(tab, false);
-                }
-            } else {
-                // Tab is unavailable. styleTabAvailability already handled its appearance.
-                // If it was the active tab, it should no longer appear active.
-                // styleTabAvailability removes ACTIVE_TAB_CLASSES_TO_REMOVE_WHEN_DISABLED.
-                // We might need to explicitly make another tab active if the current one became disabled.
-                // However, the problem description is about appearance when *available*.
-                // For now, let's assume disabling an active tab is handled or is a separate concern.
-                // The main goal here is to fix the appearance when isPbsAvailable is true.
-            }
-        });
+        // No longer needed since PBS tab is removed
     }
 
     // --- Log Tab Helper Functions ---
@@ -413,19 +359,9 @@ PulseApp.ui.tabs = (() => {
                     // Storage data is already fetched, just update the UI
                 }
                 break;
-            case 'snapshots':
-                if (PulseApp.ui && PulseApp.ui.snapshots) {
-                    PulseApp.ui.snapshots.init();
-                }
-                break;
-            case 'backups':
-                if (PulseApp.ui && PulseApp.ui.backups) {
-                    PulseApp.ui.backups.init();
-                }
-                break;
-            case 'pbs':
-                if (PulseApp.ui && PulseApp.ui.pbs) {
-                    PulseApp.ui.pbs.init();
+            case 'unified':
+                if (PulseApp.ui && PulseApp.ui.unifiedBackups) {
+                    PulseApp.ui.unifiedBackups.init();
                 }
                 break;
             case 'settings':
