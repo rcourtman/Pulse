@@ -149,13 +149,11 @@ function applyFilters() {
     const typeFilter = document.querySelector('input[name="unified-type-filter"]:checked');
     const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
     const storageFilter = document.getElementById('unified-storage-filter');
-    const statusFilter = document.querySelector('input[name="unified-status-filter"]:checked');
     
     const searchTerm = searchInput?.value.toLowerCase() || '';
     const selectedType = typeFilter?.value || 'all';
     const selectedBackupType = backupTypeFilter?.value || 'all';
     const selectedStorage = storageFilter?.value || 'all';
-    const selectedStatus = statusFilter?.value || 'all';
     
     const allData = normalizeBackupData();
     
@@ -195,12 +193,6 @@ function applyFilters() {
         if (selectedStorage !== 'all') {
             const itemStorage = item.storage || item.datastore;
             if (itemStorage !== selectedStorage) return false;
-        }
-        
-        // Status filter (only for remote backups)
-        if (selectedStatus !== 'all' && item.backupType === 'remote') {
-            if (selectedStatus === 'verified' && !item.verified) return false;
-            if (selectedStatus === 'unverified' && item.verified) return false;
         }
         
         return true;
@@ -703,14 +695,6 @@ function setupEventListeners() {
         });
     }
     
-    // Status filters
-    document.querySelectorAll('input[name="unified-status-filter"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-            applyFilters();
-            renderUnifiedTable();
-        });
-    });
-    
     // Reset button
     const resetButton = document.getElementById('unified-reset-button');
     if (resetButton) {
@@ -730,9 +714,6 @@ function resetFilters() {
     
     const storageFilter = document.getElementById('unified-storage-filter');
     if (storageFilter) storageFilter.value = 'all';
-    
-    const allStatusRadio = document.querySelector('input[name="unified-status-filter"][value="all"]');
-    if (allStatusRadio) allStatusRadio.checked = true;
     
     unified.sortKey = 'backupTime';
     unified.sortDirection = 'desc';
