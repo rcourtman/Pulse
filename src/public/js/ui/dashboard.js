@@ -39,6 +39,47 @@ PulseApp.ui.dashboard = (() => {
         return PulseApp.utils.createAlertDropdownHtml(guestId, 'guest', metricType, options);
     }
 
+    // Helper function to check if guest has any backup in last 24 hours
+    function hasRecentBackup(vmid) {
+        const now = Date.now() / 1000; // Current timestamp in seconds
+        const twentyFourHoursAgo = now - (24 * 60 * 60);
+        
+        // Check PBS backups
+        const pbsData = PulseApp.state.get('pbsDataArray') || [];
+        for (const pbsInstance of pbsData) {
+            if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
+                for (const datastore of pbsInstance.datastores) {
+                    if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
+                        for (const backup of datastore.snapshots) {
+                            // Check if this backup is for our VM/container
+                            if (backup['backup-id'] === String(vmid)) {
+                                const backupTime = backup['backup-time'] || 0;
+                                if (backupTime >= twentyFourHoursAgo) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check PVE local backups
+        const pveBackups = PulseApp.state.get('pveBackups');
+        if (pveBackups && pveBackups.storageBackups && Array.isArray(pveBackups.storageBackups)) {
+            for (const backup of pveBackups.storageBackups) {
+                if (backup.vmid === vmid || backup.vmid === String(vmid)) {
+                    const backupTime = backup.ctime || 0;
+                    if (backupTime >= twentyFourHoursAgo) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+
     // Helper function to setup event listeners for alert sliders and dropdowns
     function _setupAlertEventListeners(container) {
         if (!container) return;
@@ -707,17 +748,25 @@ PulseApp.ui.dashboard = (() => {
             // Update name (cell 0) with full HTML structure including indicators
             const thresholdIndicator = createThresholdIndicator(guest);
             const alertIndicator = createAlertIndicator(guest);
+            const hasSecureBackup = hasRecentBackup(guest.vmid);
+            const secureBackupIndicator = hasSecureBackup
+                ? `<span style="color: #10b981; margin-right: 6px;" title="Backup within 24 hours">
+                    <svg style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                  </span>`
+                : '';
             const nameHTML = `
                 <div class="flex items-center gap-1">
+                    ${secureBackupIndicator}
                     <span>${guest.name}</span>
                     ${alertIndicator}
                     ${thresholdIndicator}
                 </div>
             `;
-            if (cells[0].innerHTML !== nameHTML) {
-                cells[0].innerHTML = nameHTML;
-                cells[0].title = guest.name;
-            }
+            // Always update to ensure secure backup indicator is shown
+            cells[0].innerHTML = nameHTML;
+            cells[0].title = guest.name;
             
             // Ensure ID cell (2) has proper classes
             if (cells[2]) {
@@ -1461,9 +1510,20 @@ PulseApp.ui.dashboard = (() => {
             }
         }
 
+        // Create secure backup indicator
+        const hasSecureBackup = hasRecentBackup(guest.vmid);
+        const secureBackupIndicator = hasSecureBackup
+            ? `<span style="color: #10b981; margin-right: 6px;" title="Backup within 24 hours">
+                <svg style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+              </span>`
+            : '';
+
         // Create sticky name column
         const nameContent = `
             <div class="flex items-center gap-1">
+                ${secureBackupIndicator}
                 <span>${guest.name}</span>
                 ${alertIndicator}
                 ${thresholdIndicator}
