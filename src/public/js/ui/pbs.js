@@ -555,9 +555,12 @@ PulseApp.ui.pbs = (() => {
                         <div class="text-sm">
                             <div class="flex items-center justify-between mb-0.5">
                                 <span class="text-gray-500 dark:text-gray-500 truncate">${ds.name || 'Storage'}:</span>
-                                <span class="text-xs font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">${displayText} (${usagePercent.toFixed(0)}%)</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">${displayText} (${usagePercent.toFixed(0)}%)</span>
+                                    ${ds.deduplicationFactor && ds.deduplicationFactor > 1 ? `<span class="text-xs text-green-600 dark:text-green-400" ${dedupTooltip ? `title="${dedupTooltip}"` : ''}>${ds.deduplicationFactor.toFixed(1)}x</span>` : ''}
+                                </div>
                             </div>
-                            <div class="relative w-full h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600" ${dedupTooltip ? `title="${dedupTooltip}"` : ''}>
+                            <div class="relative w-full h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
                                 <div class="absolute top-0 left-0 h-full ${progressColorClass} rounded-full" style="width: ${usagePercent}%;"></div>
                             </div>
                         </div>
@@ -601,8 +604,10 @@ PulseApp.ui.pbs = (() => {
             if (!timestamp) return 'text-gray-500 dark:text-gray-400';
             const daysSince = (now - timestamp) / 86400;
             if (daysSince <= 1) return 'text-green-600 dark:text-green-400';
-            if (daysSince <= warningDays) return 'text-blue-600 dark:text-blue-400';
-            return 'text-yellow-600 dark:text-yellow-400';
+            if (daysSince <= 3) return 'text-green-600 dark:text-green-400';
+            if (daysSince <= warningDays) return 'text-yellow-600 dark:text-yellow-400';
+            if (daysSince <= 30) return 'text-orange-600 dark:text-orange-400';
+            return 'text-red-600 dark:text-red-400';
         };
         
         const isActive = instanceIndex === activeInstance;
@@ -1207,19 +1212,22 @@ PulseApp.ui.pbs = (() => {
         
         const now = Date.now() / 1000;
         const diff = now - timestamp;
-        const hours = diff / 3600;
+        const days = diff / 86400;
         
-        if (hours < 24) {
+        if (days < 1) {
             // Less than 1 day - green (fresh)
             return 'text-green-600 dark:text-green-400';
-        } else if (hours < 72) {
-            // 1-3 days - blue (recent)
-            return 'text-blue-600 dark:text-blue-400';
-        } else if (hours < 168) {
+        } else if (days < 3) {
+            // 1-3 days - green (still recent)
+            return 'text-green-600 dark:text-green-400';
+        } else if (days < 7) {
             // 3-7 days - yellow (getting old)
             return 'text-yellow-600 dark:text-yellow-400';
+        } else if (days < 30) {
+            // 7-30 days - orange (old)
+            return 'text-orange-600 dark:text-orange-400';
         } else {
-            // Over 7 days - red (old)
+            // Over 30 days - red (very old)
             return 'text-red-600 dark:text-red-400';
         }
     }
@@ -1232,8 +1240,8 @@ PulseApp.ui.pbs = (() => {
             // Less than 1 GB - green (small)
             return 'text-green-600 dark:text-green-400';
         } else if (gb < 5) {
-            // 1-5 GB - blue (normal)
-            return 'text-blue-600 dark:text-blue-400';
+            // 1-5 GB - green (still small)
+            return 'text-green-600 dark:text-green-400';
         } else if (gb < 20) {
             // 5-20 GB - yellow (medium)
             return 'text-yellow-600 dark:text-yellow-400';

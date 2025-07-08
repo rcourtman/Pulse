@@ -272,10 +272,13 @@ PulseApp.ui.snapshots = (() => {
                     newestColorClass = 'text-green-600 dark:text-green-400';
                 } else if (age < 86400) {
                     newestText = Math.floor(age / 3600) + 'h ago';
-                    newestColorClass = age < 43200 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400';
+                    newestColorClass = 'text-green-600 dark:text-green-400';
                 } else {
                     newestText = Math.floor(age / 86400) + 'd ago';
-                    newestColorClass = age < 172800 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                    if (age < 259200) newestColorClass = 'text-green-600 dark:text-green-400'; // < 3 days
+                    else if (age < 604800) newestColorClass = 'text-yellow-600 dark:text-yellow-400'; // < 7 days
+                    else if (age < 2592000) newestColorClass = 'text-orange-600 dark:text-orange-400'; // < 30 days
+                    else newestColorClass = 'text-red-600 dark:text-red-400'; // > 30 days
                 }
             }
             
@@ -510,19 +513,22 @@ PulseApp.ui.snapshots = (() => {
         
         const now = Date.now() / 1000;
         const diff = now - timestamp;
-        const hours = diff / 3600;
+        const days = diff / 86400;
         
-        if (hours < 24) {
+        if (days < 1) {
             // Less than 1 day - green (fresh)
             return 'text-green-600 dark:text-green-400';
-        } else if (hours < 72) {
-            // 1-3 days - blue (recent)
-            return 'text-blue-600 dark:text-blue-400';
-        } else if (hours < 168) {
+        } else if (days < 3) {
+            // 1-3 days - green (still recent)
+            return 'text-green-600 dark:text-green-400';
+        } else if (days < 7) {
             // 3-7 days - yellow (getting old)
             return 'text-yellow-600 dark:text-yellow-400';
+        } else if (days < 30) {
+            // 7-30 days - orange (old)
+            return 'text-orange-600 dark:text-orange-400';
         } else {
-            // Over 7 days - red (old)
+            // Over 30 days - red (very old)
             return 'text-red-600 dark:text-red-400';
         }
     }
