@@ -414,9 +414,9 @@ function getStatusIcon(item) {
 
 function getBackupTypeIcon(type) {
     const badges = {
-        snapshot: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">Snapshot</span>',
-        local: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-400">PVE</span>',
-        remote: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400">PBS</span>'
+        snapshot: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400" title="Point-in-time snapshot stored on the VM\'s host">Snapshot</span>',
+        local: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-400" title="Local backup stored on Proxmox VE storage">PVE</span>',
+        remote: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400" title="Remote backup stored on Proxmox Backup Server">PBS</span>'
     };
     return badges[type] || '';
 }
