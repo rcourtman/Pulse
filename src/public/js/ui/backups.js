@@ -21,7 +21,6 @@ function initializeUnifiedBackups() {
     if (!document.getElementById('tab-content-unified')) return;
     
     unified.mounted = true;
-    console.log('[Unified Backups] Initializing');
     
     setupEventListeners();
     // Keyboard handlers
@@ -741,11 +740,9 @@ async function fetchAllBackupData() {
         unified.localBackups = localBackupsRes.backups || [];
         
         // Update PBS backups
-        console.log('[Unified Backups] PBS API response:', pbsBackupsRes);
         if (pbsBackupsRes.backups) {
             // Direct backups array from API
             unified.pbsBackups = pbsBackupsRes.backups || [];
-            console.log('[Unified Backups] Found PBS backups:', unified.pbsBackups.length);
         } else if (pbsBackupsRes.instances) {
             // Legacy instances format
             unified.instances = pbsBackupsRes.instances;
@@ -784,12 +781,6 @@ async function fetchAllBackupData() {
 function updateUnifiedBackups() {
     if (!unified.mounted) return;
     
-    console.log('[Unified Backups] Updating with:', {
-        snapshots: unified.snapshots.length,
-        local: unified.localBackups.length,
-        remote: unified.pbsBackups.length
-    });
-    
     updateStorageFilter();
     applyFilters();
     renderUnifiedTable();
@@ -801,7 +792,6 @@ async function updateUnifiedBackupsInfo() {
 
 function cleanupUnifiedBackups() {
     unified.mounted = false;
-    console.log('[Unified Backups] Cleanup completed');
 }
 
     return {
