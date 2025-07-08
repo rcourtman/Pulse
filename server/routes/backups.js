@@ -8,6 +8,15 @@ router.get('/backups/pve', (req, res) => {
         const currentState = stateManager.getState();
         const backups = [];
         
+        // Build guest map for quick lookup of names
+        const guestMap = new Map();
+        [...(currentState.vms || []), ...(currentState.containers || [])].forEach(guest => {
+            guestMap.set(guest.vmid, {
+                name: guest.name,
+                type: guest.type === 'qemu' ? 'VM' : 'CT'
+            });
+        });
+        
         // Extract backups from pveBackups.storageBackups data
         if (currentState.pveBackups && currentState.pveBackups.storageBackups) {
             // storageBackups is an array
@@ -23,6 +32,10 @@ router.get('/backups/pve', (req, res) => {
                         }
                     }
                     
+                    // Look up guest name from state
+                    const guestInfo = guestMap.get(backup.vmid);
+                    const guestName = guestInfo ? guestInfo.name : '';
+                    
                     backups.push({
                         node: backup.node || 'unknown',
                         storage: backup.storage || 'unknown',
@@ -33,6 +46,7 @@ router.get('/backups/pve', (req, res) => {
                         size: backup.size || 0,
                         content: backup.content,
                         notes: backup.notes || '',
+                        guestName: guestName,
                         type: 'pve',
                         guestType: guestType
                     });

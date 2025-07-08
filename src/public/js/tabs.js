@@ -111,6 +111,12 @@ PulseApp.ui.tabs = (() => {
                     PulseApp.ui.pbs.updatePBSInfo();
                 }
             }
+            
+            if (tabId === 'unified') {
+                if (PulseApp.ui && PulseApp.ui.unifiedBackups) {
+                    PulseApp.ui.unifiedBackups.updateUnifiedBackupsInfo();
+                }
+            }
 
             if (tabId === 'settings') {
                 if (PulseApp.ui && PulseApp.ui.settings) {

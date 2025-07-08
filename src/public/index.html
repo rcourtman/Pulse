@@ -17,6 +17,60 @@
   
   <link rel="stylesheet" href="/output.css">
   <style>
+    /* Radio button styles for unified backups tab */
+    #unified-backup-all:checked ~ label[for="unified-backup-all"],
+    #unified-backup-snapshot:checked ~ label[for="unified-backup-snapshot"],
+    #unified-backup-local:checked ~ label[for="unified-backup-local"],
+    #unified-backup-remote:checked ~ label[for="unified-backup-remote"] {
+        background-color: rgb(219, 234, 254);
+        color: rgb(29, 78, 216);
+    }
+    
+    .dark #unified-backup-all:checked ~ label[for="unified-backup-all"],
+    .dark #unified-backup-snapshot:checked ~ label[for="unified-backup-snapshot"],
+    .dark #unified-backup-local:checked ~ label[for="unified-backup-local"],
+    .dark #unified-backup-remote:checked ~ label[for="unified-backup-remote"] {
+        background-color: rgba(30, 64, 175, 0.5);
+        color: rgb(147, 197, 253);
+    }
+    
+    #unified-all:checked ~ label[for="unified-all"],
+    #unified-vm:checked ~ label[for="unified-vm"],
+    #unified-lxc:checked ~ label[for="unified-lxc"] {
+        background-color: rgb(219, 234, 254);
+        color: rgb(29, 78, 216);
+    }
+    
+    .dark #unified-all:checked ~ label[for="unified-all"],
+    .dark #unified-vm:checked ~ label[for="unified-vm"] {
+        background-color: rgba(30, 64, 175, 0.5);
+        color: rgb(147, 197, 253);
+    }
+    
+    #unified-lxc:checked ~ label[for="unified-lxc"] {
+        background-color: rgb(220, 252, 231);
+        color: rgb(21, 128, 61);
+    }
+    
+    .dark #unified-lxc:checked ~ label[for="unified-lxc"] {
+        background-color: rgba(20, 83, 45, 0.5);
+        color: rgb(134, 239, 172);
+    }
+    
+    #unified-status-all:checked ~ label[for="unified-status-all"],
+    #unified-status-verified:checked ~ label[for="unified-status-verified"],
+    #unified-status-unverified:checked ~ label[for="unified-status-unverified"] {
+        background-color: rgb(219, 234, 254);
+        color: rgb(29, 78, 216);
+    }
+    
+    .dark #unified-status-all:checked ~ label[for="unified-status-all"],
+    .dark #unified-status-verified:checked ~ label[for="unified-status-verified"],
+    .dark #unified-status-unverified:checked ~ label[for="unified-status-unverified"] {
+        background-color: rgba(30, 64, 175, 0.5);
+        color: rgb(147, 197, 253);
+    }
+    
     @keyframes pulse {
       0%, 100% {
         opacity: 1;
@@ -899,6 +953,14 @@
           </svg>
           <span class="hidden md:inline">Remote Backups</span>
       </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="unified" role="tab" aria-selected="false" aria-controls="unified" tabindex="-1" title="All backups, snapshots, and remote backups in one view">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="3" y1="9" x2="21" y2="9"></line>
+              <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span class="hidden md:inline">Backups</span>
+      </div>
     </div>
     <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
       <!-- Nested Tab Content START -->
@@ -1342,6 +1404,81 @@
         </div>
       </div>
     </div>
+    
+    <div id="unified" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <div id="tab-content-unified" class="p-3">
+        <div class="filter-controls filter-bar flex flex-col gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <div class="flex flex-wrap items-center gap-2">
+            <input type="text" id="unified-search" placeholder="Search VMID, Name, Node, Storage (use ',' for OR)" aria-label="Search backups" class="flex-1 min-w-[150px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+            <button id="unified-reset-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </button>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-3">
+            <!-- Backup Type Filter -->
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Backup:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                <input type="radio" id="unified-backup-all" name="unified-backup-type-filter" value="all" checked class="hidden peer/all">
+                <label for="unified-backup-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                
+                <input type="radio" id="unified-backup-snapshot" name="unified-backup-type-filter" value="snapshot" class="hidden peer/snapshot">
+                <label for="unified-backup-snapshot" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/snapshot:bg-blue-100 dark:peer-checked/snapshot:bg-blue-800/50 peer-checked/snapshot:text-blue-700 dark:peer-checked/snapshot:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Snapshots</label>
+                
+                <input type="radio" id="unified-backup-local" name="unified-backup-type-filter" value="local" class="hidden peer/local">
+                <label for="unified-backup-local" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/local:bg-blue-100 dark:peer-checked/local:bg-blue-800/50 peer-checked/local:text-blue-700 dark:peer-checked/local:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
+                
+                <input type="radio" id="unified-backup-remote" name="unified-backup-type-filter" value="remote" class="hidden peer/remote">
+                <label for="unified-backup-remote" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/remote:bg-blue-100 dark:peer-checked/remote:bg-blue-800/50 peer-checked/remote:text-blue-700 dark:peer-checked/remote:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
+              </div>
+            </div>
+            
+            <!-- Type Filter -->
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                <input type="radio" id="unified-all" name="unified-type-filter" value="all" checked class="hidden peer/all">
+                <label for="unified-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                
+                <input type="radio" id="unified-vm" name="unified-type-filter" value="VM" class="hidden peer/vm">
+                <label for="unified-vm" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-blue-100 dark:peer-checked/vm:bg-blue-800/50 peer-checked/vm:text-blue-700 dark:peer-checked/vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">VMs</label>
+                
+                <input type="radio" id="unified-lxc" name="unified-type-filter" value="LXC" class="hidden peer/lxc">
+                <label for="unified-lxc" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
+              </div>
+            </div>
+            
+            <!-- Storage Filter (dynamic) -->
+            <div id="unified-storage-filter-container" class="flex items-center gap-1" style="display: none;">
+              <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Storage:</span>
+              <select id="unified-storage-filter" class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none">
+                <option value="all">All Storage</option>
+              </select>
+            </div>
+            
+            <!-- Status Filter (for remote backups) -->
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Status:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                <input type="radio" id="unified-status-all" name="unified-status-filter" value="all" checked class="hidden peer/all">
+                <label for="unified-status-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                
+                <input type="radio" id="unified-status-verified" name="unified-status-filter" value="verified" class="hidden peer/verified">
+                <label for="unified-status-verified" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/verified:bg-blue-100 dark:peer-checked/verified:bg-blue-800/50 peer-checked/verified:text-blue-700 dark:peer-checked/verified:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Verified</label>
+                
+                <input type="radio" id="unified-status-unverified" name="unified-status-filter" value="unverified" class="hidden peer/unverified">
+                <label for="unified-status-unverified" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/unverified:bg-blue-100 dark:peer-checked/unverified:bg-blue-800/50 peer-checked/unverified:text-blue-700 dark:peer-checked/unverified:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Unverified</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="unified-table" class="overflow-x-auto">
+          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading backup data...</p>
+        </div>
+      </div>
+    </div>
   <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
   <div id="slider-value-tooltip" class="absolute hidden z-[60] px-1.5 py-0.5 text-xs text-white bg-blue-600/90 dark:bg-blue-500/90 rounded shadow-lg pointer-events-none"></div>
   <!-- Settings Modal -->
@@ -1426,6 +1563,7 @@
   <script src="/js/ui/snapshots.js" defer></script>
   <script src="/js/ui/pve.js" defer></script>
   <script src="/js/ui/pbs.js" defer></script>
+  <script src="/js/ui/backups.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
   <script src="/js/ui/chartsControls.js" defer></script>
   <script src="/js/alertsHandler.js" defer></script>
