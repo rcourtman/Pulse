@@ -147,12 +147,10 @@ function applyFilters() {
     const searchInput = document.getElementById('unified-search');
     const typeFilter = document.querySelector('input[name="unified-type-filter"]:checked');
     const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
-    const storageFilter = document.getElementById('unified-storage-filter');
     
     const searchTerm = searchInput?.value.toLowerCase() || '';
     const selectedType = typeFilter?.value || 'all';
     const selectedBackupType = backupTypeFilter?.value || 'all';
-    const selectedStorage = storageFilter?.value || 'all';
     
     const allData = normalizeBackupData();
     
@@ -188,12 +186,6 @@ function applyFilters() {
             return false;
         }
         
-        // Storage/Datastore filter
-        if (selectedStorage !== 'all') {
-            const itemStorage = item.storage || item.datastore;
-            if (itemStorage !== selectedStorage) return false;
-        }
-        
         return true;
     });
     
@@ -201,103 +193,6 @@ function applyFilters() {
     const filterControls = document.querySelector('#tab-content-unified .filter-controls');
     if (filterControls) {
         // Save filter state if needed
-    }
-}
-
-function updateStorageFilter() {
-    const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
-    const selectedBackupType = backupTypeFilter?.value || 'all';
-    
-    const allData = normalizeBackupData();
-    const storageMap = new Map(); // storage name -> type
-    
-    allData.forEach(item => {
-        // Only include storages relevant to the selected backup type
-        if (selectedBackupType === 'all' || item.backupType === selectedBackupType) {
-            if (item.storage) {
-                storageMap.set(item.storage, 'local');
-            }
-            if (item.datastore) {
-                storageMap.set(item.datastore, 'pbs');
-            }
-        }
-    });
-    
-    const filterContainer = document.getElementById('unified-storage-filter-container');
-    const selectElement = document.getElementById('unified-storage-filter');
-    
-    if (!filterContainer || !selectElement) return;
-    
-    if (storageMap.size <= 1) {
-        filterContainer.style.display = 'none';
-        return;
-    }
-    
-    filterContainer.style.display = 'flex';
-    const currentValue = selectElement.value;
-    
-    selectElement.innerHTML = '<option value="all">All Locations</option>';
-    
-    // Group by type
-    const localStorages = [];
-    const pbsStorages = [];
-    
-    storageMap.forEach((type, storage) => {
-        if (type === 'local') {
-            localStorages.push(storage);
-        } else {
-            pbsStorages.push(storage);
-        }
-    });
-    
-    // Add local storages
-    if (localStorages.length > 0 && selectedBackupType !== 'remote') {
-        if (pbsStorages.length > 0) {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = 'PVE Storage';
-            localStorages.sort().forEach(storage => {
-                const option = document.createElement('option');
-                option.value = storage;
-                option.textContent = storage;
-                optgroup.appendChild(option);
-            });
-            selectElement.appendChild(optgroup);
-        } else {
-            // If only local storages, don't use optgroup
-            localStorages.sort().forEach(storage => {
-                const option = document.createElement('option');
-                option.value = storage;
-                option.textContent = storage;
-                selectElement.appendChild(option);
-            });
-        }
-    }
-    
-    // Add PBS datastores
-    if (pbsStorages.length > 0 && selectedBackupType !== 'local') {
-        if (localStorages.length > 0) {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = 'PBS Datastores';
-            pbsStorages.sort().forEach(storage => {
-                const option = document.createElement('option');
-                option.value = storage;
-                option.textContent = storage;
-                optgroup.appendChild(option);
-            });
-            selectElement.appendChild(optgroup);
-        } else {
-            // If only PBS storages, don't use optgroup
-            pbsStorages.sort().forEach(storage => {
-                const option = document.createElement('option');
-                option.value = storage;
-                option.textContent = storage;
-                selectElement.appendChild(option);
-            });
-        }
-    }
-    
-    if (currentValue && Array.from(selectElement.options).some(opt => opt.value === currentValue)) {
-        selectElement.value = currentValue;
     }
 }
 
@@ -346,11 +241,6 @@ function renderUnifiedTable() {
                     <th class="sticky left-0 z-10 p-1 px-2 whitespace-nowrap w-[150px]">
                         Name
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap text-center w-8">
-                    </th>
-                    <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
-                        Backup ${getSortIndicator('backupType')}
-                    </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('type')">
                         Type ${getSortIndicator('type')}
                     </th>
@@ -360,17 +250,23 @@ function renderUnifiedTable() {
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('node')">
                         Node ${getSortIndicator('node')}
                     </th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap w-32" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
+                        Time ${getSortIndicator('backupTime')}
+                    </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('size')">
                         Size ${getSortIndicator('size')}
+                    </th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
+                        Backup ${getSortIndicator('backupType')}
+                    </th>
+                    <th class="p-1 px-2 whitespace-nowrap text-center w-12">
+                        Status
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap">
                         Location
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap w-[150px]">
                         Details
-                    </th>
-                    <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
-                        Time ${getSortIndicator('backupTime')}
                     </th>
                 </tr>
             </thead>
@@ -394,19 +290,19 @@ function renderUnifiedTable() {
             html += `
                 <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td class="sticky left-0 z-10 p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
-                    <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
-                    <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
+                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
                     <td class="p-1 px-2 whitespace-nowrap ${getSizeColor(item.size)}">${item.size ? formatBytes(item.size) : '-'}</td>
-                    <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                    <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
+                    <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
+                    <td class="p-1 px-2 whitespace-nowrap">
                         ${getLocationDisplay(item)}
                     </td>
-                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 w-[150px] max-w-[150px] truncate" title="${escapeHtml(getDetails(item))}">
+                    <td class="p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(getDetails(item))}">
                         ${escapeHtml(getDetails(item))}
                     </td>
-                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
                 </tr>
             `;
         });
@@ -694,20 +590,10 @@ function setupEventListeners() {
     // Backup type filters
     document.querySelectorAll('input[name="unified-backup-type-filter"]').forEach(radio => {
         radio.addEventListener('change', () => {
-            updateStorageFilter(); // Update storage filter when backup type changes
             applyFilters();
             renderUnifiedTable();
         });
     });
-    
-    // Storage filter
-    const storageFilter = document.getElementById('unified-storage-filter');
-    if (storageFilter) {
-        storageFilter.addEventListener('change', () => {
-            applyFilters();
-            renderUnifiedTable();
-        });
-    }
     
     // Reset button
     const resetButton = document.getElementById('unified-reset-button');
@@ -725,9 +611,6 @@ function resetFilters() {
     
     const allBackupRadio = document.querySelector('input[name="unified-backup-type-filter"][value="all"]');
     if (allBackupRadio) allBackupRadio.checked = true;
-    
-    const storageFilter = document.getElementById('unified-storage-filter');
-    if (storageFilter) storageFilter.value = 'all';
     
     unified.sortKey = 'backupTime';
     unified.sortDirection = 'desc';
@@ -796,7 +679,6 @@ async function fetchAllBackupData() {
 function updateUnifiedBackups() {
     if (!unified.mounted) return;
     
-    updateStorageFilter();
     applyFilters();
     renderUnifiedTable();
 }
