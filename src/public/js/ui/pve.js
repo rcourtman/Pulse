@@ -9,7 +9,6 @@ PulseApp.ui.pve = (() => {
     
     let filters = {
         searchTerm: '',
-        node: 'all',
         storage: 'all',
         guestType: 'all',
         selectedDate: null
@@ -102,35 +101,17 @@ PulseApp.ui.pve = (() => {
         const uniqueStorages = getUniqueValues('storage');
         
         return `
-            ${renderBackupSummary()}
-
             <!-- PVE Filters -->
             <div class="mb-3 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                 <div class="flex flex-row flex-wrap items-center gap-2 sm:gap-3">
                     <div class="filter-controls-wrapper flex items-center gap-2 flex-1 min-w-[180px] sm:min-w-[240px]">
-                        <input type="search" id="pve-search" placeholder="Search by VMID or notes..." 
+                        <input type="search" id="pve-search" placeholder="Search by VMID, notes, or node..." 
                             value="${filters.searchTerm}"
                             class="flex-1 p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                         <button id="reset-pve-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-7 w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
                         </button>
                     </div>
-                    
-                    <!-- Node Filter -->
-                    ${uniqueNodes.length > 1 ? `
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Node:</span>
-                            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                                <input type="radio" id="pve-node-all" name="pve-node" value="all" class="hidden peer/all" ${filters.node === 'all' ? 'checked' : ''}>
-                                <label for="pve-node-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
-                                
-                                ${uniqueNodes.map((node, idx) => `
-                                    <input type="radio" id="pve-node-${idx}" name="pve-node" value="${node}" class="hidden peer/node${idx}" ${filters.node === node ? 'checked' : ''}>
-                                    <label for="pve-node-${idx}" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/node${idx}:bg-gray-100 dark:peer-checked/node${idx}:bg-gray-700 peer-checked/node${idx}:text-blue-600 dark:peer-checked/node${idx}:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">${node}</label>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
                     
                     <!-- Storage Filter -->
                     ${uniqueStorages.length > 1 ? `
@@ -257,30 +238,9 @@ PulseApp.ui.pve = (() => {
         };
     }
     
-    // Render backup summary cards
+    // Render backup summary cards - removed
     function renderBackupSummary() {
-        const backups = pveData.backups || [];
-        
-        if (backups.length === 0) {
-            return '';
-        }
-        
-        const stats = calculateBackupStats();
-        
-        const nodeCount = Object.keys(stats.nodeStats).length;
-        const gridCols = nodeCount === 1 ? 'grid-cols-1' : 
-                        nodeCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 
-                        nodeCount === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 
-                        'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-        
-        return `
-            <!-- Backup Summary Cards -->
-            <div class="mb-3">
-                <div class="grid ${gridCols} gap-3">
-                    ${renderBackupSummaryCards(stats)}
-                </div>
-            </div>
-        `;
+        return '';
     }
     
     // Render individual summary cards per node
@@ -506,12 +466,9 @@ PulseApp.ui.pve = (() => {
             const search = filters.searchTerm.toLowerCase();
             filtered = filtered.filter(backup => 
                 backup.vmid.toString().includes(search) ||
-                (backup.notes && backup.notes.toLowerCase().includes(search))
+                (backup.notes && backup.notes.toLowerCase().includes(search)) ||
+                (backup.node && backup.node.toLowerCase().includes(search))
             );
-        }
-        
-        if (filters.node !== 'all') {
-            filtered = filtered.filter(backup => backup.node === filters.node);
         }
         
         if (filters.storage !== 'all') {
@@ -573,12 +530,10 @@ PulseApp.ui.pve = (() => {
         }
         
         // Radio button filters
-        document.querySelectorAll('input[name="pve-node"], input[name="pve-storage"], input[name="pve-type"]').forEach(radio => {
+        document.querySelectorAll('input[name="pve-storage"], input[name="pve-type"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const filterName = e.target.name.replace('pve-', '');
-                if (filterName === 'node') {
-                    filters.node = e.target.value;
-                } else if (filterName === 'storage') {
+                if (filterName === 'storage') {
                     filters.storage = e.target.value;
                 } else if (filterName === 'type') {
                     filters.guestType = e.target.value;
@@ -683,7 +638,6 @@ PulseApp.ui.pve = (() => {
         // Reset filters
         filters = {
             searchTerm: '',
-            node: 'all',
             storage: 'all',
             guestType: 'all',
             selectedDate: null
@@ -720,7 +674,6 @@ PulseApp.ui.pve = (() => {
         const isDefaultSort = currentSort.field === 'ctime' && !currentSort.ascending;
         
         return filters.searchTerm !== '' ||
-               filters.node !== 'all' ||
                filters.storage !== 'all' ||
                filters.guestType !== 'all' ||
                !isDefaultSort;

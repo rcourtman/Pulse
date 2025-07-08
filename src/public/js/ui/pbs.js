@@ -219,16 +219,7 @@ PulseApp.ui.pbs = (() => {
             `;
         }
         
-        // Show single instance summary card
-        if (pbsInstances.length >= 1) {
-            html += `
-                <div class="mb-3">
-                    <div class="flex flex-wrap gap-3">
-                        ${createPBSInstanceCard(pbsInstances[activeInstance], activeInstance)}
-                    </div>
-                </div>
-            `;
-        }
+        // Summary cards removed
         
         html += renderPBSContent();
         

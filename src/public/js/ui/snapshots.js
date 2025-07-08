@@ -52,12 +52,7 @@ PulseApp.ui.snapshots = (() => {
                             tbody.innerHTML = renderSnapshotRows();
                         }
                         
-                        // Update summary cards
-                        const summary = calculateSummary();
-                        const summaryContainer = container.querySelector('.grid');
-                        if (summaryContainer) {
-                            summaryContainer.innerHTML = renderSummaryCards(summary);
-                        }
+                        // Summary cards removed
                     } else {
                         // First load - render full UI
                         renderSnapshotsUI();
@@ -95,13 +90,6 @@ PulseApp.ui.snapshots = (() => {
                         'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
         
         container.innerHTML = `
-            <!-- Snapshot Summary Cards -->
-            <div class="mb-3">
-                <div class="grid ${gridCols} gap-3">
-                    ${renderSummaryCards(summary)}
-                </div>
-            </div>
-
             <!-- Filters -->
             <div class="mb-3 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                 <div class="flex flex-row flex-wrap items-center gap-2 sm:gap-3">
