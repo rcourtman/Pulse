@@ -928,11 +928,11 @@
     <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar" role="tablist" aria-label="Main navigation tabs">
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main" role="tab" aria-selected="true" aria-controls="main" tabindex="0" title="Real-time status of all VMs and containers">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-          <span class="hidden md:inline">Main</span>
+          <span>Main</span>
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage" role="tab" aria-selected="false" aria-controls="storage" tabindex="-1" title="Storage usage and status across all nodes">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-          <span class="hidden md:inline">Storage</span>
+          <span>Storage</span>
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="unified" role="tab" aria-selected="false" aria-controls="unified" tabindex="-1" title="All backups, snapshots, and remote backups in one view">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle">
@@ -940,7 +940,7 @@
               <line x1="3" y1="9" x2="21" y2="9"></line>
               <line x1="9" y1="21" x2="9" y2="9"></line>
           </svg>
-          <span class="hidden md:inline">Backups</span>
+          <span>Backups</span>
       </div>
     </div>
     <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
@@ -1428,14 +1428,6 @@
                 <input type="radio" id="unified-lxc" name="unified-type-filter" value="LXC" class="hidden peer/lxc">
                 <label for="unified-lxc" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
               </div>
-            </div>
-            
-            <!-- Storage Filter (dynamic) -->
-            <div id="unified-storage-filter-container" class="flex items-center gap-1" style="display: none;">
-              <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Storage:</span>
-              <select id="unified-storage-filter" class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none">
-                <option value="all">All Storage</option>
-              </select>
             </div>
           </div>
         </div>
