@@ -104,6 +104,11 @@
       text-overflow: ellipsis;
     }
     
+    /* Force all sticky cells in tables to be opaque */
+    td.sticky.left-0 {
+      background-clip: padding-box;
+    }
+    
     /* Only apply nowrap to specific cells that need it */
     #main-table td:nth-child(1),
     #main-table td:nth-child(2),
@@ -798,13 +803,13 @@
     .node-header td.sticky.left-0,
     .node-storage-header td.sticky.left-0,
     tr.bg-gray-100.font-semibold td.sticky.left-0 {
-        background-color: rgb(243, 244, 246) !important; /* gray-100 */
+        background-color: rgb(249, 250, 251) !important; /* gray-50 */
     }
     
     .dark .node-header td.sticky.left-0,
     .dark .node-storage-header td.sticky.left-0,
     .dark tr.font-semibold td.sticky.left-0 {
-        background-color: rgba(55, 65, 81, 0.8) !important; /* gray-700/80 */
+        background-color: rgb(43, 53, 68) !important; /* Matches gray-700/50 over gray-800 */
     }
     
     
@@ -1051,6 +1056,16 @@
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
                 ← Swipe for more →
             </div>
+            <style>
+                /* Node header rows need more specific rule to override global CSS */
+                #main-table tr.bg-gray-50 td.sticky.left-0 {
+                    background-color: rgb(249, 250, 251) !important; /* gray-50 - solid */
+                }
+                .dark #main-table tr.dark\:bg-gray-700\/50 td.sticky.left-0 {
+                    /* Use a color that visually matches gray-700/50 over gray-800 background */
+                    background-color: rgb(43, 53, 68) !important; /* Between gray-800 and gray-700 */
+                }
+            </style>
             <table id="main-table" class="w-full min-w-[1100px] table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
                   <col class="name-col" style="width: 150px;">
@@ -1388,46 +1403,42 @@
     
     <div id="unified" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
       <div id="tab-content-unified" class="p-3">
-        <div class="filter-controls filter-bar flex flex-col gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
-          <div class="flex flex-wrap items-center gap-2">
-            <input type="text" id="unified-search" placeholder="Search VMID, Name, Node, Storage (use ',' for OR)" aria-label="Search backups" class="flex-1 min-w-[150px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-            <button id="unified-reset-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-            </button>
+        <div class="filter-controls filter-bar flex flex-wrap items-center gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <input type="text" id="unified-search" placeholder="Search VMID, Name, Node, Storage (use ',' for OR)" aria-label="Search backups" class="flex-1 min-w-[150px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+          <button id="unified-reset-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </button>
+          
+          <!-- Backup Type Filter -->
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium hidden sm:inline">Backup:</span>
+            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <input type="radio" id="unified-backup-all" name="unified-backup-type-filter" value="all" checked class="hidden peer/all">
+              <label for="unified-backup-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+              
+              <input type="radio" id="unified-backup-snapshot" name="unified-backup-type-filter" value="snapshot" class="hidden peer/snapshot">
+              <label for="unified-backup-snapshot" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/snapshot:bg-blue-100 dark:peer-checked/snapshot:bg-blue-800/50 peer-checked/snapshot:text-blue-700 dark:peer-checked/snapshot:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Snapshots</label>
+              
+              <input type="radio" id="unified-backup-local" name="unified-backup-type-filter" value="local" class="hidden peer/local">
+              <label for="unified-backup-local" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/local:bg-blue-100 dark:peer-checked/local:bg-blue-800/50 peer-checked/local:text-blue-700 dark:peer-checked/local:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
+              
+              <input type="radio" id="unified-backup-remote" name="unified-backup-type-filter" value="remote" class="hidden peer/remote">
+              <label for="unified-backup-remote" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/remote:bg-blue-100 dark:peer-checked/remote:bg-blue-800/50 peer-checked/remote:text-blue-700 dark:peer-checked/remote:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
+            </div>
           </div>
           
-          <div class="flex flex-wrap items-center gap-3">
-            <!-- Backup Type Filter -->
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Backup:</span>
-              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                <input type="radio" id="unified-backup-all" name="unified-backup-type-filter" value="all" checked class="hidden peer/all">
-                <label for="unified-backup-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
-                
-                <input type="radio" id="unified-backup-snapshot" name="unified-backup-type-filter" value="snapshot" class="hidden peer/snapshot">
-                <label for="unified-backup-snapshot" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/snapshot:bg-blue-100 dark:peer-checked/snapshot:bg-blue-800/50 peer-checked/snapshot:text-blue-700 dark:peer-checked/snapshot:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Snapshots</label>
-                
-                <input type="radio" id="unified-backup-local" name="unified-backup-type-filter" value="local" class="hidden peer/local">
-                <label for="unified-backup-local" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/local:bg-blue-100 dark:peer-checked/local:bg-blue-800/50 peer-checked/local:text-blue-700 dark:peer-checked/local:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
-                
-                <input type="radio" id="unified-backup-remote" name="unified-backup-type-filter" value="remote" class="hidden peer/remote">
-                <label for="unified-backup-remote" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/remote:bg-blue-100 dark:peer-checked/remote:bg-blue-800/50 peer-checked/remote:text-blue-700 dark:peer-checked/remote:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
-              </div>
-            </div>
-            
-            <!-- Type Filter -->
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
-              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                <input type="radio" id="unified-all" name="unified-type-filter" value="all" checked class="hidden peer/all">
-                <label for="unified-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
-                
-                <input type="radio" id="unified-vm" name="unified-type-filter" value="VM" class="hidden peer/vm">
-                <label for="unified-vm" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-blue-100 dark:peer-checked/vm:bg-blue-800/50 peer-checked/vm:text-blue-700 dark:peer-checked/vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">VMs</label>
-                
-                <input type="radio" id="unified-lxc" name="unified-type-filter" value="LXC" class="hidden peer/lxc">
-                <label for="unified-lxc" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
-              </div>
+          <!-- Type Filter -->
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium hidden sm:inline">Type:</span>
+            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <input type="radio" id="unified-all" name="unified-type-filter" value="all" checked class="hidden peer/all">
+              <label for="unified-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+              
+              <input type="radio" id="unified-vm" name="unified-type-filter" value="VM" class="hidden peer/vm">
+              <label for="unified-vm" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-blue-100 dark:peer-checked/vm:bg-blue-800/50 peer-checked/vm:text-blue-700 dark:peer-checked/vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">VMs</label>
+              
+              <input type="radio" id="unified-lxc" name="unified-type-filter" value="LXC" class="hidden peer/lxc">
+              <label for="unified-lxc" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
             </div>
           </div>
         </div>

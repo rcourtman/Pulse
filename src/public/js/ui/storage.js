@@ -368,7 +368,7 @@ PulseApp.ui.storage = (() => {
           const nodeStorageData = storageByNode[nodeName]; // Already sorted
 
           const nodeHeaderRow = PulseApp.ui.common.createTableRow({
-              classes: 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header',
+              classes: 'bg-gray-50 dark:bg-gray-700/50 node-storage-header',
               baseClasses: '' // Override base classes for node headers
           });
           nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(`${nodeName}`, 7, 'td');
