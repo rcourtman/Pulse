@@ -327,11 +327,16 @@ function renderUnifiedTable() {
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
             <style>
                 /* Date header rows need more specific rule to override global CSS */
-                #unified-table-inner tr td.sticky.left-0.bg-gray-50 {
-                    background-color: rgb(249, 250, 251) !important; /* gray-50 */
+                #unified-table-inner tr.bg-gray-50 td.sticky.left-0 {
+                    background-color: rgb(249, 250, 251) !important; /* gray-50 - solid */
                 }
-                .dark #unified-table-inner tr td.sticky.left-0.dark\\:bg-gray-700\\/50 {
-                    background-color: rgba(55, 65, 81, 0.5) !important; /* gray-700/50 */
+                .dark #unified-table-inner tr.dark\\:bg-gray-700\\/50 td.sticky.left-0 {
+                    background-color: rgb(55, 65, 81) !important; /* gray-700 - solid, not transparent */
+                }
+                
+                /* Ensure sticky columns are opaque to prevent background bleed-through */
+                #unified-table-inner td.sticky.left-0 {
+                    background-clip: padding-box;
                 }
             </style>
             <table class="w-full text-xs sm:text-sm" id="unified-table-inner">
@@ -373,11 +378,11 @@ function renderUnifiedTable() {
     
     Object.entries(grouped).forEach(([dateLabel, items]) => {
         html += `
-            <tr>
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
                 <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
                     ${dateLabel} (${items.length})
                 </td>
-                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50"></td>
+                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
             </tr>
         `;
         
