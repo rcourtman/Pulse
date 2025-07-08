@@ -73,7 +73,7 @@ PulseApp.ui.pbs = (() => {
         const last24h = now - (24 * 60 * 60);
         
         pbsInstances.forEach((instance, instanceIndex) => {
-            const serverName = instance.pbsInstanceName || instance.nodeName || 'PBS';
+            const serverName = instance.nodeName || instance.pbsInstanceName || 'PBS';
             
             // Count datastores
             if (instance.datastores && Array.isArray(instance.datastores)) {
@@ -444,7 +444,7 @@ PulseApp.ui.pbs = (() => {
     // Create PBS instance summary card
     function createPBSInstanceCard(instance, instanceIndex) {
         const instanceData = pbsData.filter(backup => backup.instanceIndex === instanceIndex);
-        const instanceName = instance.pbsInstanceName || instance.nodeName || `PBS ${instanceIndex + 1}`;
+        const instanceName = instance.nodeName || instance.pbsInstanceName || `PBS ${instanceIndex + 1}`;
         
         // Calculate statistics for this instance
         let totalSize = 0;
