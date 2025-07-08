@@ -334,7 +334,7 @@ function renderUnifiedTable() {
                     <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
                         Backup ${getSortIndicator('backupType')}
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap">
+                    <th class="p-1 px-2 whitespace-nowrap w-[150px]">
                         Name
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-16" onclick="PulseApp.ui.unifiedBackups.sortTable('type')">
@@ -352,7 +352,7 @@ function renderUnifiedTable() {
                     <th class="p-1 px-2 whitespace-nowrap">
                         Location
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap">
+                    <th class="p-1 px-2 whitespace-nowrap w-[180px]">
                         Details
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
@@ -380,7 +380,7 @@ function renderUnifiedTable() {
                 <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
-                    <td class="p-1 px-2 max-w-[200px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
+                    <td class="p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
@@ -388,7 +388,7 @@ function renderUnifiedTable() {
                     <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-400">
                         ${getLocationDisplay(item)}
                     </td>
-                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate max-w-[200px]" title="${escapeHtml(getDetails(item))}">
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 w-[180px] max-w-[180px] truncate" title="${escapeHtml(getDetails(item))}">
                         ${escapeHtml(getDetails(item))}
                     </td>
                     <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
