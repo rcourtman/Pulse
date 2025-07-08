@@ -11,7 +11,8 @@ PulseApp.ui.pbs = (() => {
         searchTerm: '',
         datastore: 'all',
         backupType: 'all', // 'all', 'vm', 'ct'
-        verificationStatus: 'all' // 'all', 'verified', 'unverified'
+        verificationStatus: 'all', // 'all', 'verified', 'unverified'
+        sizeDisplay: 'logical' // 'logical' or 'actual'
     };
     let currentSort = {
         field: 'backupTime',
@@ -422,6 +423,18 @@ PulseApp.ui.pbs = (() => {
                         </div>
                     </div>
                     
+                    <!-- Size Display Filter -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Size:</span>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="pbs-size-logical" name="pbs-size" value="logical" class="hidden" ${filters.sizeDisplay === 'logical' ? 'checked' : ''}>
+                            <label for="pbs-size-logical" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${filters.sizeDisplay === 'logical' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors" title="Size before deduplication">Logical</label>
+                            
+                            <input type="radio" id="pbs-size-actual" name="pbs-size" value="actual" class="hidden" ${filters.sizeDisplay === 'actual' ? 'checked' : ''}>
+                            <label for="pbs-size-actual" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${filters.sizeDisplay === 'actual' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors" title="Estimated size after deduplication">Actual</label>
+                        </div>
+                    </div>
+                    
                 </div>
             </div>
 
@@ -541,31 +554,61 @@ PulseApp.ui.pbs = (() => {
             }
         }
         
-        // Format last backup time
-        let lastBackupTime = 0;
-        instanceData.forEach(backup => {
-            if (backup.backupTime > lastBackupTime) {
-                lastBackupTime = backup.backupTime;
-            }
-        });
+        // Get last prune and verify times from task data
+        let lastPruneTime = 0;
+        let lastVerifyTime = 0;
         
-        let lastBackupText = 'Never';
-        let lastBackupColorClass = 'text-gray-500 dark:text-gray-400';
-        if (lastBackupTime) {
-            const diff = now - lastBackupTime;
-            if (diff < 3600) {
-                lastBackupText = Math.floor(diff / 60) + 'm ago';
-                lastBackupColorClass = 'text-green-600 dark:text-green-400';
-            } else if (diff < 86400) {
-                lastBackupText = Math.floor(diff / 3600) + 'h ago';
-                lastBackupColorClass = diff < 43200 ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400';
-            } else {
-                lastBackupText = Math.floor(diff / 86400) + 'd ago';
-                lastBackupColorClass = diff < 172800 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
-            }
+        if (instance.pruneTasks && instance.pruneTasks.recentTasks) {
+            instance.pruneTasks.recentTasks.forEach(task => {
+                const taskTime = task.startTime || task.starttime || 0;
+                if (task.status === 'OK' && taskTime > lastPruneTime) {
+                    lastPruneTime = taskTime;
+                }
+            });
         }
         
+        if (instance.verificationTasks && instance.verificationTasks.recentTasks) {
+            instance.verificationTasks.recentTasks.forEach(task => {
+                const taskTime = task.startTime || task.starttime || 0;
+                if (task.status === 'OK' && taskTime > lastVerifyTime) {
+                    lastVerifyTime = taskTime;
+                }
+            });
+        }
+        
+        // Format times
+        const formatTaskTime = (timestamp) => {
+            if (!timestamp) return 'Never';
+            const diff = now - timestamp;
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+            return Math.floor(diff / 604800) + 'w ago';
+        };
+        
+        const getTaskColorClass = (timestamp, warningDays = 7) => {
+            if (!timestamp) return 'text-gray-500 dark:text-gray-400';
+            const daysSince = (now - timestamp) / 86400;
+            if (daysSince <= 1) return 'text-green-600 dark:text-green-400';
+            if (daysSince <= warningDays) return 'text-blue-600 dark:text-blue-400';
+            return 'text-yellow-600 dark:text-yellow-400';
+        };
+        
         const isActive = instanceIndex === activeInstance;
+        
+        // Get CPU and memory usage if available
+        let cpuUsage = null;
+        let memUsage = null;
+        if (instance.nodeStatus && instance.nodeStatus.cpu !== null && instance.nodeStatus.cpu !== undefined) {
+            // CPU might already be a percentage (0-100) or a decimal (0-1)
+            cpuUsage = instance.nodeStatus.cpu > 1 ? Math.round(instance.nodeStatus.cpu) : Math.round(instance.nodeStatus.cpu * 100);
+        }
+        if (instance.nodeStatus && instance.nodeStatus.memory) {
+            const mem = instance.nodeStatus.memory;
+            if (mem.total && mem.used) {
+                memUsage = Math.round((mem.used / mem.total) * 100);
+            }
+        }
         
         return `
             <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'} cursor-pointer hover:shadow-lg transition-all flex-1 min-w-0 sm:min-w-[280px]" onclick="PulseApp.ui.pbs.switchInstance(${instanceIndex})">
@@ -579,7 +622,7 @@ PulseApp.ui.pbs = (() => {
                 <div class="space-y-1 text-sm">
                     <div class="flex justify-between">
                         <div class="flex gap-2">
-                            <span class="text-gray-500 dark:text-gray-500">Total:</span>
+                            <span class="text-gray-500 dark:text-gray-500">Backups:</span>
                             <span class="font-semibold text-gray-800 dark:text-gray-200">${instanceData.length}</span>
                         </div>
                         <div class="flex gap-2">
@@ -587,9 +630,15 @@ PulseApp.ui.pbs = (() => {
                             <span class="font-semibold ${verificationRate === 100 ? 'text-green-600 dark:text-green-400' : verificationRate >= 80 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'}">${verificationRate.toFixed(0)}%</span>
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <span class="text-gray-500 dark:text-gray-500">Latest:</span>
-                        <span class="font-semibold ${lastBackupColorClass}">${lastBackupText}</span>
+                    <div class="flex justify-between">
+                        <div class="flex gap-2">
+                            <span class="text-gray-500 dark:text-gray-500">Pruned:</span>
+                            <span class="font-semibold ${getTaskColorClass(lastPruneTime, 30)}">${formatTaskTime(lastPruneTime)}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="text-gray-500 dark:text-gray-500">Verify:</span>
+                            <span class="font-semibold ${getTaskColorClass(lastVerifyTime, 7)}">${formatTaskTime(lastVerifyTime)}</span>
+                        </div>
                     </div>
                 </div>
                 ${storageInfo ? `<div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">${storageInfo}</div>` : ''}
@@ -713,7 +762,7 @@ PulseApp.ui.pbs = (() => {
             { field: 'backupTime', label: 'Backup Time', width: 'w-24' },
             { field: 'datastore', label: 'Datastore', width: 'w-20' },
             { field: 'namespace', label: 'Namespace', width: 'w-20' },
-            { field: 'size', label: 'Size', width: 'w-24' }
+            { field: 'size', label: 'Size', width: 'w-28' }
         ];
         
         return headers.map(header => {
@@ -775,15 +824,24 @@ PulseApp.ui.pbs = (() => {
                 const typeLabel = backup.backupType === 'vm' ? 'VM' : 'LXC';
                 const guestName = getGuestName(backup.vmid, backup.backupType);
                 
-                // Create size display with deduplication info in tooltip
+                // Create size display - simpler approach with consistent formatting
                 let sizeHtml = '';
-                if (backup.deduplicationFactor && backup.deduplicationFactor > 1) {
+                if (backup.deduplicationFactor && backup.deduplicationFactor > 1 && filters.sizeDisplay === 'actual') {
+                    // Show actual size
                     const effectiveSize = backup.size / backup.deduplicationFactor;
                     const effectiveSizeFormatted = formatBytes(effectiveSize);
                     const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
-                    sizeHtml = `<span class="${getSizeColorClass(backup.size)}" title="~${effectiveSizeFormatted.text} on disk (${savingsPercent}% saved by ${backup.deduplicationFactor.toFixed(1)}x deduplication)">${size.text}</span>`;
+                    sizeHtml = `<span class="text-green-600 dark:text-green-400" title="Logical size: ${size.text} (${backup.deduplicationFactor.toFixed(1)}x deduplication saves ${savingsPercent}%)">~${effectiveSizeFormatted.text}</span>`;
                 } else {
-                    sizeHtml = `<span class="${getSizeColorClass(backup.size)}">${size.text}</span>`;
+                    // Show logical size
+                    if (backup.deduplicationFactor && backup.deduplicationFactor > 1) {
+                        const effectiveSize = backup.size / backup.deduplicationFactor;
+                        const effectiveSizeFormatted = formatBytes(effectiveSize);
+                        const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
+                        sizeHtml = `<span class="${getSizeColorClass(backup.size)}" title="~${effectiveSizeFormatted.text} on disk (${savingsPercent}% saved by ${backup.deduplicationFactor.toFixed(1)}x deduplication)">${size.text}</span>`;
+                    } else {
+                        sizeHtml = `<span class="${getSizeColorClass(backup.size)}">${size.text}</span>`;
+                    }
                 }
                 
                 html += `
@@ -813,7 +871,7 @@ PulseApp.ui.pbs = (() => {
                         <td class="p-1 px-2 whitespace-nowrap text-xs ${getTimeAgoColorClass(backup.backupTime)}" title="${formatBackupTime(backup.backupTime)}">${formatTimeAgo(backup.backupTime)}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.datastore}</td>
                         <td class="p-1 px-2 whitespace-nowrap">${backup.namespace}</td>
-                        <td class="p-1 px-2 whitespace-nowrap">
+                        <td class="p-1 px-2 whitespace-nowrap" style="width: 112px; text-align: right;">
                             ${sizeHtml}
                         </td>
                     </tr>
@@ -920,7 +978,7 @@ PulseApp.ui.pbs = (() => {
         }
         
         // Radio button filters
-        document.querySelectorAll('input[name="pbs-server"], input[name="pbs-datastore"], input[name="pbs-type"], input[name="pbs-verified"]').forEach(radio => {
+        document.querySelectorAll('input[name="pbs-server"], input[name="pbs-datastore"], input[name="pbs-type"], input[name="pbs-verified"], input[name="pbs-size"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const filterName = e.target.name.replace('pbs-', '');
                 if (filterName === 'server') {
@@ -931,9 +989,12 @@ PulseApp.ui.pbs = (() => {
                     filters.backupType = e.target.value;
                 } else if (filterName === 'verified') {
                     filters.verificationStatus = e.target.value;
+                } else if (filterName === 'size') {
+                    filters.sizeDisplay = e.target.value;
                 }
-                updateTable();
-                updateResetButtonState();
+                
+                // Always re-render the full UI for any filter change to ensure consistency
+                renderPBSUI();
             });
         });
         
@@ -1034,7 +1095,8 @@ PulseApp.ui.pbs = (() => {
             searchTerm: '',
             datastore: 'all',
             backupType: 'all',
-            verificationStatus: 'all'
+            verificationStatus: 'all',
+            sizeDisplay: 'logical'
         };
         
         // Reset sort
@@ -1065,13 +1127,14 @@ PulseApp.ui.pbs = (() => {
 
     // Check if any filters are active
     function hasActiveFilters() {
-        const isDefaultSort = currentSort.field === 'backup-time' && !currentSort.ascending;
+        const isDefaultSort = currentSort.field === 'backupTime' && !currentSort.ascending;
         
         return filters.searchTerm !== '' ||
                filters.server !== 'all' ||
                filters.datastore !== 'all' ||
                filters.backupType !== 'all' ||
                filters.verificationStatus !== 'all' ||
+               filters.sizeDisplay !== 'logical' ||
                !isDefaultSort;
     }
 
