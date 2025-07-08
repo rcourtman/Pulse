@@ -298,30 +298,33 @@ PulseApp.ui.snapshots = (() => {
                             ${oldCount > 0 ? `<span class="text-xs font-medium text-yellow-600 dark:text-yellow-400" title="${oldCount} snapshots 7-30 days old">● ${oldCount}</span>` : ''}
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Total Snapshots:</span>
-                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">Total:</span>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">${node.count}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">Guests:</span>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">${node.uniqueGuests}</span>
+                            </div>
                         </div>
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Unique Guests:</span>
-                            <span class="ml-1 font-semibold text-gray-800 dark:text-gray-200">${node.uniqueGuests}</span>
-                        </div>
-                        ${node.vmCount > 0 ? `
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">VM Snapshots:</span>
-                            <span class="ml-1 font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
-                        </div>
-                        ` : ''}
-                        ${node.lxcCount > 0 ? `
-                        <div class="text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">LXC Snapshots:</span>
-                            <span class="ml-1 font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
-                        </div>
-                        ` : ''}
-                        <div class="col-span-2 pt-1 border-t border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
-                            <span class="text-gray-500 dark:text-gray-500">Latest Snapshot:</span>
-                            <span class="ml-1 font-semibold ${newestColorClass}">${newestText}</span>
+                        ${(node.vmCount > 0 || node.lxcCount > 0) ? `
+                        <div class="flex justify-between">
+                            ${node.vmCount > 0 ? `
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">VMs:</span>
+                                <span class="font-semibold text-blue-600 dark:text-blue-400">${node.vmCount}</span>
+                            </div>` : '<div></div>'}
+                            ${node.lxcCount > 0 ? `
+                            <div class="flex gap-2">
+                                <span class="text-gray-500 dark:text-gray-500">LXCs:</span>
+                                <span class="font-semibold text-purple-600 dark:text-purple-400">${node.lxcCount}</span>
+                            </div>` : '<div></div>'}
+                        </div>` : ''}
+                        <div class="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-700">
+                            <span class="text-gray-500 dark:text-gray-500">Latest:</span>
+                            <span class="font-semibold ${newestColorClass}">${newestText}</span>
                         </div>
                     </div>
                 </div>
