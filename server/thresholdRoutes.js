@@ -65,9 +65,10 @@ function setupThresholdRoutes(app) {
             
             // Handle auto-detect node
             if (nodeId === 'auto-detect') {
-                const state = require('./state');
+                const stateManager = require('./state');
                 // Find the VM/LXC in the current state
-                const allGuests = [...(state.vms || []), ...(state.containers || [])];
+                const currentState = stateManager.getState();
+                const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
                 const guest = allGuests.find(g => 
                     g.endpointId === endpointId && g.id === vmid
                 );
@@ -113,9 +114,10 @@ function setupThresholdRoutes(app) {
             
             // Handle auto-detect node
             if (nodeId === 'auto-detect') {
-                const state = require('./state');
+                const stateManager = require('./state');
                 // Find the VM/LXC in the current state
-                const allGuests = [...(state.vms || []), ...(state.containers || [])];
+                const currentState = stateManager.getState();
+                const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
                 const guest = allGuests.find(g => 
                     g.endpointId === endpointId && g.id === vmid
                 );
