@@ -328,7 +328,7 @@ function renderUnifiedTable() {
             <table class="w-full text-xs sm:text-sm" id="unified-table-inner">
                 <thead class="bg-gray-100 dark:bg-gray-800">
                     <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                    <th class="sticky left-0 z-10 p-1 px-2 whitespace-nowrap w-[150px] bg-gray-100 dark:bg-gray-700">
+                    <th class="sticky left-0 z-10 p-1 px-2 whitespace-nowrap w-[150px]">
                         Name
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap text-center w-12">
@@ -365,11 +365,11 @@ function renderUnifiedTable() {
     
     Object.entries(grouped).forEach(([dateLabel, items]) => {
         html += `
-            <tr>
-                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
+            <tr class="bg-gray-50 dark:bg-gray-700/50">
+                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                     ${dateLabel} (${items.length})
                 </td>
-                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50"></td>
+                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
             </tr>
         `;
         
@@ -379,7 +379,7 @@ function renderUnifiedTable() {
             
             html += `
                 <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <td class="sticky left-0 z-10 p-1 px-2 w-[150px] max-w-[150px] truncate bg-white dark:bg-gray-800" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
+                    <td class="sticky left-0 z-10 p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name) || '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
