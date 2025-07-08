@@ -194,17 +194,42 @@ PulseApp.ui.pbs = (() => {
         const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
         const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
 
-        // Render instance summary cards
         let html = '';
+        
+        // If multiple instances, show tabs
+        if (pbsInstances.length > 1) {
+            html += `
+                <div class="border-b border-gray-200 dark:border-gray-700 mb-3">
+                    <nav class="flex space-x-1 overflow-x-auto scrollbar" role="tablist">
+                        ${pbsInstances.map((instance, index) => {
+                            const instanceName = instance.nodeName || instance.pbsInstanceName || 'PBS Server ' + (index + 1);
+                            const isActive = index === activeInstance;
+                            return `
+                                <button class="pbs-instance-tab whitespace-nowrap px-3 py-2 font-medium text-sm ${isActive ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 border-b-2 border-transparent'} transition-colors" 
+                                    data-instance="${index}"
+                                    role="tab"
+                                    aria-selected="${isActive}"
+                                    title="${instanceName}">
+                                    ${instanceName}
+                                </button>
+                            `;
+                        }).join('')}
+                    </nav>
+                </div>
+            `;
+        }
+        
+        // Show single instance summary card
         if (pbsInstances.length >= 1) {
             html += `
                 <div class="mb-3">
                     <div class="flex flex-wrap gap-3">
-                        ${pbsInstances.map((instance, index) => createPBSInstanceCard(instance, index)).join('')}
+                        ${createPBSInstanceCard(pbsInstances[activeInstance], activeInstance)}
                     </div>
                 </div>
             `;
         }
+        
         html += renderPBSContent();
         
         container.innerHTML = html;
@@ -362,7 +387,6 @@ PulseApp.ui.pbs = (() => {
         const uniqueDatastores = getUniqueValues('datastore', activeInstanceData);
         
         return `
-            ${renderBackupSummary()}
 
             <!-- PBS Filters -->
             <div class="mb-3 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
@@ -570,8 +594,7 @@ PulseApp.ui.pbs = (() => {
             const diff = now - timestamp;
             if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
             if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-            if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
-            return Math.floor(diff / 604800) + 'w ago';
+            return Math.floor(diff / 86400) + 'd ago';
         };
         
         const getTaskColorClass = (timestamp, warningDays = 7) => {
@@ -599,7 +622,7 @@ PulseApp.ui.pbs = (() => {
         }
         
         return `
-            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'} cursor-pointer hover:shadow-lg transition-all flex-1 min-w-0 sm:min-w-[280px]" onclick="PulseApp.ui.pbs.switchInstance(${instanceIndex})">
+            <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex-1 min-w-0 sm:min-w-[280px]">
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">${instanceName}</h3>
                     <div class="flex items-center gap-3">
@@ -905,6 +928,14 @@ PulseApp.ui.pbs = (() => {
 
     // Event listeners
     function setupEventListeners() {
+        // Instance tabs
+        document.querySelectorAll('.pbs-instance-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const instanceIndex = parseInt(e.target.getAttribute('data-instance'));
+                switchInstance(instanceIndex);
+            });
+        });
+        
         const searchInput = document.getElementById('pbs-search');
         const resetButton = document.getElementById('reset-pbs-button');
         
@@ -1154,10 +1185,8 @@ PulseApp.ui.pbs = (() => {
             return Math.floor(diff / 60) + 'm ago';
         } else if (diff < 86400) {
             return Math.floor(diff / 3600) + 'h ago';
-        } else if (diff < 604800) {
-            return Math.floor(diff / 86400) + 'd ago';
         } else {
-            return Math.floor(diff / 604800) + 'w ago';
+            return Math.floor(diff / 86400) + 'd ago';
         }
     }
     
