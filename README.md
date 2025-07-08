@@ -35,7 +35,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td align="center" colspan="2"><strong>Proxmox Backup Server Integration</strong></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><img src="docs/images/02-pbs-view.png" alt="PBS integration" width="600"/></td>
+<td colspan="2" align="center"><img src="docs/images/02-pbs-view.png" alt="Unified backup view with PBS integration" width="600"/></td>
 </tr>
 </table>
 </div>
@@ -570,7 +570,7 @@ For users who prefer not to use Docker or the LXC script, pre-packaged release t
 
 ### ️ Running the Application (Node.js - Development)
 
-For development purposes or running directly from source, see the **[DEVELOPMENT.md](DEVELOPMENT.md)** guide. This involves cloning the repository, installing dependencies using `npm install` in both the root and `server` directories, and running `npm run dev` or `npm run start`.
+For development purposes or running directly from source, see the **[DEVELOPMENT.md](DEVELOPMENT.md)** guide. This involves cloning the repository, installing dependencies using `npm install`, and running `npm run dev` or `npm run start`.
 
 ## ✨ Features
 
@@ -584,12 +584,10 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
   - Perfect for air-gapped or DMZ backup servers
   - Agent pushes metrics over HTTPS (no incoming connections needed)
   - Visual indicators for push vs pull connections
-- **Organized tab structure:**
+- **Streamlined tab structure:**
   - **Main**: Dashboard with VM/CT status overview
   - **Storage**: Storage usage and health monitoring
-  - **Snapshots**: VM/CT snapshot management (NEW)
-  - **Backups**: Full backup monitoring for PBS and PVE
-  - **PBS**: Proxmox Backup Server status and tasks
+  - **Backups**: Unified view of all backups, snapshots, and PBS data
 
 ### Advanced Alert System
 - **Configurable alert thresholds** for CPU, Memory, Disk, and VM/CT availability
@@ -619,14 +617,13 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Automatic Backup & Restore** of configuration during updates
 - **Context-Aware Updates** showing exactly what changes with each version switch
 - **Dual Update Channels** with persistent preference management
-- **Current Version**: v3.33.0 (Development) - Latest stable: v3.32.0
 
 #### Update Channels
-- **Stable Channel**: Production-ready releases (e.g., v3.27.1)
+- **Stable Channel**: Production-ready releases
   - Thoroughly tested releases for production environments
   - Automatic updates only to stable versions
   - Recommended for critical infrastructure monitoring
-- **RC Channel**: Release candidates with latest features (e.g., v3.28.0-rc1)
+- **RC Channel**: Release candidates with latest features
   - Early access to new features and improvements
   - Automated releases with each development commit
   - Perfect for testing and non-critical environments
@@ -634,10 +631,10 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Smart Switching**: See exact commit differences when switching between channels
 
 ### Backup Monitoring
-- **Comprehensive backup monitoring with separated views:**
-  - **Snapshots Tab**: VM/CT point-in-time snapshots with real-time search and sorting
-  - **Backups Tab**: Full backups from both PBS and PVE storage
-  - **PBS Tab**: Dedicated Proxmox Backup Server monitoring
+- **Comprehensive backup monitoring with unified view:**
+  - **All backup types in one place**: VM/CT snapshots, PBS backups, and PVE backups
+  - **Smart filtering**: Filter by backup type (snapshot, local, remote) or view all
+  - **Real-time search and sorting** across all backup data
 - **Real-time search and filtering** across all backup data
 - **Column sorting** for easy data organization
 - **Unified API** for streamlined PBS and PVE backup data access
@@ -646,28 +643,28 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 <details>
 <summary><strong>Understanding Backup Types in Pulse</strong></summary>
 
-Pulse monitors three distinct types of backups, now organized into separate tabs for better clarity:
+Pulse monitors three distinct types of backups, all unified in a single comprehensive view:
 
-1. **PBS Backups** (Purple indicator ● - shown in Backups tab)
+1. **PBS Backups** (Purple indicator ● - Remote backups)
    - Full backups stored in Proxmox Backup Server
    - Accessed via PBS API with deduplication and verification features
    - Requires separate PBS API token configuration
-   - Also has dedicated PBS tab for server-level monitoring
+   - Includes PBS server status monitoring
    
-2. **PVE Backups** (Orange indicator ● - shown in Backups tab)
+2. **PVE Backups** (Orange indicator ● - Local backups)
    - Full backups stored on any Proxmox VE storage (NFS, CIFS, local, etc.)
    - All non-PBS backup storage is considered "PVE storage"
    - Accessed via Proxmox VE API
    
-3. **Snapshots** (Yellow indicator ● - shown in Snapshots tab)
+3. **Snapshots** (Yellow indicator ● - Point-in-time snapshots)
    - VM/CT point-in-time snapshots (not full backups)
    - Stored locally on the Proxmox node
-   - Now has its own dedicated tab for easier management
+   - Quick restore points for development and testing
 
-**Navigation:**
-- **Snapshots Tab**: View and manage all VM/CT snapshots
-- **Backups Tab**: View all full backups (both PBS and PVE)
-- **PBS Tab**: Monitor Proxmox Backup Server status and tasks
+**Unified Backup View:**
+- **Filter by type**: View all backups or filter by Snapshot, Local (PVE), or Remote (PBS)
+- **Smart search**: Search across all backup types simultaneously
+- **Consistent interface**: Same powerful sorting and filtering for all backup types
 
 **Important:** If you have PBS configured as storage in Proxmox VE, those backups are accessed via the PBS API directly, not through PVE storage. This prevents double-counting of PBS backups.
 </details>
