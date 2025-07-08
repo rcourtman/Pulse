@@ -352,7 +352,7 @@ function renderUnifiedTable() {
                     <th class="p-1 px-2 whitespace-nowrap">
                         Location
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap w-[180px]">
+                    <th class="p-1 px-2 whitespace-nowrap w-[150px]">
                         Details
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupTime')">
@@ -388,7 +388,7 @@ function renderUnifiedTable() {
                     <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-400">
                         ${getLocationDisplay(item)}
                     </td>
-                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 w-[180px] max-w-[180px] truncate" title="${escapeHtml(getDetails(item))}">
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400 w-[150px] max-w-[150px] truncate" title="${escapeHtml(getDetails(item))}">
                         ${escapeHtml(getDetails(item))}
                     </td>
                     <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
