@@ -324,21 +324,22 @@ PulseApp.ui.common = (() => {
     }
 
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
-        const baseClasses = 'py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
+        const baseClasses = 'px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400';
         
         // Check if we can make this node name clickable
         const hostUrl = PulseApp.utils.getHostUrl(text);
         let nodeContent = text;
         
         if (hostUrl) {
-            nodeContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
+            nodeContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
         }
         
         // Always create individual cells so first one can be sticky
-        let html = `<${cellTag} class="sticky left-0 bg-gray-100 dark:bg-gray-700/80 z-10 ${baseClasses} border-r border-b border-gray-300 dark:border-gray-600">${nodeContent}</${cellTag}>`;
+        // Match the exact structure from backups tab that works
+        let html = `<${cellTag} class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
-            html += `<${cellTag} class="bg-gray-100 dark:bg-gray-700/80 border-b border-gray-300 dark:border-gray-600"></${cellTag}>`;
+            html += `<${cellTag} class="${baseClasses}"></${cellTag}>`;
         }
         return html;
     }

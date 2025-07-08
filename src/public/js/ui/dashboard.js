@@ -512,7 +512,7 @@ PulseApp.ui.dashboard = (() => {
         Object.keys(nodeGroups).sort().forEach(nodeName => {
             visibleNodes.add(nodeName.toLowerCase());
             const nodeHeaderRow = document.createElement('tr');
-            nodeHeaderRow.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+            nodeHeaderRow.className = 'node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs';
             nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
             tableBody.appendChild(nodeHeaderRow);
 
@@ -567,7 +567,7 @@ PulseApp.ui.dashboard = (() => {
                 if (!nodeHeader) {
                     // Create new node header
                     nodeHeader = PulseApp.ui.common.createTableRow({
-                        classes: 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs border-b border-gray-300 dark:border-gray-600',
+                        classes: 'node-header bg-gray-50 dark:bg-gray-700/50',
                         baseClasses: '' // Override base classes for node headers
                     });
                     nodeHeader.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
@@ -1184,7 +1184,7 @@ PulseApp.ui.dashboard = (() => {
 
     function _createNodeGroupDataRow(node) {
         const row = document.createElement('tr');
-        row.className = 'node-header bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
+        row.className = 'node-header bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700';
         row.setAttribute('data-node-id', node.node);
         
         const isOnline = node && node.uptime > 0;

@@ -315,19 +315,19 @@ function renderUnifiedTable() {
 function getStatusIcon(item) {
     if (item.backupType === 'remote') {
         if (item.verified) {
-            return '<span title="Verified" class="text-green-600 dark:text-green-400">✓</span>';
+            return '<span title="Verified" class="text-green-500 dark:text-green-400">✓</span>';
         } else {
-            return '<span title="Unverified" class="text-yellow-600 dark:text-yellow-400">⏱</span>';
+            return '<span title="Unverified" class="text-yellow-500 dark:text-yellow-400">⏱</span>';
         }
     }
-    return '<span class="text-green-600 dark:text-green-400">✓</span>';
+    return '<span class="text-green-500 dark:text-green-400">✓</span>';
 }
 
 function getBackupTypeIcon(type) {
     const badges = {
-        snapshot: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400" title="Point-in-time snapshot stored on the VM\'s host">Snapshot</span>',
-        local: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-400" title="Local backup stored on Proxmox VE storage">PVE</span>',
-        remote: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400" title="Remote backup stored on Proxmox Backup Server">PBS</span>'
+        snapshot: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" title="Point-in-time snapshot stored on the VM\'s host">Snapshot</span>',
+        local: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" title="Local backup stored on Proxmox VE storage">PVE</span>',
+        remote: '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300" title="Remote backup stored on Proxmox Backup Server">PBS</span>'
     };
     return badges[type] || '';
 }
@@ -427,7 +427,7 @@ function sortTable(field) {
 }
 
 function getTimeAgoColorClass(timestamp) {
-    if (!timestamp) return 'text-gray-600 dark:text-gray-400';
+    if (!timestamp) return 'text-gray-500 dark:text-gray-400';
     
     const now = Date.now() / 1000;
     const diff = now - timestamp;
@@ -444,7 +444,7 @@ function getTimeAgoColorClass(timestamp) {
         return 'text-yellow-600 dark:text-yellow-400';
     } else if (days < 30) {
         // 7-30 days - orange (warning)
-        return 'text-orange-600 dark:text-orange-400';
+        return 'text-orange-500 dark:text-orange-400';
     } else {
         // Over 30 days - red (old)
         return 'text-red-600 dark:text-red-400';
@@ -453,11 +453,11 @@ function getTimeAgoColorClass(timestamp) {
 
 function getTypeIcon(type) {
     if (type === 'VM') {
-        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">VM</span>`;
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">VM</span>`;
     } else if (type === 'LXC') {
-        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">LXC</span>`;
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">LXC</span>`;
     }
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-400">${type}</span>`;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-900/50 dark:text-gray-300">${type}</span>`;
 }
 
 function formatTime(timestamp) {
