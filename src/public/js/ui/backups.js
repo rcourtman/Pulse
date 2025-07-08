@@ -331,7 +331,8 @@ function renderUnifiedTable() {
                     background-color: rgb(249, 250, 251) !important; /* gray-50 - solid */
                 }
                 .dark #unified-table-inner tr.dark\\:bg-gray-700\\/50 td.sticky.left-0 {
-                    background-color: rgb(55, 65, 81) !important; /* gray-700 - solid, not transparent */
+                    /* Use a color that visually matches gray-700/50 over gray-800 background */
+                    background-color: rgb(43, 53, 68) !important; /* Between gray-800 and gray-700 */
                 }
                 
                 /* Ensure sticky columns are opaque to prevent background bleed-through */
