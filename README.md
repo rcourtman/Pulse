@@ -175,10 +175,14 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
           # Persistent volume for configuration data
           # Configuration persists across container updates
           - pulse_config:/usr/src/app/config
+          # Persistent volume for metrics data, alert rules, and thresholds
+          - pulse_data:/usr/src/app/data
 
     # Define persistent volumes
     volumes:
       pulse_config:
+        driver: local
+      pulse_data:
         driver: local
     ```
 3.  **Run:** Start the container:
