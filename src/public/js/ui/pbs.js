@@ -827,11 +827,11 @@ PulseApp.ui.pbs = (() => {
                 // Create size display - simpler approach with consistent formatting
                 let sizeHtml = '';
                 if (backup.deduplicationFactor && backup.deduplicationFactor > 1 && filters.sizeDisplay === 'actual') {
-                    // Show actual size
+                    // Show actual size with color based on actual size
                     const effectiveSize = backup.size / backup.deduplicationFactor;
                     const effectiveSizeFormatted = formatBytes(effectiveSize);
                     const savingsPercent = ((1 - (1/backup.deduplicationFactor)) * 100).toFixed(0);
-                    sizeHtml = `<span class="text-green-600 dark:text-green-400" title="Logical size: ${size.text} (${backup.deduplicationFactor.toFixed(1)}x deduplication saves ${savingsPercent}%)">~${effectiveSizeFormatted.text}</span>`;
+                    sizeHtml = `<span class="${getSizeColorClass(effectiveSize)}" title="Logical size: ${size.text} (${backup.deduplicationFactor.toFixed(1)}x deduplication saves ${savingsPercent}%)">~${effectiveSizeFormatted.text}</span>`;
                 } else {
                     // Show logical size
                     if (backup.deduplicationFactor && backup.deduplicationFactor > 1) {
