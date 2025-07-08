@@ -340,8 +340,7 @@ function renderUnifiedTable() {
                     <th class="sticky left-0 z-10 p-1 px-2 whitespace-nowrap w-[150px]">
                         Name
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap text-center w-12">
-                        Status
+                    <th class="p-1 px-2 whitespace-nowrap text-center w-8">
                     </th>
                     <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
                         Backup ${getSortIndicator('backupType')}
