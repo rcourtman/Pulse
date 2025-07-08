@@ -325,15 +325,6 @@ function renderUnifiedTable() {
     
     let html = `
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-            <style>
-                /* Date header rows - match background colors */
-                #unified-table-inner tr.bg-gray-50 td.sticky.left-0 {
-                    background-color: rgb(249, 250, 251) !important; /* gray-50 */
-                }
-                .dark #unified-table-inner tr.dark\\:bg-gray-700\\/50 td.sticky.left-0 {
-                    background-color: rgba(55, 65, 81, 0.5) !important; /* gray-700/50 */
-                }
-            </style>
             <table class="w-full text-xs sm:text-sm" id="unified-table-inner">
                 <thead class="bg-gray-100 dark:bg-gray-800">
                     <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -374,11 +365,11 @@ function renderUnifiedTable() {
     
     Object.entries(grouped).forEach(([dateLabel, items]) => {
         html += `
-            <tr class="bg-gray-50 dark:bg-gray-700/50">
-                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+            <tr>
+                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
                     ${dateLabel} (${items.length})
                 </td>
-                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
+                <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50"></td>
             </tr>
         `;
         
