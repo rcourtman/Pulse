@@ -4,6 +4,7 @@
       "fileStatus": "added",
       "includeGlobs": [
         "ct/**",
+        "tools/**",
         "install/**",
         "misc/**",
         "turnkey/**",
@@ -17,16 +18,13 @@
       "fileStatus": "modified",
       "includeGlobs": [
         "ct/**",
+        "tools/**",
         "install/**",
         "misc/**",
         "turnkey/**",
         "vm/**"
       ],
-      "excludeGlobs": [
-        "misc/build.func",
-        "misc/install.func",
-        "misc/api.func"
-      ]
+      "excludeGlobs": []
     }
   ],
   "delete script": [
@@ -34,6 +32,21 @@
       "fileStatus": "removed",
       "includeGlobs": [
         "ct/**",
+        "tools/**",
+        "install/**",
+        "misc/**",
+        "turnkey/**",
+        "vm/**"
+      ],
+      "excludeGlobs": []
+    }
+  ],
+  "breaking change": [
+    {
+      "fileStatus": null,
+      "includeGlobs": [
+        "ct/**",
+        "tools/**",
         "install/**",
         "misc/**",
         "turnkey/**",
@@ -46,11 +59,7 @@
     {
       "fileStatus": null,
       "includeGlobs": [
-        "*.md",
-        ".github/**",
-        "misc/*.func",
-        "misc/create_lxc.sh",
-        "api/**"
+        "*.md"
       ],
       "excludeGlobs": []
     }
@@ -62,7 +71,9 @@
         "misc/*.func",
         "misc/create_lxc.sh"
       ],
-      "excludeGlobs": []
+      "excludeGlobs": [
+        "misc/api.func"
+      ]
     }
   ],
   "website": [
@@ -71,7 +82,9 @@
       "includeGlobs": [
         "frontend/**"
       ],
-      "excludeGlobs": []
+      "excludeGlobs": [
+        "frontend/public/json/**"
+      ]
     }
   ],
   "api": [
@@ -98,26 +111,6 @@
       "fileStatus": "modified",
       "includeGlobs": [
         "frontend/public/json/**"
-      ],
-      "excludeGlobs": []
-    }
-  ],
-  "high risk": [
-    {
-      "fileStatus": null,
-      "includeGlobs": [
-        "misc/build.func",
-        "misc/install.func",
-        "misc/create_lxc.sh"
-      ],
-      "excludeGlobs": []
-    }
-  ],
-  "documentation": [
-    {
-      "fileStatus": null,
-      "includeGlobs": [
-        "*.md"
       ],
       "excludeGlobs": []
     }

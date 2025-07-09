@@ -1,112 +1,148 @@
 [
   {
     "title": "🆕 New Scripts",
-    "labels": ["new script"]
+    "labels": [
+      "new script"
+    ]
   },
   {
     "title": "🚀 Updated Scripts",
-    "labels": ["update script"],
+    "labels": [
+      "update script"
+    ],
     "subCategories": [
       {
         "title": "🐞 Bug Fixes",
-        "labels": ["bugfix"],
-        "notes" : []
+        "labels": [
+          "bugfix"
+        ],
+        "notes": []
       },
       {
         "title": "✨ New Features",
-        "labels": ["feature"],
-        "notes" : []
+        "labels": [
+          "feature"
+        ],
+        "notes": []
       },
       {
         "title": "💥 Breaking Changes",
-        "labels": ["breaking change"],
-        "notes" : []
+        "labels": [
+          "breaking change"
+        ],
+        "notes": []
       },
       {
         "title": "🔧 Refactor",
-        "labels": ["refactor"],
-        "notes" : []
+        "labels": [
+          "refactor"
+        ],
+        "notes": []
       }
     ]
   },
   {
     "title": "🧰 Maintenance",
-    "labels": ["maintenance"],
+    "labels": [
+      "maintenance"
+    ],
     "subCategories": [
       {
         "title": "🐞 Bug Fixes",
-        "labels": ["bugfix"],
-        "notes" : []
+        "labels": [
+          "bugfix"
+        ],
+        "notes": []
       },
       {
         "title": "✨ New Features",
-        "labels": ["feature"],
-        "notes" : []
+        "labels": [
+          "feature"
+        ],
+        "notes": []
       },
       {
         "title": "💥 Breaking Changes",
-        "labels": ["breaking change"],
-        "notes" : []
+        "labels": [
+          "breaking change"
+        ],
+        "notes": []
       },
       {
         "title": "📡 API",
-        "labels": ["api"],
-        "notes" : []
+        "labels": [
+          "api"
+        ],
+        "notes": []
       },
       {
         "title": "💾 Core",
-        "labels": ["core"],
-        "notes" : []
+        "labels": [
+          "core"
+        ],
+        "notes": []
       },
       {
         "title": "📂 Github",
-        "labels": ["github"],
-        "notes" : []
+        "labels": [
+          "github"
+        ],
+        "notes": []
       },
       {
-        "title" :"📝 Documentation",
-        "labels": ["documentation"],
-        "notes" : []
+        "title": "📝 Documentation",
+        "labels": [
+          "maintenance"
+        ],
+        "notes": []
       },
       {
-        "title" :"🔧 Refactor",
-        "labels": ["refactor"],
-        "notes" : []
+        "title": "🔧 Refactor",
+        "labels": [
+          "refactor"
+        ],
+        "notes": []
       }
     ]
   },
   {
     "title": "🌐 Website",
-    "labels": ["website"],
+    "labels": [
+      "website"
+    ],
     "subCategories": [
       {
         "title": "🐞 Bug Fixes",
-        "labels": ["bugfix"],
-        "notes" : []
+        "labels": [
+          "bugfix"
+        ],
+        "notes": []
       },
       {
         "title": "✨ New Features",
-        "labels": ["feature"],
-        "notes" : []
+        "labels": [
+          "feature"
+        ],
+        "notes": []
       },
       {
         "title": "💥 Breaking Changes",
-        "labels": ["breaking change"],
-        "notes" : []
+        "labels": [
+          "breaking change"
+        ],
+        "notes": []
       },
       {
         "title": "📝 Script Information",
-        "labels": ["json"],
-        "notes" : []
+        "labels": [
+          "json"
+        ],
+        "notes": []
       }
     ]
   },
   {
     "title": "❔ Unlabelled",
     "labels": []
-  },
-  {
-    "title": "💥 Breaking Changes",
-    "labels": ["breaking change"]
   }
 ]

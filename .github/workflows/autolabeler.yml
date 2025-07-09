@@ -34,7 +34,7 @@ jobs:
             const autolabelerConfig = JSON.parse(fileContent);
 
             const prNumber = context.payload.pull_request.number;
-            const prBody = context.payload.pull_request.body.toLowerCase();
+            const prBody = context.payload.pull_request.body || "";
 
             let labelsToAdd = new Set();
 
@@ -74,18 +74,34 @@ jobs:
                 "✨ **New feature**": "feature",
                 "💥 **Breaking change**": "breaking change",
                 "🆕 **New script**": "new script",
-                "🌍 **Website update**": "website",
+                "🌍 **Website update**": "website", // handled special
                 "🔧 **Refactoring / Code Cleanup**": "refactor",
-                "📝 **Documentation update**": "documentation"
+                "📝 **Documentation update**": "documentation" // mapped to maintenance
               };
 
               for (const [checkbox, label] of Object.entries(templateLabelMappings)) {
                 const escapedCheckbox = checkbox.replace(/([.*+?^=!:${}()|[\]\/\\])/g, "\\$1");
                 const regex = new RegExp(`- \\[(x|X)\\]\\s*${escapedCheckbox}`, "i");
+
                 if (regex.test(prBody)) {
-                  labelsToAdd.add(label);
+                  if (label === "website") {
+                    const hasJson = prFiles.some((f) => f.filename.startsWith("frontend/public/json/"));
+                    const hasUpdateScript = labelsToAdd.has("update script");
+                    const hasContentLabel = ["bugfix", "feature", "refactor"].some((l) => labelsToAdd.has(l));
+
+                    if (!(hasUpdateScript && hasContentLabel)) {
+                      labelsToAdd.add(hasJson ? "json" : "website");
+                    }
+                  } else if (label === "documentation") {
+                    labelsToAdd.add("maintenance");
+                  } else {
+                    labelsToAdd.add(label);
+                  }
                 }
               }
+            }
+            if (labelsToAdd.size === 0) {
+              labelsToAdd.add("needs triage");
             }
 
             if (labelsToAdd.size > 0) {
