@@ -80,7 +80,7 @@ jobs:
 
               for (const [checkbox, label] of Object.entries(templateLabelMappings)) {
                 const escapedCheckbox = checkbox.replace(/([.*+?^=!:${}()|[\]\/\\])/g, "\\$1");
-                const regex = new RegExp(`- \[(x|X)\]\s*.*${escapedCheckbox}`, "i");
+                const regex = new RegExp(`- \\[(x|X)\\]\\s*${escapedCheckbox}`, "i");
                 if (regex.test(prBody)) {
                   labelsToAdd.add(label);
                 }
