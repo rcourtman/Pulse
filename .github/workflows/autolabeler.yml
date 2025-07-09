@@ -1,6 +1,7 @@
 name: Auto Label Pull Requests
 
 on:
+  workflow_dispatch:
   pull_request_target:
     branches: ["main"]
     types: [opened, synchronize, reopened, edited]
