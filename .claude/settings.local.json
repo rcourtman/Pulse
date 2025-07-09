@@ -10,7 +10,11 @@
       "Bash(usermod:*)",
       "Bash(systemctl status:*)",
       "Bash(chown:*)",
-      "Bash(systemctl:*)"
+      "Bash(systemctl:*)",
+      "Bash(git push:*)",
+      "Bash(chmod:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   },
   "commit": {

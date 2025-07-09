@@ -13,6 +13,9 @@ if (fs.existsSync(configEnvPath)) {
     require('dotenv').config({ path: projectEnvPath });
 }
 
+// Import configuration constants
+const { SERVER_DEFAULTS, TIMEOUTS, UPDATE_INTERVALS, PERFORMANCE_THRESHOLDS, RETRY_CONFIG } = require('./config/constants');
+
 // Import the state manager FIRST
 const stateManager = require('./state');
 
@@ -91,23 +94,23 @@ const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // Server configuration
 const PORT = (() => {
     const envPort = process.env.PORT;
-    if (!envPort) return 7655;
+    if (!envPort) return SERVER_DEFAULTS.PORT;
     
     const parsed = parseInt(envPort, 10);
     if (isNaN(parsed)) {
-        console.warn(`WARNING: Invalid PORT value "${envPort}" - using default port 7655`);
-        return 7655;
+        console.warn(`WARNING: Invalid PORT value "${envPort}" - using default port ${SERVER_DEFAULTS.PORT}`);
+        return SERVER_DEFAULTS.PORT;
     }
     if (parsed < 1 || parsed > 65535) {
-        console.warn(`WARNING: PORT ${parsed} is out of valid range (1-65535) - using default port 7655`);
-        return 7655;
+        console.warn(`WARNING: PORT ${parsed} is out of valid range (1-65535) - using default port ${SERVER_DEFAULTS.PORT}`);
+        return SERVER_DEFAULTS.PORT;
     }
     return parsed;
 })();
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
-const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds
-const DISCOVERY_UPDATE_INTERVAL = parseInt(process.env.PULSE_DISCOVERY_INTERVAL_MS, 10) || 30000; // Default: 30 seconds
+const METRIC_UPDATE_INTERVAL = UPDATE_INTERVALS.METRICS;
+const DISCOVERY_UPDATE_INTERVAL = UPDATE_INTERVALS.DISCOVERY;
 
 console.log(`INFO: Using Metric Update Interval: ${METRIC_UPDATE_INTERVAL}ms`);
 console.log(`INFO: Using Discovery Update Interval: ${DISCOVERY_UPDATE_INTERVAL}ms`);
@@ -257,6 +260,33 @@ app.get('/api/raw-state', (req, res) => {
         firstGuest: state.guests?.[0],
         rawFirstGuest: rawState.guests?.[0]
     });
+});
+
+// Rate limiter status endpoint (admin only - should be protected in production)
+app.get('/api/rate-limits', (req, res) => {
+    try {
+        // Get stats from all rate limiters used in server.js
+        const stats = {
+            timestamp: Date.now(),
+            limiters: {},
+            globalStats: {
+                totalRequests: 0,
+                blockedRequests: 0,
+                allowedRequests: 0
+            }
+        };
+        
+        // Note: In production, you'd need to access the rate limiters from server.js
+        // For now, return a placeholder response
+        res.json({
+            message: 'Rate limit stats endpoint ready',
+            note: 'Stats collection requires rate limiter instances to be exposed',
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error('[Rate Limits] Error getting status:', error);
+        res.status(500).json({ error: 'Failed to get rate limit status' });
+    }
 });
 
 // --- Diagnostic Endpoint ---
@@ -626,7 +656,7 @@ async function runDiscoveryCycle() {
   isDiscoveryRunning = true;
   
   const startTime = Date.now();
-  const MAX_DISCOVERY_TIME = 120000; // 2 minutes max
+  const MAX_DISCOVERY_TIME = PERFORMANCE_THRESHOLDS.MAX_DISCOVERY_TIME;
   
   // Set a timeout to force completion if cycle takes too long
   const timeoutHandle = setTimeout(() => {
@@ -713,7 +743,7 @@ async function runMetricCycle() {
   isMetricsRunning = true;
   
   const startTime = Date.now();
-  const MAX_METRICS_TIME = 30000; // 30 seconds max
+  const MAX_METRICS_TIME = PERFORMANCE_THRESHOLDS.MAX_METRICS_TIME;
   
   // Set a timeout to force completion if cycle takes too long
   const timeoutHandle = setTimeout(() => {
@@ -854,7 +884,7 @@ function gracefulShutdown(signal) {
     const forceExitTimer = setTimeout(() => {
         console.log('Force exiting after 5 seconds...');
         process.exit(1);
-    }, 5000);
+    }, TIMEOUTS.GRACEFUL_SHUTDOWN);
     
     // Clear timers
     if (discoveryTimeoutId) clearTimeout(discoveryTimeoutId);
@@ -1050,7 +1080,7 @@ async function startServer() {
                 if (global.snapshotErrorCount > 0) {
                     const backoffDelay = Math.min(
                         schedule.interval * Math.pow(2, global.snapshotErrorCount - 1),
-                        300000 // Max 5 minutes backoff
+                        RETRY_CONFIG.MAX_BACKOFF
                     );
                     const timeSinceLastError = Date.now() - (global.lastSnapshotError || 0);
                     
