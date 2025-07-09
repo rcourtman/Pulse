@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(getent:*)",
+      "Bash(find:*)",
+      "Bash(last:*)",
+      "Bash(rm:*)",
+      "Bash(usermod:*)",
+      "Bash(systemctl status:*)",
+      "Bash(chown:*)",
+      "Bash(systemctl:*)"
+    ]
+  },
+  "commit": {
+    "addGeneratedMessage": false
+  }
+}
