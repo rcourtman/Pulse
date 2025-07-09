@@ -41,20 +41,6 @@
       "excludeGlobs": []
     }
   ],
-  "breaking change": [
-    {
-      "fileStatus": null,
-      "includeGlobs": [
-        "ct/**",
-        "tools/**",
-        "install/**",
-        "misc/**",
-        "turnkey/**",
-        "vm/**"
-      ],
-      "excludeGlobs": []
-    }
-  ],
   "maintenance": [
     {
       "fileStatus": null,
