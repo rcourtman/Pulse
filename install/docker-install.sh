@@ -62,7 +62,7 @@ if [[ "${prompt,,}" =~ ^(y|yes)$ ]]; then
   msg_info "Exposing Docker TCP socket"
   $STD mkdir -p /etc/docker
   $STD echo '{ "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"] }' > /etc/docker/daemon.json
-  $STD rc-service docker restart
+  $STD systemctl restart docker
   msg_ok "Exposed Docker TCP socket at tcp://+:2375"
 fi
 
