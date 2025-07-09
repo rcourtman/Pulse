@@ -66,6 +66,7 @@ function update_script() {
   $STD dpkg -i "$OMADA_PKG"
   rm -f "$OMADA_PKG"
   msg_ok "Updated Omada Controller"
+  exit 0
 }
 
 start
