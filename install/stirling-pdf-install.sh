@@ -15,7 +15,6 @@ update_os
 
 msg_info "Installing Dependencies (Patience)"
 $STD apt-get install -y \
-  git \
   automake \
   autoconf \
   libtool \
@@ -25,9 +24,25 @@ $STD apt-get install -y \
   make \
   g++ \
   unpaper \
+  fonts-urw-base35 \
   qpdf \
   poppler-utils
 msg_ok "Installed Dependencies"
+
+PYTHON_VERSION="3.12" setup_uv
+JAVA_VERSION="21" setup_java
+
+read -r -p "${TAB3}Do you want to Stirling-PDF with Login? (no/n = without Login) [Y/n] " response
+response=${response,,} # Convert to lowercase
+login_mode="false"
+if [[ "$response" == "y" || "$response" == "yes" || -z "$response" ]]; then
+  USE_ORIGINAL_FILENAME=true fetch_and_deploy_gh_release "stirling-pdf" "Stirling-Tools/Stirling-PDF" "singlefile" "latest" "/opt/Stirling-PDF" "Stirling-PDF-with-login.jar"
+  mv /opt/Stirling-PDF/Stirling-PDF-with-login.jar /opt/Stirling-PDF/Stirling-PDF.jar
+  touch ~/.Stirling-PDF-login
+  login_mode="true"
+else
+  USE_ORIGINAL_FILENAME=true fetch_and_deploy_gh_release "stirling-pdf" "Stirling-Tools/Stirling-PDF" "singlefile" "latest" "/opt/Stirling-PDF" "Stirling-PDF.jar"
+fi
 
 msg_info "Installing LibreOffice Components"
 $STD apt-get install -y \
@@ -37,32 +52,35 @@ $STD apt-get install -y \
   libreoffice-core \
   libreoffice-common \
   libreoffice-base-core \
-  python3-uno
+  libreoffice-script-provider-python \
+  libreoffice-java-common \
+  unoconv \
+  pngquant \
+  weasyprint
 msg_ok "Installed LibreOffice Components"
 
 msg_info "Installing Python Dependencies"
-$STD apt-get install -y \
-  python3 \
-  python3-pip
-rm -rf /usr/lib/python3.*/EXTERNALLY-MANAGED
-$STD pip3 install \
-  uno \
+mkdir -p /tmp/stirling-pdf
+$STD uv venv /opt/.venv
+export PATH="/opt/.venv/bin:$PATH"
+source /opt/.venv/bin/activate
+$STD uv pip install --upgrade pip
+$STD uv pip install \
   opencv-python-headless \
-  unoconv \
-  pngquant \
-  WeasyPrint
+  ocrmypdf \
+  pillow \
+  pdf2image
+
+$STD apt-get install -y python3-uno python3-pip
+$STD pip3 install --break-system-packages unoserver
+ln -sf /opt/.venv/bin/python3 /usr/local/bin/python3
+ln -sf /opt/.venv/bin/pip /usr/local/bin/pip
 msg_ok "Installed Python Dependencies"
 
-msg_info "Installing Azul Zulu"
-curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB1998361219BD9C9" -o "/etc/apt/trusted.gpg.d/zulu-repo.asc"
-curl -fsSL "https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb" -o "/zulu-repo_1.0.0-3_all.deb"
-$STD dpkg -i zulu-repo_1.0.0-3_all.deb
-$STD apt-get update
-$STD apt-get -y install zulu17-jdk
-msg_ok "Installed Azul Zulu"
-
 msg_info "Installing JBIG2"
-$STD git clone https://github.com/agl/jbig2enc /opt/jbig2enc
+$STD curl -fsSL -o /tmp/jbig2enc.tar.gz https://github.com/agl/jbig2enc/archive/refs/tags/0.30.tar.gz
+mkdir -p /opt/jbig2enc
+tar -xzf /tmp/jbig2enc.tar.gz -C /opt/jbig2enc --strip-components=1
 cd /opt/jbig2enc
 $STD bash ./autogen.sh
 $STD bash ./configure
@@ -74,25 +92,46 @@ msg_info "Installing Language Packs (Patience)"
 $STD apt-get install -y 'tesseract-ocr-*'
 msg_ok "Installed Language Packs"
 
-msg_info "Installing Stirling-PDF (Additional Patience)"
-RELEASE=$(curl -fsSL https://api.github.com/repos/Stirling-Tools/Stirling-PDF/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
-curl -fsSL "https://github.com/Stirling-Tools/Stirling-PDF/archive/refs/tags/v${RELEASE}.tar.gz" -o "v${RELEASE}.tar.gz"
-tar -xzf v${RELEASE}.tar.gz
-cd Stirling-PDF-$RELEASE
-chmod +x ./gradlew
-$STD ./gradlew build -x spotlessApply -x spotlessCheck -x test -x sonarqube
-mkdir -p /opt/Stirling-PDF
-touch /opt/Stirling-PDF/.env
-mv ./stirling-pdf/build/libs/*.jar /opt/Stirling-PDF/Stirling-PDF-$RELEASE.jar
-mv scripts /opt/Stirling-PDF/
-mv pipeline /opt/Stirling-PDF/
-mv stirling-pdf/src/main/resources/static/fonts/*.ttf /usr/share/fonts/opentype/noto/
-ln -s /opt/Stirling-PDF/Stirling-PDF-$RELEASE.jar /opt/Stirling-PDF/Stirling-PDF.jar
-ln -s /usr/share/tesseract-ocr/5/tessdata/ /usr/share/tessdata
-msg_ok "Installed Stirling-PDF"
+msg_info "Creating Environment Variables"
+cat <<EOF >/opt/Stirling-PDF/.env
+# Java tuning
+JAVA_BASE_OPTS="-XX:+UnlockExperimentalVMOptions -XX:MaxRAMPercentage=75 -XX:InitiatingHeapOccupancyPercent=20 -XX:+G1PeriodicGCInvokesConcurrent -XX:G1PeriodicGCInterval=10000 -XX:+UseStringDeduplication -XX:G1PeriodicGCSystemLoadThreshold=70"
+JAVA_CUSTOM_OPTS=""
+
+# LibreOffice
+PATH=/opt/.venv/bin:/usr/lib/libreoffice/program:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+UNO_PATH=/usr/lib/libreoffice/program
+URE_BOOTSTRAP=file:///usr/lib/libreoffice/program/fundamentalrc
+PYTHONPATH=/usr/lib/libreoffice/program:/opt/.venv/lib/python3.12/site-packages
+LD_LIBRARY_PATH=/usr/lib/libreoffice/program
+
+STIRLING_TEMPFILES_DIRECTORY=/tmp/stirling-pdf
+TMPDIR=/tmp/stirling-pdf
+TEMP=/tmp/stirling-pdf
+TMP=/tmp/stirling-pdf
+
+# Paths
+PATH=/opt/.venv/bin:/usr/lib/libreoffice/program:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EOF
+
+if [[ "$login_mode" == "true" ]]; then
+  cat <<EOF >>/opt/Stirling-PDF/.env
+# activate Login
+DISABLE_ADDITIONAL_FEATURES=false
+SECURITY_ENABLELOGIN=true
+
+# login credentials
+SECURITY_INITIALLOGIN_USERNAME=admin
+SECURITY_INITIALLOGIN_PASSWORD=stirling
+EOF
+fi
+msg_ok "Created Environment Variables"
+
+msg_info "Refreshing Font Cache"
+$STD fc-cache -fv
+msg_ok "Font Cache Updated"
 
 msg_info "Creating Service"
-# Create LibreOffice listener service
 cat <<EOF >/etc/systemd/system/libreoffice-listener.service
 [Unit]
 Description=LibreOffice Headless Listener Service
@@ -107,14 +146,6 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
-
-# Set up environment variables
-cat <<EOF >/opt/Stirling-PDF/.env
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/libreoffice/program
-UNO_PATH=/usr/lib/libreoffice/program
-PYTHONPATH=/usr/lib/python3/dist-packages:/usr/lib/libreoffice/program
-LD_LIBRARY_PATH=/usr/lib/libreoffice/program
 EOF
 
 cat <<EOF >/etc/systemd/system/stirlingpdf.service
@@ -139,16 +170,32 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-# Enable and start services
+cat <<EOF >/etc/systemd/system/unoserver.service
+[Unit]
+Description=UnoServer RPC Interface
+After=libreoffice-listener.service
+Requires=libreoffice-listener.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/unoserver --port 2003 --interface 127.0.0.1
+Restart=always
+EnvironmentFile=/opt/Stirling-PDF/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl enable -q --now libreoffice-listener
 systemctl enable -q --now stirlingpdf
+systemctl enable -q --now unoserver
 msg_ok "Created Service"
 
 motd_ssh
 customize
 
 msg_info "Cleaning up"
-rm -rf v${RELEASE}.tar.gz /zulu-repo_1.0.0-3_all.deb
+rm -f /tmp/jbig2enc.tar.gz
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"
