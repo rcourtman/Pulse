@@ -16,19 +16,19 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
   nginx \
-  ca-certificates
+  ca-certificates \
+  libjemalloc2
 msg_ok "Installed Dependencies"
 
-setup_mariadb
+setup_mysql
 
 msg_info "Configuring Database"
 DB_NAME=ghost
 DB_USER=ghostuser
 DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
-$STD mariadb -u root -e "CREATE DATABASE $DB_NAME;"
-$STD mariadb -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
-$STD mariadb -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
-
+$STD mysql -u root -e "CREATE DATABASE $DB_NAME;"
+$STD mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+$STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
 {
   echo "Ghost-Credentials"
   echo "Ghost Database User: $DB_USER"
@@ -37,7 +37,7 @@ $STD mariadb -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUS
 } >>~/ghost.creds
 msg_ok "Configured MySQL"
 
-NODE_VERSION="20" setup_nodejs
+NODE_VERSION="22" setup_nodejs
 
 msg_info "Installing Ghost CLI"
 $STD npm install ghost-cli@latest -g

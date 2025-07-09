@@ -20,26 +20,31 @@ color
 catch_errors
 
 function update_script() {
-    header_info
-    check_container_storage
-    check_container_resources
-    msg_info "Updating ${APP} LXC"
+  header_info
+  check_container_storage
+  check_container_resources
 
-    if command -v ghost &>/dev/null; then
-        current_version=$(ghost version | grep 'Ghost-CLI version' | awk '{print $3}')
-        latest_version=$(npm show ghost-cli version)
-        if [ "$current_version" != "$latest_version" ]; then
-            msg_info "Updating ${APP} from version v${current_version} to v${latest_version}"
-            $STD npm install -g ghost-cli@latest
-            msg_ok "Updated Successfully"
-        else
-            msg_ok "${APP} is already at v${current_version}"
-        fi
+  if ! dpkg-query -W -f='${Status}' mariadb-server 2>/dev/null | grep -q "install ok installed"; then
+    setup_mysql
+  fi
+  NODE_VERSION="22" setup_nodejs
+
+  msg_info "Updating ${APP} LXC"
+  if command -v ghost &>/dev/null; then
+    current_version=$(ghost version | grep 'Ghost-CLI version' | awk '{print $3}')
+    latest_version=$(npm show ghost-cli version)
+    if [ "$current_version" != "$latest_version" ]; then
+      msg_info "Updating ${APP} from version v${current_version} to v${latest_version}"
+      $STD npm install -g ghost-cli@latest
+      msg_ok "Updated Successfully"
     else
-        msg_error "No ${APP} Installation Found!"
-        exit
+      msg_ok "${APP} is already at v${current_version}"
     fi
+  else
+    msg_error "No ${APP} Installation Found!"
     exit
+  fi
+  exit
 }
 
 start
