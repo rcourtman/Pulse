@@ -13,7 +13,7 @@ setting_up_container
 network_check
 update_os
 
-PHP_VERSION="8.2" PHP_MODULE="dom,json,ctype,pgsql,gmp,iconv" PHP_APACHE="YES" setup_php
+PHP_VERSION="8.2" PHP_MODULE="curl,xml,mbstring,intl,zip,pgsql,gmp" PHP_APACHE="YES" setup_php
 PG_VERSION="16" setup_postgresql
 
 msg_info "Setting up PostgreSQL"
