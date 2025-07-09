@@ -25,7 +25,8 @@ function getCurrentVersionInfo() {
             // Get current branch
             gitBranch = execSync('git branch --show-current', { 
                 cwd: gitDir, 
-                encoding: 'utf8' 
+                encoding: 'utf8',
+                windowsHide: true
             }).trim();
             
             // If on develop branch, calculate RC version from git
@@ -35,7 +36,8 @@ function getCurrentVersionInfo() {
                     // Use git describe for accurate development versioning
                     const gitDescribe = execSync('git describe --tags --dirty', { 
                         cwd: gitDir, 
-                        encoding: 'utf8' 
+                        encoding: 'utf8',
+                        windowsHide: true
                     }).trim();
                     
                     if (gitDescribe) {
@@ -123,11 +125,33 @@ function analyzeCommitsForVersionBump() {
         
         let latestStableTag;
         try {
-            latestStableTag = execSync('git tag -l "v*" | grep -v "rc\\|alpha\\|beta" | sort -V | tail -1', { 
+            // Use git tag with proper filtering to avoid shell injection
+            const allTags = execSync('git tag -l "v*"', { 
                 cwd: gitDir, 
                 encoding: 'utf8',
-                shell: '/bin/bash'
-            }).trim();
+                windowsHide: true
+            }).trim().split('\n').filter(tag => tag);
+            
+            // Filter out RC/alpha/beta tags in JavaScript instead of shell
+            const stableTags = allTags.filter(tag => 
+                !tag.includes('rc') && 
+                !tag.includes('alpha') && 
+                !tag.includes('beta')
+            );
+            
+            // Sort versions properly
+            stableTags.sort((a, b) => {
+                const versionA = a.replace(/^v/, '').split('.').map(Number);
+                const versionB = b.replace(/^v/, '').split('.').map(Number);
+                for (let i = 0; i < 3; i++) {
+                    if ((versionA[i] || 0) !== (versionB[i] || 0)) {
+                        return (versionA[i] || 0) - (versionB[i] || 0);
+                    }
+                }
+                return 0;
+            });
+            
+            latestStableTag = stableTags[stableTags.length - 1] || 'v0.0.0';
         } catch (error) {
             // No stable tags found, use v0.0.0 as baseline
             latestStableTag = 'v0.0.0';
@@ -140,9 +164,11 @@ function analyzeCommitsForVersionBump() {
         // Get commit messages since last stable release
         let commitMessages;
         try {
-            commitMessages = execSync(`git log ${latestStableTag}..HEAD --pretty=format:"%s"`, { 
+            // Use array form to avoid shell injection
+            commitMessages = execSync(`git log ${latestStableTag}..HEAD --pretty=format:%s`, { 
                 cwd: gitDir, 
-                encoding: 'utf8' 
+                encoding: 'utf8',
+                windowsHide: true
             }).trim();
         } catch (error) {
             // If git log fails, assume no commits
@@ -303,7 +329,8 @@ function shouldTriggerStableRelease() {
         // Check if we're on main branch
         const currentBranch = execSync('git branch --show-current', { 
             cwd: gitDir, 
-            encoding: 'utf8' 
+            encoding: 'utf8',
+            windowsHide: true
         }).trim();
         
         if (currentBranch !== 'main') {
@@ -312,9 +339,10 @@ function shouldTriggerStableRelease() {
         
         // Check if the last commit was a merge from develop
         try {
-            const lastCommitMessage = execSync('git log -1 --pretty=format:"%s"', { 
+            const lastCommitMessage = execSync('git log -1 --pretty=format:%s', { 
                 cwd: gitDir, 
-                encoding: 'utf8' 
+                encoding: 'utf8',
+                windowsHide: true
             }).trim();
             
             // Look for merge commit patterns from develop

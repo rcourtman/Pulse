@@ -3,9 +3,20 @@
  * Discovers namespaces using the PBS API namespace list endpoint
  */
 
-// Cache for discovered namespaces per PBS instance
+// Cache for discovered namespaces per PBS instance with size limit
 const namespaceCache = new Map();
 const CACHE_TTL = 300000; // 5 minutes cache TTL
+const CACHE_MAX_SIZE = 100; // Maximum number of cached namespace entries
+
+// Clean up old cache entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of namespaceCache) {
+        if (entry.timestamp < now - CACHE_TTL) {
+            namespaceCache.delete(key);
+        }
+    }
+}, CACHE_TTL);
 
 /**
  * Lists namespaces for a given PBS datastore
@@ -70,7 +81,12 @@ async function discoverNamespaces(client, datastoreName, config) {
         const allNamespaces = ['', ...namespaces];
         const uniqueNamespaces = [...new Set(allNamespaces)].sort();
         
-        // Cache the results
+        // Cache the results with size limit enforcement
+        if (namespaceCache.size >= CACHE_MAX_SIZE) {
+            // Remove oldest entry
+            const oldestKey = namespaceCache.keys().next().value;
+            namespaceCache.delete(oldestKey);
+        }
         namespaceCache.set(cacheKey, {
             namespaces: uniqueNamespaces,
             timestamp: Date.now()

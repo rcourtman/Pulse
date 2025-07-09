@@ -87,6 +87,19 @@ router.post('/:alertId/acknowledge', (req, res) => {
         const alertId = req.params.alertId;
         const { userId = 'api-user', note = '' } = req.body;
         
+        // Validate input
+        if (!alertId || typeof alertId !== 'string' || alertId.length > 100) {
+            return res.status(400).json({ error: 'Invalid alert ID' });
+        }
+        
+        if (typeof userId !== 'string' || userId.length > 50) {
+            return res.status(400).json({ error: 'Invalid user ID' });
+        }
+        
+        if (typeof note !== 'string' || note.length > 1000) {
+            return res.status(400).json({ error: 'Note too long (max 1000 characters)' });
+        }
+        
         const success = stateManager.alertManager.acknowledgeAlert(alertId, userId, note);
         
         if (success) {
@@ -105,8 +118,20 @@ router.post('/suppress', (req, res) => {
     try {
         const { ruleId, guestFilter = {}, duration = 3600000, reason = '' } = req.body;
         
-        if (!ruleId) {
-            return res.status(400).json({ error: "ruleId is required" });
+        if (!ruleId || typeof ruleId !== 'string' || ruleId.length > 100) {
+            return res.status(400).json({ error: "Invalid ruleId" });
+        }
+        
+        if (typeof duration !== 'number' || duration < 0 || duration > 86400000) { // Max 24 hours
+            return res.status(400).json({ error: "Invalid duration (must be 0-86400000ms)" });
+        }
+        
+        if (typeof reason !== 'string' || reason.length > 500) {
+            return res.status(400).json({ error: "Reason too long (max 500 characters)" });
+        }
+        
+        if (typeof guestFilter !== 'object') {
+            return res.status(400).json({ error: "Invalid guestFilter" });
         }
         
         const success = stateManager.alertManager.suppressAlert(ruleId, guestFilter, duration, reason);

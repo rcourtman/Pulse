@@ -2,9 +2,20 @@ const dns = require('dns').promises;
 const { promisify } = require('util');
 const lookup = promisify(require('dns').lookup);
 
-// Cache for DNS resolutions
+// Cache for DNS resolutions with size limit
 const dnsCache = new Map();
 const DNS_CACHE_TTL = 60000; // 1 minute cache
+const DNS_CACHE_MAX_SIZE = 1000; // Maximum number of cached entries
+
+// Clean up old cache entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [hostname, entry] of dnsCache) {
+        if (now - entry.timestamp > DNS_CACHE_TTL) {
+            dnsCache.delete(hostname);
+        }
+    }
+}, DNS_CACHE_TTL);
 
 /**
  * Custom DNS resolver with caching and round-robin support
@@ -13,6 +24,17 @@ class DnsResolver {
   constructor() {
     this.failedHosts = new Map(); // Track failed hosts with timestamps
     this.FAILED_HOST_RETRY_DELAY = 30000; // 30 seconds before retrying a failed host
+    this.FAILED_HOSTS_MAX_SIZE = 500; // Maximum number of failed hosts to track
+    
+    // Clean up old failed hosts periodically
+    setInterval(() => {
+      const now = Date.now();
+      for (const [host, timestamp] of this.failedHosts) {
+        if (now - timestamp > this.FAILED_HOST_RETRY_DELAY) {
+          this.failedHosts.delete(host);
+        }
+      }
+    }, this.FAILED_HOST_RETRY_DELAY);
   }
 
   /**
@@ -28,6 +50,14 @@ class DnsResolver {
    */
   markHostFailed(hostOrIp) {
     console.log(`[DnsResolver] Marking host as failed: ${hostOrIp}`);
+    
+    // Enforce size limit
+    if (this.failedHosts.size >= this.FAILED_HOSTS_MAX_SIZE) {
+      // Remove oldest entry
+      const oldestKey = this.failedHosts.keys().next().value;
+      this.failedHosts.delete(oldestKey);
+    }
+    
     this.failedHosts.set(hostOrIp, Date.now());
   }
 
@@ -82,7 +112,12 @@ class DnsResolver {
         throw new Error(`No IP addresses found for ${hostname}`);
       }
 
-      // Cache the results
+      // Cache the results with size limit enforcement
+      if (dnsCache.size >= DNS_CACHE_MAX_SIZE) {
+        // Remove oldest entry
+        const oldestKey = dnsCache.keys().next().value;
+        dnsCache.delete(oldestKey);
+      }
       dnsCache.set(hostname, { addresses: allAddresses, timestamp: Date.now() });
       console.log(`[DnsResolver] Resolved ${hostname} to: ${allAddresses.join(', ')}`);
       

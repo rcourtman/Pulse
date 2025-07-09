@@ -53,5 +53,9 @@ ENV DOCKER_DEPLOYMENT=true
 # Expose port
 EXPOSE 7655
 
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:7655/api/health/healthz', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"
+
 # Run the application using the start script
 CMD [ "npm", "run", "start" ]

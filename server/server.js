@@ -20,8 +20,73 @@ function createServer() {
         threshold: 1024,
         level: 6
     }));
-    app.use(cors());
-    app.use(express.json({ limit: '50mb' })); // Global limit, push routes can set their own
+    // Configure CORS with specific origins
+    const corsOptions = {
+        origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps or curl requests)
+            if (!origin) return callback(null, true);
+            
+            // In production, you should specify exact origins
+            // For now, allow same-origin and local development
+            const allowedOrigins = [
+                'http://localhost:7655',
+                'http://127.0.0.1:7655',
+                `http://localhost:${process.env.PORT || 7655}`,
+                `http://127.0.0.1:${process.env.PORT || 7655}`
+            ];
+            
+            // Also allow the actual server URL if known
+            if (process.env.PULSE_PUBLIC_URL) {
+                allowedOrigins.push(process.env.PULSE_PUBLIC_URL);
+            }
+            
+            // Check if origin matches allowed list
+            if (allowedOrigins.indexOf(origin) !== -1) {
+                callback(null, true);
+            } else {
+                // Log rejected origins for debugging
+                console.warn(`CORS: Rejected origin ${origin}`);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        credentials: true,
+        optionsSuccessStatus: 200
+    };
+    
+    app.use(cors(corsOptions));
+    
+    // Security headers middleware
+    app.use((req, res, next) => {
+        // Prevent clickjacking
+        res.setHeader('X-Frame-Options', 'DENY');
+        
+        // Prevent MIME type sniffing
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        
+        // Enable browser XSS protection
+        res.setHeader('X-XSS-Protection', '1; mode=block');
+        
+        // Referrer policy for privacy
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        
+        // Basic CSP - adjust based on your needs
+        res.setHeader('Content-Security-Policy', 
+            "default-src 'self'; " +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+            "font-src 'self' data: https://cdn.jsdelivr.net; " +
+            "img-src 'self' data: blob:; " +
+            "connect-src 'self' ws: wss:; " +
+            "frame-ancestors 'none';"
+        );
+        
+        // Remove X-Powered-By header
+        res.removeHeader('X-Powered-By');
+        
+        next();
+    });
+    
+    app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent DoS attacks
 
     // Static files
     const publicDir = path.join(__dirname, '../src/public');
