@@ -355,7 +355,6 @@ msg_custom() {
   [[ -z "$msg" ]] && return
   stop_spinner
   echo -e "${BFR:-} ${symbol} ${color}${msg}${CL:-\e[0m}"
-  printf "\r\033[K\e[?25h\n"
 }
 
 run_container_safe() {
