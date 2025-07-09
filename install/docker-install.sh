@@ -57,14 +57,31 @@ else
   fi
 fi
 
-read -r -p "${TAB3}Would you like to expose the Docker TCP socket? <y/N> " prompt
+read -r -p "${TAB3}Expose Docker TCP socket (⚠️ insecure)? <y/N> " prompt
 if [[ "${prompt,,}" =~ ^(y|yes)$ ]]; then
-  msg_info "Exposing Docker TCP socket"
-  $STD mkdir -p /etc/docker
-  $STD echo '{ "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"] }' > /etc/docker/daemon.json
-  $STD systemctl restart docker
-  msg_ok "Exposed Docker TCP socket at tcp://+:2375"
+  msg_info "Enabling Docker TCP socket on port 2375 (insecure)"
+  
+  mkdir -p /etc/docker
+  echo '{ "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"] }' > /etc/docker/daemon.json
+
+  mkdir -p /etc/systemd/system/docker.service.d
+  cat <<EOF > /etc/systemd/system/docker.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd
+EOF
+
+  $STD systemctl daemon-reexec
+  $STD systemctl daemon-reload
+
+  if systemctl restart docker; then
+    msg_ok "Docker TCP socket now available on tcp://0.0.0.0:2375"
+  else
+    msg_error "Docker failed to restart. Check journalctl -xeu docker.service"
+    exit 1
+  fi
 fi
+
 
 motd_ssh
 customize
