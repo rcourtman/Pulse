@@ -1,17 +1,23 @@
 
 const express = require('express');
 const stateManager = require('../state');
+const ValidationMiddleware = require('../middleware/validation');
 
 const router = express.Router();
 
 // Enhanced alerts endpoint with filtering
-router.get('/', (req, res) => {
+router.get('/', ValidationMiddleware.validateQuery({
+    fields: {
+        group: { type: 'string', maxLength: 100 },
+        node: { type: 'string', maxLength: 255 },
+        acknowledged: { type: 'boolean' }
+    }
+}), (req, res) => {
     try {
         const filters = {
             group: req.query.group,
             node: req.query.node,
-            acknowledged: req.query.acknowledged === 'true' ? true : 
-                         req.query.acknowledged === 'false' ? false : undefined
+            acknowledged: req.query.acknowledged
         };
         
         // Get alert data with safe serialization
@@ -33,7 +39,7 @@ router.get('/', (req, res) => {
             JSON.stringify(rules);
             
         } catch (serializationError) {
-            console.error('[API] Serialization error in /api/alerts:', serializationError.message);
+            // Serialization error logged silently
             
             // Return empty data if serialization fails
             alertInfo = {
@@ -82,23 +88,23 @@ router.get('/active', (req, res) => {
 
 
 // Alert acknowledgment endpoint
-router.post('/:alertId/acknowledge', (req, res) => {
+router.post('/:alertId/acknowledge', 
+    ValidationMiddleware.validateParams({
+        fields: {
+            alertId: { type: 'string', maxLength: 100 }
+        },
+        required: ['alertId']
+    }),
+    ValidationMiddleware.validateBody({
+        fields: {
+            userId: { type: 'string', maxLength: 50, default: 'api-user' },
+            note: { type: 'string', maxLength: 1000, default: '' }
+        }
+    }),
+    (req, res) => {
     try {
         const alertId = req.params.alertId;
         const { userId = 'api-user', note = '' } = req.body;
-        
-        // Validate input
-        if (!alertId || typeof alertId !== 'string' || alertId.length > 100) {
-            return res.status(400).json({ error: 'Invalid alert ID' });
-        }
-        
-        if (typeof userId !== 'string' || userId.length > 50) {
-            return res.status(400).json({ error: 'Invalid user ID' });
-        }
-        
-        if (typeof note !== 'string' || note.length > 1000) {
-            return res.status(400).json({ error: 'Note too long (max 1000 characters)' });
-        }
         
         const success = stateManager.alertManager.acknowledgeAlert(alertId, userId, note);
         
@@ -114,25 +120,19 @@ router.post('/:alertId/acknowledge', (req, res) => {
 });
 
 // Alert suppression endpoint
-router.post('/suppress', (req, res) => {
+router.post('/suppress',
+    ValidationMiddleware.validateBody({
+        fields: {
+            ruleId: { type: 'string', maxLength: 100 },
+            guestFilter: { type: 'object', default: {} },
+            duration: { type: 'number', min: 0, max: 86400000, default: 3600000 },
+            reason: { type: 'string', maxLength: 500, default: '' }
+        },
+        required: ['ruleId']
+    }),
+    (req, res) => {
     try {
         const { ruleId, guestFilter = {}, duration = 3600000, reason = '' } = req.body;
-        
-        if (!ruleId || typeof ruleId !== 'string' || ruleId.length > 100) {
-            return res.status(400).json({ error: "Invalid ruleId" });
-        }
-        
-        if (typeof duration !== 'number' || duration < 0 || duration > 86400000) { // Max 24 hours
-            return res.status(400).json({ error: "Invalid duration (must be 0-86400000ms)" });
-        }
-        
-        if (typeof reason !== 'string' || reason.length > 500) {
-            return res.status(400).json({ error: "Reason too long (max 500 characters)" });
-        }
-        
-        if (typeof guestFilter !== 'object') {
-            return res.status(400).json({ error: "Invalid guestFilter" });
-        }
         
         const success = stateManager.alertManager.suppressAlert(ruleId, guestFilter, duration, reason);
         

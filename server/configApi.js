@@ -4,6 +4,7 @@ const path = require('path');
 const { loadConfiguration } = require('./configLoader');
 const { initializeApiClients } = require('./apiClients');
 const customThresholdManager = require('./customThresholds');
+const ValidationMiddleware = require('./middleware/validation');
 
 class ConfigApi {
     constructor() {
@@ -846,7 +847,15 @@ class ConfigApi {
         });
 
         // Save configuration
-        app.post('/api/config', async (req, res) => {
+        app.post('/api/config', 
+            ValidationMiddleware.validateBody({
+                fields: {
+                    proxmox: { type: 'object' },
+                    pbs: { type: 'object' },
+                    advanced: { type: 'object' }
+                }
+            }),
+            async (req, res) => {
             try {
                 const result = await this.saveConfig(req.body);
                 res.json({ success: true });
@@ -860,7 +869,18 @@ class ConfigApi {
         });
 
         // Test configuration
-        app.post('/api/config/test', async (req, res) => {
+        app.post('/api/config/test',
+            ValidationMiddleware.validateBody({
+                fields: {
+                    host: { type: 'string', maxLength: 255 },
+                    port: ValidationMiddleware.schemas.port,
+                    tokenId: { type: 'string', maxLength: 255 },
+                    tokenSecret: { type: 'string', maxLength: 255 },
+                    type: { type: 'string', enum: ['pve', 'pbs'] }
+                },
+                required: ['host', 'type']
+            }),
+            async (req, res) => {
             try {
                 const result = await this.testConfig(req.body);
                 res.json(result);

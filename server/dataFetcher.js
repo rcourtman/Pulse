@@ -16,15 +16,18 @@ let pLimit;
 let requestLimiter;
 let pLimitInitialized = false;
 
+// Import constants
+const { CACHE_CONFIG, UPDATE_INTERVALS, RETRY_CONFIG } = require('./config/constants');
+
 // Cache for direct node connections with TTL
 const nodeConnectionCache = new Map();
 const nodeConnectionTimestamps = new Map();
-const NODE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes TTL
+const NODE_CACHE_TTL = CACHE_CONFIG.NODE_CONNECTION_TTL;
 
 // Track failed guest agent calls to avoid repeated attempts
 const failedGuestAgents = new Map(); // Key: endpointId-nodeId-vmid, Value: { failCount, lastFailTime }
-const AGENT_RETRY_DELAY = 5 * 60 * 1000; // 5 minutes before retrying failed agents
-const MAX_AGENT_FAIL_COUNT = 3; // After 3 failures, skip for longer period
+const AGENT_RETRY_DELAY = UPDATE_INTERVALS.DNS_REFRESH; // 5 minutes before retrying failed agents
+const MAX_AGENT_FAIL_COUNT = RETRY_CONFIG.MAX_RETRIES; // After 3 failures, skip for longer period
 
 // Cleanup old connections and agent failure tracking periodically
 setInterval(() => {

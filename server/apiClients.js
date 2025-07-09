@@ -3,6 +3,10 @@ const https = require('https');
 const axiosRetry = require('axios-retry').default;
 const ResilientApiClient = require('./resilientApiClient');
 const dnsResolver = require('./dnsResolver');
+const { createLogger } = require('./utils/logger');
+const { TIMEOUTS, RETRY_CONFIG } = require('./config/constants');
+
+const logger = createLogger('ApiClients');
 
 /**
  * Creates a request interceptor for PVE API authentication.
