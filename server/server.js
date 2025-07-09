@@ -4,10 +4,18 @@ const http = require('http');
 const cors = require('cors');
 const compression = require('compression');
 const path = require('path');
+const { createLogger } = require('./utils/logger');
+const { createRateLimiter } = require('./middleware/rateLimiter');
 
 function createServer() {
     const app = express();
     const server = http.createServer(app);
+    const logger = createLogger('Server');
+    
+    // Create rate limiters for different endpoint types
+    const generalLimiter = createRateLimiter('default');
+    const apiLimiter = createRateLimiter('api');
+    const strictLimiter = createRateLimiter('strict');
 
     // Middleware
     app.use(compression({
@@ -45,7 +53,7 @@ function createServer() {
                 callback(null, true);
             } else {
                 // Log rejected origins for debugging
-                console.warn(`CORS: Rejected origin ${origin}`);
+                logger.warn(`CORS: Rejected origin ${origin}`);
                 callback(new Error('Not allowed by CORS'));
             }
         },
@@ -92,6 +100,9 @@ function createServer() {
     const publicDir = path.join(__dirname, '../src/public');
     app.use(express.static(publicDir, { index: false }));
 
+    // Apply general rate limiting to all routes
+    app.use(generalLimiter.middleware());
+
     // --- API Routes ---
     const configApi = new (require('./configApi'))();
     configApi.setupRoutes(app);
@@ -101,30 +112,30 @@ function createServer() {
 
 
     const updateRoutes = require('./routes/updates');
-    app.use('/api/updates', updateRoutes);
+    app.use('/api/updates', apiLimiter.middleware(), updateRoutes);
 
     const healthRoutes = require('./routes/health');
-    app.use('/api/health', healthRoutes);
+    app.use('/api/health', healthRoutes); // No rate limit on health checks
 
 
     const alertRoutes = require('./routes/alerts');
-    app.use('/api/alerts', alertRoutes);
+    app.use('/api/alerts', apiLimiter.middleware(), alertRoutes);
 
     const snapshotsRoutes = require('./routes/snapshots');
-    app.use('/api', snapshotsRoutes);
+    app.use('/api', apiLimiter.middleware(), snapshotsRoutes);
 
     const backupsRoutes = require('./routes/backups');
-    app.use('/api', backupsRoutes);
+    app.use('/api', apiLimiter.middleware(), backupsRoutes);
 
     const pushRoutes = require('./routes/push');
-    app.use('/api/push', pushRoutes);
+    app.use('/api/push', strictLimiter.middleware(), pushRoutes); // Stricter limit for push endpoints
 
     // --- HTML Routes ---
     app.get('/', (req, res) => {
         const indexPath = path.join(publicDir, 'index.html');
         res.sendFile(indexPath, (err) => {
             if (err) {
-                console.error(`Error sending index.html: ${err.message}`);
+                logger.error(`Error sending index.html: ${err.message}`);
                 res.status(err.status || 500).send('Internal Server Error loading page.');
             }
         });
@@ -134,7 +145,7 @@ function createServer() {
         const setupPath = path.join(publicDir, 'setup.html');
         res.sendFile(setupPath, (err) => {
             if (err) {
-                console.error(`Error sending setup.html: ${err.message}`);
+                logger.error(`Error sending setup.html: ${err.message}`);
                 res.status(err.status || 500).send('Internal Server Error loading setup page.');
             }
         });
