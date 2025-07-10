@@ -1488,22 +1488,15 @@
         <div id="backup-frequency-chart-container" class="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
           <div class="flex justify-between items-center mb-3">
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
-            <div class="flex items-center gap-3 text-xs">
-              <span class="flex items-center gap-1">
-                <span class="inline-block w-3 h-3 rounded bg-yellow-500"></span>
-                <span class="text-gray-600 dark:text-gray-400">Snapshots</span>
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="inline-block w-3 h-3 rounded bg-orange-500"></span>
-                <span class="text-gray-600 dark:text-gray-400">PVE</span>
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="inline-block w-3 h-3 rounded bg-violet-500"></span>
-                <span class="text-gray-600 dark:text-gray-400">PBS</span>
-              </span>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span id="backup-chart-date-range">Last 30 days</span>
+            <div class="flex items-center gap-2 text-xs">
+              <div class="flex items-center gap-1">
+                <button class="backup-chart-range px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-days="7">7d</button>
+                <button class="backup-chart-range px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700" data-days="30">30d</button>
+                <button class="backup-chart-range px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-days="90">90d</button>
+                <button class="backup-chart-range px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-days="365">1y</button>
+              </div>
+              <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+              <span id="backup-chart-date-range" class="text-gray-500 dark:text-gray-400">Last 30 days</span>
               <button id="clear-date-filter" class="hidden px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors">
                 Clear filter
               </button>
@@ -1513,6 +1506,20 @@
             <div class="absolute inset-0 flex items-center justify-center">
               <p class="text-sm text-gray-500 dark:text-gray-400">Loading chart...</p>
             </div>
+          </div>
+          <div class="flex justify-end items-center gap-3 text-xs mt-2">
+            <span class="flex items-center gap-1">
+              <span class="inline-block w-3 h-3 rounded bg-yellow-500"></span>
+              <span class="text-gray-600 dark:text-gray-400">Snapshots</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="inline-block w-3 h-3 rounded bg-orange-500"></span>
+              <span class="text-gray-600 dark:text-gray-400">PVE</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="inline-block w-3 h-3 rounded bg-violet-500"></span>
+              <span class="text-gray-600 dark:text-gray-400">PBS</span>
+            </span>
           </div>
         </div>
         
@@ -1556,7 +1563,7 @@
           </div>
         </div>
         
-        <div id="unified-table" class="overflow-x-auto">
+        <div id="unified-table" class="overflow-x-auto transition-opacity duration-200">
           <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading backup data...</p>
         </div>
       </div>
