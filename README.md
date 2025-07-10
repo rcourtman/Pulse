@@ -499,31 +499,48 @@ If monitoring PBS, create a token within the PBS interface.
 <details>
 <summary><strong>Steps to Create a PBS API Token (Click to Expand)</strong></summary>
 
+**🔒 Security Best Practice:** Pulse only needs `DatastoreAudit` permission (read-only access). Never grant `Admin` role for monitoring purposes.
+
+> **Quick Setup (Recommended):**
+> ```bash
+> # Create user and token
+> proxmox-backup-manager user create pulse-monitor@pbs --password 'ChangeMe123'
+> proxmox-backup-manager user generate-token pulse-monitor@pbs monitoring
+> # Grant read-only access
+> proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse-monitor@pbs!monitoring'
+> ```
+
 1.  **Log in to the Proxmox Backup Server web interface.**
-2.  **Create a dedicated user** (optional but recommended):
+2.  **Create a dedicated user** (strongly recommended for security):
     *   Go to `Configuration` → `Access Control` → `User Management`.
     *   Click `Add`. Enter `User ID` (e.g., "pulse-monitor"), set Realm to `Proxmox Backup authentication server` (`pbs`). Click `Add`.
     *   Note: For PBS realm users, you'll need to set a password. For PAM users, no password is needed for API token usage.
+    *   **⚠️ Avoid using `admin@pbs`** - This is the built-in administrative account with full privileges. Create a dedicated monitoring user instead.
 3.  **Create an API token:**
     *   Go to `Configuration` → `Access Control` → `API Token`.
     *   Click `Add`.
-    *   Select `User` (e.g., "pulse-monitor@pbs") or `root@pam`.
+    *   Select `User` (e.g., "pulse-monitor@pbs"). Avoid using `root@pam` or `admin@pbs` for production.
     *   Enter `Token Name` (e.g., "pulse").
     *   Leave `Privilege Separation` checked (recommended for security). Click `Add`.
     *   **Important:** Copy the `Secret` value immediately.
 4.  **Assign permissions (CRITICAL - PBS tokens need explicit permissions):**
     *   **PBS tokens do NOT inherit from users** - you must grant permissions to the token itself
-    *   For monitoring with admin@pbs user:
+    *   **⚠️ Security Note:** Pulse only needs read-only access. Avoid granting Admin role unless absolutely necessary.
+    
+    *   **Recommended: Minimal read-only permissions**
     ```bash
-    # Grant Admin role to the TOKEN (not the user!)
-    proxmox-backup-manager acl update / Admin --auth-id 'admin@pbs!pulse'
-    proxmox-backup-manager acl update /datastore Admin --auth-id 'admin@pbs!pulse'
+    # Grant DatastoreAudit for read-only monitoring (THIS IS ALL PULSE NEEDS!)
+    proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse-monitor@pbs!pulse'
+    
+    # Or for specific datastores only:
+    proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'pulse-monitor@pbs!pulse'
     ```
-    *   For minimal permissions:
+    
+    *   **Not Recommended: Full admin access (only if troubleshooting)**
     ```bash
-    # Grant read-only access to specific datastores
-    proxmox-backup-manager acl update /datastore/main DatastoreReader --auth-id 'user@realm!token'
-    proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'user@realm!token'
+    # ⚠️ WARNING: This grants full read/write/delete permissions!
+    # Only use temporarily for troubleshooting, then switch to DatastoreAudit
+    proxmox-backup-manager acl update / Admin --auth-id 'user@realm!token'
     ```
 5.  **Update `.env`:** Set `PBS_TOKEN_ID` (e.g., `pulse-monitor@pbs!pulse`) and `PBS_TOKEN_SECRET`.
 
@@ -648,23 +665,29 @@ pveum acl modify /storage/nas --users pulse-readonly@pve --roles PVEDatastoreAdm
 
 #### PBS Non-Root Setup
 
-PBS requires explicit token permissions:
+PBS requires creating a dedicated monitoring user with minimal permissions:
 
 ```bash
-# For PBS using admin@pbs user (recommended)
-# The admin@pbs user already exists in PBS
+# 1. Create a dedicated monitoring user (NOT admin@pbs!)
+proxmox-backup-manager user create pulse-monitor@pbs --password 'SecurePassword123'
 
-# 1. Create token for admin user
-proxmox-backup-manager user generate-token admin@pbs pulse
+# 2. Create API token for the monitoring user
+proxmox-backup-manager user generate-token pulse-monitor@pbs monitoring
 
-# 2. Grant permissions to the TOKEN (not user!)
-proxmox-backup-manager acl update / Admin --auth-id 'admin@pbs!pulse'
-proxmox-backup-manager acl update /datastore Admin --auth-id 'admin@pbs!pulse'
+# 3. Grant ONLY read permissions to the TOKEN
+# This is all Pulse needs - no Admin role required!
+proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse-monitor@pbs!monitoring'
 
-# 3. For specific datastores (more secure):
-proxmox-backup-manager acl update /datastore/main DatastoreReader --auth-id 'admin@pbs!pulse'
-proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'admin@pbs!pulse'
+# 4. Optional: For specific datastores only (even more restrictive):
+proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'pulse-monitor@pbs!monitoring'
+proxmox-backup-manager acl update /datastore/backup DatastoreAudit --auth-id 'pulse-monitor@pbs!monitoring'
 ```
+
+**⚠️ Important Security Notes:**
+- Never use `admin@pbs` for monitoring - it has full administrative privileges
+- `DatastoreAudit` provides all the read access Pulse needs
+- Avoid granting `Admin` role unless troubleshooting
+- The password for the user is only needed during creation, not for API token usage
 
 #### Migrating from Root to Non-Root
 

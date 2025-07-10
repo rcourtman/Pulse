@@ -402,27 +402,167 @@
             document.getElementById('full-report').classList.toggle('hidden');
         }
 
+        function sanitizeReport(report) {
+            // Deep clone the report to avoid modifying the original
+            const sanitized = JSON.parse(JSON.stringify(report));
+            
+            // Environment section doesn't need sanitization except for working directory
+            if (sanitized.environment && sanitized.environment.workingDirectory) {
+                sanitized.environment.workingDirectory = '/opt/pulse';
+            }
+            
+            // Sanitize connectivity section
+            if (sanitized.connectivity) {
+                if (sanitized.connectivity.proxmox) {
+                    sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map(conn => ({
+                        ...conn,
+                        host: conn.host ? conn.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : conn.host,
+                        name: conn.name ? `pve-server-${sanitized.connectivity.proxmox.indexOf(conn) + 1}` : conn.name
+                    }));
+                }
+                if (sanitized.connectivity.pbs) {
+                    sanitized.connectivity.pbs = sanitized.connectivity.pbs.map(conn => ({
+                        ...conn,
+                        host: conn.host ? conn.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : conn.host,
+                        name: conn.name ? `pbs-server-${sanitized.connectivity.pbs.indexOf(conn) + 1}` : conn.name
+                    }));
+                }
+            }
+            
+            // Sanitize state section
+            if (sanitized.state) {
+                if (sanitized.state.nodes) {
+                    const nodeMapping = {};
+                    let nodeCounter = 1;
+                    Object.keys(sanitized.state.nodes).forEach(nodeName => {
+                        nodeMapping[nodeName] = `node-${nodeCounter++}`;
+                    });
+                    
+                    const sanitizedNodes = {};
+                    Object.entries(sanitized.state.nodes).forEach(([nodeName, nodeData]) => {
+                        const sanitizedNodeName = nodeMapping[nodeName];
+                        sanitizedNodes[sanitizedNodeName] = {
+                            ...nodeData,
+                            node: sanitizedNodeName,
+                            // Sanitize storage names
+                            storages: nodeData.storages ? Object.entries(nodeData.storages).reduce((acc, [storageName, storageData], idx) => {
+                                acc[`storage-${sanitizedNodeName.split('-')[1]}-${idx + 1}`] = {
+                                    ...storageData,
+                                    storage: `storage-${sanitizedNodeName.split('-')[1]}-${idx + 1}`
+                                };
+                                return acc;
+                            }, {}) : {}
+                        };
+                    });
+                    sanitized.state.nodes = sanitizedNodes;
+                }
+                
+                if (sanitized.state.backupServers) {
+                    sanitized.state.backupServers = Object.entries(sanitized.state.backupServers).reduce((acc, [serverName, serverData], idx) => {
+                        const sanitizedName = `pbs-server-${idx + 1}`;
+                        acc[sanitizedName] = {
+                            ...serverData,
+                            nodes: serverData.nodes ? Object.entries(serverData.nodes).reduce((nodeAcc, [nodeName, nodeData], nodeIdx) => {
+                                const sanitizedNodeName = nodeName === 'localhost' || nodeName.includes('auto-discovered') ? nodeName : `pbs-node-${idx + 1}-${nodeIdx + 1}`;
+                                nodeAcc[sanitizedNodeName] = {
+                                    ...nodeData,
+                                    node: sanitizedNodeName
+                                };
+                                return nodeAcc;
+                            }, {}) : {},
+                            datastores: serverData.datastores ? serverData.datastores.map((ds, dsIdx) => ({
+                                ...ds,
+                                name: `datastore-${idx + 1}-${dsIdx + 1}`,
+                                path: ds.path ? ds.path.replace(/\/[^\/]+$/, '/[PATH]') : ds.path
+                            })) : [],
+                            backups: serverData.backups ? serverData.backups.map((backup, backupIdx) => ({
+                                ...backup,
+                                'backup-id': `backup-${backupIdx + 1}`,
+                                'backup-group': backup['backup-group'] ? backup['backup-group'].replace(/^[^\/]+/, 'namespace-1') : backup['backup-group']
+                            })) : []
+                        };
+                        return acc;
+                    }, {});
+                }
+            }
+            
+            // Sanitize recommendations
+            if (sanitized.recommendations) {
+                sanitized.recommendations = sanitized.recommendations.map(rec => ({
+                    ...rec,
+                    message: rec.message
+                        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP-ADDRESS]')
+                        .replace(/https?:\/\/[^\/\s:]+/g, 'https://[HOSTNAME]')
+                        .replace(/node\s+'[^']+'/g, "node '[NODE-NAME]'")
+                        .replace(/node\s+"[^"]+"/g, 'node "[NODE-NAME]"')
+                        .replace(/host\s+'[^']+'/g, "host '[HOSTNAME]'")
+                        .replace(/host\s+"[^"]+"/g, 'host "[HOSTNAME]"')
+                        .replace(/:\d{4,5}\b/g, ':[PORT]')
+                }));
+            }
+            
+            // Sanitize errors
+            if (sanitized.errors) {
+                sanitized.errors = sanitized.errors.map(error => ({
+                    ...error,
+                    message: error.message
+                        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
+                        .replace(/https?:\/\/[^\/\s:]+/g, 'https://[HOSTNAME]')
+                        .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
+                        .replace(/:\d{4,5}\b/g, ':[PORT]')
+                }));
+            }
+            
+            // Sanitize permissions  
+            if (sanitized.permissions) {
+                if (sanitized.permissions.proxmox) {
+                    sanitized.permissions.proxmox = sanitized.permissions.proxmox.map((perm, idx) => ({
+                        ...perm,
+                        name: `pve-server-${idx + 1}`,
+                        host: perm.host ? perm.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : perm.host,
+                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId
+                    }));
+                }
+                if (sanitized.permissions.pbs) {
+                    sanitized.permissions.pbs = sanitized.permissions.pbs.map((perm, idx) => ({
+                        ...perm,
+                        name: `pbs-server-${idx + 1}`,
+                        host: perm.host ? perm.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : perm.host,
+                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId
+                    }));
+                }
+            }
+            
+            // Add sanitization notice
+            sanitized.sanitizationNotice = 'This report has been sanitized to remove sensitive information (hostnames, IPs, node names, etc.)';
+            
+            return sanitized;
+        }
+
         async function copySanitizedReport() {
             if (!diagnosticData) {
                 alert('No diagnostic data available. Please wait for the diagnostics to complete.');
                 return;
             }
+            
+            // Sanitize the diagnostic data
+            const sanitizedData = sanitizeReport(diagnosticData);
 
             // Format the report for GitHub
             let formattedReport = '## Pulse Diagnostics Report\n\n';
             
             // Add basic info
-            formattedReport += `**Version:** ${diagnosticData.version || 'Unknown'}\n`;
-            formattedReport += `**Generated:** ${new Date(diagnosticData.timestamp).toLocaleString()}\n\n`;
+            formattedReport += `**Version:** ${sanitizedData.version || 'Unknown'}\n`;
+            formattedReport += `**Generated:** ${new Date(sanitizedData.timestamp).toLocaleString()}\n\n`;
             
             // Add recommendations summary
-            if (diagnosticData.recommendations && diagnosticData.recommendations.length > 0) {
+            if (sanitizedData.recommendations && sanitizedData.recommendations.length > 0) {
                 formattedReport += '### Issues Found\n\n';
                 
                 // Group by severity
-                const critical = diagnosticData.recommendations.filter(r => r.severity === 'critical');
-                const warnings = diagnosticData.recommendations.filter(r => r.severity === 'warning');
-                const info = diagnosticData.recommendations.filter(r => r.severity === 'info');
+                const critical = sanitizedData.recommendations.filter(r => r.severity === 'critical');
+                const warnings = sanitizedData.recommendations.filter(r => r.severity === 'warning');
+                const info = sanitizedData.recommendations.filter(r => r.severity === 'info');
                 
                 if (critical.length > 0) {
                     formattedReport += '#### Critical Issues\n';
@@ -454,7 +594,7 @@
             // Add collapsible full report
             formattedReport += '<details>\n<summary><b>Full Diagnostic Report (Click to expand)</b></summary>\n\n';
             formattedReport += '```json\n';
-            formattedReport += JSON.stringify(diagnosticData, null, 2);
+            formattedReport += JSON.stringify(sanitizedData, null, 2);
             formattedReport += '\n```\n\n</details>\n';
             
             // Copy to clipboard

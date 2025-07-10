@@ -258,7 +258,7 @@ function renderUnifiedTable() {
                     <th class="sortable p-1 px-2 whitespace-nowrap w-24" onclick="PulseApp.ui.unifiedBackups.sortTable('size')">
                         Size ${getSortIndicator('size')}
                     </th>
-                    <th class="sortable p-1 px-2 whitespace-nowrap" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
+                    <th class="sortable p-1 px-2 whitespace-nowrap w-20" onclick="PulseApp.ui.unifiedBackups.sortTable('backupType')">
                         Backup ${getSortIndicator('backupType')}
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap text-center w-12">
@@ -267,7 +267,7 @@ function renderUnifiedTable() {
                     <th class="p-1 px-2 whitespace-nowrap">
                         Location
                     </th>
-                    <th class="p-1 px-2 whitespace-nowrap w-[150px]">
+                    <th class="p-1 px-2 whitespace-nowrap w-[250px]">
                         Details
                     </th>
                 </tr>
@@ -325,7 +325,7 @@ function renderUnifiedTable() {
                     <td class="p-1 px-2 whitespace-nowrap">
                         ${getLocationDisplay(item)}
                     </td>
-                    <td class="p-1 px-2 w-[150px] max-w-[150px] truncate" title="${escapeHtml(getDetails(item))}">
+                    <td class="p-1 px-2 w-[250px] max-w-[250px] truncate" title="${escapeHtml(getDetails(item))}">
                         ${escapeHtml(getDetails(item))}
                     </td>
                 </tr>

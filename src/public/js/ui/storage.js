@@ -555,6 +555,8 @@ PulseApp.ui.storage = (() => {
             // Use requestAnimationFrame to ensure DOM is fully updated
             requestAnimationFrame(() => {
                 updateStorageCharts();
+                // Also check time range availability when switching to storage tab
+                updateTimeRangeAvailability();
             });
         }
     }
@@ -943,6 +945,7 @@ PulseApp.ui.storage = (() => {
         // Calculate data age in minutes
         const now = Date.now();
         const dataAgeMinutes = (now - oldestDataTime) / (1000 * 60);
+        console.log('[Storage] Data age in minutes:', dataAgeMinutes);
         
         // Check each time range
         const timeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
@@ -976,6 +979,20 @@ PulseApp.ui.storage = (() => {
                 label.title = '';
             }
         });
+        
+        // If current selection is disabled, switch to the smallest available range
+        const currentRadio = document.querySelector('input[name="storage-time-range"]:checked');
+        if (currentRadio && currentRadio.disabled) {
+            console.log('[Storage] Current time range is disabled, switching to available range');
+            const firstEnabledRadio = document.querySelector('input[name="storage-time-range"]:not(:disabled)');
+            if (firstEnabledRadio) {
+                console.log('[Storage] Switching to time range:', firstEnabledRadio.value);
+                firstEnabledRadio.checked = true;
+                firstEnabledRadio.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                console.log('[Storage] No enabled time ranges available');
+            }
+        }
     }
 
     function init() {
@@ -1002,6 +1019,13 @@ PulseApp.ui.storage = (() => {
                 }
             });
         });
+        
+        // Check time range availability on init if charts mode is already active
+        const storageContainer = document.getElementById('storage');
+        if (storageContainer && storageContainer.classList.contains('charts-mode')) {
+            // Small delay to ensure everything is loaded
+            setTimeout(() => updateTimeRangeAvailability(), 100);
+        }
     }
 
     return {
