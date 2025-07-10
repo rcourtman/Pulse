@@ -1193,7 +1193,8 @@ PulseApp.ui.settings = (() => {
                 showMessage(result.error || 'Connection test failed', 'error');
             }
         } catch (error) {
-            PulseApp.apiClient.handleError(error, 'Test connections', showMessage);
+            console.error('Test connections error:', error);
+            showMessage('Failed to test connections: ' + error.message, 'error');
         }
     }
 
@@ -1223,7 +1224,8 @@ PulseApp.ui.settings = (() => {
                 showMessage(result.error || 'Failed to save configuration', 'error');
             }
         } catch (error) {
-            PulseApp.apiClient.handleError(error, 'Save configuration', showMessage);
+            console.error('Save configuration error:', error);
+            showMessage('Failed to save configuration: ' + error.message, 'error');
         } finally {
             PulseApp.utils.resetButton(saveButton, buttonState);
         }
