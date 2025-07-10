@@ -385,14 +385,19 @@ class DiagnosticTool {
     getEnvironmentInfo() {
         const os = require('os');
         
+        const totalMemoryMB = Math.round(os.totalmem() / 1024 / 1024);
+        const freeMemoryMB = Math.round(os.freemem() / 1024 / 1024);
+        const usedMemoryMB = totalMemoryMB - freeMemoryMB;
+        
         const env = {
             nodeVersion: process.version,
             platform: process.platform,
             arch: process.arch,
             osRelease: os.release(),
             osType: os.type(),
-            totalMemory: Math.round(os.totalmem() / 1024 / 1024) + ' MB',
-            freeMemory: Math.round(os.freemem() / 1024 / 1024) + ' MB',
+            totalMemory: totalMemoryMB + ' MB',
+            freeMemory: freeMemoryMB + ' MB',
+            usedMemory: usedMemoryMB + ' MB',
             cpuCount: os.cpus().length,
             uptime: Math.round(process.uptime()) + ' seconds',
             dockerDetected: fs.existsSync('/.dockerenv') || process.env.container === 'docker',
