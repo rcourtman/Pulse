@@ -1078,6 +1078,13 @@
                     /* Use a color that visually matches gray-700/50 over gray-800 background */
                     background-color: rgb(43, 53, 68) !important; /* Between gray-800 and gray-700 */
                 }
+                /* Fix for threshold row sticky cell */
+                #main-table #threshold-slider-row td.sticky.left-0 {
+                    background-color: rgb(255, 255, 255) !important; /* white */
+                }
+                .dark #main-table #threshold-slider-row td.sticky.left-0 {
+                    background-color: rgb(31, 41, 55) !important; /* gray-800 */
+                }
             </style>
             <table id="main-table" class="w-full min-w-[1100px] table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
