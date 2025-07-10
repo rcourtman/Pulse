@@ -355,11 +355,11 @@ function createRateLimiter(preset = 'default', customOptions = {}) {
         },
         relaxed: {
             windowMs: 60000, // 1 minute
-            maxRequests: 100
+            maxRequests: 500  // Increased for rapid UI interactions
         },
         api: {
             windowMs: 60000, // 1 minute
-            maxRequests: 60,
+            maxRequests: 300, // Increased for better frontend experience
             skipSuccessfulRequests: false,
             skipFailedRequests: true
         },
