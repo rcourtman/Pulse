@@ -14,14 +14,6 @@ PulseApp.ui.alerts = (() => {
     let isSliderDragging = false; // Track if any slider is being dragged
 
     function init() {
-        // Check if we should show success message after page reload
-        if (sessionStorage.getItem('alertConfigSaved') === 'true') {
-            sessionStorage.removeItem('alertConfigSaved');
-            setTimeout(() => {
-                PulseApp.ui.toast?.success('Alert configuration saved');
-            }, 500); // Small delay to ensure toast system is ready
-        }
-        
         // Get DOM elements
         alertsToggle = document.getElementById('toggle-alerts-checkbox');
         globalAlertThresholds = document.getElementById('global-alert-thresholds-row');
@@ -1182,11 +1174,18 @@ PulseApp.ui.alerts = (() => {
             const result = await response.json();
             
             if (response.ok && result.success) {
-                // Set a flag to show success message after reload
-                sessionStorage.setItem('alertConfigSaved', 'true');
+                // Show success message
+                PulseApp.ui.toast?.success('Alert configuration saved');
                 
-                // Refresh the page immediately to reset all state cleanly
-                window.location.reload();
+                // Clear any unsaved changes indicator
+                const saveButton = document.getElementById('save-alert-config');
+                if (saveButton) {
+                    saveButton.textContent = 'Save Changes';
+                    saveButton.classList.remove('animate-pulse');
+                }
+                
+                // Update save message to indicate saved state
+                updateAlertSaveMessage();
             } else {
                 PulseApp.ui.toast?.error('Failed to save alert configuration');
                 console.warn('Failed to save alert configuration:', result.error);

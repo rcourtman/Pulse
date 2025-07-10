@@ -83,10 +83,6 @@ function loadPbsConfig(index = null) {
     const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
     const enabledVar = `PBS_ENABLED${suffix}`;
     const resilientDnsVar = `PBS_RESILIENT_DNS${suffix}`;
-    const namespaceVar = `PBS_NAMESPACE${suffix}`;
-    const namespaceAutoVar = `PBS_NAMESPACE_AUTO${suffix}`;
-    const namespaceIncludeVar = `PBS_NAMESPACE_INCLUDE${suffix}`;
-    const namespaceExcludeVar = `PBS_NAMESPACE_EXCLUDE${suffix}`;
 
     const pbsHostUrl = process.env[hostVar];
     if (!pbsHostUrl) {
@@ -122,8 +118,6 @@ function loadPbsConfig(index = null) {
                 port: process.env[portVar] || (pbsHostUrl && pbsHostUrl.includes('://') ? '' : '8007'),
                 tokenId: pbsTokenId,
                 tokenSecret: pbsTokenSecret,
-                namespace: process.env[namespaceVar] || '', // Default to root namespace if not specified
-                namespaces: process.env[namespaceVar] ? process.env[namespaceVar].split(',').map(ns => ns.trim()).filter(ns => ns !== undefined) : null, // Support comma-separated namespaces, null for auto-discovery
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
                 enabled: process.env[enabledVar] !== 'false',
                 useResilientDns: process.env[resilientDnsVar] === 'true'

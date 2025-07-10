@@ -135,8 +135,6 @@ class DiagnosticTool {
                     name: this.sanitizeUrl(pbs.name),
                     // Sanitize node_name
                     node_name: (pbs.node_name === 'NOT SET' || pbs.node_name === 'auto-discovered') ? pbs.node_name : `pbs-node-${index + 1}`,
-                    // Keep namespace if configured
-                    namespace: pbs.namespace || null,
                     // Remove potentially sensitive fields, keep only structure info
                     tokenConfigured: pbs.tokenConfigured,
                     selfSignedCerts: pbs.selfSignedCerts
@@ -175,8 +173,6 @@ class DiagnosticTool {
                     name: this.sanitizeUrl(perm.name),
                     // Sanitize node_name
                     node_name: (perm.node_name === 'NOT SET' || perm.node_name === 'auto-discovered') ? perm.node_name : `pbs-node-${index + 1}`,
-                    // Keep namespace if configured
-                    namespace: perm.namespace || null,
                     // Keep namespace test results
                     canListNamespaces: perm.canListNamespaces,
                     discoveredNamespaces: perm.discoveredNamespaces ? perm.discoveredNamespaces.length : 0,
@@ -329,6 +325,7 @@ class DiagnosticTool {
                     id: id,
                     name: clientObj.config?.name || id,
                     host: clientObj.config?.host,
+                    tokenId: clientObj.config?.tokenId,
                     canConnect: false,
                     canListNodes: false,
                     canListVMs: false,
@@ -543,8 +540,8 @@ class DiagnosticTool {
                     id: id,
                     name: clientObj.config?.name || id,
                     host: clientObj.config?.host,
+                    tokenId: clientObj.config?.tokenId,
                     node_name: clientObj.config?.nodeName || clientObj.config?.node_name || 'auto-discovered',
-                    namespace: clientObj.config?.namespace || null,
                     canConnect: false,
                     canListDatastores: false,
                     canListBackups: false,
@@ -590,18 +587,13 @@ class DiagnosticTool {
                                     // 404 is expected on older PBS versions without namespace support
                                 }
                                 
-                                // Test backup listing in configured namespace or root
+                                // Test backup listing in root namespace
                                 try {
                                     const groupsParams = {};
                                     const namespacesToTest = [];
                                     
                                     // Always test root namespace
                                     namespacesToTest.push({ ns: '', label: 'root' });
-                                    
-                                    // Test configured namespace if present
-                                    if (clientObj.config.namespace) {
-                                        namespacesToTest.push({ ns: clientObj.config.namespace, label: 'configured' });
-                                    }
                                     
                                     for (const nsTest of namespacesToTest) {
                                         try {
@@ -711,7 +703,6 @@ class DiagnosticTool {
                         name: clientObj.config.name || id,
                         port: clientObj.config.port || '8007',
                         node_name: nodeName || 'auto-discovered',
-                        namespace: clientObj.config.namespace || null,
                         tokenConfigured: !!clientObj.config.tokenId,
                         selfSignedCerts: clientObj.config.allowSelfSignedCerts || false
                     });
@@ -912,6 +903,35 @@ class DiagnosticTool {
     }
 
     generateRecommendations(report) {
+        // Check for root token usage (security concern)
+        if (report.permissions) {
+            // Check Proxmox root tokens
+            if (report.permissions.proxmox && Array.isArray(report.permissions.proxmox)) {
+                report.permissions.proxmox.forEach(perm => {
+                    if (perm.tokenId && perm.tokenId.startsWith('root@')) {
+                        report.recommendations.push({
+                            severity: 'warning',
+                            category: 'Security Best Practice',
+                            message: `Proxmox "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. For better security, create a dedicated monitoring user with only necessary permissions. See README "Security Best Practices" section for instructions on setting up non-root tokens.`
+                        });
+                    }
+                });
+            }
+            
+            // Check PBS root tokens
+            if (report.permissions.pbs && Array.isArray(report.permissions.pbs)) {
+                report.permissions.pbs.forEach(perm => {
+                    if (perm.tokenId && perm.tokenId.startsWith('root@')) {
+                        report.recommendations.push({
+                            severity: 'warning',
+                            category: 'Security Best Practice',
+                            message: `PBS "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. For better security, create a dedicated monitoring user with only necessary permissions. See README "Security Best Practices" section.`
+                        });
+                    }
+                });
+            }
+        }
+        
         // Check permission test results
         if (report.permissions) {
             // Check Proxmox permissions
@@ -968,7 +988,7 @@ class DiagnosticTool {
                                     report.recommendations.push({
                                         severity: 'critical',
                                         category: 'Proxmox Storage Permissions',
-                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery. Grant 'PVEDatastoreAdmin' role on '/storage' using: pveum acl modify /storage --tokens ${perm.id} --roles PVEDatastoreAdmin`
+                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery.\n\nMost likely cause: Token has privilege separation enabled (default) but permissions were set on the token instead of the user.\n\nTo fix:\n1. Check token's privsep setting: pveum user token list <username> --output-format json\n2. If privsep=1: pveum acl modify /storage --users <username> --roles PVEDatastoreAdmin\n3. If privsep=0: pveum acl modify /storage --tokens <token-id> --roles PVEDatastoreAdmin\n\nSee README "Storage Content Visibility" section for details.`
                                     });
                                 }
                             } else {
@@ -1025,26 +1045,6 @@ class DiagnosticTool {
                     
                     // Node name is now auto-discovered, no need to check for it
                     
-                    // Check namespace configuration and access
-                    if (perm.namespace && perm.namespaceAccess) {
-                        const configuredNsAccess = perm.namespaceAccess.configured;
-                        if (configuredNsAccess && !configuredNsAccess.accessible) {
-                            report.recommendations.push({
-                                severity: 'critical',
-                                category: 'PBS Namespace Access',
-                                message: `PBS "${perm.name}": Cannot access configured namespace '${perm.namespace}'. Error: ${configuredNsAccess.error}. Verify the namespace exists and the token has permission.`
-                            });
-                        }
-                    }
-                    
-                    // Check if namespaces are discovered but not configured
-                    if (perm.canListNamespaces && perm.discoveredNamespaces && perm.discoveredNamespaces.length > 0 && !perm.namespace) {
-                        report.recommendations.push({
-                            severity: 'info',
-                            category: 'PBS Namespace Configuration',
-                            message: `PBS "${perm.name}": Found ${perm.discoveredNamespaces.length} namespace(s) but none configured. Available namespaces: ${perm.discoveredNamespaces.slice(0, 5).join(', ')}${perm.discoveredNamespaces.length > 5 ? '...' : ''}. Consider adding PBS_NAMESPACE to target a specific namespace.`
-                        });
-                    }
                     
                     // Add success message for PBS with backup counts and namespace info
                     if (perm.canConnect && perm.canListDatastores && report.state && report.state.pbs && report.state.pbs.instanceDetails) {

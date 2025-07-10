@@ -5,6 +5,16 @@ const ValidationMiddleware = require('../middleware/validation');
 
 const router = express.Router();
 
+// Test route to verify router is working
+router.all('/test', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Alerts router test endpoint working',
+        method: req.method,
+        path: req.path
+    });
+});
+
 // Enhanced alerts endpoint with filtering
 router.get('/', ValidationMiddleware.validateQuery({
     fields: {
@@ -14,10 +24,12 @@ router.get('/', ValidationMiddleware.validateQuery({
     }
 }), (req, res) => {
     try {
+        // Use validatedQuery if available (when req.query is read-only), otherwise use req.query
+        const query = req.validatedQuery || req.query || {};
         const filters = {
-            group: req.query.group,
-            node: req.query.node,
-            acknowledged: req.query.acknowledged
+            group: query.group,
+            node: query.node,
+            acknowledged: query.acknowledged
         };
         
         // Get alert data with safe serialization
@@ -243,9 +255,9 @@ router.post('/test', async (req, res) => {
                 selectedVMs: selectedVMs || '[]'
             },
             guest: {
-                name: 'pihole',
-                vmid: '103',
-                node: 'pimox',
+                name: 'test-vm',
+                vmid: '100',
+                node: 'node1',
                 type: 'lxc',
                 endpointId: 'primary'
             },
@@ -571,9 +583,6 @@ router.get('/debug', (req, res) => {
 // Simple endpoint to get just the alert enabled/disabled status
 router.get('/status', (req, res) => {
     try {
-        const { loadConfiguration } = require('./configLoader');
-        const { endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration();
-        
         // Read the environment variables directly
         const alertStatus = {
             cpu: process.env.ALERT_CPU_ENABLED !== 'false',
@@ -589,12 +598,49 @@ router.get('/status', (req, res) => {
     }
 });
 
+// Test endpoint to debug the issue
+router.post('/config-debug', (req, res) => {
+    try {
+        res.json({ 
+            success: true, 
+            message: 'Debug endpoint working',
+            bodyReceived: !!req.body,
+            bodyType: typeof req.body,
+            bodyKeys: req.body ? Object.keys(req.body) : [],
+            stateManager: !!stateManager,
+            alertManager: !!(stateManager && stateManager.alertManager)
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            errorType: error.constructor.name
+        });
+    }
+});
+
 // Per-guest alert configuration endpoint
 router.post('/config', (req, res) => {
+    console.log('[API] /alerts/config endpoint called at', new Date().toISOString());
+    
+    // Wrap everything in try-catch to catch any error
     try {
         const alertConfig = req.body;
         
+        console.log('[API] Request body type:', typeof req.body);
+        console.log('[API] Request headers:', req.headers);
+        
+        if (!req.body) {
+            console.error('[API] No request body received');
+            return res.status(400).json({ 
+                success: false, 
+                error: 'No request body' 
+            });
+        }
+        
         console.log('[API] Received alert config:', JSON.stringify(alertConfig, null, 2));
+        console.log('[API] Alert config keys:', Object.keys(alertConfig));
+        console.log('[API] Type of alertConfig:', typeof alertConfig);
         console.log('[API] Node thresholds in request:', {
             globalNodeThresholds: alertConfig.globalNodeThresholds,
             nodeThresholds: alertConfig.nodeThresholds
@@ -620,6 +666,7 @@ router.post('/config', (req, res) => {
             nodeThresholds: alertConfig.nodeThresholds || {},
             alertLogic: alertConfig.alertLogic || 'and',
             duration: alertConfig.duration || 0,
+            autoResolve: alertConfig.autoResolve !== false,
             enabled: alertConfig.enabled !== false,
             notifications: alertConfig.notifications || {
                 dashboard: true,
@@ -632,7 +679,22 @@ router.post('/config', (req, res) => {
         };
         
         // Check if the rule already exists
-        const existingRule = stateManager.alertManager.alertRules.get('per-guest-alerts');
+        if (!stateManager || !stateManager.alertManager) {
+            console.error('[API] Alert manager not initialized:', {
+                stateManager: !!stateManager,
+                alertManager: stateManager ? !!stateManager.alertManager : 'N/A'
+            });
+            throw new Error('Alert manager not initialized');
+        }
+        
+        let allRules, existingRule;
+        try {
+            allRules = stateManager.alertManager.getRules();
+            existingRule = allRules.find(r => r.id === 'per-guest-alerts');
+        } catch (err) {
+            console.error('[API] Error getting rules:', err);
+            throw err;
+        }
         
         if (existingRule) {
             // Update existing rule
@@ -643,6 +705,7 @@ router.post('/config', (req, res) => {
                 nodeThresholds: rule.nodeThresholds,
                 alertLogic: rule.alertLogic,
                 duration: rule.duration,
+                autoResolve: rule.autoResolve,
                 notifications: rule.notifications,
                 emailCooldowns: rule.emailCooldowns,
                 webhookCooldowns: rule.webhookCooldowns,
@@ -679,18 +742,28 @@ router.post('/config', (req, res) => {
         }
         
     } catch (error) {
-        console.error('Error saving alert configuration:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Internal server error while saving alert configuration' 
-        });
+        console.error('[API] Error in /alerts/config:', error);
+        console.error('[API] Error type:', error.constructor.name);
+        console.error('[API] Error message:', error.message);
+        console.error('[API] Stack trace:', error.stack);
+        
+        // Make sure we haven't already sent a response
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                success: false, 
+                error: error.message || 'Internal server error while saving alert configuration' 
+            });
+        } else {
+            console.error('[API] Headers already sent, cannot send error response');
+        }
     }
 });
 
 // Get per-guest alert configuration endpoint
 router.get('/config', (req, res) => {
     try {
-        const existingRule = stateManager.alertManager.alertRules.get('per-guest-alerts');
+        const allRules = stateManager.alertManager.getRules();
+        const existingRule = allRules.find(r => r.id === 'per-guest-alerts');
         
         if (existingRule && existingRule.type === 'per_guest_thresholds') {
             res.json({

@@ -138,25 +138,6 @@ async function fallbackNamespaceDiscovery(client, datastoreName, config) {
             }
         }
         
-        // If user has configured specific namespaces to check, probe them
-        if (config.namespace) {
-            const namespacesToProbe = config.namespace.split(',').map(ns => ns.trim()).filter(ns => ns);
-            for (const ns of namespacesToProbe) {
-                try {
-                    const nsGroups = await client.get(`/admin/datastore/${datastoreName}/groups`, {
-                        params: { ns }
-                    });
-                    if (nsGroups.data?.data) {
-                        discoveredNamespaces.add(ns);
-                    }
-                } catch (error) {
-                    // Namespace doesn't exist or no access
-                    if (error.response?.status !== 404 && error.response?.status !== 403) {
-                        console.warn(`WARN: [PBS Namespace Discovery] Error probing namespace '${ns}': ${error.message}`);
-                    }
-                }
-            }
-        }
     } catch (error) {
         console.error(`ERROR: [PBS Namespace Discovery] Fallback discovery failed: ${error.message}`);
     }
@@ -182,13 +163,7 @@ async function fallbackNamespaceDiscovery(client, datastoreName, config) {
  * @returns {Promise<Array<string>>} Array of namespace names to query
  */
 async function getNamespacesToQuery(client, datastoreName, config) {
-    // If namespaces are explicitly configured, use them
-    if (config.namespaces && Array.isArray(config.namespaces) && config.namespaces.length > 0) {
-        console.log(`[PBS Namespace Discovery] Using explicitly configured namespaces for ${config.name}: ${config.namespaces.join(', ')}`);
-        return config.namespaces;
-    }
-    
-    // Otherwise, discover namespaces
+    // Always discover all namespaces automatically
     return discoverNamespaces(client, datastoreName, config);
 }
 

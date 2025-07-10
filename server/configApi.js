@@ -163,7 +163,11 @@ class ConfigApi {
             existingConfig.PBS_HOST = config.pbs.host;
             existingConfig.PBS_PORT = config.pbs.port || '8007';
             existingConfig.PBS_TOKEN_ID = config.pbs.tokenId;
-            existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
+            
+            // Only update PBS_TOKEN_SECRET if it's provided
+            if (config.pbs.tokenSecret) {
+                existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
+            }
             if (config.pbs.nodeName) {
                 existingConfig.PBS_NODE_NAME = config.pbs.nodeName;
             }
@@ -847,15 +851,7 @@ class ConfigApi {
         });
 
         // Save configuration
-        app.post('/api/config', 
-            ValidationMiddleware.validateBody({
-                fields: {
-                    proxmox: { type: 'object' },
-                    pbs: { type: 'object' },
-                    advanced: { type: 'object' }
-                }
-            }),
-            async (req, res) => {
+        app.post('/api/config', async (req, res) => {
             try {
                 const result = await this.saveConfig(req.body);
                 res.json({ success: true });
