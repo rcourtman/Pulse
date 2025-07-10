@@ -1138,30 +1138,71 @@ class DiagnosticTool {
     }
 
     generateRecommendations(report) {
-        // Check for root token usage (security concern)
+        // Check for overly permissive tokens and security concerns
         if (report.permissions) {
-            // Check Proxmox root tokens
+            // Check Proxmox tokens
             if (report.permissions.proxmox && Array.isArray(report.permissions.proxmox)) {
                 report.permissions.proxmox.forEach(perm => {
+                    // Check for root token usage
                     if (perm.tokenId && perm.tokenId.startsWith('root@')) {
                         report.recommendations.push({
                             severity: 'warning',
-                            category: 'Security Best Practice',
-                            message: `Proxmox "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. For better security, create a dedicated monitoring user with only necessary permissions. See README "Security Best Practices" section for instructions on setting up non-root tokens.`
+                            category: 'Security: Root Token',
+                            message: `Proxmox "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. Root tokens have full admin access to your entire Proxmox cluster.\n\nRecommended: Create a dedicated monitoring user with only necessary permissions:\n• PVEAuditor on '/' for basic monitoring\n• PVEDatastoreAdmin on '/storage' for backup visibility\n\nSee README "Security Best Practices" section for step-by-step instructions.`
+                        });
+                    }
+                    
+                    // Check if they have more permissions than needed
+                    // If they can access backups AND have all other permissions, they likely have admin rights
+                    if (perm.canConnect && perm.canListNodes && perm.canListVMs && 
+                        perm.canListContainers && perm.canGetNodeStats && 
+                        perm.canListStorage && perm.canAccessStorageBackups) {
+                        
+                        // Check if it's an admin token (has version info which requires Sys.Audit)
+                        if (perm.version && !perm.tokenId.startsWith('root@')) {
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Security: Permissions Review',
+                                message: `Proxmox "${perm.name}": Token appears to have full permissions. While Pulse requires PVEDatastoreAdmin for backup visibility (an unfortunate necessity), ensure your token doesn't have unnecessary admin rights like:\n• VM.Allocate (create/delete VMs)\n• Sys.Modify (modify system settings)\n• Permissions.Modify (change permissions)\n\nPulse only needs:\n• PVEAuditor role on '/' (read-only monitoring)\n• PVEDatastoreAdmin on '/storage' (required for backup visibility due to API limitations)`
+                            });
+                        }
+                    }
+                    
+                    // Explain the PVEDatastoreAdmin requirement if they're missing backup access
+                    if (perm.canListStorage && !perm.canAccessStorageBackups && 
+                        perm.storageBackupAccess && perm.storageBackupAccess.totalStoragesTested > 0) {
+                        // They already get a critical error, but add an explanation
+                        report.recommendations.push({
+                            severity: 'info',
+                            category: 'Permission Requirement Explanation',
+                            message: `Why PVEDatastoreAdmin is needed: Due to Proxmox API design, listing backup contents requires the Datastore.Allocate permission, which is only available in the PVEDatastoreAdmin role. While this role includes write permissions Pulse doesn't use (like creating backups), it's unfortunately the only way to view backup files via the API. This is a known limitation of the Proxmox permission system.`
                         });
                     }
                 });
             }
             
-            // Check PBS root tokens
+            // Check PBS tokens
             if (report.permissions.pbs && Array.isArray(report.permissions.pbs)) {
                 report.permissions.pbs.forEach(perm => {
+                    // Check for root token usage
                     if (perm.tokenId && perm.tokenId.startsWith('root@')) {
                         report.recommendations.push({
                             severity: 'warning',
-                            category: 'Security Best Practice',
-                            message: `PBS "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. For better security, create a dedicated monitoring user with only necessary permissions. See README "Security Best Practices" section.`
+                            category: 'Security: Root Token',
+                            message: `PBS "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. Root tokens have full admin access to your backup server.\n\nRecommended: Create a dedicated monitoring user with only Datastore.Audit permissions. See README "Security Best Practices" section.`
                         });
+                    }
+                    
+                    // PBS permissions are simpler - we only need Datastore.Audit
+                    if (perm.canConnect && perm.canListDatastores && perm.canListBackups) {
+                        // If they have full access but aren't root, suggest reviewing permissions
+                        if (!perm.tokenId.startsWith('root@') && perm.version) {
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Security: Permissions Review',
+                                message: `PBS "${perm.name}": Token has full access. Consider restricting to only Datastore.Audit permissions if this token has Admin role. Pulse only needs read access to monitor backups.`
+                            });
+                        }
                     }
                 });
             }
@@ -1472,6 +1513,40 @@ class DiagnosticTool {
             }
         }
 
+        // Add security summary if we have tokens configured
+        if (report.permissions && 
+            ((report.permissions.proxmox && report.permissions.proxmox.length > 0) || 
+             (report.permissions.pbs && report.permissions.pbs.length > 0))) {
+            
+            let hasRootTokens = false;
+            let hasOverlyPermissive = false;
+            
+            // Check for security issues
+            report.recommendations.forEach(rec => {
+                if (rec.category && rec.category.includes('Root Token')) hasRootTokens = true;
+                if (rec.category && rec.category.includes('Permissions Review')) hasOverlyPermissive = true;
+            });
+            
+            // Add a positive security message if tokens are well-configured
+            if (!hasRootTokens && !hasOverlyPermissive) {
+                // Check if any PVE tokens are non-root
+                const hasNonRootPve = report.permissions.proxmox?.some(p => 
+                    p.tokenId && !p.tokenId.startsWith('root@')
+                );
+                const hasNonRootPbs = report.permissions.pbs?.some(p => 
+                    p.tokenId && !p.tokenId.startsWith('root@')
+                );
+                
+                if (hasNonRootPve || hasNonRootPbs) {
+                    report.recommendations.push({
+                        severity: 'info',
+                        category: 'Security: Good Configuration',
+                        message: 'Your API tokens follow security best practices by using dedicated monitoring users instead of root tokens. This limits potential damage if tokens are compromised.'
+                    });
+                }
+            }
+        }
+        
         // Add success message if everything looks good
         if (report.recommendations.length === 0) {
             report.recommendations.push({
