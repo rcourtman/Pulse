@@ -91,7 +91,7 @@ const configApi = new ConfigApi();
 
 
 // --- Data Fetching (Imported) ---
-const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
+const { fetchDiscoveryData, fetchMetricsData, fetchStoppedGuestUptime } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
@@ -814,12 +814,14 @@ async function runMetricCycle() {
         console.warn("[Metrics Cycle] PVE API clients not initialized yet, skipping run.");
         return;
     }
-    // Use global state for all guests
+    // Use global state for running guests
     const { vms: currentVms, containers: currentContainers } = stateManager.getState();
+    const runningVms = currentVms.filter(vm => vm.status === 'running');
+    const runningContainers = currentContainers.filter(ct => ct.status === 'running');
     
-    if (currentVms.length > 0 || currentContainers.length > 0) {
-        // Use imported fetchMetricsData - fetch metrics for ALL VMs/containers to ensure accurate uptime
-        const fetchedMetrics = await fetchMetricsData(currentVms, currentContainers, currentApiClients);
+    if (runningVms.length > 0 || runningContainers.length > 0) {
+        // Use imported fetchMetricsData
+        const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, currentApiClients);
 
         const duration = Date.now() - startTime;
 
@@ -827,8 +829,21 @@ async function runMetricCycle() {
         if (fetchedMetrics && fetchedMetrics.length >= 0) { // Allow empty array to clear metrics
            stateManager.updateMetricsData(fetchedMetrics, duration, errors);
            
+           // Fetch uptime for stopped VMs to ensure accurate values
+           const stoppedVms = currentVms.filter(vm => vm.status !== 'running');
+           const stoppedContainers = currentContainers.filter(ct => ct.status !== 'running');
+           
+           let allMetrics = fetchedMetrics;
+           if (stoppedVms.length > 0 || stoppedContainers.length > 0) {
+               const stoppedMetrics = await fetchStoppedGuestUptime(stoppedVms, stoppedContainers, currentApiClients);
+               // Combine running and stopped metrics
+               allMetrics = [...fetchedMetrics, ...stoppedMetrics];
+               // Update state with all metrics
+               stateManager.updateMetricsData(allMetrics, duration, errors);
+           }
+           
            // Add metrics to history for charts
-           fetchedMetrics.forEach(metricData => {
+           allMetrics.forEach(metricData => {
                if (metricData && metricData.current) {
                    const guestId = `${metricData.endpointId}-${metricData.node}-${metricData.id}`;
                    metricsHistory.addMetricData(guestId, metricData.current);

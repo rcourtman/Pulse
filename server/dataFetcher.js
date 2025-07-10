@@ -1919,7 +1919,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     // Fetch snapshots for all VMs and containers, with better error handling
     const guestSnapshotPromises = [];
     
-    [...vms, ...containers].forEach(guest => {
+    [...runningVms, ...runningContainers].forEach(guest => {
         const endpointId = guest.endpointId;
         const nodeName = guest.node;
         const vmid = guest.vmid;
@@ -2026,18 +2026,18 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
 }
 
 /**
- * Fetches dynamic metric data for all PVE guests.
- * @param {Array} vms - Array of VM objects.
- * @param {Array} containers - Array of Container objects.
+ * Fetches dynamic metric data for running PVE guests.
+ * @param {Array} runningVms - Array of running VM objects.
+ * @param {Array} runningContainers - Array of running Container objects.
  * @param {Object} currentApiClients - Initialized PVE API clients.
  * @returns {Promise<Array>} - Array of metric data objects.
  */
-async function fetchMetricsData(vms, containers, currentApiClients) {
+async function fetchMetricsData(runningVms, runningContainers, currentApiClients) {
     const allMetrics = [];
     const metricPromises = [];
     const guestsByEndpointNode = {};
 
-    [...vms, ...containers].forEach(guest => {
+    [...runningVms, ...runningContainers].forEach(guest => {
         const { endpointId, node, vmid, type, name, agent } = guest; // Added 'agent'
         if (!guestsByEndpointNode[endpointId]) {
             guestsByEndpointNode[endpointId] = {};
@@ -2326,11 +2326,75 @@ async function fetchMetricsData(vms, containers, currentApiClients) {
         }
     });
 
-    const totalGuests = vms.length + containers.length;
+    const totalGuests = runningVms.length + runningContainers.length;
     const endpointCount = Object.keys(guestsByEndpointNode).length;
     console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
     console.log(`[DataFetcher] API call optimization: Using bulk endpoint reduced calls from ${totalGuests} to ${endpointCount} per cycle`);
     return allMetrics;
+}
+
+/**
+ * Fetches uptime for stopped VMs/containers to ensure accurate values.
+ * @param {Array} stoppedVms - Array of stopped VM objects.
+ * @param {Array} stoppedContainers - Array of stopped Container objects.
+ * @param {Object} currentApiClients - Initialized PVE API clients.
+ * @returns {Promise<Array>} - Array of uptime metric objects for stopped guests.
+ */
+async function fetchStoppedGuestUptime(stoppedVms, stoppedContainers, currentApiClients) {
+    const stoppedMetrics = [];
+    const uptimePromises = [];
+    
+    [...stoppedVms, ...stoppedContainers].forEach(guest => {
+        const { endpointId, node, vmid, type, name } = guest;
+        if (!currentApiClients[endpointId]) return;
+        
+        const { client: apiClient, config } = currentApiClients[endpointId];
+        const endpointName = config.name || endpointId;
+        
+        uptimePromises.push(
+            (async () => {
+                try {
+                    const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
+                    const statusResponse = await apiClient.get(`/nodes/${node}/${pathPrefix}/${vmid}/status/current`);
+                    const statusData = statusResponse?.data?.data || {};
+                    
+                    // Create a minimal metric object with just uptime info
+                    const metricData = {
+                        id: vmid,
+                        guestName: name || 'unknown',
+                        node: node,
+                        type: type,
+                        endpointId: endpointId,
+                        endpointName: endpointName,
+                        data: [], // No RRD data for stopped VMs
+                        current: {
+                            cpu: 0,
+                            cpus: statusData.maxcpu || 1,
+                            mem: 0,
+                            maxmem: statusData.maxmem || 0,
+                            disk: statusData.disk || 0,
+                            maxdisk: statusData.maxdisk || 0,
+                            netin: 0,
+                            netout: 0,
+                            diskread: 0,
+                            diskwrite: 0,
+                            uptime: statusData.uptime || 0,
+                            status: statusData.status || 'stopped',
+                            qmpstatus: statusData.qmpstatus || statusData.status || 'stopped',
+                            agent: 0
+                        }
+                    };
+                    
+                    stoppedMetrics.push(metricData);
+                } catch (err) {
+                    // Silently ignore errors for stopped VMs
+                }
+            })()
+        );
+    });
+    
+    await Promise.allSettled(uptimePromises);
+    return stoppedMetrics;
 }
 
 /**
@@ -3002,6 +3066,7 @@ module.exports = {
     fetchDiscoveryData,
     fetchPbsData, // Keep exporting the real one
     fetchMetricsData,
+    fetchStoppedGuestUptime,
     clearCaches, // Export for testing
     processBackupDataWithCoordinator, // Export new function
     // Potentially export PBS helpers if needed elsewhere, but keep internal if not
