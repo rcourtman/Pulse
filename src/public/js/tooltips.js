@@ -211,10 +211,11 @@ PulseApp.tooltips = (() => {
         tooltipElement.classList.remove('hidden', 'opacity-0');
         tooltipElement.classList.add('opacity-100');
         
-        // Force visibility
-        tooltipElement.style.display = 'block';
-        tooltipElement.style.visibility = 'visible';
-        tooltipElement.style.opacity = '1';
+        // Force visibility with !important to override any inherited styles
+        tooltipElement.style.setProperty('display', 'block', 'important');
+        tooltipElement.style.setProperty('visibility', 'visible', 'important');
+        tooltipElement.style.setProperty('opacity', '1', 'important');
+        tooltipElement.style.setProperty('z-index', '9999', 'important');
         
         // Set content and position AFTER making visible
         tooltipElement.innerHTML = content;
@@ -226,10 +227,11 @@ PulseApp.tooltips = (() => {
         if (tooltipElement) {
             tooltipElement.classList.add('hidden', 'opacity-0');
             tooltipElement.classList.remove('opacity-100');
-            // Remove inline styles to let CSS classes handle visibility
-            tooltipElement.style.display = '';
-            tooltipElement.style.visibility = '';
-            tooltipElement.style.opacity = '';
+            // Remove all inline styles to let CSS classes handle visibility
+            tooltipElement.style.removeProperty('display');
+            tooltipElement.style.removeProperty('visibility');
+            tooltipElement.style.removeProperty('opacity');
+            tooltipElement.style.removeProperty('z-index');
             tooltipElement.removeAttribute('data-programmatic');
         }
     }
