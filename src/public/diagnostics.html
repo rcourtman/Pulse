@@ -51,6 +51,12 @@
                         <p><strong>Pulse Version:</strong> <span id="version"></span></p>
                         <p><strong>Report Generated:</strong> <span id="timestamp"></span></p>
                     </div>
+                    <div class="mt-4">
+                        <button onclick="copySanitizedReport()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mr-2">
+                            Copy Sanitized Report
+                        </button>
+                        <span id="copy-feedback" class="hidden text-green-600 font-semibold">✓ Report copied to clipboard!</span>
+                    </div>
                 </div>
                 
                 <div class="mb-8">
@@ -75,6 +81,8 @@
     </div>
 
     <script>
+        let diagnosticData = null; // Store the diagnostic data globally for copy function
+        
         async function runDiagnostics() {
             try {
                 const response = await fetch('/api/diagnostics');
@@ -82,6 +90,7 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
+                diagnosticData = data; // Store for copy function
                 displayResults(data);
             } catch (error) {
                 showError(error.message);
@@ -185,6 +194,97 @@
 
         function toggleFullReport() {
             document.getElementById('full-report').classList.toggle('hidden');
+        }
+
+        async function copySanitizedReport() {
+            if (!diagnosticData) {
+                alert('No diagnostic data available. Please wait for the diagnostics to complete.');
+                return;
+            }
+
+            // Format the report for GitHub
+            let formattedReport = '## Pulse Diagnostics Report\n\n';
+            
+            // Add basic info
+            formattedReport += `**Version:** ${diagnosticData.version || 'Unknown'}\n`;
+            formattedReport += `**Generated:** ${new Date(diagnosticData.timestamp).toLocaleString()}\n\n`;
+            
+            // Add recommendations summary
+            if (diagnosticData.recommendations && diagnosticData.recommendations.length > 0) {
+                formattedReport += '### Issues Found\n\n';
+                
+                // Group by severity
+                const critical = diagnosticData.recommendations.filter(r => r.severity === 'critical');
+                const warnings = diagnosticData.recommendations.filter(r => r.severity === 'warning');
+                const info = diagnosticData.recommendations.filter(r => r.severity === 'info');
+                
+                if (critical.length > 0) {
+                    formattedReport += '#### Critical Issues\n';
+                    critical.forEach(rec => {
+                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
+                    });
+                    formattedReport += '\n';
+                }
+                
+                if (warnings.length > 0) {
+                    formattedReport += '#### Warnings\n';
+                    warnings.forEach(rec => {
+                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
+                    });
+                    formattedReport += '\n';
+                }
+                
+                if (info.length > 0) {
+                    formattedReport += '#### Information\n';
+                    info.forEach(rec => {
+                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
+                    });
+                    formattedReport += '\n';
+                }
+            } else {
+                formattedReport += '### ✅ No Issues Found\n\n';
+            }
+            
+            // Add collapsible full report
+            formattedReport += '<details>\n<summary><b>Full Diagnostic Report (Click to expand)</b></summary>\n\n';
+            formattedReport += '```json\n';
+            formattedReport += JSON.stringify(diagnosticData, null, 2);
+            formattedReport += '\n```\n\n</details>\n';
+            
+            // Copy to clipboard
+            try {
+                await navigator.clipboard.writeText(formattedReport);
+                
+                // Show feedback
+                const feedback = document.getElementById('copy-feedback');
+                feedback.classList.remove('hidden');
+                setTimeout(() => {
+                    feedback.classList.add('hidden');
+                }, 3000);
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = formattedReport;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    // Show feedback
+                    const feedback = document.getElementById('copy-feedback');
+                    feedback.classList.remove('hidden');
+                    setTimeout(() => {
+                        feedback.classList.add('hidden');
+                    }, 3000);
+                } catch (err) {
+                    alert('Failed to copy report to clipboard. Please try selecting and copying manually.');
+                }
+                
+                document.body.removeChild(textArea);
+            }
         }
 
         // Run diagnostics on page load
