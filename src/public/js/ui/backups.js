@@ -40,6 +40,8 @@ function initializeUnifiedBackups() {
                 
                 if (!isTyping && document.getElementById('unified').style.display !== 'none') {
                     searchInput.focus();
+                    searchInput.value = e.key; // Set the typed character immediately
+                    e.preventDefault(); // Prevent the character from being typed twice
                 }
             }
         });
