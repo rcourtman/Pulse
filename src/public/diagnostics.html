@@ -12,34 +12,29 @@
             max-width: 100%;
         }
         .recommendation {
-            margin-bottom: 1rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
         }
         .severity-critical { 
             background-color: #fef2f2; 
-            border: 2px solid #dc2626;
-            border-left-width: 6px;
+            border: 1px solid #dc2626;
+            border-left-width: 4px;
         }
         .severity-warning { 
             background-color: #fffbeb; 
-            border: 2px solid #f59e0b;
-            border-left-width: 6px;
+            border: 1px solid #f59e0b;
+            border-left-width: 4px;
         }
         .severity-info { 
             background-color: #f0f9ff; 
-            border: 2px solid #3b82f6;
-            border-left-width: 6px;
+            border: 1px solid #3b82f6;
+            border-left-width: 4px;
         }
         .severity-success {
             background-color: #f0fdf4;
-            border: 2px solid #16a34a;
-            border-left-width: 6px;
-        }
-        .severity-icon {
-            font-size: 1.5rem;
-            margin-right: 0.5rem;
-            vertical-align: middle;
+            border: 1px solid #16a34a;
+            border-left-width: 4px;
         }
     </style>
 </head>
@@ -228,17 +223,17 @@
                 const info = data.recommendations.filter(r => r.severity === 'info');
                 
                 // Create summary
-                let summaryHtml = '<div class="mb-6 p-4 bg-gray-100 rounded">';
+                let summaryHtml = '<div class="mb-4 p-3 bg-gray-100 rounded">';
                 summaryHtml += '<h3 class="font-semibold mb-2">Summary</h3>';
-                summaryHtml += '<div class="flex gap-6">';
+                summaryHtml += '<div class="flex gap-6 text-sm">';
                 if (critical.length > 0) {
-                    summaryHtml += `<span class="text-red-600 font-semibold">❌ ${critical.length} Critical Issue${critical.length > 1 ? 's' : ''}</span>`;
+                    summaryHtml += `<span class="text-red-600 font-semibold">❌ ${critical.length} Critical</span>`;
                 }
                 if (warnings.length > 0) {
                     summaryHtml += `<span class="text-yellow-600 font-semibold">⚠️ ${warnings.length} Warning${warnings.length > 1 ? 's' : ''}</span>`;
                 }
                 if (info.length > 0) {
-                    summaryHtml += `<span class="text-blue-600 font-semibold">ℹ️ ${info.length} Info Message${info.length > 1 ? 's' : ''}</span>`;
+                    summaryHtml += `<span class="text-blue-600 font-semibold">ℹ️ ${info.length} Info</span>`;
                 }
                 summaryHtml += '</div></div>';
                 
@@ -248,14 +243,12 @@
                 // Critical issues first
                 if (critical.length > 0) {
                     critical.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        const formattedMessage = rec.message.replace(/\n/g, ' ');
                         recsHtml += `
                             <div class="recommendation severity-critical">
-                                <h3 class="font-semibold text-lg mb-2">
-                                    <span class="severity-icon">❌</span>
-                                    <span class="text-red-700">CRITICAL:</span> ${rec.category}
-                                </h3>
-                                <div class="ml-8">${formattedMessage}</div>
+                                <div class="text-sm">
+                                    <span class="font-semibold">❌ CRITICAL: ${rec.category}</span> - ${formattedMessage}
+                                </div>
                             </div>
                         `;
                     });
@@ -264,14 +257,12 @@
                 // Warnings
                 if (warnings.length > 0) {
                     warnings.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        const formattedMessage = rec.message.replace(/\n/g, ' ');
                         recsHtml += `
                             <div class="recommendation severity-warning">
-                                <h3 class="font-semibold text-lg mb-2">
-                                    <span class="severity-icon">⚠️</span>
-                                    <span class="text-yellow-700">WARNING:</span> ${rec.category}
-                                </h3>
-                                <div class="ml-8">${formattedMessage}</div>
+                                <div class="text-sm">
+                                    <span class="font-semibold">⚠️ WARNING: ${rec.category}</span> - ${formattedMessage}
+                                </div>
                             </div>
                         `;
                     });
@@ -280,7 +271,7 @@
                 // Info messages (these are often "everything is good" messages)
                 if (info.length > 0) {
                     info.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        const formattedMessage = rec.message.replace(/\n/g, ' ');
                         // Check if it's a success/good message
                         const isSuccess = rec.message.includes('successfully') || 
                                         rec.message.includes('correctly configured') || 
@@ -289,11 +280,9 @@
                         
                         recsHtml += `
                             <div class="recommendation ${isSuccess ? 'severity-success' : 'severity-info'}">
-                                <h3 class="font-semibold text-lg mb-2">
-                                    <span class="severity-icon">${isSuccess ? '✅' : 'ℹ️'}</span>
-                                    <span class="${isSuccess ? 'text-green-700' : 'text-blue-700'}">${isSuccess ? 'OK' : 'INFO'}:</span> ${rec.category}
-                                </h3>
-                                <div class="ml-8">${formattedMessage}</div>
+                                <div class="text-sm">
+                                    <span class="font-semibold">${isSuccess ? '✅' : 'ℹ️'} ${isSuccess ? 'OK' : 'INFO'}: ${rec.category}</span> - ${formattedMessage}
+                                </div>
                             </div>
                         `;
                     });
@@ -301,15 +290,7 @@
                 
                 recsContainer.innerHTML = summaryHtml + recsHtml;
             } else {
-                recsContainer.innerHTML = `
-                    <div class="recommendation severity-success">
-                        <h3 class="font-semibold text-lg">
-                            <span class="severity-icon">✅</span>
-                            <span class="text-green-700">All Good!</span>
-                        </h3>
-                        <div class="ml-8">No issues found. Configuration appears to be correct.</div>
-                    </div>
-                `;
+                recsContainer.innerHTML = '<p class="text-gray-600">No issues found</p>';
             }
             
             // Permissions
