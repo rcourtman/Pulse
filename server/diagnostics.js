@@ -727,11 +727,11 @@ class DiagnosticTool {
                                                             storage: storage.storage,
                                                             type: storage.type,
                                                             accessible: false,
-                                                            error: is403 ? 'Permission denied (403) - needs PVEDatastoreAdmin role' : storageError.message
+                                                            error: is403 ? 'Permission denied (403) - needs Datastore.Allocate permission' : storageError.message
                                                         });
                                                         
                                                         if (is403) {
-                                                            permCheck.errors.push(`Storage ${storage.storage} on ${node.node}: Permission denied accessing backup content. Token needs 'PVEDatastoreAdmin' role on '/storage'.`);
+                                                            permCheck.errors.push(`Storage ${storage.storage} on ${node.node}: Permission denied accessing backup content. The Proxmox API requires 'Datastore.Allocate' permission to list storage contents.`);
                                                         } else {
                                                             permCheck.errors.push(`Storage ${storage.storage} on ${node.node}: ${storageError.message}`);
                                                         }
@@ -1163,7 +1163,7 @@ class DiagnosticTool {
                             report.recommendations.push({
                                 severity: 'info',
                                 category: 'Security: Permissions Review',
-                                message: `Proxmox "${perm.name}": Token appears to have full permissions. While Pulse requires PVEDatastoreAdmin for backup visibility (an unfortunate necessity), ensure your token doesn't have unnecessary admin rights like:\n• VM.Allocate (create/delete VMs)\n• Sys.Modify (modify system settings)\n• Permissions.Modify (change permissions)\n\nPulse only needs:\n• PVEAuditor role on '/' (read-only monitoring)\n• PVEDatastoreAdmin on '/storage' (required for backup visibility due to API limitations)`
+                                message: `Proxmox "${perm.name}": Token appears to have full permissions. While Pulse requires PVEDatastoreAdmin for backup visibility (an unfortunate necessity), ensure your token doesn't have unnecessary admin rights like:\n• VM.Allocate (create/delete VMs)\n• Sys.Modify (modify system settings)\n• Permissions.Modify (change permissions)\n\nPulse requires:\n• PVEAuditor role on '/' (provides Sys.Audit, VM.Audit, Datastore.Audit, Pool.Audit, SDN.Audit)\n• PVEDatastoreAdmin on '/storage' (provides Datastore.Allocate needed for listing backup files)`
                             });
                         }
                     }
@@ -1175,7 +1175,7 @@ class DiagnosticTool {
                         report.recommendations.push({
                             severity: 'info',
                             category: 'Permission Requirement Explanation',
-                            message: `Why PVEDatastoreAdmin is needed: Due to Proxmox API design, listing backup contents requires the Datastore.Allocate permission, which is only available in the PVEDatastoreAdmin role. While this role includes write permissions Pulse doesn't use (like creating backups), it's unfortunately the only way to view backup files via the API. This is a known limitation of the Proxmox permission system.`
+                            message: `Why PVEDatastoreAdmin is needed: The Proxmox API endpoint /nodes/{node}/storage/{storage}/content requires the 'Datastore.Allocate' permission to list backup files. This permission is only available in the PVEDatastoreAdmin or PVEAdmin roles. While PVEDatastoreAdmin includes write permissions that Pulse doesn't use, it's the least privileged role that can view storage contents via the API. This is a documented limitation of the Proxmox API permission model.`
                         });
                     }
                 });
@@ -1225,35 +1225,35 @@ class DiagnosticTool {
                             report.recommendations.push({
                                 severity: 'critical',
                                 category: 'Proxmox Permissions',
-                                message: `Proxmox "${perm.name}": Token cannot list nodes. Ensure your API token has the 'Sys.Audit' permission on '/'.`
+                                message: `Proxmox "${perm.name}": Token cannot list nodes. The PVEAuditor role on '/' (which includes Sys.Audit permission) is recommended for basic monitoring.`
                             });
                         }
                         if (!perm.canListVMs) {
                             report.recommendations.push({
                                 severity: 'critical',
                                 category: 'Proxmox Permissions', 
-                                message: `Proxmox "${perm.name}": Token cannot list VMs. Ensure your API token has the 'VM.Audit' permission on '/'.`
+                                message: `Proxmox "${perm.name}": Token cannot list VMs. The PVEAuditor role on '/' (which includes VM.Audit permission) is recommended for basic monitoring.`
                             });
                         }
                         if (!perm.canListContainers) {
                             report.recommendations.push({
                                 severity: 'critical',
                                 category: 'Proxmox Permissions',
-                                message: `Proxmox "${perm.name}": Token cannot list containers. Ensure your API token has the 'VM.Audit' permission on '/'.`
+                                message: `Proxmox "${perm.name}": Token cannot list containers. The PVEAuditor role on '/' (which includes VM.Audit permission) is recommended for basic monitoring.`
                             });
                         }
                         if (!perm.canGetNodeStats) {
                             report.recommendations.push({
                                 severity: 'warning',
                                 category: 'Proxmox Permissions',
-                                message: `Proxmox "${perm.name}": Token cannot get node statistics. This may affect metrics collection. Ensure your API token has the 'Sys.Audit' permission on '/'.`
+                                message: `Proxmox "${perm.name}": Token cannot get node statistics. This may affect metrics collection. The PVEAuditor role includes the necessary permissions.`
                             });
                         }
                         if (!perm.canListStorage) {
                             report.recommendations.push({
                                 severity: 'warning',
                                 category: 'Proxmox Permissions',
-                                message: `Proxmox "${perm.name}": Token cannot list storage. This may affect backup discovery. Ensure your API token has the 'Sys.Audit' permission on '/'.`
+                                message: `Proxmox "${perm.name}": Token cannot list storage. This may affect backup discovery. The PVEAuditor role includes the necessary permissions.`
                             });
                         }
                         if (perm.canListStorage && !perm.canAccessStorageBackups) {
@@ -1264,7 +1264,7 @@ class DiagnosticTool {
                                     report.recommendations.push({
                                         severity: 'critical',
                                         category: 'Proxmox Storage Permissions',
-                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery.\n\nMost likely cause: Token has privilege separation enabled (default) but permissions were set on the token instead of the user.\n\nTo fix:\n1. Check token's privsep setting: pveum user token list <username> --output-format json\n2. If privsep=1: pveum acl modify /storage --users <username> --roles PVEDatastoreAdmin\n3. If privsep=0: pveum acl modify /storage --tokens <token-id> --roles PVEDatastoreAdmin\n\nSee README "Storage Content Visibility" section for details.`
+                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery.\n\nThe Proxmox API requires 'Datastore.Allocate' permission to list storage contents via the API. This permission is included in the PVEDatastoreAdmin role.\n\nMost likely cause: Token has privilege separation enabled (default) but permissions were set on the token instead of the user.\n\nTo fix:\n1. Check token's privsep setting: pveum user token list <username> --output-format json\n2. If privsep=1: pveum acl modify /storage --users <username> --roles PVEDatastoreAdmin\n3. If privsep=0: pveum acl modify /storage --tokens <token-id> --roles PVEDatastoreAdmin\n\nSee README "Storage Content Visibility" section for details.`
                                     });
                                 }
                             } else {
@@ -1307,14 +1307,14 @@ class DiagnosticTool {
                             report.recommendations.push({
                                 severity: 'critical',
                                 category: 'PBS Permissions',
-                                message: `PBS "${perm.name}": Token cannot list datastores. Ensure your API token has the 'Datastore.Audit' permission.`
+                                message: `PBS "${perm.name}": Token cannot list datastores. Grant 'Datastore.Audit' permission on '/' or specific datastore paths. Note: PBS tokens do NOT inherit permissions from users - you must explicitly grant permissions to the token using --auth-id 'user@realm!token'.`
                             });
                         }
                         if (!perm.canListBackups && perm.canListDatastores) {
                             report.recommendations.push({
                                 severity: 'warning',
                                 category: 'PBS Permissions',
-                                message: `PBS "${perm.name}": Token can list datastores but not backup snapshots. This may affect backup overview functionality.`
+                                message: `PBS "${perm.name}": Token can list datastores but not backup snapshots. Ensure the token has 'Datastore.Audit' permission on the specific datastores, not just on '/'.`
                             });
                         }
                     }

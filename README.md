@@ -571,8 +571,8 @@ If monitoring PBS, create a token within the PBS interface.
     <details>
     <summary>Permissions included in PVEAuditor (Click to Expand)</summary>
     - `Datastore.Audit`
-    - `Permissions.Read` (implicitly included)
     - `Pool.Audit`
+    - `SDN.Audit`
     - `Sys.Audit`
     - `VM.Audit`
     </details>
