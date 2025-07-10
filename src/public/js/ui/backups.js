@@ -23,6 +23,7 @@ function initializeUnifiedBackups() {
     unified.mounted = true;
     
     setupEventListeners();
+    initializeBackupFrequencyChart();
     // Keyboard handlers
     const searchInput = document.getElementById('unified-search');
     if (searchInput) {
@@ -157,6 +158,13 @@ function applyFilters() {
     const allData = normalizeBackupData();
     
     unified.filteredData = allData.filter(item => {
+        // Date range filter (from chart selection)
+        if (selectedDateRange) {
+            if (item.backupTime < selectedDateRange.start || item.backupTime > selectedDateRange.end) {
+                return false;
+            }
+        }
+        
         // Search filter
         if (searchTerm) {
             const searchFields = [
@@ -610,6 +618,7 @@ function setupEventListeners() {
         radio.addEventListener('change', () => {
             applyFilters();
             renderUnifiedTable();
+            updateBackupFrequencyChart();
         });
     });
     
@@ -618,6 +627,7 @@ function setupEventListeners() {
         radio.addEventListener('change', () => {
             applyFilters();
             renderUnifiedTable();
+            updateBackupFrequencyChart();
         });
     });
     
@@ -641,11 +651,25 @@ function resetFilters() {
     unified.sortKey = 'backupTime';
     unified.sortDirection = 'desc';
     
+    // Clear date range filter
+    selectedDateRange = null;
+    const dateRangeElement = document.getElementById('backup-chart-date-range');
+    if (dateRangeElement) {
+        dateRangeElement.textContent = 'Last 30 days';
+    }
+    
+    // Hide clear filter button
+    const clearButton = document.getElementById('clear-date-filter');
+    if (clearButton) {
+        clearButton.classList.add('hidden');
+    }
+    
     // Update sort state
     PulseApp.state.setSortState('unified', 'backupTime', 'desc');
     
     applyFilters();
     renderUnifiedTable();
+    updateBackupFrequencyChart();
 }
 
 async function fetchAllBackupData() {
@@ -707,6 +731,7 @@ function updateUnifiedBackups() {
     
     applyFilters();
     renderUnifiedTable();
+    updateBackupFrequencyChart();
 }
 
 async function updateUnifiedBackupsInfo() {
@@ -715,6 +740,374 @@ async function updateUnifiedBackupsInfo() {
 
 function cleanupUnifiedBackups() {
     unified.mounted = false;
+}
+
+// Backup Frequency Chart Functions
+let selectedDateRange = null; // Store selected date range for filtering
+
+function initializeBackupFrequencyChart() {
+    const chartContainer = document.getElementById('backup-frequency-chart');
+    if (!chartContainer) return;
+    
+    // Create SVG element for the chart
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.setAttribute('class', 'backup-frequency-svg');
+    chartContainer.innerHTML = '';
+    chartContainer.appendChild(svg);
+    
+    // Setup clear date filter button
+    const clearButton = document.getElementById('clear-date-filter');
+    if (clearButton) {
+        clearButton.addEventListener('click', () => {
+            clearDateFilter();
+        });
+    }
+}
+
+function updateBackupFrequencyChart() {
+    const chartContainer = document.getElementById('backup-frequency-chart');
+    if (!chartContainer || !unified.mounted) return;
+    
+    // Get filters from radio buttons
+    const typeFilter = document.querySelector('input[name="unified-type-filter"]:checked');
+    const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
+    const selectedType = typeFilter?.value || 'all';
+    const selectedBackupType = backupTypeFilter?.value || 'all';
+    
+    // Get all backup data and apply type filters
+    let allData = normalizeBackupData();
+    
+    // Apply type filter (VM/LXC)
+    if (selectedType !== 'all') {
+        allData = allData.filter(item => item.type === selectedType);
+    }
+    
+    // Apply backup type filter
+    if (selectedBackupType !== 'all') {
+        allData = allData.filter(item => item.backupType === selectedBackupType);
+    }
+    
+    // Calculate backup frequency per day
+    const backupsByDate = {};
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    // Initialize all days in the range with 0 backups
+    for (let d = new Date(thirtyDaysAgo); d <= now; d.setDate(d.getDate() + 1)) {
+        const dateKey = d.toISOString().split('T')[0];
+        backupsByDate[dateKey] = {
+            total: 0,
+            snapshot: 0,
+            local: 0,
+            remote: 0,
+            date: new Date(d)
+        };
+    }
+    
+    // Count backups per day
+    allData.forEach(backup => {
+        const date = new Date(backup.backupTime * 1000);
+        const dateKey = date.toISOString().split('T')[0];
+        
+        if (backupsByDate[dateKey]) {
+            backupsByDate[dateKey].total++;
+            backupsByDate[dateKey][backup.backupType]++;
+        }
+    });
+    
+    // Convert to array and sort by date
+    const chartData = Object.entries(backupsByDate)
+        .map(([date, data]) => ({ date, ...data }))
+        .sort((a, b) => a.date - b.date);
+    
+    renderBackupFrequencyChart(chartData);
+}
+
+function renderBackupFrequencyChart(data) {
+    const svg = document.querySelector('.backup-frequency-svg');
+    if (!svg) return;
+    
+    // Clear existing content
+    svg.innerHTML = '';
+    
+    // Chart dimensions
+    const containerRect = svg.getBoundingClientRect();
+    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
+    const width = containerRect.width - margin.left - margin.right;
+    const height = 128 - margin.top - margin.bottom;
+    
+    svg.setAttribute('viewBox', `0 0 ${containerRect.width} 128`);
+    
+    // Create main group
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${margin.left},${margin.top})`);
+    svg.appendChild(g);
+    
+    // Calculate scales
+    const maxBackups = Math.max(...data.map(d => d.total), 1);
+    const barWidth = Math.max(1, (width / data.length) - 2);
+    const xScale = width / data.length;
+    const yScale = height / maxBackups;
+    
+    // Add grid lines
+    const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    gridGroup.setAttribute('class', 'grid-lines');
+    g.appendChild(gridGroup);
+    
+    // Y-axis grid lines
+    const gridCount = 5;
+    for (let i = 0; i <= gridCount; i++) {
+        const y = height - (i * height / gridCount);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', 0);
+        line.setAttribute('y1', y);
+        line.setAttribute('x2', width);
+        line.setAttribute('y2', y);
+        line.setAttribute('stroke', 'currentColor');
+        line.setAttribute('stroke-opacity', '0.1');
+        line.setAttribute('class', 'text-gray-300 dark:text-gray-600');
+        gridGroup.appendChild(line);
+        
+        // Add labels
+        const value = Math.round(i * maxBackups / gridCount);
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', -5);
+        text.setAttribute('y', y + 3);
+        text.setAttribute('text-anchor', 'end');
+        text.setAttribute('class', 'text-[10px] fill-gray-500 dark:fill-gray-400');
+        text.textContent = value;
+        g.appendChild(text);
+    }
+    
+    // Add bars
+    const barsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    barsGroup.setAttribute('class', 'bars');
+    g.appendChild(barsGroup);
+    
+    data.forEach((d, i) => {
+        const barHeight = d.total * yScale;
+        const x = i * xScale + (xScale - barWidth) / 2;
+        const y = height - barHeight;
+        
+        // Create bar group
+        const barGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        barGroup.setAttribute('class', 'bar-group');
+        barGroup.style.cursor = 'pointer';
+        
+        // Background rect for click area
+        const clickRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        clickRect.setAttribute('x', i * xScale);
+        clickRect.setAttribute('y', 0);
+        clickRect.setAttribute('width', xScale);
+        clickRect.setAttribute('height', height);
+        clickRect.setAttribute('fill', 'transparent');
+        barGroup.appendChild(clickRect);
+        
+        // Main bar
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', x);
+        rect.setAttribute('y', y);
+        rect.setAttribute('width', barWidth);
+        rect.setAttribute('height', barHeight);
+        rect.setAttribute('rx', '2');
+        rect.setAttribute('class', 'backup-bar');
+        rect.setAttribute('data-date', d.date.toISOString().split('T')[0]);
+        
+        // Color based on backup count
+        let barColor;
+        if (d.total === 0) {
+            barColor = '#e5e7eb'; // gray-200
+        } else if (d.total <= 5) {
+            barColor = '#60a5fa'; // blue-400
+        } else if (d.total <= 10) {
+            barColor = '#34d399'; // emerald-400
+        } else {
+            barColor = '#a78bfa'; // violet-400
+        }
+        
+        rect.setAttribute('fill', barColor);
+        rect.setAttribute('fill-opacity', '0.8');
+        rect.style.transition = 'fill-opacity 0.2s ease';
+        barGroup.appendChild(rect);
+        
+        // Add stacked segments for different backup types if there are backups
+        if (d.total > 0) {
+            let stackY = y;
+            
+            // PBS backups (bottom)
+            if (d.remote > 0) {
+                const pbsHeight = (d.remote / d.total) * barHeight;
+                const pbsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                pbsRect.setAttribute('x', x);
+                pbsRect.setAttribute('y', stackY + barHeight - pbsHeight);
+                pbsRect.setAttribute('width', barWidth);
+                pbsRect.setAttribute('height', pbsHeight);
+                pbsRect.setAttribute('rx', '2');
+                pbsRect.setAttribute('fill', '#8b5cf6'); // violet-500
+                pbsRect.setAttribute('fill-opacity', '0.9');
+                barGroup.appendChild(pbsRect);
+            }
+            
+            // PVE backups (middle)
+            if (d.local > 0) {
+                const pveHeight = (d.local / d.total) * barHeight;
+                const pveY = y + (d.snapshot / d.total) * barHeight;
+                const pveRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                pveRect.setAttribute('x', x);
+                pveRect.setAttribute('y', pveY);
+                pveRect.setAttribute('width', barWidth);
+                pveRect.setAttribute('height', pveHeight);
+                pveRect.setAttribute('fill', '#f97316'); // orange-500
+                pveRect.setAttribute('fill-opacity', '0.9');
+                barGroup.appendChild(pveRect);
+            }
+            
+            // Snapshots (top)
+            if (d.snapshot > 0) {
+                const snapshotHeight = (d.snapshot / d.total) * barHeight;
+                const snapshotRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                snapshotRect.setAttribute('x', x);
+                snapshotRect.setAttribute('y', y);
+                snapshotRect.setAttribute('width', barWidth);
+                snapshotRect.setAttribute('height', snapshotHeight);
+                snapshotRect.setAttribute('rx', '2');
+                snapshotRect.setAttribute('fill', '#eab308'); // yellow-500
+                snapshotRect.setAttribute('fill-opacity', '0.9');
+                barGroup.appendChild(snapshotRect);
+            }
+        }
+        
+        // Hover effects
+        barGroup.addEventListener('mouseenter', (e) => {
+            rect.setAttribute('fill-opacity', '1');
+            
+            // Show tooltip
+            const dateStr = new Date(d.date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+            let tooltipContent = `<strong>${dateStr}</strong><br>`;
+            if (d.total > 0) {
+                tooltipContent += `Total: ${d.total}<br>`;
+                if (d.snapshot > 0) tooltipContent += `Snapshots: ${d.snapshot}<br>`;
+                if (d.local > 0) tooltipContent += `PVE: ${d.local}<br>`;
+                if (d.remote > 0) tooltipContent += `PBS: ${d.remote}`;
+            } else {
+                tooltipContent += 'No backups';
+            }
+            
+            if (PulseApp.tooltips && PulseApp.tooltips.showTooltip) {
+                PulseApp.tooltips.showTooltip(e, tooltipContent);
+            }
+        });
+        
+        barGroup.addEventListener('mouseleave', () => {
+            rect.setAttribute('fill-opacity', '0.8');
+            if (PulseApp.tooltips && PulseApp.tooltips.hideTooltip) {
+                PulseApp.tooltips.hideTooltip();
+            }
+        });
+        
+        // Click to filter
+        barGroup.addEventListener('click', () => {
+            filterBackupsByDate(d.date);
+        });
+        
+        barsGroup.appendChild(barGroup);
+        
+        // Add date labels (show every few days to avoid crowding)
+        if (i % Math.ceil(data.length / 10) === 0 || i === data.length - 1) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x + barWidth / 2);
+            text.setAttribute('y', height + 15);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('class', 'text-[9px] fill-gray-500 dark:fill-gray-400');
+            const dateStr = new Date(d.date).toLocaleDateString('en-US', { 
+                month: 'numeric', 
+                day: 'numeric' 
+            });
+            text.textContent = dateStr;
+            g.appendChild(text);
+        }
+    });
+    
+}
+
+function filterBackupsByDate(date) {
+    // Calculate start and end of the selected day
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Store the selected date range
+    selectedDateRange = {
+        start: startOfDay.getTime() / 1000,
+        end: endOfDay.getTime() / 1000
+    };
+    
+    // Update the date range display
+    const dateRangeElement = document.getElementById('backup-chart-date-range');
+    if (dateRangeElement) {
+        const dateStr = startOfDay.toLocaleDateString('en-US', { 
+            month: 'long', 
+            day: 'numeric',
+            year: 'numeric'
+        });
+        dateRangeElement.textContent = dateStr;
+    }
+    
+    // Show clear filter button
+    const clearButton = document.getElementById('clear-date-filter');
+    if (clearButton) {
+        clearButton.classList.remove('hidden');
+    }
+    
+    // Apply filters and re-render the table
+    applyFilters();
+    renderUnifiedTable();
+    
+    // Highlight the selected bar
+    highlightSelectedDate(date);
+}
+
+function clearDateFilter() {
+    // Clear the date range
+    selectedDateRange = null;
+    
+    // Reset date range display
+    const dateRangeElement = document.getElementById('backup-chart-date-range');
+    if (dateRangeElement) {
+        dateRangeElement.textContent = 'Last 30 days';
+    }
+    
+    // Hide clear filter button
+    const clearButton = document.getElementById('clear-date-filter');
+    if (clearButton) {
+        clearButton.classList.add('hidden');
+    }
+    
+    // Re-apply filters and update display
+    applyFilters();
+    renderUnifiedTable();
+    updateBackupFrequencyChart();
+}
+
+function highlightSelectedDate(date) {
+    // Remove previous highlights
+    document.querySelectorAll('.backup-bar').forEach(bar => {
+        bar.classList.remove('ring-2', 'ring-blue-500');
+    });
+    
+    // Add highlight to selected bar
+    const dateKey = date.toISOString().split('T')[0];
+    const selectedBar = document.querySelector(`.backup-bar[data-date="${dateKey}"]`);
+    if (selectedBar) {
+        selectedBar.classList.add('ring-2', 'ring-blue-500');
+    }
 }
 
     return {
