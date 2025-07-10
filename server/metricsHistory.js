@@ -6,6 +6,7 @@ class MetricsHistory {
     constructor() {
         this.guestMetrics = new Map(); // guestId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
         this.nodeMetrics = new Map(); // nodeId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
+        this.storageMetrics = new Map(); // storageId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
         this.chartDataCache = new Map(); // cacheKey -> { data, timestamp }
         this.CACHE_TTL = 30000; // 30 second cache for chart data
         this.startCleanupTimer();
@@ -246,6 +247,35 @@ class MetricsHistory {
         
         // Always store the data point
         nodeHistory.dataPoints.push(dataPoint);
+    }
+
+    addStorageMetricData(storageId, storageData) {
+        const timestamp = Date.now();
+        
+        // Initialize storage history if it doesn't exist
+        if (!this.storageMetrics.has(storageId)) {
+            this.storageMetrics.set(storageId, {
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS)
+            });
+        }
+
+        const storageHistory = this.storageMetrics.get(storageId);
+
+        // Store storage usage data
+        const dataPoint = {
+            timestamp,
+            used: storageData?.used || 0,
+            total: storageData?.total || 0,
+            avail: storageData?.avail || 0,
+            storage: storageData?.storage,
+            node: storageData?.node,
+            type: storageData?.type,
+            enabled: storageData?.enabled,
+            active: storageData?.active
+        };
+        
+        // Always store the data point
+        storageHistory.dataPoints.push(dataPoint);
     }
 
     getNodeChartData(nodeId, metric) {
@@ -502,6 +532,65 @@ class MetricsHistory {
         }
 
         return result;
+    }
+
+    getAllStorageChartData(timeRangeMinutes = 60) {
+        const result = {};
+        const timeRangeMs = timeRangeMinutes * 60 * 1000;
+        const cutoffTime = Date.now() - timeRangeMs;
+        
+        // Use same downsample targets as other chart data
+        let downsampleTarget = null;
+        if (timeRangeMinutes > 240) { // > 4 hours
+            downsampleTarget = 500;
+        } else if (timeRangeMinutes > 60) { // > 1 hour
+            downsampleTarget = 300;
+        }
+
+        for (const [storageId, storageHistory] of this.storageMetrics) {
+            const validDataPoints = storageHistory.dataPoints
+                .filter(point => point && point.timestamp >= cutoffTime);
+
+            if (validDataPoints.length > 0) {
+                result[storageId] = {
+                    usage: this.extractStorageMetricSeries(validDataPoints, 'usage', downsampleTarget),
+                    used: this.extractStorageMetricSeries(validDataPoints, 'used', downsampleTarget),
+                    total: this.extractStorageMetricSeries(validDataPoints, 'total', downsampleTarget),
+                    avail: this.extractStorageMetricSeries(validDataPoints, 'avail', downsampleTarget)
+                };
+            }
+        }
+
+        return result;
+    }
+
+    extractStorageMetricSeries(dataPoints, metric, downsampleTarget = null) {
+        let series = dataPoints
+            .map(point => {
+                let value = 0;
+                if (metric === 'usage') {
+                    // Calculate usage percentage
+                    value = point.total > 0 ? (point.used / point.total * 100) : 0;
+                } else if (metric === 'used') {
+                    value = point.used || 0;
+                } else if (metric === 'total') {
+                    value = point.total || 0;
+                } else if (metric === 'avail') {
+                    value = point.avail || 0;
+                }
+                
+                return {
+                    timestamp: point.timestamp,
+                    value: value
+                };
+            })
+            .filter(point => point.value !== undefined);
+
+        if (downsampleTarget && series.length > downsampleTarget) {
+            return this.downsampleSeries(series, downsampleTarget);
+        }
+
+        return series;
     }
 
     extractNodeMetricSeries(dataPoints, metric, downsampleTarget = null) {

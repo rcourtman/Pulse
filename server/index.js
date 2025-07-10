@@ -242,6 +242,24 @@ app.get('/api/charts', async (req, res) => {
     }
 });
 
+app.get('/api/storage-charts', async (req, res) => {
+    try {
+        const timeRangeMinutes = parseInt(req.query.range) || 60;
+        
+        const storageChartData = metricsHistory.getAllStorageChartData(timeRangeMinutes);
+        const stats = metricsHistory.getStats();
+        
+        res.json({
+            data: storageChartData,
+            stats: stats,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/storage-charts:", error);
+        res.status(500).json({ error: error.message || "Failed to fetch storage chart data." });
+    }
+});
+
 
 
 
@@ -712,6 +730,23 @@ async function runDiscoveryCycle() {
             if (node && node.node) {
                 const nodeId = `node-${node.node}`;
                 metricsHistory.addNodeMetricData(nodeId, node);
+            }
+        });
+    }
+
+    // Add storage metrics to history
+    if (discoveryData.nodes && discoveryData.nodes.length > 0) {
+        discoveryData.nodes.forEach(node => {
+            if (node && node.node && node.storage && Array.isArray(node.storage)) {
+                node.storage.forEach(storage => {
+                    if (storage && storage.storage) {
+                        const storageId = `${node.node}-${storage.storage}`;
+                        metricsHistory.addStorageMetricData(storageId, {
+                            ...storage,
+                            node: node.node
+                        });
+                    }
+                });
             }
         });
     }

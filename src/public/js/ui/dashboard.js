@@ -1628,6 +1628,14 @@ PulseApp.ui.dashboard = (() => {
             if (thresholdsToggle && thresholdsToggle.checked) {
                 thresholdsToggle.checked = false;
                 thresholdsToggle.dispatchEvent(new Event('change'));
+                
+                // Wait for threshold change to complete before proceeding
+                setTimeout(() => {
+                    // Double-check that all styling is cleared after threshold toggle
+                    if (PulseApp.ui.thresholds && PulseApp.ui.thresholds.clearAllStyling) {
+                        PulseApp.ui.thresholds.clearAllStyling();
+                    }
+                }, 0);
             }
             
             // Clear threshold styling when entering charts mode
@@ -1679,18 +1687,131 @@ PulseApp.ui.dashboard = (() => {
                 document.querySelectorAll('.metric-chart').forEach(el => el.style.display = 'block');
             }
             
+            // Ensure all rows and cells are fully visible when in charts mode
+            const tableBody = document.querySelector('#main-table tbody');
+            if (tableBody) {
+                const rows = tableBody.querySelectorAll('tr[data-id]');
+                rows.forEach(row => {
+                    row.style.opacity = '';
+                    row.style.transition = '';
+                    row.removeAttribute('data-dimmed');
+                    
+                    // Also clear cell-level opacity
+                    const cells = row.querySelectorAll('td');
+                    cells.forEach(cell => {
+                        cell.style.opacity = '';
+                        cell.style.transition = '';
+                    });
+                });
+                
+                // Also ensure chart containers and SVGs are not dimmed
+                tableBody.querySelectorAll('.usage-chart-container, .sparkline-container').forEach(container => {
+                    container.style.opacity = '';
+                    const svg = container.querySelector('svg');
+                    if (svg) {
+                        svg.style.opacity = '';
+                    }
+                });
+                
+                // Force a reflow to ensure styles are applied
+                void tableBody.offsetHeight;
+            }
+            
             // Start fetching chart data if needed and update charts
             if (PulseApp.charts) {
                 // Small delay to ensure DOM is ready after mode switch
                 setTimeout(() => {
+                    // Clear all dimming one more time after DOM is ready
+                    const clearAllDimming = () => {
+                        const tableBody = document.querySelector('#main-table tbody');
+                        if (tableBody) {
+                            // Clear row dimming
+                            tableBody.querySelectorAll('tr[data-id]').forEach(row => {
+                                row.style.opacity = '';
+                                row.style.transition = '';
+                                row.removeAttribute('data-dimmed');
+                                row.removeAttribute('data-threshold-hidden');
+                            });
+                            
+                            // Clear all cell dimming
+                            tableBody.querySelectorAll('td').forEach(cell => {
+                                cell.style.opacity = '';
+                                cell.style.transition = '';
+                            });
+                            
+                            // Clear chart container dimming - be more specific
+                            tableBody.querySelectorAll('.usage-chart-container, .sparkline-container').forEach(container => {
+                                container.style.setProperty('opacity', '1', 'important');
+                                container.style.transition = '';
+                                // Also check parent elements
+                                let parent = container.parentElement;
+                                while (parent && parent !== tableBody) {
+                                    if (parent.style.opacity) {
+                                        parent.style.opacity = '';
+                                    }
+                                    parent = parent.parentElement;
+                                }
+                            });
+                            
+                            // Clear metric-chart divs
+                            tableBody.querySelectorAll('.metric-chart').forEach(chart => {
+                                chart.style.setProperty('opacity', '1', 'important');
+                                chart.style.transition = '';
+                            });
+                            
+                            // Clear SVG dimming
+                            tableBody.querySelectorAll('svg').forEach(svg => {
+                                svg.style.setProperty('opacity', '1', 'important');
+                                svg.style.transition = '';
+                            });
+                        }
+                        
+                        // Ensure tooltip containers are not affected by dimming
+                        const customTooltip = document.getElementById('custom-tooltip');
+                        const sliderTooltip = document.getElementById('slider-value-tooltip');
+                        if (customTooltip) {
+                            // Remove any inherited opacity but don't force visibility
+                            customTooltip.style.removeProperty('opacity');
+                            // Ensure the tooltip element itself can show at full opacity when needed
+                            const parent = customTooltip.parentElement;
+                            if (parent && parent.style.opacity) {
+                                parent.style.opacity = '';
+                            }
+                        }
+                        if (sliderTooltip) {
+                            sliderTooltip.style.removeProperty('opacity');
+                            const parent = sliderTooltip.parentElement;
+                            if (parent && parent.style.opacity) {
+                                parent.style.opacity = '';
+                            }
+                        }
+                    };
+                    
+                    clearAllDimming();
+                    
                     // First try to update with existing data
                     PulseApp.charts.updateAllCharts(true);
+                    
+                    // Clear dimming again after chart update
+                    setTimeout(clearAllDimming, 10);
                     
                     // Then fetch fresh data if needed
                     if (PulseApp.charts.getChartData) {
                         PulseApp.charts.getChartData().then(() => {
                             // Update again with fresh data
                             PulseApp.charts.updateAllCharts(true);
+                            // And clear dimming one final time
+                            setTimeout(clearAllDimming, 10);
+                            
+                            // Remove the !important overrides after a delay
+                            setTimeout(() => {
+                                const tableBody = document.querySelector('#main-table tbody');
+                                if (tableBody) {
+                                    tableBody.querySelectorAll('.usage-chart-container, .sparkline-container, .metric-chart, svg').forEach(el => {
+                                        el.style.opacity = '1';  // Keep opacity 1 but remove !important
+                                    });
+                                }
+                            }, 500);
                         });
                     }
                 }, 50); // 50ms delay to ensure DOM updates are complete
@@ -1721,6 +1842,15 @@ PulseApp.ui.dashboard = (() => {
             document.querySelectorAll('.metric-chart').forEach(el => {
                 el.style.display = '';  // Remove inline style
             });
+            
+            // Re-apply threshold styling if thresholds are active
+            const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
+            if (thresholdsToggle && thresholdsToggle.checked && PulseApp.ui.thresholds) {
+                // Use applyThresholdDimmingNow to immediately re-apply threshold styling
+                if (PulseApp.ui.thresholds.applyThresholdDimmingNow) {
+                    PulseApp.ui.thresholds.applyThresholdDimmingNow();
+                }
+            }
             
             // Refresh node summary cards to hide charts
             if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
