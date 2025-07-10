@@ -387,25 +387,36 @@
             // Deep clone the report to avoid modifying the original
             const sanitized = JSON.parse(JSON.stringify(report));
             
-            // Environment section doesn't need sanitization except for working directory
-            if (sanitized.environment && sanitized.environment.workingDirectory) {
-                sanitized.environment.workingDirectory = '/opt/pulse';
+            // Sanitize environment section
+            if (sanitized.environment) {
+                if (sanitized.environment.workingDirectory) {
+                    sanitized.environment.workingDirectory = '/opt/pulse';
+                }
+                // Sanitize environment variables
+                if (sanitized.environment.environmentVariables) {
+                    const env = sanitized.environment.environmentVariables;
+                    // Sanitize email addresses
+                    if (env.ALERT_FROM_EMAIL) env.ALERT_FROM_EMAIL = '[EMAIL]';
+                    if (env.ALERT_TO_EMAIL) env.ALERT_TO_EMAIL = '[EMAIL]';
+                    // Sanitize hostnames
+                    if (env.PBS_HOST) env.PBS_HOST = '[HOSTNAME]';
+                }
             }
             
             // Sanitize connectivity section
             if (sanitized.connectivity) {
                 if (sanitized.connectivity.proxmox) {
-                    sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map(conn => ({
+                    sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map((conn, idx) => ({
                         ...conn,
-                        host: conn.host ? conn.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : conn.host,
-                        name: conn.name ? `pve-server-${sanitized.connectivity.proxmox.indexOf(conn) + 1}` : conn.name
+                        host: '[HOSTNAME]',
+                        name: `pve-server-${idx + 1}`
                     }));
                 }
                 if (sanitized.connectivity.pbs) {
-                    sanitized.connectivity.pbs = sanitized.connectivity.pbs.map(conn => ({
+                    sanitized.connectivity.pbs = sanitized.connectivity.pbs.map((conn, idx) => ({
                         ...conn,
-                        host: conn.host ? conn.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : conn.host,
-                        name: conn.name ? `pbs-server-${sanitized.connectivity.pbs.indexOf(conn) + 1}` : conn.name
+                        host: '[HOSTNAME]',
+                        name: `pbs-server-${idx + 1}`
                     }));
                 }
             }
@@ -422,8 +433,20 @@
                     const sanitizedNodes = {};
                     Object.entries(sanitized.state.nodes).forEach(([nodeName, nodeData]) => {
                         const sanitizedNodeName = nodeMapping[nodeName];
+                        const sanitizedData = { ...nodeData };
+                        
+                        // Sanitize any nested node names
+                        Object.keys(sanitizedData).forEach(key => {
+                            if (typeof sanitizedData[key] === 'string' && (key.match(/^\d+$/) || key === 'node')) {
+                                // Check if it's a node name
+                                if (['minipc', 'delly', 'pi', 'pimox', 'proxmox'].some(name => sanitizedData[key].includes(name))) {
+                                    sanitizedData[key] = `node-${Object.keys(nodeMapping).indexOf(sanitizedData[key]) + 1 || 'X'}`;
+                                }
+                            }
+                        });
+                        
                         sanitizedNodes[sanitizedNodeName] = {
-                            ...nodeData,
+                            ...sanitizedData,
                             node: sanitizedNodeName,
                             // Sanitize storage names
                             storages: nodeData.storages ? Object.entries(nodeData.storages).reduce((acc, [storageName, storageData], idx) => {
@@ -436,6 +459,31 @@
                         };
                     });
                     sanitized.state.nodes = sanitizedNodes;
+                }
+                
+                // Sanitize pbs section
+                if (sanitized.state.pbs) {
+                    if (sanitized.state.pbs.sampleBackupIds) {
+                        sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, idx) => `backup-id-${idx + 1}`);
+                    }
+                    if (sanitized.state.pbs.instanceDetails) {
+                        sanitized.state.pbs.instanceDetails = sanitized.state.pbs.instanceDetails.map((instance, idx) => ({
+                            ...instance,
+                            name: `pbs-server-${idx + 1}`
+                        }));
+                    }
+                }
+                
+                // Sanitize storageDebug section
+                if (sanitized.state.storageDebug && sanitized.state.storageDebug.storageByNode) {
+                    sanitized.state.storageDebug.storageByNode = sanitized.state.storageDebug.storageByNode.map((nodeInfo, idx) => ({
+                        ...nodeInfo,
+                        node: `node-${idx + 1}`,
+                        storages: nodeInfo.storages ? nodeInfo.storages.map((storage, sIdx) => ({
+                            ...storage,
+                            name: storage.name.includes('pbs-') ? `pbs-storage-${idx + 1}-${sIdx + 1}` : `storage-${idx + 1}-${sIdx + 1}`
+                        })) : []
+                    }));
                 }
                 
                 if (sanitized.state.backupServers) {
@@ -494,21 +542,47 @@
                 }));
             }
             
+            // Sanitize configuration section
+            if (sanitized.configuration) {
+                if (sanitized.configuration.proxmox) {
+                    sanitized.configuration.proxmox = sanitized.configuration.proxmox.map((config, idx) => ({
+                        ...config,
+                        host: '[HOSTNAME]',
+                        name: `pve-server-${idx + 1}`
+                    }));
+                }
+                if (sanitized.configuration.pbs) {
+                    sanitized.configuration.pbs = sanitized.configuration.pbs.map((config, idx) => ({
+                        ...config,
+                        host: '[HOSTNAME]',
+                        name: `pbs-server-${idx + 1}`
+                    }));
+                }
+            }
+            
             // Sanitize permissions  
             if (sanitized.permissions) {
                 if (sanitized.permissions.proxmox) {
                     sanitized.permissions.proxmox = sanitized.permissions.proxmox.map((perm, idx) => ({
                         ...perm,
                         name: `pve-server-${idx + 1}`,
-                        host: perm.host ? perm.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : perm.host,
-                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId
+                        host: '[HOSTNAME]',
+                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId,
+                        storageBackupAccess: perm.storageBackupAccess ? {
+                            ...perm.storageBackupAccess,
+                            storageDetails: perm.storageBackupAccess.storageDetails ? perm.storageBackupAccess.storageDetails.map((detail, dIdx) => ({
+                                ...detail,
+                                node: `node-${dIdx + 1}`,
+                                storage: detail.storage.includes('pbs-') ? `pbs-storage-${dIdx + 1}` : `storage-${dIdx + 1}`
+                            })) : []
+                        } : undefined
                     }));
                 }
                 if (sanitized.permissions.pbs) {
                     sanitized.permissions.pbs = sanitized.permissions.pbs.map((perm, idx) => ({
                         ...perm,
                         name: `pbs-server-${idx + 1}`,
-                        host: perm.host ? perm.host.replace(/https?:\/\/[^\/]+/, 'https://[HOSTNAME]') : perm.host,
+                        host: '[HOSTNAME]',
                         tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId
                     }));
                 }
