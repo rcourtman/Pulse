@@ -11,15 +11,35 @@ class DiagnosticTool {
         this.metricsHistory = metricsHistory;
         this.apiClients = apiClients || {};
         this.pbsApiClients = pbsApiClients || {};
+        this.errorLog = []; // Store recent errors
+        this.maxErrorLogSize = 20;
+    }
+    
+    logError(error, context = '') {
+        const errorEntry = {
+            timestamp: new Date().toISOString(),
+            context,
+            message: error.message || error.toString(),
+            stack: error.stack,
+            type: error.constructor.name
+        };
+        
+        this.errorLog.unshift(errorEntry);
+        if (this.errorLog.length > this.maxErrorLogSize) {
+            this.errorLog = this.errorLog.slice(0, this.maxErrorLogSize);
+        }
     }
 
     async runDiagnostics() {
         const report = {
             timestamp: new Date().toISOString(),
             version: 'unknown',
+            environment: {},
             configuration: { proxmox: [], pbs: [] },
             state: {},
             permissions: { proxmox: [], pbs: [] },
+            connectivity: { proxmox: [], pbs: [] },
+            recentErrors: [],
             recommendations: []
         };
 
@@ -27,6 +47,13 @@ class DiagnosticTool {
             report.version = this.getVersion();
         } catch (e) {
             console.error('Error getting version:', e);
+        }
+        
+        try {
+            report.environment = this.getEnvironmentInfo();
+        } catch (e) {
+            console.error('Error getting environment:', e);
+            report.environment = { error: e.message };
         }
 
         try {
@@ -41,6 +68,13 @@ class DiagnosticTool {
         } catch (e) {
             console.error('Error checking permissions:', e);
             report.permissions = { proxmox: [], pbs: [] };
+        }
+        
+        try {
+            report.connectivity = await this.checkConnectivity();
+        } catch (e) {
+            console.error('Error checking connectivity:', e);
+            report.connectivity = { proxmox: [], pbs: [] };
         }
 
         try {
@@ -91,6 +125,14 @@ class DiagnosticTool {
             report.state = { error: e.message };
         }
 
+        // Get recent errors
+        try {
+            report.recentErrors = this.getRecentErrors();
+        } catch (e) {
+            console.error('Error getting recent errors:', e);
+            report.recentErrors = [];
+        }
+        
         // Generate recommendations
         try {
             this.generateRecommendations(report);
@@ -114,6 +156,34 @@ class DiagnosticTool {
     sanitizeReport(report) {
         // Deep clone the report to avoid modifying the original
         const sanitized = JSON.parse(JSON.stringify(report));
+        
+        // Environment section doesn't need sanitization except for working directory
+        if (sanitized.environment && sanitized.environment.workingDirectory) {
+            sanitized.environment.workingDirectory = '/opt/pulse';
+        }
+        
+        // Sanitize connectivity section
+        if (sanitized.connectivity) {
+            if (sanitized.connectivity.proxmox) {
+                sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map(conn => ({
+                    ...conn,
+                    host: this.sanitizeUrl(conn.host),
+                    name: this.sanitizeUrl(conn.name),
+                    error: conn.error ? this.sanitizeErrorMessage(conn.error) : null
+                }));
+            }
+            
+            if (sanitized.connectivity.pbs) {
+                sanitized.connectivity.pbs = sanitized.connectivity.pbs.map(conn => ({
+                    ...conn,
+                    host: this.sanitizeUrl(conn.host),
+                    name: this.sanitizeUrl(conn.name),
+                    error: conn.error ? this.sanitizeErrorMessage(conn.error) : null
+                }));
+            }
+        }
+        
+        // Recent errors are already sanitized by getRecentErrors()
         
         // Sanitize configuration section
         if (sanitized.configuration) {
@@ -311,7 +381,172 @@ class DiagnosticTool {
             return 'unknown';
         }
     }
+    
+    getEnvironmentInfo() {
+        const os = require('os');
+        
+        const env = {
+            nodeVersion: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            osRelease: os.release(),
+            osType: os.type(),
+            totalMemory: Math.round(os.totalmem() / 1024 / 1024) + ' MB',
+            freeMemory: Math.round(os.freemem() / 1024 / 1024) + ' MB',
+            cpuCount: os.cpus().length,
+            uptime: Math.round(process.uptime()) + ' seconds',
+            dockerDetected: fs.existsSync('/.dockerenv') || process.env.container === 'docker',
+            environmentVariables: this.getSanitizedEnvVars(),
+            workingDirectory: process.cwd(),
+            nodeMemoryUsage: {
+                rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + ' MB',
+                heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB',
+                heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+                external: Math.round(process.memoryUsage().external / 1024 / 1024) + ' MB'
+            }
+        };
+        
+        // Check if running as specific user
+        try {
+            env.runningUser = process.getuid ? `uid:${process.getuid()}` : 'unknown';
+        } catch (e) {
+            env.runningUser = 'unknown';
+        }
+        
+        return env;
+    }
+    
+    getSanitizedEnvVars() {
+        const sensitiveKeys = ['TOKEN', 'SECRET', 'PASSWORD', 'KEY', 'API', 'CREDENTIAL'];
+        const envVars = {};
+        
+        Object.keys(process.env).forEach(key => {
+            if (key.startsWith('PVE_') || key.startsWith('PBS_') || key.startsWith('PULSE_') || 
+                key.startsWith('ALERT_') || key === 'NODE_ENV' || key === 'PORT') {
+                
+                // Check if it's a sensitive key
+                const isSensitive = sensitiveKeys.some(sensitive => key.includes(sensitive));
+                
+                if (isSensitive) {
+                    envVars[key] = process.env[key] ? '[REDACTED]' : '[NOT SET]';
+                } else {
+                    envVars[key] = process.env[key] || '[NOT SET]';
+                }
+            }
+        });
+        
+        return envVars;
+    }
+    
+    getRecentErrors() {
+        // Return sanitized version of error log
+        return this.errorLog.map(error => ({
+            timestamp: error.timestamp,
+            context: error.context,
+            message: this.sanitizeErrorMessage(error.message),
+            type: error.type,
+            // Include stack trace but sanitize it
+            stack: error.stack ? this.sanitizeErrorMessage(error.stack) : undefined
+        }));
+    }
 
+    async checkConnectivity() {
+        const connectivity = {
+            proxmox: [],
+            pbs: []
+        };
+        
+        // Test Proxmox connectivity
+        for (const [id, clientObj] of Object.entries(this.apiClients)) {
+            if (!id.startsWith('pbs_') && clientObj && clientObj.client) {
+                const connTest = {
+                    id: id,
+                    name: clientObj.config?.name || id,
+                    host: clientObj.config?.host,
+                    reachable: false,
+                    responseTime: null,
+                    error: null,
+                    sslInfo: {}
+                };
+                
+                const startTime = Date.now();
+                try {
+                    // Simple connectivity test
+                    const response = await clientObj.client.get('/version');
+                    connTest.reachable = true;
+                    connTest.responseTime = Date.now() - startTime;
+                    
+                    // Check if using self-signed certs
+                    connTest.sslInfo.selfSigned = clientObj.config?.allowSelfSignedCerts || false;
+                } catch (error) {
+                    connTest.error = error.message;
+                    connTest.responseTime = Date.now() - startTime;
+                    
+                    // Try to categorize the error
+                    if (error.code === 'ECONNREFUSED') {
+                        connTest.errorType = 'connection_refused';
+                    } else if (error.code === 'ETIMEDOUT') {
+                        connTest.errorType = 'timeout';
+                    } else if (error.code === 'ENOTFOUND') {
+                        connTest.errorType = 'dns_failure';
+                    } else if (error.message.includes('certificate')) {
+                        connTest.errorType = 'ssl_error';
+                    } else {
+                        connTest.errorType = 'unknown';
+                    }
+                }
+                
+                connectivity.proxmox.push(connTest);
+            }
+        }
+        
+        // Test PBS connectivity
+        for (const [id, clientObj] of Object.entries(this.pbsApiClients)) {
+            if (clientObj && clientObj.client) {
+                const connTest = {
+                    id: id,
+                    name: clientObj.config?.name || id,
+                    host: clientObj.config?.host,
+                    reachable: false,
+                    responseTime: null,
+                    error: null,
+                    sslInfo: {}
+                };
+                
+                const startTime = Date.now();
+                try {
+                    // Simple connectivity test
+                    const response = await clientObj.client.get('/version');
+                    connTest.reachable = true;
+                    connTest.responseTime = Date.now() - startTime;
+                    
+                    // Check if using self-signed certs
+                    connTest.sslInfo.selfSigned = clientObj.config?.allowSelfSignedCerts || false;
+                } catch (error) {
+                    connTest.error = error.message;
+                    connTest.responseTime = Date.now() - startTime;
+                    
+                    // Try to categorize the error
+                    if (error.code === 'ECONNREFUSED') {
+                        connTest.errorType = 'connection_refused';
+                    } else if (error.code === 'ETIMEDOUT') {
+                        connTest.errorType = 'timeout';
+                    } else if (error.code === 'ENOTFOUND') {
+                        connTest.errorType = 'dns_failure';
+                    } else if (error.message.includes('certificate')) {
+                        connTest.errorType = 'ssl_error';
+                    } else {
+                        connTest.errorType = 'unknown';
+                    }
+                }
+                
+                connectivity.pbs.push(connTest);
+            }
+        }
+        
+        return connectivity;
+    }
+    
     async checkPermissions() {
         const permissions = {
             proxmox: [],

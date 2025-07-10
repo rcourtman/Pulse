@@ -82,6 +82,9 @@ let apiClients = {};   // Initialize as empty objects
 let pbsApiClients = {};
 // --- END API Client Initialization ---
 
+// Create global diagnostic tool instance for error logging
+let diagnosticTool = null;
+
 // Configuration API
 const ConfigApi = require('./configApi');
 const configApi = new ConfigApi();
@@ -293,11 +296,17 @@ app.get('/api/rate-limits', (req, res) => {
 app.get('/api/diagnostics', async (req, res) => {
     try {
         console.log('Running diagnostics...');
-        // Force reload the diagnostic module to get latest changes
-        delete require.cache[require.resolve('./diagnostics')];
-        const DiagnosticTool = require('./diagnostics');
-        const diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
-        const report = await diagnosticTool.runDiagnostics();
+        
+        // Use the persistent diagnosticTool instance if available
+        let toolToUse = diagnosticTool;
+        
+        // If no persistent instance (shouldn't happen), create a temporary one
+        if (!toolToUse) {
+            const DiagnosticTool = require('./diagnostics');
+            toolToUse = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
+        }
+        
+        const report = await toolToUse.runDiagnostics();
         
         // Format the report for easy reading
         const formattedReport = {
@@ -612,6 +621,11 @@ app.get('/api/webhook-status', (req, res) => {
 app.use((err, req, res, next) => {
     console.error('Unhandled API error:', err);
     
+    // Log error to diagnostic tool if available
+    if (diagnosticTool) {
+        diagnosticTool.logError(err, `API Error: ${req.method} ${req.url}`);
+    }
+    
     // Ensure we always return JSON for API routes
     if (req.url.startsWith('/api/')) {
         return res.status(500).json({
@@ -721,6 +735,11 @@ async function runDiscoveryCycle() {
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
       errors.push({ type: 'discovery', message: error.message, endpointId: 'general' });
+      
+      // Log error to diagnostic tool if available
+      if (diagnosticTool) {
+        diagnosticTool.logError(error, 'Discovery Cycle');
+      }
       
       const duration = Date.now() - startTime;
       stateManager.updateDiscoveryData({ nodes: [], vms: [], containers: [], pbs: [] }, duration, errors);
@@ -844,6 +863,11 @@ async function runMetricCycle() {
   } catch (error) {
       console.error(`[Metrics Cycle] Error during execution: ${error.message}`, error.stack);
       errors.push({ type: 'metrics', message: error.message, endpointId: 'general' });
+      
+      // Log error to diagnostic tool if available
+      if (diagnosticTool) {
+        diagnosticTool.logError(error, 'Metrics Cycle');
+      }
       
       const duration = Date.now() - startTime;
       stateManager.updateMetricsData([], duration, errors);
@@ -1161,6 +1185,12 @@ async function startServer() {
             global.pulseApiClients = { apiClients, pbsApiClients };
             global.runDiscoveryCycle = runDiscoveryCycle;
             
+            // Initialize diagnostic tool now that we have API clients
+            diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
+            
+            // Make diagnosticTool globally available for error logging
+            global.diagnosticTool = diagnosticTool;
+            
             console.log("INFO: All API clients initialized.");
         } catch (initError) {
             console.error("FATAL: Failed to initialize API clients:", initError);
@@ -1180,6 +1210,12 @@ async function startServer() {
         pbsApiClients = {};
         global.pulseApiClients = { apiClients, pbsApiClients };
         global.runDiscoveryCycle = runDiscoveryCycle;
+        
+        // Initialize diagnostic tool even in setup mode
+        diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
+        
+        // Make diagnosticTool globally available for error logging
+        global.diagnosticTool = diagnosticTool;
     } 
 
     server.listen(PORT, '0.0.0.0', () => {
