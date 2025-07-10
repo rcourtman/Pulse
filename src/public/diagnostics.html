@@ -17,16 +17,29 @@
             border-radius: 0.5rem;
         }
         .severity-critical { 
-            background-color: #fee; 
-            border-left: 4px solid #dc2626;
+            background-color: #fef2f2; 
+            border: 2px solid #dc2626;
+            border-left-width: 6px;
         }
         .severity-warning { 
-            background-color: #fef3c7; 
-            border-left: 4px solid #f59e0b;
+            background-color: #fffbeb; 
+            border: 2px solid #f59e0b;
+            border-left-width: 6px;
         }
         .severity-info { 
-            background-color: #dbeafe; 
-            border-left: 4px solid #3b82f6;
+            background-color: #f0f9ff; 
+            border: 2px solid #3b82f6;
+            border-left-width: 6px;
+        }
+        .severity-success {
+            background-color: #f0fdf4;
+            border: 2px solid #16a34a;
+            border-left-width: 6px;
+        }
+        .severity-icon {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -209,22 +222,94 @@
             // Recommendations
             const recsContainer = document.getElementById('recommendations');
             if (data.recommendations && data.recommendations.length > 0) {
-                recsContainer.innerHTML = data.recommendations
-                    .sort((a, b) => {
-                        const severityOrder = { critical: 0, warning: 1, info: 2 };
-                        return (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3);
-                    })
-                    .map(rec => {
+                // Count by severity
+                const critical = data.recommendations.filter(r => r.severity === 'critical');
+                const warnings = data.recommendations.filter(r => r.severity === 'warning');
+                const info = data.recommendations.filter(r => r.severity === 'info');
+                
+                // Create summary
+                let summaryHtml = '<div class="mb-6 p-4 bg-gray-100 rounded">';
+                summaryHtml += '<h3 class="font-semibold mb-2">Summary</h3>';
+                summaryHtml += '<div class="flex gap-6">';
+                if (critical.length > 0) {
+                    summaryHtml += `<span class="text-red-600 font-semibold">❌ ${critical.length} Critical Issue${critical.length > 1 ? 's' : ''}</span>`;
+                }
+                if (warnings.length > 0) {
+                    summaryHtml += `<span class="text-yellow-600 font-semibold">⚠️ ${warnings.length} Warning${warnings.length > 1 ? 's' : ''}</span>`;
+                }
+                if (info.length > 0) {
+                    summaryHtml += `<span class="text-blue-600 font-semibold">ℹ️ ${info.length} Info Message${info.length > 1 ? 's' : ''}</span>`;
+                }
+                summaryHtml += '</div></div>';
+                
+                // Group and display recommendations
+                let recsHtml = '';
+                
+                // Critical issues first
+                if (critical.length > 0) {
+                    critical.forEach(rec => {
                         const formattedMessage = rec.message.replace(/\n/g, '<br>');
-                        return `
-                            <div class="recommendation severity-${rec.severity}">
-                                <h3 class="font-semibold text-lg mb-2">${rec.category}</h3>
-                                <div>${formattedMessage}</div>
+                        recsHtml += `
+                            <div class="recommendation severity-critical">
+                                <h3 class="font-semibold text-lg mb-2">
+                                    <span class="severity-icon">❌</span>
+                                    <span class="text-red-700">CRITICAL:</span> ${rec.category}
+                                </h3>
+                                <div class="ml-8">${formattedMessage}</div>
                             </div>
                         `;
-                    }).join('');
+                    });
+                }
+                
+                // Warnings
+                if (warnings.length > 0) {
+                    warnings.forEach(rec => {
+                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        recsHtml += `
+                            <div class="recommendation severity-warning">
+                                <h3 class="font-semibold text-lg mb-2">
+                                    <span class="severity-icon">⚠️</span>
+                                    <span class="text-yellow-700">WARNING:</span> ${rec.category}
+                                </h3>
+                                <div class="ml-8">${formattedMessage}</div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Info messages (these are often "everything is good" messages)
+                if (info.length > 0) {
+                    info.forEach(rec => {
+                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        // Check if it's a success/good message
+                        const isSuccess = rec.message.includes('successfully') || 
+                                        rec.message.includes('correctly configured') || 
+                                        rec.message.includes('No issues') ||
+                                        rec.message.includes('appears to be correct');
+                        
+                        recsHtml += `
+                            <div class="recommendation ${isSuccess ? 'severity-success' : 'severity-info'}">
+                                <h3 class="font-semibold text-lg mb-2">
+                                    <span class="severity-icon">${isSuccess ? '✅' : 'ℹ️'}</span>
+                                    <span class="${isSuccess ? 'text-green-700' : 'text-blue-700'}">${isSuccess ? 'OK' : 'INFO'}:</span> ${rec.category}
+                                </h3>
+                                <div class="ml-8">${formattedMessage}</div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                recsContainer.innerHTML = summaryHtml + recsHtml;
             } else {
-                recsContainer.innerHTML = '<p class="text-green-600">✓ No issues found!</p>';
+                recsContainer.innerHTML = `
+                    <div class="recommendation severity-success">
+                        <h3 class="font-semibold text-lg">
+                            <span class="severity-icon">✅</span>
+                            <span class="text-green-700">All Good!</span>
+                        </h3>
+                        <div class="ml-8">No issues found. Configuration appears to be correct.</div>
+                    </div>
+                `;
             }
             
             // Permissions
@@ -237,14 +322,28 @@
                         <h3 class="font-semibold text-lg mb-2">Proxmox: ${perm.name}</h3>
                         <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
                         ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
-                        <div class="grid grid-cols-2 gap-2 text-sm">
-                            <div>✓ Connection: ${perm.canConnect ? '✅' : '❌'}</div>
-                            <div>✓ List Nodes: ${perm.canListNodes ? '✅' : '❌'}</div>
-                            <div>✓ List VMs: ${perm.canListVMs ? '✅' : '❌'}</div>
-                            <div>✓ List Containers: ${perm.canListContainers ? '✅' : '❌'}</div>
-                            <div>✓ Node Stats: ${perm.canGetNodeStats ? '✅' : '❌'}</div>
-                            <div>✓ List Storage: ${perm.canListStorage ? '✅' : '❌'}</div>
-                            <div>✓ Access Backups: ${perm.canAccessStorageBackups ? '✅' : '❌'}</div>
+                        <div class="grid grid-cols-2 gap-2 text-sm mt-3">
+                            <div class="${perm.canConnect ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canConnect ? '✅' : '❌'} Connection
+                            </div>
+                            <div class="${perm.canListNodes ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListNodes ? '✅' : '❌'} List Nodes
+                            </div>
+                            <div class="${perm.canListVMs ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListVMs ? '✅' : '❌'} List VMs
+                            </div>
+                            <div class="${perm.canListContainers ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListContainers ? '✅' : '❌'} List Containers
+                            </div>
+                            <div class="${perm.canGetNodeStats ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canGetNodeStats ? '✅' : '❌'} Node Stats
+                            </div>
+                            <div class="${perm.canListStorage ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListStorage ? '✅' : '❌'} List Storage
+                            </div>
+                            <div class="${perm.canAccessStorageBackups ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canAccessStorageBackups ? '✅' : '❌'} Access Backups
+                            </div>
                         </div>
                         ${perm.storageBackupAccess ? `
                             <p class="mt-2 text-sm">
@@ -268,10 +367,16 @@
                         <h3 class="font-semibold text-lg mb-2">PBS: ${perm.name}</h3>
                         <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
                         ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
-                        <div class="grid grid-cols-2 gap-2 text-sm">
-                            <div>✓ Connection: ${perm.canConnect ? '✅' : '❌'}</div>
-                            <div>✓ List Datastores: ${perm.canListDatastores ? '✅' : '❌'}</div>
-                            <div>✓ List Backups: ${perm.canListBackups ? '✅' : '❌'}</div>
+                        <div class="grid grid-cols-2 gap-2 text-sm mt-3">
+                            <div class="${perm.canConnect ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canConnect ? '✅' : '❌'} Connection
+                            </div>
+                            <div class="${perm.canListDatastores ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListDatastores ? '✅' : '❌'} List Datastores
+                            </div>
+                            <div class="${perm.canListBackups ? 'text-green-700' : 'text-red-700'}">
+                                ${perm.canListBackups ? '✅' : '❌'} List Backups
+                            </div>
                         </div>
                         ${perm.errors && perm.errors.length > 0 ? `
                             <div class="mt-2 text-red-600 text-sm">
