@@ -46,7 +46,7 @@ const RETRY_CONFIG = {
 const REQUEST_LIMITS = {
     JSON_SIZE: '10mb',           // Express JSON body limit
     RATE_LIMIT_WINDOW: 60000,    // Rate limit window (1 minute)
-    RATE_LIMIT_MAX: 60,          // Max requests per window
+    RATE_LIMIT_MAX: 300,         // Max requests per window (increased for better UX)
     MAX_CONCURRENT_REQUESTS: 10, // Max concurrent API requests
 };
 
