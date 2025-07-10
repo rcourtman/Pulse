@@ -1383,8 +1383,69 @@
 
     <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
       <div class="p-3">
-        <div id="storage-info-content">
-          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading storage data...</p>
+        <div class="storage-filter flex flex-col gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <div class="filter-controls-wrapper flex flex-wrap items-center gap-2 justify-between">
+            <div class="flex items-center gap-1 flex-shrink-0 relative">
+              <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden sm:inline">View:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded flex-shrink-0">
+                <label class="relative">
+                  <input type="checkbox" id="toggle-storage-charts-checkbox" class="hidden peer">
+                  <span class="flex items-center justify-center px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors">
+                    <span>Charts</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- Storage Chart Controls - inline -->
+            <div id="storage-chart-controls" class="hidden flex items-center gap-2">
+              <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Time Range:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                <input type="radio" id="storage-time-5m" name="storage-time-range" value="5" class="hidden peer/5m">
+                <label for="storage-time-5m" data-storage-time-range="5" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/5m:bg-blue-100 dark:peer-checked/5m:bg-blue-800/50 peer-checked/5m:text-blue-700 dark:peer-checked/5m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">5m</label>
+                
+                <input type="radio" id="storage-time-15m" name="storage-time-range" value="15" class="hidden peer/15m">
+                <label for="storage-time-15m" data-storage-time-range="15" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/15m:bg-blue-100 dark:peer-checked/15m:bg-blue-800/50 peer-checked/15m:text-blue-700 dark:peer-checked/15m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">15m</label>
+                
+                <input type="radio" id="storage-time-30m" name="storage-time-range" value="30" class="hidden peer/30m">
+                <label for="storage-time-30m" data-storage-time-range="30" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/30m:bg-blue-100 dark:peer-checked/30m:bg-blue-800/50 peer-checked/30m:text-blue-700 dark:peer-checked/30m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30m</label>
+                
+                <input type="radio" id="storage-time-1h" name="storage-time-range" value="60" class="hidden peer/1h" checked>
+                <label for="storage-time-1h" data-storage-time-range="60" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/1h:bg-blue-100 dark:peer-checked/1h:bg-blue-800/50 peer-checked/1h:text-blue-700 dark:peer-checked/1h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1h</label>
+                
+                <input type="radio" id="storage-time-4h" name="storage-time-range" value="240" class="hidden peer/4h">
+                <label for="storage-time-4h" data-storage-time-range="240" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/4h:bg-blue-100 dark:peer-checked/4h:bg-blue-800/50 peer-checked/4h:text-blue-700 dark:peer-checked/4h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">4h</label>
+                
+                <input type="radio" id="storage-time-12h" name="storage-time-range" value="720" class="hidden peer/12h">
+                <label for="storage-time-12h" data-storage-time-range="720" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/12h:bg-blue-100 dark:peer-checked/12h:bg-blue-800/50 peer-checked/12h:text-blue-700 dark:peer-checked/12h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">12h</label>
+                
+                <input type="radio" id="storage-time-24h" name="storage-time-range" value="1440" class="hidden peer/24h">
+                <label for="storage-time-24h" data-storage-time-range="1440" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/24h:bg-blue-100 dark:peer-checked/24h:bg-blue-800/50 peer-checked/24h:text-blue-700 dark:peer-checked/24h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">24h</label>
+                
+                <input type="radio" id="storage-time-7d" name="storage-time-range" value="10080" class="hidden peer/7d">
+                <label for="storage-time-7d" data-storage-time-range="10080" class="flex items-center justify-center px-2 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/7d:bg-blue-100 dark:peer-checked/7d:bg-blue-800/50 peer-checked/7d:text-blue-700 dark:peer-checked/7d:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+          <table id="storage-table" class="w-full text-sm border-collapse table-auto min-w-full">
+            <thead>
+              <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
+                <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Content</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Type</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Shared</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none min-w-[200px]" id="usage-sort-header">Usage</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Avail</th>
+                <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-600">
+              <!-- Storage rows will be injected here -->
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

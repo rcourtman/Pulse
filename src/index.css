@@ -51,4 +51,25 @@
   input[type="range"]:focus::-moz-range-thumb {
     @apply outline-none;
   }
+
+  /* Charts mode visibility toggle */
+  .metric-chart {
+    display: none;
+  }
+  
+  .charts-mode .metric-text {
+    display: none;
+  }
+  
+  .charts-mode .metric-chart {
+    display: block;
+  }
+  
+  /* Ensure chart containers don't overflow and match progress bar width */
+  .usage-chart-container {
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
+    display: block;
+  }
 }

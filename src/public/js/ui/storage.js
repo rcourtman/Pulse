@@ -5,6 +5,9 @@ PulseApp.ui.storage = (() => {
     const contentBadgeCache = new Map();
     const iconCache = new Map();
     const contentBadgeHTMLCache = new Map(); // Cache for complete content badge HTML
+    let storageChartData = null; // Cache storage chart data
+    let isUpdatingCharts = false; // Prevent concurrent chart updates
+    let chartUpdateTimeout = null; // Debounce timer for chart updates
 
     function _initMobileScrollIndicators() {
         const tableContainer = document.querySelector('#storage .table-container');
@@ -223,30 +226,182 @@ PulseApp.ui.storage = (() => {
         `;
     }
 
+    // Incremental table update using DOM diffing (copied from dashboard pattern)
+    function _updateStorageTableIncremental(tableBody, storageByNode, sortedNodeNames) {
+        const existingRows = new Map();
+        const nodeHeaders = new Map();
+
+        // Build map of existing rows
+        const children = tableBody.children;
+        for (let i = 0; i < children.length; i++) {
+            const row = children[i];
+            if (row.classList.contains('node-storage-header')) {
+                const nodeText = row.querySelector('td').textContent.trim();
+                nodeHeaders.set(nodeText, row);
+            } else {
+                // For storage rows, use a composite key of node+storage
+                const cells = row.querySelectorAll('td');
+                if (cells.length > 0 && cells[0].querySelector('.sticky-col-content')) {
+                    const storageId = cells[0].querySelector('.sticky-col-content').textContent.trim();
+                    const nodeId = row.dataset.node;
+                    if (storageId && nodeId) {
+                        const key = `${nodeId}-${storageId}`;
+                        existingRows.set(key, row);
+                    }
+                }
+            }
+        }
+
+        // Process each node group
+        let currentIndex = 0;
+        sortedNodeNames.forEach(nodeName => {
+            const nodeStorageData = storageByNode[nodeName] || [];
+            
+            // Handle node header
+            let nodeHeader = nodeHeaders.get(nodeName);
+            if (!nodeHeader) {
+                // Create new node header
+                nodeHeader = PulseApp.ui.common.createTableRow({
+                    classes: 'bg-gray-50 dark:bg-gray-700/50 node-storage-header',
+                    baseClasses: ''
+                });
+                nodeHeader.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 7, 'td');
+            }
+            
+            // Move or insert node header at correct position
+            if (tableBody.children[currentIndex] !== nodeHeader) {
+                tableBody.insertBefore(nodeHeader, tableBody.children[currentIndex] || null);
+            }
+            currentIndex++;
+
+            if (nodeStorageData.length === 0) {
+                // Handle empty state for node
+                let emptyRow = tableBody.children[currentIndex];
+                if (!emptyRow || !emptyRow.querySelector('[class*="no-storage"]')) {
+                    const noDataRow = document.createElement('tr');
+                    if (PulseApp.ui.emptyStates) {
+                        noDataRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+                    } else {
+                        noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
+                    }
+                    if (emptyRow) {
+                        tableBody.replaceChild(noDataRow, emptyRow);
+                    } else {
+                        tableBody.insertBefore(noDataRow, tableBody.children[currentIndex] || null);
+                    }
+                }
+                currentIndex++;
+            } else {
+                // Process storage rows for this node
+                nodeStorageData.forEach(store => {
+                    const storeWithNode = { ...store, node: nodeName };
+                    const rowKey = `${nodeName}-${store.storage}`;
+                    let existingRow = existingRows.get(rowKey);
+                    
+                    if (existingRow) {
+                        // Update existing row if needed
+                        _updateStorageRow(existingRow, storeWithNode);
+                        if (tableBody.children[currentIndex] !== existingRow) {
+                            tableBody.insertBefore(existingRow, tableBody.children[currentIndex] || null);
+                        }
+                        existingRows.delete(rowKey);
+                    } else {
+                        // Create new row
+                        const newRow = _createStorageRow(storeWithNode);
+                        tableBody.insertBefore(newRow, tableBody.children[currentIndex] || null);
+                    }
+                    currentIndex++;
+                });
+            }
+        });
+
+        // Remove any remaining rows that weren't in the new data
+        existingRows.forEach(row => row.remove());
+        
+        // Remove any orphaned elements
+        while (tableBody.children[currentIndex]) {
+            tableBody.removeChild(tableBody.children[currentIndex]);
+        }
+    }
+
+    // Update existing storage row without destroying chart containers
+    function _updateStorageRow(row, store) {
+        // Only update cells that need updating, preserve chart containers
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 7) return;
+
+        const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+        const isWarning = usagePercent >= 80 && usagePercent < 90;
+        const isCritical = usagePercent >= 90;
+        
+        // Update row classes if needed
+        const isDisabled = store.enabled === 0 || store.active === 0;
+        if (isDisabled && !row.classList.contains('opacity-50')) {
+            row.classList.add('opacity-50', 'grayscale-[50%]');
+        } else if (!isDisabled && row.classList.contains('opacity-50')) {
+            row.classList.remove('opacity-50', 'grayscale-[50%]');
+        }
+
+        // Update background color classes
+        row.classList.remove('bg-red-50', 'dark:bg-red-900/10', 'bg-yellow-50', 'dark:bg-yellow-900/10');
+        if (isCritical) {
+            row.classList.add('bg-red-50', 'dark:bg-red-900/10');
+        } else if (isWarning) {
+            row.classList.add('bg-yellow-50', 'dark:bg-yellow-900/10');
+        }
+
+        // Update usage cell - preserve chart container
+        const usageCell = cells[4];
+        const metricTextDiv = usageCell.querySelector('.metric-text');
+        if (metricTextDiv) {
+            // Only update the progress bar content
+            const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
+            const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
+            const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass, `${usagePercent.toFixed(0)}%`);
+            metricTextDiv.innerHTML = usageBarHTML;
+        }
+
+        // Update available and total cells
+        cells[5].textContent = PulseApp.utils.formatBytes(store.avail);
+        cells[6].textContent = PulseApp.utils.formatBytes(store.total);
+    }
+
     function updateStorageInfo() {
-        const contentDiv = document.getElementById('storage-info-content');
-        if (!contentDiv) return;
-        
-        // Find existing table container and preserve its scroll position
-        const existingTableContainer = contentDiv.querySelector('.table-container');
-        const currentScrollLeft = existingTableContainer ? existingTableContainer.scrollLeft : 0;
-        const currentScrollTop = existingTableContainer ? existingTableContainer.scrollTop : 0;
-        
-        contentDiv.innerHTML = '';
-        contentDiv.className = '';
+        // Check if we're in charts mode before updating
+        const storageContainer = document.getElementById('storage');
+        const isChartsMode = storageContainer && storageContainer.classList.contains('charts-mode');
 
         const nodes = PulseApp.state.get('nodesData') || [];
 
+        // Get the existing table and tbody from the HTML
+        const table = document.getElementById('storage-table');
+        if (!table) return;
+        
+        let tbody = table.querySelector('tbody');
+        
         if (!Array.isArray(nodes) || nodes.length === 0) {
-            if (PulseApp.ui.emptyStates) {
-                contentDiv.innerHTML = PulseApp.ui.emptyStates.createEmptyState('no-storage');
-            } else {
-                contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No node or storage data available.</p>';
+            if (!tbody) {
+                tbody = document.createElement('tbody');
+                tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
+                table.appendChild(tbody);
             }
+            tbody.innerHTML = '';
+            const emptyRow = document.createElement('tr');
+            if (PulseApp.ui.emptyStates) {
+                emptyRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+            } else {
+                emptyRow.innerHTML = '<td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No node or storage data available.</td>';
+            }
+            tbody.appendChild(emptyRow);
             return;
         }
-
-        const container = document.createElement('div');
+        
+        // Create tbody if it doesn't exist
+        if (!tbody) {
+            tbody = document.createElement('tbody');
+            tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
+            table.appendChild(tbody);
+        }
 
         // Pre-sort storage data for each node
         const storageByNode = nodes.reduce((acc, node) => {
@@ -279,43 +434,23 @@ PulseApp.ui.storage = (() => {
         const nodeKeys = Object.keys(storageByNode);
 
         if (nodeKeys.length === 0) {
-          if (PulseApp.ui.emptyStates) {
-              container.innerHTML += PulseApp.ui.emptyStates.createEmptyState('no-storage');
-          } else {
-              container.innerHTML += '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
-          }
-          contentDiv.appendChild(container);
-          return;
+            tbody.innerHTML = '';
+            const emptyRow = document.createElement('tr');
+            if (PulseApp.ui.emptyStates) {
+                emptyRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+            } else {
+                emptyRow.innerHTML = '<td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No storage data found associated with nodes.</td>';
+            }
+            tbody.appendChild(emptyRow);
+            return;
         }
 
         const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
 
-        // Add node storage summary cards
-        const summaryCardsContainer = document.createElement('div');
-        summaryCardsContainer.className = 'mb-3';
-        
-        const cardsGrid = document.createElement('div');
-        cardsGrid.className = 'flex flex-wrap gap-3';
-        
-        sortedNodeNames.forEach(nodeName => {
-            const nodeStorageData = storageByNode[nodeName];
-            if (nodeStorageData.length > 0) {
-                const card = createNodeStorageSummaryCard(nodeName, nodeStorageData);
-                cardsGrid.appendChild(card);
-            }
-        });
-        
-        summaryCardsContainer.appendChild(cardsGrid);
-        container.appendChild(summaryCardsContainer);
-
-        // Table view with scroll container
-        const tableContainer = document.createElement('div');
-        tableContainer.className = 'table-container max-h-[80vh] overflow-y-auto overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar';
-        
-        const table = document.createElement('table');
-        table.className = 'w-full text-sm border-collapse table-auto min-w-full';
-
-            const thead = document.createElement('thead');
+        // Create or update table header if needed
+        let thead = table.querySelector('thead');
+        if (!thead) {
+            thead = document.createElement('thead');
             const sortIndicator = (order) => {
                 if (currentSortOrder === order) {
                     return order === 'usage-desc' ? ' ↓' : ' ↑';
@@ -336,10 +471,27 @@ PulseApp.ui.storage = (() => {
                   <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Total</th>
                 </tr>
               `;
-            table.appendChild(thead);
+            table.insertBefore(thead, tbody);
+        } else {
+            // Update sort header if needed
+            const sortHeader = table.querySelector('#usage-sort-header');
+            if (sortHeader) {
+                const sortIndicator = (order) => {
+                    if (currentSortOrder === order) {
+                        return order === 'usage-desc' ? ' ↓' : ' ↑';
+                    }
+                    return '';
+                };
+                sortHeader.innerHTML = `Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}`;
+            }
+        }
+        
+        // Get the table container for scroll position preservation
+        const tableContainer = storageContainer.querySelector('.table-container')
 
-            const tbody = document.createElement('tbody');
-            tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
+        // Preserve scroll position
+        const currentScrollLeft = tableContainer.scrollLeft;
+        const currentScrollTop = tableContainer.scrollTop;
 
         // Calculate dynamic column widths for responsive display
         let maxStorageLength = 0;
@@ -364,42 +516,13 @@ PulseApp.ui.storage = (() => {
             htmlElement.style.setProperty('--storage-type-col-width', `${typeColWidth}px`);
         }
 
-        sortedNodeNames.forEach(nodeName => {
-          const nodeStorageData = storageByNode[nodeName]; // Already sorted
-
-          const nodeHeaderRow = PulseApp.ui.common.createTableRow({
-              classes: 'bg-gray-50 dark:bg-gray-700/50 node-storage-header',
-              baseClasses: '' // Override base classes for node headers
-          });
-          nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(`${nodeName}`, 7, 'td');
-          tbody.appendChild(nodeHeaderRow);
-
-          if (nodeStorageData.length === 0) {
-            const noDataRow = document.createElement('tr');
-            if (PulseApp.ui.emptyStates) {
-                noDataRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
-            } else {
-                noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
-            }
-            tbody.appendChild(noDataRow);
-            return;
-          }
-
-          // Use pre-sorted data
-          nodeStorageData.forEach(store => {
-              const row = _createStorageRow(store);
-              tbody.appendChild(row);
-          });
-        });
-
-        table.appendChild(tbody);
-        tableContainer.appendChild(table);
-        container.appendChild(tableContainer);
-        contentDiv.appendChild(container);
+        // Use incremental update instead of rebuilding
+        _updateStorageTableIncremental(tbody, storageByNode, sortedNodeNames);
         
-        // Add click handler for sort
+        // Add click handler for sort (only if not already added)
         const usageSortHeader = document.getElementById('usage-sort-header');
-        if (usageSortHeader) {
+        if (usageSortHeader && !usageSortHeader.hasAttribute('data-click-bound')) {
+            usageSortHeader.setAttribute('data-click-bound', 'true');
             usageSortHeader.addEventListener('click', () => {
                 // Cycle through sort orders: name -> usage-desc -> usage-asc -> name
                 if (currentSortOrder === 'name') {
@@ -421,30 +544,18 @@ PulseApp.ui.storage = (() => {
         // Initialize fixed table line
         _initTableFixedLine();
         
-        // Restore scroll position to the new table container with multiple timing strategies
+        // Restore scroll position
         if (tableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
-            const restoreScroll = () => {
-                tableContainer.scrollLeft = currentScrollLeft;
-                tableContainer.scrollTop = currentScrollTop;
-            };
-            
-            // Multiple restoration attempts with different timing
-            setTimeout(restoreScroll, 0);
-            setTimeout(restoreScroll, 16);
-            setTimeout(restoreScroll, 50);
-            setTimeout(restoreScroll, 100);
-            requestAnimationFrame(restoreScroll);
-            
-            // Final verification and fallback
-            setTimeout(() => {
-                if (Math.abs(tableContainer.scrollTop - currentScrollTop) > 10) {
-                    tableContainer.scrollTo({
-                        top: currentScrollTop,
-                        left: currentScrollLeft,
-                        behavior: 'instant'
-                    });
-                }
-            }, 200);
+            tableContainer.scrollLeft = currentScrollLeft;
+            tableContainer.scrollTop = currentScrollTop;
+        }
+
+        // Update charts after table is rendered, but only if in charts mode
+        if (isChartsMode) {
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                updateStorageCharts();
+            });
         }
     }
 
@@ -579,6 +690,7 @@ PulseApp.ui.storage = (() => {
 
     function _createStorageRow(store) {
         const row = document.createElement('tr');
+        row.dataset.node = store.node; // Add node data attribute for incremental updates
         const isDisabled = store.enabled === 0 || store.active === 0;
         const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
         const isWarning = usagePercent >= 80 && usagePercent < 90;
@@ -632,7 +744,12 @@ PulseApp.ui.storage = (() => {
         row.appendChild(PulseApp.ui.common.createTableCell(contentBadges, 'p-1 px-2 whitespace-nowrap text-xs'));
         row.appendChild(PulseApp.ui.common.createTableCell(store.type || 'N/A', 'p-1 px-2 whitespace-nowrap text-xs'));
         row.appendChild(PulseApp.ui.common.createTableCell(sharedText, 'p-1 px-2 whitespace-nowrap text-center'));
-        row.appendChild(PulseApp.ui.common.createTableCell(usageBarHTML, 'p-1 px-2 min-w-[250px]'));
+        // Create dual content structure for usage cell (progress bar + chart)
+        const storageId = `${store.node}-${store.storage}`;
+        const chartId = `chart-${storageId}-disk`;
+        const storageChartHTML = `<div id="${chartId}" class="usage-chart-container h-3.5 w-full" data-storage-id="${store.storage}" data-node="${store.node}"></div>`;
+        const usageCellHTML = `<div class="w-full"><div class="metric-text">${usageBarHTML}</div><div class="metric-chart">${storageChartHTML}</div></div>`;
+        row.appendChild(PulseApp.ui.common.createTableCell(usageCellHTML, 'p-1 px-2 min-w-[200px]'));
         row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.avail), 'p-1 px-2 whitespace-nowrap'));
         row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.total), 'p-1 px-2 whitespace-nowrap'));
         return row;
@@ -646,8 +763,251 @@ PulseApp.ui.storage = (() => {
         updateStorageInfo();
     }
 
+    function toggleStorageChartsMode() {
+        const storageContainer = document.getElementById('storage');
+        const checkbox = document.getElementById('toggle-storage-charts-checkbox');
+        const label = checkbox ? checkbox.parentElement : null;
+        
+        if (checkbox && checkbox.checked) {
+            // Switch to charts mode  
+            storageContainer.classList.add('charts-mode');
+            if (label) label.title = 'Toggle Progress View';
+            
+            // Show storage-specific chart controls
+            const storageChartControls = document.getElementById('storage-chart-controls');
+            if (storageChartControls) {
+                storageChartControls.classList.remove('hidden');
+            }
+            
+            // CSS classes will handle visibility - no need to set inline styles
+            
+            // Start fetching chart data if needed and update charts
+            if (PulseApp.charts) {
+                // Small delay to ensure DOM is ready after mode switch
+                setTimeout(() => {
+                    // Fetch initial data if needed
+                    updateStorageCharts(false);
+                    // Also update time range availability after initial fetch
+                    setTimeout(() => updateTimeRangeAvailability(), 100);
+                }, 50);
+            }
+        } else {
+            // Switch to progress bars mode
+            storageContainer.classList.remove('charts-mode');
+            if (label) label.title = 'Toggle Charts View';
+            
+            // Hide storage-specific chart controls
+            const storageChartControls = document.getElementById('storage-chart-controls');
+            if (storageChartControls) {
+                storageChartControls.classList.add('hidden');
+            }
+            
+            // Remove inline styles to let CSS classes take over
+            const storageTab = document.getElementById('storage');
+            if (storageTab) {
+                storageTab.querySelectorAll('.metric-text').forEach(el => {
+                    el.style.display = '';  // Remove inline style
+                });
+                storageTab.querySelectorAll('.metric-chart').forEach(el => {
+                    el.style.display = '';  // Remove inline style
+                });
+            }
+        }
+    }
+
+    async function updateStorageCharts(forceRefetch = false) {
+        const storageTab = document.getElementById('storage');
+        if (!storageTab || isUpdatingCharts) return;
+        
+        isUpdatingCharts = true;
+
+        try {
+            // Only fetch new data if we don't have any cached data yet
+            // The API returns ALL data regardless of time range, so we only need to fetch once
+            if (!storageChartData) {
+                // Fetch storage chart data from API (range parameter is ignored by the server)
+                const response = await fetch('/api/storage-charts?range=10080'); // Just use max range
+                if (!response.ok) {
+                    console.error('[Storage Charts] Failed to fetch storage chart data:', response.status);
+                    if (response.status === 429) {
+                        // Rate limited - show a message to the user
+                        console.warn('[Storage Charts] Rate limited. Please wait a moment before trying again.');
+                    }
+                    isUpdatingCharts = false;
+                    return;
+                }
+                
+                const chartData = await response.json();
+                storageChartData = chartData.data || {};
+            }
+            
+            // Get current time range for client-side filtering/display
+            const checkedTimeRange = document.querySelector('input[name="storage-time-range"]:checked');
+            const timeRange = parseInt(checkedTimeRange ? checkedTimeRange.value : '60');
+            const now = Date.now();
+            const cutoffTime = now - (timeRange * 60 * 1000);
+            
+            const storageData = storageChartData;
+            
+            // Update each storage chart container
+            const chartContainers = storageTab.querySelectorAll('.usage-chart-container');
+            
+            chartContainers.forEach(container => {
+                const storageId = container.dataset.storageId;
+                const nodeId = container.dataset.node;
+                
+                if (storageId && nodeId) {
+                    const fullStorageId = `${nodeId}-${storageId}`;
+                    const storageMetrics = storageData[fullStorageId];
+                    
+                    if (storageMetrics && storageMetrics.usage && storageMetrics.usage.length > 0) {
+                        // Filter data based on selected time range
+                        const filteredData = storageMetrics.usage.filter(point => point.timestamp >= cutoffTime);
+                        
+                        if (filteredData.length > 0) {
+                            // Use the existing chart system to create usage charts
+                            if (PulseApp.charts && PulseApp.charts.createOrUpdateChart) {
+                                // The container should already have the correct ID from _createStorageRow
+                                const chartId = container.id;
+                                
+                                // Only update if container is still in DOM and visible
+                                if (container.offsetParent !== null) {
+                                    PulseApp.charts.createOrUpdateChart(
+                                        chartId,
+                                        filteredData,
+                                        'disk',
+                                        'mini',
+                                        fullStorageId
+                                    );
+                                }
+                            }
+                        } else {
+                            // No data in selected time range
+                            if (!container.querySelector('svg')) {
+                                container.innerHTML = '<div class="text-[9px] text-gray-400 text-center leading-4">NO DATA</div>';
+                            }
+                        }
+                    } else {
+                        // No data available - show placeholder only if container is empty
+                        if (!container.querySelector('svg')) {
+                            container.innerHTML = '<div class="text-[9px] text-gray-400 text-center leading-4">DISK</div>';
+                        }
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('[Storage Charts] Error updating storage charts:', error);
+        } finally {
+            isUpdatingCharts = false;
+            // Update time range availability after chart update
+            updateTimeRangeAvailability();
+        }
+    }
+
+    function updateTimeRangeAvailability() {
+        // For storage charts, check actual data age to grey out unavailable time ranges
+        if (!storageChartData) return;
+        
+        // Find the oldest data point across all storages
+        let oldestDataTime = null;
+        Object.values(storageChartData).forEach(storage => {
+            if (storage.usage && storage.usage.length > 0) {
+                const firstDataPoint = storage.usage[0];
+                if (firstDataPoint && firstDataPoint.timestamp) {
+                    const dataTime = firstDataPoint.timestamp;
+                    if (!oldestDataTime || dataTime < oldestDataTime) {
+                        oldestDataTime = dataTime;
+                    }
+                }
+            }
+        });
+        
+        if (!oldestDataTime) {
+            // No data at all - disable everything
+            const timeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
+            const timeRangeLabels = document.querySelectorAll('label[data-storage-time-range]');
+            
+            timeRangeInputs.forEach(input => {
+                input.disabled = true;
+            });
+            
+            timeRangeLabels.forEach(label => {
+                label.classList.add('opacity-50', 'cursor-not-allowed');
+                label.classList.remove('cursor-pointer', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                label.title = 'No data available yet';
+            });
+            return;
+        }
+        
+        // Calculate data age in minutes
+        const now = Date.now();
+        const dataAgeMinutes = (now - oldestDataTime) / (1000 * 60);
+        
+        // Check each time range
+        const timeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
+        const timeRangeLabels = document.querySelectorAll('label[data-storage-time-range]');
+        
+        timeRangeInputs.forEach(input => {
+            const rangeMinutes = parseInt(input.value);
+            const hasEnoughData = dataAgeMinutes >= rangeMinutes * 0.8; // Allow if we have at least 80% of the range
+            input.disabled = !hasEnoughData;
+        });
+        
+        timeRangeLabels.forEach(label => {
+            const rangeMinutes = parseInt(label.dataset.storageTimeRange);
+            const hasEnoughData = dataAgeMinutes >= rangeMinutes * 0.8;
+            
+            if (!hasEnoughData) {
+                label.classList.add('opacity-50', 'cursor-not-allowed');
+                label.classList.remove('cursor-pointer', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                
+                // Calculate how much more time is needed
+                const minutesNeeded = Math.ceil(rangeMinutes * 0.8 - dataAgeMinutes);
+                if (minutesNeeded > 60) {
+                    const hoursNeeded = Math.ceil(minutesNeeded / 60);
+                    label.title = `Need ${hoursNeeded}h more data`;
+                } else {
+                    label.title = `Need ${minutesNeeded}m more data`;
+                }
+            } else {
+                label.classList.remove('opacity-50', 'cursor-not-allowed');
+                label.classList.add('cursor-pointer', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                label.title = '';
+            }
+        });
+    }
+
+    function init() {
+        // Initialize storage charts toggle
+        const storageChartsToggleCheckbox = document.getElementById('toggle-storage-charts-checkbox');
+        if (storageChartsToggleCheckbox) {
+            storageChartsToggleCheckbox.addEventListener('change', toggleStorageChartsMode);
+        }
+
+        // Initialize storage time range controls
+        const storageTimeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
+        storageTimeRangeInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                // Only update charts if charts mode is active
+                const storageContainer = document.getElementById('storage');
+                if (storageContainer && storageContainer.classList.contains('charts-mode')) {
+                    // Debounce chart updates to prevent rapid clicking issues
+                    if (chartUpdateTimeout) {
+                        clearTimeout(chartUpdateTimeout);
+                    }
+                    chartUpdateTimeout = setTimeout(() => {
+                        updateStorageCharts(false); // Don't refetch, just re-render with new time range
+                    }, 100);
+                }
+            });
+        });
+    }
+
     return {
         updateStorageInfo,
-        resetSort
+        resetSort,
+        toggleStorageChartsMode,
+        init
     };
 })();

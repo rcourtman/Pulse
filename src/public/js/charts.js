@@ -22,6 +22,7 @@ PulseApp.charts = (() => {
         // Different sizes for different use cases
         sparkline: { width: 66, height: 16, padding: 1 }, // For I/O metrics
         mini: { width: 118, height: 20, padding: 2 },       // For usage metrics
+        storage: { width: 200, height: 14, padding: 2 },   // For storage tab - matches min column width
         renderPoints: getOptimalRenderPoints(),
         strokeWidth: 1.5, // Slightly thicker for better visibility
         // Smart color coding based on data values
@@ -225,6 +226,7 @@ PulseApp.charts = (() => {
             svg.setAttribute('preserveAspectRatio', 'none');
             svg.setAttribute('class', 'mini-chart');
             svg.style.cursor = 'crosshair';
+            svg.style.display = 'block'; // Ensure SVG doesn't have inline-block spacing issues
 
             // Create gradient definition for fill
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
