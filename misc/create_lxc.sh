@@ -253,7 +253,7 @@ fi
 TEMPLATE_SEARCH="${PCT_OSTYPE}-${PCT_OSVERSION:-}"
 
 msg_info "Updating LXC Template List"
-if ! timeout 15 pveam update >/dev/null 2>&1; then
+if ! pveam update >/dev/null 2>&1; then
   TEMPLATE_FALLBACK=$(pveam list "$TEMPLATE_STORAGE" | awk "/$TEMPLATE_SEARCH/ {print \$2}" | sort -t - -k 2 -V | tail -n1)
   if [[ -z "$TEMPLATE_FALLBACK" ]]; then
     msg_error "Failed to update LXC template list and no local template matching '$TEMPLATE_SEARCH' found."
@@ -284,7 +284,7 @@ if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE" || ! zstdcat "$TEMPLAT
   for attempt in {1..3}; do
     msg_info "Attempt $attempt: Downloading LXC template..."
 
-    if timeout 120 pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null 2>&1; then
+    if pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null 2>&1; then
       msg_ok "Template download successful."
       break
     fi
