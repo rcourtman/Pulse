@@ -2159,8 +2159,11 @@ docker compose up -d</code></pre>
                     }
                     showMessage('Update applied successfully. Service is restarting and will refresh automatically.', 'success');
                     
-                    // Poll health endpoint until service is back up, then refresh
-                    pollHealthAndRefresh();
+                    // Wait 3 seconds to ensure service has time to start shutting down
+                    setTimeout(() => {
+                        // Poll health endpoint until service is back up, then refresh
+                        pollHealthAndRefresh();
+                    }, 3000);
                 });
                 
                 window.socket.on('updateError', (data) => {
