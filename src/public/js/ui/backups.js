@@ -24,6 +24,10 @@ function initializeUnifiedBackups() {
     
     setupEventListeners();
     initializeBackupFrequencyChart();
+    
+    // Fetch and display data when initialized
+    updateUnifiedBackupsInfo();
+    
     // Keyboard handlers
     const searchInput = document.getElementById('unified-search');
     if (searchInput) {
@@ -935,8 +939,8 @@ function renderBackupFrequencyChart(data) {
     
     // Calculate scales
     const maxBackups = Math.max(...data.map(d => d.total), 1);
-    const barWidth = Math.max(1, (width / data.length) - 2);
-    const xScale = width / data.length;
+    const xScale = width / Math.max(data.length, 1);
+    const barWidth = Math.max(1, Math.min(xScale - 2, 50)); // Cap at 50px max width
     const yScale = height / maxBackups;
     
     // Add grid lines
@@ -1000,7 +1004,7 @@ function renderBackupFrequencyChart(data) {
     
     data.forEach((d, i) => {
         const barHeight = d.total * yScale;
-        const x = i * xScale + (xScale - barWidth) / 2;
+        const x = Math.max(0, i * xScale + (xScale - barWidth) / 2);
         const y = height - barHeight;
         
         // Create bar group
@@ -1014,7 +1018,7 @@ function renderBackupFrequencyChart(data) {
         const clickRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         clickRect.setAttribute('x', i * xScale);
         clickRect.setAttribute('y', 0);
-        clickRect.setAttribute('width', xScale);
+        clickRect.setAttribute('width', Math.max(1, xScale));
         clickRect.setAttribute('height', height);
         clickRect.setAttribute('fill', 'transparent');
         clickRect.style.cursor = 'pointer';
