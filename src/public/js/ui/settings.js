@@ -239,7 +239,7 @@ PulseApp.ui.settings = (() => {
                         Main PVE server configuration (required) 
                         <a href="https://github.com/rcourtman/Pulse#creating-a-proxmox-api-token" target="_blank" rel="noopener noreferrer" 
                            class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
-                            📚 Need help creating API tokens?
+                            Need help creating API tokens?
                         </a>
                     </p>
                 </div>
@@ -348,7 +348,7 @@ PulseApp.ui.settings = (() => {
                         Main PBS server configuration (optional)
                         <a href="https://github.com/rcourtman/Pulse#creating-a-proxmox-backup-server-api-token" target="_blank" rel="noopener noreferrer" 
                            class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
-                            📚 Need help creating PBS API tokens?
+                            Need help creating PBS API tokens?
                         </a>
                     </p>
                 </div>
@@ -1942,7 +1942,7 @@ docker compose up -d</code></pre>
         }
         
         if (categories.docs.length > 0) {
-            summaryParts.push(`<span class="text-purple-600 dark:text-purple-400">📚 ${categories.docs.length} documentation</span>`);
+            summaryParts.push(`<span class="text-purple-600 dark:text-purple-400">${categories.docs.length} documentation</span>`);
         }
         
         let summaryHtml = '';
@@ -1990,7 +1990,7 @@ docker compose up -d</code></pre>
                 icon = '🔧';
                 iconClass = 'text-gray-600 dark:text-gray-400';
             } else if (message.toLowerCase().startsWith('docs')) {
-                icon = '📚';
+                icon = '';
                 iconClass = 'text-purple-600 dark:text-purple-400';
             }
             
