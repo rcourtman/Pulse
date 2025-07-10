@@ -1919,7 +1919,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     // Fetch snapshots for all VMs and containers, with better error handling
     const guestSnapshotPromises = [];
     
-    [...runningVms, ...runningContainers].forEach(guest => {
+    [...vms, ...containers].forEach(guest => {
         const endpointId = guest.endpointId;
         const nodeName = guest.node;
         const vmid = guest.vmid;
