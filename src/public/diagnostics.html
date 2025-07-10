@@ -60,6 +60,21 @@
                 </div>
                 
                 <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Environment</h2>
+                    <div id="environment" class="bg-gray-50 p-4 rounded space-y-2"></div>
+                </div>
+                
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Network Connectivity</h2>
+                    <div id="connectivity" class="space-y-4"></div>
+                </div>
+                
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Recent Errors</h2>
+                    <div id="recent-errors"></div>
+                </div>
+                
+                <div class="mb-8">
                     <h2 class="text-2xl font-semibold mb-4 text-gray-700">Recommendations</h2>
                     <div id="recommendations"></div>
                 </div>
@@ -104,6 +119,92 @@
             // Basic info
             document.getElementById('version').textContent = data.version || 'Unknown';
             document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleString();
+            
+            // Environment info
+            const envContainer = document.getElementById('environment');
+            if (data.environment) {
+                const env = data.environment;
+                envContainer.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p><strong>Node.js:</strong> ${env.nodeVersion}</p>
+                            <p><strong>Platform:</strong> ${env.platform} (${env.arch})</p>
+                            <p><strong>OS:</strong> ${env.osType} ${env.osRelease}</p>
+                            <p><strong>Docker:</strong> ${env.dockerDetected ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div>
+                            <p><strong>CPU Cores:</strong> ${env.cpuCount}</p>
+                            <p><strong>Memory:</strong> ${env.freeMemory} / ${env.totalMemory}</p>
+                            <p><strong>Process Memory:</strong> ${env.nodeMemoryUsage.heapUsed} heap</p>
+                            <p><strong>Uptime:</strong> ${env.uptime}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Network Connectivity
+            const connContainer = document.getElementById('connectivity');
+            if (data.connectivity) {
+                let connHtml = '';
+                
+                // Proxmox connections
+                if (data.connectivity.proxmox && data.connectivity.proxmox.length > 0) {
+                    connHtml += '<h3 class="text-lg font-semibold mb-2">Proxmox VE</h3>';
+                    connHtml += '<div class="bg-gray-50 p-4 rounded mb-4">';
+                    data.connectivity.proxmox.forEach(conn => {
+                        const statusIcon = conn.reachable ? '✅' : '❌';
+                        const statusText = conn.reachable ? 'Connected' : conn.errorType || 'Failed';
+                        const timeText = conn.responseTime ? `${conn.responseTime}ms` : 'N/A';
+                        connHtml += `
+                            <div class="mb-2">
+                                <strong>${conn.name}:</strong> ${statusIcon} ${statusText} 
+                                <span class="text-sm text-gray-600">(Response time: ${timeText})</span>
+                                ${conn.error ? `<div class="text-red-600 text-sm">${conn.error}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                    connHtml += '</div>';
+                }
+                
+                // PBS connections
+                if (data.connectivity.pbs && data.connectivity.pbs.length > 0) {
+                    connHtml += '<h3 class="text-lg font-semibold mb-2">Proxmox Backup Server</h3>';
+                    connHtml += '<div class="bg-gray-50 p-4 rounded">';
+                    data.connectivity.pbs.forEach(conn => {
+                        const statusIcon = conn.reachable ? '✅' : '❌';
+                        const statusText = conn.reachable ? 'Connected' : conn.errorType || 'Failed';
+                        const timeText = conn.responseTime ? `${conn.responseTime}ms` : 'N/A';
+                        connHtml += `
+                            <div class="mb-2">
+                                <strong>${conn.name}:</strong> ${statusIcon} ${statusText}
+                                <span class="text-sm text-gray-600">(Response time: ${timeText})</span>
+                                ${conn.error ? `<div class="text-red-600 text-sm">${conn.error}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                    connHtml += '</div>';
+                }
+                
+                connContainer.innerHTML = connHtml || '<p class="text-gray-600">No connections configured</p>';
+            }
+            
+            // Recent Errors
+            const errorsContainer = document.getElementById('recent-errors');
+            if (data.recentErrors && data.recentErrors.length > 0) {
+                errorsContainer.innerHTML = `
+                    <div class="bg-red-50 p-4 rounded space-y-2">
+                        ${data.recentErrors.map(error => `
+                            <div class="border-b border-red-200 pb-2 mb-2">
+                                <div class="text-sm text-gray-600">${new Date(error.timestamp).toLocaleString()} - ${error.context}</div>
+                                <div class="text-red-700 font-semibold">${error.type}: ${error.message}</div>
+                                ${error.stack ? `<pre class="text-xs text-gray-600 overflow-x-auto mt-1">${error.stack}</pre>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                errorsContainer.innerHTML = '<p class="text-green-600 bg-green-50 p-4 rounded">✓ No recent errors</p>';
+            }
             
             // Recommendations
             const recsContainer = document.getElementById('recommendations');
