@@ -22,18 +22,16 @@ curl -fsSL "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1
 $STD dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
 msg_ok "Installed Dependencies"
 
-NODE_VERSION="20" setup_nodejs
+NODE_VERSION="20" NODE_MODULE="gulp-cli,mocha" setup_nodejs
+fetch_and_deploy_gh_release "habitica" "HabitRPG/habitica" "tarball" "latest" "/opt/habitica"
 
 msg_info "Setup ${APPLICATION}"
-temp_file=$(mktemp)
-RELEASE=$(curl -fsSL https://api.github.com/repos/HabitRPG/habitica/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
-curl -fsSL "https://github.com/HabitRPG/habitica/archive/refs/tags/v${RELEASE}.tar.gz" -o "$temp_file"
-tar zxf $temp_file
-mv habitica-${RELEASE}/ /opt/habitica
 cd /opt/habitica
 $STD npm i
+$STD npm run postinstall
+$STD npm run client:build
+$STD gulp build:prod
 cp config.json.example config.json
-echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Setup ${APPLICATION}"
 
 msg_info "Creating Service"
@@ -91,7 +89,6 @@ motd_ssh
 customize
 
 msg_info "Cleaning up"
-rm -f $temp_file
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"
