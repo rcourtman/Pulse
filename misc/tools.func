@@ -54,8 +54,24 @@ function setup_nodejs() {
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" \
       >/etc/apt/sources.list.d/nodesource.list
 
+    sleep 2
     if ! apt-get update >/dev/null 2>&1; then
-      msg_error "Failed to update APT repositories after adding NodeSource"
+      msg_warn "APT update failed – retrying in 5s"
+      sleep 5
+      if ! apt-get update >/dev/null 2>&1; then
+        msg_error "Failed to update APT repositories after adding NodeSource"
+        exit 1
+      fi
+    fi
+
+    if ! apt-cache policy nodejs | grep -q 'Candidate:'; then
+      msg_error "Node.js package not found – repository might be broken or too fresh"
+      apt-cache policy nodejs >&2
+      exit 1
+    fi
+
+    if ! apt-get install -y nodejs >/dev/null 2>&1; then
+      msg_error "Failed to install Node.js ${NODE_VERSION} from NodeSource"
       exit 1
     fi
 

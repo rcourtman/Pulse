@@ -20,18 +20,39 @@ color
 catch_errors
 
 function update_script() {
-    header_info
-    check_container_storage
-    check_container_resources
-    if [[ ! -d /var ]]; then
-        msg_error "No ${APP} Installation Found!"
-        exit
-    fi
-    msg_info "Updating $APP LXC"
-    $STD apt-get update
-    $STD apt-get -y upgrade
-    msg_ok "Updated $APP LXC"
-    exit
+  header_info
+  check_container_storage
+  check_container_resources
+
+  RELEASE=$(curl -fsSL https://www.emqx.com/en/downloads/enterprise | grep -oP '/en/downloads/enterprise/v\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n1)
+  if [[ "$RELEASE" != "$(cat ~/.emqx 2>/dev/null)" ]] || [[ ! -f ~/.emqx ]]; then
+    msg_info "Stopping EMQX"
+    systemctl stop emqx
+    msg_ok "Stopped EMQX"
+
+    msg_info "Downloading EMQX v${RELEASE}"
+    DEB_FILE="/tmp/emqx-enterprise-${RELEASE}-debian12-amd64.deb"
+    curl -fsSL -o "$DEB_FILE" "https://www.emqx.com/en/downloads/enterprise/v${RELEASE}/emqx-enterprise-${RELEASE}-debian12-amd64.deb"
+    msg_ok "Downloaded EMQX"
+
+    msg_info "Installing EMQX"
+    $STD apt-get install -y "$DEB_FILE"
+    msg_ok "Installed EMQX v${RELEASE}"
+
+    msg_info "Starting EMQX"
+    systemctl start emqx
+    echo "$RELEASE" >~/.emqx
+    msg_ok "Started EMQX"
+
+    msg_info "Cleaning Up"
+    rm -f "$DEB_FILE"
+    msg_ok "Cleanup Completed"
+    msg_ok "Update Successful"
+  else
+    msg_ok "No update required. EMQX is already at v${RELEASE}"
+  fi
+
+  exit
 }
 
 start

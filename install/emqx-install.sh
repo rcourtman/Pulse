@@ -14,22 +14,38 @@ network_check
 update_os
 
 msg_info "Installing dependencies"
-$STD apt-get install -y \
-  apt-transport-https \
-  ca-certificates \
-  lsb-release
+$STD apt-get install -y ca-certificates
 msg_ok "Installed dependencies"
 
+msg_info "Fetching latest EMQX Enterprise version"
+LATEST_VERSION=$(curl -fsSL https://www.emqx.com/en/downloads/enterprise | grep -oP '/en/downloads/enterprise/v\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n1)
+if [[ -z "$LATEST_VERSION" ]]; then
+  msg_error "Failed to determine latest EMQX version"
+  exit 1
+fi
+msg_ok "Latest version: v$LATEST_VERSION"
+
+DOWNLOAD_URL="https://www.emqx.com/en/downloads/enterprise/v$LATEST_VERSION/emqx-enterprise-${LATEST_VERSION}-debian12-amd64.deb"
+DEB_FILE="/tmp/emqx-enterprise-${LATEST_VERSION}-debian12-amd64.deb"
+
+msg_info "Downloading EMQX v$LATEST_VERSION"
+$STD curl -fsSL -o "$DEB_FILE" "$DOWNLOAD_URL"
+msg_ok "Downloaded EMQX"
+
 msg_info "Installing EMQX"
-curl -fsSL https://packagecloud.io/emqx/emqx/gpgkey | gpg --dearmor -o /usr/share/keyrings/emqx-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/emqx-archive-keyring.gpg] https://packagecloud.io/emqx/emqx/debian/ bookworm main" >/etc/apt/sources.list.d/emqx.list
-$STD apt-get install -y emqx
+$STD apt-get install -y "$DEB_FILE"
+echo "$LATEST_VERSION" >~/.emqx
 msg_ok "Installed EMQX"
+
+msg_info "Starting EMQX service"
+$STD systemctl enable -q --now emqx
+msg_ok "Enabled EMQX service"
 
 motd_ssh
 customize
 
 msg_info "Cleaning up"
+rm -f "$DEB_FILE"
 $STD apt-get autoremove
 $STD apt-get autoclean
 msg_ok "Cleaned"
