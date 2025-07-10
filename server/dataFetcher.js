@@ -2089,12 +2089,23 @@ async function fetchMetricsData(vms, containers, currentApiClients) {
                                 const bulkKey = `${nodeName}-${vmid}`;
                                 const bulkVmData = bulkDataMap.get(bulkKey) || {};
                                 
-                                const rrdDataResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { 
-                                    params: { timeframe: 'hour', cf: 'AVERAGE' } 
-                                });
+                                // Check if VM is running before fetching RRD data
+                                // Non-running VMs will return 400 error for RRD data
+                                const isRunning = bulkVmData.status === 'running';
                                 
-                                // Also fetch current status for accurate I/O counters
-                                // The bulk endpoint seems to cache these values
+                                let rrdDataResponse = null;
+                                if (isRunning) {
+                                    try {
+                                        rrdDataResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { 
+                                            params: { timeframe: 'hour', cf: 'AVERAGE' } 
+                                        });
+                                    } catch (rrdError) {
+                                        console.warn(`[DataFetcher - ${endpointName}] Failed to fetch RRD data for ${vmid}: ${rrdError.message}`);
+                                    }
+                                }
+                                
+                                // Always fetch current status for accurate uptime and current metrics
+                                // This works even for stopped VMs
                                 let currentStatusResponse;
                                 try {
                                     currentStatusResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`);
