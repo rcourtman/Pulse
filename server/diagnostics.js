@@ -149,8 +149,8 @@ class DiagnosticTool {
             isTimingIssue: report.state.loadTimeout || (report.state.serverUptime < 60 && (!report.state.guests || report.state.guests.total === 0))
         };
 
-        // Return sanitized report by default for privacy
-        return this.sanitizeReport(report);
+        // Return unsanitized report
+        return report;
     }
 
     sanitizeReport(report) {
@@ -1195,12 +1195,18 @@ class DiagnosticTool {
                     
                     // PBS permissions are simpler - we only need Datastore.Audit
                     if (perm.canConnect && perm.canListDatastores && perm.canListBackups) {
-                        // If they have full access but aren't root, suggest reviewing permissions
-                        if (!perm.tokenId.startsWith('root@') && perm.version) {
+                        // Check if token might have excessive permissions (heuristic since we can't query permissions with another token)
+                        // Skip this check for root tokens (already warned above) and read-only named tokens
+                        const tokenName = perm.tokenId.split('!')[1] || '';
+                        const isLikelyReadOnly = tokenName.toLowerCase().includes('read') || 
+                                               tokenName.toLowerCase().includes('audit') || 
+                                               tokenName.toLowerCase().includes('monitor');
+                        
+                        if (!perm.tokenId.startsWith('root@') && !isLikelyReadOnly && perm.version) {
                             report.recommendations.push({
                                 severity: 'info',
                                 category: 'Security: Permissions Review',
-                                message: `PBS "${perm.name}": Token has full access. Consider restricting to only Datastore.Audit permissions if this token has Admin role. Pulse only needs read access to monitor backups.`
+                                message: `PBS "${perm.name}": Token appears to have full access. If this token has Admin role, consider restricting to only Datastore.Audit permissions. Pulse only needs read access to monitor backups.`
                             });
                         }
                     }
