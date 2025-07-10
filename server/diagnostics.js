@@ -1163,7 +1163,7 @@ class DiagnosticTool {
                             report.recommendations.push({
                                 severity: 'info',
                                 category: 'Security: Permissions Review',
-                                message: `Proxmox "${perm.name}": Token appears to have full permissions. While Pulse requires PVEDatastoreAdmin for backup visibility (an unfortunate necessity), ensure your token doesn't have unnecessary admin rights like:\n• VM.Allocate (create/delete VMs)\n• Sys.Modify (modify system settings)\n• Permissions.Modify (change permissions)\n\nPulse requires:\n• PVEAuditor role on '/' (provides Sys.Audit, VM.Audit, Datastore.Audit, Pool.Audit, SDN.Audit)\n• PVEDatastoreAdmin on '/storage' (provides Datastore.Allocate needed for listing backup files)`
+                                message: `Proxmox "${perm.name}": Token appears to have full permissions. While Pulse requires PVEDatastoreAdmin for backup visibility (an unfortunate necessity), ensure your token doesn't have unnecessary admin rights like:\n• VM.Allocate (create/delete VMs)\n• Sys.Modify (modify system settings)\n• Permissions.Modify (change permissions)\n\nPulse requires:\n• PVEAuditor role on '/' (provides Datastore.Audit, Mapping.Audit, Pool.Audit, SDN.Audit, Sys.Audit, VM.Audit)\n• PVEDatastoreAdmin on '/storage' (provides Datastore.Allocate needed for listing backup files)`
                             });
                         }
                     }
