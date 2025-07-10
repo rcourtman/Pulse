@@ -260,7 +260,7 @@ function renderUnifiedTable() {
                         Backup ${getSortIndicator('backupType')}
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap text-center w-12">
-                        Status
+                        Verified
                     </th>
                     <th class="p-1 px-2 whitespace-nowrap">
                         Location
@@ -338,12 +338,13 @@ function renderUnifiedTable() {
 function getStatusIcon(item) {
     if (item.backupType === 'remote') {
         if (item.verified) {
-            return '<span title="Verified" class="text-green-500 dark:text-green-400">✓</span>';
+            return '<span title="PBS backup verified" class="text-green-500 dark:text-green-400">✓</span>';
         } else {
-            return '<span title="Unverified" class="text-yellow-500 dark:text-yellow-400">⏱</span>';
+            return '<span title="PBS backup not yet verified" class="text-yellow-500 dark:text-yellow-400">⏱</span>';
         }
     }
-    return '<span class="text-green-500 dark:text-green-400">✓</span>';
+    // Snapshots and local backups don't have verification status
+    return '<span class="text-gray-400 dark:text-gray-500" title="Verification only available for PBS backups">-</span>';
 }
 
 function getBackupTypeIcon(type) {
