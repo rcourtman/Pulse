@@ -64,17 +64,6 @@ function setup_nodejs() {
       fi
     fi
 
-    if ! apt-cache policy nodejs | grep -q 'Candidate:'; then
-      msg_error "Node.js package not found – repository might be broken or too fresh"
-      apt-cache policy nodejs >&2
-      exit 1
-    fi
-
-    if ! apt-get install -y nodejs >/dev/null 2>&1; then
-      msg_error "Failed to install Node.js ${NODE_VERSION} from NodeSource"
-      exit 1
-    fi
-
     if ! apt-get install -y nodejs >/dev/null 2>&1; then
       msg_error "Failed to install Node.js ${NODE_VERSION} from NodeSource"
       exit 1
