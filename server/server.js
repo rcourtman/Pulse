@@ -43,6 +43,18 @@ function createServer() {
                 `http://127.0.0.1:${process.env.PORT || 7655}`
             ];
             
+            // Allow same-origin requests by checking if origin matches the port
+            // This handles any IP address or hostname accessing the same port
+            try {
+                const originUrl = new URL(origin);
+                const port = process.env.PORT || 7655;
+                if (originUrl.port === String(port)) {
+                    return callback(null, true);
+                }
+            } catch (e) {
+                // Invalid URL, continue to check allowed origins
+            }
+            
             // Also allow the actual server URL if known
             if (process.env.PULSE_PUBLIC_URL) {
                 allowedOrigins.push(process.env.PULSE_PUBLIC_URL);

@@ -446,6 +446,19 @@
             position: relative;
         }
     }
+    
+    /* Settings modal tab scrolling on mobile */
+    @media (max-width: 640px) {
+        #settings-tabs {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+        
+        #settings-tabs .settings-tab {
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+    }
 
     /* Mobile-specific PBS styles */
     .tap-target {
@@ -1199,8 +1212,7 @@
                 <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Threshold Settings</span>
                 <label class="inline-flex items-center gap-2 cursor-pointer" title="Hide guests that don't meet thresholds instead of dimming">
                   <span class="text-xs text-blue-700 dark:text-blue-300">Hide non-matching:</span>
-                  <input type="checkbox" id="threshold-hide-mode" class="sr-only peer">
-                  <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  <input type="checkbox" id="threshold-hide-mode" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
                 </label>
               </div>
             </div>
@@ -1208,12 +1220,13 @@
 
           <!-- Charts Mode Controls -->
           <div id="charts-mode-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
                 <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Chart Settings</span>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                   <span class="text-xs text-blue-700 dark:text-blue-300">Time Range:</span>
-                  <div class="segmented-control inline-flex border border-blue-300 dark:border-blue-600 rounded overflow-hidden">
+                  <div class="overflow-x-auto">
+                    <div class="segmented-control inline-flex border border-blue-300 dark:border-blue-600 rounded overflow-hidden">
                     <input type="radio" id="time-5m" name="time-range" value="5" class="hidden peer/5m">
                     <label for="time-5m" data-time-range="5" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/5m:bg-gray-100 dark:peer-checked/5m:bg-gray-700 peer-checked/5m:text-blue-600 dark:peer-checked/5m:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">5m</label>
                     
@@ -1237,6 +1250,7 @@
                     
                     <input type="radio" id="time-7d" name="time-range" value="10080" class="hidden peer/7d">
                     <label for="time-7d" data-time-range="10080" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/7d:bg-gray-100 dark:peer-checked/7d:bg-gray-700 peer-checked/7d:text-blue-600 dark:peer-checked/7d:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1248,27 +1262,28 @@
             <!-- Main Controls -->
             <div class="space-y-4">
               <!-- Top row with main controls -->
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-6">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
                   <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Alert Settings</span>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
-                    <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
-                      <option value="0" selected>Instant</option>
-                      <option value="10000">10s</option>
-                      <option value="30000">30s</option>
-                      <option value="60000">1m</option>
-                      <option value="300000">5m</option>
-                      <option value="600000">10m</option>
-                    </select>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
+                      <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
+                        <option value="0" selected>Instant</option>
+                        <option value="10000">10s</option>
+                        <option value="30000">30s</option>
+                        <option value="60000">1m</option>
+                        <option value="300000">5m</option>
+                        <option value="600000">10m</option>
+                      </select>
+                    </div>
+                    <label class="inline-flex items-center gap-2 cursor-pointer" title="Automatically clear alerts when thresholds return to normal">
+                      <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
+                      <input type="checkbox" id="alert-auto-resolve-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
+                    </label>
                   </div>
-                  <label class="inline-flex items-center gap-2 cursor-pointer" title="Automatically clear alerts when thresholds return to normal">
-                    <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
-                    <input type="checkbox" id="alert-auto-resolve-toggle" class="sr-only peer" checked>
-                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                  </label>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 sm:ml-auto">
                   <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
                   <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
                     Save
@@ -1284,8 +1299,7 @@
                   <div class="flex items-center justify-between mb-4">
                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Email Notifications</h4>
                     <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
-                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      <input type="checkbox" id="alert-email-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
                     </label>
                   </div>
                   <div id="email-cooldown-settings" style="display: none;">
@@ -1323,8 +1337,7 @@
                   <div class="flex items-center justify-between mb-4">
                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Webhook Notifications</h4>
                     <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
-                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                      <input type="checkbox" id="alert-webhook-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
                     </label>
                   </div>
                   <div id="webhook-cooldown-settings" style="display: none;">
@@ -1464,23 +1477,25 @@
       
       <!-- Tab Navigation -->
       <div class="border-b border-gray-200 dark:border-gray-700">
-        <nav class="flex space-x-8 px-6" id="settings-tabs">
-          <button class="settings-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="proxmox">
-            Proxmox VE
-          </button>
-          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="pbs">
-            Backup Server
-          </button>
-          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
-            Notifications
-          </button>
-          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="system">
-            System
-          </button>
-          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="diagnostics">
-            Diagnostics
-          </button>
-        </nav>
+        <div class="overflow-x-auto">
+          <nav class="flex space-x-8 px-6" id="settings-tabs" style="width: max-content;">
+            <button class="settings-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="proxmox">
+              Proxmox VE
+            </button>
+            <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="pbs">
+              Backup Server
+            </button>
+            <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
+              Notifications
+            </button>
+            <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="system">
+              System
+            </button>
+            <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="diagnostics">
+              Diagnostics
+            </button>
+          </nav>
+        </div>
       </div>
       
       <div id="settings-modal-body" class="overflow-y-auto flex-grow p-6 scrollbar">

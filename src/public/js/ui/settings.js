@@ -875,54 +875,63 @@ PulseApp.ui.settings = (() => {
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">System Diagnostics</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Generate a comprehensive diagnostic report to help troubleshoot issues with your Pulse configuration.
+                        View comprehensive diagnostic information about your Pulse configuration, permissions, and system status.
                     </p>
                     
-                    <div class="flex items-center gap-4 mb-4">
-                        <button type="button" id="runDiagnostics" onclick="PulseApp.ui.settings.runDiagnostics()" 
-                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                            Run Diagnostics
-                        </button>
-                        <button type="button" id="copyReport" onclick="PulseApp.ui.settings.copyDiagnosticReport()" 
-                                style="display: none;" title="Safe to share - all sensitive data has been sanitized"
-                                class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            Copy Safe Report
-                        </button>
-                        <button type="button" id="downloadReport" onclick="PulseApp.ui.settings.downloadDiagnosticReport()" 
-                                style="display: none;" title="Safe to share - all sensitive data has been sanitized"
-                                class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Download Safe Report
-                        </button>
-                    </div>
-                    
-                    <div id="diagnostics-status" class="hidden mb-4 p-3 rounded-lg text-sm font-medium"></div>
-                    
-                    <div id="diagnostics-results" style="display: none;" class="space-y-4 mt-6">
-                        <!-- Results will be populated here -->
-                    </div>
-                </div>
-                
-                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Privacy Notice</h3>
-                            <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                                <p>The diagnostic report displays real hostnames, IPs, and other potentially sensitive information for troubleshooting purposes.</p>
-                                <p class="mt-1 font-semibold">When you copy or download the report, all sensitive data is automatically sanitized for safe sharing.</p>
+                            <div>
+                                <p class="text-sm text-blue-800 dark:text-blue-200">
+                                    The diagnostics page provides detailed information about:
+                                </p>
+                                <ul class="mt-2 text-sm text-blue-700 dark:text-blue-300 list-disc list-inside space-y-1">
+                                    <li>API token permissions and security status</li>
+                                    <li>Connection status for all endpoints</li>
+                                    <li>Backup access and storage permissions</li>
+                                    <li>Configuration recommendations</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
+                    
+                    <a href="/diagnostics.html" 
+                       target="_blank"
+                       class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Open Diagnostics
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Quick Tips</h4>
+                    <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                        <li class="flex items-start">
+                            <svg class="w-4 h-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Run diagnostics when experiencing connection issues or missing data
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-4 h-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Share the diagnostics URL with support for troubleshooting
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-4 h-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            The diagnostics page automatically refreshes when accessed
+                        </li>
+                    </ul>
                 </div>
             </div>
         `;
@@ -2963,375 +2972,6 @@ docker compose up -d</code></pre>
 
     // Diagnostics functions
     let diagnosticData = null;
-    
-    async function runDiagnostics() {
-        const statusEl = document.getElementById('diagnostics-status');
-        const resultsEl = document.getElementById('diagnostics-results');
-        const runButton = document.getElementById('runDiagnostics');
-        const copyButton = document.getElementById('copyReport');
-        const downloadButton = document.getElementById('downloadReport');
-        
-        // Reset UI
-        statusEl.className = 'block mb-4 p-3 rounded-lg text-sm font-medium';
-        statusEl.classList.add('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-700', 'dark:text-blue-300');
-        statusEl.textContent = 'Running diagnostics...';
-        statusEl.style.display = 'block';
-        resultsEl.style.display = 'none';
-        runButton.disabled = true;
-        
-        try {
-            const response = await fetch('/api/diagnostics');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            diagnosticData = await response.json();
-            
-            // Show success status
-            statusEl.className = 'block mb-4 p-3 rounded-lg text-sm font-medium';
-            if (diagnosticData.summary?.hasIssues) {
-                statusEl.classList.add('bg-yellow-50', 'dark:bg-yellow-900/20', 'text-yellow-700', 'dark:text-yellow-300');
-                statusEl.textContent = `Diagnostics complete. Found ${diagnosticData.summary.criticalIssues} critical issues and ${diagnosticData.summary.warnings} warnings.`;
-            } else {
-                statusEl.classList.add('bg-green-50', 'dark:bg-green-900/20', 'text-green-700', 'dark:text-green-300');
-                statusEl.textContent = 'Diagnostics complete. No critical issues found!';
-            }
-            
-            // Display results
-            displayDiagnosticResults(diagnosticData);
-            resultsEl.style.display = 'block';
-            
-            // Show action buttons
-            copyButton.style.display = 'inline-flex';
-            downloadButton.style.display = 'inline-flex';
-            
-        } catch (error) {
-            statusEl.className = 'block mb-4 p-3 rounded-lg text-sm font-medium';
-            statusEl.classList.add('bg-red-50', 'dark:bg-red-900/20', 'text-red-700', 'dark:text-red-300');
-            statusEl.textContent = `Error running diagnostics: ${error.message}`;
-        } finally {
-            runButton.disabled = false;
-        }
-    }
-    
-    function displayDiagnosticResults(data) {
-        const resultsEl = document.getElementById('diagnostics-results');
-        
-        let html = '';
-        
-        // Recommendations section
-        if (data.recommendations && data.recommendations.length > 0) {
-            html += createDiagnosticSection('Recommendations', renderRecommendations(data.recommendations), true);
-        }
-        
-        // Configuration section
-        if (data.configuration) {
-            html += createDiagnosticSection('Configuration', renderConfiguration(data.configuration));
-        }
-        
-        // Permissions section
-        if (data.permissions) {
-            html += createDiagnosticSection('API Token Permissions', renderPermissions(data.permissions));
-        }
-        
-        // System Information section
-        if (data.state || data.version) {
-            html += createDiagnosticSection('System Information', renderSystemInfo(data));
-        }
-        
-        resultsEl.innerHTML = html;
-        
-        // Add click handlers for collapsible sections
-        resultsEl.querySelectorAll('.diagnostic-section-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const section = header.parentElement;
-                const content = section.querySelector('.diagnostic-section-content');
-                const indicator = header.querySelector('.diagnostic-indicator');
-                
-                if (content.style.display === 'none') {
-                    content.style.display = 'block';
-                    indicator.textContent = '▼';
-                } else {
-                    content.style.display = 'none';
-                    indicator.textContent = '▶';
-                }
-            });
-        });
-    }
-    
-    function createDiagnosticSection(title, content, expanded = false) {
-        return `
-            <div class="diagnostic-section bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                <div class="diagnostic-section-header px-4 py-3 bg-gray-50 dark:bg-gray-700 cursor-pointer flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-600">
-                    <span class="font-medium text-gray-900 dark:text-gray-100">${title}</span>
-                    <span class="diagnostic-indicator text-gray-500 dark:text-gray-400">${expanded ? '▼' : '▶'}</span>
-                </div>
-                <div class="diagnostic-section-content px-4 py-3" style="display: ${expanded ? 'block' : 'none'};">
-                    ${content}
-                </div>
-            </div>
-        `;
-    }
-    
-    function renderRecommendations(recommendations) {
-        if (recommendations.length === 0) {
-            return '<p class="text-green-600 dark:text-green-400">✓ No issues found - everything looks good!</p>';
-        }
-        
-        return recommendations.map(rec => {
-            // Style based on severity level
-            let bgColor, textColor, borderColor;
-            
-            switch (rec.severity) {
-                case 'critical':
-                    bgColor = 'bg-red-50 dark:bg-red-900/20';
-                    textColor = 'text-red-800 dark:text-red-200';
-                    borderColor = 'border-red-500';
-                    break;
-                case 'warning':
-                    bgColor = 'bg-yellow-50 dark:bg-yellow-900/20';
-                    textColor = 'text-yellow-800 dark:text-yellow-200';
-                    borderColor = 'border-yellow-500';
-                    break;
-                case 'info':
-                    bgColor = 'bg-blue-50 dark:bg-blue-900/20';
-                    textColor = 'text-blue-800 dark:text-blue-200';
-                    borderColor = 'border-blue-500';
-                    break;
-                default:
-                    // Fallback to red for any unknown severity
-                    bgColor = 'bg-red-50 dark:bg-red-900/20';
-                    textColor = 'text-red-800 dark:text-red-200';
-                    borderColor = 'border-red-500';
-            }
-            
-            return `
-                <div class="${bgColor} ${textColor} p-3 rounded-lg border-l-4 ${borderColor} mb-3">
-                    <strong>${rec.category}:</strong> ${rec.message}
-                </div>
-            `;
-        }).join('');
-    }
-    
-    function renderConfiguration(config) {
-        let html = '<div class="space-y-4">';
-        
-        html += '<h4 class="font-medium text-gray-900 dark:text-gray-100">Proxmox VE Instances</h4>';
-        if (!config.proxmox || config.proxmox.length === 0) {
-            html += '<p class="text-gray-600 dark:text-gray-400">No Proxmox instances configured</p>';
-        } else {
-            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">';
-            html += '<thead class="bg-gray-50 dark:bg-gray-700"><tr>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Host</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Name</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Token</th>';
-            html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
-            
-            config.proxmox.forEach(pve => {
-                html += `<tr>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pve.host}</td>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pve.name}</td>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pve.tokenConfigured ? '✓' : '✗'}</td>
-                </tr>`;
-            });
-            html += '</tbody></table></div>';
-        }
-        
-        html += '<h4 class="font-medium text-gray-900 dark:text-gray-100 mt-4">PBS Instances</h4>';
-        if (!config.pbs || config.pbs.length === 0) {
-            html += '<p class="text-gray-600 dark:text-gray-400">No PBS instances configured</p>';
-        } else {
-            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">';
-            html += '<thead class="bg-gray-50 dark:bg-gray-700"><tr>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Host</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Name</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Node Name</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Token</th>';
-            html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
-            
-            config.pbs.forEach(pbs => {
-                const nodeNameStyle = pbs.node_name === 'NOT SET' ? 'text-red-600 dark:text-red-400 font-bold' : '';
-                html += `<tr>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pbs.host}</td>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pbs.name}</td>
-                    <td class="px-4 py-2 text-sm ${nodeNameStyle}">${pbs.node_name}</td>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${pbs.tokenConfigured ? '✓' : '✗'}</td>
-                </tr>`;
-            });
-            html += '</tbody></table></div>';
-        }
-        
-        html += '</div>';
-        return html;
-    }
-    
-    function renderPermissions(permissions) {
-        let html = '<div class="space-y-4">';
-        
-        if (permissions.proxmox && permissions.proxmox.length > 0) {
-            html += '<h4 class="font-medium text-gray-900 dark:text-gray-100">Proxmox VE Token Permissions</h4>';
-            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">';
-            html += '<thead class="bg-gray-50 dark:bg-gray-700"><tr>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Instance</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Connect</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nodes</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">VMs</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Containers</th>';
-            html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
-            
-            permissions.proxmox.forEach(perm => {
-                const checkIcon = (canDo) => canDo ? 
-                    '<span class="text-green-600 dark:text-green-400">✓</span>' : 
-                    '<span class="text-red-600 dark:text-red-400">✗</span>';
-                html += `<tr>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${perm.name}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canConnect)}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListNodes)} ${perm.nodeCount ? `(${perm.nodeCount})` : ''}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListVMs)} ${perm.vmCount !== undefined ? `(${perm.vmCount})` : ''}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListContainers)} ${perm.containerCount !== undefined ? `(${perm.containerCount})` : ''}</td>
-                </tr>`;
-            });
-            html += '</tbody></table></div>';
-        }
-        
-        if (permissions.pbs && permissions.pbs.length > 0) {
-            html += '<h4 class="font-medium text-gray-900 dark:text-gray-100 mt-4">PBS Token Permissions</h4>';
-            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">';
-            html += '<thead class="bg-gray-50 dark:bg-gray-700"><tr>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Instance</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Connect</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Datastores</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Backups</th>';
-            html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
-            
-            permissions.pbs.forEach(perm => {
-                const checkIcon = (canDo) => canDo ? 
-                    '<span class="text-green-600 dark:text-green-400">✓</span>' : 
-                    '<span class="text-red-600 dark:text-red-400">✗</span>';
-                html += `<tr>
-                    <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${perm.name}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canConnect)}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListDatastores)} ${perm.datastoreCount !== undefined ? `(${perm.datastoreCount})` : ''}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListBackups)} ${perm.backupCount !== undefined ? `(${perm.backupCount})` : ''}</td>
-                </tr>`;
-            });
-            html += '</tbody></table></div>';
-        }
-        
-        html += '</div>';
-        return html;
-    }
-    
-    function renderSystemInfo(data) {
-        let html = '<div class="space-y-2">';
-        
-        if (data.version) {
-            html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Pulse Version:</span> <span class="text-gray-900 dark:text-gray-100">${data.version}</span></p>`;
-        }
-        
-        if (data.state) {
-            if (data.state.lastUpdate) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Last Update:</span> <span class="text-gray-900 dark:text-gray-100">${PulseApp.utils.formatDateTime(data.state.lastUpdate)}</span></p>`;
-            }
-            
-            if (data.state.serverUptime) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Server Uptime:</span> <span class="text-gray-900 dark:text-gray-100">${Math.floor(data.state.serverUptime)} seconds</span></p>`;
-            }
-            
-            if (data.state.nodes) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Nodes:</span> <span class="text-gray-900 dark:text-gray-100">${data.state.nodes.count} (${data.state.nodes.names.join(', ') || 'none'})</span></p>`;
-            }
-            
-            if (data.state.guests) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Total Guests:</span> <span class="text-gray-900 dark:text-gray-100">${data.state.guests.total} (${data.state.guests.vms} VMs, ${data.state.guests.containers} Containers)</span></p>`;
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Guest Status:</span> <span class="text-gray-900 dark:text-gray-100">${data.state.guests.running} running, ${data.state.guests.stopped} stopped</span></p>`;
-            }
-            
-            if (data.state.pbs) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">PBS Instances:</span> <span class="text-gray-900 dark:text-gray-100">${data.state.pbs.instances}</span></p>`;
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Total Backups:</span> <span class="text-gray-900 dark:text-gray-100">${data.state.pbs.totalBackups}</span></p>`;
-            }
-        }
-        
-        html += '</div>';
-        return html;
-    }
-    
-    function sanitizeReport(report) {
-        // Deep clone the report to avoid modifying the original
-        const sanitized = JSON.parse(JSON.stringify(report));
-        
-        // Sanitize configuration section
-        if (sanitized.configuration) {
-            if (sanitized.configuration.proxmox) {
-                sanitized.configuration.proxmox = sanitized.configuration.proxmox.map(pve => ({
-                    ...pve,
-                    host: sanitizeUrl(pve.host),
-                    tokenConfigured: pve.tokenConfigured,
-                    selfSignedCerts: pve.selfSignedCerts
-                }));
-            }
-            
-            if (sanitized.configuration.pbs) {
-                sanitized.configuration.pbs = sanitized.configuration.pbs.map(pbs => ({
-                    ...pbs,
-                    host: sanitizeUrl(pbs.host),
-                    tokenConfigured: pbs.tokenConfigured,
-                    selfSignedCerts: pbs.selfSignedCerts,
-                    node_name: pbs.node_name
-                }));
-            }
-        }
-        
-        // Sanitize permissions section
-        if (sanitized.permissions) {
-            if (sanitized.permissions.proxmox) {
-                sanitized.permissions.proxmox = sanitized.permissions.proxmox.map(perm => ({
-                    ...perm,
-                    host: sanitizeUrl(perm.host),
-                    name: sanitizeUrl(perm.name),
-                    errors: perm.errors ? perm.errors.map(err => sanitizeErrorMessage(err)) : []
-                }));
-            }
-            
-            if (sanitized.permissions.pbs) {
-                sanitized.permissions.pbs = sanitized.permissions.pbs.map(perm => ({
-                    ...perm,
-                    host: sanitizeUrl(perm.host),
-                    name: sanitizeUrl(perm.name),
-                    errors: perm.errors ? perm.errors.map(err => sanitizeErrorMessage(err)) : []
-                }));
-            }
-        }
-        
-        // Sanitize state section
-        if (sanitized.state) {
-            if (sanitized.state.nodes && sanitized.state.nodes.names) {
-                sanitized.state.nodes.names = sanitized.state.nodes.names.map((name, index) => `node-${index + 1}`);
-            }
-            
-            if (sanitized.state.pbs && sanitized.state.pbs.sampleBackupIds) {
-                sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, index) => `backup-${index + 1}`);
-            }
-        }
-        
-        // Sanitize recommendations
-        if (sanitized.recommendations) {
-            sanitized.recommendations = sanitized.recommendations.map(rec => ({
-                ...rec,
-                message: sanitizeRecommendationMessage(rec.message)
-            }));
-        }
-        
-        // Add notice about sanitization
-        sanitized._sanitized = {
-            notice: "This diagnostic report has been sanitized for safe sharing. Hostnames, IPs, node names, and backup IDs have been anonymized while preserving structural information needed for troubleshooting.",
-            timestamp: new Date().toISOString()
-        };
-        
-        return sanitized;
-    }
-    
     function sanitizeUrl(url) {
         if (!url) return url;
         
@@ -3377,103 +3017,6 @@ docker compose up -d</code></pre>
             
         return sanitized;
     }
-    
-    function copyDiagnosticReport() {
-        if (!diagnosticData) return;
-        
-        // Sanitize the data before copying
-        const sanitizedData = sanitizeReport(diagnosticData);
-        const text = JSON.stringify(sanitizedData, null, 2);
-        
-        const button = document.getElementById('copyReport');
-        const originalText = button.innerHTML;
-        
-        // Try modern clipboard API first
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                showCopySuccess(button, originalText);
-            }).catch(err => {
-                console.warn('Clipboard API failed, trying fallback:', err);
-                fallbackCopyText(text, button, originalText);
-            });
-        } else {
-            // Fallback for older browsers
-            fallbackCopyText(text, button, originalText);
-        }
-    }
-    
-    function showCopySuccess(button, originalText) {
-        button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Copied!';
-        button.classList.remove('bg-gray-600', 'hover:bg-gray-700');
-        button.classList.add('bg-green-600', 'hover:bg-green-700');
-        
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.classList.remove('bg-green-600', 'hover:bg-green-700');
-            button.classList.add('bg-gray-600', 'hover:bg-gray-700');
-        }, 3000);
-    }
-    
-    function fallbackCopyText(text, button, originalText) {
-        try {
-            // Create a temporary textarea element
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            textarea.style.top = '0';
-            textarea.style.left = '0';
-            document.body.appendChild(textarea);
-            
-            // Select and copy the text
-            textarea.focus();
-            textarea.select();
-            const successful = document.execCommand('copy');
-            document.body.removeChild(textarea);
-            
-            if (successful) {
-                showCopySuccess(button, originalText);
-            } else {
-                showCopyError(button, originalText);
-            }
-        } catch (err) {
-            console.error('Fallback copy failed:', err);
-            showCopyError(button, originalText);
-        }
-    }
-    
-    function showCopyError(button, originalText) {
-        button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> Copy Failed';
-        button.classList.remove('bg-gray-600', 'hover:bg-gray-700');
-        button.classList.add('bg-red-600', 'hover:bg-red-700');
-        
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.classList.remove('bg-red-600', 'hover:bg-red-700');
-            button.classList.add('bg-gray-600', 'hover:bg-gray-700');
-        }, 3000);
-    }
-    
-    function downloadDiagnosticReport() {
-        if (!diagnosticData) return;
-        
-        // Sanitize the data before downloading
-        const sanitizedData = sanitizeReport(diagnosticData);
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-        const filename = `pulse_diagnostics_${timestamp}.json`;
-        const text = JSON.stringify(sanitizedData, null, 2);
-        
-        const blob = new Blob([text], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
     // Public API
     // Handle update channel selection change
     function onUpdateChannelChange(value) {
@@ -3739,9 +3282,6 @@ docker compose up -d</code></pre>
         checkForUpdates,
         applyUpdate,
         changeTheme,
-        runDiagnostics,
-        copyDiagnosticReport,
-        downloadDiagnosticReport,
         onUpdateChannelChange,
         switchToRecommendedChannel,
         switchToChannel,

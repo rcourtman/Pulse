@@ -273,7 +273,27 @@ function renderUnifiedTable() {
             <tbody>
     `;
     
-    Object.entries(grouped).forEach(([dateLabel, items]) => {
+    // Sort date groups chronologically (most recent first)
+    const sortedGroups = Object.entries(grouped).sort((a, b) => {
+        const [labelA] = a;
+        const [labelB] = b;
+        
+        // Handle special cases
+        if (labelA === 'Today') return -1;
+        if (labelB === 'Today') return 1;
+        if (labelA === 'Yesterday') return labelB === 'Today' ? 1 : -1;
+        if (labelB === 'Yesterday') return labelA === 'Today' ? -1 : 1;
+        
+        // For other dates, parse and compare
+        // Get the first item from each group to extract the actual date
+        const dateA = a[1][0].backupTime;
+        const dateB = b[1][0].backupTime;
+        
+        // Sort descending (most recent first)
+        return dateB - dateA;
+    });
+    
+    sortedGroups.forEach(([dateLabel, items]) => {
         html += `
             <tr class="bg-gray-50 dark:bg-gray-700/50">
                 <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
@@ -282,6 +302,9 @@ function renderUnifiedTable() {
                 <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
             </tr>
         `;
+        
+        // Sort items within the group by time (most recent first)
+        items.sort((a, b) => b.backupTime - a.backupTime);
         
         items.forEach(item => {
             const ageColor = getTimeAgoColorClass(item.backupTime);

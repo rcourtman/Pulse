@@ -17,6 +17,7 @@ class ValidationMiddleware {
         return (req, res, next) => {
             try {
                 const validated = this.validateSchema(req.body, schema);
+                // Replace body with validated data
                 req.body = validated;
                 next();
             } catch (error) {
@@ -62,8 +63,17 @@ class ValidationMiddleware {
     static validateQuery(schema) {
         return (req, res, next) => {
             try {
-                const validated = this.validateSchema(req.query, schema);
-                req.query = validated;
+                const validated = this.validateSchema(req.query || {}, schema);
+                // Store validated query params in a new property to avoid modifying read-only req.query
+                req.validatedQuery = validated;
+                // For backwards compatibility, try to update req.query if possible
+                try {
+                    Object.keys(validated).forEach(key => {
+                        req.query[key] = validated[key];
+                    });
+                } catch (e) {
+                    // If req.query is read-only, just use validatedQuery
+                }
                 next();
             } catch (error) {
                 logger.warn(`Invalid query params: ${error.message}`, {
