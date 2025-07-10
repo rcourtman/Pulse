@@ -66,6 +66,7 @@ PulseApp.state = (() => {
             main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
             backups: { column: 'ctime', direction: 'desc', ...(savedSortState.backups || {}) },
             snapshots: { column: 'snaptime', direction: 'desc', ...(savedSortState.snapshots || {}) },
+            unified: { column: 'backupTime', direction: 'desc', ...(savedSortState.unified || {}) },
         },
         thresholdState: {
             cpu: { value: 0 },

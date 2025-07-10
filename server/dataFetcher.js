@@ -1574,7 +1574,7 @@ async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isS
     } catch (error) {
         // Storage might not support backups or might be inaccessible
         if (error.response?.status === 403) {
-            console.error(`[DataFetcher - ${endpointId}-${nodeName}] Permission denied (403) accessing storage ${storage}. Token needs 'Datastore.Allocate' permission.`);
+            console.error(`[DataFetcher - ${endpointId}-${nodeName}] Permission denied (403) accessing storage ${storage}. Token needs 'Datastore.Allocate' permission. Check token privsep with 'pveum user token list' - if privsep=1, set permissions on USER not TOKEN.`);
         } else if (error.response?.status !== 501) { // 501 = not implemented
             console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching backups from storage ${storage}: ${error.message} (Status: ${error.response?.status})`);
         }

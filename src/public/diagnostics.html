@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse Diagnostics</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        pre { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            max-width: 100%;
+        }
+        .recommendation {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .severity-critical { 
+            background-color: #fee; 
+            border-left: 4px solid #dc2626;
+        }
+        .severity-warning { 
+            background-color: #fef3c7; 
+            border-left: 4px solid #f59e0b;
+        }
+        .severity-info { 
+            background-color: #dbeafe; 
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-3xl font-bold mb-6 text-gray-800">Pulse Diagnostics</h1>
+            
+            <div id="loading" class="text-center py-8">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <p class="mt-4 text-gray-600">Running diagnostics...</p>
+            </div>
+            
+            <div id="error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <strong>Error:</strong> <span id="error-message"></span>
+            </div>
+            
+            <div id="results" class="hidden">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">System Information</h2>
+                    <div class="bg-gray-50 p-4 rounded">
+                        <p><strong>Pulse Version:</strong> <span id="version"></span></p>
+                        <p><strong>Report Generated:</strong> <span id="timestamp"></span></p>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Recommendations</h2>
+                    <div id="recommendations"></div>
+                </div>
+                
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Permission Details</h2>
+                    <div id="permissions" class="space-y-4"></div>
+                </div>
+                
+                <div class="mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Full Report</h2>
+                    <button onclick="toggleFullReport()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4">
+                        Show/Hide Full Report
+                    </button>
+                    <pre id="full-report" class="hidden bg-gray-100 p-4 rounded overflow-x-auto text-sm"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runDiagnostics() {
+            try {
+                const response = await fetch('/api/diagnostics');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function displayResults(data) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('results').classList.remove('hidden');
+            
+            // Basic info
+            document.getElementById('version').textContent = data.version || 'Unknown';
+            document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleString();
+            
+            // Recommendations
+            const recsContainer = document.getElementById('recommendations');
+            if (data.recommendations && data.recommendations.length > 0) {
+                recsContainer.innerHTML = data.recommendations
+                    .sort((a, b) => {
+                        const severityOrder = { critical: 0, warning: 1, info: 2 };
+                        return (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3);
+                    })
+                    .map(rec => {
+                        const formattedMessage = rec.message.replace(/\n/g, '<br>');
+                        return `
+                            <div class="recommendation severity-${rec.severity}">
+                                <h3 class="font-semibold text-lg mb-2">${rec.category}</h3>
+                                <div>${formattedMessage}</div>
+                            </div>
+                        `;
+                    }).join('');
+            } else {
+                recsContainer.innerHTML = '<p class="text-green-600">✓ No issues found!</p>';
+            }
+            
+            // Permissions
+            const permsContainer = document.getElementById('permissions');
+            
+            // PVE Permissions
+            if (data.permissions && data.permissions.proxmox) {
+                const pveHtml = data.permissions.proxmox.map(perm => `
+                    <div class="bg-gray-50 p-4 rounded">
+                        <h3 class="font-semibold text-lg mb-2">Proxmox: ${perm.name}</h3>
+                        <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
+                        ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div>✓ Connection: ${perm.canConnect ? '✅' : '❌'}</div>
+                            <div>✓ List Nodes: ${perm.canListNodes ? '✅' : '❌'}</div>
+                            <div>✓ List VMs: ${perm.canListVMs ? '✅' : '❌'}</div>
+                            <div>✓ List Containers: ${perm.canListContainers ? '✅' : '❌'}</div>
+                            <div>✓ Node Stats: ${perm.canGetNodeStats ? '✅' : '❌'}</div>
+                            <div>✓ List Storage: ${perm.canListStorage ? '✅' : '❌'}</div>
+                            <div>✓ Access Backups: ${perm.canAccessStorageBackups ? '✅' : '❌'}</div>
+                        </div>
+                        ${perm.storageBackupAccess ? `
+                            <p class="mt-2 text-sm">
+                                Storage Access: ${perm.storageBackupAccess.accessibleStorages} of ${perm.storageBackupAccess.totalStoragesTested} accessible
+                            </p>
+                        ` : ''}
+                        ${perm.errors && perm.errors.length > 0 ? `
+                            <div class="mt-2 text-red-600 text-sm">
+                                Errors: ${perm.errors.join(', ')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+                permsContainer.innerHTML += '<h3 class="text-xl font-semibold mb-2">Proxmox VE</h3>' + pveHtml;
+            }
+            
+            // PBS Permissions
+            if (data.permissions && data.permissions.pbs && data.permissions.pbs.length > 0) {
+                const pbsHtml = data.permissions.pbs.map(perm => `
+                    <div class="bg-gray-50 p-4 rounded">
+                        <h3 class="font-semibold text-lg mb-2">PBS: ${perm.name}</h3>
+                        <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
+                        ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div>✓ Connection: ${perm.canConnect ? '✅' : '❌'}</div>
+                            <div>✓ List Datastores: ${perm.canListDatastores ? '✅' : '❌'}</div>
+                            <div>✓ List Backups: ${perm.canListBackups ? '✅' : '❌'}</div>
+                        </div>
+                        ${perm.errors && perm.errors.length > 0 ? `
+                            <div class="mt-2 text-red-600 text-sm">
+                                Errors: ${perm.errors.join(', ')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+                permsContainer.innerHTML += '<h3 class="text-xl font-semibold mb-2 mt-4">Proxmox Backup Server</h3>' + pbsHtml;
+            }
+            
+            // Full report
+            document.getElementById('full-report').textContent = JSON.stringify(data, null, 2);
+        }
+
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+
+        function toggleFullReport() {
+            document.getElementById('full-report').classList.toggle('hidden');
+        }
+
+        // Run diagnostics on page load
+        runDiagnostics();
+    </script>
+</body>
+</html>

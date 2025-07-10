@@ -112,7 +112,7 @@ Before installing Pulse, ensure you have:
 
 **For Proxmox VE:**
 - [ ] Proxmox VE 7.x or 8.x running
-- [ ] Admin access to create API tokens
+- [ ] Admin access to create API tokens (root not required - see [Security Best Practices](#security-best-practices-non-root-setup))
 - [ ] Network connectivity between Pulse and Proxmox (ports 8006/8007)
 
 **For Pulse Installation:**
@@ -458,9 +458,9 @@ Optional numbered variables also exist for additional PBS instances (e.g., `PBS_
 
 ### Creating a Proxmox API Token
 
-> ⚠️ **IMPORTANT:** Creating an API token is a two-step process. Many users experience blank dashboards because they skip step 4 (Add Token Permission). The token will connect successfully but show no data without proper permissions.
+> ⚠️ **IMPORTANT:** Token permissions are the #1 cause of blank dashboards. With privilege separation enabled (default), permissions must be set on the USER, not the token. Read the instructions carefully - the permission setup differs from what you might expect!
 
-Using an API token is the recommended authentication method.
+Using an API token is the recommended authentication method. **Never use root tokens in production** - see [Security Best Practices](#security-best-practices-non-root-setup) below.
 
 <details>
 <summary><strong>Steps to Create a PVE API Token (Click to Expand)</strong></summary>
@@ -475,19 +475,19 @@ Using an API token is the recommended authentication method.
     *   Click `Add`.
     *   Select the `User` (e.g., "pulse-monitor@pam") or `root@pam`.
     *   Enter a `Token ID` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked. Click `Add`.
+    *   Leave `Privilege Separation` checked (recommended for security). Click `Add`.
     *   **Important:** Copy the `Secret` value immediately. It's shown only once.
     *   **Note:** Creating a token does NOT automatically grant it permissions. You MUST complete step 4 below.
 4.  **Assign permissions (CRITICAL STEP - Often Missed):**
     *   Go to `Datacenter` → `Permissions`.
-    *   **Add User Permission:** Click `Add` → `User Permission`. Path: `/`, User: `pulse-monitor@pam`, Role: `PVEAuditor`, check `Propagate`. Click `Add`.
-    *   **Add Token Permission (REQUIRED):** Click `Add` → `API Token Permission`.
-        - Path: `/` (must be root path, NOT `/access`)
-        - API Token: `pulse-monitor@pam!pulse` (format: `username@realm!tokenname`)
+    *   **For tokens with Privilege Separation (default):** Click `Add` → `User Permission`.
+        - Path: `/`
+        - User: `pulse-monitor@pam` (the USER, not the token!)
         - Role: `PVEAuditor`
-        - **Propagate: MUST be checked**
+        - Propagate: Must be checked
         - Click `Add`
-    *   **Common Mistake:** Many users skip the "Add Token Permission" step, which results in a blank dashboard even though the connection shows as successful.
+    *   **Why set permissions on the user?** Tokens with privilege separation enabled (the default) do NOT use permissions set directly on the token. They inherit from the user's permissions instead.
+    *   **Common Mistake:** Setting permissions on the token (using "API Token Permission") when privilege separation is enabled. This appears to work but the token won't actually have any permissions.
 5.  **Update `.env`:** Set `PROXMOX_TOKEN_ID` (e.g., `pulse-monitor@pam!pulse`) and `PROXMOX_TOKEN_SECRET` (the secret you copied).
 
 </details>
@@ -509,13 +509,22 @@ If monitoring PBS, create a token within the PBS interface.
     *   Click `Add`.
     *   Select `User` (e.g., "pulse-monitor@pbs") or `root@pam`.
     *   Enter `Token Name` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked. Click `Add`.
+    *   Leave `Privilege Separation` checked (recommended for security). Click `Add`.
     *   **Important:** Copy the `Secret` value immediately.
-4.  **Assign permissions:**
-    *   For basic monitoring, the token needs minimal permissions. Any of these approaches work:
-    *   **Option 1 - Datastore-specific:** Grant `Datastore.Audit` on specific datastores you want to monitor
-    *   **Option 2 - Global audit:** Grant `Datastore.Audit` role at path `/` with `Propagate` 
-    *   **Note:** Pulse automatically discovers the PBS node configuration, so no special permissions are required
+4.  **Assign permissions (CRITICAL - PBS tokens need explicit permissions):**
+    *   **PBS tokens do NOT inherit from users** - you must grant permissions to the token itself
+    *   For monitoring with admin@pbs user:
+    ```bash
+    # Grant Admin role to the TOKEN (not the user!)
+    proxmox-backup-manager acl update / Admin --auth-id 'admin@pbs!pulse'
+    proxmox-backup-manager acl update /datastore Admin --auth-id 'admin@pbs!pulse'
+    ```
+    *   For minimal permissions:
+    ```bash
+    # Grant read-only access to specific datastores
+    proxmox-backup-manager acl update /datastore/main DatastoreReader --auth-id 'user@realm!token'
+    proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'user@realm!token'
+    ```
 5.  **Update `.env`:** Set `PBS_TOKEN_ID` (e.g., `pulse-monitor@pbs!pulse`) and `PBS_TOKEN_SECRET`.
 
 </details>
@@ -534,11 +543,29 @@ If monitoring PBS, create a token within the PBS interface.
     - You need the `Datastore.Allocate` permission (included in `PVEDatastoreAdmin` role)
     - This applies even for read-only access to backup listings
     
-    To fix empty PVE backup listings:
+    **Critical: Token Privilege Separation**
+    
+    How you grant permissions depends on your token's privilege separation setting:
+    
+    **Option 1: Token with privilege separation (default, more secure)**
     ```bash
-    # Grant storage admin permissions to your API token
+    # Check if your token has privsep enabled (shows "privsep": 1)
+    pveum user token list user@realm --output-format json
+    
+    # If privsep=1, set permissions on the USER (not the token!)
+    pveum acl modify / --users user@realm --roles PVEAuditor
+    pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin
+    ```
+    
+    **Option 2: Token without privilege separation**
+    ```bash
+    # Only if you created token with --privsep 0
+    # Set permissions on the TOKEN directly
+    pveum acl modify / --tokens user@realm!tokenname --roles PVEAuditor
     pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin
     ```
+    
+    **Why this matters:** Tokens created with `--privsep 1` (the default) do NOT honor permissions set with `--tokens`. This is a common source of confusion and the reason many users see empty backup lists despite setting permissions.
     </details>
     
     <details>
@@ -553,7 +580,124 @@ If monitoring PBS, create a token within the PBS interface.
 -   **Proxmox Backup Server:** Basic read permissions are sufficient. Either:
     - `Datastore.Audit` on specific datastores you want to monitor
     - `Datastore.Audit` at path `/` with `Propagate` for all datastores
-    - Note: Pulse automatically discovers PBS configuration - no special permissions needed
+    - Note: Pulse automatically discovers PBS namespaces and configuration
+    - **IMPORTANT for PBS:** Unlike PVE, PBS tokens do NOT inherit permissions from users. You must explicitly grant permissions to the token using `--auth-id 'user@realm!token'`
+    - **PBS Namespaces:** Pulse automatically discovers and displays backups from all namespaces (e.g., if your backups are organized in namespaces like `production`, `development`, `node1`, etc., they will all be shown)
+
+### Security Best Practices (Non-Root Setup)
+
+<details>
+<summary><strong>🔒 How to Avoid Using Root Tokens (Click to Expand)</strong></summary>
+
+Using root tokens is convenient but violates the principle of least privilege. Here's how to set up Pulse securely without root access:
+
+#### Recommended: Dedicated User with Privilege Separation
+
+This is the most secure approach:
+
+```bash
+# 1. Create a dedicated monitoring user
+pveum user add pulse-monitor@pam --comment "Pulse monitoring user"
+
+# 2. Create token WITH privilege separation (default, more secure)
+pveum user token add pulse-monitor@pam monitoring --privsep 1
+
+# 3. Set permissions on the USER (not the token!)
+pveum acl modify / --users pulse-monitor@pam --roles PVEAuditor
+pveum acl modify /storage --users pulse-monitor@pam --roles PVEDatastoreAdmin
+
+# 4. Use in Pulse .env:
+# PROXMOX_TOKEN_ID=pulse-monitor@pam!monitoring
+# PROXMOX_TOKEN_SECRET=<your-token-secret>
+```
+
+#### Alternative: Token Without Privilege Separation
+
+Simpler but less secure:
+
+```bash
+# 1. Create user
+pveum user add pulse-monitor@pam --comment "Pulse monitoring user"
+
+# 2. Create token WITHOUT privilege separation
+pveum user token add pulse-monitor@pam monitoring --privsep 0
+
+# 3. Set permissions on the TOKEN directly
+pveum acl modify / --tokens pulse-monitor@pam!monitoring --roles PVEAuditor
+pveum acl modify /storage --tokens pulse-monitor@pam!monitoring --roles PVEDatastoreAdmin
+```
+
+#### Minimal Permissions Setup
+
+For environments requiring strict access control:
+
+```bash
+# Create user with minimal permissions
+pveum user add pulse-readonly@pve --comment "Pulse read-only"
+pveum user token add pulse-readonly@pve monitor --privsep 1
+
+# Grant basic monitoring (no backup visibility)
+pveum acl modify / --users pulse-readonly@pve --roles PVEAuditor
+
+# For backup visibility on specific storages only:
+pveum acl modify /storage/local --users pulse-readonly@pve --roles PVEDatastoreAdmin
+pveum acl modify /storage/nas --users pulse-readonly@pve --roles PVEDatastoreAdmin
+# (Repeat for each storage you want to monitor)
+```
+
+#### PBS Non-Root Setup
+
+PBS requires explicit token permissions:
+
+```bash
+# For PBS using admin@pbs user (recommended)
+# The admin@pbs user already exists in PBS
+
+# 1. Create token for admin user
+proxmox-backup-manager user generate-token admin@pbs pulse
+
+# 2. Grant permissions to the TOKEN (not user!)
+proxmox-backup-manager acl update / Admin --auth-id 'admin@pbs!pulse'
+proxmox-backup-manager acl update /datastore Admin --auth-id 'admin@pbs!pulse'
+
+# 3. For specific datastores (more secure):
+proxmox-backup-manager acl update /datastore/main DatastoreReader --auth-id 'admin@pbs!pulse'
+proxmox-backup-manager acl update /datastore/main DatastoreAudit --auth-id 'admin@pbs!pulse'
+```
+
+#### Migrating from Root to Non-Root
+
+If you're currently using root and want to switch:
+
+```bash
+# 1. Check current permissions in web diagnostics
+# http://your-pulse-ip:7655/diagnostics.html
+
+# 2. Create new non-root setup (see above)
+
+# 3. Verify the new token works in diagnostics
+
+# 4. Update .env and restart Pulse
+
+# 5. After confirming it works, remove the old root token:
+pveum user token remove root@pam your-token
+```
+
+#### Common Security Mistakes
+
+1. **Using root tokens** - Gives unnecessary full access
+2. **Disabling privilege separation** - Token gets ALL user permissions
+3. **Setting permissions on tokens with privsep=1** - Doesn't work!
+4. **Granting Admin roles** - PVEAuditor + PVEDatastoreAdmin is sufficient
+
+#### Quick Decision Guide
+
+- **Maximum security?** → Dedicated user with privsep=1
+- **Simplest setup?** → Token with privsep=0
+- **Minimal permissions?** → Restrict to specific storages
+- **Multiple Pulse instances?** → Create separate tokens for each
+
+</details>
 
 ### Running from Release Tarball
 
@@ -1073,7 +1217,13 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
     - **Note:** The pveproxy log path is hard-coded in Proxmox and cannot be changed. Pulse's 2-second polling provides real-time responsiveness - adjusting Proxmox logging is preferable to reducing polling frequency.
 *   **Empty Backups Tab:** 
     - **PBS backups not showing:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
-    - **PVE backups not showing:** Ensure your API token has `PVEDatastoreAdmin` role on `/storage` to view backup files. See the permissions section above.
+    - **PVE backups not showing:** This is usually a permission issue:
+      - Run the web-based diagnostics: http://your-pulse-ip:7655/diagnostics.html
+      - Check the "Recommendations" section for specific permission issues
+      - Or manually check if your token has privilege separation: `pveum user token list user@realm --output-format json`
+      - If `privsep` is 1 (default), permissions must be set on the USER: `pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin`
+      - If `privsep` is 0, permissions can be set on the TOKEN: `pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin`
+      - See the [Storage Content Visibility](#required-permissions) section for full details.
 *   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
 *   **Configuration Issues:** Use the settings modal to verify all connection details. Test connections with the built-in connectivity tester before saving. Ensure no placeholder values remain.
 *   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.
