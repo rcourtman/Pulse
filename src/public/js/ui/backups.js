@@ -206,7 +206,7 @@ function applyFilters() {
     }
 }
 
-function renderUnifiedTable() {
+function renderUnifiedTable(skipTransition = false) {
     const container = document.getElementById('unified-table');
     if (!container) return;
     
@@ -215,13 +215,21 @@ function renderUnifiedTable() {
     unified.sortDirection = sortState.direction;
     const sortedData = PulseApp.utils.sortData(unified.filteredData, unified.sortKey, unified.sortDirection, 'unified');
     
+    // Add fade effect unless skipping
+    if (!skipTransition) {
+        container.style.opacity = '0.7';
+    }
+    
     if (sortedData.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p class="text-lg">No backups found</p>
-                <p class="text-sm mt-2">No backups, snapshots, or remote backups match your filters</p>
-            </div>
-        `;
+        setTimeout(() => {
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p class="text-lg">No backups found</p>
+                    <p class="text-sm mt-2">No backups, snapshots, or remote backups match your filters</p>
+                </div>
+            `;
+            container.style.opacity = '1';
+        }, skipTransition ? 0 : 50);
         return;
     }
     
@@ -342,7 +350,12 @@ function renderUnifiedTable() {
     });
     
     html += '</tbody></table></div>';
-    container.innerHTML = html;
+    
+    // Apply content with fade effect
+    setTimeout(() => {
+        container.innerHTML = html;
+        container.style.opacity = '1';
+    }, skipTransition ? 0 : 50);
 }
 
 function getStatusIcon(item) {
@@ -610,6 +623,7 @@ function setupEventListeners() {
         searchInput.addEventListener('input', () => {
             applyFilters();
             renderUnifiedTable();
+            updateBackupFrequencyChart();
         });
     }
     
@@ -662,6 +676,16 @@ function resetFilters() {
     const clearButton = document.getElementById('clear-date-filter');
     if (clearButton) {
         clearButton.classList.add('hidden');
+    }
+    
+    // Reset time range to 30 days
+    chartTimeRangeDays = 30;
+    document.querySelectorAll('.backup-chart-range').forEach(btn => {
+        btn.classList.remove('bg-blue-100', 'dark:bg-blue-900/50', 'text-blue-700', 'dark:text-blue-300', 'border-blue-300', 'dark:border-blue-700');
+    });
+    const thirtyDayButton = document.querySelector('.backup-chart-range[data-days="30"]');
+    if (thirtyDayButton) {
+        thirtyDayButton.classList.add('bg-blue-100', 'dark:bg-blue-900/50', 'text-blue-700', 'dark:text-blue-300', 'border-blue-300', 'dark:border-blue-700');
     }
     
     // Update sort state
@@ -744,6 +768,7 @@ function cleanupUnifiedBackups() {
 
 // Backup Frequency Chart Functions
 let selectedDateRange = null; // Store selected date range for filtering
+let chartTimeRangeDays = 30; // Default to 30 days
 
 function initializeBackupFrequencyChart() {
     const chartContainer = document.getElementById('backup-frequency-chart');
@@ -764,20 +789,79 @@ function initializeBackupFrequencyChart() {
             clearDateFilter();
         });
     }
+    
+    // Setup time range buttons
+    document.querySelectorAll('.backup-chart-range').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const days = parseInt(e.target.dataset.days);
+            setChartTimeRange(days);
+        });
+    });
+}
+
+function setChartTimeRange(days) {
+    chartTimeRangeDays = days;
+    
+    // Update button styling
+    document.querySelectorAll('.backup-chart-range').forEach(btn => {
+        btn.classList.remove('bg-blue-100', 'dark:bg-blue-900/50', 'text-blue-700', 'dark:text-blue-300', 'border-blue-300', 'dark:border-blue-700');
+    });
+    
+    const activeButton = document.querySelector(`.backup-chart-range[data-days="${days}"]`);
+    if (activeButton) {
+        activeButton.classList.add('bg-blue-100', 'dark:bg-blue-900/50', 'text-blue-700', 'dark:text-blue-300', 'border-blue-300', 'dark:border-blue-700');
+    }
+    
+    // Update date range text
+    const dateRangeElement = document.getElementById('backup-chart-date-range');
+    if (dateRangeElement && !selectedDateRange) {
+        let rangeText;
+        if (days === 7) rangeText = 'Last 7 days';
+        else if (days === 30) rangeText = 'Last 30 days';
+        else if (days === 90) rangeText = 'Last 90 days';
+        else if (days === 365) rangeText = 'Last year';
+        dateRangeElement.textContent = rangeText;
+    }
+    
+    // Update the chart
+    updateBackupFrequencyChart();
 }
 
 function updateBackupFrequencyChart() {
     const chartContainer = document.getElementById('backup-frequency-chart');
     if (!chartContainer || !unified.mounted) return;
     
-    // Get filters from radio buttons
+    // Get filters from radio buttons and search input
+    const searchInput = document.getElementById('unified-search');
     const typeFilter = document.querySelector('input[name="unified-type-filter"]:checked');
     const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
+    const searchTerm = searchInput?.value.toLowerCase() || '';
     const selectedType = typeFilter?.value || 'all';
     const selectedBackupType = backupTypeFilter?.value || 'all';
     
-    // Get all backup data and apply type filters
+    // Get all backup data and apply filters
     let allData = normalizeBackupData();
+    
+    // Apply search filter
+    if (searchTerm) {
+        const searchTerms = searchTerm.split(',').map(term => term.trim());
+        allData = allData.filter(item => {
+            const searchFields = [
+                item.vmid,
+                item.name,
+                item.node,
+                item.backupName,
+                item.description,
+                item.storage,
+                item.datastore,
+                item.namespace
+            ].filter(Boolean).map(field => field.toString().toLowerCase());
+            
+            return searchTerms.some(term => 
+                searchFields.some(field => field.includes(term))
+            );
+        });
+    }
     
     // Apply type filter (VM/LXC)
     if (selectedType !== 'all') {
@@ -792,11 +876,11 @@ function updateBackupFrequencyChart() {
     // Calculate backup frequency per day
     const backupsByDate = {};
     const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - chartTimeRangeDays);
     
     // Initialize all days in the range with 0 backups
-    for (let d = new Date(thirtyDaysAgo); d <= now; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
         const dateKey = d.toISOString().split('T')[0];
         backupsByDate[dateKey] = {
             total: 0,
@@ -833,6 +917,9 @@ function renderBackupFrequencyChart(data) {
     // Clear existing content
     svg.innerHTML = '';
     
+    // Set cursor style
+    svg.style.cursor = 'pointer';
+    
     // Chart dimensions
     const containerRect = svg.getBoundingClientRect();
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
@@ -857,8 +944,10 @@ function renderBackupFrequencyChart(data) {
     gridGroup.setAttribute('class', 'grid-lines');
     g.appendChild(gridGroup);
     
-    // Y-axis grid lines
+    // Y-axis grid lines and labels
     const gridCount = 5;
+    
+    // Always add grid lines for visual consistency
     for (let i = 0; i <= gridCount; i++) {
         const y = height - (i * height / gridCount);
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -870,16 +959,38 @@ function renderBackupFrequencyChart(data) {
         line.setAttribute('stroke-opacity', '0.1');
         line.setAttribute('class', 'text-gray-300 dark:text-gray-600');
         gridGroup.appendChild(line);
-        
-        // Add labels
-        const value = Math.round(i * maxBackups / gridCount);
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', -5);
-        text.setAttribute('y', y + 3);
-        text.setAttribute('text-anchor', 'end');
-        text.setAttribute('class', 'text-[10px] fill-gray-500 dark:fill-gray-400');
-        text.textContent = value;
-        g.appendChild(text);
+    }
+    
+    // Add labels based on actual values
+    if (maxBackups <= 5) {
+        // For small values, show each integer
+        for (let i = 0; i <= maxBackups; i++) {
+            const y = height - (i * height / maxBackups);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', -5);
+            text.setAttribute('y', y + 3);
+            text.setAttribute('text-anchor', 'end');
+            text.setAttribute('class', 'text-[10px] fill-gray-500 dark:fill-gray-400');
+            text.textContent = i;
+            g.appendChild(text);
+        }
+    } else {
+        // For larger values, use the grid positions
+        for (let i = 0; i <= gridCount; i++) {
+            const value = Math.round(i * maxBackups / gridCount);
+            const y = height - (i * height / gridCount);
+            
+            // Only add label if it's different from the previous one
+            if (i === 0 || value !== Math.round((i - 1) * maxBackups / gridCount)) {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', -5);
+                text.setAttribute('y', y + 3);
+                text.setAttribute('text-anchor', 'end');
+                text.setAttribute('class', 'text-[10px] fill-gray-500 dark:fill-gray-400');
+                text.textContent = value;
+                g.appendChild(text);
+            }
+        }
     }
     
     // Add bars
@@ -895,6 +1006,8 @@ function renderBackupFrequencyChart(data) {
         // Create bar group
         const barGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         barGroup.setAttribute('class', 'bar-group');
+        barGroup.setAttribute('data-date', d.date.toISOString().split('T')[0]);
+        barGroup.setAttribute('data-index', i);
         barGroup.style.cursor = 'pointer';
         
         // Background rect for click area
@@ -904,6 +1017,7 @@ function renderBackupFrequencyChart(data) {
         clickRect.setAttribute('width', xScale);
         clickRect.setAttribute('height', height);
         clickRect.setAttribute('fill', 'transparent');
+        clickRect.style.cursor = 'pointer';
         barGroup.appendChild(clickRect);
         
         // Main bar
@@ -1002,33 +1116,61 @@ function renderBackupFrequencyChart(data) {
             if (PulseApp.tooltips && PulseApp.tooltips.showTooltip) {
                 PulseApp.tooltips.showTooltip(e, tooltipContent);
             }
+            
+            // Highlight the bar
+            rect.setAttribute('fill-opacity', '1');
+            rect.setAttribute('filter', 'brightness(1.2)');
+            
         });
         
         barGroup.addEventListener('mouseleave', () => {
             rect.setAttribute('fill-opacity', '0.8');
+            rect.removeAttribute('filter');
             if (PulseApp.tooltips && PulseApp.tooltips.hideTooltip) {
                 PulseApp.tooltips.hideTooltip();
             }
+            
         });
         
         // Click to filter
-        barGroup.addEventListener('click', () => {
+        barGroup.addEventListener('click', (e) => {
             filterBackupsByDate(d.date);
+            e.stopPropagation();
         });
         
         barsGroup.appendChild(barGroup);
         
-        // Add date labels (show every few days to avoid crowding)
-        if (i % Math.ceil(data.length / 10) === 0 || i === data.length - 1) {
+        // Add date labels based on time range
+        let showLabel = false;
+        let labelFormat;
+        
+        if (chartTimeRangeDays <= 7) {
+            // Show every day for 7 days
+            showLabel = true;
+            labelFormat = { month: 'numeric', day: 'numeric' };
+        } else if (chartTimeRangeDays <= 30) {
+            // Show every few days for 30 days
+            showLabel = i % Math.ceil(data.length / 10) === 0 || i === data.length - 1;
+            labelFormat = { month: 'numeric', day: 'numeric' };
+        } else if (chartTimeRangeDays <= 90) {
+            // Show weekly for 90 days
+            const dayOfWeek = d.date.getDay();
+            showLabel = dayOfWeek === 0 || i === 0 || i === data.length - 1; // Sundays + first/last
+            labelFormat = { month: 'short', day: 'numeric' };
+        } else {
+            // Show monthly for 1 year
+            const dayOfMonth = d.date.getDate();
+            showLabel = dayOfMonth === 1 || i === 0 || i === data.length - 1; // First of month + first/last
+            labelFormat = { month: 'short' };
+        }
+        
+        if (showLabel) {
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('x', x + barWidth / 2);
             text.setAttribute('y', height + 15);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('class', 'text-[9px] fill-gray-500 dark:fill-gray-400');
-            const dateStr = new Date(d.date).toLocaleDateString('en-US', { 
-                month: 'numeric', 
-                day: 'numeric' 
-            });
+            const dateStr = new Date(d.date).toLocaleDateString('en-US', labelFormat);
             text.textContent = dateStr;
             g.appendChild(text);
         }
@@ -1036,52 +1178,117 @@ function renderBackupFrequencyChart(data) {
     
 }
 
-function filterBackupsByDate(date) {
+function filterBackupsByDate(date, isTemporary = false) {
     // Calculate start and end of the selected day
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
     
-    // Store the selected date range
-    selectedDateRange = {
-        start: startOfDay.getTime() / 1000,
-        end: endOfDay.getTime() / 1000
-    };
-    
-    // Update the date range display
-    const dateRangeElement = document.getElementById('backup-chart-date-range');
-    if (dateRangeElement) {
-        const dateStr = startOfDay.toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric',
-            year: 'numeric'
+    if (!isTemporary) {
+        // Store the selected date range for permanent filtering
+        selectedDateRange = {
+            start: startOfDay.getTime() / 1000,
+            end: endOfDay.getTime() / 1000
+        };
+        
+        // Update the date range display
+        const dateRangeElement = document.getElementById('backup-chart-date-range');
+        if (dateRangeElement) {
+            const dateStr = startOfDay.toLocaleDateString('en-US', { 
+                month: 'long', 
+                day: 'numeric',
+                year: 'numeric'
+            });
+            dateRangeElement.textContent = dateStr;
+        }
+        
+        // Show clear filter button
+        const clearButton = document.getElementById('clear-date-filter');
+        if (clearButton) {
+            clearButton.classList.remove('hidden');
+        }
+        
+        // Highlight the selected bar
+        highlightSelectedDate(date);
+    } else {
+        // For temporary hover filtering, just set a temporary date range
+        const tempDateRange = {
+            start: startOfDay.getTime() / 1000,
+            end: endOfDay.getTime() / 1000
+        };
+        
+        // Apply filters with temporary date range
+        const searchInput = document.getElementById('unified-search');
+        const typeFilter = document.querySelector('input[name="unified-type-filter"]:checked');
+        const backupTypeFilter = document.querySelector('input[name="unified-backup-type-filter"]:checked');
+        
+        const searchTerm = searchInput?.value.toLowerCase() || '';
+        const selectedType = typeFilter?.value || 'all';
+        const selectedBackupType = backupTypeFilter?.value || 'all';
+        
+        const allData = normalizeBackupData();
+        
+        unified.filteredData = allData.filter(item => {
+            // Apply temporary date filter
+            if (item.backupTime < tempDateRange.start || item.backupTime > tempDateRange.end) {
+                return false;
+            }
+            
+            // Apply other filters
+            if (searchTerm) {
+                const searchFields = [
+                    item.vmid,
+                    item.name,
+                    item.node,
+                    item.backupName,
+                    item.description,
+                    item.storage,
+                    item.datastore,
+                    item.namespace
+                ].filter(Boolean).map(field => field.toString().toLowerCase());
+                
+                const searchTerms = searchTerm.split(',').map(term => term.trim());
+                const matchesSearch = searchTerms.some(term => 
+                    searchFields.some(field => field.includes(term))
+                );
+                
+                if (!matchesSearch) return false;
+            }
+            
+            if (selectedType !== 'all' && item.type !== selectedType) {
+                return false;
+            }
+            
+            if (selectedBackupType !== 'all' && item.backupType !== selectedBackupType) {
+                return false;
+            }
+            
+            return true;
         });
-        dateRangeElement.textContent = dateStr;
-    }
-    
-    // Show clear filter button
-    const clearButton = document.getElementById('clear-date-filter');
-    if (clearButton) {
-        clearButton.classList.remove('hidden');
+        
+        renderUnifiedTable(true); // Skip transition for hover
+        return;
     }
     
     // Apply filters and re-render the table
     applyFilters();
     renderUnifiedTable();
-    
-    // Highlight the selected bar
-    highlightSelectedDate(date);
 }
 
 function clearDateFilter() {
     // Clear the date range
     selectedDateRange = null;
     
-    // Reset date range display
+    // Reset date range display to current time range
     const dateRangeElement = document.getElementById('backup-chart-date-range');
     if (dateRangeElement) {
-        dateRangeElement.textContent = 'Last 30 days';
+        let rangeText;
+        if (chartTimeRangeDays === 7) rangeText = 'Last 7 days';
+        else if (chartTimeRangeDays === 30) rangeText = 'Last 30 days';
+        else if (chartTimeRangeDays === 90) rangeText = 'Last 90 days';
+        else if (chartTimeRangeDays === 365) rangeText = 'Last year';
+        dateRangeElement.textContent = rangeText;
     }
     
     // Hide clear filter button
