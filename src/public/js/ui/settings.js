@@ -141,11 +141,25 @@ PulseApp.ui.settings = (() => {
         try {
             const versionData = await PulseApp.apiClient.get('/api/version');
             const currentVersionElement = document.getElementById('current-version');
+            const deploymentTypeElement = document.getElementById('deployment-type');
+            
             if (currentVersionElement && versionData.version) {
                 currentVersionElement.textContent = versionData.version;
                 // Update currentConfig with the dynamic version for consistency
                 currentConfig.version = versionData.version;
+                
+                // Update deployment type indicator
+                if (deploymentTypeElement && versionData.isDocker !== undefined) {
+                    deploymentTypeElement.textContent = versionData.isDocker ? 'Docker' : 'Native';
+                    deploymentTypeElement.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1';
+                    if (versionData.isDocker) {
+                        deploymentTypeElement.innerHTML = '<span class="inline-flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/></svg> Docker</span>';
+                    }
+                }
             }
+            
+            // Auto-check for updates
+            await checkLatestVersion();
         } catch (error) {
             console.warn('Could not load current version:', error);
             const currentVersionElement = document.getElementById('current-version');
@@ -200,13 +214,6 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
-            // Initialize update channel warning visibility
-            setTimeout(() => {
-                const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
-                if (channelSelect) {
-                    onUpdateChannelChange(channelSelect.value);
-                }
-            }, 0);
         }
     }
 
@@ -673,197 +680,158 @@ PulseApp.ui.settings = (() => {
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Software Updates</h3>
                 
-                <!-- Update Channel Preference -->
-                <div class="mb-6 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div class="mb-4">
-                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Update Channel</h4>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                            Choose which types of updates to receive
-                        </p>
-                        <select name="UPDATE_CHANNEL" onchange="PulseApp.ui.settings.onUpdateChannelChange(this.value)"
-                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="stable" ${(advanced.updateChannel || 'stable') === 'stable' ? 'selected' : ''}>
-                                Stable - Production releases (recommended)
-                            </option>
-                            <option value="rc" ${(advanced.updateChannel || 'stable') === 'rc' ? 'selected' : ''}>
-                                Release Candidate - Test fixes and new features
-                            </option>
-                        </select>
-                        <div id="update-channel-description" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <strong>Stable:</strong> Thoroughly tested releases for production use
-                        </div>
-                        <div id="rc-warning" class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hidden">
-                            <div class="flex items-start gap-2">
-                                <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                </svg>
+                <!-- Always Visible Update Status Card -->
+                <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-4">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <!-- Version Info -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <h5 class="text-sm font-semibold text-amber-800 dark:text-amber-200">Release Candidate Warning</h5>
-                                    <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                                        RC versions are pre-release software for testing fixes and new features. 
-                                        They may contain bugs. Only select this if you want to help test and provide feedback.
-                                    </p>
+                                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Current Version</p>
+                                    <p id="current-version" class="text-lg font-mono font-semibold text-gray-900 dark:text-gray-100">Loading...</p>
+                                    <p id="deployment-type" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></p>
                                 </div>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                        <span id="latest-version-label">Latest Version</span>
+                                    </p>
+                                    <p id="latest-version" class="text-lg font-mono font-semibold text-gray-900 dark:text-gray-100">-</p>
+                                    <p id="last-check-time" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></p>
+                                </div>
+                            </div>
+                            
+                            <!-- Update Status Indicator -->
+                            <div id="update-status-indicator" class="mb-4">
+                                <!-- This will be populated dynamically -->
+                            </div>
+                            
+                            <!-- Update Channel Selection -->
+                            <div class="flex items-center gap-4 mb-4">
+                                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Channel:</label>
+                                <div class="flex gap-2">
+                                    <button type="button" 
+                                            onclick="PulseApp.ui.settings.switchToChannel('stable')"
+                                            class="channel-btn px-3 py-1 text-xs font-medium rounded-md transition-colors ${(!advanced.updateChannel || advanced.updateChannel === 'stable') ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'}"
+                                            data-channel="stable">
+                                        Stable
+                                    </button>
+                                    <button type="button"
+                                            onclick="PulseApp.ui.settings.switchToChannel('rc')"
+                                            class="channel-btn px-3 py-1 text-xs font-medium rounded-md transition-colors ${advanced.updateChannel === 'rc' ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'}"
+                                            data-channel="rc">
+                                        RC
+                                    </button>
+                                </div>
+                                <div class="ml-auto">
+                                    <button type="button" 
+                                            onclick="PulseApp.ui.settings.checkForUpdates()" 
+                                            id="check-updates-button"
+                                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md flex items-center gap-2 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Check Now
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Channel Warning (if needed) -->
+                            <div id="channel-warning" class="hidden">
+                                <!-- This will be populated when switching channels -->
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Auto-update Setting -->
-                <div class="mb-6 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Automatic Updates</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Automatically check for and install updates when available
-                            </p>
-                        </div>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="AUTO_UPDATE_ENABLED" ${advanced.autoUpdate?.enabled !== false ? 'checked' : ''}
-                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable</span>
-                        </label>
-                    </div>
-                    <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Check Interval (hours)
-                            </label>
-                            <input type="number" name="AUTO_UPDATE_CHECK_INTERVAL"
-                                   value="${advanced.autoUpdate?.checkInterval || ''}"
-                                   placeholder="24 (default)"
-                                   min="1" max="168"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Update Time
-                            </label>
-                            <input type="time" name="AUTO_UPDATE_TIME"
-                                   value="${advanced.autoUpdate?.time || ''}"
-                                   placeholder="02:00"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Preferred time for automatic updates</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="update-status" class="mb-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-700 dark:text-gray-300">
-                                Current Version: <span id="current-version" class="font-mono font-semibold">Loading...</span>
-                            </p>
-                            <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                                <span id="latest-version-label">Latest Version</span>: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
-                            </p>
-                            <p id="update-channel-info" class="text-sm text-gray-500 dark:text-gray-400 mt-1"></p>
-                            <div id="channel-mismatch-warning" class="hidden mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                <div class="flex items-start gap-2">
-                                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                                    </svg>
-                                    <div>
-                                        <h5 class="text-sm font-semibold text-blue-800 dark:text-blue-200">Channel Recommendation</h5>
-                                        <p id="channel-mismatch-message" class="text-sm text-blue-700 dark:text-blue-300 mt-1"></p>
-                                        <div class="mt-2 space-x-3">
-                                            <button type="button" id="switch-to-stable-btn" class="text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 underline font-medium" onclick="PulseApp.ui.settings.proceedWithStableSwitch()">
-                                                Switch to stable release
-                                            </button>
-                                            <button type="button" id="cancel-switch-btn" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline" onclick="PulseApp.ui.settings.switchToChannel('rc')">
-                                                Cancel (stay on RC)
-                                            </button>
+                <!-- Update Available Section (hidden by default) -->
+                <div id="update-available-section" class="hidden">
+                    <div class="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                            </svg>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-semibold text-green-800 dark:text-green-200 mb-1">
+                                    Update Available: <span id="update-version" class="font-mono"></span>
+                                </h4>
+                                <p id="update-summary" class="text-sm text-green-700 dark:text-green-300 mb-3"></p>
+                                
+                                <!-- Deployment-specific instructions -->
+                                <div id="update-instructions" class="mb-3">
+                                    <!-- This will be populated based on deployment type -->
+                                </div>
+                                
+                                <!-- Expandable changelog -->
+                                <details class="group">
+                                    <summary class="cursor-pointer text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 font-medium">
+                                        View changelog
+                                    </summary>
+                                    <div class="mt-3 space-y-3">
+                                        <div id="changelog-content" class="bg-white dark:bg-gray-800 rounded-md p-3 text-sm">
+                                            <!-- Changelog will be loaded here -->
                                         </div>
                                     </div>
-                                </div>
+                                </details>
                             </div>
-                            <p id="version-status" class="text-sm mt-1"></p>
-                        </div>
-                        <button type="button" onclick="PulseApp.ui.settings.checkForUpdates()" 
-                                id="check-updates-button"
-                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Check for Updates
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Update Details (hidden by default) -->
-                <div id="update-details" class="hidden">
-                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200">
-                                    Update Available: <span id="update-version"></span>
-                                </h4>
-                                <span id="update-published-badge" class="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded"></span>
-                            </div>
-                            
-                            <!-- Compact Changes Summary -->
-                            <div id="changes-summary" class="mb-3">
-                                <div id="changes-loading" class="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
-                                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Loading changes...
-                                </div>
-                                <div id="changes-summary-text" class="hidden text-sm text-gray-700 dark:text-gray-300"></div>
-                                <div id="changes-error" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
-                            </div>
-                            
-                            <!-- Expandable Details -->
-                            <div class="border-t border-blue-200 dark:border-blue-700 pt-3">
-                                <button type="button" id="toggle-details-btn" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-1">
-                                    <span>Show details</span>
-                                    <svg id="details-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                    </svg>
-                                </button>
-                                
-                                <div id="update-details-expanded" class="hidden mt-3 space-y-3">
-                                    <div id="detailed-changes" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-3">
-                                        <h5 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Commit Details</h5>
-                                        <div id="changes-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
-                                    </div>
-                                    
-                                    <div id="release-notes-section" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-3">
-                                        <h5 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Release Notes</h5>
-                                        <div id="update-release-notes" class="text-sm text-gray-700 dark:text-gray-300 prose prose-sm max-w-none max-h-48 overflow-y-auto"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="flex justify-end">
-                            <button type="button" onclick="PulseApp.ui.settings.applyUpdate()" 
-                                    id="apply-update-button"
-                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                                </svg>
-                                Apply Update
-                            </button>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Update Progress (hidden by default) -->
                 <div id="update-progress" class="hidden">
-                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <div class="mb-4">
+                    <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <div class="mb-3">
                             <p class="text-sm font-medium text-gray-700 dark:text-gray-300" id="update-progress-text">Preparing update...</p>
                         </div>
-                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                            <div id="update-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div id="update-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            Do not close this window or refresh the page during the update process.
+                            Do not close this window or refresh the page. The page will refresh automatically when the update is complete.
                         </p>
                     </div>
                 </div>
+                
+                <!-- Automatic Updates -->
+                <div class="p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-800 dark:text-gray-200">Automatic Updates</h4>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Check for updates automatically</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="AUTO_UPDATE_ENABLED" ${advanced.autoUpdate?.enabled !== false ? 'checked' : ''}
+                                   class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Check Interval
+                            </label>
+                            <select name="AUTO_UPDATE_CHECK_INTERVAL"
+                                    class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="6" ${advanced.autoUpdate?.checkInterval == 6 ? 'selected' : ''}>Every 6 hours</option>
+                                <option value="12" ${advanced.autoUpdate?.checkInterval == 12 ? 'selected' : ''}>Every 12 hours</option>
+                                <option value="24" ${(!advanced.autoUpdate?.checkInterval || advanced.autoUpdate?.checkInterval == 24) ? 'selected' : ''}>Daily</option>
+                                <option value="168" ${advanced.autoUpdate?.checkInterval == 168 ? 'selected' : ''}>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Update Time
+                            </label>
+                            <input type="time" name="AUTO_UPDATE_TIME"
+                                   value="${advanced.autoUpdate?.time || '02:00'}"
+                                   class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Hidden elements for compatibility -->
+                <div id="update-details" class="hidden"></div>
+                <input type="hidden" name="UPDATE_CHANNEL" value="${advanced.updateChannel || 'stable'}">
             </div>
         `;
     }
@@ -1250,9 +1218,7 @@ PulseApp.ui.settings = (() => {
                     PulseApp.ui.alerts.updateNotificationStatus();
                 }
                 
-                setTimeout(() => {
-                    closeModal();
-                }, 1500);
+                // Keep modal open so users can continue making changes
             } else {
                 showMessage(result.error || 'Failed to save configuration', 'error');
             }
@@ -1491,23 +1457,21 @@ PulseApp.ui.settings = (() => {
     async function checkLatestVersion(channelOverride = null) {
         const latestVersionElement = document.getElementById('latest-version');
         const latestVersionLabelElement = document.getElementById('latest-version-label');
-        const versionStatusElement = document.getElementById('version-status');
-        const updateChannelInfoElement = document.getElementById('update-channel-info');
-        const channelMismatchWarning = document.getElementById('channel-mismatch-warning');
+        const updateStatusIndicator = document.getElementById('update-status-indicator');
+        const lastCheckTime = document.getElementById('last-check-time');
+        const checkButton = document.getElementById('check-updates-button');
         
         if (!latestVersionElement) return;
         
+        // Update button state
+        if (checkButton) {
+            checkButton.disabled = true;
+            checkButton.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Checking...';
+        }
+        
         try {
             latestVersionElement.textContent = 'Checking...';
-            latestVersionElement.className = 'font-mono font-semibold text-gray-500 dark:text-gray-400';
-            
-            if (updateChannelInfoElement) {
-                updateChannelInfoElement.textContent = '';
-            }
-            
-            if (channelMismatchWarning) {
-                channelMismatchWarning.classList.add('hidden');
-            }
+            latestVersionElement.className = 'text-lg font-mono font-semibold text-gray-500 dark:text-gray-400';
             
             // Check cache first to reduce API calls
             const cacheKey = channelOverride || 'default';
@@ -1527,6 +1491,11 @@ PulseApp.ui.settings = (() => {
                     data: data,
                     timestamp: Date.now()
                 });
+            }
+            
+            // Update last check time
+            if (lastCheckTime) {
+                lastCheckTime.textContent = 'Last checked: just now';
             }
             
             // Add preview indicator if using channel override
@@ -1549,23 +1518,9 @@ PulseApp.ui.settings = (() => {
                 // Update the label to be channel-specific
                 if (latestVersionLabelElement) {
                     if (updateChannel === 'rc') {
-                        latestVersionLabelElement.textContent = 'Latest RC Version';
+                        latestVersionLabelElement.textContent = 'Latest RC';
                     } else {
-                        latestVersionLabelElement.textContent = 'Latest Stable Version';
-                    }
-                }
-                
-                // Display update channel information with more context
-                if (updateChannelInfoElement) {
-                    const channelName = updateChannel === 'rc' ? 'Release Candidate (RC)' : 'Stable';
-                    const previewText = isPreview ? ' (Preview)' : '';
-                    updateChannelInfoElement.textContent = `Update channel: ${channelName}${previewText}`;
-                    
-                    // Add preview styling
-                    if (isPreview) {
-                        updateChannelInfoElement.classList.add('text-blue-600', 'dark:text-blue-400', 'font-medium');
-                    } else {
-                        updateChannelInfoElement.classList.remove('text-blue-600', 'dark:text-blue-400', 'font-medium');
+                        latestVersionLabelElement.textContent = 'Latest Stable';
                     }
                 }
                 
@@ -1574,29 +1529,58 @@ PulseApp.ui.settings = (() => {
                 const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
                 const shouldShowRecommendation = (!isCurrentRC && updateChannel === 'rc');
                 
-                
-                if (shouldShowRecommendation && channelMismatchWarning) {
-                    const messageElement = document.getElementById('channel-mismatch-message');
-                    if (messageElement) {
-                        messageElement.textContent = `You're running a stable version (${currentVersion}) but checking for RC releases. Consider switching to the stable channel for production use.`;
+                // Show channel warning if needed
+                const channelWarning = document.getElementById('channel-warning');
+                if (channelWarning) {
+                    if (shouldShowRecommendation && !isPreview) {
+                        channelWarning.innerHTML = `
+                            <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                                <div class="flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div class="text-xs">
+                                        <p class="font-medium text-amber-800 dark:text-amber-200">Release Candidate Channel</p>
+                                        <p class="text-amber-700 dark:text-amber-300 mt-0.5">RC versions may contain bugs. Consider switching to stable for production use.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        channelWarning.classList.remove('hidden');
+                    } else {
+                        channelWarning.classList.add('hidden');
                     }
-                    channelMismatchWarning.classList.remove('hidden');
                 }
+                
+                // Check if running a development version
+                const isDevVersion = currentVersion.includes('-dev') || currentVersion.includes('+dev');
                 
                 const isDowngradeToStable = isCurrentRC && updateChannel === 'stable' && 
                     currentVersion !== latestVersion;
                 
-                if (data.updateAvailable || isDowngradeToStable) {
-                    latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
+                // Never show updates for development versions
+                if (!isDevVersion && (data.updateAvailable || isDowngradeToStable)) {
+                    latestVersionElement.className = 'text-lg font-mono font-semibold text-green-600 dark:text-green-400';
                     
-                    let updateText;
-                    if (isDowngradeToStable) {
-                        updateText = '📦 Switch to stable release available';
-                    } else {
-                        updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
+                    // Update status indicator
+                    if (updateStatusIndicator) {
+                        let statusText;
+                        let statusIcon;
+                        if (isDowngradeToStable) {
+                            statusText = 'Switch to stable available';
+                            statusIcon = '⬇️';
+                        } else {
+                            statusText = updateChannel === 'rc' ? 'RC update available' : 'Update available';
+                            statusIcon = '🎉';
+                        }
+                        
+                        updateStatusIndicator.innerHTML = `
+                            <div class="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                                <span class="text-lg">${statusIcon}</span>
+                                <span class="text-sm font-medium text-green-800 dark:text-green-200">${statusText}</span>
+                            </div>
+                        `;
                     }
-                    
-                    versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${updateText}</span>`;
                     
                     // Convert server response to match GitHub API format for showUpdateDetails
                     const releaseData = {
@@ -1605,34 +1589,49 @@ PulseApp.ui.settings = (() => {
                         published_at: data.publishedAt,
                         html_url: data.releaseUrl,
                         assets: data.assets,
-                        isDocker: data.isDocker // Store Docker status
+                        isDocker: data.isDocker,
+                        updateChannel: updateChannel,
+                        isDowngrade: isDowngradeToStable
                     };
                     
                     // Show update details
                     showUpdateDetails(releaseData);
-                    
-                    // Show Docker warning if applicable
-                    if (data.isDocker) {
-                        versionStatusElement.innerHTML += '<br><span class="text-amber-600 dark:text-amber-400 text-xs">Note: Docker deployments require manual update</span>';
-                    }
                 } else {
                     // Up to date - hide any update details
                     hideUpdateDetails();
                     
-                    latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
+                    latestVersionElement.className = 'text-lg font-mono font-semibold text-gray-700 dark:text-gray-300';
                     
-                    // Check if we should show "up to date" or "no updates" for RC on stable
-                    if (isCurrentRC && updateChannel === 'stable' && currentVersion === latestVersion) {
-                        // Same version on both channels
-                        const upToDateText = '✅ Up to date (same as stable)';
-                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
-                    } else if (isCurrentRC && updateChannel === 'stable') {
-                        // RC version is different from stable - should have been caught above as "downgrade"
-                        const upToDateText = '⚠️ No newer stable (running RC)';
-                        versionStatusElement.innerHTML = `<span class="text-amber-600 dark:text-amber-400">${upToDateText}</span>`;
-                    } else {
-                        const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
-                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    // Update status indicator
+                    if (updateStatusIndicator) {
+                        let statusText;
+                        let statusIcon;
+                        
+                        if (isDevVersion) {
+                            statusText = 'Development version';
+                            statusIcon = '🚧';
+                            latestVersionElement.className = 'text-lg font-mono font-semibold text-purple-600 dark:text-purple-400';
+                        } else if (isCurrentRC && updateChannel === 'stable' && currentVersion === latestVersion) {
+                            statusText = 'Up to date (same as stable)';
+                            statusIcon = '✅';
+                        } else if (isCurrentRC && updateChannel === 'stable') {
+                            statusText = 'Running RC version';
+                            statusIcon = '🧪';
+                        } else {
+                            statusText = updateChannel === 'rc' ? 'Up to date (RC channel)' : 'Up to date';
+                            statusIcon = '✅';
+                        }
+                        
+                        const bgColor = isDevVersion ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-gray-50 dark:bg-gray-800';
+                        const borderColor = isDevVersion ? 'border-purple-200 dark:border-purple-800' : 'border-gray-200 dark:border-gray-700';
+                        const textColor = isDevVersion ? 'text-purple-800 dark:text-purple-200' : 'text-gray-700 dark:text-gray-300';
+                        
+                        updateStatusIndicator.innerHTML = `
+                            <div class="flex items-center gap-2 p-2 ${bgColor} border ${borderColor} rounded-md">
+                                <span class="text-lg">${statusIcon}</span>
+                                <span class="text-sm font-medium ${textColor}">${statusText}</span>
+                            </div>
+                        `;
                     }
                 }
             } else {
@@ -1645,33 +1644,53 @@ PulseApp.ui.settings = (() => {
             hideUpdateDetails();
             
             latestVersionElement.textContent = 'Error';
-            latestVersionElement.className = 'font-mono font-semibold text-red-500';
+            latestVersionElement.className = 'text-lg font-mono font-semibold text-red-500';
             
-            // Provide more specific error messages
-            let errorMessage = 'Failed to check for updates';
-            if (error.message.includes('500')) {
-                errorMessage = 'Server error - please try again later';
-            } else if (error.message.includes('403') || error.message.includes('429')) {
-                errorMessage = 'Rate limited - please wait a moment';
-            } else if (error.message.includes('Failed to fetch')) {
-                errorMessage = 'Network error - check connection';
+            // Update status indicator with error
+            if (updateStatusIndicator) {
+                let errorMessage = 'Failed to check for updates';
+                if (error.message.includes('500')) {
+                    errorMessage = 'Server error';
+                } else if (error.message.includes('403') || error.message.includes('429')) {
+                    errorMessage = 'Rate limited';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error';
+                }
+                
+                updateStatusIndicator.innerHTML = `
+                    <div class="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                        <span class="text-lg">❌</span>
+                        <span class="text-sm font-medium text-red-800 dark:text-red-200">${errorMessage}</span>
+                    </div>
+                `;
             }
-            
-            versionStatusElement.innerHTML = `<span class="text-red-500">${errorMessage}</span>`;
             
             // If it's a rate limit issue, suggest using cached data if available
             if (error.message.includes('403') || error.message.includes('429')) {
                 const cacheKey = channelOverride || 'default';
                 const staleCache = updateCache.get(cacheKey);
                 if (staleCache) {
-                    // Recursively call with cached data
+                    // Use cached data
                     setTimeout(() => {
                         const cachedData = staleCache.data;
                         latestVersionElement.textContent = cachedData.latestVersion || 'Unknown';
-                        latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
-                        versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Cached data (rate limited)</span>';
+                        latestVersionElement.className = 'text-lg font-mono font-semibold text-gray-700 dark:text-gray-300';
+                        if (updateStatusIndicator) {
+                            updateStatusIndicator.innerHTML = `
+                                <div class="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                                    <span class="text-lg">⚠️</span>
+                                    <span class="text-sm font-medium text-amber-800 dark:text-amber-200">Using cached data</span>
+                                </div>
+                            `;
+                        }
                     }, 100);
                 }
+            }
+        } finally {
+            // Restore button state
+            if (checkButton) {
+                checkButton.disabled = false;
+                checkButton.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Check Now';
             }
         }
     }
@@ -1693,79 +1712,76 @@ PulseApp.ui.settings = (() => {
     
     // Show update details in the update section
     function showUpdateDetails(releaseData) {
-        const updateDetails = document.getElementById('update-details');
-        if (!updateDetails) return;
+        const updateSection = document.getElementById('update-available-section');
+        if (!updateSection) return;
         
         // Store the release data for use in applyUpdate
         latestReleaseData = releaseData;
         
         const updateVersion = document.getElementById('update-version');
-        const updatePublishedBadge = document.getElementById('update-published-badge');
-        const updateReleaseNotes = document.getElementById('update-release-notes');
-        const applyUpdateButton = document.getElementById('apply-update-button');
+        const updateSummary = document.getElementById('update-summary');
+        const updateInstructions = document.getElementById('update-instructions');
+        const changelogContent = document.getElementById('changelog-content');
         
         if (updateVersion) {
             updateVersion.textContent = releaseData.tag_name;
         }
         
-        if (updatePublishedBadge && releaseData.published_at) {
-            const publishedDate = PulseApp.utils.formatDate(releaseData.published_at);
-            updatePublishedBadge.textContent = publishedDate;
-        }
-        
-        if (updateReleaseNotes && releaseData.body) {
-            const htmlContent = releaseData.body
-                .replace(/### (.*)/g, '<h4 class="font-semibold mt-3 mb-1">$1</h4>')
-                .replace(/## (.*)/g, '<h3 class="font-semibold text-lg mt-3 mb-2">$1</h3>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/- (.*)/g, '<li class="ml-4">• $1</li>')
-                .replace(/\n/g, '<br>');
+        // Generate update summary
+        if (updateSummary) {
+            const publishedDate = releaseData.published_at ? PulseApp.utils.formatDate(releaseData.published_at) : '';
+            let summaryText = `Published ${publishedDate}`;
             
-            updateReleaseNotes.innerHTML = htmlContent;
+            if (releaseData.isDowngrade) {
+                summaryText = 'Switch from RC to stable release • ' + summaryText;
+            } else if (releaseData.updateChannel === 'rc') {
+                summaryText = 'Release candidate version • ' + summaryText;
+            }
+            
+            updateSummary.textContent = summaryText;
         }
         
-        // Handle Docker deployments - hide apply button and show message
-        if (applyUpdateButton) {
+        // Show deployment-specific instructions
+        if (updateInstructions) {
             if (releaseData.isDocker) {
-                applyUpdateButton.style.display = 'none';
-                // Add Docker update instructions if not already present
-                const dockerMsg = document.getElementById('docker-update-message');
-                if (!dockerMsg) {
-                    const dockerMessage = document.createElement('div');
-                    dockerMessage.id = 'docker-update-message';
-                    dockerMessage.className = 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3';
-                    dockerMessage.innerHTML = `
-                        <div class="flex items-start gap-2">
-                            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <div class="text-sm">
-                                <p class="font-medium text-amber-800 dark:text-amber-200">Docker Deployment Detected</p>
-                                <p class="text-amber-700 dark:text-amber-300 mt-1">To update, pull the latest Docker image:</p>
-                                <pre class="bg-amber-100 dark:bg-amber-900/30 rounded p-2 mt-2 text-xs overflow-x-auto"><code>docker pull rcourtman/pulse:${releaseData.tag_name}
+                updateInstructions.innerHTML = `
+                    <div class="bg-white dark:bg-gray-800 rounded-md p-3 border border-gray-200 dark:border-gray-700">
+                        <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Docker Update Instructions:</p>
+                        <pre class="bg-gray-100 dark:bg-gray-900 rounded p-2 text-xs overflow-x-auto"><code>docker pull rcourtman/pulse:${releaseData.tag_name}
 docker compose up -d</code></pre>
-                            </div>
-                        </div>
-                    `;
-                    applyUpdateButton.parentElement.appendChild(dockerMessage);
-                }
+                    </div>
+                `;
             } else {
-                applyUpdateButton.style.display = '';
-                const dockerMsg = document.getElementById('docker-update-message');
-                if (dockerMsg) {
-                    dockerMsg.remove();
-                }
+                updateInstructions.innerHTML = `
+                    <button type="button" 
+                            onclick="PulseApp.ui.settings.applyUpdate()" 
+                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md flex items-center gap-2 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                        Apply Update
+                    </button>
+                `;
             }
         }
         
-        // Set up toggle functionality
-        setupDetailsToggle();
+        // Show changelog
+        if (changelogContent && releaseData.body) {
+            const htmlContent = releaseData.body
+                .replace(/### (.*)/g, '<h4 class="font-semibold text-sm mt-3 mb-1 text-gray-800 dark:text-gray-200">$1</h4>')
+                .replace(/## (.*)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-800 dark:text-gray-200">$1</h3>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/- (.*)/g, '<li class="ml-4 text-gray-700 dark:text-gray-300">• $1</li>')
+                .replace(/\n/g, '<br>');
+            
+            changelogContent.innerHTML = htmlContent;
+        }
         
-        updateDetails.classList.remove('hidden');
+        updateSection.classList.remove('hidden');
         
-        // Load commit differences for summary
-        loadVersionChanges(releaseData.tag_name);
+        // TODO: Implement commit differences in changelog section if needed
+        // For now, skip loadVersionChanges as it references old UI elements
     }
     
     // Set up the toggle functionality for details expansion
@@ -1793,11 +1809,20 @@ docker compose up -d</code></pre>
     
     // Load and display commit differences between versions
     async function loadVersionChanges(targetVersion) {
+        // This function is temporarily disabled as it references old UI elements
+        // TODO: Reimplement for new UI if needed
+        return;
+        
         const currentVersion = currentConfig.version || 'Unknown';
         const changesLoading = document.getElementById('changes-loading');
         const changesSummaryText = document.getElementById('changes-summary-text');
         const changesList = document.getElementById('changes-list');
         const changesError = document.getElementById('changes-error');
+        
+        if (!changesLoading || !changesSummaryText || !changesList || !changesError) {
+            console.log('[Settings] Version changes elements not found in new UI, skipping');
+            return;
+        }
         
         if (currentVersion === 'Unknown') return;
         
@@ -2035,25 +2060,9 @@ docker compose up -d</code></pre>
     
     // Hide update details card
     function hideUpdateDetails() {
-        const updateDetails = document.getElementById('update-details');
-        if (updateDetails) {
-            updateDetails.classList.add('hidden');
-        }
-        
-        // Reset expanded details state
-        const detailsExpanded = document.getElementById('update-details-expanded');
-        const chevron = document.getElementById('details-chevron');
-        const toggleBtn = document.getElementById('toggle-details-btn');
-        
-        if (detailsExpanded) {
-            detailsExpanded.classList.add('hidden');
-        }
-        if (chevron) {
-            chevron.style.transform = 'rotate(0deg)';
-        }
-        if (toggleBtn) {
-            const span = toggleBtn.querySelector('span');
-            if (span) span.textContent = 'Show details';
+        const updateSection = document.getElementById('update-available-section');
+        if (updateSection) {
+            updateSection.classList.add('hidden');
         }
         
         // Clear the stored release data
@@ -2100,7 +2109,7 @@ docker compose up -d</code></pre>
         
         // Confirm update
         PulseApp.ui.toast.confirm(
-            `Update to version ${latestReleaseData.tag_name}? The application will restart automatically after the update is applied.`,
+            `Update to version ${latestReleaseData.tag_name}? The application will restart automatically and refresh the page when complete.`,
             async () => {
                 await _performUpdate(latestReleaseData, tarballAsset);
             }
@@ -2111,12 +2120,12 @@ docker compose up -d</code></pre>
         
         try {
             // Hide update details and show progress
-            const updateDetails = document.getElementById('update-available');
+            const updateSection = document.getElementById('update-available-section');
             const updateProgress = document.getElementById('update-progress');
             const progressBar = document.getElementById('update-progress-bar');
             const progressText = document.getElementById('update-progress-text');
             
-            if (updateDetails) updateDetails.classList.add('hidden');
+            if (updateSection) updateSection.classList.add('hidden');
             if (updateProgress) updateProgress.classList.remove('hidden');
             
             // Start the update
@@ -2144,9 +2153,9 @@ docker compose up -d</code></pre>
                 
                 window.socket.on('updateComplete', () => {
                     if (progressText) {
-                        progressText.textContent = 'Update complete! Restarting...';
+                        progressText.textContent = 'Update complete! Service restarting...';
                     }
-                    showMessage('Update applied successfully. The application will restart momentarily.', 'success');
+                    showMessage('Update applied successfully. Service is restarting and will refresh automatically.', 'success');
                     
                     // Poll health endpoint until service is back up, then refresh
                     pollHealthAndRefresh();
@@ -2154,7 +2163,8 @@ docker compose up -d</code></pre>
                 
                 window.socket.on('updateError', (data) => {
                     showMessage(`Update failed: ${data.error}`, 'error');
-                    if (updateDetails) updateDetails.classList.remove('hidden');
+                    const updateSection = document.getElementById('update-available-section');
+                    if (updateSection) updateSection.classList.remove('hidden');
                     if (updateProgress) updateProgress.classList.add('hidden');
                 });
             }
@@ -2166,9 +2176,9 @@ docker compose up -d</code></pre>
             showMessage(`Failed to apply update: ${error.message}`, 'error');
             
             // Restore UI state
-            const updateDetails = document.getElementById('update-available');
+            const updateSection = document.getElementById('update-available-section');
             const updateProgress = document.getElementById('update-progress');
-            if (updateDetails) updateDetails.classList.remove('hidden');
+            if (updateSection) updateSection.classList.remove('hidden');
             if (updateProgress) updateProgress.classList.add('hidden');
         }
     }
@@ -3040,32 +3050,42 @@ docker compose up -d</code></pre>
     
     // Switch to a specific update channel
     function switchToChannel(targetChannel) {
-        const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
-        if (channelSelect) {
-            channelSelect.value = targetChannel;
-            onUpdateChannelChange(targetChannel);
-            
-            // Hide the warning
-            const warningElement = document.getElementById('channel-mismatch-warning');
-            if (warningElement) {
-                warningElement.classList.add('hidden');
-            }
-            
-            // Show success message
-            const button = document.getElementById('switch-to-rc-btn');
-            if (button) {
-                const originalText = button.textContent;
-                button.textContent = 'Switched! ✓';
-                button.classList.add('text-green-600', 'dark:text-green-400');
-                button.classList.remove('text-blue-600', 'dark:text-blue-400');
-                
-                setTimeout(() => {
-                    if (warningElement) {
-                        warningElement.classList.add('hidden');
-                    }
-                }, 2000);
-            }
+        // Update hidden input
+        const hiddenInput = document.querySelector('input[name="UPDATE_CHANNEL"]');
+        if (hiddenInput) {
+            hiddenInput.value = targetChannel;
         }
+        
+        // Update button states
+        const channelButtons = document.querySelectorAll('.channel-btn');
+        channelButtons.forEach(btn => {
+            const btnChannel = btn.getAttribute('data-channel');
+            if (btnChannel === targetChannel) {
+                // Active state
+                btn.className = 'channel-btn px-3 py-1 text-xs font-medium rounded-md transition-colors';
+                if (targetChannel === 'rc') {
+                    btn.classList.add('bg-amber-100', 'dark:bg-amber-900', 'text-amber-700', 'dark:text-amber-300', 'border', 'border-amber-300', 'dark:border-amber-700');
+                } else {
+                    btn.classList.add('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-300', 'border', 'border-blue-300', 'dark:border-blue-700');
+                }
+            } else {
+                // Inactive state
+                btn.className = 'channel-btn px-3 py-1 text-xs font-medium rounded-md transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600';
+            }
+        });
+        
+        // Store the channel preference
+        if (currentConfig.advanced) {
+            currentConfig.advanced.updateChannel = targetChannel;
+        } else {
+            currentConfig.advanced = { updateChannel: targetChannel };
+        }
+        
+        // Check for updates with the new channel
+        checkLatestVersion(targetChannel);
+        
+        // Show/hide RC warning
+        onUpdateChannelChange(targetChannel);
     }
     
     function proceedWithStableSwitch() {
@@ -3226,11 +3246,25 @@ docker compose up -d</code></pre>
         let attempts = 0;
         let lastError = null;
         
-        // Show a persistent message while polling
-        showMessage('Update complete. Waiting for service to fully restart...', 'info');
+        // Show progress in the update progress section if available
+        const progressText = document.getElementById('update-progress-text');
+        const progressBar = document.getElementById('update-progress-bar');
+        
+        // Show clear message about what's happening
+        showMessage('🔄 Waiting for service to restart... The page will refresh automatically when ready.', 'info');
+        
+        if (progressText) {
+            progressText.textContent = 'Waiting for service to restart...';
+        }
         
         const checkHealth = async () => {
             attempts++;
+            
+            // Update progress text with attempts
+            if (progressText) {
+                progressText.textContent = `Checking service status... (${attempts}/${maxAttempts})`;
+            }
+            
             try {
                 const response = await fetch('/healthz', {
                     method: 'GET',
@@ -3240,14 +3274,30 @@ docker compose up -d</code></pre>
                 if (response.ok) {
                     // Health check passed, but wait a bit more to ensure full initialization
                     console.log('[Update] Health check passed, waiting for full initialization...');
-                    showMessage('Service is starting up, please wait...', 'info');
+                    showMessage('✅ Service is ready! Refreshing page in 3 seconds...', 'success');
                     
-                    // Additional delay to ensure the service is fully ready
-                    // This addresses the issue where health endpoint responds before everything is loaded
-                    setTimeout(() => {
-                        console.log('[Update] Refreshing page...');
-                        window.location.reload();
-                    }, 3000); // Wait 3 more seconds after health check passes
+                    if (progressText) {
+                        progressText.textContent = 'Service ready! Refreshing page...';
+                    }
+                    
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                    }
+                    
+                    // Show countdown to make it clear when refresh will happen
+                    let countdown = 3;
+                    const countdownInterval = setInterval(() => {
+                        countdown--;
+                        if (progressText) {
+                            progressText.textContent = `Service ready! Refreshing page in ${countdown}...`;
+                        }
+                        if (countdown <= 0) {
+                            clearInterval(countdownInterval);
+                            console.log('[Update] Refreshing page...');
+                            window.location.reload();
+                        }
+                    }, 1000);
+                    
                     return true;
                 }
                 lastError = `Status: ${response.status}`;
@@ -3258,7 +3308,12 @@ docker compose up -d</code></pre>
             
             if (attempts >= maxAttempts) {
                 console.error('[Update] Max health check attempts reached');
-                showMessage('Service restart is taking longer than expected. Please refresh the page manually.', 'warning');
+                showMessage('⚠️ Service restart is taking longer than expected. You may need to refresh the page manually.', 'warning');
+                
+                if (progressText) {
+                    progressText.textContent = 'Restart taking longer than expected. You may need to refresh manually.';
+                }
+                
                 return false;
             }
             
