@@ -814,14 +814,12 @@ async function runMetricCycle() {
         console.warn("[Metrics Cycle] PVE API clients not initialized yet, skipping run.");
         return;
     }
-    // Use global state for running guests
+    // Use global state for all guests
     const { vms: currentVms, containers: currentContainers } = stateManager.getState();
-    const runningVms = currentVms.filter(vm => vm.status === 'running');
-    const runningContainers = currentContainers.filter(ct => ct.status === 'running');
-
-    if (runningVms.length > 0 || runningContainers.length > 0) {
-        // Use imported fetchMetricsData
-        const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, currentApiClients);
+    
+    if (currentVms.length > 0 || currentContainers.length > 0) {
+        // Use imported fetchMetricsData - fetch metrics for ALL VMs/containers to ensure accurate uptime
+        const fetchedMetrics = await fetchMetricsData(currentVms, currentContainers, currentApiClients);
 
         const duration = Date.now() - startTime;
 

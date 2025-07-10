@@ -2026,18 +2026,18 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
 }
 
 /**
- * Fetches dynamic metric data for running PVE guests.
- * @param {Array} runningVms - Array of running VM objects.
- * @param {Array} runningContainers - Array of running Container objects.
+ * Fetches dynamic metric data for all PVE guests.
+ * @param {Array} vms - Array of VM objects.
+ * @param {Array} containers - Array of Container objects.
  * @param {Object} currentApiClients - Initialized PVE API clients.
  * @returns {Promise<Array>} - Array of metric data objects.
  */
-async function fetchMetricsData(runningVms, runningContainers, currentApiClients) {
+async function fetchMetricsData(vms, containers, currentApiClients) {
     const allMetrics = [];
     const metricPromises = [];
     const guestsByEndpointNode = {};
 
-    [...runningVms, ...runningContainers].forEach(guest => {
+    [...vms, ...containers].forEach(guest => {
         const { endpointId, node, vmid, type, name, agent } = guest; // Added 'agent'
         if (!guestsByEndpointNode[endpointId]) {
             guestsByEndpointNode[endpointId] = {};
@@ -2087,12 +2087,7 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 
                                 // Get bulk data for this VM
                                 const bulkKey = `${nodeName}-${vmid}`;
-                                const bulkVmData = bulkDataMap.get(bulkKey);
-                                
-                                // Skip if VM not found or not running
-                                if (!bulkVmData || bulkVmData.status !== 'running') {
-                                    return null;
-                                }
+                                const bulkVmData = bulkDataMap.get(bulkKey) || {};
                                 
                                 const rrdDataResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { 
                                     params: { timeframe: 'hour', cf: 'AVERAGE' } 
@@ -2110,22 +2105,24 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 
                                 // Convert bulk data to match existing currentMetrics structure
                                 const statusData = currentStatusResponse?.data?.data || {};
+                                
+                                // Prefer fresh data from individual status endpoint when available
                                 let currentMetrics = {
-                                    cpu: bulkVmData.cpu || 0,
-                                    cpus: bulkVmData.maxcpu || 1,
-                                    mem: bulkVmData.mem || 0,
-                                    maxmem: bulkVmData.maxmem || 0,
-                                    disk: bulkVmData.disk || 0,
-                                    maxdisk: bulkVmData.maxdisk || 0,
+                                    cpu: statusData.cpu !== undefined ? statusData.cpu : (bulkVmData.cpu || 0),
+                                    cpus: statusData.maxcpu !== undefined ? statusData.maxcpu : (bulkVmData.maxcpu || 1),
+                                    mem: statusData.mem !== undefined ? statusData.mem : (bulkVmData.mem || 0),
+                                    maxmem: statusData.maxmem !== undefined ? statusData.maxmem : (bulkVmData.maxmem || 0),
+                                    disk: statusData.disk !== undefined ? statusData.disk : (bulkVmData.disk || 0),
+                                    maxdisk: statusData.maxdisk !== undefined ? statusData.maxdisk : (bulkVmData.maxdisk || 0),
                                     // Prefer fresh I/O counters and uptime from individual status endpoint
                                     netin: statusData.netin !== undefined ? statusData.netin : (bulkVmData.netin || 0),
                                     netout: statusData.netout !== undefined ? statusData.netout : (bulkVmData.netout || 0),
                                     diskread: statusData.diskread !== undefined ? statusData.diskread : (bulkVmData.diskread || 0),
                                     diskwrite: statusData.diskwrite !== undefined ? statusData.diskwrite : (bulkVmData.diskwrite || 0),
                                     uptime: statusData.uptime !== undefined ? statusData.uptime : (bulkVmData.uptime || 0),
-                                    status: bulkVmData.status || 'unknown',
-                                    qmpstatus: bulkVmData.qmpstatus || bulkVmData.status || 'unknown',
-                                    agent: type === 'qemu' ? (bulkVmData.agent || 0) : 0
+                                    status: statusData.status !== undefined ? statusData.status : (bulkVmData.status || 'unknown'),
+                                    qmpstatus: statusData.qmpstatus !== undefined ? statusData.qmpstatus : (bulkVmData.qmpstatus || bulkVmData.status || 'unknown'),
+                                    agent: type === 'qemu' ? (statusData.agent !== undefined ? statusData.agent : (bulkVmData.agent || 0)) : 0
                                 };
                                 
 
@@ -2318,7 +2315,7 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
         }
     });
 
-    const totalGuests = runningVms.length + runningContainers.length;
+    const totalGuests = vms.length + containers.length;
     const endpointCount = Object.keys(guestsByEndpointNode).length;
     console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
     console.log(`[DataFetcher] API call optimization: Using bulk endpoint reduced calls from ${totalGuests} to ${endpointCount} per cycle`);
