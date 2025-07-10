@@ -1147,8 +1147,8 @@ class DiagnosticTool {
                     if (perm.tokenId && perm.tokenId.startsWith('root@')) {
                         report.recommendations.push({
                             severity: 'warning',
-                            category: 'Security: Root Token',
-                            message: `Proxmox "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. Root tokens have full admin access to your entire Proxmox cluster.\n\nRecommended: Create a dedicated monitoring user with only necessary permissions:\n• PVEAuditor on '/' for basic monitoring\n• PVEDatastoreAdmin on '/storage' for backup visibility\n\nSee README "Security Best Practices" section for step-by-step instructions.`
+                            category: 'Security: Root User Token',
+                            message: `Proxmox "${perm.name}": Using root user token (${perm.tokenId.split('!')[0]}). While tokens can limit root's permissions through roles, using a dedicated monitoring user is recommended for defense in depth.\n\nBenefits of a dedicated user:\n• Clear audit trail of monitoring activities\n• Can be disabled without affecting root access\n• Follows principle of least privilege\n• Reduces risk if token is compromised\n\nSee README "Security Best Practices" section for setup instructions.`
                         });
                     }
                     
@@ -1188,8 +1188,8 @@ class DiagnosticTool {
                     if (perm.tokenId && perm.tokenId.startsWith('root@')) {
                         report.recommendations.push({
                             severity: 'warning',
-                            category: 'Security: Root Token',
-                            message: `PBS "${perm.name}": Using root token (${perm.tokenId.split('!')[0]}) violates the principle of least privilege. Root tokens have full admin access to your backup server.\n\nRecommended: Create a dedicated monitoring user with only Datastore.Audit permissions. See README "Security Best Practices" section.`
+                            category: 'Security: Root User Token',
+                            message: `PBS "${perm.name}": Using root user token (${perm.tokenId.split('!')[0]}). While tokens can limit root's permissions through roles, using a dedicated monitoring user is recommended for defense in depth.\n\nBenefits of a dedicated user:\n• Clear audit trail of monitoring activities\n• Can be disabled without affecting root access\n• Follows principle of least privilege\n• Reduces risk if token is compromised`
                         });
                     }
                     
@@ -1523,7 +1523,7 @@ class DiagnosticTool {
             
             // Check for security issues
             report.recommendations.forEach(rec => {
-                if (rec.category && rec.category.includes('Root Token')) hasRootTokens = true;
+                if (rec.category && rec.category.includes('Root User Token')) hasRootTokens = true;
                 if (rec.category && rec.category.includes('Permissions Review')) hasOverlyPermissive = true;
             });
             
