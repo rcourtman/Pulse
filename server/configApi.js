@@ -865,18 +865,7 @@ class ConfigApi {
         });
 
         // Test configuration
-        app.post('/api/config/test',
-            ValidationMiddleware.validateBody({
-                fields: {
-                    host: { type: 'string', maxLength: 255 },
-                    port: ValidationMiddleware.schemas.port,
-                    tokenId: { type: 'string', maxLength: 255 },
-                    tokenSecret: { type: 'string', maxLength: 255 },
-                    type: { type: 'string', enum: ['pve', 'pbs'] }
-                },
-                required: ['host', 'type']
-            }),
-            async (req, res) => {
+        app.post('/api/config/test', async (req, res) => {
             try {
                 const result = await this.testConfig(req.body);
                 res.json(result);
