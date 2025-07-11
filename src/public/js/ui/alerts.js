@@ -463,26 +463,17 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             setupAlertSliderEvents(cpuSlider, 'cpu');
-            // Set initial styling based on whether it's default or custom
-            if (globalThresholds.cpu !== 80) {
-                cpuSlider.classList.add('custom-threshold');
-            }
+            PulseApp.ui.thresholds.updateSliderVisual(cpuSlider);
         }
         
         if (memorySlider) {
             setupAlertSliderEvents(memorySlider, 'memory');
-            // Set initial styling based on whether it's default or custom
-            if (globalThresholds.memory !== 85) {
-                memorySlider.classList.add('custom-threshold');
-            }
+            PulseApp.ui.thresholds.updateSliderVisual(memorySlider);
         }
         
         if (diskSlider) {
             setupAlertSliderEvents(diskSlider, 'disk');
-            // Set initial styling based on whether it's default or custom
-            if (globalThresholds.disk !== 90) {
-                diskSlider.classList.add('custom-threshold');
-            }
+            PulseApp.ui.thresholds.updateSliderVisual(diskSlider);
         }
         
         // Setup dropdowns
@@ -891,15 +882,15 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             cpuSlider.value = globalThresholds.cpu;
-            cpuSlider.classList.remove('custom-threshold');
+            PulseApp.ui.thresholds.updateSliderVisual(cpuSlider);
         }
         if (memorySlider) {
             memorySlider.value = globalThresholds.memory;
-            memorySlider.classList.remove('custom-threshold');
+            PulseApp.ui.thresholds.updateSliderVisual(memorySlider);
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
-            diskSlider.classList.remove('custom-threshold');
+            PulseApp.ui.thresholds.updateSliderVisual(diskSlider);
             // Hide any lingering tooltip that might have been triggered
             PulseApp.tooltips.hideSliderTooltipImmediately();
         }

@@ -4,52 +4,25 @@
 
 /* Custom slider styling for alert thresholds */
 @layer components {
-  /* Default slider appearance */
+  /* Simple native range input styling */
   input[type="range"] {
-    @apply appearance-none bg-transparent cursor-pointer;
+    @apply appearance-none w-full h-2 bg-gray-300 dark:bg-gray-600 rounded-full outline-none cursor-pointer;
   }
   
-  /* Slider track */
-  input[type="range"]::-webkit-slider-track {
-    @apply h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full;
+  input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer;
   }
   
-  input[type="range"]::-moz-range-track {
-    @apply h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full;
+  input[type="range"]::-moz-range-thumb {
+    @apply w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer border-0;
   }
   
-  /* Default slider thumb (handle) - override custom-slider blue styles */
-  input[type="range"]::-webkit-slider-thumb,
-  input[type="range"].custom-slider::-webkit-slider-thumb {
-    @apply appearance-none w-3 h-3 bg-gray-400 dark:bg-gray-400 rounded-full cursor-pointer;
-    margin-top: 0;
-  }
-  
-  input[type="range"]::-moz-range-thumb,
-  input[type="range"].custom-slider::-moz-range-thumb {
-    @apply appearance-none w-3 h-3 bg-gray-400 dark:bg-gray-400 rounded-full cursor-pointer border-0;
-  }
-  
-  /* Custom threshold slider thumb - blue to indicate custom value */
   input[type="range"].custom-threshold::-webkit-slider-thumb {
     @apply bg-blue-500 dark:bg-blue-400;
   }
   
   input[type="range"].custom-threshold::-moz-range-thumb {
     @apply bg-blue-500 dark:bg-blue-400;
-  }
-  
-  /* Remove focus outline completely */
-  input[type="range"]:focus {
-    @apply outline-none;
-  }
-  
-  input[type="range"]:focus::-webkit-slider-thumb {
-    @apply outline-none;
-  }
-  
-  input[type="range"]:focus::-moz-range-thumb {
-    @apply outline-none;
   }
 
   /* Charts mode visibility toggle */
