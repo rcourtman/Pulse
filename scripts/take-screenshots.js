@@ -5,7 +5,7 @@ const fs = require('fs');
 // --- Configuration ---
 const BASE_URL = process.env.PULSE_URL || 'http://localhost:7655'; // Allow overriding via env var
 const OUTPUT_DIR = path.resolve(__dirname, '../docs/images');
-const DESKTOP_VIEWPORT = { width: 1440, height: 900 }; // Match common M1 Air scaled resolution (16:10)
+const DESKTOP_VIEWPORT = { width: 1440, height: 900 }; // Standard viewport
 const WAIT_OPTIONS = { waitUntil: 'networkidle', timeout: 15000 }; // Increased timeout, networkidle
 const OVERLAY_SELECTOR = '#loading-overlay';
 
@@ -21,30 +21,8 @@ const sections = [
       }
     },
 
-    // PBS View: Proxmox Backup Server
-    { name: '02-pbs-view',
-      action: async (page) => {
-        console.log('  Action: Clicking PBS tab');
-        // More specific selector to avoid conflict with settings modal
-        await page.locator('.tab[data-tab="pbs"]').click();
-        console.log('  Action: Waiting for PBS container to be visible');
-        await page.locator('#pbs #pbs-instances-container').waitFor({ state: 'visible', timeout: 10000 });
-        console.log('  Action: PBS container visible');
-        
-        // Wait for PBS data to load
-        try {
-          await page.locator('#pbs .pbs-status-table tbody tr, #pbs .pbs-datastore-table tbody tr').first().waitFor({ state: 'visible', timeout: 15000 });
-          console.log('  Action: PBS data loaded');
-        } catch (e) {
-          console.log('  Warning: PBS data may not be fully loaded');
-        }
-        
-        await page.waitForTimeout(500);
-      }
-    },
-
     // Storage View
-    { name: '03-storage-view',
+    { name: '02-storage-view',
       action: async (page) => {
         console.log('  Action: Clicking Storage tab');
         await page.locator('[data-tab="storage"]').click();
@@ -63,23 +41,58 @@ const sections = [
       }
     },
 
-    // Backups View
-    { name: '04-backups-view',
+    // Unified Backups View
+    { name: '03-unified-backups-view',
       action: async (page) => {
         console.log('  Action: Clicking Backups tab');
-        await page.locator('[data-tab="backups"]').click();
-        console.log('  Action: Waiting for backups container to be visible');
-        await page.locator('#backups').waitFor({ state: 'visible', timeout: 10000 });
+        await page.locator('[data-tab="unified"]').click();
+        console.log('  Action: Waiting for unified backups container to be visible');
+        await page.locator('#unified').waitFor({ state: 'visible', timeout: 10000 });
         
-        // Try to wait for data, but don't fail if none exists
+        // Wait for backups data to load
         try {
-          await page.locator('#backups-overview-tbody tr').first().waitFor({ state: 'visible', timeout: 5000 });
+          await page.locator('#unified-backups-tbody tr').first().waitFor({ state: 'visible', timeout: 5000 });
           console.log('  Action: Backups data loaded');
         } catch (e) {
           console.log('  Warning: No backup data available, capturing empty view');
         }
         
         await page.waitForTimeout(1000);
+      }
+    },
+
+    // Thresholds View
+    { name: '04-thresholds-view',
+      action: async (page) => {
+        console.log('  Action: Ensuring Main tab is active');
+        // Ensure main tab is active
+        const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
+        if (!mainTabIsActive) {
+             await page.locator('[data-tab="main"]').click();
+             await page.waitForLoadState('networkidle', { timeout: 5000 });
+        }
+
+        console.log('  Action: Clicking Thresholds toggle to activate thresholds mode');
+        // Click the thresholds toggle checkbox label to activate thresholds mode
+        const thresholdsToggleLabel = page.locator('label:has(#toggle-thresholds-checkbox)');
+        await thresholdsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
+        await thresholdsToggleLabel.click();
+        
+        console.log('  Action: Waiting for thresholds mode changes');
+        // Give it time for the UI to update
+        await page.waitForTimeout(1000);
+        
+        console.log('  Action: Thresholds view is now active');
+        
+        // Brief wait to ensure everything is rendered
+        await page.waitForTimeout(800);
+      },
+      postAction: async (page) => {
+        console.log('  Action: Deactivating thresholds mode');
+        // Toggle thresholds off again
+        const thresholdsToggleLabel = page.locator('label:has(#toggle-thresholds-checkbox)');
+        await thresholdsToggleLabel.click();
+        await page.waitForTimeout(300);
       }
     },
     
@@ -106,9 +119,13 @@ const sections = [
         await page.waitForTimeout(300);
 
         console.log('  Action: Clicking charts toggle label');
-        const chartsToggleLabel = page.locator('label:has(#toggle-charts-checkbox)');
-        await chartsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
-        await chartsToggleLabel.click();
+        const chartsToggleCheckbox = page.locator('#toggle-charts-checkbox');
+        const isChecked = await chartsToggleCheckbox.isChecked();
+        if (!isChecked) {
+            const chartsToggleLabel = page.locator('label:has(#toggle-charts-checkbox)');
+            await chartsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
+            await chartsToggleLabel.click();
+        }
         
         console.log('  Action: Waiting for charts to appear');
         await page.waitForFunction(() => {
@@ -142,9 +159,13 @@ const sections = [
       postAction: async (page) => {
         console.log('  Action: Resetting view');
         // Toggle charts off again
-        const chartsToggleLabel = page.locator('label:has(#toggle-charts-checkbox)');
-        await chartsToggleLabel.click();
-        await page.waitForTimeout(300);
+        const chartsToggleCheckbox = page.locator('#toggle-charts-checkbox');
+        const isChecked = await chartsToggleCheckbox.isChecked();
+        if (isChecked) {
+            const chartsToggleLabel = page.locator('label:has(#toggle-charts-checkbox)');
+            await chartsToggleLabel.click();
+            await page.waitForTimeout(300);
+        }
         
         // Reset filter to show all
         const allFilterLabel = page.locator('label[for="filter-all"]');
@@ -169,16 +190,17 @@ const sections = [
 
         console.log('  Action: Clicking Alerts toggle to activate alerts mode');
         // Click the alerts toggle checkbox label to activate alerts mode
-        const alertsToggleLabel = page.locator('label:has(#toggle-alerts-checkbox)');
-        await alertsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
-        await alertsToggleLabel.click();
+        const alertsToggleCheckbox = page.locator('#toggle-alerts-checkbox');
+        const isChecked = await alertsToggleCheckbox.isChecked();
+        if (!isChecked) {
+            const alertsToggleLabel = page.locator('label:has(#toggle-alerts-checkbox)');
+            await alertsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
+            await alertsToggleLabel.click();
+        }
         
-        console.log('  Action: Waiting for alerts mode to be active');
-        // Wait for the alert mode controls to be visible
-        await page.locator('#alert-mode-controls').waitFor({ state: 'visible', timeout: 5000 });
-        
-        // Wait for the global alert thresholds row to be visible
-        await page.locator('#global-alert-thresholds-row').waitFor({ state: 'visible', timeout: 5000 });
+        console.log('  Action: Waiting for alerts mode changes');
+        // Give it time for the UI to update
+        await page.waitForTimeout(1000);
         
         console.log('  Action: Alerts view is now active');
         
@@ -188,9 +210,13 @@ const sections = [
       postAction: async (page) => {
         console.log('  Action: Deactivating alerts mode');
         // Toggle alerts off again
-        const alertsToggleLabel = page.locator('label:has(#toggle-alerts-checkbox)');
-        await alertsToggleLabel.click();
-        await page.waitForTimeout(300);
+        const alertsToggleCheckbox = page.locator('#toggle-alerts-checkbox');
+        const isChecked = await alertsToggleCheckbox.isChecked();
+        if (isChecked) {
+            const alertsToggleLabel = page.locator('label:has(#toggle-alerts-checkbox)');
+            await alertsToggleLabel.click();
+            await page.waitForTimeout(300);
+        }
       }
     }
 ];
@@ -201,22 +227,37 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
     const context = await browser.newContext({
         viewport: viewport,
         ignoreHTTPSErrors: true,
-        deviceScaleFactor: 2, // Back to 2x for better clarity
-        isMobile: false,
-        hasTouch: false,
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        deviceScaleFactor: 2 // 2x for retina quality
     });
     const page = await context.newPage();
     
-    // Don't inject any CSS - let the page render naturally
+    // Get CDP session for better screenshot quality
+    const client = await page.context().newCDPSession(page);
+    
 
     console.log(`Navigating to base URL...`);
     await page.goto(BASE_URL, WAIT_OPTIONS);
 
+    // Wait for fonts to load
+    console.log('Waiting for fonts to load...');
+    await page.evaluate(() => document.fonts.ready);
+    
     // Wait for the loading overlay to disappear
     console.log(`Waiting for overlay to disappear...`);
     await page.locator(OVERLAY_SELECTOR).waitFor({ state: 'hidden', timeout: 20000 });
     console.log('Overlay hidden.');
+    
+    // Additional wait for rendering to complete
+    await page.waitForTimeout(2000);
+    
+    // Force a repaint to ensure crisp rendering
+    await page.evaluate(() => {
+        document.body.style.display = 'none';
+        document.body.offsetHeight; // Force reflow
+        document.body.style.display = '';
+    });
+    
+    await page.waitForTimeout(500);
 
     // Ensure Dark Mode
     console.log('Ensuring dark mode is active...');
@@ -248,13 +289,36 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
                 console.log('  Action completed and network idle.');
             }
 
-            // Take the screenshot
-            console.log(`  Saving screenshot to: ${screenshotPath}`);
-            await page.screenshot({ 
-                path: screenshotPath, 
-                fullPage: false,
-                omitBackground: false
-            });
+            // Wait a bit more for any final rendering
+            await page.waitForTimeout(500);
+            
+            // Take the screenshot using CDP with WebP for better quality
+            const webpPath = screenshotPath.replace('.png', '.webp');
+            console.log(`  Saving screenshot to: ${webpPath}`);
+            
+            try {
+                // Use CDP with WebP format for higher quality
+                const { data } = await client.send('Page.captureScreenshot', {
+                    format: 'webp',
+                    quality: 100,
+                    fromSurface: true, // Capture from surface for better quality
+                    captureBeyondViewport: false
+                });
+                
+                fs.writeFileSync(webpPath, Buffer.from(data, 'base64'));
+                
+            } catch (cdpError) {
+                console.log('  CDP screenshot failed, falling back to standard method');
+                // Fallback to standard screenshot with WebP
+                await page.screenshot({ 
+                    path: webpPath, 
+                    fullPage: false,
+                    omitBackground: false,
+                    animations: 'disabled',
+                    type: 'jpeg',
+                    quality: 100
+                });
+            }
 
             console.log(`  Successfully captured ${section.name}`);
 
@@ -279,13 +343,14 @@ async function takeScreenshots() {
     console.log(`Starting screenshot capture for ${BASE_URL}...`);
     console.log(`Outputting to: ${OUTPUT_DIR}`);
 
-    // Clean up existing PNG files
+    // Clean up existing WebP files
     if (fs.existsSync(OUTPUT_DIR)) {
-        console.log(`\nCleaning up existing *.png files in ${OUTPUT_DIR}...`);
+        console.log(`\nCleaning up existing *.webp files in ${OUTPUT_DIR}...`);
         const files = fs.readdirSync(OUTPUT_DIR);
         let deletedCount = 0;
         files.forEach(file => {
-            if (path.extname(file).toLowerCase() === '.png') {
+            const ext = path.extname(file).toLowerCase();
+            if (ext === '.webp') {
                 const filePath = path.join(OUTPUT_DIR, file);
                 try {
                     fs.unlinkSync(filePath);
@@ -295,7 +360,7 @@ async function takeScreenshots() {
                 }
             }
         });
-        console.log(`Cleanup finished. Deleted ${deletedCount} PNG file(s).`);
+        console.log(`Cleanup finished. Deleted ${deletedCount} WebP file(s).`);
     } else {
         console.log('Output directory does not exist, no cleanup needed.');
     }
