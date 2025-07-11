@@ -55,12 +55,7 @@ PulseApp.ui.thresholds = (() => {
                 const sliderElement = sliders[type];
                 if (sliderElement) {
                     sliderElement.value = thresholdState[type].value;
-                    // Apply custom-threshold class if slider has a value > 0
-                    if (thresholdState[type].value > 0) {
-                        sliderElement.classList.add('custom-threshold');
-                    } else {
-                        sliderElement.classList.remove('custom-threshold');
-                    }
+                    updateSliderVisual(sliderElement);
                 }
             } else if (thresholdSelects[type]) {
                 const selectElement = thresholdSelects[type];
@@ -583,7 +578,7 @@ PulseApp.ui.thresholds = (() => {
         for (const type in sliders) {
             if (sliders[type]) {
                 sliders[type].value = 0;
-                sliders[type].classList.remove('custom-threshold');
+                updateSliderVisual(sliders[type]);
             }
         }
         for (const type in thresholdSelects) {
@@ -610,15 +605,13 @@ PulseApp.ui.thresholds = (() => {
 
     function createThresholdSliderHtml(id, min, max, step, value, additionalClasses = '') {
         return `
-            <div class="flex flex-row items-center gap-1 ${additionalClasses}">
-                <input type="range" 
-                       id="${id}"
-                       min="${min}" 
-                       max="${max}" 
-                       step="${step}" 
-                       value="${value || min}"
-                       class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
-            </div>
+            <input type="range" 
+                   id="${id}"
+                   min="${min}" 
+                   max="${max}" 
+                   step="${step}" 
+                   value="${value || min}"
+                   class="custom-slider w-full ${additionalClasses}">
         `;
     }
 
@@ -635,12 +628,27 @@ PulseApp.ui.thresholds = (() => {
         `;
     }
 
+    // Helper function to update slider visual
+    function updateSliderVisual(sliderElement) {
+        if (!sliderElement) return;
+        
+        const value = parseInt(sliderElement.value);
+        const min = parseInt(sliderElement.min);
+        
+        if (value > min) {
+            sliderElement.classList.add('custom-threshold');
+        } else {
+            sliderElement.classList.remove('custom-threshold');
+        }
+    }
+    
     // Helper function to setup threshold slider events on any slider element
     function setupThresholdSliderEvents(sliderElement, onChangeCallback) {
         if (!sliderElement) return;
         
         sliderElement.addEventListener('input', (event) => {
             const value = event.target.value;
+            updateSliderVisual(event.target);
             if (onChangeCallback) onChangeCallback(value, event.target);
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
@@ -729,6 +737,7 @@ PulseApp.ui.thresholds = (() => {
         // Expose helper functions for alerts system
         createThresholdSliderHtml,
         createThresholdSelectHtml,
-        setupThresholdSliderEvents
+        setupThresholdSliderEvents,
+        updateSliderVisual
     };
 })();
