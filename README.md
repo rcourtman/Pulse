@@ -458,7 +458,7 @@ Optional numbered variables also exist for additional PBS instances (e.g., `PBS_
 
 ### Creating a Proxmox API Token
 
-> ⚠️ **IMPORTANT:** Token permissions are the #1 cause of blank dashboards. With privilege separation enabled (default), the token inherits permissions from the user. With privilege separation disabled, you must set permissions on the token itself. Read the instructions carefully!
+> ⚠️ **IMPORTANT:** Token permissions are the #1 cause of blank dashboards. With privilege separation disabled, the token inherits permissions from the user. With privilege separation enabled (default), you must set permissions on the token itself. Most users should DISABLE privilege separation for simplicity!
 
 Using an API token is the recommended authentication method. **Never use root tokens in production** - see [Security Best Practices](#security-best-practices-non-root-setup) below.
 
@@ -475,19 +475,19 @@ Using an API token is the recommended authentication method. **Never use root to
     *   Click `Add`.
     *   Select the `User` (e.g., "pulse-monitor@pam") or `root@pam`.
     *   Enter a `Token ID` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked (recommended for security). Click `Add`.
+    *   **Uncheck `Privilege Separation`** (recommended for simplicity - token inherits user permissions). Click `Add`.
     *   **Important:** Copy the `Secret` value immediately. It's shown only once.
     *   **Note:** Creating a token does NOT automatically grant it permissions. You MUST complete step 4 below.
 4.  **Assign permissions (CRITICAL STEP - Often Missed):**
     *   Go to `Datacenter` → `Permissions`.
-    *   **For tokens with Privilege Separation enabled (default):** Click `Add` → `User Permission`.
+    *   **Recommended (with Privilege Separation DISABLED):** Click `Add` → `User Permission`.
         - Path: `/`
         - User: `pulse-monitor@pam` (the USER, not the token!)
         - Role: `PVEAuditor`
         - Propagate: Must be checked
         - Click `Add`
-    *   **Why set permissions on the user?** Tokens with privilege separation enabled (the default) inherit permissions from their user. The token effectively has the same permissions as the user.
-    *   **Alternative:** If you disable privilege separation, you must set permissions directly on the token instead.
+    *   **Why disable privilege separation?** With it disabled, the token inherits all permissions from the user. This is simpler - you only need to set permissions once on the user.
+    *   **If you keep privilege separation enabled:** You must set permissions on BOTH the user AND the token (using "API Token Permission" instead).
 5.  **Update `.env`:** Set `PROXMOX_TOKEN_ID` (e.g., `pulse-monitor@pam!pulse`) and `PROXMOX_TOKEN_SECRET` (the secret you copied).
 
 </details>
@@ -521,11 +521,11 @@ If monitoring PBS, create a token within the PBS interface.
     *   Click `Add`.
     *   Select `User` (e.g., "pulse-monitor@pbs"). Avoid using `root@pam` or `admin@pbs` for production.
     *   Enter `Token Name` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked (recommended for security). Click `Add`.
+    *   **Uncheck `Privilege Separation`** (recommended for simplicity - token inherits user permissions). Click `Add`.
     *   **Important:** Copy the `Secret` value immediately.
 4.  **Assign permissions (CRITICAL STEP):**
-    *   **With privilege separation enabled (default):** Set permissions on the USER
-    *   **With privilege separation disabled:** Set permissions on the TOKEN itself
+    *   **With privilege separation disabled (recommended):** Set permissions on the USER only
+    *   **With privilege separation enabled:** Set permissions on BOTH the USER and TOKEN
     *   **⚠️ Security Note:** Pulse only needs read-only access. Avoid granting Admin role unless absolutely necessary.
     
     *   **Recommended: Minimal read-only permissions**
@@ -565,25 +565,25 @@ If monitoring PBS, create a token within the PBS interface.
     
     How you grant permissions depends on your token's privilege separation setting:
     
-    **Option 1: Token with privilege separation (default, more secure)**
+    **Option 1: Token without privilege separation (recommended, simpler)**
     ```bash
-    # Check if your token has privsep enabled (shows "privsep": 1)
-    pveum user token list user@realm --output-format json
-    
-    # If privsep=1, set permissions on the USER (not the token!)
+    # Create token with --privsep 0
+    # Set permissions on the USER only
     pveum acl modify / --users user@realm --roles PVEAuditor
     pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin
     ```
     
-    **Option 2: Token without privilege separation**
+    **Option 2: Token with privilege separation (more complex)**
     ```bash
-    # Only if you created token with --privsep 0
-    # Set permissions on the TOKEN directly
+    # If you created token with --privsep 1 (default)
+    # Must set permissions on BOTH user AND token
+    pveum acl modify / --users user@realm --roles PVEAuditor
+    pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin
     pveum acl modify / --tokens user@realm!tokenname --roles PVEAuditor
     pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin
     ```
     
-    **Why this matters:** Tokens created with `--privsep 1` (the default) inherit permissions from the user, so permissions must be set on the user with `--users`. Setting permissions with `--tokens` won't work for tokens with privilege separation enabled.
+    **Why this matters:** Tokens with `--privsep 0` inherit all permissions from the user automatically. Tokens with `--privsep 1` require explicit permissions set on both the user AND the token - the token can only have permissions that the user also has.
     </details>
     
     <details>
@@ -610,18 +610,18 @@ If monitoring PBS, create a token within the PBS interface.
 
 Using root tokens is convenient but violates the principle of least privilege. Here's how to set up Pulse securely without root access:
 
-#### Recommended: Dedicated User with Privilege Separation
+#### Recommended: Dedicated User WITHOUT Privilege Separation
 
-This is the most secure approach:
+This is the simplest approach:
 
 ```bash
 # 1. Create a dedicated monitoring user
 pveum user add pulse-monitor@pam --comment "Pulse monitoring user"
 
-# 2. Create token WITH privilege separation (default, more secure)
-pveum user token add pulse-monitor@pam monitoring --privsep 1
+# 2. Create token WITHOUT privilege separation (simpler)
+pveum user token add pulse-monitor@pam monitoring --privsep 0
 
-# 3. Set permissions on the USER (not the token!)
+# 3. Set permissions on the USER only (token inherits them)
 pveum acl modify / --users pulse-monitor@pam --roles PVEAuditor
 pveum acl modify /storage --users pulse-monitor@pam --roles PVEDatastoreAdmin
 
@@ -630,18 +630,20 @@ pveum acl modify /storage --users pulse-monitor@pam --roles PVEDatastoreAdmin
 # PROXMOX_TOKEN_SECRET=<your-token-secret>
 ```
 
-#### Alternative: Token Without Privilege Separation
+#### Alternative: Token With Privilege Separation
 
-Simpler but less secure:
+More complex but provides finer control:
 
 ```bash
 # 1. Create user
 pveum user add pulse-monitor@pam --comment "Pulse monitoring user"
 
-# 2. Create token WITHOUT privilege separation
-pveum user token add pulse-monitor@pam monitoring --privsep 0
+# 2. Create token WITH privilege separation
+pveum user token add pulse-monitor@pam monitoring --privsep 1
 
-# 3. Set permissions on the TOKEN directly
+# 3. Set permissions on BOTH USER AND TOKEN
+pveum acl modify / --users pulse-monitor@pam --roles PVEAuditor
+pveum acl modify /storage --users pulse-monitor@pam --roles PVEDatastoreAdmin
 pveum acl modify / --tokens pulse-monitor@pam!monitoring --roles PVEAuditor
 pveum acl modify /storage --tokens pulse-monitor@pam!monitoring --roles PVEDatastoreAdmin
 ```
@@ -711,14 +713,14 @@ pveum user token remove root@pam your-token
 #### Common Security Mistakes
 
 1. **Using root tokens** - Gives unnecessary full access
-2. **Not understanding privilege separation** - With it enabled, set permissions on user; with it disabled, set permissions on token
-3. **Setting permissions on tokens with privsep=1** - Doesn't work!
+2. **Not understanding privilege separation** - With it disabled, set permissions on user only; with it enabled, set permissions on BOTH user and token
+3. **Only setting permissions on user with privsep=1** - Must also set on token!
 4. **Granting Admin roles** - PVEAuditor + PVEDatastoreAdmin is sufficient
 
 #### Quick Decision Guide
 
-- **Maximum security?** → Dedicated user with privsep=1
-- **Simplest setup?** → Token with privsep=0
+- **Simplest setup?** → Token with privsep=0 (disabled)
+- **Maximum control?** → Token with privsep=1 (enabled) 
 - **Minimal permissions?** → Restrict to specific storages
 - **Multiple Pulse instances?** → Create separate tokens for each
 
@@ -1141,9 +1143,9 @@ sudo journalctl -u pulse-monitor.service -f
 3. **Test connectivity:** Can you ping your Proxmox host from where Pulse is running?
 
 4. **Check Privilege Separation Setting:**
-   - With privilege separation enabled (default): Ensure permissions are set on the USER
-   - With privilege separation disabled: Ensure permissions are set on the TOKEN
-   - Most issues occur when permissions are set in the wrong place
+   - With privilege separation disabled: Ensure permissions are set on the USER only
+   - With privilege separation enabled (default): Ensure permissions are set on BOTH USER and TOKEN
+   - The easiest solution is to disable privilege separation and set permissions on the user only
 
 **"Empty Backups Tab" with PBS configured?**
 - Ensure `PBS Node Name` is configured in the settings modal
@@ -1246,8 +1248,12 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
       - Run the web-based diagnostics: http://your-pulse-ip:7655/diagnostics.html
       - Check the "Recommendations" section for specific permission issues
       - Or manually check if your token has privilege separation: `pveum user token list user@realm --output-format json`
-      - If `privsep` is 1 (default), permissions must be set on the USER: `pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin`
-      - If `privsep` is 0, permissions can be set on the TOKEN: `pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin`
+      - If `privsep` is 0, permissions only need to be set on the USER: `pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin`
+      - If `privsep` is 1 (default), permissions must be set on BOTH USER and TOKEN: 
+        ```
+        pveum acl modify /storage --users user@realm --roles PVEDatastoreAdmin
+        pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin
+        ```
       - See the [Storage Content Visibility](#required-permissions) section for full details.
 *   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
 *   **Configuration Issues:** Use the settings modal to verify all connection details. Test connections with the built-in connectivity tester before saving. Ensure no placeholder values remain.
