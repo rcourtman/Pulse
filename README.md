@@ -418,6 +418,9 @@ For performance tuning and specialized deployments:
 # Performance & Retention
 BACKUP_HISTORY_DAYS=365          # Backup history retention (default: 365 days)
 
+# Embedding Support
+ALLOW_EMBEDDING=false            # Allow Pulse to be embedded in iframes (default: false)
+
 # Update System Configuration
 UPDATE_CHANNEL_PREFERENCE=stable  # Force specific update channel (stable/rc)
 UPDATE_TEST_MODE=false            # Enable test mode for update system
@@ -429,6 +432,24 @@ DEBUG=pulse:*                     # Enable debug logging for specific modules
 # Docker Detection (automatically set)
 DOCKER_DEPLOYMENT=true            # Automatically detected in Docker environments
 ```
+
+#### Iframe Embedding Support
+
+Pulse can be embedded in other web applications (like Homepage, Organizr, or custom dashboards) using iframes.
+
+**To enable embedding:**
+1. Set `ALLOW_EMBEDDING=true` in your `.env` file
+2. Restart Pulse
+3. Embed using standard HTML iframe:
+   ```html
+   <iframe src="http://your-pulse-host:7655" width="100%" height="600"></iframe>
+   ```
+
+**Security Considerations:**
+- By default, embedding is disabled to prevent clickjacking attacks
+- When enabled, Pulse uses `X-Frame-Options: SAMEORIGIN` to allow embedding only from the same origin
+- The Content Security Policy is also adjusted to permit iframe embedding
+- Only enable this feature if you trust the applications that will embed Pulse
 
 **Performance Notes:**
 - `BACKUP_HISTORY_DAYS` affects calendar heatmap visualization and memory usage
