@@ -10,11 +10,11 @@
   }
   
   input[type="range"]::-webkit-slider-thumb {
-    @apply appearance-none w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer;
+    @apply appearance-none w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer relative z-10;
   }
   
   input[type="range"]::-moz-range-thumb {
-    @apply w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer border-0;
+    @apply w-3 h-3 bg-gray-500 dark:bg-gray-400 rounded-full cursor-pointer border-0 relative z-10;
   }
   
   input[type="range"].custom-threshold::-webkit-slider-thumb {
