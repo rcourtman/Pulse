@@ -6,7 +6,7 @@
 
 A lightweight monitoring application for Proxmox VE that displays real-time status for VMs and containers via a simple web interface.
 
-![Pulse Dashboard](docs/images/01-dashboard.png)
+![Pulse Dashboard](docs/images/01-dashboard.webp)
 
 ### 📸 Screenshots
 
@@ -20,22 +20,22 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td align="center"><strong>Alert Thresholds</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/05-charts-view.png" alt="Real-time performance charts" width="400"/></td>
-<td><img src="docs/images/06-alerts-view.png" alt="Alert threshold configuration" width="400"/></td>
+<td><img src="docs/images/05-charts-view.webp" alt="Real-time performance charts" width="400"/></td>
+<td><img src="docs/images/06-alerts-view.webp" alt="Alert threshold configuration" width="400"/></td>
 </tr>
 <tr>
 <td align="center"><strong>Storage Overview</strong></td>
 <td align="center"><strong>Backup Management</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/03-storage-view.png" alt="Storage overview" width="400"/></td>
-<td><img src="docs/images/04-backups-view.png" alt="Backup management" width="400"/></td>
+<td><img src="docs/images/02-storage-view.webp" alt="Storage overview" width="400"/></td>
+<td><img src="docs/images/03-unified-backups-view.webp" alt="Backup management" width="400"/></td>
 </tr>
 <tr>
-<td align="center" colspan="2"><strong>Proxmox Backup Server Integration</strong></td>
+<td align="center" colspan="2"><strong>Custom Alert Thresholds</strong></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><img src="docs/images/02-pbs-view.png" alt="Unified backup view with PBS integration" width="600"/></td>
+<td colspan="2" align="center"><img src="docs/images/04-thresholds-view.webp" alt="Custom per-VM alert thresholds" width="600"/></td>
 </tr>
 </table>
 </div>
