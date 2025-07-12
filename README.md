@@ -8,18 +8,18 @@
 
 ![Pulse Dashboard](docs/images/01-dashboard.webp)
 
-## ✨ Key Features
+## Key Features
 
-- **📊 Real-time Monitoring** - Live updates for VMs, containers, and storage via WebSockets
-- **🔔 Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Teams)
-- **💾 Unified Backups** - Single view for PBS backups, PVE backups, and snapshots
-- **🔒 PBS Push Mode** - Monitor isolated/firewalled PBS servers without inbound connections
-- **🎨 Modern UI** - Responsive design with dark/light themes and virtual scrolling
-- **🚀 Lightweight** - Minimal resource usage, stops polling when no clients connected
+- **Real-time Monitoring** - Live updates for VMs, containers, and storage via WebSockets
+- **Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Teams)
+- **Unified Backups** - Single view for PBS backups, PVE backups, and snapshots
+- **PBS Push Mode** - Monitor isolated/firewalled PBS servers without inbound connections
+- **Modern UI** - Responsive design with dark/light themes and virtual scrolling
+- **Lightweight** - Minimal resource usage, stops polling when no clients connected
 
 [View Screenshots →](docs/SCREENSHOTS.md)
 
-## 🚀 Quick Start (2 minutes)
+## Quick Start (2 minutes)
 
 ### Prerequisites
 - Proxmox VE 7.0+ or PBS 2.0+
@@ -52,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 
 **That's it!** Pulse is now monitoring your Proxmox environment.
 
-## 📋 Creating API Token
+## Creating API Token
 
 <details>
 <summary><strong>Proxmox VE Token (Click to expand)</strong></summary>
@@ -66,7 +66,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
    - Path: `/`
    - User: `pulse@pam` (not the token!)
    - Role: `PVEAuditor`
-   - Propagate: ✓ Checked
+   - Propagate: Checked
 
 For backup visibility, also add:
    - Path: `/storage`
@@ -86,24 +86,24 @@ proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse@pbs
 
 </details>
 
-## 🔧 Configuration
+## Configuration
 
 All configuration is done through the web interface - no file editing required!
 
-- **Settings** (⚙️ icon) - Add/modify Proxmox connections, configure alerts
+- **Settings** (gear icon) - Add/modify Proxmox connections, configure alerts
 - **Alerts** - Set CPU/Memory/Disk thresholds, configure notifications
 - **Updates** - Built-in updater for non-Docker installations
 
 For advanced configuration options, see [Configuration Guide](docs/CONFIGURATION.md).
 
-## 📚 Documentation
+## Documentation
 
 - [Installation Guide](docs/INSTALLATION.md) - Detailed install instructions for all methods
 - [Configuration Guide](docs/CONFIGURATION.md) - Advanced settings and environment variables
 - [PBS Push Mode](docs/PBS_PUSH_MODE.md) - Monitor isolated PBS servers
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
-## 🆘 Common Issues
+## Common Issues
 
 ### Empty Dashboard?
 Run diagnostics: `http://<pulse-ip>:7655/diagnostics.html`
@@ -120,7 +120,7 @@ Most common cause: Missing API token permissions. The diagnostic tool will tell 
 
 [Full Troubleshooting Guide →](docs/TROUBLESHOOTING.md)
 
-## 🚦 Choosing Installation Method
+## Choosing Installation Method
 
 | Method | Best For | Pros | Cons |
 |--------|----------|------|------|
@@ -128,28 +128,28 @@ Most common cause: Missing API token permissions. The diagnostic tool will tell 
 | **Docker** | Existing Docker hosts | Easy updates, isolated | No built-in updater |
 | **Manual** | Existing LXC/VMs | Use existing system | Manual dependency install |
 
-## 🔄 Updating
+## Updating
 
 - **Web UI**: Settings → Software Updates → Check for Updates
 - **Docker**: `docker compose pull && docker compose up -d`
 - **Manual**: `sudo /opt/pulse/scripts/install-pulse.sh --update`
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! See [Contributing Guidelines](CONTRIBUTING.md).
 
 - `main` branch: Stable releases only
 - `develop` branch: Active development (auto-creates RC releases)
 
-## 📜 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
-## ™️ Trademark Notice
+## Trademark Notice
 
 Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. This project is not affiliated with or endorsed by Proxmox Server Solutions GmbH.
 
-## ❤️ Support
+## Support
 
 If you find Pulse useful, consider supporting development:
 
