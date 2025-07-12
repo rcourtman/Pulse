@@ -25,7 +25,7 @@
     "axios-retry": "^4.5.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.1.0",
+    "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "nodemailer": "^7.0.5",
     "semver": "^7.7.2",
@@ -38,7 +38,7 @@
     "autoprefixer": "^10.4.21",
     "chokidar": "^4.0.3",
     "concurrently": "^9.2.0",
-    "playwright": "^1.53.2",
+    "playwright": "^1.54.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17"
   },
