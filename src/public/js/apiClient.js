@@ -35,7 +35,19 @@ PulseApp.apiClient = (() => {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Try to get error details from response body
+                let errorMessage = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorBody = await response.json();
+                    if (errorBody.error) {
+                        errorMessage = errorBody.error;
+                    } else if (errorBody.details) {
+                        errorMessage = errorBody.details;
+                    }
+                } catch (e) {
+                    // Response body wasn't JSON, use default error message
+                }
+                throw new Error(errorMessage);
             }
             
             return await response.json();

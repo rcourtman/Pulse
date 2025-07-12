@@ -9,6 +9,8 @@ PulseApp.ui.settings = (() => {
     let updateCache = new Map(); // Cache update check results to reduce API calls
     let updateCheckTimeout = null; // Debounce rapid channel changes
     let formDataCache = {}; // Store form data between tab switches
+    let originalFormData = null; // Store original form data to detect changes
+    let hasUnsavedChanges = false; // Track if form has unsaved changes
 
     function init() {
         if (isInitialized) return;
@@ -31,7 +33,21 @@ PulseApp.ui.settings = (() => {
         }
 
         if (cancelButton) {
-            cancelButton.addEventListener('click', closeModal);
+            cancelButton.addEventListener('click', () => {
+                if (hasUnsavedChanges) {
+                    PulseApp.ui.toast.confirm(
+                        'You have unsaved changes. Are you sure you want to cancel?',
+                        () => {
+                            hasUnsavedChanges = false;
+                            originalFormData = null;
+                            formDataCache = {};
+                            closeModal();
+                        }
+                    );
+                } else {
+                    closeModal();
+                }
+            });
         }
 
         if (saveButton) {
@@ -43,6 +59,18 @@ PulseApp.ui.settings = (() => {
             PulseApp.modalManager.setupModal(modal, {
                 closeButton: closeButton,
                 onClose: () => {
+                    if (hasUnsavedChanges) {
+                        PulseApp.ui.toast.confirm(
+                            'You have unsaved changes. Are you sure you want to close?',
+                            () => {
+                                hasUnsavedChanges = false;
+                                originalFormData = null;
+                                formDataCache = {};
+                                closeModal();
+                            }
+                        );
+                        return false; // Prevent default close
+                    }
                     preserveCurrentFormData();
                     formDataCache = {};
                 }
@@ -106,6 +134,11 @@ PulseApp.ui.settings = (() => {
     }
     
     async function openModalWithTab(tabName) {
+        // Reset state
+        hasUnsavedChanges = false;
+        originalFormData = null;
+        formDataCache = {};
+        
         // Show the modal using modalManager
         PulseApp.modalManager.openModal('#settings-modal');
 
@@ -204,6 +237,7 @@ PulseApp.ui.settings = (() => {
         // Restore form data after content is rendered
         setTimeout(() => {
             restoreFormData();
+            setupChangeTracking();
         }, 0);
         
         // Load existing additional endpoints for Proxmox and PBS tabs
@@ -258,6 +292,7 @@ PulseApp.ui.settings = (() => {
                         <input type="text" name="PROXMOX_HOST" required
                                value="${host}"
                                placeholder="proxmox.example.com"
+                               oninput="PulseApp.ui.settings.validateHost(this)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
@@ -266,6 +301,7 @@ PulseApp.ui.settings = (() => {
                         <input type="number" name="PROXMOX_PORT"
                                value="${port}"
                                placeholder="8006"
+                               oninput="PulseApp.ui.settings.validatePort(this)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
                     </div>
@@ -276,6 +312,7 @@ PulseApp.ui.settings = (() => {
                         <input type="text" name="PROXMOX_TOKEN_ID" required
                                value="${tokenId}"
                                placeholder="root@pam!token-name"
+                               oninput="PulseApp.ui.settings.validateTokenId(this)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
@@ -283,7 +320,7 @@ PulseApp.ui.settings = (() => {
                             API Token Secret
                         </label>
                         <input type="password" name="PROXMOX_TOKEN_SECRET"
-                               placeholder="Leave blank to keep current"
+                               placeholder="Enter token secret (required for testing)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
@@ -294,34 +331,27 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
 
-            <!-- Additional Proxmox VE Endpoints -->
-            <div id="additional-pve-endpoints">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Proxmox VE Servers</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more PVE servers beyond the primary one above</p>
-                    </div>
-                    <button type="button" onclick="PulseApp.ui.settings.addPveEndpoint()" 
-                            class="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Another PVE Server
-                    </button>
-                </div>
-                <div id="pve-endpoints-container" class="space-y-4">
-                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                        No additional PVE servers configured.<br>
-                        <span class="text-sm">Click "Add Another PVE Server" to add more.</span>
-                    </div>
-                </div>
+            <!-- Additional Endpoints Container -->
+            <div id="pve-endpoints-container" class="space-y-4 mt-4">
+                <!-- Additional endpoints will be added here -->
             </div>
             
             <!-- Test Connections -->
-            <div class="flex justify-end mt-6">
+            <div class="flex justify-between items-center mt-6">
                 <button type="button" onclick="PulseApp.ui.settings.testConnections()" 
                         class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors">
-                    Test PVE Connections
+                    Test All Connections
+                </button>
+            </div>
+            
+            <!-- Add More Button at Bottom -->
+            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button type="button" onclick="PulseApp.ui.settings.addPveEndpoint()" 
+                        class="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm rounded-md transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Another Proxmox VE Server
                 </button>
             </div>
         `;
@@ -386,40 +416,33 @@ PulseApp.ui.settings = (() => {
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
                         <input type="password" name="PBS_TOKEN_SECRET"
-                               placeholder="Leave blank to keep current"
+                               placeholder="Enter token secret (required for testing)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                 </div>
             </div>
 
-            <!-- Additional PBS Endpoints -->
-            <div id="additional-pbs-endpoints">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional PBS Servers</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more PBS servers beyond the primary one above</p>
-                    </div>
-                    <button type="button" onclick="PulseApp.ui.settings.addPbsEndpoint()" 
-                            class="flex items-center gap-2 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Another PBS Server
-                    </button>
-                </div>
-                <div id="pbs-endpoints-container" class="space-y-4">
-                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                        No additional PBS servers configured.<br>
-                        <span class="text-sm">Click "Add Another PBS Server" to add more.</span>
-                    </div>
-                </div>
+            <!-- Additional Endpoints Container -->
+            <div id="pbs-endpoints-container" class="space-y-4 mt-4">
+                <!-- Additional endpoints will be added here -->
             </div>
             
             <!-- Test Connections -->
-            <div class="flex justify-end mt-6">
+            <div class="flex justify-between items-center mt-6">
                 <button type="button" onclick="PulseApp.ui.settings.testConnections()" 
-                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
-                    Test PBS Connections
+                        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors">
+                    Test All Connections
+                </button>
+            </div>
+            
+            <!-- Add More Button at Bottom -->
+            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button type="button" onclick="PulseApp.ui.settings.addPbsEndpoint()" 
+                        class="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm rounded-md transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Another Proxmox Backup Server
                 </button>
             </div>
         `;
@@ -997,7 +1020,7 @@ PulseApp.ui.settings = (() => {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
-                        <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                        <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" placeholder="Enter token secret (required for testing)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
@@ -1072,7 +1095,7 @@ PulseApp.ui.settings = (() => {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
-                        <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                        <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret (required for testing)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                 </div>
@@ -1212,21 +1235,170 @@ PulseApp.ui.settings = (() => {
     }
 
     async function testConnections() {
-        showMessage('Testing connections...', 'info');
+        PulseApp.ui.toast.showToast('Testing connections...', 'info');
         
         const config = collectFormData();
+        console.log('Testing connections with config:', config);
+        const testButton = event?.target || document.querySelector('[onclick*="testConnections"]');
+        
+        // Clear any previous test indicators
+        clearAllTestIndicators();
+        
+        // Disable button during test
+        if (testButton) {
+            testButton.disabled = true;
+            testButton.textContent = 'Testing...';
+        }
         
         try {
             const result = await PulseApp.apiClient.post('/api/config/test', config);
             
             if (result.success) {
-                showMessage('All connections tested successfully!', 'success');
+                PulseApp.ui.toast.success('All connections tested successfully!');
+                // Show success indicators for all configured endpoints
+                showTestSuccessIndicators(config);
             } else {
-                showMessage(result.error || 'Connection test failed', 'error');
+                PulseApp.ui.toast.error(result.error || 'Connection test failed');
+                // Try to parse error to show which endpoints failed
+                showTestFailureIndicators(config, result.error);
             }
         } catch (error) {
             console.error('Test connections error:', error);
-            showMessage('Failed to test connections: ' + error.message, 'error');
+            // Show the actual error message from the server
+            PulseApp.ui.toast.error(error.message || 'Failed to test connections');
+            showTestFailureIndicators(config, error.message);
+        } finally {
+            // Re-enable button
+            if (testButton) {
+                testButton.disabled = false;
+                testButton.textContent = 'Test All Connections';
+            }
+        }
+    }
+    
+    function clearAllTestIndicators() {
+        // Remove all existing test indicators
+        document.querySelectorAll('.test-indicator').forEach(el => el.remove());
+    }
+    
+    function showTestSuccessIndicators(config) {
+        // Show success for primary PVE
+        if (config.PROXMOX_HOST && config.PROXMOX_TOKEN_ID) {
+            showEndpointTestResult('proxmox-primary', true);
+        }
+        
+        // Show success for additional PVE endpoints
+        Object.keys(config).forEach(key => {
+            const match = key.match(/^PROXMOX_HOST_(\d+)$/);
+            if (match && config[`PROXMOX_TOKEN_ID_${match[1]}`]) {
+                showEndpointTestResult(`proxmox-${match[1]}`, true);
+            }
+        });
+        
+        // Show success for primary PBS
+        if (config.PBS_HOST && config.PBS_TOKEN_ID) {
+            showEndpointTestResult('pbs-primary', true);
+        }
+        
+        // Show success for additional PBS endpoints
+        Object.keys(config).forEach(key => {
+            const match = key.match(/^PBS_HOST_(\d+)$/);
+            if (match && config[`PBS_TOKEN_ID_${match[1]}`]) {
+                showEndpointTestResult(`pbs-${match[1]}`, true);
+            }
+        });
+    }
+    
+    function showTestFailureIndicators(config, errorMessage) {
+        // Try to parse which endpoints failed from error message
+        const failedEndpoints = [];
+        if (errorMessage && errorMessage.includes('Connection test failed for:')) {
+            // Extract failed endpoint names from error message
+            const match = errorMessage.match(/Connection test failed for: (.+)/);
+            if (match) {
+                failedEndpoints.push(...match[1].split(', ').map(e => e.split(':')[0].trim()));
+            }
+        }
+        
+        // Show appropriate indicators based on what's configured
+        if (config.PROXMOX_HOST && config.PROXMOX_TOKEN_ID) {
+            const failed = failedEndpoints.includes('Primary PVE');
+            showEndpointTestResult('proxmox-primary', !failed, failed ? 'Connection failed' : '');
+        }
+        
+        // Check additional PVE endpoints
+        Object.keys(config).forEach(key => {
+            const match = key.match(/^PROXMOX_HOST_(\d+)$/);
+            if (match && config[`PROXMOX_TOKEN_ID_${match[1]}`]) {
+                const failed = failedEndpoints.includes(`PVE Endpoint ${match[1]}`);
+                showEndpointTestResult(`proxmox-${match[1]}`, !failed, failed ? 'Connection failed' : '');
+            }
+        });
+        
+        // Check PBS endpoints
+        if (config.PBS_HOST && config.PBS_TOKEN_ID) {
+            const failed = failedEndpoints.includes('Primary PBS');
+            showEndpointTestResult('pbs-primary', !failed, failed ? 'Connection failed' : '');
+        }
+        
+        Object.keys(config).forEach(key => {
+            const match = key.match(/^PBS_HOST_(\d+)$/);
+            if (match && config[`PBS_TOKEN_ID_${match[1]}`]) {
+                const failed = failedEndpoints.includes(`PBS Endpoint ${match[1]}`);
+                showEndpointTestResult(`pbs-${match[1]}`, !failed, failed ? 'Connection failed' : '');
+            }
+        });
+    }
+    
+    function showEndpointTestResult(endpointId, success, errorMessage = '') {
+        // Find the endpoint container
+        let container;
+        if (endpointId === 'proxmox-primary') {
+            container = document.querySelector('#proxmox-servers .bg-gray-50');
+        } else if (endpointId === 'pbs-primary') {
+            container = document.querySelector('#pbs-servers .bg-gray-50');
+        } else if (endpointId.startsWith('proxmox-')) {
+            const index = endpointId.replace('proxmox-', '');
+            container = document.querySelector(`#proxmox-endpoint-${index}`);
+        } else if (endpointId.startsWith('pbs-')) {
+            const index = endpointId.replace('pbs-', '');
+            container = document.querySelector(`#pbs-endpoint-${index}`);
+        }
+        
+        if (!container) return;
+        
+        // Remove any existing indicator
+        const existingIndicator = container.querySelector('.test-indicator');
+        if (existingIndicator) existingIndicator.remove();
+        
+        // Create new indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'test-indicator mt-2 p-2 rounded-md flex items-center gap-2 text-sm';
+        
+        if (success) {
+            indicator.className += ' bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400';
+            indicator.innerHTML = `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Connection successful</span>
+            `;
+        } else {
+            indicator.className += ' bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400';
+            indicator.innerHTML = `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                <span>${errorMessage || 'Connection failed'}</span>
+            `;
+        }
+        
+        // Insert after the last form group in the container
+        const lastFormGroup = container.querySelector('.grid:last-of-type');
+        if (lastFormGroup) {
+            lastFormGroup.after(indicator);
+        } else {
+            container.appendChild(indicator);
         }
     }
 
@@ -1244,6 +1416,10 @@ PulseApp.ui.settings = (() => {
             const result = await PulseApp.apiClient.post('/api/config', config);
             
             if (result.success) {
+                // Reset unsaved changes state
+                hasUnsavedChanges = false;
+                originalFormData = collectAllTabsData();
+                
                 // Check if embedding setting was changed
                 const originalEmbedding = currentConfig.advanced?.allowEmbedding === true;
                 const newEmbedding = config.ALLOW_EMBEDDING === 'true';
@@ -1262,6 +1438,9 @@ PulseApp.ui.settings = (() => {
                     if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
                         PulseApp.ui.alerts.updateNotificationStatus();
                     }
+                    
+                    // Update save button state
+                    trackChanges();
                     
                     // Keep modal open so users can continue making changes
                 }
@@ -1285,7 +1464,8 @@ PulseApp.ui.settings = (() => {
 
         // Build the config object from form data
         for (const [name, value] of formData.entries()) {
-            if (value.trim() === '') continue; // Skip empty values
+            // Skip empty values except for password fields (which might be empty if unchanged)
+            if (value.trim() === '' && !name.includes('TOKEN_SECRET')) continue;
 
             // Handle checkbox values
             if (form.querySelector(`[name="${name}"]`).type === 'checkbox') {
@@ -1398,6 +1578,42 @@ PulseApp.ui.settings = (() => {
         });
     }
 
+    function setupChangeTracking() {
+        const form = document.getElementById('settings-form');
+        if (!form) return;
+        
+        // Store original form data when first rendered
+        if (!originalFormData) {
+            originalFormData = collectAllTabsData();
+        }
+        
+        // Add change event listeners to all form inputs
+        form.addEventListener('input', trackChanges);
+        form.addEventListener('change', trackChanges);
+    }
+    
+    function trackChanges() {
+        const currentData = collectAllTabsData();
+        const originalDataStr = JSON.stringify(originalFormData || {});
+        const currentDataStr = JSON.stringify(currentData);
+        
+        hasUnsavedChanges = originalDataStr !== currentDataStr;
+        
+        // Update save button state
+        const saveButton = document.getElementById('settings-save-button');
+        if (saveButton) {
+            if (hasUnsavedChanges) {
+                saveButton.textContent = 'Save Changes';
+                saveButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                saveButton.disabled = false;
+            } else {
+                saveButton.textContent = 'Save';
+                saveButton.classList.add('opacity-50', 'cursor-not-allowed');
+                saveButton.disabled = true;
+            }
+        }
+    }
+
     function restoreFormData() {
         const form = document.getElementById('settings-form');
         if (!form) return;
@@ -1453,6 +1669,92 @@ PulseApp.ui.settings = (() => {
                 container.innerHTML = '';
             }, 5000);
         }
+    }
+
+    // Field validation functions
+    function validateHost(input) {
+        const value = input.value.trim();
+        const errorEl = input.nextElementSibling;
+        
+        if (!value && input.hasAttribute('required')) {
+            showFieldError(input, 'This field is required');
+            return false;
+        }
+        
+        // Basic hostname/IP validation
+        const hostnameRegex = /^[a-zA-Z0-9.-]+$/;
+        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+        
+        if (value && !hostnameRegex.test(value) && !ipRegex.test(value)) {
+            showFieldError(input, 'Please enter a valid hostname or IP address');
+            return false;
+        }
+        
+        clearFieldError(input);
+        return true;
+    }
+    
+    function validatePort(input) {
+        const value = input.value.trim();
+        
+        if (value) {
+            const port = parseInt(value);
+            if (isNaN(port) || port < 1 || port > 65535) {
+                showFieldError(input, 'Port must be between 1 and 65535');
+                return false;
+            }
+        }
+        
+        clearFieldError(input);
+        return true;
+    }
+    
+    function validateTokenId(input) {
+        const value = input.value.trim();
+        
+        if (!value && input.hasAttribute('required')) {
+            showFieldError(input, 'This field is required');
+            return false;
+        }
+        
+        // Token ID format: user@realm!tokenname
+        if (value && !value.match(/^[^@]+@[^!]+![^!]+$/)) {
+            showFieldError(input, 'Format: user@realm!tokenname (e.g., monitor@pam!pulse)');
+            return false;
+        }
+        
+        clearFieldError(input);
+        return true;
+    }
+    
+    function showFieldError(input, message) {
+        input.classList.add('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+        input.classList.remove('border-gray-300', 'dark:border-gray-600');
+        
+        // Find or create error element
+        let errorEl = input.parentElement.querySelector('.field-error');
+        if (!errorEl) {
+            errorEl = document.createElement('p');
+            errorEl.className = 'field-error mt-1 text-xs text-red-600 dark:text-red-400';
+            input.parentElement.appendChild(errorEl);
+        }
+        errorEl.textContent = message;
+        
+        input.setAttribute('aria-invalid', 'true');
+        input.setAttribute('aria-describedby', errorEl.id || 'error-' + Math.random().toString(36).substr(2, 9));
+    }
+    
+    function clearFieldError(input) {
+        input.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+        input.classList.add('border-gray-300', 'dark:border-gray-600');
+        
+        const errorEl = input.parentElement.querySelector('.field-error');
+        if (errorEl) {
+            errorEl.remove();
+        }
+        
+        input.setAttribute('aria-invalid', 'false');
+        input.removeAttribute('aria-describedby');
     }
 
     function showSuccessToast(title, subtitle) {
@@ -3387,6 +3689,9 @@ docker compose up -d</code></pre>
         checkForUpdates,
         applyUpdate,
         changeTheme,
+        validateHost,
+        validatePort,
+        validateTokenId,
         onUpdateChannelChange,
         switchToRecommendedChannel,
         switchToChannel,
