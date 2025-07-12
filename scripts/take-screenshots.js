@@ -61,43 +61,8 @@ const sections = [
       }
     },
 
-    // Thresholds View
-    { name: '04-thresholds-view',
-      action: async (page) => {
-        console.log('  Action: Ensuring Main tab is active');
-        // Ensure main tab is active
-        const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
-        if (!mainTabIsActive) {
-             await page.locator('[data-tab="main"]').click();
-             await page.waitForLoadState('networkidle', { timeout: 5000 });
-        }
-
-        console.log('  Action: Clicking Thresholds toggle to activate thresholds mode');
-        // Click the thresholds toggle checkbox label to activate thresholds mode
-        const thresholdsToggleLabel = page.locator('label:has(#toggle-thresholds-checkbox)');
-        await thresholdsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
-        await thresholdsToggleLabel.click();
-        
-        console.log('  Action: Waiting for thresholds mode changes');
-        // Give it time for the UI to update
-        await page.waitForTimeout(1000);
-        
-        console.log('  Action: Thresholds view is now active');
-        
-        // Brief wait to ensure everything is rendered
-        await page.waitForTimeout(800);
-      },
-      postAction: async (page) => {
-        console.log('  Action: Deactivating thresholds mode');
-        // Toggle thresholds off again
-        const thresholdsToggleLabel = page.locator('label:has(#toggle-thresholds-checkbox)');
-        await thresholdsToggleLabel.click();
-        await page.waitForTimeout(300);
-      }
-    },
-    
     // Line Graph/Charts View
-    { name: '05-charts-view', 
+    { name: '04-charts-view', 
       action: async (page) => {
         console.log('  Action: Ensuring Main tab is active');
         // Ensure main tab is active
@@ -178,7 +143,7 @@ const sections = [
     },
 
     // Alerts/Thresholds View
-    { name: '06-alerts-view',
+    { name: '05-alerts-view',
       action: async (page) => {
         console.log('  Action: Ensuring Main tab is active');
         // Ensure main tab is active
