@@ -20,8 +20,8 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td align="center"><strong>Alert Thresholds</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/05-charts-view.webp" alt="Real-time performance charts" width="400"/></td>
-<td><img src="docs/images/06-alerts-view.webp" alt="Alert threshold configuration" width="400"/></td>
+<td><img src="docs/images/04-charts-view.webp" alt="Real-time performance charts" width="400"/></td>
+<td><img src="docs/images/05-alerts-view.webp" alt="Alert threshold configuration" width="400"/></td>
 </tr>
 <tr>
 <td align="center"><strong>Storage Overview</strong></td>
