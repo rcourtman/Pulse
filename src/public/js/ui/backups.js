@@ -1102,10 +1102,13 @@ function renderBackupFrequencyChart(data) {
         barGroup.addEventListener('mouseenter', (e) => {
             rect.setAttribute('fill-opacity', '1');
             
-            // Show tooltip
-            const dateStr = new Date(d.date).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
+            // Show tooltip with localized date format
+            const date = new Date(d.date);
+            const userLocale = navigator.language || 'en-GB';
+            const dateStr = date.toLocaleDateString(userLocale, { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
             });
             let tooltipContent = `<strong>${dateStr}</strong><br>`;
             if (d.total > 0) {
@@ -1174,7 +1177,32 @@ function renderBackupFrequencyChart(data) {
             text.setAttribute('y', height + 15);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('class', 'text-[9px] fill-gray-500 dark:fill-gray-400');
-            const dateStr = new Date(d.date).toLocaleDateString('en-US', labelFormat);
+            
+            // Use browser locale for date formatting
+            const date = new Date(d.date);
+            let dateStr;
+            const userLocale = navigator.language || 'en-GB'; // Default to UK format if no locale
+            
+            if (chartTimeRangeDays <= 30) {
+                // For shorter ranges, show day/month
+                dateStr = date.toLocaleDateString(userLocale, { 
+                    day: '2-digit', 
+                    month: '2-digit' 
+                });
+            } else if (chartTimeRangeDays <= 90) {
+                // For medium ranges, show day/month
+                dateStr = date.toLocaleDateString(userLocale, { 
+                    day: '2-digit', 
+                    month: '2-digit' 
+                });
+            } else {
+                // For year view, show month/year
+                dateStr = date.toLocaleDateString(userLocale, { 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                });
+            }
+            
             text.textContent = dateStr;
             g.appendChild(text);
         }
@@ -1199,7 +1227,8 @@ function filterBackupsByDate(date, isTemporary = false) {
         // Update the date range display
         const dateRangeElement = document.getElementById('backup-chart-date-range');
         if (dateRangeElement) {
-            const dateStr = startOfDay.toLocaleDateString('en-US', { 
+            const userLocale = navigator.language || 'en-GB';
+            const dateStr = startOfDay.toLocaleDateString(userLocale, { 
                 month: 'long', 
                 day: 'numeric',
                 year: 'numeric'
