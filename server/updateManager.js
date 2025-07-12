@@ -594,21 +594,46 @@ class UpdateManager {
         console.log('[UpdateManager] All restart methods failed. Using graceful shutdown...');
         console.log('[UpdateManager] systemd will automatically restart the service');
         
-        // Close server gracefully then exit with non-zero status to trigger systemd restart
+        // Close server gracefully then exit
         if (global.server) {
             global.server.close(() => {
                 console.log('[UpdateManager] Server closed gracefully');
-                process.exit(1);
+                // Kill the entire process tree to ensure npm also exits
+                this.killProcessTree();
             });
             
             // Force exit after 5 seconds if graceful close doesn't work
             setTimeout(() => {
                 console.log('[UpdateManager] Forcing process exit');
-                process.exit(1);
+                this.killProcessTree();
             }, 5000);
         } else {
-            process.exit(1);
+            this.killProcessTree();
         }
+    }
+
+    /**
+     * Kill the entire process tree to ensure npm wrapper also exits
+     */
+    killProcessTree() {
+        console.log('[UpdateManager] Killing process tree to ensure full restart...');
+        
+        try {
+            // First try to kill the parent process (npm) if we're running under npm
+            if (process.ppid) {
+                console.log(`[UpdateManager] Sending SIGTERM to parent process (PID: ${process.ppid})`);
+                process.kill(process.ppid, 'SIGTERM');
+            }
+        } catch (error) {
+            console.warn('[UpdateManager] Could not signal parent process:', error.message);
+        }
+        
+        // Then exit ourselves
+        // Use exit code 0 for some process managers, 1 for systemd
+        // Most process managers will restart on any exit when Restart=always
+        const exitCode = 1;
+        console.log(`[UpdateManager] Exiting with code ${exitCode}`);
+        process.exit(exitCode);
     }
 
     /**
