@@ -31,12 +31,6 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td><img src="docs/images/02-storage-view.webp" alt="Storage overview" width="400"/></td>
 <td><img src="docs/images/03-unified-backups-view.webp" alt="Backup management" width="400"/></td>
 </tr>
-<tr>
-<td align="center" colspan="2"><strong>Custom Thresholds</strong></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><img src="docs/images/04-thresholds-view.webp" alt="Custom per-VM thresholds" width="600"/></td>
-</tr>
 </table>
 </div>
 
