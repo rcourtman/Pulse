@@ -405,6 +405,31 @@ PulseApp.ui.alerts = (() => {
         
         // Setup event listeners for global controls using threshold system pattern
         setupGlobalThresholdEventListeners();
+        
+        // Apply custom-threshold class to sliders that have non-default values
+        const cpuSlider = document.getElementById('global-alert-cpu');
+        const memorySlider = document.getElementById('global-alert-memory');
+        const diskSlider = document.getElementById('global-alert-disk');
+        
+        // Remove custom-threshold class first to ensure clean state
+        if (cpuSlider) {
+            cpuSlider.classList.remove('custom-threshold');
+            if (cpuSlider.value != 80) {
+                cpuSlider.classList.add('custom-threshold');
+            }
+        }
+        if (memorySlider) {
+            memorySlider.classList.remove('custom-threshold');
+            if (memorySlider.value != 85) {
+                memorySlider.classList.add('custom-threshold');
+            }
+        }
+        if (diskSlider) {
+            diskSlider.classList.remove('custom-threshold');
+            if (diskSlider.value != 90) {
+                diskSlider.classList.add('custom-threshold');
+            }
+        }
     }
 
     // Optimized event setup: only update tooltip during drag, defer all DOM updates until release
@@ -882,15 +907,15 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             cpuSlider.value = globalThresholds.cpu;
-            PulseApp.ui.thresholds.updateSliderVisual(cpuSlider);
+            cpuSlider.classList.remove('custom-threshold');
         }
         if (memorySlider) {
             memorySlider.value = globalThresholds.memory;
-            PulseApp.ui.thresholds.updateSliderVisual(memorySlider);
+            memorySlider.classList.remove('custom-threshold');
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
-            PulseApp.ui.thresholds.updateSliderVisual(diskSlider);
+            diskSlider.classList.remove('custom-threshold');
             // Hide any lingering tooltip that might have been triggered
             PulseApp.tooltips.hideSliderTooltipImmediately();
         }
@@ -1224,18 +1249,24 @@ PulseApp.ui.alerts = (() => {
                         cpuSlider.value = globalThresholds.cpu;
                         if (globalThresholds.cpu != 80) {
                             cpuSlider.classList.add('custom-threshold');
+                        } else {
+                            cpuSlider.classList.remove('custom-threshold');
                         }
                     }
                     if (memorySlider && globalThresholds.memory) {
                         memorySlider.value = globalThresholds.memory;
                         if (globalThresholds.memory != 85) {
                             memorySlider.classList.add('custom-threshold');
+                        } else {
+                            memorySlider.classList.remove('custom-threshold');
                         }
                     }
                     if (diskSlider && globalThresholds.disk) {
                         diskSlider.value = globalThresholds.disk;
                         if (globalThresholds.disk != 90) {
                             diskSlider.classList.add('custom-threshold');
+                        } else {
+                            diskSlider.classList.remove('custom-threshold');
                         }
                     }
                     
