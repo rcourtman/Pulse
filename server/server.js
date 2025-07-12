@@ -77,8 +77,16 @@ function createServer() {
     
     // Security headers middleware
     app.use((req, res, next) => {
-        // Prevent clickjacking
-        res.setHeader('X-Frame-Options', 'DENY');
+        // Configurable frame options for embedding support
+        const allowEmbedding = process.env.ALLOW_EMBEDDING === 'true';
+        
+        if (allowEmbedding) {
+            // Allow embedding but still prevent clickjacking from unknown sources
+            res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        } else {
+            // Default: Prevent all embedding
+            res.setHeader('X-Frame-Options', 'DENY');
+        }
         
         // Prevent MIME type sniffing
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -89,7 +97,8 @@ function createServer() {
         // Referrer policy for privacy
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         
-        // Basic CSP - adjust based on your needs
+        // Basic CSP - adjust frame-ancestors based on embedding preference
+        const frameAncestors = allowEmbedding ? "'self'" : "'none'";
         res.setHeader('Content-Security-Policy', 
             "default-src 'self'; " +
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
@@ -97,7 +106,7 @@ function createServer() {
             "font-src 'self' data: https://cdn.jsdelivr.net; " +
             "img-src 'self' data: blob:; " +
             "connect-src 'self' ws: wss:; " +
-            "frame-ancestors 'none';"
+            `frame-ancestors ${frameAncestors};`
         );
         
         // Remove X-Powered-By header

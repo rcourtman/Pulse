@@ -647,6 +647,38 @@ PulseApp.ui.settings = (() => {
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How often to discover nodes and VMs</p>
                     </div>
                 </div>
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Allow Iframe Embedding
+                            </label>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                Enable this to embed Pulse in other applications (e.g., Homepage, Organizr)
+                            </p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="ALLOW_EMBEDDING" value="true"
+                                   ${advanced.allowEmbedding === true ? 'checked' : ''}
+                                   class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="mt-2 space-y-1">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            <strong>Security Note:</strong> Enabling this allows Pulse to be embedded in iframes. Only enable if you trust the embedding applications.
+                        </p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            <strong>Note:</strong> The page will automatically reload when this setting is changed.
+                        </p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            <a href="https://github.com/rcourtman/Pulse#iframe-embedding-support" target="_blank" rel="noopener noreferrer" 
+                               class="text-blue-600 dark:text-blue-400 hover:underline">
+                                View embedding documentation →
+                            </a>
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- Alert Settings -->
@@ -1212,14 +1244,27 @@ PulseApp.ui.settings = (() => {
             const result = await PulseApp.apiClient.post('/api/config', config);
             
             if (result.success) {
-                showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
+                // Check if embedding setting was changed
+                const originalEmbedding = currentConfig.advanced?.allowEmbedding === true;
+                const newEmbedding = config.ALLOW_EMBEDDING === 'true';
+                const embeddingChanged = originalEmbedding !== newEmbedding;
                 
-                // Update alert mode notification status if alerts module is available
-                if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-                    PulseApp.ui.alerts.updateNotificationStatus();
+                if (embeddingChanged) {
+                    showSuccessToast('Configuration Saved', 'Reloading page to apply embedding changes...');
+                    // Reload after a short delay so user can see the message
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
+                    
+                    // Update alert mode notification status if alerts module is available
+                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
+                        PulseApp.ui.alerts.updateNotificationStatus();
+                    }
+                    
+                    // Keep modal open so users can continue making changes
                 }
-                
-                // Keep modal open so users can continue making changes
             } else {
                 showMessage(result.error || 'Failed to save configuration', 'error');
             }

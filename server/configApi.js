@@ -52,6 +52,7 @@ class ConfigApi {
                     metricInterval: config.PULSE_METRIC_INTERVAL_MS,
                     discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
                     updateChannel: config.UPDATE_CHANNEL || 'stable',
+                    allowEmbedding: config.ALLOW_EMBEDDING === 'true',
                     alerts: {
                         enabled: config.ALERTS_ENABLED !== 'false',
                         cpu: {
