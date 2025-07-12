@@ -785,13 +785,15 @@ PulseApp.ui.storage = (() => {
             
             // Start fetching chart data if needed and update charts
             if (PulseApp.charts) {
-                // Small delay to ensure DOM is ready after mode switch
+                // First ensure the table is rendered with chart containers
+                updateStorageInfo();
+                // Then update charts after DOM is ready
                 setTimeout(() => {
                     // Fetch initial data if needed
                     updateStorageCharts(false);
                     // Also update time range availability after initial fetch
                     setTimeout(() => updateTimeRangeAvailability(), 100);
-                }, 50);
+                }, 100);
             }
         } else {
             // Switch to progress bars mode
