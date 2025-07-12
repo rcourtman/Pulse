@@ -467,6 +467,43 @@ class ConfigApi {
             }
             
             if (testEndpoints.length === 0 && testPbsConfigs.length === 0) {
+                // Check what's missing to provide better error message
+                const missingSecrets = [];
+                
+                if (config.PROXMOX_HOST && config.PROXMOX_TOKEN_ID && !config.PROXMOX_TOKEN_SECRET && !existingConfig.PROXMOX_TOKEN_SECRET) {
+                    missingSecrets.push('Primary PVE token secret');
+                }
+                
+                if (config.PBS_HOST && config.PBS_TOKEN_ID && !config.PBS_TOKEN_SECRET && !existingConfig.PBS_TOKEN_SECRET) {
+                    missingSecrets.push('Primary PBS token secret');
+                }
+                
+                // Check additional endpoints
+                Object.keys(config).forEach(key => {
+                    const pveMatch = key.match(/^PROXMOX_HOST_(\d+)$/);
+                    if (pveMatch) {
+                        const index = pveMatch[1];
+                        if (config[`PROXMOX_TOKEN_ID_${index}`] && !config[`PROXMOX_TOKEN_SECRET_${index}`] && !existingConfig[`PROXMOX_TOKEN_SECRET_${index}`]) {
+                            missingSecrets.push(`PVE Endpoint ${index} token secret`);
+                        }
+                    }
+                    
+                    const pbsMatch = key.match(/^PBS_HOST_(\d+)$/);
+                    if (pbsMatch) {
+                        const index = pbsMatch[1];
+                        if (config[`PBS_TOKEN_ID_${index}`] && !config[`PBS_TOKEN_SECRET_${index}`] && !existingConfig[`PBS_TOKEN_SECRET_${index}`]) {
+                            missingSecrets.push(`PBS Endpoint ${index} token secret`);
+                        }
+                    }
+                });
+                
+                if (missingSecrets.length > 0) {
+                    return {
+                        success: false,
+                        error: `Missing token secrets for: ${missingSecrets.join(', ')}. Please enter the token secret(s) to test the connection.`
+                    };
+                }
+                
                 return {
                     success: false,
                     error: 'No endpoints configured to test. Please ensure host, token ID, and token secret are provided.'
