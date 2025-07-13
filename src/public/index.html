@@ -395,6 +395,29 @@
         text-overflow: ellipsis;
     }
     
+    /* PBS Push mode badge */
+    .pbs-push-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 6px;
+        margin-left: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        background-color: #6366f1;
+        color: white;
+        border-radius: 9999px;
+        height: 16px;
+        line-height: 1;
+        vertical-align: middle;
+    }
+    
+    .dark .pbs-push-badge {
+        background-color: #818cf8;
+        color: #1f2937;
+    }
+    
     /* Special handling for name column to enable ellipsis */
     #main-table td:first-child {
         max-width: 250px;
