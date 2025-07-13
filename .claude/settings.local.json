@@ -15,7 +15,9 @@
       "Bash(chmod:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(claude doctor)",
+      "Bash(npm update:*)"
     ]
   },
   "commit": {
