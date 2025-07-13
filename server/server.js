@@ -79,13 +79,73 @@ function createServer() {
     app.use((req, res, next) => {
         // Configurable frame options for embedding support
         const allowEmbedding = process.env.ALLOW_EMBEDDING === 'true';
+        const allowedOrigins = process.env.ALLOWED_EMBED_ORIGINS || '';
         
         if (allowEmbedding) {
-            // Allow embedding but still prevent clickjacking from unknown sources
-            res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+            if (allowedOrigins) {
+                // Parse comma-separated origins and format for CSP
+                const origins = allowedOrigins.split(',')
+                    .map(origin => origin.trim())
+                    .filter(origin => origin.length > 0)
+                    .map(origin => {
+                        // Ensure origin has protocol
+                        if (!origin.startsWith('http://') && !origin.startsWith('https://')) {
+                            return `https://${origin}`;
+                        }
+                        return origin;
+                    });
+                
+                if (origins.length > 0) {
+                    // X-Frame-Options doesn't support multiple origins, so we'll rely on CSP
+                    // Don't set X-Frame-Options header when using custom origins
+                    const frameAncestors = "'self' " + origins.join(' ');
+                    res.setHeader('Content-Security-Policy', 
+                        "default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+                        "font-src 'self' data: https://cdn.jsdelivr.net; " +
+                        "img-src 'self' data: blob:; " +
+                        "connect-src 'self' ws: wss:; " +
+                        `frame-ancestors ${frameAncestors};`
+                    );
+                } else {
+                    // Fall back to SAMEORIGIN if no origins specified
+                    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+                    res.setHeader('Content-Security-Policy', 
+                        "default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+                        "font-src 'self' data: https://cdn.jsdelivr.net; " +
+                        "img-src 'self' data: blob:; " +
+                        "connect-src 'self' ws: wss:; " +
+                        "frame-ancestors 'self';"
+                    );
+                }
+            } else {
+                // Allow embedding but only from same origin
+                res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+                res.setHeader('Content-Security-Policy', 
+                    "default-src 'self'; " +
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+                    "font-src 'self' data: https://cdn.jsdelivr.net; " +
+                    "img-src 'self' data: blob:; " +
+                    "connect-src 'self' ws: wss:; " +
+                    "frame-ancestors 'self';"
+                );
+            }
         } else {
             // Default: Prevent all embedding
             res.setHeader('X-Frame-Options', 'DENY');
+            res.setHeader('Content-Security-Policy', 
+                "default-src 'self'; " +
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+                "font-src 'self' data: https://cdn.jsdelivr.net; " +
+                "img-src 'self' data: blob:; " +
+                "connect-src 'self' ws: wss:; " +
+                "frame-ancestors 'none';"
+            );
         }
         
         // Prevent MIME type sniffing
@@ -96,18 +156,6 @@ function createServer() {
         
         // Referrer policy for privacy
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-        
-        // Basic CSP - adjust frame-ancestors based on embedding preference
-        const frameAncestors = allowEmbedding ? "'self'" : "'none'";
-        res.setHeader('Content-Security-Policy', 
-            "default-src 'self'; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-            "font-src 'self' data: https://cdn.jsdelivr.net; " +
-            "img-src 'self' data: blob:; " +
-            "connect-src 'self' ws: wss:; " +
-            `frame-ancestors ${frameAncestors};`
-        );
         
         // Remove X-Powered-By header
         res.removeHeader('X-Powered-By');

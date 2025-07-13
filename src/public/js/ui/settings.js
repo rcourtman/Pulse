@@ -687,6 +687,20 @@ PulseApp.ui.settings = (() => {
                             <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                         </label>
                     </div>
+                    ${advanced.allowEmbedding === true ? `
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Allowed Embed Origins
+                        </label>
+                        <input type="text" name="ALLOWED_EMBED_ORIGINS" 
+                               value="${advanced.allowedEmbedOrigins || ''}"
+                               placeholder="https://homepage.example.com, https://organizr.example.com"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Comma-separated list of origins allowed to embed Pulse. Leave empty for same-origin only.
+                        </p>
+                    </div>
+                    ` : ''}
                     <div class="mt-2 space-y-1">
                         <p class="text-xs text-gray-500 dark:text-gray-400">
                             <strong>Security Note:</strong> Enabling this allows Pulse to be embedded in iframes. Only enable if you trust the embedding applications.
@@ -1420,10 +1434,12 @@ PulseApp.ui.settings = (() => {
                 hasUnsavedChanges = false;
                 originalFormData = collectAllTabsData();
                 
-                // Check if embedding setting was changed
+                // Check if embedding settings were changed
                 const originalEmbedding = currentConfig.advanced?.allowEmbedding === true;
                 const newEmbedding = config.ALLOW_EMBEDDING === 'true';
-                const embeddingChanged = originalEmbedding !== newEmbedding;
+                const originalOrigins = currentConfig.advanced?.allowedEmbedOrigins || '';
+                const newOrigins = config.ALLOWED_EMBED_ORIGINS || '';
+                const embeddingChanged = originalEmbedding !== newEmbedding || originalOrigins !== newOrigins;
                 
                 if (embeddingChanged) {
                     showSuccessToast('Configuration Saved', 'Reloading page to apply embedding changes...');
