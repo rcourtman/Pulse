@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 
 // --- Configuration ---
 const BASE_URL = process.env.PULSE_URL || 'http://localhost:7655'; // Allow overriding via env var
@@ -8,6 +9,22 @@ const OUTPUT_DIR = path.resolve(__dirname, '../docs/images');
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 }; // Standard viewport
 const WAIT_OPTIONS = { waitUntil: 'networkidle', timeout: 15000 }; // Increased timeout, networkidle
 const OVERLAY_SELECTOR = '#loading-overlay';
+
+// --- Styling Enhancement Options ---
+// Can be controlled via environment variables
+const STYLING_OPTIONS = {
+    addDropShadow: process.env.NO_SHADOW !== 'true',
+    addRoundedCorners: process.env.ADD_ROUNDED === 'true',
+    cornerRadius: parseInt(process.env.CORNER_RADIUS) || 0,
+    addBackground: process.env.NO_BACKGROUND !== 'true',
+    backgroundPadding: parseInt(process.env.BG_PADDING) || 60,
+    shadowBlur: parseInt(process.env.SHADOW_BLUR) || 40,
+    shadowOpacity: parseFloat(process.env.SHADOW_OPACITY) || 0.3,
+    shadowOffsetY: parseInt(process.env.SHADOW_OFFSET) || 15,
+    // Gradient background colors (neutral dark grays)
+    backgroundGradientStart: process.env.BG_GRADIENT_START || '#1a1a1a',
+    backgroundGradientEnd: process.env.BG_GRADIENT_END || '#0d0d0d'
+};
 
 // Define the sections to capture - ONLY ESSENTIAL SCREENSHOTS
 const sections = [
@@ -186,6 +203,98 @@ const sections = [
     }
 ];
 
+// Apply styling enhancements to screenshots
+async function applyStylingEnhancements(inputPath, outputPath, options = STYLING_OPTIONS) {
+    try {
+        console.log(`  Applying browser window enhancement...`);
+        
+        // Get the original screenshot
+        const screenshot = await sharp(inputPath);
+        const metadata = await screenshot.metadata();
+        
+        // Browser window dimensions
+        const browserPadding = 20;
+        const titleBarHeight = 40;
+        const newWidth = metadata.width + (browserPadding * 2);
+        const newHeight = metadata.height + titleBarHeight + (browserPadding * 2);
+        
+        // Create a realistic browser window
+        const browserWindow = Buffer.from(
+            `<svg width="${newWidth}" height="${newHeight}" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Window shadow -->
+                    <filter id="windowShadow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
+                        <feOffset dx="0" dy="10" result="offsetblur"/>
+                        <feFlood flood-color="#000000" flood-opacity="0.25"/>
+                        <feComposite in2="offsetblur" operator="in"/>
+                        <feMerge>
+                            <feMergeNode/>
+                            <feMergeNode in="SourceGraphic"/> 
+                        </feMerge>
+                    </filter>
+                    
+                </defs>
+                
+                <!-- Browser window -->
+                <g filter="url(#windowShadow)">
+                    <!-- Window background -->
+                    <rect x="${browserPadding}" y="${browserPadding}" 
+                          width="${metadata.width}" height="${metadata.height + titleBarHeight}" 
+                          rx="8" ry="8" fill="#1e1e1e"/>
+                    
+                    <!-- Title bar -->
+                    <rect x="${browserPadding}" y="${browserPadding}" 
+                          width="${metadata.width}" height="${titleBarHeight}" 
+                          rx="8" ry="8" fill="#2d2d30"/>
+                    
+                    <!-- Fix bottom corners -->
+                    <rect x="${browserPadding}" y="${browserPadding + 20}" 
+                          width="${metadata.width}" height="20" fill="#2d2d30"/>
+                    
+                    <!-- Window controls -->
+                    <circle cx="${browserPadding + 20}" cy="${browserPadding + titleBarHeight/2}" r="6" fill="#ff5f57"/>
+                    <circle cx="${browserPadding + 40}" cy="${browserPadding + titleBarHeight/2}" r="6" fill="#ffbd2e"/>
+                    <circle cx="${browserPadding + 60}" cy="${browserPadding + titleBarHeight/2}" r="6" fill="#28c940"/>
+                    
+                    <!-- URL bar -->
+                    <rect x="${browserPadding + 90}" y="${browserPadding + 12}" 
+                          width="${metadata.width - 180}" height="16" 
+                          rx="4" ry="4" fill="#1e1e1e" opacity="0.5"/>
+                    
+                    <!-- URL text -->
+                    <text x="${browserPadding + 100}" y="${browserPadding + 24}" 
+                          font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#888">
+                        localhost:7655 — Pulse Monitor
+                    </text>
+                </g>
+            </svg>`
+        );
+        
+        // Composite the screenshot into the browser window
+        const result = await sharp(browserWindow)
+            .composite([{
+                input: await screenshot.toBuffer(),
+                top: browserPadding + titleBarHeight,
+                left: browserPadding
+            }])
+            .webp({ quality: 100 })
+            .toFile(outputPath);
+        
+        // Delete the original
+        if (inputPath !== outputPath) {
+            fs.unlinkSync(inputPath);
+        }
+        
+        console.log(`  Successfully applied browser window enhancement`);
+    } catch (error) {
+        console.error(`  Failed to apply enhancements:`, error);
+        if (inputPath !== outputPath && fs.existsSync(inputPath)) {
+            fs.copyFileSync(inputPath, outputPath);
+        }
+    }
+}
+
 async function captureScreenshotsForViewport(browser, sectionsToCapture, viewport, viewportName) {
     console.log(`\n--- Starting ${viewportName} captures ---`);
     
@@ -258,8 +367,9 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
             await page.waitForTimeout(500);
             
             // Take the screenshot using CDP with WebP for better quality
+            const tempPath = screenshotPath.replace('.png', '.temp.webp');
             const webpPath = screenshotPath.replace('.png', '.webp');
-            console.log(`  Saving screenshot to: ${webpPath}`);
+            console.log(`  Capturing screenshot...`);
             
             try {
                 // Use CDP with WebP format for higher quality
@@ -270,13 +380,13 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
                     captureBeyondViewport: false
                 });
                 
-                fs.writeFileSync(webpPath, Buffer.from(data, 'base64'));
+                fs.writeFileSync(tempPath, Buffer.from(data, 'base64'));
                 
             } catch (cdpError) {
                 console.log('  CDP screenshot failed, falling back to standard method');
                 // Fallback to standard screenshot with WebP
                 await page.screenshot({ 
-                    path: webpPath, 
+                    path: tempPath, 
                     fullPage: false,
                     omitBackground: false,
                     animations: 'disabled',
@@ -286,6 +396,9 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
             }
 
             console.log(`  Successfully captured ${section.name}`);
+            
+            // Apply styling enhancements
+            await applyStylingEnhancements(tempPath, webpPath);
 
             // Perform post-action if defined
             if (section.postAction) {
