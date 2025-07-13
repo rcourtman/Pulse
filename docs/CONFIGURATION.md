@@ -187,9 +187,59 @@ DEBUG=pulse:*
 # Allow embedding in iframes (for dashboards)
 ALLOW_EMBEDDING=true            # Default: false
 
+# Specify allowed origins for iframe embedding
+# Comma-separated list of origins that can embed Pulse
+# Only applies when ALLOW_EMBEDDING=true
+# HTTP is allowed for local networks (192.168.x.x, 10.x.x.x, *.local, *.lan)
+# HTTPS is required for public addresses
+ALLOWED_EMBED_ORIGINS=http://homepage.lan:3000,https://dashboard.example.com
+
 # PBS Push Mode (for isolated servers)
 PULSE_PUSH_API_KEY=secure-random-key
 ```
+
+## Iframe Embedding
+
+Pulse can be embedded in other dashboards using iframes. This is useful for integrating Pulse into Homepage, Organizr, or custom dashboards.
+
+### Configuration
+
+1. **Enable embedding** - Set `ALLOW_EMBEDDING=true` in your `.env` file or enable "Allow iframe embedding" in Settings → Advanced
+2. **Add allowed origins** - Set `ALLOWED_EMBED_ORIGINS` with comma-separated origins that can embed Pulse
+
+### Security Notes
+
+- **HTTP allowed for local networks**: 192.168.x.x, 10.x.x.x, 172.16-31.x.x, *.local, *.lan
+- **HTTPS required for public addresses**: Any non-local addresses must use HTTPS
+- **Exact origin matching**: Origins must match exactly (including protocol and port)
+- **CSP frame-ancestors**: Modern browsers use Content Security Policy for iframe control
+- **X-Frame-Options fallback**: Legacy browsers fall back to X-Frame-Options header
+
+### Example: Homepage Integration
+
+1. In Pulse, add your Homepage origin:
+   ```env
+   ALLOWED_EMBED_ORIGINS=http://homepage.lan:3000
+   ```
+
+2. In Homepage's `services.yaml`:
+   ```yaml
+   - Monitoring:
+       - Pulse Monitor:
+           icon: mdi-monitor-dashboard
+           href: http://pulse.lan:7655/
+           description: Proxmox monitoring
+           widget:
+             type: iframe
+             src: http://pulse.lan:7655
+             height: 400
+   ```
+
+### Troubleshooting
+
+- **"Refused to frame" error**: Check that the origin in the error message exactly matches what's in `ALLOWED_EMBED_ORIGINS`
+- **Use browser DevTools**: The console will show the exact CSP policy and which origin is being blocked
+- **Hostname vs IP**: If accessing Homepage via `homepage.lan`, add `http://homepage.lan:3000`, not the IP address
 
 ### Update System
 

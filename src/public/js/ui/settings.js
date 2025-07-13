@@ -694,7 +694,7 @@ PulseApp.ui.settings = (() => {
                         </label>
                         <input type="text" name="ALLOWED_EMBED_ORIGINS" 
                                value="${advanced.allowedEmbedOrigins || ''}"
-                               placeholder="https://homepage.example.com, https://organizr.example.com"
+                               placeholder="http://homepage.lan:3000, https://dashboard.example.com"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Comma-separated list of origins allowed to embed Pulse. Leave empty for same-origin only.
