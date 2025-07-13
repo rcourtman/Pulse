@@ -17,10 +17,14 @@
       "Bash(git commit:*)",
       "Bash(curl:*)",
       "Bash(claude doctor)",
-      "Bash(npm update:*)"
+      "Bash(npm update:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm run dev:*)",
+      "Bash(sudo systemctl:*)",
+      "Bash(node:*)",
+      "Bash(pkill:*)"
     ]
   },
-  "commit": {
-    "addGeneratedMessage": false
-  }
+  "includeCoAuthoredBy": false
 }

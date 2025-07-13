@@ -53,6 +53,7 @@ class ConfigApi {
                     discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
                     updateChannel: config.UPDATE_CHANNEL || 'stable',
                     allowEmbedding: config.ALLOW_EMBEDDING === 'true',
+                    allowedEmbedOrigins: config.ALLOWED_EMBED_ORIGINS || '',
                     alerts: {
                         enabled: config.ALERTS_ENABLED !== 'false',
                         cpu: {
@@ -224,6 +225,14 @@ class ConfigApi {
                 if (webhook.enabled !== undefined) {
                     existingConfig.WEBHOOK_ENABLED = webhook.enabled ? 'true' : 'false';
                 }
+            }
+            
+            // Iframe embedding settings
+            if (config.advanced.allowEmbedding !== undefined) {
+                existingConfig.ALLOW_EMBEDDING = config.advanced.allowEmbedding ? 'true' : 'false';
+            }
+            if (config.advanced.allowedEmbedOrigins !== undefined) {
+                existingConfig.ALLOWED_EMBED_ORIGINS = config.advanced.allowedEmbedOrigins;
             }
         }
     }
