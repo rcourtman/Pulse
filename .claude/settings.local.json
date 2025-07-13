@@ -1,4 +1,5 @@
 {
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(ls:*)",
@@ -23,8 +24,13 @@
       "Bash(npm run dev:*)",
       "Bash(sudo systemctl:*)",
       "Bash(node:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(ssh:*)",
+      "Bash(iptables:*)",
+      "Bash(hostname:*)",
+      "Bash(journalctl:*)",
+      "Bash(gh api:*)",
+      "Bash(gh issue view:*)"
     ]
-  },
-  "includeCoAuthoredBy": false
+  }
 }

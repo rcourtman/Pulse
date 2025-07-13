@@ -83,21 +83,45 @@ function createServer() {
         
         if (allowEmbedding) {
             if (allowedOrigins) {
-                // Parse comma-separated origins and format for CSP
+                // Parse comma-separated origins and validate format
                 const origins = allowedOrigins.split(',')
                     .map(origin => origin.trim())
                     .filter(origin => origin.length > 0)
                     .map(origin => {
-                        // Ensure origin has protocol
-                        if (!origin.startsWith('http://') && !origin.startsWith('https://')) {
-                            return `https://${origin}`;
+                        // Basic URL validation
+                        try {
+                            const url = new URL(origin);
+                            
+                            // Allow HTTP for local/private networks, require HTTPS for public
+                            const hostname = url.hostname;
+                            const isLocalNetwork = 
+                                hostname === 'localhost' ||
+                                hostname.endsWith('.local') ||
+                                hostname.endsWith('.lan') ||
+                                /^192\.168\.\d+\.\d+$/.test(hostname) ||
+                                /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+                                /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname) ||
+                                /^127\.\d+\.\d+\.\d+$/.test(hostname);
+                            
+                            if (url.protocol === 'http:' && !isLocalNetwork) {
+                                console.warn(`[Security] HTTP origin blocked for non-local address: ${origin}. Use HTTPS for public addresses.`);
+                                return null;
+                            }
+                            
+                            return origin;
+                        } catch (e) {
+                            console.warn(`[Security] Invalid origin format blocked: ${origin}`);
+                            return null;
                         }
-                        return origin;
-                    });
+                    })
+                    .filter(origin => origin !== null);
                 
                 if (origins.length > 0) {
-                    // X-Frame-Options doesn't support multiple origins, so we'll rely on CSP
-                    // Don't set X-Frame-Options header when using custom origins
+                    // Set both headers for maximum compatibility
+                    // Remove X-Frame-Options when using CSP to avoid conflicts
+                    // res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+                    
+                    // CSP frame-ancestors as primary control (takes precedence in modern browsers)
                     const frameAncestors = "'self' " + origins.join(' ');
                     res.setHeader('Content-Security-Policy', 
                         "default-src 'self'; " +
@@ -109,7 +133,7 @@ function createServer() {
                         `frame-ancestors ${frameAncestors};`
                     );
                 } else {
-                    // Fall back to SAMEORIGIN if no origins specified
+                    // No valid origins specified, fall back to SAMEORIGIN
                     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
                     res.setHeader('Content-Security-Policy', 
                         "default-src 'self'; " +
@@ -135,7 +159,7 @@ function createServer() {
                 );
             }
         } else {
-            // Default: Prevent all embedding
+            // Default: Prevent all embedding (secure by default)
             res.setHeader('X-Frame-Options', 'DENY');
             res.setHeader('Content-Security-Policy', 
                 "default-src 'self'; " +
@@ -185,6 +209,7 @@ function createServer() {
 
     const healthRoutes = require('./routes/health');
     app.use('/api/health', healthRoutes); // No rate limit on health checks
+
 
 
     const alertRoutes = require('./routes/alerts');
