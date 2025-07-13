@@ -204,13 +204,14 @@ PulseApp.ui.pbs = (() => {
                         ${pbsInstances.map((instance, index) => {
                             const instanceName = instance.nodeName || instance.pbsInstanceName || 'PBS Server ' + (index + 1);
                             const isActive = index === activeInstance;
+                            const isPushMode = instance.pushMode === true || instance.source === 'push';
                             return `
                                 <button class="pbs-instance-tab whitespace-nowrap px-3 py-2 font-medium text-sm ${isActive ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 border-b-2 border-transparent'} transition-colors" 
                                     data-instance="${index}"
                                     role="tab"
                                     aria-selected="${isActive}"
-                                    title="${instanceName}">
-                                    ${instanceName}
+                                    title="${instanceName}${isPushMode ? ' (Push Mode)' : ''}">
+                                    ${instanceName}${isPushMode ? '<span class="pbs-push-badge">push</span>' : ''}
                                 </button>
                             `;
                         }).join('')}
