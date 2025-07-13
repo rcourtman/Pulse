@@ -10,20 +10,13 @@ const DESKTOP_VIEWPORT = { width: 1440, height: 900 }; // Standard viewport
 const WAIT_OPTIONS = { waitUntil: 'networkidle', timeout: 15000 }; // Increased timeout, networkidle
 const OVERLAY_SELECTOR = '#loading-overlay';
 
-// --- Styling Enhancement Options ---
+// --- Browser Window Enhancement Options ---
 // Can be controlled via environment variables
-const STYLING_OPTIONS = {
-    addDropShadow: process.env.NO_SHADOW !== 'true',
-    addRoundedCorners: process.env.ADD_ROUNDED === 'true',
-    cornerRadius: parseInt(process.env.CORNER_RADIUS) || 0,
-    addBackground: process.env.NO_BACKGROUND !== 'true',
-    backgroundPadding: parseInt(process.env.BG_PADDING) || 60,
-    shadowBlur: parseInt(process.env.SHADOW_BLUR) || 40,
-    shadowOpacity: parseFloat(process.env.SHADOW_OPACITY) || 0.3,
-    shadowOffsetY: parseInt(process.env.SHADOW_OFFSET) || 15,
-    // Gradient background colors (neutral dark grays)
-    backgroundGradientStart: process.env.BG_GRADIENT_START || '#1a1a1a',
-    backgroundGradientEnd: process.env.BG_GRADIENT_END || '#0d0d0d'
+const BROWSER_WINDOW_OPTIONS = {
+    enabled: process.env.NO_BROWSER_WINDOW !== 'true',
+    shadowBlur: parseInt(process.env.SHADOW_BLUR) || 20,
+    shadowOpacity: parseFloat(process.env.SHADOW_OPACITY) || 0.25,
+    shadowOffsetY: parseInt(process.env.SHADOW_OFFSET) || 10
 };
 
 // Define the sections to capture - ONLY ESSENTIAL SCREENSHOTS
@@ -203,9 +196,17 @@ const sections = [
     }
 ];
 
-// Apply styling enhancements to screenshots
-async function applyStylingEnhancements(inputPath, outputPath, options = STYLING_OPTIONS) {
+// Apply browser window enhancement to screenshots
+async function applyBrowserWindowEnhancement(inputPath, outputPath, options = BROWSER_WINDOW_OPTIONS) {
     try {
+        if (!options.enabled) {
+            // Just copy the file without enhancement
+            if (inputPath !== outputPath) {
+                fs.copyFileSync(inputPath, outputPath);
+            }
+            return;
+        }
+        
         console.log(`  Applying browser window enhancement...`);
         
         // Get the original screenshot
@@ -224,9 +225,9 @@ async function applyStylingEnhancements(inputPath, outputPath, options = STYLING
                 <defs>
                     <!-- Window shadow -->
                     <filter id="windowShadow" x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
-                        <feOffset dx="0" dy="10" result="offsetblur"/>
-                        <feFlood flood-color="#000000" flood-opacity="0.25"/>
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="${options.shadowBlur}"/>
+                        <feOffset dx="0" dy="${options.shadowOffsetY}" result="offsetblur"/>
+                        <feFlood flood-color="#000000" flood-opacity="${options.shadowOpacity}"/>
                         <feComposite in2="offsetblur" operator="in"/>
                         <feMerge>
                             <feMergeNode/>
@@ -397,8 +398,8 @@ async function captureScreenshotsForViewport(browser, sectionsToCapture, viewpor
 
             console.log(`  Successfully captured ${section.name}`);
             
-            // Apply styling enhancements
-            await applyStylingEnhancements(tempPath, webpPath);
+            // Apply browser window enhancement
+            await applyBrowserWindowEnhancement(tempPath, webpPath);
 
             // Perform post-action if defined
             if (section.postAction) {
