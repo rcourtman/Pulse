@@ -257,6 +257,10 @@ PulseApp.ui.settings = (() => {
         const tokenId = proxmox?.tokenId || config.PROXMOX_TOKEN_ID || '';
         const enabled = proxmox?.enabled !== undefined ? proxmox.enabled : (config.PROXMOX_ENABLED !== 'false');
         
+        // Check if this is an existing configuration with a stored secret
+        // Use the hasToken flag from the API response
+        const hasStoredToken = proxmox?.hasToken || false;
+        
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
             const originalHost = host;
@@ -317,11 +321,15 @@ PulseApp.ui.settings = (() => {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            API Token Secret
+                            API Token Secret ${hasStoredToken ? '' : '<span class="text-red-500">*</span>'}
                         </label>
-                        <input type="password" name="PROXMOX_TOKEN_SECRET"
-                               placeholder="Enter token secret (required for testing)"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <div class="relative">
+                            <input type="password" name="PROXMOX_TOKEN_SECRET"
+                                   ${hasStoredToken ? 'value="••••••••••••••••••••••••••••••••••••"' : ''}
+                                   placeholder="${hasStoredToken ? '' : 'Enter token secret'}"
+                                   oninput="if(this.value.includes('•')) this.value = this.value.replace(/•/g, '');"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enabled</label>
@@ -362,6 +370,10 @@ PulseApp.ui.settings = (() => {
         let port = pbs?.port || config.PBS_PORT || '';
         const tokenId = pbs?.tokenId || config.PBS_TOKEN_ID || '';
         
+        // Check if this is an existing configuration with a stored secret
+        // Use the hasToken flag from the API response
+        const hasStoredToken = pbs?.hasToken || false;
+        
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
             const originalHost = host;
@@ -383,7 +395,7 @@ PulseApp.ui.settings = (() => {
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Primary Proxmox Backup Server</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400">
                         Main PBS server configuration (optional)
-                        <a href="https://github.com/rcourtman/Pulse#creating-a-proxmox-backup-server-api-token" target="_blank" rel="noopener noreferrer" 
+                        <a href="https://pbs.proxmox.com/docs/user-management.html#api-tokens" target="_blank" rel="noopener noreferrer" 
                            class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
                             Need help creating PBS API tokens?
                         </a>
@@ -414,10 +426,16 @@ PulseApp.ui.settings = (() => {
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
-                        <input type="password" name="PBS_TOKEN_SECRET"
-                               placeholder="Enter token secret (required for testing)"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            API Token Secret ${hasStoredToken ? '' : '<span class="text-red-500">*</span>'}
+                        </label>
+                        <div class="relative">
+                            <input type="password" name="PBS_TOKEN_SECRET"
+                                   ${hasStoredToken ? 'value="••••••••••••••••••••••••••••••••••••"' : ''}
+                                   placeholder="${hasStoredToken ? '' : 'Enter token secret'}"
+                                   oninput="if(this.value.includes('•')) this.value = this.value.replace(/•/g, '');"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -718,6 +736,159 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
 
+            <!-- Security Settings -->
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Security Settings</h3>
+                
+                <!-- Security Mode -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Security Mode
+                    </label>
+                    <select name="SECURITY_MODE" 
+                            onchange="PulseApp.ui.settings.updateSecurityOptionsVisibility(this.value)"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                        <option value="public" ${advanced.security?.mode === 'public' || advanced.security?.mode === 'open' ? 'selected' : ''}>
+                            Public - No authentication (trusted networks only)
+                        </option>
+                        <option value="private" ${(!advanced.security?.mode || advanced.security?.mode === 'private' || advanced.security?.mode === 'secure' || advanced.security?.mode === 'strict') ? 'selected' : ''}>
+                            Private - Authentication required (default)
+                        </option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Public mode provides no security. Private mode requires login to access Pulse.
+                    </p>
+                </div>
+
+                <!-- Security options container - visibility controlled by JavaScript -->
+                <div id="security-options-container" style="display: ${(advanced.security?.mode === 'public' || advanced.security?.mode === 'open') ? 'none' : 'block'}">
+                <!-- Admin Password -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Admin Password ${advanced.security?.hasAdminPassword ? '(Currently Set)' : '(Not Set)'}
+                    </label>
+                    <input type="password" name="ADMIN_PASSWORD" 
+                           placeholder="${advanced.security?.hasAdminPassword ? 'Enter new password to change' : 'Set admin password'}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Leave blank to keep current password. Username is always 'admin'.
+                    </p>
+                </div>
+
+                <!-- Session Secret -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Session Secret ${advanced.security?.hasSessionSecret ? '(Currently Set)' : '(Not Set)'}
+                    </label>
+                    <div class="flex space-x-2">
+                        <input type="text" name="SESSION_SECRET" 
+                               placeholder="${advanced.security?.hasSessionSecret ? 'Session secret is set' : 'Generate or enter session secret'}"
+                               class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                        <button type="button" onclick="PulseApp.ui.settings.generateSessionSecret()" 
+                                class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            Generate
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        64+ character random string for session encryption. Required for secure/strict modes.
+                    </p>
+                </div>
+
+                <!-- Session Timeout -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Session Timeout (hours)
+                    </label>
+                    <input type="number" name="SESSION_TIMEOUT_HOURS" min="1" max="168" 
+                           value="${(advanced.security?.sessionTimeout || 86400000) / 3600000}"
+                           onchange="this.setAttribute('data-ms', this.value * 3600000)"
+                           data-ms="${advanced.security?.sessionTimeout || 86400000}"
+                           class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        How long sessions stay active (24 hours = 1 day, 168 hours = 1 week)
+                    </p>
+                </div>
+
+                <!-- Authentication Options -->
+                <div class="space-y-4 mb-6">
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Enable Audit Logging
+                            </label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                Log security events to /opt/pulse/data/audit.log
+                            </p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="AUDIT_LOG" value="true"
+                                   ${advanced.security?.auditLog === true ? 'checked' : ''}
+                                   class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Advanced Security Settings -->
+                <details class="mb-4">
+                    <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                        Advanced Security Options ▼
+                    </summary>
+                    <div class="mt-4 space-y-4 pl-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Bcrypt Rounds
+                            </label>
+                            <input type="number" name="BCRYPT_ROUNDS" min="8" max="20" 
+                                   value="${advanced.security?.bcryptRounds || 10}"
+                                   class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Password hashing strength (10 is standard, higher is more secure but slower)
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Max Login Attempts
+                            </label>
+                            <input type="number" name="MAX_LOGIN_ATTEMPTS" min="3" max="20" 
+                                   value="${advanced.security?.maxLoginAttempts || 5}"
+                                   class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Failed attempts before account lockout
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Lockout Duration (minutes)
+                            </label>
+                            <input type="number" name="LOCKOUT_DURATION" min="5" max="1440" 
+                                   value="${(advanced.security?.lockoutDuration || 900000) / 60000}"
+                                   onchange="this.setAttribute('data-ms', this.value * 60000)"
+                                   data-ms="${advanced.security?.lockoutDuration || 900000}"
+                                   class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                How long to lock account after max attempts
+                            </p>
+                        </div>
+
+                    </div>
+                </details>
+                </div>
+
+                <div class="mt-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        <strong>Note:</strong> Changing security mode requires a service restart.
+                        <a href="https://github.com/rcourtman/Pulse/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer" 
+                           class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
+                            View security documentation →
+                        </a>
+                    </p>
+                </div>
+            </div>
+
             <!-- Alert Settings -->
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Alert System</h3>
@@ -976,7 +1147,7 @@ PulseApp.ui.settings = (() => {
 
 
     // Additional endpoint management functions
-    function addPveEndpoint() {
+    function addPveEndpoint(existingData = null, forceIndex = null) {
         const container = document.getElementById('pve-endpoints-container');
         if (!container) return;
 
@@ -1001,48 +1172,77 @@ PulseApp.ui.settings = (() => {
             }
         });
         
-        // Find the first unused index starting from 2
-        while (usedIndexes.has(index)) {
-            index++;
+        // Use forced index if provided, otherwise find the first unused index starting from 2
+        if (forceIndex !== null) {
+            index = forceIndex;
+        } else {
+            while (usedIndexes.has(index)) {
+                index++;
+            }
         }
+        
+        // Check if this endpoint has existing data (i.e., a stored token secret)
+        const tokenSecretKey = `PROXMOX_TOKEN_SECRET_${index}`;
+        // The secret will be '***REDACTED***' if it exists
+        const hasStoredToken = existingData && existingData[tokenSecretKey] && 
+                              (existingData[tokenSecretKey] === '***REDACTED***' || existingData[tokenSecretKey].trim() !== '');
+        
         const endpointHtml = `
-            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
                         class="absolute top-4 right-4 text-red-600 hover:text-red-800" title="Remove this server">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                     </svg>
                 </button>
-                <h4 class="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">PVE Server #${index}</h4>
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Server #${index}</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Additional PVE server configuration</p>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
-                        <input type="text" name="PROXMOX_HOST_${index}" placeholder="pve${index}.example.com"
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Host Address <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" name="PROXMOX_HOST_${index}" required
+                               placeholder="proxmox${index}.example.com"
+                               oninput="PulseApp.ui.settings.validateHost(this)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
-                        <input type="number" name="PROXMOX_PORT_${index}" placeholder="8006"
+                        <input type="number" name="PROXMOX_PORT_${index}" 
+                               placeholder="8006"
+                               oninput="PulseApp.ui.settings.validatePort(this)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
-                        <input type="text" name="PROXMOX_TOKEN_ID_${index}" placeholder="root@pam!token-name"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
-                        <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" placeholder="Enter token secret (required for testing)"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="flex items-center mt-6">
-                            <input type="checkbox" name="PROXMOX_ENABLED_${index}" checked
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            API Token ID <span class="text-red-500">*</span>
                         </label>
+                        <input type="text" name="PROXMOX_TOKEN_ID_${index}" required
+                               placeholder="root@pam!token-name"
+                               oninput="PulseApp.ui.settings.validateTokenId(this)"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            API Token Secret ${hasStoredToken ? '' : '<span class="text-red-500">*</span>'}
+                        </label>
+                        <div class="relative">
+                            <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" 
+                                   ${hasStoredToken ? 'value="••••••••••••••••••••••••••••••••••••"' : ''}
+                                   placeholder="${hasStoredToken ? '' : 'Enter token secret'}"
+                                   oninput="if(this.value.includes('•')) this.value = this.value.replace(/•/g, '');"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enabled</label>
+                        <input type="checkbox" name="PROXMOX_ENABLED_${index}" checked
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                     </div>
                 </div>
             </div>
@@ -1051,7 +1251,7 @@ PulseApp.ui.settings = (() => {
         container.insertAdjacentHTML('beforeend', endpointHtml);
     }
 
-    function addPbsEndpoint() {
+    function addPbsEndpoint(existingData = null, forceIndex = null) {
         const container = document.getElementById('pbs-endpoints-container');
         if (!container) return;
 
@@ -1076,41 +1276,65 @@ PulseApp.ui.settings = (() => {
             }
         });
         
-        // Find the first unused index starting from 2
-        while (usedIndexes.has(index)) {
-            index++;
+        // Use forced index if provided, otherwise find the first unused index starting from 2
+        if (forceIndex !== null) {
+            index = forceIndex;
+        } else {
+            while (usedIndexes.has(index)) {
+                index++;
+            }
         }
+        
+        // Check if this endpoint has existing data (i.e., a stored token secret)
+        const tokenSecretKey = `PBS_TOKEN_SECRET_${index}`;
+        // The secret will be '***REDACTED***' if it exists
+        const hasStoredToken = existingData && existingData[tokenSecretKey] && 
+                              (existingData[tokenSecretKey] === '***REDACTED***' || existingData[tokenSecretKey].trim() !== '');
+        
         const endpointHtml = `
-            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
                         class="absolute top-4 right-4 text-red-600 hover:text-red-800" title="Remove this server">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                     </svg>
                 </button>
-                <h4 class="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">PBS Server #${index}</h4>
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server #${index}</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Additional PBS server configuration</p>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
-                        <input type="text" name="PBS_HOST_${index}" placeholder="pbs${index}.example.com"
+                        <input type="text" name="PBS_HOST_${index}" 
+                               placeholder="pbs${index}.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
-                        <input type="number" name="PBS_PORT_${index}" placeholder="8007"
+                        <input type="number" name="PBS_PORT_${index}" 
+                               placeholder="8007"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox Backup Server web interface port</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
-                        <input type="text" name="PBS_TOKEN_ID_${index}" placeholder="root@pam!token-name"
+                        <input type="text" name="PBS_TOKEN_ID_${index}" 
+                               placeholder="root@pam!token-name"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
-                        <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret (required for testing)"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            API Token Secret ${hasStoredToken ? '' : '<span class="text-red-500">*</span>'}
+                        </label>
+                        <div class="relative">
+                            <input type="password" name="PBS_TOKEN_SECRET_${index}" 
+                                   ${hasStoredToken ? 'value="••••••••••••••••••••••••••••••••••••"' : ''}
+                                   placeholder="${hasStoredToken ? '' : 'Enter token secret'}"
+                                   oninput="if(this.value.includes('•')) this.value = this.value.replace(/•/g, '');"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1154,7 +1378,7 @@ PulseApp.ui.settings = (() => {
         
         for (const i of pveHostKeys) {
             if (config[`PROXMOX_HOST_${i}`]) {
-                addPveEndpoint();
+                addPveEndpoint(config, i);
                 // Populate the newly added endpoint with data
                 const newEndpoint = container.lastElementChild;
                 const inputs = newEndpoint.querySelectorAll('input');
@@ -1184,7 +1408,12 @@ PulseApp.ui.settings = (() => {
                                 }
                             }
                             
-                            input.value = value;
+                            // Don't set the value for token secret fields if they're redacted
+                            if (configKey.includes('TOKEN_SECRET') && value === '***REDACTED***') {
+                                // Skip - the placeholder will show the bullets
+                            } else {
+                                input.value = value;
+                            }
                         }
                     }
                 });
@@ -1210,7 +1439,7 @@ PulseApp.ui.settings = (() => {
         
         for (const i of pbsHostKeys) {
             if (config[`PBS_HOST_${i}`]) {
-                addPbsEndpoint();
+                addPbsEndpoint(config, i);
                 // Populate the newly added endpoint with data
                 const newEndpoint = container.lastElementChild;
                 const inputs = newEndpoint.querySelectorAll('input');
@@ -1240,7 +1469,12 @@ PulseApp.ui.settings = (() => {
                                 }
                             }
                             
-                            input.value = value;
+                            // Don't set the value for token secret fields if they're redacted
+                            if (configKey.includes('TOKEN_SECRET') && value === '***REDACTED***') {
+                                // Skip - the placeholder will show the bullets
+                            } else {
+                                input.value = value;
+                            }
                         }
                     }
                 });
@@ -1249,10 +1483,27 @@ PulseApp.ui.settings = (() => {
     }
 
     async function testConnections() {
-        PulseApp.ui.toast.showToast('Testing connections...', 'info');
+        // Show testing notification after a short delay to avoid flash for quick tests
+        const toastTimeout = setTimeout(() => {
+            PulseApp.ui.toast.showToast('Testing connections...', 'info');
+        }, 500);
         
         const config = collectFormData();
-        console.log('Testing connections with config:', config);
+        
+        // Keep all config but send empty string for redacted token secrets
+        // The backend needs TOKEN_ID to identify which endpoint to test
+        const testConfig = {};
+        Object.entries(config).forEach(([key, value]) => {
+            // Send empty string for redacted token SECRETS so backend knows to use stored value
+            if (key.includes('TOKEN_SECRET') && (value === '***REDACTED***' || value.includes('•') || value.includes('\u2022'))) {
+                testConfig[key] = '';
+            } else {
+                // Include everything else as-is
+                testConfig[key] = value;
+            }
+        });
+        
+        console.log('Testing connections with config:', testConfig);
         const testButton = event?.target || document.querySelector('[onclick*="testConnections"]');
         
         // Clear any previous test indicators
@@ -1265,7 +1516,10 @@ PulseApp.ui.settings = (() => {
         }
         
         try {
-            const result = await PulseApp.apiClient.post('/api/config/test', config);
+            const result = await PulseApp.apiClient.post('/api/config/test', testConfig);
+            
+            // Clear the testing toast if it hasn't shown yet
+            clearTimeout(toastTimeout);
             
             if (result.success) {
                 PulseApp.ui.toast.success('All connections tested successfully!');
@@ -1277,6 +1531,9 @@ PulseApp.ui.settings = (() => {
                 showTestFailureIndicators(config, result.error);
             }
         } catch (error) {
+            // Clear the testing toast if it hasn't shown yet
+            clearTimeout(toastTimeout);
+            
             console.error('Test connections error:', error);
             // Show the actual error message from the server
             PulseApp.ui.toast.error(error.message || 'Failed to test connections');
@@ -1416,6 +1673,31 @@ PulseApp.ui.settings = (() => {
         }
     }
 
+    function generateSessionSecret() {
+        // Generate a cryptographically secure random string
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        const secret = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        
+        // Set the value in the input field
+        const input = document.querySelector('input[name="SESSION_SECRET"]');
+        if (input) {
+            input.value = secret;
+            // Trigger change event to enable save button
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    function updateSecurityOptionsVisibility(mode) {
+        const container = document.getElementById('security-options-container');
+        if (container) {
+            container.style.display = (mode === 'public' || mode === 'open') ? 'none' : 'block';
+        }
+        
+        // Trigger change tracking
+        trackChanges();
+    }
+
     async function saveConfiguration() {
         const saveButton = document.getElementById('settings-save-button');
         if (!saveButton) return;
@@ -1434,18 +1716,94 @@ PulseApp.ui.settings = (() => {
                 hasUnsavedChanges = false;
                 originalFormData = collectAllTabsData();
                 
-                // Check if embedding settings were changed
+                // Check if embedding settings were changed (normalize to boolean for comparison)
                 const originalEmbedding = currentConfig.advanced?.allowEmbedding === true;
-                const newEmbedding = config.ALLOW_EMBEDDING === 'true';
-                const originalOrigins = currentConfig.advanced?.allowedEmbedOrigins || '';
-                const newOrigins = config.ALLOWED_EMBED_ORIGINS || '';
+                // If ALLOW_EMBEDDING is undefined, preserve the original value (don't consider it changed)
+                const newEmbedding = config.ALLOW_EMBEDDING !== undefined ? 
+                    (config.ALLOW_EMBEDDING === 'true' || config.ALLOW_EMBEDDING === true) : 
+                    originalEmbedding;
+                const originalOrigins = (currentConfig.advanced?.allowedEmbedOrigins || '').trim();
+                // If ALLOWED_EMBED_ORIGINS is undefined, preserve the original value
+                const newOrigins = config.ALLOWED_EMBED_ORIGINS !== undefined ? 
+                    (config.ALLOWED_EMBED_ORIGINS || '').trim() : 
+                    originalOrigins;
                 const embeddingChanged = originalEmbedding !== newEmbedding || originalOrigins !== newOrigins;
                 
-                if (embeddingChanged) {
-                    showSuccessToast('Configuration Saved', 'Reloading page to apply embedding changes...');
-                    // Reload after a short delay so user can see the message
-                    setTimeout(() => {
-                        window.location.reload();
+                // Check if security mode changed (normalize to string for comparison)
+                const originalSecurityMode = (currentConfig.advanced?.security?.mode || 'private').toString();
+                // If SECURITY_MODE is undefined, preserve the original value
+                const newSecurityMode = config.SECURITY_MODE !== undefined ? 
+                    (config.SECURITY_MODE || 'private').toString() : 
+                    originalSecurityMode;
+                const securityModeChanged = originalSecurityMode !== newSecurityMode;
+                
+                // Debug logging
+                console.log('Restart detection debug:', {
+                    embedding: {
+                        original: originalEmbedding,
+                        new: newEmbedding,
+                        changed: embeddingChanged,
+                        originsOld: originalOrigins,
+                        originsNew: newOrigins
+                    },
+                    security: {
+                        original: originalSecurityMode,
+                        new: newSecurityMode,
+                        changed: securityModeChanged
+                    },
+                    rawValues: {
+                        'config.ALLOW_EMBEDDING': config.ALLOW_EMBEDDING,
+                        'currentConfig.advanced?.allowEmbedding': currentConfig.advanced?.allowEmbedding
+                    }
+                });
+                
+                if (embeddingChanged || securityModeChanged) {
+                    const reason = embeddingChanged && securityModeChanged ? 'iframe and security settings' : 
+                                 embeddingChanged ? 'iframe settings' : 'security settings';
+                    showSuccessToast('Configuration Saved', `Restarting Pulse to apply ${reason}...`);
+                    
+                    // Trigger service restart
+                    setTimeout(async () => {
+                        try {
+                            const response = await fetch('/api/service/restart', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error('Failed to restart service');
+                            }
+                            
+                            // Show restart message
+                            PulseApp.ui.toast.showToast('Pulse is restarting. The page will reload automatically when ready.', 'info');
+                            
+                            // Start checking if service is back online
+                            let retries = 0;
+                            const maxRetries = 30; // 30 seconds
+                            const checkInterval = setInterval(async () => {
+                                retries++;
+                                try {
+                                    const healthResponse = await fetch('/api/health', { method: 'GET' });
+                                    if (healthResponse.ok) {
+                                        clearInterval(checkInterval);
+                                        window.location.reload();
+                                    }
+                                } catch (e) {
+                                    // Service still down, keep trying
+                                }
+                                
+                                if (retries >= maxRetries) {
+                                    clearInterval(checkInterval);
+                                    PulseApp.ui.toast.showToast('Service restart is taking longer than expected. Please check the service status.', 'error');
+                                }
+                            }, 1000);
+                            
+                        } catch (error) {
+                            console.error('Failed to restart service:', error);
+                            PulseApp.ui.toast.showToast('Could not restart the service. Please restart manually: sudo systemctl restart pulse', 'error');
+                        }
                     }, 1500);
                 } else {
                     showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
@@ -1481,7 +1839,17 @@ PulseApp.ui.settings = (() => {
         // Build the config object from form data
         for (const [name, value] of formData.entries()) {
             // Skip empty values except for password fields (which might be empty if unchanged)
-            if (value.trim() === '' && !name.includes('TOKEN_SECRET')) continue;
+            // and ALLOWED_EMBED_ORIGINS (which needs to be cleared when empty)
+            if (value.trim() === '' && 
+                !name.includes('TOKEN_SECRET') && 
+                !name.includes('ADMIN_PASSWORD') && 
+                !name.includes('SESSION_SECRET') &&
+                name !== 'ALLOWED_EMBED_ORIGINS') continue;
+            
+            // Skip token secret fields that contain any bullet points
+            if (name.includes('TOKEN_SECRET') && (value.includes('•') || value.includes('\u2022'))) {
+                continue;
+            }
 
             // Handle checkbox values
             if (form.querySelector(`[name="${name}"]`).type === 'checkbox') {
@@ -1496,6 +1864,10 @@ PulseApp.ui.settings = (() => {
                         cleanHost = portMatch[1];
                     }
                     config[name] = cleanHost;
+                } else if (name === 'LOCKOUT_DURATION') {
+                    // Handle special data-ms attribute for lockout duration
+                    const input = form.querySelector(`[name="${name}"]`);
+                    config[name] = input.getAttribute('data-ms') || (parseInt(value) * 60000).toString();
                 } else {
                     config[name] = value;
                 }
@@ -1523,6 +1895,11 @@ PulseApp.ui.settings = (() => {
             Object.entries(tabData).forEach(([name, value]) => {
                 // Only use cached value if not already set from current form
                 if (!allConfig.hasOwnProperty(name)) {
+                    // Skip token secret fields that contain bullet points
+                    if (name.includes('TOKEN_SECRET') && typeof value === 'string' && (value.includes('•') || value.includes('\u2022'))) {
+                        return; // Skip this field
+                    }
+                    
                     if (typeof value === 'boolean') {
                         allConfig[name] = value ? 'true' : 'false';
                     } else {
@@ -1549,6 +1926,10 @@ PulseApp.ui.settings = (() => {
                 if (field.type === 'checkbox') {
                     currentTabData[name] = field.checked;
                 } else {
+                    // Don't cache token secret fields that contain bullet points
+                    if (name.includes('TOKEN_SECRET') && (value.includes('•') || value.includes('\u2022'))) {
+                        continue; // Skip caching this field
+                    }
                     currentTabData[name] = value;
                 }
             }
@@ -3634,7 +4015,7 @@ docker compose up -d</code></pre>
             }
             
             try {
-                const response = await fetch('/healthz', {
+                const response = await fetch('/api/health', {
                     method: 'GET',
                     cache: 'no-cache'
                 });
@@ -3708,6 +4089,8 @@ docker compose up -d</code></pre>
         validateHost,
         validatePort,
         validateTokenId,
+        generateSessionSecret,
+        updateSecurityOptionsVisibility,
         onUpdateChannelChange,
         switchToRecommendedChannel,
         switchToChannel,

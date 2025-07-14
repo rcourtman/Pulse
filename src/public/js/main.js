@@ -1,3 +1,30 @@
+// Global authentication handler
+(function() {
+    let authCheckInProgress = false;
+    let hasRedirectedToLogin = false;
+    
+    // Don't redirect if we're already on the login page
+    const isLoginPage = window.location.pathname === '/login.html' || window.location.pathname.endsWith('/login.html');
+    
+    // Override fetch to handle 401 responses globally
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        return originalFetch.apply(this, args).then(response => {
+            if (response.status === 401 && !authCheckInProgress && !hasRedirectedToLogin && !isLoginPage) {
+                authCheckInProgress = true;
+                console.log('Authentication required - redirecting to login');
+                hasRedirectedToLogin = true;
+                
+                // Small delay to prevent redirect loops
+                setTimeout(() => {
+                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
+                }, 100);
+            }
+            return response;
+        });
+    };
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
     const PulseApp = window.PulseApp || {};
 

@@ -96,6 +96,15 @@ All configuration is done through the web interface - no file editing required!
 
 For advanced configuration options, see [Configuration Guide](docs/CONFIGURATION.md).
 
+## Security
+
+Pulse offers two simple security modes:
+
+- **Public Mode** - No authentication required (for trusted networks only)
+- **Private Mode** (Default) - Authentication required for all access
+
+For production use, always use Private mode with HTTPS via reverse proxy. See [Security Guide](SECURITY.md) for detailed information.
+
 ## Documentation
 
 - [Installation Guide](docs/INSTALLATION.md) - Detailed install instructions for all methods
