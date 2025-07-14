@@ -101,7 +101,14 @@ For advanced configuration options, see [Configuration Guide](docs/CONFIGURATION
 Pulse offers two simple security modes:
 
 - **Public Mode** - No authentication required (for trusted networks only)
-- **Private Mode** (Default) - Authentication required for all access
+- **Private Mode** (Default) - Authentication required with CSRF protection
+
+Key security features:
+- Session-based authentication with configurable timeouts
+- CSRF protection for state-changing operations
+- Support for reverse proxy deployments with `TRUST_PROXY` configuration
+- Audit logging for security events
+- Rate limiting on API endpoints
 
 For production use, always use Private mode with HTTPS via reverse proxy. See [Security Guide](SECURITY.md) for detailed information.
 
@@ -109,6 +116,9 @@ For production use, always use Private mode with HTTPS via reverse proxy. See [S
 
 - [Installation Guide](docs/INSTALLATION.md) - Detailed install instructions for all methods
 - [Configuration Guide](docs/CONFIGURATION.md) - Advanced settings and environment variables
+- [API Documentation](docs/API.md) - REST API endpoints and authentication
+- [Security Guide](SECURITY.md) - Authentication and security configuration
+- [Reverse Proxy Guide](docs/REVERSE_PROXY.md) - Nginx, Caddy, Traefik setup
 - [PBS Push Mode](docs/PBS_PUSH_MODE.md) - Monitor isolated PBS servers
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
