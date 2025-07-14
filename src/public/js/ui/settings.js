@@ -3878,6 +3878,10 @@ docker compose up -d</code></pre>
             }
         }
         
+        // Clear stored release data when switching channels to prevent cross-channel confusion
+        latestReleaseData = null;
+        hideUpdateDetails();
+        
         // Debounce rapid changes to prevent API spam
         if (updateCheckTimeout) {
             clearTimeout(updateCheckTimeout);
@@ -3919,6 +3923,10 @@ docker compose up -d</code></pre>
         } else {
             currentConfig.advanced = { updateChannel: targetChannel };
         }
+        
+        // Clear stored release data when switching channels
+        latestReleaseData = null;
+        hideUpdateDetails();
         
         // Check for updates with the new channel
         checkLatestVersion(targetChannel);
