@@ -240,6 +240,21 @@ proxmox-backup-manager user generate-token pulse@pbs monitoring
 proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse@pbs!monitoring'
 ```
 
+**Verify Permissions:**
+After creating tokens, you can verify permissions are correctly set:
+```bash
+# Check PVE permissions
+cd /opt/pulse
+./scripts/check-pve-permissions.sh
+
+# Check PBS permissions
+./scripts/check-pbs-permissions.sh
+
+# Auto-fix any permission issues
+./scripts/check-pve-permissions.sh --fix
+./scripts/check-pbs-permissions.sh --fix
+```
+
 ### 3. Configure Firewall
 
 Allow Pulse to reach Proxmox APIs:
