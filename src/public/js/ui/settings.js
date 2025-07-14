@@ -480,48 +480,103 @@ PulseApp.ui.settings = (() => {
             <div id="email-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 mb-6">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
                 
-                <div class="grid grid-cols-1 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
-                        <input type="email" name="ALERT_FROM_EMAIL" 
-                               value="${config.ALERT_FROM_EMAIL || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="alerts@yourdomain.com">
+                <!-- Email Provider Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Provider</label>
+                    <div class="flex gap-3">
+                        <button type="button" 
+                                id="email-provider-sendgrid"
+                                onclick="PulseApp.ui.settings.setEmailProvider('sendgrid')"
+                                class="px-4 py-2 text-sm font-medium rounded-md border ${config.EMAIL_PROVIDER === 'sendgrid' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}">
+                            SendGrid
+                        </button>
+                        <button type="button" 
+                                id="email-provider-smtp"
+                                onclick="PulseApp.ui.settings.setEmailProvider('smtp')"
+                                class="px-4 py-2 text-sm font-medium rounded-md border ${config.EMAIL_PROVIDER !== 'sendgrid' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}">
+                            SMTP
+                        </button>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
-                        <input type="email" name="ALERT_TO_EMAIL" 
-                               value="${config.ALERT_TO_EMAIL || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="admin@yourdomain.com">
+                    <input type="hidden" name="EMAIL_PROVIDER" value="${config.EMAIL_PROVIDER || 'smtp'}">
+                </div>
+                
+                <!-- SendGrid Configuration -->
+                <div id="sendgrid-config" class="${config.EMAIL_PROVIDER === 'sendgrid' ? '' : 'hidden'}">
+                    <div class="grid grid-cols-1 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SendGrid API Key</label>
+                            <input type="password" name="SENDGRID_API_KEY" 
+                                   value="${config.SENDGRID_API_KEY || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="SG.xxxxxxxxxxxxxxxxxxxx">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <a href="https://app.sendgrid.com/settings/api_keys" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">
+                                    Get your SendGrid API key →
+                                </a>
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
+                            <input type="email" name="SENDGRID_FROM_EMAIL" 
+                                   value="${config.SENDGRID_FROM_EMAIL || config.ALERT_FROM_EMAIL || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="alerts@yourdomain.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
+                            <input type="email" name="ALERT_TO_EMAIL_SENDGRID" 
+                                   value="${config.ALERT_TO_EMAIL || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="admin@yourdomain.com">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
-                        <input type="text" name="SMTP_HOST" 
-                               value="${config.SMTP_HOST || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="smtp.gmail.com">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
-                        <input type="number" name="SMTP_PORT" 
-                               value="${config.SMTP_PORT || 587}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="587">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
-                        <input type="text" name="SMTP_USER" 
-                               value="${config.SMTP_USER || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="your.email@gmail.com">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
-                        <input type="password" name="SMTP_PASS" 
-                               value="${config.SMTP_PASS || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="Enter password">
+                </div>
+                
+                <!-- SMTP Configuration -->
+                <div id="smtp-config" class="${config.EMAIL_PROVIDER === 'sendgrid' ? 'hidden' : ''}">
+                    <div class="grid grid-cols-1 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
+                            <input type="email" name="ALERT_FROM_EMAIL" 
+                                   value="${config.ALERT_FROM_EMAIL || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="alerts@yourdomain.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
+                            <input type="email" name="ALERT_TO_EMAIL" 
+                                   value="${config.ALERT_TO_EMAIL || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="admin@yourdomain.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
+                            <input type="text" name="SMTP_HOST" 
+                                   value="${config.SMTP_HOST || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="smtp.gmail.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
+                            <input type="number" name="SMTP_PORT" 
+                                   value="${config.SMTP_PORT || 587}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="587">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
+                            <input type="text" name="SMTP_USER" 
+                                   value="${config.SMTP_USER || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="your.email@gmail.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                            <input type="password" name="SMTP_PASS" 
+                                   value="${config.SMTP_PASS || ''}"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                   placeholder="Enter password">
+                        </div>
                     </div>
                 </div>
                 
@@ -1923,6 +1978,11 @@ PulseApp.ui.settings = (() => {
             if (name.includes('TOKEN_SECRET') && (value.includes('•') || value.includes('\u2022'))) {
                 continue;
             }
+            
+            // Skip SMTP password if it's redacted
+            if (name === 'SMTP_PASS' && value === '***REDACTED***') {
+                continue;
+            }
 
             // Handle checkbox values
             if (form.querySelector(`[name="${name}"]`).type === 'checkbox') {
@@ -1951,6 +2011,11 @@ PulseApp.ui.settings = (() => {
                     }
                 } else if (name === 'TRUST_PROXY_CUSTOM') {
                     // Skip this as it's handled above
+                    continue;
+                } else if (name === 'ALERT_TO_EMAIL_SENDGRID') {
+                    // Map SendGrid TO email to common field
+                    config['ALERT_TO_EMAIL'] = value;
+                    // Don't include the original field name
                     continue;
                 } else {
                     config[name] = value;
@@ -3978,23 +4043,42 @@ docker compose up -d</code></pre>
         testButton.textContent = 'Testing...';
         
         try {
-            const response = await PulseApp.apiClient.post('/api/test-email', {
-                from: formData.ALERT_FROM_EMAIL,
-                to: formData.ALERT_TO_EMAIL,
-                host: formData.SMTP_HOST,
-                port: parseInt(formData.SMTP_PORT) || 587,
-                user: formData.SMTP_USER,
-                pass: formData.SMTP_PASS,
-                secure: formData.SMTP_SECURE === 'on'
-            });
+            let testConfig;
+            
+            if (formData.EMAIL_PROVIDER === 'sendgrid') {
+                testConfig = {
+                    emailProvider: 'sendgrid',
+                    sendgridApiKey: formData.SENDGRID_API_KEY,
+                    from: formData.SENDGRID_FROM_EMAIL,
+                    to: formData.ALERT_TO_EMAIL || formData.ALERT_TO_EMAIL_SENDGRID
+                };
+            } else {
+                testConfig = {
+                    emailProvider: 'smtp',
+                    from: formData.ALERT_FROM_EMAIL,
+                    to: formData.ALERT_TO_EMAIL,
+                    host: formData.SMTP_HOST,
+                    port: parseInt(formData.SMTP_PORT) || 587,
+                    user: formData.SMTP_USER,
+                    pass: formData.SMTP_PASS === '***REDACTED***' ? '' : formData.SMTP_PASS,
+                    secure: formData.SMTP_SECURE === 'on'
+                };
+            }
+            
+            // If password is missing, add empty string to signal server to use stored password
+            if (testConfig.emailProvider === 'smtp' && !testConfig.pass) {
+                testConfig.pass = '';
+            }
+            
+            const response = await PulseApp.apiClient.post('/api/alerts/test-email', testConfig);
             
             if (response.success) {
-                showMessage('Test email sent successfully!', 'success');
+                PulseApp.ui.toast.success('Test email sent successfully!');
             } else {
-                showMessage(`Email test failed: ${response.error}`, 'error');
+                PulseApp.ui.toast.error(`Email test failed: ${response.error}`);
             }
         } catch (error) {
-            PulseApp.apiClient.handleError(error, 'Test email', showMessage);
+            PulseApp.ui.toast.error(error.message || 'Failed to test email');
         } finally {
             testButton.disabled = false;
             testButton.textContent = originalText;
@@ -4023,7 +4107,7 @@ docker compose up -d</code></pre>
             
             
             if (!formData.WEBHOOK_URL) {
-                showMessage('Please enter a webhook URL', 'error');
+                PulseApp.ui.toast.error('Please enter a webhook URL');
                 testButton.disabled = false;
                 testButton.textContent = originalText;
                 return;
@@ -4037,19 +4121,19 @@ docker compose up -d</code></pre>
             console.log('[Settings] Test webhook response:', response);
             
             if (response.success) {
-                showMessage('✅ Webhook test sent successfully!', 'success');
+                PulseApp.ui.toast.success('Webhook test sent successfully!');
                 
                 // Show additional status info if there are cooldowns
                 if (statusResponse.activeCooldowns && statusResponse.activeCooldowns.length > 0) {
                     const cooldown = statusResponse.activeCooldowns[0];
-                    showMessage(`ℹ️ Note: Some alerts may be on cooldown for ${cooldown.remainingMinutes} more minutes`, 'info');
+                    PulseApp.ui.toast.showToast(`Note: Some alerts may be on cooldown for ${cooldown.remainingMinutes} more minutes`, 'info');
                 }
             } else {
-                showMessage(`❌ Webhook test failed: ${response.error}`, 'error');
+                PulseApp.ui.toast.error(`Webhook test failed: ${response.error}`);
             }
         } catch (error) {
             logger.error('Test webhook error:', error);
-            PulseApp.apiClient.handleError(error, 'Test webhook', showMessage);
+            PulseApp.ui.toast.error(error.message || 'Failed to test webhook');
         } finally {
             testButton.disabled = false;
             testButton.textContent = originalText;
@@ -4172,6 +4256,33 @@ docker compose up -d</code></pre>
         setTimeout(checkHealth, 2000); // Wait 2 seconds before first check
     }
     
+    function setEmailProvider(provider) {
+        const sendgridBtn = document.getElementById('email-provider-sendgrid');
+        const smtpBtn = document.getElementById('email-provider-smtp');
+        const sendgridConfig = document.getElementById('sendgrid-config');
+        const smtpConfig = document.getElementById('smtp-config');
+        const providerInput = document.querySelector('input[name="EMAIL_PROVIDER"]');
+        
+        if (provider === 'sendgrid') {
+            sendgridBtn.className = 'px-4 py-2 text-sm font-medium rounded-md border bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300';
+            smtpBtn.className = 'px-4 py-2 text-sm font-medium rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700';
+            sendgridConfig.classList.remove('hidden');
+            smtpConfig.classList.add('hidden');
+        } else {
+            smtpBtn.className = 'px-4 py-2 text-sm font-medium rounded-md border bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300';
+            sendgridBtn.className = 'px-4 py-2 text-sm font-medium rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700';
+            smtpConfig.classList.remove('hidden');
+            sendgridConfig.classList.add('hidden');
+        }
+        
+        if (providerInput) {
+            providerInput.value = provider;
+        }
+        
+        // Trigger change tracking
+        trackChanges();
+    }
+    
     return {
         init,
         openModal,
@@ -4192,6 +4303,7 @@ docker compose up -d</code></pre>
         updateTrustProxyVisibility,
         updateEmbedOriginVisibility,
         onUpdateChannelChange,
+        setEmailProvider,
         switchToRecommendedChannel,
         switchToChannel,
         acknowledgeStableChoice,
