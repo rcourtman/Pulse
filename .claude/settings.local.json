@@ -30,7 +30,21 @@
       "Bash(hostname:*)",
       "Bash(journalctl:*)",
       "Bash(gh api:*)",
-      "Bash(gh issue view:*)"
+      "Bash(gh issue view:*)",
+      "Bash(gh release view:*)",
+      "Bash(gh release list:*)",
+      "Bash(npm start:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(sed:*)",
+      "Bash(mv:*)",
+      "Bash(cat:*)",
+      "Bash(/opt/pulse/smoke-test.sh:*)",
+      "Bash(npm run build:css:*)",
+      "Bash(sudo journalctl:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse Login</title>
+    <link rel="icon" type="image/svg+xml" href="/logos/pulse-logo.svg">
+    <link href="/output.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md">
+        <!-- Logo and Title -->
+        <div class="text-center mb-8">
+            <img src="/logos/pulse-logo-256x256.png" alt="Pulse Logo" class="w-24 h-24 mx-auto mb-4">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Pulse Monitor</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">Sign in to access monitoring dashboard</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg px-8 py-10">
+            <form id="loginForm" class="space-y-6">
+                <!-- Username -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Username
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required
+                        autocomplete="username"
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                        placeholder="admin"
+                    >
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Password
+                    </label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        required
+                        autocomplete="current-password"
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                        placeholder="Enter your password"
+                    >
+                </div>
+
+                <!-- Error Message -->
+                <div id="errorMessage" class="hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-md text-sm">
+                </div>
+
+                <!-- Submit Button -->
+                <button 
+                    type="submit" 
+                    id="submitButton"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                >
+                    Sign In
+                </button>
+            </form>
+
+            <!-- Security Mode Info -->
+            <div id="securityInfo" class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Help Text -->
+        <p class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+            Need help? Check the 
+            <a href="https://github.com/rcourtman/Pulse/blob/main/SECURITY.md" target="_blank" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                Security Guide
+            </a>
+        </p>
+    </div>
+
+    <script>
+        // Check security mode
+        async function checkSecurity() {
+            try {
+                const response = await fetch('/api/auth/me');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // Already logged in, redirect to main page
+                    window.location.href = '/';
+                    return;
+                }
+                
+                // Show security mode info
+                const securityInfo = document.getElementById('securityInfo');
+                if (response.headers.get('X-Security-Mode') === 'open') {
+                    securityInfo.innerHTML = `
+                        <div class="text-yellow-600 dark:text-yellow-400">
+                            ⚠️ Running in OPEN mode - Authentication optional
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to check security status:', error);
+            }
+        }
+
+        // Handle login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const errorMessage = document.getElementById('errorMessage');
+            const submitButton = document.getElementById('submitButton');
+            
+            // Reset error
+            errorMessage.classList.add('hidden');
+            
+            // Disable button
+            submitButton.disabled = true;
+            submitButton.textContent = 'Signing in...';
+            
+            const formData = new FormData(e.target);
+            const credentials = {
+                username: formData.get('username'),
+                password: formData.get('password')
+            };
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(credentials)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Login successful
+                    submitButton.textContent = 'Success! Redirecting...';
+                    
+                    // Redirect to original URL or home
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const redirect = urlParams.get('redirect') || '/';
+                    window.location.href = redirect;
+                } else {
+                    // Login failed
+                    errorMessage.textContent = data.error || 'Invalid username or password';
+                    errorMessage.classList.remove('hidden');
+                    
+                    // Re-enable button
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Sign In';
+                    
+                    // Focus password field
+                    document.getElementById('password').focus();
+                    document.getElementById('password').select();
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorMessage.textContent = 'Connection error. Please try again.';
+                errorMessage.classList.remove('hidden');
+                
+                // Re-enable button
+                submitButton.disabled = false;
+                submitButton.textContent = 'Sign In';
+            }
+        });
+
+        // Auto-focus username field
+        document.getElementById('username').focus();
+        
+        // Check security on load
+        checkSecurity();
+    </script>
+</body>
+</html>

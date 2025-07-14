@@ -184,6 +184,16 @@ DEBUG=pulse:*
 ### Security Options
 
 ```env
+# Security mode: public (no auth) or private (auth required)
+SECURITY_MODE=private           # Default: private
+
+# Admin password for private mode
+ADMIN_PASSWORD=your-secure-password
+
+# Session configuration
+SESSION_SECRET=random-64-char-string
+SESSION_TIMEOUT_HOURS=24        # Default: 24
+
 # Allow embedding in iframes (for dashboards)
 ALLOW_EMBEDDING=true            # Default: false
 
@@ -196,6 +206,9 @@ ALLOWED_EMBED_ORIGINS=http://homepage.lan:3000,https://dashboard.example.com
 
 # PBS Push Mode (for isolated servers)
 PULSE_PUSH_API_KEY=secure-random-key
+
+# Audit logging
+AUDIT_LOG=true                  # Default: true
 ```
 
 ## Iframe Embedding
@@ -248,6 +261,23 @@ Pulse can be embedded in other dashboards using iframes. This is useful for inte
 UPDATE_CHANNEL_PREFERENCE=stable # or 'rc'
 UPDATE_TEST_MODE=false          # Enable test mode
 ```
+
+## Security Configuration
+
+Pulse supports two security modes:
+
+1. **Public Mode** (`SECURITY_MODE=public`)
+   - No authentication required
+   - Only use on fully trusted networks
+   - Suitable for home labs with no external access
+
+2. **Private Mode** (`SECURITY_MODE=private`) - Default
+   - Authentication required for all access
+   - Username: `admin`
+   - Password: Set via `ADMIN_PASSWORD` environment variable
+   - Supports both web login and HTTP Basic Auth
+
+For detailed security configuration, see the [Security Guide](../SECURITY.md).
 
 ## Security Best Practices
 

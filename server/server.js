@@ -6,6 +6,7 @@ const compression = require('compression');
 const path = require('path');
 const { createLogger } = require('./utils/logger');
 const { createRateLimiter } = require('./middleware/rateLimiter');
+const { applySecurity } = require('./security');
 
 function createServer() {
     const app = express();
@@ -75,7 +76,17 @@ function createServer() {
     
     app.use(cors(corsOptions));
     
-    // Security headers middleware
+    // Body parsing middleware - MUST be before routes that need it
+    app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent DoS attacks
+    
+    // Static files - serve BEFORE authentication to allow CSS/JS loading
+    const publicDir = path.join(__dirname, '../src/public');
+    app.use(express.static(publicDir, { index: false }));
+    
+    // Apply security middleware (auth, audit, etc.) AFTER static files
+    applySecurity(app);
+    
+    // Security headers middleware (iframe-specific)
     app.use((req, res, next) => {
         // Configurable frame options for embedding support
         const allowEmbedding = process.env.ALLOW_EMBEDDING === 'true';
@@ -187,12 +198,6 @@ function createServer() {
         next();
     });
     
-    app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent DoS attacks
-
-    // Static files
-    const publicDir = path.join(__dirname, '../src/public');
-    app.use(express.static(publicDir, { index: false }));
-
     // Apply general rate limiting to all routes
     app.use(generalLimiter.middleware());
 
@@ -214,6 +219,9 @@ function createServer() {
 
     const alertRoutes = require('./routes/alerts');
     app.use('/api/alerts', apiLimiter.middleware(), alertRoutes);
+
+    const serviceRoutes = require('./routes/service');
+    app.use('/api/service', apiLimiter.middleware(), serviceRoutes);
 
     const snapshotsRoutes = require('./routes/snapshots');
     app.use('/api', apiLimiter.middleware(), snapshotsRoutes);
