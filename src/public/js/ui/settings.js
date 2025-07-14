@@ -789,7 +789,7 @@ PulseApp.ui.settings = (() => {
                             <select name="TRUST_PROXY" 
                                     onchange="PulseApp.ui.settings.updateTrustProxyVisibility(this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200 text-sm">
-                                <option value="">Disabled (Direct connection)</option>
+                                <option value="" ${!advanced.trustProxy || advanced.trustProxy === '' ? 'selected' : ''}>Disabled (Direct connection)</option>
                                 <option value="true" ${advanced.trustProxy === 'true' ? 'selected' : ''}>Trust all proxies (⚠️ use with caution)</option>
                                 <option value="1" ${advanced.trustProxy === '1' ? 'selected' : ''}>Behind 1 proxy (e.g., Nginx, Caddy)</option>
                                 <option value="2" ${advanced.trustProxy === '2' ? 'selected' : ''}>Behind 2 proxies (e.g., Cloudflare + Nginx)</option>
