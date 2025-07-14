@@ -34,19 +34,10 @@ PulseApp.ui.settings = (() => {
 
         if (cancelButton) {
             cancelButton.addEventListener('click', () => {
-                if (hasUnsavedChanges) {
-                    PulseApp.ui.toast.confirm(
-                        'You have unsaved changes. Are you sure you want to cancel?',
-                        () => {
-                            hasUnsavedChanges = false;
-                            originalFormData = null;
-                            formDataCache = {};
-                            closeModal();
-                        }
-                    );
-                } else {
-                    closeModal();
-                }
+                hasUnsavedChanges = false;
+                originalFormData = null;
+                formDataCache = {};
+                closeModal();
             });
         }
 
@@ -59,18 +50,8 @@ PulseApp.ui.settings = (() => {
             PulseApp.modalManager.setupModal(modal, {
                 closeButton: closeButton,
                 onClose: () => {
-                    if (hasUnsavedChanges) {
-                        PulseApp.ui.toast.confirm(
-                            'You have unsaved changes. Are you sure you want to close?',
-                            () => {
-                                hasUnsavedChanges = false;
-                                originalFormData = null;
-                                formDataCache = {};
-                                closeModal();
-                            }
-                        );
-                        return false; // Prevent default close
-                    }
+                    hasUnsavedChanges = false;
+                    originalFormData = null;
                     preserveCurrentFormData();
                     formDataCache = {};
                 }
