@@ -194,7 +194,7 @@ function authMiddleware() {
         }
         
         // Skip authentication for specific public pages
-        const publicPages = ['/login.html', '/setup.html'];
+        const publicPages = ['/login.html'];
         if (publicPages.includes(req.path)) {
             return next();
         }
