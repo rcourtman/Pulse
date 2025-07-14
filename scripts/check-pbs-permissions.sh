@@ -138,10 +138,11 @@ for token in $tokens; do
         # Fallback: Parse text output for this token
         perms=""
         while IFS= read -r line; do
-            if [[ "$line" =~ \|[[:space:]]*${token}[[:space:]]*\| ]]; then
-                path=$(echo "$line" | awk -F'|' '{print $2}' | tr -d ' ')
-                role=$(echo "$line" | awk -F'|' '{print $4}' | tr -d ' ')
-                if [[ -n "$path" ]] && [[ -n "$role" ]]; then
+            # Match lines that start with | and contain the token in the first column
+            if [[ "$line" =~ ^\|[[:space:]]*${token}[[:space:]]*\| ]]; then
+                path=$(echo "$line" | awk -F'|' '{print $3}' | tr -d ' ')
+                role=$(echo "$line" | awk -F'|' '{print $5}' | tr -d ' ')
+                if [[ -n "$path" ]] && [[ -n "$role" ]] && [[ "$path" != "path" ]]; then
                     perms="${perms}  Path: $path\n  Role: $role\n"
                 fi
             fi
@@ -165,7 +166,7 @@ for token in $tokens; do
         
         # Check if token has access to each datastore
         for ds in $datastores; do
-            has_access=$(echo "$perms" | grep -E "(Path: /datastore/$ds|Path: /datastore\s|Path: /\s)" || true)
+            has_access=$(echo "$perms" | grep -E "(Path: /datastore/$ds|Path: /datastore$|Path: /$)" || true)
             if [[ -z "$has_access" ]]; then
                 echo -e "  ${RED}✗${NC} No access to datastore: $ds"
                 issues_found=$((issues_found + 1))
