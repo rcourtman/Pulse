@@ -62,9 +62,34 @@ if ! command -v proxmox-backup-manager &> /dev/null; then
     exit 1
 fi
 
+# Check for jq (JSON processor)
+if ! command -v jq &> /dev/null; then
+    echo -e "${YELLOW}Note: 'jq' not found. JSON parsing will be limited.${NC}"
+    echo "Consider installing: apt-get install jq"
+    echo ""
+    JQ_AVAILABLE=false
+else
+    JQ_AVAILABLE=true
+fi
+
 # Find all tokens
 echo -e "${YELLOW}Step 1: Finding API tokens...${NC}"
-tokens=$(proxmox-backup-manager user list --output-format json 2>/dev/null | jq -r '.[] | select(.tokenid) | "\(.tokenid)"' | sort -u || true)
+tokens=""
+
+# Get all users first
+all_users=$(proxmox-backup-manager user list 2>/dev/null | grep -E '^\\| [^|]+@[^|]+' | awk -F'|' '{print $2}' | tr -d ' ' | grep -v '^userid$' || true)
+
+# Check each user for tokens
+for user in $all_users; do
+    user_tokens=$(proxmox-backup-manager user list-tokens "$user" 2>/dev/null | grep -E '^\\| [^|]+![^|]+' | awk -F'|' '{print $2}' | tr -d ' ' | grep -v '^tokenid$' || true)
+    if [[ -n "$user_tokens" ]]; then
+        for token in $user_tokens; do
+            tokens="$tokens$token\n"
+        done
+    fi
+done
+
+tokens=$(echo -e "$tokens" | grep -v '^$' | sort -u)
 
 if [[ -z "$tokens" ]]; then
     echo -e "${RED}No API tokens found!${NC}"
@@ -82,7 +107,12 @@ echo ""
 
 # Check datastores
 echo -e "${YELLOW}Step 2: Finding datastores...${NC}"
-datastores=$(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].store' | sort -u || true)
+if [[ "$JQ_AVAILABLE" == "true" ]]; then
+    datastores=$(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].store' | sort -u || true)
+else
+    # Fallback: Parse text output
+    datastores=$(proxmox-backup-manager datastore list 2>/dev/null | grep -E '^\\| [^|]+' | awk -F'|' '{print $2}' | tr -d ' ' | grep -v '^store$' | grep -v '^name$' | grep -v '^===' | sort -u || true)
+fi
 
 if [[ -z "$datastores" ]]; then
     echo -e "${RED}No datastores found!${NC}"
@@ -102,7 +132,22 @@ for token in $tokens; do
     echo -e "\n${BLUE}Token: $token${NC}"
     
     # Get token permissions
-    perms=$(proxmox-backup-manager acl list --output-format json 2>/dev/null | jq -r --arg token "$token" '.[] | select(.ugid == $token) | "  Path: \(.path)\n  Role: \(.roleid)"' || true)
+    if [[ "$JQ_AVAILABLE" == "true" ]]; then
+        perms=$(proxmox-backup-manager acl list --output-format json 2>/dev/null | jq -r --arg token "$token" '.[] | select(.ugid == $token) | "  Path: \(.path)\n  Role: \(.roleid)"' || true)
+    else
+        # Fallback: Parse text output for this token
+        perms=""
+        while IFS= read -r line; do
+            if [[ "$line" =~ \|[[:space:]]*${token}[[:space:]]*\| ]]; then
+                path=$(echo "$line" | awk -F'|' '{print $2}' | tr -d ' ')
+                role=$(echo "$line" | awk -F'|' '{print $4}' | tr -d ' ')
+                if [[ -n "$path" ]] && [[ -n "$role" ]]; then
+                    perms="${perms}  Path: $path\n  Role: $role\n"
+                fi
+            fi
+        done < <(proxmox-backup-manager acl list 2>/dev/null || true)
+        perms=$(echo -e "$perms" | grep -v '^$' || true)
+    fi
     
     if [[ -z "$perms" ]]; then
         echo -e "  ${RED}✗${NC} No permissions found for this token"
