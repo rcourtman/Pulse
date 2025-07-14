@@ -363,7 +363,7 @@ class ConfigApi {
         // Update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
             // Handle empty values for fields that need to be cleared
-            if (key === 'ALLOWED_EMBED_ORIGINS' && value === '') {
+            if ((key === 'ALLOWED_EMBED_ORIGINS' || key === 'TRUST_PROXY') && value === '') {
                 existingConfig[key] = '';
                 return;
             }
