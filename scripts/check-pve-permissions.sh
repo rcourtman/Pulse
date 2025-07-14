@@ -6,6 +6,34 @@
 
 set -euo pipefail
 
+# Check if running interactively
+if [ -t 0 ]; then
+    INTERACTIVE=true
+else
+    INTERACTIVE=false
+fi
+
+# Parse command line arguments
+AUTO_FIX=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --fix|--auto-fix)
+            AUTO_FIX=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--fix|--auto-fix]"
+            echo "  --fix, --auto-fix  Automatically apply permission fixes without prompting"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -246,7 +274,45 @@ else
     echo "- With privsep=1 (Yes), set permissions on the USER"
     echo "- With privsep=0 (No), set permissions on the TOKEN"
     echo ""
-    echo "For detailed setup instructions, see the README."
+    
+    # Offer to apply fixes
+    APPLY_FIXES=false
+    
+    if [[ "$AUTO_FIX" == "true" ]]; then
+        echo -e "${YELLOW}Auto-fix mode enabled. Applying fixes...${NC}"
+        APPLY_FIXES=true
+    elif [[ "$INTERACTIVE" == "true" ]]; then
+        echo -e "${YELLOW}Would you like to apply these fixes automatically?${NC}"
+        echo "This will modify permissions on your Proxmox cluster."
+        read -p "Apply fixes? (y/N): " -n 1 -r
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            APPLY_FIXES=true
+        fi
+    else
+        echo -e "${YELLOW}Run with --fix flag to automatically apply these fixes${NC}"
+    fi
+    
+    if [[ "$APPLY_FIXES" == "true" ]]; then
+        echo -e "\n${BLUE}Applying permission fixes...${NC}"
+        
+        # Apply each fix
+        printf '%s\n' "${fixes_needed[@]}" | sort -u | while IFS= read -r fix; do
+            echo -e "\nExecuting: ${YELLOW}$fix${NC}"
+            if eval "$fix"; then
+                echo -e "${GREEN}✓ Success${NC}"
+            else
+                echo -e "${RED}✗ Failed to apply fix${NC}"
+            fi
+        done
+        
+        echo -e "\n${GREEN}Permission fixes have been applied!${NC}"
+        echo "Please restart Pulse to use the updated permissions."
+    else
+        echo -e "\n${BLUE}Skipping automatic fixes.${NC}"
+        echo "You can run the commands above manually when ready."
+    fi
 fi
 
 echo ""
