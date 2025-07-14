@@ -1010,6 +1010,46 @@ class MetricsHistory {
             nodeHistory.dataPoints.push(point);
         }
     }
+
+    // Export storage metrics for persistence
+    exportStorageMetrics(timeRangeMinutes = null) {
+        const result = {};
+        const cutoffTime = timeRangeMinutes ? Date.now() - (timeRangeMinutes * 60 * 1000) : 0;
+
+        for (const [storageId, storageHistory] of this.storageMetrics) {
+            const dataPoints = storageHistory.dataPoints
+                .toArray()
+                .filter(point => point && point.timestamp >= cutoffTime);
+            
+            if (dataPoints.length > 0) {
+                result[storageId] = dataPoints;
+            }
+        }
+
+        return result;
+    }
+
+    // Import storage metrics from persistence
+    importStorageMetrics(storageId, dataPoints) {
+        if (!dataPoints || dataPoints.length === 0) return;
+
+        if (!this.storageMetrics.has(storageId)) {
+            this.storageMetrics.set(storageId, {
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS)
+            });
+        }
+
+        const storageHistory = this.storageMetrics.get(storageId);
+        
+        // Sort by timestamp and add to buffer
+        const sortedPoints = dataPoints.sort((a, b) => a.timestamp - b.timestamp);
+        for (const point of sortedPoints) {
+            // Skip if point is too old
+            if (Date.now() - point.timestamp > HISTORY_RETENTION_MS) continue;
+            
+            storageHistory.dataPoints.push(point);
+        }
+    }
 }
 
 // Singleton instance

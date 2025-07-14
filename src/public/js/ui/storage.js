@@ -947,7 +947,6 @@ PulseApp.ui.storage = (() => {
         // Calculate data age in minutes
         const now = Date.now();
         const dataAgeMinutes = (now - oldestDataTime) / (1000 * 60);
-        console.log('[Storage] Data age in minutes:', dataAgeMinutes);
         
         // Check each time range
         const timeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');

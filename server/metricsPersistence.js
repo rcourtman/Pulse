@@ -21,12 +21,13 @@ class MetricsPersistence {
             
             // Get current data from metricsHistory
             const snapshot = {
-                version: 2, // Bumped for timezone support
+                version: 3, // Bumped for storage metrics support
                 timestamp: Date.now(),
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 timezoneOffset: new Date().getTimezoneOffset(), // Minutes offset from UTC
                 guests: {},
-                nodes: {}
+                nodes: {},
+                storage: {}
             };
 
             // Export guest metrics with downsampling
@@ -41,6 +42,12 @@ class MetricsPersistence {
                 snapshot.nodes[nodeId] = this.downsampleMetrics(metrics);
             }
 
+            // Export storage metrics with downsampling
+            const storageData = metricsHistory.exportStorageMetrics(this.maxRetentionHours * 60);
+            for (const [storageId, metrics] of Object.entries(storageData)) {
+                snapshot.storage[storageId] = this.downsampleMetrics(metrics);
+            }
+
             // Convert to JSON and compress
             const jsonData = JSON.stringify(snapshot);
             const compressed = await gzip(jsonData);
@@ -52,12 +59,13 @@ class MetricsPersistence {
             const stats = {
                 guests: Object.keys(snapshot.guests).length,
                 nodes: Object.keys(snapshot.nodes).length,
+                storage: Object.keys(snapshot.storage).length,
                 totalDataPoints: this.countDataPoints(snapshot),
                 sizeBytes: compressed.length,
                 elapsedMs
             };
 
-            console.log(`[MetricsPersistence] Snapshot saved: ${stats.guests} guests, ${stats.nodes} nodes, ${stats.totalDataPoints} points, ${(stats.sizeBytes / 1024).toFixed(1)}KB in ${stats.elapsedMs}ms`);
+            console.log(`[MetricsPersistence] Snapshot saved: ${stats.guests} guests, ${stats.nodes} nodes, ${stats.storage} storage, ${stats.totalDataPoints} points, ${(stats.sizeBytes / 1024).toFixed(1)}KB in ${stats.elapsedMs}ms`);
             return stats;
         } catch (error) {
             console.error('[MetricsPersistence] Failed to save snapshot:', error.message);
@@ -83,7 +91,7 @@ class MetricsPersistence {
             const snapshot = JSON.parse(jsonData.toString());
 
             // Handle version compatibility
-            if (snapshot.version !== 1 && snapshot.version !== 2) {
+            if (snapshot.version !== 1 && snapshot.version !== 2 && snapshot.version !== 3) {
                 throw new Error(`Unsupported snapshot version: ${snapshot.version}`);
             }
             
@@ -117,6 +125,7 @@ class MetricsPersistence {
             // Import data into metricsHistory
             let importedGuests = 0;
             let importedNodes = 0;
+            let importedStorage = 0;
             let totalPoints = 0;
 
             // Import guest metrics
@@ -137,12 +146,24 @@ class MetricsPersistence {
                 }
             }
 
+            // Import storage metrics (version 3+)
+            if (snapshot.version >= 3 && snapshot.storage) {
+                for (const [storageId, dataPoints] of Object.entries(snapshot.storage || {})) {
+                    if (dataPoints && dataPoints.length > 0) {
+                        metricsHistory.importStorageMetrics(storageId, dataPoints);
+                        importedStorage++;
+                        totalPoints += dataPoints.length;
+                    }
+                }
+            }
+
             const elapsedMs = Date.now() - startTime;
-            console.log(`[MetricsPersistence] Snapshot loaded: ${importedGuests} guests, ${importedNodes} nodes, ${totalPoints} points in ${elapsedMs}ms`);
+            console.log(`[MetricsPersistence] Snapshot loaded: ${importedGuests} guests, ${importedNodes} nodes, ${importedStorage} storage, ${totalPoints} points in ${elapsedMs}ms`);
 
             return {
                 guests: importedGuests,
                 nodes: importedNodes,
+                storage: importedStorage,
                 totalPoints,
                 ageHours,
                 elapsedMs
@@ -308,6 +329,9 @@ class MetricsPersistence {
             count += metrics.length;
         }
         for (const metrics of Object.values(snapshot.nodes || {})) {
+            count += metrics.length;
+        }
+        for (const metrics of Object.values(snapshot.storage || {})) {
             count += metrics.length;
         }
         return count;
