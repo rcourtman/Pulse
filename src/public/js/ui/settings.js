@@ -3778,7 +3778,7 @@ docker compose up -d</code></pre>
                         enabled: formData.get('WEBHOOK_ENABLED') === 'on'
                     };
                     
-                    const response = await fetch('/api/test-webhook', {
+                    const response = await fetch('/api/alerts/test-webhook', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -4031,7 +4031,7 @@ docker compose up -d</code></pre>
             
             // Send test webhook
             console.log('[Settings] Sending test webhook to:', formData.WEBHOOK_URL);
-            const response = await PulseApp.apiClient.post('/api/test-webhook', {
+            const response = await PulseApp.apiClient.post('/api/alerts/test-webhook', {
                 url: formData.WEBHOOK_URL
             });
             console.log('[Settings] Test webhook response:', response);
