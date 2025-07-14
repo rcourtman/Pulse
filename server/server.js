@@ -90,7 +90,7 @@ function createServer() {
             } else {
                 // Log rejected origins for debugging
                 logger.warn(`CORS: Rejected origin ${origin}`);
-                callback(new Error('Not allowed by CORS'));
+                callback(new Error('Not allowed by CORS. If using a reverse proxy, set PULSE_PUBLIC_URL environment variable to your proxy URL.'));
             }
         },
         credentials: true,

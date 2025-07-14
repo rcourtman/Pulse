@@ -6,10 +6,22 @@ This guide explains how to properly configure Pulse behind various reverse proxi
 
 Pulse supports deployment behind reverse proxies with proper configuration. The key requirements are:
 
-1. **Trust Proxy Settings** - Configure Pulse to trust X-Forwarded headers
-2. **Header Forwarding** - Ensure your proxy forwards necessary headers
-3. **WebSocket Support** - Enable WebSocket proxying for real-time updates
-4. **HTTPS Termination** - Handle SSL/TLS at the proxy level
+1. **CORS Configuration** - Set PULSE_PUBLIC_URL to avoid CORS errors
+2. **Trust Proxy Settings** - Configure Pulse to trust X-Forwarded headers
+3. **Header Forwarding** - Ensure your proxy forwards necessary headers
+4. **WebSocket Support** - Enable WebSocket proxying for real-time updates
+5. **HTTPS Termination** - Handle SSL/TLS at the proxy level
+
+## Important: CORS Configuration
+
+**When accessing Pulse through a reverse proxy with a different domain/port, you MUST set the `PULSE_PUBLIC_URL` environment variable:**
+
+```bash
+# In your .env file or Docker environment
+PULSE_PUBLIC_URL=https://pulse.yourdomain.com
+```
+
+Without this, you'll get **"Not allowed by CORS"** errors when trying to save configuration or use other API features. This is because the browser sends a different Origin header when accessing through the proxy.
 
 ## Configuration via Settings UI (Recommended)
 
@@ -92,16 +104,11 @@ pulse.example.com {
 }
 ```
 
-For advanced configuration with headers:
+That's it! Caddy automatically handles headers and WebSocket upgrades. Just remember to set:
 
-```caddyfile
-pulse.example.com {
-    reverse_proxy localhost:7655 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-}
+```bash
+# In your .env file
+PULSE_PUBLIC_URL=https://pulse.example.com
 ```
 
 ## Apache Configuration
@@ -184,6 +191,15 @@ backend pulse_back
 ```
 
 ## Common Issues and Solutions
+
+### Issue: "Not allowed by CORS" or "Failed to save configuration: Internal server error"
+
+**Cause**: CORS policy is blocking API requests when accessing through a reverse proxy.
+
+**Solution**: Set the `PULSE_PUBLIC_URL` environment variable to your proxy URL:
+```bash
+PULSE_PUBLIC_URL=https://pulse.yourdomain.com
+```
 
 ### Issue: "Failed to save configuration: Invalid CSRF token"
 
