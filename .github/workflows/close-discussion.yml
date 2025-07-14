@@ -12,7 +12,7 @@ permissions:
 jobs:
   close-discussion:
     if: github.repository == 'community-scripts/ProxmoxVE'
-    runs-on: runner-cluster-htl-set
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
