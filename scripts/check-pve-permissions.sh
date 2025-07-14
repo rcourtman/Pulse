@@ -3,6 +3,9 @@
 # Pulse Permission Checker for Proxmox VE
 # This script helps diagnose permission issues for Pulse monitoring
 # Run on any Proxmox VE node in your cluster
+#
+# This script is provided "as is" without warranty of any kind.
+# Use at your own risk. Always review changes before applying to production.
 
 set -euo pipefail
 
@@ -45,13 +48,12 @@ echo -e "${BLUE}=== Pulse Permission Troubleshooter for Proxmox VE ===${NC}"
 echo "This script helps diagnose storage permission issues for Pulse monitoring"
 echo "Version: 1.0"
 echo ""
-echo -e "${YELLOW}DISCLAIMER:${NC} This script will:"
-echo "  • Read your Proxmox user and token configuration"
-echo "  • Test permissions by attempting to access storage"
-echo "  • Optionally modify ACL permissions if you choose"
+echo -e "${YELLOW}This diagnostic tool will:${NC}"
+echo "  • Check your API token permissions"
+echo "  • Identify what's missing for Pulse monitoring"
+echo "  • Offer to fix issues (with your approval)"
 echo ""
-echo "This script is provided as-is for diagnostic purposes."
-echo "Always review commands before running them in production."
+echo "By using this script, you acknowledge it's provided as-is without warranty."
 echo ""
 
 # Check if running on PVE
