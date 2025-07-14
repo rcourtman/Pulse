@@ -37,7 +37,6 @@ const ENDPOINT_SECURITY = {
     'GET /api/health': SECURITY_LEVELS.PUBLIC,
     'HEAD /api/health': SECURITY_LEVELS.PUBLIC,
     'GET /diagnostics.html': SECURITY_LEVELS.PUBLIC,
-    'GET /setup.html': SECURITY_LEVELS.PUBLIC,
     
     // Read-only endpoints
     'GET /api/status': SECURITY_LEVELS.READ,
