@@ -174,6 +174,21 @@ PulseApp.charts = (() => {
         if (diffMinutes >= 60) {
             const hours = Math.floor(diffMinutes / 60);
             const minutes = diffMinutes % 60;
+            
+            // Convert to days if >= 24 hours
+            if (hours >= 24) {
+                const days = Math.floor(hours / 24);
+                const remainingHours = hours % 24;
+                
+                if (remainingHours > 0) {
+                    return `${days}d ${remainingHours}h ${minutes}m ago`;
+                } else if (minutes > 0) {
+                    return `${days}d ${minutes}m ago`;
+                } else {
+                    return `${days}d ago`;
+                }
+            }
+            
             return `${hours}h ${minutes}m ago`;
         } else if (diffMinutes > 0) {
             // Show minutes and seconds
