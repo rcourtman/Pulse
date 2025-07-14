@@ -65,6 +65,13 @@ SESSION_SECRET=your-random-session-secret
 # Session timeout in hours (default: 24)
 SESSION_TIMEOUT_HOURS=24
 
+# CSRF Protection is automatic in private mode
+# No configuration needed - it's always enabled for security
+
+# Trust proxy configuration (for reverse proxy setups)
+# Set to '1' for single proxy, 'true' for all proxies
+TRUST_PROXY=false
+
 # Enable audit logging
 AUDIT_LOG=true
 ```
@@ -94,9 +101,17 @@ LOCKOUT_DURATION=900000  # 15 minutes in ms
 - SameSite protection
 - Configurable session timeout
 
+### CSRF Protection
+In Private mode, Pulse implements CSRF protection using a double-submit cookie pattern:
+- Tokens are automatically generated for authenticated sessions
+- Required for all state-changing operations (POST, PUT, DELETE)
+- Tokens included in response headers and login responses
+- API integrations using Basic Auth are exempt
+
 ### Brute Force Protection
 - Account lockout after failed attempts
 - Configurable attempt limits and lockout duration
+- Rate limiting on authentication endpoints
 
 ### Audit Logging
 When enabled (`AUDIT_LOG=true`), Pulse logs:
@@ -104,6 +119,8 @@ When enabled (`AUDIT_LOG=true`), Pulse logs:
 - Configuration changes
 - Service restarts
 - Security mode changes
+- CSRF validation failures
+- Failed authorization attempts
 
 ## Best Practices
 
@@ -115,10 +132,11 @@ When enabled (`AUDIT_LOG=true`), Pulse logs:
 ### For Any Other Environment
 1. **Always use Private mode** - Authentication should be required
 2. **Strong passwords** - Use a password manager
-3. **HTTPS recommended** - Use a reverse proxy with SSL certificates:
+3. **Configure trust proxy** - Set `TRUST_PROXY=1` when behind a reverse proxy
+4. **HTTPS required** - Use a reverse proxy with SSL certificates:
 
 ```nginx
-# nginx example
+# nginx example with proper headers
 server {
     listen 443 ssl;
     server_name pulse.example.com;
@@ -130,9 +148,18 @@ server {
         proxy_pass http://localhost:7655;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 ```
+
+Remember to set `TRUST_PROXY=1` in your Pulse configuration when using this setup.
 
 ## Common Scenarios
 
@@ -176,21 +203,32 @@ A: Pulse is designed to be simple. For multi-user setups, use a reverse proxy wi
 
 **Q: Can I access Pulse remotely?**  
 A: Yes, but we recommend:
-1. Use Private mode
+1. Use Private mode with CSRF protection
 2. Set up HTTPS via reverse proxy
-3. Consider using a VPN instead of direct exposure
+3. Configure `TRUST_PROXY` setting
+4. Consider using a VPN instead of direct exposure
+
+**Q: What is CSRF protection?**  
+A: CSRF (Cross-Site Request Forgery) protection prevents malicious websites from making unauthorized requests on behalf of authenticated users. Pulse uses a double-submit cookie pattern that requires a secret token for all state-changing operations.
+
+**Q: When should I configure TRUST_PROXY?**  
+A: Set `TRUST_PROXY=1` when Pulse is behind a single reverse proxy (most common). This ensures correct client IP logging, HTTPS detection, and proper session security. For multiple proxies, set the number of proxies or specific IPs to trust.
 
 ## Security Hardening Checklist
 
 For production use:
 - [ ] Set `SECURITY_MODE=private`
 - [ ] Configure strong `ADMIN_PASSWORD`
-- [ ] Generate random `SESSION_SECRET`
+- [ ] Generate random `SESSION_SECRET` (64+ characters)
 - [ ] Enable `AUDIT_LOG=true`
-- [ ] Use HTTPS (reverse proxy)
+- [ ] Use HTTPS via reverse proxy
+- [ ] Configure `TRUST_PROXY` appropriately
+- [ ] Verify CSRF protection is enabled
 - [ ] Configure firewall rules
 - [ ] Set appropriate `SESSION_TIMEOUT_HOURS`
 - [ ] Monitor audit logs
+- [ ] Review and adjust rate limits if needed
+- [ ] Test authentication and CSRF protection
 
 ## Support
 

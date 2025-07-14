@@ -248,6 +248,14 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
+            
+            // Ensure embed origins field visibility matches checkbox state
+            setTimeout(() => {
+                const embedCheckbox = document.querySelector('input[name="ALLOW_EMBEDDING"]');
+                if (embedCheckbox) {
+                    updateEmbedOriginVisibility(embedCheckbox.checked);
+                }
+            }, 100);
         }
     }
 
@@ -701,12 +709,12 @@ PulseApp.ui.settings = (() => {
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="ALLOW_EMBEDDING" value="true"
                                    ${advanced.allowEmbedding === true ? 'checked' : ''}
+                                   onchange="PulseApp.ui.settings.updateEmbedOriginVisibility(this.checked)"
                                    class="sr-only peer">
                             <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                         </label>
                     </div>
-                    ${advanced.allowEmbedding === true ? `
-                    <div class="mt-4">
+                    <div id="embedOriginsContainer" class="mt-4" style="${advanced.allowEmbedding === true ? '' : 'display: none;'}">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Allowed Embed Origins
                         </label>
@@ -718,7 +726,6 @@ PulseApp.ui.settings = (() => {
                             Comma-separated list of origins allowed to embed Pulse. Leave empty for same-origin only.
                         </p>
                     </div>
-                    ` : ''}
                     <div class="mt-2 space-y-1">
                         <p class="text-xs text-gray-500 dark:text-gray-400">
                             <strong>Security Note:</strong> Enabling this allows Pulse to be embedded in iframes. Only enable if you trust the embedding applications.
@@ -732,6 +739,50 @@ PulseApp.ui.settings = (() => {
                                 View embedding documentation →
                             </a>
                         </p>
+                    </div>
+                </div>
+                
+                <!-- Reverse Proxy Settings -->
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Reverse Proxy Configuration</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Trust Proxy
+                            </label>
+                            <select name="TRUST_PROXY" 
+                                    onchange="PulseApp.ui.settings.updateTrustProxyVisibility(this.value)"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200 text-sm">
+                                <option value="">Disabled (Direct connection)</option>
+                                <option value="true" ${advanced.trustProxy === 'true' ? 'selected' : ''}>Trust all proxies</option>
+                                <option value="1" ${advanced.trustProxy === '1' ? 'selected' : ''}>Trust 1 proxy from front</option>
+                                <option value="2" ${advanced.trustProxy === '2' ? 'selected' : ''}>Trust 2 proxies from front</option>
+                                <option value="custom" ${advanced.trustProxy && !['true', '1', '2', ''].includes(advanced.trustProxy) ? 'selected' : ''}>Custom IP list</option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Configure if Pulse is behind a reverse proxy (Nginx, Caddy, Traefik, etc.)
+                            </p>
+                        </div>
+                        
+                        <div id="trustProxyCustom" style="${advanced.trustProxy && !['true', '1', '2', ''].includes(advanced.trustProxy) ? '' : 'display: none;'}">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Trusted Proxy IPs
+                            </label>
+                            <input type="text" name="TRUST_PROXY_CUSTOM" 
+                                   value="${advanced.trustProxy && !['true', '1', '2', ''].includes(advanced.trustProxy) ? advanced.trustProxy : ''}"
+                                   placeholder="10.0.0.0/8, 172.16.0.0/12, 192.168.1.1"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200 text-sm">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Comma-separated list of trusted proxy IPs or subnets
+                            </p>
+                        </div>
+                        
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            <a href="https://github.com/rcourtman/Pulse/blob/main/docs/REVERSE_PROXY.md" target="_blank" rel="noopener noreferrer" 
+                               class="text-blue-600 dark:text-blue-400 hover:underline">
+                                View reverse proxy setup guide →
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1697,6 +1748,26 @@ PulseApp.ui.settings = (() => {
         // Trigger change tracking
         trackChanges();
     }
+    
+    function updateTrustProxyVisibility(value) {
+        const customDiv = document.getElementById('trustProxyCustom');
+        if (customDiv) {
+            customDiv.style.display = value === 'custom' ? 'block' : 'none';
+        }
+        
+        // Trigger change tracking
+        trackChanges();
+    }
+    
+    function updateEmbedOriginVisibility(isChecked) {
+        const container = document.getElementById('embedOriginsContainer');
+        if (container) {
+            container.style.display = isChecked ? 'block' : 'none';
+        }
+        
+        // Trigger change tracking
+        trackChanges();
+    }
 
     async function saveConfiguration() {
         const saveButton = document.getElementById('settings-save-button');
@@ -1768,8 +1839,10 @@ PulseApp.ui.settings = (() => {
                             const response = await fetch('/api/service/restart', {
                                 method: 'POST',
                                 headers: {
-                                    'Content-Type': 'application/json'
-                                }
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-Token': sessionStorage.getItem('csrfToken') || ''
+                                },
+                                body: JSON.stringify({ reason: reason })
                             });
                             
                             if (!response.ok) {
@@ -1868,6 +1941,17 @@ PulseApp.ui.settings = (() => {
                     // Handle special data-ms attribute for lockout duration
                     const input = form.querySelector(`[name="${name}"]`);
                     config[name] = input.getAttribute('data-ms') || (parseInt(value) * 60000).toString();
+                } else if (name === 'TRUST_PROXY' && value === 'custom') {
+                    // Handle custom trust proxy value
+                    const customValue = formData.get('TRUST_PROXY_CUSTOM');
+                    if (customValue && customValue.trim()) {
+                        config[name] = customValue.trim();
+                    } else {
+                        config[name] = '';
+                    }
+                } else if (name === 'TRUST_PROXY_CUSTOM') {
+                    // Skip this as it's handled above
+                    continue;
                 } else {
                     config[name] = value;
                 }
@@ -3405,8 +3489,14 @@ docker compose up -d</code></pre>
     async function _performDeleteThresholdConfiguration(endpointId, nodeId, vmid) {
         
         try {
+            // Get CSRF token for DELETE request
+            const csrfToken = sessionStorage.getItem('csrfToken') || '';
+            
             const response = await fetch(`/api/thresholds/${endpointId}/${nodeId}/${vmid}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-Token': csrfToken
+                }
             });
             
             const result = await response.json();
@@ -4091,6 +4181,8 @@ docker compose up -d</code></pre>
         validateTokenId,
         generateSessionSecret,
         updateSecurityOptionsVisibility,
+        updateTrustProxyVisibility,
+        updateEmbedOriginVisibility,
         onUpdateChannelChange,
         switchToRecommendedChannel,
         switchToChannel,

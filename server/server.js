@@ -13,6 +13,29 @@ function createServer() {
     const server = http.createServer(app);
     const logger = createLogger('Server');
     
+    // Configure proxy trust settings
+    const trustProxy = process.env.TRUST_PROXY || false;
+    if (trustProxy) {
+        // Trust proxy settings - can be boolean, number, or string
+        // true = trust all proxies
+        // false = trust no proxies (default)
+        // Number = trust n proxies from the front
+        // String = trust specific IPs/subnets (comma-separated)
+        if (trustProxy === 'true') {
+            app.set('trust proxy', true);
+            logger.info('[Server] Trusting all proxies');
+        } else if (!isNaN(trustProxy)) {
+            app.set('trust proxy', parseInt(trustProxy));
+            logger.info(`[Server] Trusting ${trustProxy} proxies from front`);
+        } else {
+            const trustedProxies = trustProxy.split(',').map(ip => ip.trim());
+            app.set('trust proxy', trustedProxies);
+            logger.info(`[Server] Trusting specific proxies: ${trustedProxies.join(', ')}`);
+        }
+    } else {
+        logger.info('[Server] Not trusting any proxies (direct connection mode)');
+    }
+    
     // Create rate limiters for different endpoint types
     const generalLimiter = createRateLimiter('default');
     const apiLimiter = createRateLimiter('api');

@@ -324,12 +324,17 @@ async function handleLogin(req, res) {
         
         res.cookie('pulse_session', sessionId, cookieOptions);
         
+        // Create CSRF token for this session
+        const csrf = require('./csrf');
+        const csrfToken = csrf.createCsrfToken(sessionId);
+        
         res.json({
             success: true,
             user: {
                 username: result.user.username,
                 role: result.user.role
-            }
+            },
+            csrfToken: csrfToken
         });
     } else {
         res.status(401).json({ error: result.error });
@@ -345,6 +350,10 @@ async function handleLogout(req, res) {
     const sessionId = req.cookies?.pulse_session;
     if (sessionId) {
         destroySession(sessionId);
+        
+        // Clean up CSRF token
+        const csrf = require('./csrf');
+        csrf.destroyCsrfToken(sessionId);
     }
     
     res.clearCookie('pulse_session');
