@@ -142,6 +142,11 @@
                     // Login successful
                     submitButton.textContent = 'Success! Redirecting...';
                     
+                    // Store CSRF token if provided
+                    if (data.csrfToken) {
+                        sessionStorage.setItem('csrfToken', data.csrfToken);
+                    }
+                    
                     // Redirect to original URL or home
                     const urlParams = new URLSearchParams(window.location.search);
                     const redirect = urlParams.get('redirect') || '/';

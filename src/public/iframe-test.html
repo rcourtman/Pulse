@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse Iframe Embedding Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .info-box {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status.enabled {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disabled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .iframe-container {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .code-block {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .settings-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .settings-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pulse Iframe Embedding Test Page</h1>
+        
+        <div class="info-box">
+            <h2>Current Configuration</h2>
+            <p><strong>Iframe Embedding Status:</strong> <span id="embedding-status" class="status">Checking...</span></p>
+            <p><strong>Current Origin:</strong> <code id="current-origin"></code></p>
+            <p><strong>Pulse URL:</strong> <code id="pulse-url"></code></p>
+            <p><strong>Security Mode:</strong> <span id="security-mode">Checking...</span></p>
+            <div id="allowed-origins" style="display:none;">
+                <p><strong>Allowed Origins:</strong> <code id="origins-list"></code></p>
+            </div>
+        </div>
+
+        <div id="config-warning" class="warning" style="display:none;">
+            <strong>Configuration Required:</strong> Iframe embedding is currently disabled. To enable it:
+            <ol>
+                <li>Go to Pulse Settings → Advanced Settings</li>
+                <li>Enable "Allow Iframe Embedding"</li>
+                <li>Add this origin to the allowed list: <code id="suggested-origin"></code></li>
+                <li>Save the configuration</li>
+            </ol>
+            <a href="/setup.html" class="settings-link">Go to Settings →</a>
+        </div>
+
+        <div id="auth-warning" class="warning" style="display:none;">
+            <strong>Authentication Required:</strong> Pulse is running in Private mode. You need to:
+            <ol>
+                <li>Login to Pulse first: <a href="/login.html" target="_blank">Login Page</a></li>
+                <li>Then refresh this test page</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3 class="test-title">Test 1: Basic Iframe Embedding</h3>
+            <div class="iframe-container">
+                <iframe id="basic-iframe" src="/" title="Pulse Dashboard"></iframe>
+            </div>
+            <p>Status: <span id="test1-status">Loading...</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3 class="test-title">Test 2: Cross-Origin Behavior</h3>
+            <button onclick="testCrossOrigin()">Test Cross-Origin Access</button>
+            <p>Result: <span id="cross-origin-result">Click button to test</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3 class="test-title">Test 3: API Access from Parent</h3>
+            <button onclick="testAPIAccess()">Test API Call</button>
+            <p>Result: <span id="api-result">Click button to test</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3 class="test-title">Configuration Examples</h3>
+            
+            <h4>Nginx Configuration</h4>
+            <div class="code-block">
+location / {
+    proxy_pass http://localhost:7655;
+    proxy_set_header X-Frame-Options ""; # Remove default header
+    proxy_hide_header X-Frame-Options;   # Hide upstream header
+}</div>
+
+            <h4>Environment Variables</h4>
+            <div class="code-block">
+ALLOW_EMBEDDING=true
+ALLOWED_EMBED_ORIGINS=http://localhost:7655,https://dashboard.example.com</div>
+        </div>
+    </div>
+
+    <script>
+        // Get current origin and Pulse URL
+        const currentOrigin = window.location.origin;
+        const pulseUrl = window.location.origin;
+        
+        document.getElementById('current-origin').textContent = currentOrigin;
+        document.getElementById('pulse-url').textContent = pulseUrl;
+        document.getElementById('suggested-origin').textContent = currentOrigin;
+
+        // Check embedding configuration
+        async function checkConfiguration() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                // Check if we can access the API
+                if (response.ok) {
+                    // Try to get config if authenticated
+                    try {
+                        const configResponse = await fetch('/api/config');
+                        if (configResponse.ok) {
+                            const config = await configResponse.json();
+                            
+                            const embeddingEnabled = config.advanced?.allowEmbedding === true;
+                            const allowedOrigins = config.advanced?.allowedEmbedOrigins || '';
+                            const securityMode = config.advanced?.security?.mode || 'private';
+                            
+                            document.getElementById('embedding-status').textContent = embeddingEnabled ? 'Enabled' : 'Disabled';
+                            document.getElementById('embedding-status').className = `status ${embeddingEnabled ? 'enabled' : 'disabled'}`;
+                            
+                            document.getElementById('security-mode').textContent = securityMode.charAt(0).toUpperCase() + securityMode.slice(1);
+                            
+                            if (embeddingEnabled && allowedOrigins) {
+                                document.getElementById('allowed-origins').style.display = 'block';
+                                document.getElementById('origins-list').textContent = allowedOrigins;
+                            }
+                            
+                            if (!embeddingEnabled) {
+                                document.getElementById('config-warning').style.display = 'block';
+                            }
+                            
+                            if (securityMode === 'private') {
+                                checkIframeAuth();
+                            }
+                        } else if (configResponse.status === 401) {
+                            document.getElementById('security-mode').textContent = 'Private (Not authenticated)';
+                            document.getElementById('auth-warning').style.display = 'block';
+                        }
+                    } catch (error) {
+                        console.log('Could not fetch config:', error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking configuration:', error);
+            }
+        }
+
+        // Check if iframe loaded successfully
+        function checkIframeStatus() {
+            const iframe = document.getElementById('basic-iframe');
+            const status = document.getElementById('test1-status');
+            
+            iframe.onload = function() {
+                try {
+                    // Try to access iframe content (will fail if cross-origin)
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (iframeDoc) {
+                        status.textContent = '✅ Loaded successfully';
+                        status.style.color = 'green';
+                    }
+                } catch (error) {
+                    // This is expected for cross-origin iframes
+                    status.textContent = '✅ Loaded (cross-origin restrictions apply)';
+                    status.style.color = 'green';
+                }
+            };
+            
+            iframe.onerror = function() {
+                status.textContent = '❌ Failed to load';
+                status.style.color = 'red';
+            };
+        }
+
+        // Test cross-origin access
+        function testCrossOrigin() {
+            const result = document.getElementById('cross-origin-result');
+            const iframe = document.getElementById('basic-iframe');
+            
+            try {
+                // Try to access iframe window
+                const iframeWindow = iframe.contentWindow;
+                const iframeLocation = iframeWindow.location.href;
+                result.textContent = '✅ Can access iframe (same-origin)';
+                result.style.color = 'green';
+            } catch (error) {
+                result.textContent = '🔒 Cross-origin restrictions active (expected)';
+                result.style.color = 'orange';
+            }
+        }
+
+        // Test API access
+        async function testAPIAccess() {
+            const result = document.getElementById('api-result');
+            
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    result.textContent = `✅ API accessible - Status: ${data.overall}`;
+                    result.style.color = 'green';
+                } else {
+                    result.textContent = `❌ API error - Status: ${response.status}`;
+                    result.style.color = 'red';
+                }
+            } catch (error) {
+                result.textContent = `❌ API error - ${error.message}`;
+                result.style.color = 'red';
+            }
+        }
+
+        // Check iframe authentication
+        async function checkIframeAuth() {
+            try {
+                const response = await fetch('/api/auth/me');
+                const data = await response.json();
+                
+                if (!data.authenticated) {
+                    document.getElementById('auth-warning').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error checking auth:', error);
+            }
+        }
+
+        // Initialize checks
+        checkConfiguration();
+        checkIframeStatus();
+
+        // Also listen for iframe security errors
+        window.addEventListener('message', function(event) {
+            console.log('Received message from iframe:', event);
+        });
+    </script>
+</body>
+</html>

@@ -98,7 +98,8 @@ class ConfigApi {
                         sessionTimeout: parseInt(config.SESSION_TIMEOUT_HOURS || '24', 10) * 3600000,
                         hasAdminPassword: !!config.ADMIN_PASSWORD,
                         hasSessionSecret: !!config.SESSION_SECRET
-                    }
+                    },
+                    trustProxy: config.TRUST_PROXY || ''
                 }
             };
             
@@ -247,6 +248,11 @@ class ConfigApi {
             }
             if (config.advanced.allowedEmbedOrigins !== undefined) {
                 existingConfig.ALLOWED_EMBED_ORIGINS = config.advanced.allowedEmbedOrigins;
+            }
+            
+            // Proxy settings
+            if (config.advanced.trustProxy !== undefined) {
+                existingConfig.TRUST_PROXY = config.advanced.trustProxy;
             }
             
             // Security settings

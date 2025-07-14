@@ -194,6 +194,20 @@ ADMIN_PASSWORD=your-secure-password
 SESSION_SECRET=random-64-char-string
 SESSION_TIMEOUT_HOURS=24        # Default: 24
 
+# CSRF Protection is automatically enabled in private mode
+# This is not user-configurable for security reasons
+
+# Trust Proxy Settings (for reverse proxy deployments)
+# false = trust no proxies (default)
+# true = trust all proxies
+# Number = trust n proxies from the front (e.g., 1)
+# String = trust specific IPs/subnets (comma-separated)
+TRUST_PROXY=false               # Default: false
+# Examples:
+# TRUST_PROXY=1                 # Trust 1 proxy (typical for single reverse proxy)
+# TRUST_PROXY=true              # Trust all proxies (use with caution)
+# TRUST_PROXY=192.168.1.1,10.0.0.0/8  # Trust specific IPs/subnets
+
 # Allow embedding in iframes (for dashboards)
 ALLOW_EMBEDDING=true            # Default: false
 
@@ -209,6 +223,11 @@ PULSE_PUSH_API_KEY=secure-random-key
 
 # Audit logging
 AUDIT_LOG=true                  # Default: true
+
+# Advanced Security Settings
+BCRYPT_ROUNDS=10                # Password hashing rounds (default: 10)
+MAX_LOGIN_ATTEMPTS=5            # Max failed login attempts (default: 5)
+LOCKOUT_DURATION=900000         # Account lockout duration in ms (default: 15 min)
 ```
 
 ## Iframe Embedding
@@ -270,14 +289,56 @@ Pulse supports two security modes:
    - No authentication required
    - Only use on fully trusted networks
    - Suitable for home labs with no external access
+   - CSRF protection is disabled in this mode
 
 2. **Private Mode** (`SECURITY_MODE=private`) - Default
    - Authentication required for all access
    - Username: `admin`
    - Password: Set via `ADMIN_PASSWORD` environment variable
    - Supports both web login and HTTP Basic Auth
+   - CSRF protection enabled by default
+   - Session management with configurable timeouts
+
+### CSRF Protection
+
+In Private mode, CSRF (Cross-Site Request Forgery) protection is enabled by default using a double-submit cookie pattern:
+
+- CSRF tokens are automatically generated for authenticated sessions
+- Tokens must be included in all state-changing requests (POST, PUT, DELETE)
+- The web UI automatically includes tokens in all API requests
+- API integrations using Basic Auth are exempt from CSRF checks
+
+### Trust Proxy Configuration
+
+When deploying Pulse behind a reverse proxy, configure the `TRUST_PROXY` setting:
+
+```env
+# For single reverse proxy (most common)
+TRUST_PROXY=1
+
+# For multiple proxies (e.g., CDN -> Load Balancer -> Nginx)
+TRUST_PROXY=2
+
+# Trust specific proxy IPs
+TRUST_PROXY=192.168.1.10,192.168.1.11
+```
+
+This ensures:
+- Correct client IP logging
+- Proper HTTPS detection
+- Accurate rate limiting
+- Secure session cookies work correctly
 
 For detailed security configuration, see the [Security Guide](../SECURITY.md).
+
+## Reverse Proxy Configuration
+
+For deploying Pulse behind a reverse proxy (Nginx, Caddy, Traefik, etc.), see the [Reverse Proxy Guide](REVERSE_PROXY.md).
+
+**Important**: When using a reverse proxy, remember to:
+1. Set `TRUST_PROXY` appropriately (usually `TRUST_PROXY=1`)
+2. Configure your proxy to forward the correct headers (X-Real-IP, X-Forwarded-For, etc.)
+3. Use HTTPS between clients and the proxy for security
 
 ## Security Best Practices
 
