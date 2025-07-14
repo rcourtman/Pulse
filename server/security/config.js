@@ -90,7 +90,7 @@ const SECURITY_HEADERS = {
 // Get security configuration from environment
 function getSecurityConfig() {
     return {
-        mode: process.env.SECURITY_MODE || SECURITY_MODES.PRIVATE,
+        mode: process.env.SECURITY_MODE || SECURITY_MODES.PUBLIC,
         sessionSecret: process.env.SESSION_SECRET,
         adminPassword: process.env.ADMIN_PASSWORD,
         bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '10', 10),
