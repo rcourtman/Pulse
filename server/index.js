@@ -19,6 +19,9 @@ const { SERVER_DEFAULTS, TIMEOUTS, UPDATE_INTERVALS, PERFORMANCE_THRESHOLDS, RET
 // Import the state manager FIRST
 const stateManager = require('./state');
 
+// Import security module
+const { initializeSecurity, shutdownAudit } = require('./security');
+
 // Import metrics history system
 const metricsHistory = require('./metricsHistory');
 
@@ -1085,6 +1088,14 @@ function setupEnvFileWatcher() {
 
 // --- Start the server ---
 async function startServer() {
+    // Initialize security
+    try {
+        await initializeSecurity();
+    } catch (error) {
+        console.error('[Security] Failed to initialize security:', error);
+        // Continue startup even if security fails in open mode
+    }
+    
     // Load persisted metrics before starting
     try {
         const loadResult = await metricsPersistence.loadSnapshot(metricsHistory);
@@ -1329,4 +1340,17 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown handlers
+process.on('SIGTERM', async () => {
+    console.log('[Server] SIGTERM received, shutting down gracefully...');
+    await shutdownAudit();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('[Server] SIGINT received, shutting down gracefully...');
+    await shutdownAudit();
+    process.exit(0);
+});
 

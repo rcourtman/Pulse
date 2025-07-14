@@ -5,6 +5,7 @@ const { loadConfiguration } = require('./configLoader');
 const { initializeApiClients } = require('./apiClients');
 const customThresholdManager = require('./customThresholds');
 const ValidationMiddleware = require('./middleware/validation');
+const { sanitizeConfig, audit } = require('./security');
 
 class ConfigApi {
     constructor() {
@@ -32,6 +33,7 @@ class ConfigApi {
             const config = await this.readEnvFile();
             const packageJson = require('../package.json');
             
+            
             // Build the response structure including all additional endpoints
             const response = {
                 version: packageJson.version,
@@ -40,12 +42,14 @@ class ConfigApi {
                     port: config.PROXMOX_PORT || '8006',
                     tokenId: config.PROXMOX_TOKEN_ID,
                     enabled: config.PROXMOX_ENABLED !== 'false',
+                    hasToken: !!config.PROXMOX_TOKEN_SECRET,
                     // Don't send the secret
                 } : null,
                 pbs: config.PBS_HOST ? {
                     host: config.PBS_HOST,
                     port: config.PBS_PORT || '8007',
                     tokenId: config.PBS_TOKEN_ID,
+                    hasToken: !!config.PBS_TOKEN_SECRET,
                     // Don't send the secret
                 } : null,
                 advanced: {
@@ -84,6 +88,16 @@ class ConfigApi {
                         to: config.ALERT_TO_EMAIL,
                         secure: config.SMTP_SECURE === 'true'
                         // Don't send password for security
+                    },
+                    security: {
+                        mode: config.SECURITY_MODE || 'private',
+                        auditLog: config.AUDIT_LOG === 'true',
+                        bcryptRounds: parseInt(config.BCRYPT_ROUNDS || '10', 10),
+                        maxLoginAttempts: parseInt(config.MAX_LOGIN_ATTEMPTS || '5', 10),
+                        lockoutDuration: parseInt(config.LOCKOUT_DURATION || '900000', 10),
+                        sessionTimeout: parseInt(config.SESSION_TIMEOUT_HOURS || '24', 10) * 3600000,
+                        hasAdminPassword: !!config.ADMIN_PASSWORD,
+                        hasSessionSecret: !!config.SESSION_SECRET
                     }
                 }
             };
@@ -234,6 +248,40 @@ class ConfigApi {
             if (config.advanced.allowedEmbedOrigins !== undefined) {
                 existingConfig.ALLOWED_EMBED_ORIGINS = config.advanced.allowedEmbedOrigins;
             }
+            
+            // Security settings
+            if (config.advanced.security) {
+                const security = config.advanced.security;
+                if (security.mode !== undefined) {
+                    existingConfig.SECURITY_MODE = security.mode;
+                }
+                if (security.auditLog !== undefined) {
+                    existingConfig.AUDIT_LOG = security.auditLog ? 'true' : 'false';
+                }
+                if (security.bcryptRounds !== undefined) {
+                    existingConfig.BCRYPT_ROUNDS = String(security.bcryptRounds);
+                }
+                if (security.maxLoginAttempts !== undefined) {
+                    existingConfig.MAX_LOGIN_ATTEMPTS = String(security.maxLoginAttempts);
+                }
+                if (security.lockoutDuration !== undefined) {
+                    existingConfig.LOCKOUT_DURATION = String(security.lockoutDuration);
+                }
+                // New session and cookie settings
+                if (security.sessionTimeout !== undefined) {
+                    // Convert from milliseconds to hours for storage
+                    existingConfig.SESSION_TIMEOUT_HOURS = String(Math.round(security.sessionTimeout / 3600000));
+                }
+                // Handle password changes specially
+                if (security.adminPassword && security.adminPassword !== '***CHANGE_ME***' && security.adminPassword !== '***REDACTED***') {
+                    const bcrypt = require('bcryptjs');
+                    const rounds = parseInt(existingConfig.BCRYPT_ROUNDS || '10', 10);
+                    existingConfig.ADMIN_PASSWORD = bcrypt.hashSync(security.adminPassword, rounds);
+                }
+                if (security.sessionSecret && security.sessionSecret !== '***GENERATE_ME***' && security.sessionSecret !== '***REDACTED***') {
+                    existingConfig.SESSION_SECRET = security.sessionSecret;
+                }
+            }
         }
     }
 
@@ -306,7 +354,19 @@ class ConfigApi {
         
         // Update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
+            // Handle empty values for fields that need to be cleared
+            if (key === 'ALLOWED_EMBED_ORIGINS' && value === '') {
+                existingConfig[key] = '';
+                return;
+            }
+            
             if (value !== undefined && value !== '') {
+                // CRITICAL: Never save redacted values - skip any redacted tokens/secrets
+                if (value === '***REDACTED***' || value === '[REDACTED]') {
+                    console.log(`[Config] Skipping redacted value for ${key}`);
+                    return; // Skip redacted values to preserve original
+                }
+                
                 // Special validation for UPDATE_CHANNEL
                 if (key === 'UPDATE_CHANNEL') {
                     const validChannels = ['stable', 'rc'];
@@ -315,7 +375,15 @@ class ConfigApi {
                         return; // Skip this invalid value
                     }
                 }
-                existingConfig[key] = value;
+                
+                // Handle password changes specially - hash before storing
+                if (key === 'ADMIN_PASSWORD' && value.trim() !== '') {
+                    const bcrypt = require('bcryptjs');
+                    const rounds = parseInt(existingConfig.BCRYPT_ROUNDS || config.BCRYPT_ROUNDS || '10', 10);
+                    existingConfig[key] = bcrypt.hashSync(value, rounds);
+                } else {
+                    existingConfig[key] = value;
+                }
             }
         });
         
@@ -347,6 +415,16 @@ class ConfigApi {
             const testPbsConfigs = [];
             const existingConfig = await this.readEnvFile();
             const failedEndpoints = [];
+            
+            console.log('[testConfig] Testing with config keys:', Object.keys(config).filter(k => k.includes('PROXMOX')));
+            console.log('[testConfig] Token values:', {
+                primary_id: config.PROXMOX_TOKEN_ID,
+                primary_secret_provided: !!config.PROXMOX_TOKEN_SECRET,
+                primary_secret_exists: !!existingConfig.PROXMOX_TOKEN_SECRET,
+                endpoint2_id: config.PROXMOX_TOKEN_ID_2,
+                endpoint2_secret_provided: !!config.PROXMOX_TOKEN_SECRET_2,
+                endpoint2_secret_exists: !!existingConfig.PROXMOX_TOKEN_SECRET_2
+            });
             
             // Handle both old structured format and new raw .env format
             if (config.proxmox) {
@@ -391,8 +469,16 @@ class ConfigApi {
                 
                 // Test primary PVE endpoint
                 if (config.PROXMOX_HOST && config.PROXMOX_TOKEN_ID) {
-                    const secret = config.PROXMOX_TOKEN_SECRET || existingConfig.PROXMOX_TOKEN_SECRET;
+                    // Handle empty token secret by using existing config
+                    const secret = (config.PROXMOX_TOKEN_SECRET && config.PROXMOX_TOKEN_SECRET.trim() !== '') 
+                        ? config.PROXMOX_TOKEN_SECRET 
+                        : existingConfig.PROXMOX_TOKEN_SECRET;
                     if (secret) {
+                        console.log(`[testConfig] Adding primary PVE endpoint:`);
+                        console.log(`  - Host: ${config.PROXMOX_HOST}`);
+                        console.log(`  - TokenID: ${config.PROXMOX_TOKEN_ID}`);
+                        console.log(`  - Secret from: ${config.PROXMOX_TOKEN_SECRET ? 'request' : 'existing config'}`);
+                        console.log(`  - Secret length: ${secret ? secret.length : 0}`);
                         testEndpoints.push({
                             id: 'test-primary',
                             name: 'Primary PVE',
@@ -403,6 +489,8 @@ class ConfigApi {
                             enabled: config.PROXMOX_ENABLED !== 'false',
                             allowSelfSignedCerts: true
                         });
+                    } else {
+                        console.log('[testConfig] No secret found for primary PVE endpoint');
                     }
                 }
                 
@@ -416,7 +504,11 @@ class ConfigApi {
                         const enabled = config[`PROXMOX_ENABLED_${index}`] !== 'false';
                         
                         if (host && tokenId && enabled) {
-                            const secret = config[`PROXMOX_TOKEN_SECRET_${index}`] || existingConfig[`PROXMOX_TOKEN_SECRET_${index}`];
+                            // Handle empty token secret by using existing config
+                            const secretKey = `PROXMOX_TOKEN_SECRET_${index}`;
+                            const secret = (config[secretKey] && config[secretKey].trim() !== '') 
+                                ? config[secretKey] 
+                                : existingConfig[secretKey];
                             if (secret) {
                                 testEndpoints.push({
                                     id: `test-endpoint-${index}`,
@@ -527,9 +619,12 @@ class ConfigApi {
                 try {
                     const client = apiClients[endpoint.id];
                     if (client) {
+                        console.log(`[testConfig] Testing ${endpoint.name} with token: ${endpoint.tokenId}=<hidden>`);
                         await client.client.get('/nodes');
+                        console.log(`[testConfig] ${endpoint.name} test successful`);
                     }
                 } catch (error) {
+                    console.error(`[testConfig] ${endpoint.name} test failed:`, error.response?.status, error.response?.data || error.message);
                     failedEndpoints.push(`${endpoint.name}: ${error.message}`);
                 }
             }
@@ -891,7 +986,15 @@ class ConfigApi {
         app.get('/api/config', async (req, res) => {
             try {
                 const config = await this.getConfig();
-                res.json(config);
+                
+                // Audit log
+                if (req.auth?.user) {
+                    audit.configRead(req.auth.user, req);
+                }
+                
+                // Sanitize sensitive data
+                const sanitized = sanitizeConfig(config);
+                res.json(sanitized);
             } catch (error) {
                 res.status(500).json({ error: 'Failed to read configuration' });
             }
@@ -901,6 +1004,12 @@ class ConfigApi {
         app.post('/api/config', async (req, res) => {
             try {
                 const result = await this.saveConfig(req.body);
+                
+                // Audit log
+                if (req.auth?.user) {
+                    audit.configChanged(req.body, req.auth.user, req);
+                }
+                
                 res.json({ success: true });
             } catch (error) {
                 console.error('[API /api/config] Error:', error);
@@ -914,12 +1023,23 @@ class ConfigApi {
         // Test configuration
         app.post('/api/config/test', async (req, res) => {
             try {
+                console.log('[API /api/config/test] Request body type:', typeof req.body);
+                console.log('[API /api/config/test] Request body keys:', Object.keys(req.body || {}));
+                
+                // Log specific values to debug
+                console.log('[API /api/config/test] Token IDs received:', {
+                    primary: req.body.PROXMOX_TOKEN_ID,
+                    endpoint2: req.body.PROXMOX_TOKEN_ID_2
+                });
+                
                 const result = await this.testConfig(req.body);
                 res.json(result);
             } catch (error) {
+                console.error('[API /api/config/test] Error:', error);
                 res.status(500).json({ 
                     success: false, 
-                    error: error.message || 'Failed to test configuration' 
+                    error: 'Internal server error',
+                    message: error.message || 'Failed to test configuration' 
                 });
             }
         });
