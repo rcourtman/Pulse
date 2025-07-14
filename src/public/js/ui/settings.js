@@ -835,11 +835,11 @@ PulseApp.ui.settings = (() => {
                     <select name="SECURITY_MODE" 
                             onchange="PulseApp.ui.settings.updateSecurityOptionsVisibility(this.value)"
                             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-200 text-sm">
-                        <option value="public" ${advanced.security?.mode === 'public' || advanced.security?.mode === 'open' ? 'selected' : ''}>
+                        <option value="public" ${(!advanced.security?.mode || advanced.security?.mode === 'public' || advanced.security?.mode === 'open') ? 'selected' : ''}>
                             Public - No authentication (trusted networks only)
                         </option>
-                        <option value="private" ${(!advanced.security?.mode || advanced.security?.mode === 'private' || advanced.security?.mode === 'secure' || advanced.security?.mode === 'strict') ? 'selected' : ''}>
-                            Private - Authentication required (default)
+                        <option value="private" ${(advanced.security?.mode === 'private' || advanced.security?.mode === 'secure' || advanced.security?.mode === 'strict') ? 'selected' : ''}>
+                            Private - Authentication required
                         </option>
                     </select>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -848,7 +848,7 @@ PulseApp.ui.settings = (() => {
                 </div>
 
                 <!-- Security options container - visibility controlled by JavaScript -->
-                <div id="security-options-container" style="display: ${(advanced.security?.mode === 'public' || advanced.security?.mode === 'open') ? 'none' : 'block'}">
+                <div id="security-options-container" style="display: ${(!advanced.security?.mode || advanced.security?.mode === 'public' || advanced.security?.mode === 'open') ? 'none' : 'block'}">
                 <!-- Admin Password -->
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
