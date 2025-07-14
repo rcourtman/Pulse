@@ -266,15 +266,6 @@ function createServer() {
         });
     });
 
-    app.get('/setup.html', (req, res) => {
-        const setupPath = path.join(publicDir, 'setup.html');
-        res.sendFile(setupPath, (err) => {
-            if (err) {
-                logger.error(`Error sending setup.html: ${err.message}`);
-                res.status(err.status || 500).send('Internal Server Error loading setup page.');
-            }
-        });
-    });
 
     return { app, server };
 }

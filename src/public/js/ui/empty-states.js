@@ -79,7 +79,7 @@ PulseApp.ui.emptyStates = (() => {
                 message: 'Pulse needs to be configured with your Proxmox credentials before it can start monitoring.',
                 actions: [{
                     text: 'Configure Now',
-                    onclick: 'window.location.href="/setup.html"'
+                    onclick: 'window.location.href="/"'
                 }]
             }
         };
