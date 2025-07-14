@@ -21,7 +21,14 @@ This tool automatically checks:
 
 **Cause:** Missing API token permissions (90% of cases)
 
-**Solution:**
+**Quick Check:**
+```bash
+# Use Pulse's automated permission checker
+cd /opt/pulse
+./scripts/check-pve-permissions.sh
+```
+
+**Manual Solution:**
 ```bash
 # Check if token has permissions
 pveum user permissions user@pam!token
@@ -39,11 +46,20 @@ pveum acl modify / --users user@pam --roles PVEAuditor
 
 **PVE Backups Missing:**
 ```bash
-# Need additional permission for storage
+# Quick check with permission script
+cd /opt/pulse
+./scripts/check-pve-permissions.sh
+
+# Manual fix - need additional permission for storage
 pveum acl modify /storage --users user@pam --roles PVEDatastoreAdmin
 ```
 
 **PBS Backups Missing:**
+```bash
+# Quick check with permission script
+cd /opt/pulse
+./scripts/check-pbs-permissions.sh
+```
 - Verify PBS connection is configured in settings
 - Check PBS permissions: `DatastoreAudit` on `/datastore`
 
@@ -94,6 +110,38 @@ cat /var/log/pulse_update.log
 ## Detailed Troubleshooting
 
 ### Permission Issues
+
+**Automated Permission Checking:**
+
+Pulse includes scripts to automatically verify API token permissions:
+
+**For Proxmox VE:**
+```bash
+# Run from Pulse installation directory
+cd /opt/pulse
+./scripts/check-pve-permissions.sh
+
+# Or specify token details directly
+./scripts/check-pve-permissions.sh --url https://proxmox:8006 \
+  --token-id user@pam!token --token-secret your-secret
+```
+
+**For Proxmox Backup Server:**
+```bash
+# Run from Pulse installation directory
+cd /opt/pulse
+./scripts/check-pbs-permissions.sh
+
+# Or specify token details directly
+./scripts/check-pbs-permissions.sh --url https://pbs:8007 \
+  --token-id user@pbs!token --token-secret your-secret
+```
+
+These scripts will:
+- ✓ Test API connectivity
+- ✓ Verify token authentication
+- ✓ Check all required permissions
+- ✓ Provide specific fixes for any issues found
 
 **Understanding Token Permissions:**
 
