@@ -186,9 +186,12 @@ for user in $users_with_tokens; do
             if [[ -n "$token" ]]; then
                 privsep=${token_info["$user!$token"]:-1}
                 
-                if [[ "$privsep" == "1" ]]; then
+                if [[ "$privsep" == "0" ]]; then
+                    # Privilege separation disabled: set on USER only
                     fixes_needed+=("pveum acl modify / --users $user --roles PVEAuditor")
                 else
+                    # Privilege separation enabled: set on BOTH user and token
+                    fixes_needed+=("pveum acl modify / --users $user --roles PVEAuditor")
                     fixes_needed+=("pveum acl modify / --tokens $user!$token --roles PVEAuditor")
                 fi
             fi
@@ -241,9 +244,12 @@ for user in $users_with_tokens; do
                 if [[ -n "$token" ]]; then
                     privsep=${token_info["$user!$token"]:-1}
                     
-                    if [[ "$privsep" == "1" ]]; then
+                    if [[ "$privsep" == "0" ]]; then
+                        # Privilege separation disabled: set on USER only
                         fixes_needed+=("pveum acl modify /storage/$storage --users $user --roles PVEDatastoreAdmin")
                     else
+                        # Privilege separation enabled: set on BOTH user and token
+                        fixes_needed+=("pveum acl modify /storage/$storage --users $user --roles PVEDatastoreAdmin")
                         fixes_needed+=("pveum acl modify /storage/$storage --tokens $user!$token --roles PVEDatastoreAdmin")
                     fi
                 fi
@@ -283,8 +289,10 @@ else
     echo "- PVEDatastoreAdmin on /storage is needed to view backup information"
     echo "  ${RED}Note:${NC} PVEDatastoreAdmin includes write permissions that Pulse doesn't use,"
     echo "  but it's the minimum role with the required 'Datastore.Allocate' permission"
-    echo "- With privsep=1 (Yes), set permissions on the USER"
-    echo "- With privsep=0 (No), set permissions on the TOKEN"
+    echo ""
+    echo -e "${YELLOW}Privilege Separation:${NC}"
+    echo "- With privsep=0 (No): Set permissions on USER only (recommended)"
+    echo "- With privsep=1 (Yes): Set permissions on BOTH user and token"
     echo ""
     
     # Offer to apply fixes
