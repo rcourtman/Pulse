@@ -45,6 +45,14 @@ echo -e "${BLUE}=== Pulse Permission Troubleshooter for Proxmox VE ===${NC}"
 echo "This script helps diagnose storage permission issues for Pulse monitoring"
 echo "Version: 1.0"
 echo ""
+echo -e "${YELLOW}DISCLAIMER:${NC} This script will:"
+echo "  • Read your Proxmox user and token configuration"
+echo "  • Test permissions by attempting to access storage"
+echo "  • Optionally modify ACL permissions if you choose"
+echo ""
+echo "This script is provided as-is for diagnostic purposes."
+echo "Always review commands before running them in production."
+echo ""
 
 # Check if running on PVE
 if ! command -v pveum &> /dev/null; then
@@ -283,7 +291,11 @@ else
         APPLY_FIXES=true
     elif [[ "$INTERACTIVE" == "true" ]]; then
         echo -e "${YELLOW}Would you like to apply these fixes automatically?${NC}"
-        echo "This will modify permissions on your Proxmox cluster."
+        echo "This will modify ACL permissions on your Proxmox cluster."
+        echo ""
+        echo -e "${RED}WARNING:${NC} Permission changes take effect immediately!"
+        echo "Ensure you understand the implications before proceeding."
+        echo ""
         read -p "Apply fixes? (y/N): " -n 1 -r
         echo ""
         
