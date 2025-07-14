@@ -82,6 +82,8 @@ For backup visibility, also add:
 proxmox-backup-manager user create pulse@pbs --password 'TempPass123'
 proxmox-backup-manager user generate-token pulse@pbs monitoring
 proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse@pbs!monitoring'
+
+# Note: PBS tokens always need explicit permissions (no privilege separation option)
 ```
 
 </details>
