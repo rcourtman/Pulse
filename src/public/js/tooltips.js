@@ -14,6 +14,15 @@ PulseApp.tooltips = (() => {
             console.warn('Element #slider-value-tooltip not found - slider values will not display on drag.');
             // Continue initialization for general tooltips even if slider tooltip is missing
         }
+        
+        // Reset tooltip state on init to ensure clean state
+        tooltipElement.classList.add('hidden', 'opacity-0');
+        tooltipElement.classList.remove('opacity-100');
+        tooltipElement.removeAttribute('data-programmatic');
+        tooltipElement.style.removeProperty('display');
+        tooltipElement.style.removeProperty('visibility');
+        tooltipElement.style.removeProperty('opacity');
+        tooltipElement.style.removeProperty('z-index');
 
         tooltipElement.classList.remove('duration-100');
         tooltipElement.classList.add('duration-50');
@@ -201,7 +210,11 @@ PulseApp.tooltips = (() => {
     function showTooltip(event, content) {
         if (!tooltipElement) {
             console.error('[Tooltip] tooltipElement is null');
-            return;
+            // Try to reinitialize if tooltip element is missing
+            tooltipElement = document.getElementById('custom-tooltip');
+            if (!tooltipElement) {
+                return;
+            }
         }
         
         // Mark as programmatic tooltip to prevent global handlers from interfering
@@ -216,6 +229,7 @@ PulseApp.tooltips = (() => {
         tooltipElement.style.setProperty('visibility', 'visible', 'important');
         tooltipElement.style.setProperty('opacity', '1', 'important');
         tooltipElement.style.setProperty('z-index', '9999', 'important');
+        tooltipElement.style.setProperty('pointer-events', 'none', 'important');
         
         // Set content and position AFTER making visible
         tooltipElement.innerHTML = content;
@@ -224,6 +238,10 @@ PulseApp.tooltips = (() => {
     }
 
     function hideTooltip() {
+        if (!tooltipElement) {
+            // Try to find tooltip element if reference is lost
+            tooltipElement = document.getElementById('custom-tooltip');
+        }
         if (tooltipElement) {
             tooltipElement.classList.add('hidden', 'opacity-0');
             tooltipElement.classList.remove('opacity-100');
@@ -232,7 +250,10 @@ PulseApp.tooltips = (() => {
             tooltipElement.style.removeProperty('visibility');
             tooltipElement.style.removeProperty('opacity');
             tooltipElement.style.removeProperty('z-index');
+            tooltipElement.style.removeProperty('pointer-events');
             tooltipElement.removeAttribute('data-programmatic');
+            // Clear content to prevent stale tooltips
+            tooltipElement.innerHTML = '';
         }
     }
 

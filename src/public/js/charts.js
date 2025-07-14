@@ -325,6 +325,9 @@ PulseApp.charts = (() => {
         overlay.setAttribute('class', 'chart-overlay');
         overlay.style.cursor = 'crosshair';
         overlay.style.pointerEvents = 'all'; // Ensure overlay can receive events
+        
+        // Ensure SVG container has proper pointer events
+        svg.style.pointerEvents = 'auto';
 
         // Shared function to show tooltip
         function showTooltipForPosition(event, clientX, clientY) {
@@ -387,10 +390,17 @@ PulseApp.charts = (() => {
         }
 
         overlay.addEventListener('mousemove', (event) => {
+            event.stopPropagation(); // Prevent event bubbling
             showTooltipForPosition(event, event.clientX, event.clientY);
         });
 
-        overlay.addEventListener('mouseenter', () => {
+        overlay.addEventListener('mouseenter', (event) => {
+            event.stopPropagation(); // Prevent event bubbling
+            // Force tooltip element to be ready
+            if (PulseApp.tooltips && !document.getElementById('custom-tooltip')) {
+                console.warn('[Charts] Tooltip element missing, attempting to reinitialize');
+                PulseApp.tooltips.init();
+            }
             // Change chart line color on hover based on theme
             const path = svg.querySelector('.chart-line');
             if (path) {
@@ -402,7 +412,8 @@ PulseApp.charts = (() => {
             }
         });
 
-        overlay.addEventListener('mouseleave', () => {
+        overlay.addEventListener('mouseleave', (event) => {
+            event.stopPropagation(); // Prevent event bubbling
             // Restore original color and hide tooltip
             const path = svg.querySelector('.chart-line');
             if (path) {
@@ -424,7 +435,12 @@ PulseApp.charts = (() => {
         // Touch events disabled for now - they interfere with scrolling
         // Charts will still work with mouse events on devices that support them
 
+        // Ensure overlay is added as the last child so it's on top
         svg.appendChild(overlay);
+        
+        // Force SVG to maintain proper stacking context
+        svg.style.position = 'relative';
+        svg.style.zIndex = '1';
         
         // Initialize with current data
         overlay._chartData = chartData.slice(); // Create a copy to avoid reference issues
@@ -726,6 +742,12 @@ PulseApp.charts = (() => {
         if (!chartDataCache) {
             showChartPlaceholders();
             return;
+        }
+        
+        // Ensure tooltip system is initialized when updating charts
+        if (PulseApp.tooltips && !document.getElementById('custom-tooltip')) {
+            console.warn('[Charts] Tooltip element missing during chart update, reinitializing');
+            PulseApp.tooltips.init();
         }
         
         if (immediate) {
