@@ -11,7 +11,7 @@ jobs:
   check-files:
     if: github.repository == 'community-scripts/ProxmoxVE'
     name: Check changed files
-    runs-on: runner-cluster-htl-set
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: write
 
