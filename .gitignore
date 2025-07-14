@@ -109,6 +109,7 @@ temp/
 docker-compose.zen.yml
 toggle-debug.html
 zen-mcp-server/
+test-proxy/
 
 # Temporary files
 CHANGELOG.md
