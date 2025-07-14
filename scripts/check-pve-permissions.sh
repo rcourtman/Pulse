@@ -279,6 +279,8 @@ else
     echo -e "${YELLOW}Important Notes:${NC}"
     echo "- PVEAuditor on / is REQUIRED for basic monitoring (VMs, containers, nodes)"
     echo "- PVEDatastoreAdmin on /storage is needed to view backup information"
+    echo "  ${RED}Note:${NC} PVEDatastoreAdmin includes write permissions that Pulse doesn't use,"
+    echo "  but it's the minimum role with the required 'Datastore.Allocate' permission"
     echo "- With privsep=1 (Yes), set permissions on the USER"
     echo "- With privsep=0 (No), set permissions on the TOKEN"
     echo ""
@@ -312,7 +314,8 @@ else
         # Apply each fix
         printf '%s\n' "${fixes_needed[@]}" | sort -u | while IFS= read -r fix; do
             echo -e "\nExecuting: ${YELLOW}$fix${NC}"
-            if eval "$fix"; then
+            # Use bash -c instead of eval for better safety
+            if bash -c "$fix"; then
                 echo -e "${GREEN}✓ Success${NC}"
             else
                 echo -e "${RED}✗ Failed to apply fix${NC}"

@@ -188,7 +188,8 @@ else
         # Apply each fix
         printf '%s\n' "${fixes_needed[@]}" | sort -u | while IFS= read -r fix; do
             echo -e "\nExecuting: ${YELLOW}$fix${NC}"
-            if eval "$fix"; then
+            # Use bash -c instead of eval for better safety
+            if bash -c "$fix"; then
                 echo -e "${GREEN}✓ Success${NC}"
             else
                 echo -e "${RED}✗ Failed to apply fix${NC}"
