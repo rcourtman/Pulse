@@ -46,9 +46,12 @@ pveum acl modify / --users user@pam --roles PVEAuditor
 
 **PVE Backups Missing:**
 ```bash
-# Quick check with permission script
+# Use Pulse's automated permission checker
 cd /opt/pulse
 ./scripts/check-pve-permissions.sh
+
+# Automatically fix permission issues
+./scripts/check-pve-permissions.sh --fix
 
 # Manual fix - need additional permission for storage
 pveum acl modify /storage --users user@pam --roles PVEDatastoreAdmin
@@ -56,9 +59,12 @@ pveum acl modify /storage --users user@pam --roles PVEDatastoreAdmin
 
 **PBS Backups Missing:**
 ```bash
-# Quick check with permission script
+# Use Pulse's automated permission checker
 cd /opt/pulse
 ./scripts/check-pbs-permissions.sh
+
+# Automatically fix permission issues (requires admin credentials)
+./scripts/check-pbs-permissions.sh --fix
 ```
 - Verify PBS connection is configured in settings
 - Check PBS permissions: `DatastoreAudit` on `/datastore`
@@ -113,7 +119,7 @@ cat /var/log/pulse_update.log
 
 **Automated Permission Checking:**
 
-Pulse includes scripts to automatically verify API token permissions:
+Pulse includes scripts to automatically verify and fix API token permissions:
 
 **For Proxmox VE:**
 ```bash
@@ -121,9 +127,16 @@ Pulse includes scripts to automatically verify API token permissions:
 cd /opt/pulse
 ./scripts/check-pve-permissions.sh
 
+# Automatically fix permission issues
+./scripts/check-pve-permissions.sh --fix
+
 # Or specify token details directly
 ./scripts/check-pve-permissions.sh --url https://proxmox:8006 \
   --token-id user@pam!token --token-secret your-secret
+
+# Specify token details with automatic fix
+./scripts/check-pve-permissions.sh --url https://proxmox:8006 \
+  --token-id user@pam!token --token-secret your-secret --fix
 ```
 
 **For Proxmox Backup Server:**
@@ -132,9 +145,17 @@ cd /opt/pulse
 cd /opt/pulse
 ./scripts/check-pbs-permissions.sh
 
+# Automatically fix permission issues (requires admin credentials)
+./scripts/check-pbs-permissions.sh --fix
+
 # Or specify token details directly
 ./scripts/check-pbs-permissions.sh --url https://pbs:8007 \
   --token-id user@pbs!token --token-secret your-secret
+
+# Specify token details with automatic fix
+./scripts/check-pbs-permissions.sh --url https://pbs:8007 \
+  --token-id user@pbs!token --token-secret your-secret --fix \
+  --admin-user admin@pbs --admin-password your-admin-password
 ```
 
 These scripts will:
@@ -142,6 +163,9 @@ These scripts will:
 - ✓ Verify token authentication
 - ✓ Check all required permissions
 - ✓ Provide specific fixes for any issues found
+- ✓ Automatically apply fixes with --fix flag
+- ✓ Work without jq installed (important for Docker environments)
+- ✓ Correctly parse and validate permissions
 
 **Understanding Token Permissions:**
 
