@@ -127,6 +127,10 @@ stateManager.init();
 const { createServer } = require('./server');
 const { app, server } = createServer();
 
+// Mount alerts router
+const alertsRouter = require('./routes/alerts');
+app.use('/api/alerts', alertsRouter);
+
 // State endpoint - returns current state data
 app.get('/api/state', (req, res) => {
     try {
@@ -353,7 +357,9 @@ app.get('/api/diagnostics', async (req, res) => {
     }
 });
 
-// Test email endpoint
+// Test email endpoint - MOVED TO routes/alerts.js
+// Commented out to avoid duplicate route conflict
+/*
 app.post('/api/test-email', async (req, res) => {
     try {
         const { host, port, user, pass, from, to, secure } = req.body;
@@ -385,6 +391,7 @@ app.post('/api/test-email', async (req, res) => {
         });
     }
 });
+*/
 
 // Get webhook status and configuration
 app.get('/api/webhook-status', (req, res) => {
@@ -854,28 +861,39 @@ function setupEnvFileWatcher() {
                     return;
                 }
                 
-                console.log('.env file changed, reloading configuration...');
+                console.log('.env file changed, triggering service restart...');
                 global.lastReloadTime = now;
                 
                 try {
-                    await configApi.reloadConfiguration();
-                    
-                    // Notify connected clients about configuration change
-                    io.emit('configurationReloaded', { 
-                        message: 'Configuration has been updated',
+                    // Notify connected clients about pending restart
+                    io.emit('serviceRestarting', { 
+                        message: 'Configuration changed, service is restarting...',
                         timestamp: Date.now()
                     });
                     
-                    console.log('Configuration reloaded successfully');
+                    // Use systemctl to restart the service
+                    const { exec } = require('child_process');
+                    exec('systemctl restart pulse', (error, stdout, stderr) => {
+                        if (error) {
+                            console.error('Failed to restart service:', error);
+                            // Fall back to configuration reload
+                            configApi.reloadConfiguration().catch(err => {
+                                console.error('Fallback reload also failed:', err);
+                            });
+                        } else {
+                            console.log('Service restart triggered successfully');
+                        }
+                    });
                 } catch (error) {
-                    console.error('Failed to reload configuration:', error);
+                    console.error('Failed to trigger restart:', error);
                     
-                    // Notify clients about the error
-                    io.emit('configurationError', {
-                        message: 'Failed to reload configuration',
-                        error: error.message,
-                        timestamp: Date.now()
-                    });
+                    // Fall back to configuration reload
+                    try {
+                        await configApi.reloadConfiguration();
+                        console.log('Fell back to configuration reload');
+                    } catch (reloadError) {
+                        console.error('Fallback reload also failed:', reloadError);
+                    }
                 }
             }, 1000); // Wait 1 second after last change before reloading
         }
