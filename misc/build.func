@@ -259,7 +259,7 @@ TAGS="${TAGS:-none}"
 ENABLE_FUSE="$ENABLE_FUSE"
 ENABLE_TUN="$ENABLE_TUN"
 EOF
-fi
+
       echo -e "${INFO}${BOLD}${GN}Writing configuration to ${FILEPATH}${CL}"
     else
       echo -e "${INFO}${BOLD}${RD}Configuration file already exists at ${FILEPATH}${CL}"
