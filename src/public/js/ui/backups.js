@@ -318,7 +318,7 @@ function renderUnifiedTable(skipTransition = false) {
     sortedGroups.forEach(([dateLabel, items]) => {
         html += `
             <tr class="bg-gray-50 dark:bg-gray-700/50">
-                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
+                <td class="sticky left-0 z-10 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 whitespace-nowrap">
                     ${dateLabel} (${items.length})
                 </td>
                 <td colspan="9" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>

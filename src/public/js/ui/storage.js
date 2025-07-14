@@ -1006,8 +1006,21 @@ PulseApp.ui.storage = (() => {
 
         // Initialize storage time range controls
         const storageTimeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
+        
+        // Restore saved time range preference
+        const savedTimeRange = localStorage.getItem('pulseStorageChartTimeRange');
+        if (savedTimeRange) {
+            const savedInput = document.querySelector(`input[name="storage-time-range"][value="${savedTimeRange}"]`);
+            if (savedInput && !savedInput.disabled) {
+                savedInput.checked = true;
+            }
+        }
+        
         storageTimeRangeInputs.forEach(input => {
             input.addEventListener('change', () => {
+                // Save the selected time range to localStorage
+                localStorage.setItem('pulseStorageChartTimeRange', input.value);
+                
                 // Only update charts if charts mode is active
                 const storageContainer = document.getElementById('storage');
                 if (storageContainer && storageContainer.classList.contains('charts-mode')) {
