@@ -264,10 +264,16 @@ router.post('/test-webhook', async (req, res) => {
                     alert: {
                         id: 'test-' + Date.now(),
                         rule: {
-                            name: 'Test Alert',
+                            name: 'Webhook Configuration Test',
                             description: 'This is a test webhook notification',
-                            severity: 'info'
+                            severity: 'info',
+                            metric: 'webhook'
                         },
+                        guest: {
+                            name: 'Test VM',
+                            node: 'test-node'
+                        },
+                        value: 100,
                         message: 'Webhook configuration test successful!'
                     },
                     test: true
