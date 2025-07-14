@@ -4,16 +4,24 @@ Enable monitoring of isolated PBS servers in 3 steps:
 
 ## 1. Enable Push Mode on Pulse
 
-In your Pulse container/LXC, add this to `/opt/pulse/config/.env`:
+### Option A: Via Settings UI (Recommended)
+
+1. Open Pulse Settings (⚙️ gear icon)
+2. Go to the **PBS** tab
+3. In the **PBS Push Mode Settings** section:
+   - Click **Generate** to create a secure API key
+   - Or enter your own secure key
+4. Click **Save Changes**
+
+### Option B: Manual Configuration
+
+If using Docker or need to set via environment variables:
 
 ```bash
 PULSE_PUSH_API_KEY=<generate-a-secure-key-here>
 ```
 
-Then restart Pulse:
-```bash
-systemctl restart pulse
-```
+Then restart Pulse if manually configured.
 
 ## 2. Install Agent on PBS Server
 

@@ -754,10 +754,10 @@ PulseApp.ui.settings = (() => {
                                     onchange="PulseApp.ui.settings.updateTrustProxyVisibility(this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200 text-sm">
                                 <option value="">Disabled (Direct connection)</option>
-                                <option value="true" ${advanced.trustProxy === 'true' ? 'selected' : ''}>Trust all proxies</option>
-                                <option value="1" ${advanced.trustProxy === '1' ? 'selected' : ''}>Trust 1 proxy from front</option>
-                                <option value="2" ${advanced.trustProxy === '2' ? 'selected' : ''}>Trust 2 proxies from front</option>
-                                <option value="custom" ${advanced.trustProxy && !['true', '1', '2', ''].includes(advanced.trustProxy) ? 'selected' : ''}>Custom IP list</option>
+                                <option value="true" ${advanced.trustProxy === 'true' ? 'selected' : ''}>Trust all proxies (⚠️ use with caution)</option>
+                                <option value="1" ${advanced.trustProxy === '1' ? 'selected' : ''}>Behind 1 proxy (e.g., Nginx, Caddy)</option>
+                                <option value="2" ${advanced.trustProxy === '2' ? 'selected' : ''}>Behind 2 proxies (e.g., Cloudflare + Nginx)</option>
+                                <option value="custom" ${advanced.trustProxy && !['true', '1', '2', ''].includes(advanced.trustProxy) ? 'selected' : ''}>Custom (specific IPs/subnets)</option>
                             </select>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 Configure if Pulse is behind a reverse proxy (Nginx, Caddy, Traefik, etc.)

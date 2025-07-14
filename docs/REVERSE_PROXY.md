@@ -11,21 +11,34 @@ Pulse supports deployment behind reverse proxies with proper configuration. The 
 3. **WebSocket Support** - Enable WebSocket proxying for real-time updates
 4. **HTTPS Termination** - Handle SSL/TLS at the proxy level
 
-## Environment Variables
+## Configuration via Settings UI (Recommended)
 
-Configure these environment variables in your `.env` file:
+**No manual file editing required!** Configure proxy settings through the Pulse UI:
+
+1. Click the **Settings** button (⚙️ gear icon) in Pulse
+2. Navigate to the **System/Advanced** tab
+3. Find the **Reverse Proxy Configuration** section
+4. Select your **Trust Proxy** setting:
+   - **Disabled (Direct connection)** - No reverse proxy
+   - **Behind 1 proxy** - Single proxy like Nginx, Caddy, or Apache
+   - **Behind 2 proxies** - CDN + proxy (e.g., Cloudflare + Nginx)
+   - **Trust all proxies** - ⚠️ Only use on fully trusted networks
+   - **Custom** - Specify exact IPs or subnets to trust
+5. Save your changes
+
+The UI automatically handles all configuration - no need to edit .env files!
+
+## Manual Configuration (Alternative)
+
+If you prefer environment variables or need to configure via Docker/deployment scripts:
 
 ```env
 # Trust proxy settings
-# Options:
-# - false (default) - Don't trust any proxies
-# - true - Trust all proxies (use with caution)
-# - 1,2,3... - Trust N proxies from the front
-# - "10.0.0.0/8,172.16.0.0/12" - Trust specific IPs/subnets
-TRUST_PROXY=1
-
-# Optional: Set if your proxy changes the public URL
-PULSE_PUBLIC_URL=https://pulse.example.com
+TRUST_PROXY=1  # For single proxy (most common)
+# or
+TRUST_PROXY=2  # For CDN + proxy setup
+# or
+TRUST_PROXY=10.0.0.0/8,172.16.0.0/12  # Custom IPs/subnets
 ```
 
 ## Nginx Configuration
