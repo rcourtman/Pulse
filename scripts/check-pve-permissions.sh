@@ -262,9 +262,34 @@ echo ""
 echo -e "${YELLOW}Step 5: Summary and Recommendations${NC}"
 echo "================================================"
 
+# Check if any tokens have privsep=1 and suggest simpler approach
+has_privsep_enabled=false
+privsep_tokens=""
+for user in $users_with_tokens; do
+    user_tokens=$(pveum user token list $user --output-format json 2>/dev/null | jq -r '.[] | select(.privsep == 1) | .tokenid' 2>/dev/null || true)
+    for token in $user_tokens; do
+        if [[ -n "$token" ]]; then
+            has_privsep_enabled=true
+            privsep_tokens="${privsep_tokens}  pveum user token remove $user $token\n  pveum user token add $user $token --privsep 0\n\n"
+        fi
+    done
+done
+
 if [[ $issues_found -eq 0 ]]; then
     echo -e "${GREEN}✓ No permission issues found!${NC}"
     echo ""
+    
+    if [[ "$has_privsep_enabled" == "true" ]]; then
+        echo -e "${YELLOW}Optional: Simplify Token Management${NC}"
+        echo "Some tokens have privilege separation enabled, which requires setting"
+        echo "permissions on both user and token. For easier management, consider"
+        echo "recreating them without privilege separation:"
+        echo ""
+        echo -e "$privsep_tokens"
+        echo "This way you only need to manage permissions on the user."
+        echo ""
+    fi
+    
     echo "Your Proxmox API tokens appear to have the correct permissions for accessing backup storage."
     echo "If you're still seeing warnings in Pulse, try:"
     echo "  1. Restart Pulse to refresh the data"
