@@ -7,6 +7,7 @@ const customThresholdManager = require('./customThresholds');
 const WebhookBatcher = require('./webhookBatcher');
 const alertPatches = require('./alertManagerPatches');
 const DebounceHandler = require('./debounceHandler');
+const EmailService = require('./emailService');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -102,7 +103,8 @@ class AlertManager extends EventEmitter {
         // Initialize custom threshold manager
         this.initializeCustomThresholds();
         
-        // Initialize email transporter
+        // Initialize email service
+        this.emailService = new EmailService();
         this.emailTransporter = null;
         this.emailConfig = null;
         this.initializeEmailTransporter();
@@ -725,7 +727,6 @@ class AlertManager extends EventEmitter {
         
         if ((existingStatus && (existingStatus.emailSent || existingStatus.webhookSent)) || 
             (alertHasEmailSent || alertHasWebhookSent)) {
-            console.log(`[AlertManager] Skipping notifications for alert ${alert.id} - already sent (map: email=${existingStatus?.emailSent}, webhook=${existingStatus?.webhookSent}, alert: email=${alertHasEmailSent}, webhook=${alertHasWebhookSent})`);
             return;
         }
         
@@ -741,7 +742,6 @@ class AlertManager extends EventEmitter {
             }
         }
         sendEmail = ruleEmailEnabled && !!this.emailTransporter;
-        console.log(`[AlertManager] Email check - ruleEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
         
         // For webhooks - check if webhook URL exists and if rule has webhooks enabled
         let ruleWebhookEnabled = false; // Default to false for webhooks
@@ -774,7 +774,6 @@ class AlertManager extends EventEmitter {
             const cooldownInfo = this.emailCooldowns.get(cooldownKey);
             const now = Date.now();
             
-            console.log(`[AlertManager] Email cooldown check for key: ${cooldownKey}`);
             console.log(`[AlertManager] Current cooldown info:`, cooldownInfo);
             
             // Use per-guest cooldown config if available, otherwise fall back to default
@@ -796,7 +795,6 @@ class AlertManager extends EventEmitter {
             
             if (cooldownInfo && now < cooldownInfo.cooldownUntil) {
                 const remainingMinutes = Math.ceil((cooldownInfo.cooldownUntil - now) / 60000);
-                console.log(`[AlertManager] Email cooldown active for alert ${alert.id} - ${remainingMinutes} minutes remaining`);
                 statusUpdate.emailSkipped = true;
                 statusUpdate.cooldownRemaining = remainingMinutes;
             } else {
@@ -816,7 +814,6 @@ class AlertManager extends EventEmitter {
                     } else if (now < cooldownInfo.debounceUntil) {
                         // Still in debounce period
                         const remainingSeconds = Math.ceil((cooldownInfo.debounceUntil - now) / 1000);
-                        console.log(`[AlertManager] Email debounce active for alert ${alert.id} - ${remainingSeconds} seconds remaining`);
                         statusUpdate.emailDebounced = true;
                         // Don't return early - still need to check webhook
                     }
@@ -825,23 +822,19 @@ class AlertManager extends EventEmitter {
                 const oneHourAgo = now - 3600000;
                 const recentEmails = cooldownInfo?.emailHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
                 if (recentEmails.length >= cooldownConfig.maxEmailsPerHour) {
-                    console.log(`[AlertManager] Rate limit reached for alert ${alert.id} - ${recentEmails.length} emails sent in last hour`);
                     statusUpdate.emailRateLimited = true;
                     // Don't return early - still need to check webhook
                 }
                 
                 // Only send email if not debounced or rate limited
                 if (!statusUpdate.emailDebounced && !statusUpdate.emailRateLimited) {
-                    console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
                     try {
                         if (this.emailBatchEnabled) {
                             // Add to email queue for batching
                             this.queueEmailNotification(alert);
-                            console.log(`[AlertManager] Email queued for alert ${alert.id}`);
                         } else {
                             // Send immediately
                             await this.sendDirectEmailNotification(alert);
-                            console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
                         }
                         
                         // Update cooldown tracking
@@ -858,7 +851,6 @@ class AlertManager extends EventEmitter {
                             debounceStarted: cooldownInfo?.debounceStarted || now
                         };
                         this.emailCooldowns.set(cooldownKey, cooldownData);
-                        console.log(`[AlertManager] Email cooldown set for key: ${cooldownKey}, cooldown until: ${new Date(cooldownData.cooldownUntil).toISOString()}`);
                         
                         statusUpdate.emailSent = true;
                         statusUpdate.channels.push('email');
@@ -869,7 +861,6 @@ class AlertManager extends EventEmitter {
                 }
             }
         } else {
-            console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
         }
         
         // Send webhook notification with cooldown check
@@ -1690,7 +1681,6 @@ class AlertManager extends EventEmitter {
         }
         
         if (emailCooldownsRemoved > 0) {
-            console.log(`[AlertManager] Cleaned up ${emailCooldownsRemoved} expired email cooldowns`);
         }
         if (webhookCooldownsRemoved > 0) {
             console.log(`[AlertManager] Cleaned up ${webhookCooldownsRemoved} expired webhook cooldowns`);
@@ -2563,7 +2553,6 @@ class AlertManager extends EventEmitter {
                 if (rule.type === 'per_guest_thresholds') {
                     if (rule.emailCooldowns) {
                         this.perGuestCooldownConfig = rule.emailCooldowns;
-                        console.log(`[AlertManager] Loaded email cooldown settings from per-guest thresholds rule:`, this.perGuestCooldownConfig);
                     }
                     if (rule.webhookCooldowns) {
                         // Store webhook cooldowns in the perGuestCooldownConfig object
@@ -2858,47 +2847,45 @@ class AlertManager extends EventEmitter {
             // Try to load config from config API first
             const config = await this.loadEmailConfig();
             
-            if (config.host || process.env.SMTP_HOST) {
-                const transporter = nodemailer.createTransport({
-                    host: config.host || process.env.SMTP_HOST,
-                    port: parseInt(config.port || process.env.SMTP_PORT) || 587,
-                    secure: config.secure || process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-                    requireTLS: true, // Force TLS encryption
-                    auth: {
-                        user: config.user || process.env.SMTP_USER,
-                        pass: config.pass || process.env.SMTP_PASS
-                    },
-                    tls: {
-                        // Do not fail on invalid certs
-                        rejectUnauthorized: false
-                    }
-                });
-                
-                // Make the transporter non-enumerable to prevent it from being serialized
+            // Initialize the new email service
+            const emailConfig = {
+                emailProvider: config.emailProvider || process.env.EMAIL_PROVIDER || 'smtp',
+                sendgridApiKey: config.sendgridApiKey || process.env.SENDGRID_API_KEY,
+                sendgridFromEmail: config.sendgridFromEmail || process.env.SENDGRID_FROM_EMAIL,
+                alertToEmail: config.to || process.env.ALERT_TO_EMAIL || process.env.SENDGRID_TO_EMAIL,
+                smtpHost: config.host || process.env.SMTP_HOST,
+                smtpPort: config.port || process.env.SMTP_PORT,
+                smtpSecure: config.secure || process.env.SMTP_SECURE === 'true',
+                smtpUser: config.user || process.env.SMTP_USER,
+                smtpPass: config.pass || process.env.SMTP_PASS,
+                alertFromEmail: config.from || process.env.ALERT_FROM_EMAIL
+            };
+            
+            await this.emailService.initialize(emailConfig);
+            
+            // Store email config for use in notifications
+            this.emailConfig = this.emailService.getConfig();
+            
+            // For backward compatibility, create emailTransporter property that delegates to emailService
+            if (this.emailService.getProvider()) {
                 Object.defineProperty(this, 'emailTransporter', {
-                    value: transporter,
+                    value: {
+                        sendMail: async (options) => {
+                            await this.emailService.sendMail(options);
+                        },
+                        close: () => {
+                            this.emailService.close();
+                        }
+                    },
                     writable: true,
                     enumerable: false,
                     configurable: true
                 });
                 
-                // Store email config for use in notifications
-                this.emailConfig = {
-                    from: config.from || process.env.ALERT_FROM_EMAIL,
-                    to: config.to || process.env.ALERT_TO_EMAIL
-                };
-                
-                console.log('[AlertManager] Email transporter initialized with config:', {
-                    host: config.host || process.env.SMTP_HOST,
-                    hasAuth: !!(config.user || process.env.SMTP_USER),
-                    from: this.emailConfig.from,
-                    to: this.emailConfig.to
-                });
             } else {
-                console.log('[AlertManager] SMTP not configured, email notifications disabled');
             }
         } catch (error) {
-            console.error('[AlertManager] Failed to initialize email transporter:', error);
+            console.error('[AlertManager] Failed to initialize email service:', error);
         }
     }
 
@@ -2906,7 +2893,6 @@ class AlertManager extends EventEmitter {
      * Reload email configuration (call this when settings change)
      */
     async reloadEmailConfiguration() {
-        console.log('[AlertManager] Reloading email configuration...');
         
         // Close existing transporter
         if (this.emailTransporter) {
@@ -3256,12 +3242,10 @@ class AlertManager extends EventEmitter {
         let valueDisplay, thresholdDisplay, metricDisplay;
         let metricsArray = null; // For bundled alerts
         
-        console.log(`[AlertManager] Email alert details - metric: ${alert.metric}, exceededMetrics: ${alert.exceededMetrics ? alert.exceededMetrics.length : 'undefined'}, rule.type: ${alert.rule?.type}`);
         console.log(`[AlertManager] Alert object keys:`, Object.keys(alert));
         console.log(`[AlertManager] Checking conditions - metric === 'bundled': ${alert.metric === 'bundled'}, exceededMetrics truthy: ${!!alert.exceededMetrics}`);
         
         if (alert.metric === 'bundled' && alert.exceededMetrics) {
-            console.log(`[AlertManager] Formatting bundled alert email with ${alert.exceededMetrics.length} exceeded metrics`);
             console.log(`[AlertManager] Exceeded metrics:`, JSON.stringify(alert.exceededMetrics));
             metricsArray = alert.exceededMetrics.map(m => {
                 const isPercentage = ['cpu', 'memory', 'disk'].includes(m.metricType);
@@ -3301,7 +3285,6 @@ class AlertManager extends EventEmitter {
             }
         } else {
             // Format single metric values
-            console.log(`[AlertManager] Formatting non-bundled alert email - rule type: ${alert.rule?.type}, metric: ${alert.rule?.metric}, alert.metric: ${alert.metric}`);
             // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
             const metric = alert.metric || alert.rule.metric;
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
@@ -3319,7 +3302,6 @@ class AlertManager extends EventEmitter {
         
         const subject = `🚨 Pulse Alert: ${alert.rule.name}`;
         
-        console.log(`[AlertManager] Final email values - metricDisplay: "${metricDisplay}", valueDisplay: "${valueDisplay}", thresholdDisplay: "${thresholdDisplay}"`);
         
         // Handle node vs guest alert data
         let alertData;
@@ -3416,7 +3398,6 @@ This alert was generated by Pulse monitoring system.
         };
 
         await this.emailTransporter.sendMail(mailOptions);
-        console.log(`[EMAIL] Alert sent to: ${recipients.join(', ')}`);
     }
     
     cleanup() {
@@ -3451,7 +3432,6 @@ This alert was generated by Pulse monitoring system.
      */
     queueEmailNotification(alert) {
         this.emailQueue.push(alert);
-        console.log(`[AlertManager] Email queued for alert ${alert.id}. Queue size: ${this.emailQueue.length}`);
         
         // Start or reset batch timer
         if (this.emailBatchTimeout) {
@@ -3469,7 +3449,6 @@ This alert was generated by Pulse monitoring system.
     async sendBatchedEmails() {
         if (this.emailQueue.length === 0) return;
         
-        console.log(`[AlertManager] Sending batched email for ${this.emailQueue.length} alerts`);
         
         try {
             if (this.emailQueue.length === 1) {
@@ -3579,12 +3558,10 @@ This alert was generated by Pulse monitoring system.
         };
         
         await this.emailTransporter.sendMail(mailOptions);
-        console.log(`[EMAIL] Summary alert sent to: ${recipients.join(', ')}`);
     }
 
     async sendTestEmail(customConfig = null) {
         try {
-            console.log('[AlertManager] Sending test email...');
             
             // If custom config is provided, use it to create a temporary transporter
             if (customConfig) {
@@ -3618,35 +3595,44 @@ This alert was generated by Pulse monitoring system.
 
     async sendTestEmailWithCustomTransporter(config) {
         try {
-            console.log('[AlertManager] Creating temporary transporter for test email...');
+            let { emailProvider, sendgridApiKey, host, port, user, pass, from, to, secure } = config;
             
-            const { host, port, user, pass, from, to, secure } = config;
-            
-            if (!host || !port || !user || !pass || !from || !to) {
-                return {
-                    success: false,
-                    error: 'All email fields are required for testing'
-                };
+            // Validate based on provider
+            if (emailProvider === 'sendgrid') {
+                if (!sendgridApiKey || !from || !to) {
+                    return {
+                        success: false,
+                        error: 'SendGrid API key and email addresses are required'
+                    };
+                }
+            } else {
+                // For SMTP, allow empty password (will use stored one)
+                if (!host || !port || !user || !from || !to) {
+                    return {
+                        success: false,
+                        error: 'All SMTP fields are required for testing (except password which can use stored value)'
+                    };
+                }
+                // If password is empty, we'll use the stored one
+                if (!pass) {
+                    pass = process.env.SMTP_PASS;
+                }
             }
             
-            // Create a temporary transporter for testing
-            const nodemailer = require('nodemailer');
-            const testTransporter = nodemailer.createTransport({
+            // Use the email service for testing
+            const testConfig = {
+                emailProvider: emailProvider || 'smtp',
+                sendgridApiKey: sendgridApiKey,
+                from: from,
+                to: to,
                 host: host,
-                port: parseInt(port),
-                secure: secure === true, // true for 465, false for other ports
-                requireTLS: true, // Force TLS encryption
-                auth: {
-                    user: user,
-                    pass: pass
-                },
-                tls: {
-                    // Do not fail on invalid certs for testing
-                    rejectUnauthorized: false
-                }
-            });
+                port: port,
+                secure: secure === true,
+                user: user,
+                pass: pass
+            };
             
-            // Use the unified email template
+            // Generate the proper test email HTML template
             const html = this.generateEmailTemplate({
                 type: 'test',
                 data: {
@@ -3657,32 +3643,67 @@ This alert was generated by Pulse monitoring system.
                     smtpHost: host,
                     smtpPort: port,
                     smtpSecure: secure,
+                    provider: emailProvider,
                     configSource: 'custom'
                 }
             });
+            
+            
+            // Send using email service with the template
+            if (emailProvider === 'sendgrid') {
+                const testSgMail = require('@sendgrid/mail');
+                testSgMail.setApiKey(sendgridApiKey);
+                
+                const response = await testSgMail.send({
+                    to: to,
+                    from: from,
+                    subject: '🧪 Pulse Alert System - Test Email',
+                    html: html,
+                    text: 'This is a test email from Pulse monitoring system. Your email configuration is working correctly!'
+                });
+                
+                return { success: true, provider: 'sendgrid' };
+            } else {
+                // For SMTP, send directly with the template
+                const nodemailer = require('nodemailer');
+                const testTransporter = nodemailer.createTransport({
+                    host: host,
+                    port: parseInt(port) || 587,
+                    secure: secure === true,
+                    requireTLS: true,
+                    auth: {
+                        user: user,
+                        pass: pass
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    }
+                });
 
-            const testMailOptions = {
-                from: from,
-                to: to,
-                subject: '🧪 Pulse Alert System - Test Email',
-                html: html
-            };
-            
-            await testTransporter.sendMail(testMailOptions);
-            testTransporter.close();
-            
-            console.log(`[AlertManager] Test email sent successfully to: ${to}`);
-            return { success: true };
+                await testTransporter.sendMail({
+                    from: from,
+                    to: to,
+                    subject: '🧪 Pulse Alert System - Test Email',
+                    html: html,
+                    text: 'This is a test email from Pulse monitoring system. Your email configuration is working correctly!'
+                });
+
+                testTransporter.close();
+                return { success: true, provider: 'smtp' };
+            }
             
         } catch (error) {
-            console.error('[AlertManager] Error sending test email with custom transporter:', error);
-            return { success: false, error: error.message };
+            console.error('[AlertManager] Error sending test email:', error);
+            if (error.response && emailProvider === 'sendgrid') {
+                console.error('[AlertManager] SendGrid error response:', error.response.body);
+                return { success: false, error: `SendGrid error: ${JSON.stringify(error.response.body)}` };
+            }
+            return { success: false, error: error.message || 'Unknown error occurred' };
         }
     }
 
     async sendTestEmailWithConfig(config) {
         try {
-            console.log('[AlertManager] Sending test email with provided config...');
             
             if (!this.emailTransporter) {
                 return { success: false, error: 'Email transporter not configured' };
@@ -3728,7 +3749,6 @@ Pulse Monitoring System`,
             };
 
             await this.emailTransporter.sendMail(testEmailOptions);
-            console.log('[AlertManager] Test email sent successfully');
             return { success: true };
             
         } catch (error) {
@@ -3930,7 +3950,6 @@ Pulse Monitoring System`,
 
     async sendTestAlertEmail({ alertName, testAlert, config }) {
         try {
-            console.log('[AlertManager] Sending test alert email...', { alertName });
             
             if (!this.emailTransporter) {
                 return { success: false, error: 'Email transporter not configured' };
@@ -3999,7 +4018,6 @@ Pulse Monitoring System`,
             };
 
             await this.emailTransporter.sendMail(testAlertEmailOptions);
-            console.log('[AlertManager] Test alert email sent successfully');
             return { success: true };
             
         } catch (error) {
@@ -4157,11 +4175,13 @@ Pulse Monitoring System`,
             const response = await axios.get(`http://localhost:${port}/api/config`);
             const config = response.data;
             
-            console.log('[AlertManager] Loading email config from API, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
             
             return {
+                emailProvider: config.EMAIL_PROVIDER,
+                sendgridApiKey: config.SENDGRID_API_KEY,
+                sendgridFromEmail: config.SENDGRID_FROM_EMAIL,
                 from: config.ALERT_FROM_EMAIL,
-                to: config.ALERT_TO_EMAIL,
+                to: config.ALERT_TO_EMAIL || config.SENDGRID_TO_EMAIL,
                 host: config.SMTP_HOST,
                 port: config.SMTP_PORT,
                 user: config.SMTP_USER,

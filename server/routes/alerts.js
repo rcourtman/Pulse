@@ -176,16 +176,26 @@ router.get('/groups', (req, res) => {
 // Test email configuration
 router.post('/test-email', async (req, res) => {
     try {
-        console.log('[Test Email] Sending test email...');
-        
-        const testResult = await stateManager.alertManager.sendTestEmail();
-        
-        if (testResult.success) {
-            console.log('[Test Email] Test email sent successfully');
-            res.json({ success: true, message: 'Test email sent successfully' });
+        // If body contains custom config, use sendTestEmailWithCustomTransporter
+        if (req.body && Object.keys(req.body).length > 0) {
+            const testResult = await stateManager.alertManager.sendTestEmailWithCustomTransporter(req.body);
+            
+            if (testResult.success) {
+                res.json({ success: true, message: `Test email sent successfully via ${testResult.provider}` });
+            } else {
+                console.error('[Test Email] Failed to send test email:', testResult.error);
+                res.status(400).json({ success: false, error: testResult.error || 'Failed to send test email' });
+            }
         } else {
-            console.error('[Test Email] Failed to send test email:', testResult.error);
-            res.status(400).json({ success: false, error: testResult.error || 'Failed to send test email' });
+            // Use existing configuration
+            const testResult = await stateManager.alertManager.sendTestEmail();
+            
+            if (testResult.success) {
+                res.json({ success: true, message: 'Test email sent successfully' });
+            } else {
+                console.error('[Test Email] Failed to send test email:', testResult.error);
+                res.status(400).json({ success: false, error: testResult.error || 'Failed to send test email' });
+            }
         }
     } catch (error) {
         console.error('[Test Email] Error sending test email:', error);
@@ -196,7 +206,6 @@ router.post('/test-email', async (req, res) => {
 // Test webhook endpoint
 router.post('/test-webhook', async (req, res) => {
     try {
-        console.log('[Test Webhook] Sending test webhook...');
         
         // Get webhook URL from request body or environment
         const webhookUrl = req.body?.url || process.env.WEBHOOK_URL;
@@ -289,7 +298,6 @@ router.post('/test-webhook', async (req, res) => {
                     }
                 });
                 
-                console.log(`[Test Webhook] Test webhook sent successfully to: ${webhookUrl} (${response.status})`);
                 res.json({ 
                     success: true, 
                     message: 'Test webhook sent successfully!',
@@ -317,7 +325,6 @@ router.post('/test-webhook', async (req, res) => {
             const testResult = await stateManager.alertManager.sendTestWebhook();
             
             if (testResult.success) {
-                console.log('[Test Webhook] Test webhook sent successfully');
                 res.json({ success: true, message: 'Test webhook sent successfully' });
             } else {
                 console.error('[Test Webhook] Failed to send test webhook:', testResult.error);
@@ -343,7 +350,6 @@ router.post('/test', async (req, res) => {
             return res.status(400).json({ success: false, error: 'At least one notification channel is required' });
         }
         
-        console.log('[Test Alert] Creating test alert notification...', { alertName, notificationChannels });
         
         // Transform thresholds to match AlertManager format
         const transformedThresholds = (activeThresholds || []).map(threshold => ({
