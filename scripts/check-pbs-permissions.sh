@@ -45,6 +45,14 @@ echo -e "${BLUE}=== Pulse Permission Troubleshooter for PBS ===${NC}"
 echo "This script helps diagnose permission issues for Pulse monitoring"
 echo "Version: 1.0"
 echo ""
+echo -e "${YELLOW}DISCLAIMER:${NC} This script will:"
+echo "  • Read your PBS user and token configuration"
+echo "  • Test permissions on datastores"
+echo "  • Optionally modify ACL permissions if you choose"
+echo ""
+echo "This script is provided as-is for diagnostic purposes."
+echo "Always review commands before running them in production."
+echo ""
 
 # Check if running on PBS
 if ! command -v proxmox-backup-manager &> /dev/null; then
@@ -159,7 +167,11 @@ else
         APPLY_FIXES=true
     elif [[ "$INTERACTIVE" == "true" ]]; then
         echo -e "${YELLOW}Would you like to apply these fixes automatically?${NC}"
-        echo "This will modify permissions on your PBS server."
+        echo "This will modify ACL permissions on your PBS server."
+        echo ""
+        echo -e "${RED}WARNING:${NC} Permission changes take effect immediately!"
+        echo "Ensure you understand the implications before proceeding."
+        echo ""
         read -p "Apply fixes? (y/N): " -n 1 -r
         echo ""
         
