@@ -1422,14 +1422,18 @@
               
               <!-- Storage View Toggle -->
               <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded flex-shrink-0 ml-2">
-                <input type="radio" id="storage-view-node" name="storage-view" value="node" class="hidden peer/node" checked>
-                <label for="storage-view-node" class="flex items-center justify-center px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/node:bg-blue-100 dark:peer-checked/node:bg-blue-800/50 peer-checked/node:text-blue-700 dark:peer-checked/node:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors rounded-l">
-                  <span>Node View</span>
+                <label class="relative">
+                  <input type="radio" id="storage-view-node" name="storage-view" value="node" class="hidden peer" checked>
+                  <span class="flex items-center justify-center px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors rounded-l">
+                    <span>Node View</span>
+                  </span>
                 </label>
                 
-                <input type="radio" id="storage-view-storage" name="storage-view" value="storage" class="hidden peer/storage">
-                <label for="storage-view-storage" class="flex items-center justify-center px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/storage:bg-blue-100 dark:peer-checked/storage:bg-blue-800/50 peer-checked/storage:text-blue-700 dark:peer-checked/storage:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors rounded-r">
-                  <span>Storage View</span>
+                <label class="relative">
+                  <input type="radio" id="storage-view-storage" name="storage-view" value="storage" class="hidden peer">
+                  <span class="flex items-center justify-center px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors rounded-r">
+                    <span>Storage View</span>
+                  </span>
                 </label>
               </div>
             </div>
