@@ -28,8 +28,11 @@ function update_script() {
     msg_error "No ${APP} Installation Found!"
     exit
   fi
-  RELEASE=$(curl -fsSL https://api.github.com/repos/Bubka/2FAuth/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
-  if [[ "${RELEASE}" != "$(cat ~/.2fauth 2>/dev/null || cat /opt/2fauth_version.txt 2>/dev/null)" ]]; then
+  if ! command -v jq &>/dev/null; then
+    $STD apt-get install -y jq
+  fi
+  RELEASE=$(curl -fsSL https://api.github.com/repos/Bubka/2FAuth/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+  if [[ "${RELEASE}" != "$(cat ~/.2fauth 2>/dev/null)" ]] || [[ ! -f ~/.2fauth ]]; then
     msg_info "Updating $APP to ${RELEASE}"
     $STD apt-get update
     $STD apt-get -y upgrade
@@ -45,10 +48,11 @@ function update_script() {
       $STD apt-get install -y \
         lsb-release \
         gnupg2
-      PHP_VERSION="8.3" PHP_MODULE="common,ctype,fileinfo,fpm,mysql,cli" setup_php
+      PHP_VERSION="8.3" PHP_MODULE="common,ctype,fileinfo,mysql,cli" PHP_FPM="YES" setup_php
       sed -i 's/php8.2/php8.3/g' /etc/nginx/conf.d/2fauth.conf
     fi
     fetch_and_deploy_gh_release "2fauth" "Bubka/2FAuth"
+    setup_composer
     mv "/opt/2fauth-backup/.env" "/opt/2fauth/.env"
     mv "/opt/2fauth-backup/storage" "/opt/2fauth/storage"
     cd "/opt/2fauth" || return

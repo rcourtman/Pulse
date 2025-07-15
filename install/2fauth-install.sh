@@ -19,7 +19,7 @@ $STD apt-get install -y \
   nginx
 msg_ok "Installed Dependencies"
 
-PHP_VERSION="8.3" PHP_MODULE="common,ctype,fileinfo,fpm,mysql,cli" setup_php
+PHP_VERSION="8.3" PHP_MODULE="common,ctype,fileinfo,mysql,cli" PHP_FPM="YES" setup_php
 setup_composer
 setup_mariadb
 
