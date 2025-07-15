@@ -890,6 +890,8 @@ install_script() {
       exit 0
     fi
 
+    CHOICE="$TMP_CHOICE"
+
     case $CHOICE in
     1)
       header_info
