@@ -22,11 +22,21 @@ class EmailService {
             };
         } else if (config.smtpHost || config.host) {
             this.provider = 'smtp';
+            const port = parseInt(config.smtpPort || config.port) || 587;
+            // Parse secure flag - handle string values from environment variables
+            let secure = false;
+            if (config.smtpSecure !== undefined) {
+                secure = config.smtpSecure === true || config.smtpSecure === 'true';
+            } else if (config.secure !== undefined) {
+                secure = config.secure === true || config.secure === 'true';
+            } else {
+                secure = port === 465;
+            }
+            
             this.transporter = nodemailer.createTransport({
                 host: config.smtpHost || config.host,
-                port: parseInt(config.smtpPort || config.port) || 587,
-                secure: config.smtpSecure || config.secure || false,
-                requireTLS: true,
+                port: port,
+                secure: secure,
                 auth: {
                     user: config.smtpUser || config.user,
                     pass: config.smtpPass || config.pass
