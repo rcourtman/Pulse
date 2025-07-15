@@ -13,7 +13,7 @@ setting_up_container
 network_check
 update_os
 
-FFMPEG_VERSION="latest" FFMPEG_TYPE="medium" setup_ffmpeg
+FFMPEG_VERSION="latest" FFMPEG_TYPE="full" setup_ffmpeg
 
 msg_info "Setting Up Hardware Acceleration"
 $STD apt-get -y install {va-driver-all,ocl-icd-libopencl1,intel-opencl-icd,vainfo,intel-gpu-tools}
