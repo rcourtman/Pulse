@@ -875,8 +875,9 @@ install_script() {
   header_info
   while true; do
 
-    TMP_CHOICE=$(whiptail --backtitle "[dev] Proxmox VE Helper Scripts" \
-      18 60 6 \
+    TMP_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" \
+      --title "SETTINGS" \
+      --menu "Choose an option:" 20 60 6 \
       "1" "Default Settings" \
       "2" "Default Settings (with verbose)" \
       "3" "Advanced Settings" \
@@ -950,7 +951,7 @@ install_script() {
       exit 0
       ;;
     *)
-      echo -e "${CROSS}${RD}Invalid option, please try again.${CL}"
+      echo -e "\n${CROSS}${RD}Invalid option, please try again.${CL}\n"
       ;;
     esac
   done
