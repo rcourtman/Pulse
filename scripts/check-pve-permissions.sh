@@ -192,8 +192,7 @@ for user in $users_with_tokens; do
                     # Privilege separation disabled: set on USER only
                     fixes_needed+=("pveum acl modify / --users $user --roles PVEAuditor")
                 else
-                    # Privilege separation enabled: set on BOTH user and token
-                    fixes_needed+=("pveum acl modify / --users $user --roles PVEAuditor")
+                    # Privilege separation enabled: set on TOKEN only
                     fixes_needed+=("pveum acl modify / --tokens $user!$token --roles PVEAuditor")
                 fi
             fi
@@ -205,8 +204,9 @@ for user in $users_with_tokens; do
     
     if [[ "$user_has_storage_perm" == "true" ]]; then
         echo -e "  ${GREEN}✓${NC} User has Datastore permissions on /storage"
+        has_storage_access=true
     else
-        echo -e "  ${RED}✗${NC} User lacks Datastore permissions on /storage"
+        echo -e "  ${YELLOW}○${NC} User lacks Datastore permissions on /storage (needed for viewing PVE backups)"
     fi
     
     # Check permissions on each storage
@@ -249,11 +249,10 @@ for user in $users_with_tokens; do
                     
                     if [[ "$privsep" == "0" ]]; then
                         # Privilege separation disabled: set on USER only
-                        fixes_needed+=("pveum acl modify /storage/$storage --users $user --roles PVEDatastoreAdmin")
+                        fixes_needed+=("pveum acl modify /storage --users $user --roles PVEDatastoreAdmin")
                     else
-                        # Privilege separation enabled: set on BOTH user and token
-                        fixes_needed+=("pveum acl modify /storage/$storage --users $user --roles PVEDatastoreAdmin")
-                        fixes_needed+=("pveum acl modify /storage/$storage --tokens $user!$token --roles PVEDatastoreAdmin")
+                        # Privilege separation enabled: set on TOKEN only
+                        fixes_needed+=("pveum acl modify /storage --tokens $user!$token --roles PVEDatastoreAdmin")
                     fi
                 fi
             done
@@ -277,6 +276,11 @@ for user in $users_with_tokens; do
         fi
     done
 done
+
+# Initialize user_has_root_perm if not set
+if [[ -z "$user_has_root_perm" ]]; then
+    user_has_root_perm="false"
+fi
 
 # Determine current permission mode
 if [[ "$user_has_root_perm" == "true" ]] && [[ "$has_storage_access" == "true" ]]; then
@@ -374,8 +378,8 @@ fi
 
 if [[ "$has_privsep_enabled" == "true" ]]; then
     echo -e "${YELLOW}Note about Privilege Separation:${NC}"
-    echo "- With privsep=0 (No): Set permissions on USER only (simpler)"
-    echo "- With privsep=1 (Yes): Set permissions on BOTH user and token"
+    echo "- With privsep=0 (No): Set permissions on USER only (simpler - recommended)"
+    echo "- With privsep=1 (Yes): Set permissions on TOKEN only"
     echo ""
 fi
     

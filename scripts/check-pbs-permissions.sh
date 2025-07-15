@@ -97,7 +97,7 @@ if [[ -z "$tokens" ]]; then
     echo ""
     echo "To create a token:"
     echo "  proxmox-backup-manager user create pulse@pbs"
-    echo "  proxmox-backup-manager user generate-token pulse@pbs pulse-token"
+    echo "  proxmox-backup-manager user create-token pulse@pbs pulse-token --privsep 0"
     exit 1
 fi
 
@@ -193,7 +193,8 @@ if [[ $issues_found -eq 0 ]]; then
 else
     echo -e "${RED}✗ Found $issues_found permission issue(s)${NC}"
     echo ""
-    echo "PBS tokens do NOT inherit permissions from users. You must explicitly grant permissions."
+    echo -e "${YELLOW}Important:${NC} PBS tokens always require explicit permissions."
+    echo "Unlike PVE, PBS tokens never inherit permissions from users, regardless of privsep setting."
     echo ""
     echo "The following commands will fix the permission issues:"
     echo ""
