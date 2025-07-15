@@ -30,6 +30,10 @@ function update_script() {
     systemctl stop emqx
     msg_ok "Stopped EMQX"
 
+    msg_info "Removing old EMQX"
+    $STD apt-get remove --purge -y emqx
+    msg_ok "Removed old EMQX"
+
     msg_info "Downloading EMQX v${RELEASE}"
     DEB_FILE="/tmp/emqx-enterprise-${RELEASE}-debian12-amd64.deb"
     curl -fsSL -o "$DEB_FILE" "https://www.emqx.com/en/downloads/enterprise/v${RELEASE}/emqx-enterprise-${RELEASE}-debian12-amd64.deb"
