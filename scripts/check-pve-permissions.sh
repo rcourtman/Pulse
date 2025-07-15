@@ -163,9 +163,11 @@ echo "$backup_storages" | sed 's/^/  - /'
 echo ""
 
 # Check permissions for each user/token on each storage
-echo -e "${YELLOW}Step 4: Checking storage permissions...${NC}"
+echo -e "${YELLOW}Step 4: Analyzing current permissions...${NC}"
 issues_found=0
 fixes_needed=()
+has_storage_access=false
+storage_permission_missing=false
 
 for user in $users_with_tokens; do
     echo -e "\n${BLUE}Checking permissions for user: $user${NC}"
@@ -233,11 +235,12 @@ for user in $users_with_tokens; do
         
         if [[ "$user_has_perm" == "true" ]] || [[ "$can_list" == "true" ]]; then
             echo -e "    ${GREEN}✓${NC} User has access to storage"
+            has_storage_access=true
         else
-            echo -e "    ${RED}✗${NC} User cannot access storage"
-            issues_found=$((issues_found + 1))
+            echo -e "    ${YELLOW}○${NC} User cannot access storage backup content"
+            storage_permission_missing=true
             
-            # Check tokens for this user
+            # Store token info for later recommendations
             user_tokens=$(pveum user token list $user --output-format json 2>/dev/null | jq -r '.[].tokenid' 2>/dev/null || true)
             
             for token in $user_tokens; do
@@ -275,9 +278,44 @@ for user in $users_with_tokens; do
     done
 done
 
-if [[ $issues_found -eq 0 ]]; then
-    echo -e "${GREEN}✓ No permission issues found!${NC}"
+# Determine current permission mode
+if [[ "$user_has_root_perm" == "true" ]] && [[ "$has_storage_access" == "true" ]]; then
+    echo -e "${GREEN}✓ Current Mode: Extended (Full Backup Visibility)${NC}"
     echo ""
+    echo "Your tokens have permissions to view all backup types including PVE storage backups."
+    echo "This requires PVEDatastoreAdmin which includes write permissions."
+    echo ""
+elif [[ "$user_has_root_perm" == "true" ]] && [[ "$storage_permission_missing" == "true" ]]; then
+    echo -e "${BLUE}ℹ Current Mode: Secure (Minimal Permissions)${NC}"
+    echo ""
+    echo "Your tokens have minimal read-only permissions. This is the most secure configuration."
+    echo ""
+    echo -e "${YELLOW}Available Features:${NC}"
+    echo "  ✅ All VM/Container monitoring"
+    echo "  ✅ Node statistics and health"
+    echo "  ✅ Storage usage statistics"
+    echo "  ✅ Backup task history"
+    echo "  ✅ VM/Container snapshots"
+    echo "  ✅ PBS backups (if configured)"
+    echo "  ✅ All alerts and notifications"
+    echo ""
+    echo -e "${YELLOW}Not Available:${NC}"
+    echo "  ❌ PVE storage backup files (.vma files)"
+    echo ""
+    echo -e "${YELLOW}Want to see PVE storage backups?${NC}"
+    echo "You can switch to Extended Mode by granting PVEDatastoreAdmin permissions."
+    echo "Note: This adds write permissions due to Proxmox API limitations."
+    echo ""
+elif [[ "$user_has_root_perm" == "false" ]]; then
+    echo -e "${RED}✗ Critical: Missing basic monitoring permissions${NC}"
+    echo ""
+    issues_found=$((issues_found + 1))
+else
+    echo -e "${GREEN}✓ No critical permission issues found!${NC}"
+    echo ""
+fi
+
+if [[ $issues_found -eq 0 ]] && [[ "$storage_permission_missing" == "false" ]]; then
     
     if [[ "$has_privsep_enabled" == "true" ]]; then
         echo -e "${YELLOW}Optional: Simplify Token Management${NC}"
@@ -295,53 +333,80 @@ if [[ $issues_found -eq 0 ]]; then
     echo "  1. Restart Pulse to refresh the data"
     echo "  2. Check if backups actually exist in the listed storages"
     echo "  3. Verify the token credentials in Pulse configuration"
-else
-    echo -e "${RED}✗ Found $issues_found permission issue(s)${NC}"
+elif [[ $issues_found -gt 0 ]]; then
+    # Critical issues that must be fixed
+    echo -e "${RED}✗ Found $issues_found critical permission issue(s)${NC}"
     echo ""
-    echo "The following commands will fix the permission issues:"
+    echo "The following commands will fix the critical issues:"
     echo ""
     
-    # Remove duplicates and print fixes
-    printf '%s\n' "${fixes_needed[@]}" | sort -u | while IFS= read -r fix; do
+    # Print only non-storage fixes (critical ones)
+    printf '%s\n' "${fixes_needed[@]}" | grep -v "storage" | sort -u | while IFS= read -r fix; do
+        if [[ -n "$fix" ]]; then
+            echo "  $fix"
+        fi
+    done
+    
+    echo ""
+    echo "These permissions are REQUIRED for basic Pulse functionality."
+    echo ""
+elif [[ "$storage_permission_missing" == "true" ]]; then
+    # Storage permissions are optional - present as a choice
+    echo -e "${YELLOW}Optional: Switch to Extended Mode${NC}"
+    echo ""
+    echo "To view PVE storage backups, you can grant additional permissions:"
+    echo ""
+    
+    # Remove duplicates and print storage-related fixes
+    printf '%s\n' "${fixes_needed[@]}" | grep "storage" | sort -u | while IFS= read -r fix; do
         echo "  $fix"
     done
     
     echo ""
-    echo "Run these commands on any node in your cluster to grant the necessary permissions."
+    echo -e "${YELLOW}Important Considerations:${NC}"
+    echo "- PVEDatastoreAdmin includes write permissions (Proxmox API limitation)"
+    echo "- Can create/delete datastores and modify storage settings"
+    echo "- Only needed if you use PVE storage for backups (not PBS)"
     echo ""
-    echo -e "${YELLOW}Important Notes:${NC}"
-    echo "- PVEAuditor on / is REQUIRED for basic monitoring (VMs, containers, nodes)"
-    echo "- PVEDatastoreAdmin on /storage is needed to view backup information"
-    echo "  ${RED}⚠️  WARNING:${NC} PVEDatastoreAdmin includes write permissions (delete backups, modify storage)"
-    echo "  This is a Proxmox API limitation. See security details and mitigations:"
-    echo "  https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#api-token-permissions-and-security"
+    echo "See security details: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md"
     echo ""
-    echo -e "${YELLOW}Privilege Separation:${NC}"
-    echo "- With privsep=0 (No): Set permissions on USER only (recommended)"
+fi
+
+if [[ "$has_privsep_enabled" == "true" ]]; then
+    echo -e "${YELLOW}Note about Privilege Separation:${NC}"
+    echo "- With privsep=0 (No): Set permissions on USER only (simpler)"
     echo "- With privsep=1 (Yes): Set permissions on BOTH user and token"
     echo ""
+fi
     
-    # Offer to apply fixes
+# Offer to apply fixes only if there are fixes needed
+if [[ ${#fixes_needed[@]} -gt 0 ]]; then
     APPLY_FIXES=false
     
     if [[ "$AUTO_FIX" == "true" ]]; then
-        echo -e "${YELLOW}Auto-fix mode enabled. Applying fixes...${NC}"
+        echo -e "${YELLOW}Auto-fix mode enabled. Applying changes...${NC}"
         APPLY_FIXES=true
-    elif [[ "$INTERACTIVE" == "true" ]]; then
-        echo -e "${YELLOW}Would you like to apply these fixes automatically?${NC}"
-        echo "This will modify ACL permissions on your Proxmox cluster."
+    elif [[ "$INTERACTIVE" == "true" ]] && ([[ $issues_found -gt 0 ]] || [[ "$storage_permission_missing" == "true" ]]); then
+        if [[ "$storage_permission_missing" == "true" ]] && [[ $issues_found -eq 0 ]]; then
+            echo -e "${YELLOW}Would you like to switch to Extended Mode?${NC}"
+            echo "This will grant PVEDatastoreAdmin permissions to view PVE storage backups."
+            echo ""
+            echo -e "${YELLOW}Note:${NC} This includes write permissions due to Proxmox API limitations."
+        else
+            echo -e "${YELLOW}Would you like to apply these fixes automatically?${NC}"
+            echo "This will modify ACL permissions on your Proxmox cluster."
+        fi
         echo ""
-        echo -e "${RED}WARNING:${NC} Permission changes take effect immediately!"
-        echo "Ensure you understand the implications before proceeding."
-        echo ""
-        read -p "Apply fixes? (y/N): " -n 1 -r
+        read -p "Apply changes? (y/N): " -n 1 -r
         echo ""
         
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             APPLY_FIXES=true
         fi
     else
-        echo -e "${YELLOW}Run with --fix flag to automatically apply these fixes${NC}"
+        if [[ $issues_found -gt 0 ]]; then
+            echo -e "${YELLOW}Run with --fix flag to automatically apply these fixes${NC}"
+        fi
     fi
     
     if [[ "$APPLY_FIXES" == "true" ]]; then
@@ -358,11 +423,13 @@ else
             fi
         done
         
-        echo -e "\n${GREEN}Permission fixes have been applied!${NC}"
+        echo -e "\n${GREEN}Permission changes have been applied!${NC}"
         echo "Please restart Pulse to use the updated permissions."
     else
-        echo -e "\n${BLUE}Skipping automatic fixes.${NC}"
-        echo "You can run the commands above manually when ready."
+        echo -e "\n${BLUE}No changes made.${NC}"
+        if [[ ${#fixes_needed[@]} -gt 0 ]]; then
+            echo "You can run the commands above manually when ready."
+        fi
     fi
 fi
 

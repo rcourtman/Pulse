@@ -61,18 +61,30 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 2. Select user (or create new one like `pulse@pam`)
 3. Token ID: `pulse`
 4. **Uncheck "Privilege Separation"** (important!)
+   - CLI equivalent: `pveum user token add pulse@pam pulse --privsep 0`
 5. Copy the secret immediately (shown only once)
-6. **Grant permissions**: Datacenter → Permissions → Add → User Permission
+6. **Choose your permission level**:
+
+   **Option A: Secure Mode (Recommended)**
    - Path: `/`
    - User: `pulse@pam` (not the token!)
    - Role: `PVEAuditor`
    - Propagate: Checked
-
-For backup visibility, also add:
-   - Path: `/storage`
-   - Role: `PVEDatastoreAdmin`
    
-**⚠️ Security Notice**: PVEDatastoreAdmin includes write permissions. See [Security Guide](SECURITY.md#api-token-permissions-and-security) for important details.
+   ✅ Monitors: VMs, containers, nodes, storage usage, PBS backups, snapshots  
+   ❌ Cannot see: PVE storage backup files (.vma)
+   
+   **Option B: Extended Mode** (if you need PVE backup visibility)
+   - First add PVEAuditor as above, then:
+   - Path: `/storage` (or specific storages like `/storage/local`)
+   - User: `pulse@pam`
+   - Role: `PVEDatastoreAdmin`
+   - Propagate: Checked
+   
+   ✅ Everything from Secure Mode + PVE storage backups  
+   ⚠️ Token can create/delete datastores (Proxmox API limitation)
+
+See [Security Guide](SECURITY.md#api-token-permissions-and-security) for details.
 
 </details>
 

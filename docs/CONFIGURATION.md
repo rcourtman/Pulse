@@ -351,10 +351,15 @@ For deploying Pulse behind a reverse proxy (Nginx, Caddy, Traefik, etc.), see th
 1. **Never use root tokens** - Create dedicated monitoring users
 2. **Disable privilege separation** for simpler permission management
 3. **Use minimal permissions**:
-   - PVE: `PVEAuditor` + `PVEDatastoreAdmin` (for backups)
-   - PBS: `DatastoreAudit` only
 
-### Example: Secure PVE Setup
+### Permission Modes
+
+Pulse supports two permission levels for Proxmox VE:
+
+#### Secure Mode (Recommended)
+- **Role Required**: `PVEAuditor` on `/`
+- **Features**: All monitoring except PVE storage backups
+- **Security**: Read-only, cannot modify infrastructure
 
 ```bash
 # Create monitoring user
@@ -363,10 +368,25 @@ pveum user add pulse@pam --comment "Pulse monitoring"
 # Create token without privilege separation
 pveum user token add pulse@pam monitoring --privsep 0
 
-# Grant minimal permissions
+# Grant minimal permissions (Secure Mode)
 pveum acl modify / --users pulse@pam --roles PVEAuditor
-pveum acl modify /storage --users pulse@pam --roles PVEDatastoreAdmin
 ```
+
+#### Extended Mode
+- **Roles Required**: `PVEAuditor` on `/` + `PVEDatastoreAdmin` on `/storage`
+- **Features**: Everything including PVE storage backup visibility
+- **Security**: Can create/delete datastores (API limitation)
+
+```bash
+# Same user setup as above, then add:
+pveum acl modify /storage --users pulse@pam --roles PVEDatastoreAdmin
+
+# Or limit to specific storages:
+pveum acl modify /storage/local --users pulse@pam --roles PVEDatastoreAdmin
+pveum acl modify /storage/nfs-backup --users pulse@pam --roles PVEDatastoreAdmin
+```
+
+**Note**: PBS always uses read-only `DatastoreAudit` permissions.
 
 ### Example: Secure PBS Setup
 
