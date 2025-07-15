@@ -509,7 +509,7 @@ PulseApp.ui.storage = (() => {
             storageName = store.storage;
         }
         
-        const storageNameContent = `<span class="font-medium">${storageName}${warningBadge}</span>`;
+        const storageNameContent = `${storageName}${warningBadge}`;
         const stickyStorageCell = PulseApp.ui.common.createStickyColumn(storageNameContent, {
             additionalClasses: 'text-gray-700 dark:text-gray-300 min-w-[150px]'
         });
