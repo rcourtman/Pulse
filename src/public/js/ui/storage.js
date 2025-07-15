@@ -415,7 +415,10 @@ PulseApp.ui.storage = (() => {
         // Clear existing content
         tableBody.innerHTML = '';
         
-        if (storageData.length === 0) {
+        // Filter out entries with no capacity (0 B) - these are the greyed out entries
+        const filteredData = storageData.filter(store => store.total > 0);
+        
+        if (filteredData.length === 0) {
             const emptyRow = document.createElement('tr');
             if (PulseApp.ui.emptyStates) {
                 emptyRow.innerHTML = `<td colspan="8" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
@@ -427,7 +430,7 @@ PulseApp.ui.storage = (() => {
         }
         
         // Sort storage data based on current sort order
-        let sortedData = [...storageData];
+        let sortedData = [...filteredData];
         if (currentSortOrder === 'usage-desc') {
             sortedData.sort((a, b) => {
                 const percentA = a.total > 0 ? (a.used / a.total) * 100 : 0;
