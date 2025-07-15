@@ -227,7 +227,7 @@ write_config() {
   if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Write configfile" --yesno "Do you want to write the selections to a config file?" 10 60; then
     FILEPATH="/opt/community-scripts/${NSAPP}.conf"
     if [[ ! -f $FILEPATH ]]; then
-  cat <<EOF >"$FILEPATH"
+      cat <<EOF >"$FILEPATH"
 # ${NSAPP} Configuration File
 # Generated on $(date)
 
@@ -264,7 +264,7 @@ EOF
       echo -e "${INFO}${BOLD}${RD}Configuration file already exists at ${FILEPATH}${CL}"
       if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Overwrite configfile" --yesno "Do you want to overwrite the existing config file?" 10 60; then
         rm -f "$FILEPATH"
-          cat <<EOF >"$FILEPATH"
+        cat <<EOF >"$FILEPATH"
 # ${NSAPP} Configuration File
 # Generated on $(date)
 
@@ -875,17 +875,18 @@ install_script() {
   header_info
   while true; do
 
-    CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "SETTINGS" --menu "Choose an option:" \
+    TMP_CHOICE=$(whiptail --backtitle "[dev] Proxmox VE Helper Scripts" \
       18 60 6 \
       "1" "Default Settings" \
       "2" "Default Settings (with verbose)" \
       "3" "Advanced Settings" \
       "4" "Use Config File" \
       "5" "Diagnostic Settings" \
-      "6" "Exit" --nocancel --default-item "1" 3>&1 1>&2 2>&3)
+      "6" "Exit" \
+      --default-item "1" 3>&1 1>&2 2>&3) || true
 
-    if [ $? -ne 0 ]; then
-      echo -e "${CROSS}${RD} Menu canceled. Exiting.${CL}"
+    if [ -z "$TMP_CHOICE" ]; then
+      echo -e "\n${CROSS}${RD}Menu canceled. Exiting script.${CL}\n"
       exit 0
     fi
 
@@ -943,11 +944,11 @@ install_script() {
 
       ;;
     6)
-      echo -e "${CROSS}${RD}Exiting.${CL}"
+      echo -e "\n${CROSS}${RD}Script terminated. Have a great day!${CL}\n"
       exit 0
       ;;
     *)
-      echo -e "${CROSS}${RD}Invalid option, please try again.${CL}"
+      echo -e "\n${CROSS}${RD}Invalid option, please try again.${CL}\n"
       ;;
     esac
   done
