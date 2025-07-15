@@ -25,6 +25,8 @@ The recommended way to configure Pulse is through the web interface:
 
 For advanced deployments, Pulse can be configured using environment variables in a `.env` file. The web interface will override these settings.
 
+> **Automatic Reload:** Pulse watches the `.env` file for changes and automatically reloads configuration without requiring a service restart. Changes typically take effect within a few seconds.
+
 ### Proxmox VE Configuration
 
 **Required:**
@@ -33,6 +35,8 @@ PROXMOX_HOST=https://192.168.1.10:8006
 PROXMOX_TOKEN_ID=user@pam!tokenid
 PROXMOX_TOKEN_SECRET=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
+
+> **Note:** The environment variables must be named exactly as shown above (`PROXMOX_*` not `PVE_*`). These names are case-sensitive.
 
 **Optional:**
 ```env

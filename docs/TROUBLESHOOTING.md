@@ -206,6 +206,22 @@ nslookup proxmox-hostname
 - DNS not resolving hostnames
 - Proxy intercepting connections
 
+**Container/LXC Network Connectivity:**
+
+If running Pulse inside an LXC container on the Proxmox host you're monitoring:
+- The container may not be able to reach the host's management IP
+- Use the host's IP address as seen from containers (often different from the public IP)
+- Test connectivity from inside the container:
+  ```bash
+  # From inside the container
+  ping proxmox-hostname
+  nc -zv proxmox-hostname 8006
+  ```
+- If using the host's public IP fails, try:
+  - Using the hostname instead of IP
+  - Finding the host's bridge IP: `ip addr show vmbr0`
+  - Using the gateway IP visible from the container
+
 ### Performance Issues
 
 **High Memory Usage:**
