@@ -29,59 +29,57 @@ function getCurrentVersionInfo() {
                 windowsHide: true
             }).trim();
             
-            // If on develop branch, calculate RC version from git
-            if (gitBranch === 'develop') {
-                isDevelopment = true;
-                try {
-                    // Use git describe for accurate development versioning
-                    const gitDescribe = execSync('git describe --tags --dirty', { 
-                        cwd: gitDir, 
-                        encoding: 'utf8',
-                        windowsHide: true
-                    }).trim();
+            // Calculate development version from git if we have commits ahead of the latest tag
+            try {
+                // Use git describe for accurate development versioning
+                const gitDescribe = execSync('git describe --tags --dirty', { 
+                    cwd: gitDir, 
+                    encoding: 'utf8',
+                    windowsHide: true
+                }).trim();
+                
+                if (gitDescribe) {
+                    // Parse git describe output: v3.23.1-109-g3ee29b2-dirty
+                    const match = gitDescribe.match(/^v([^-]+)(?:-(\d+)-g([a-f0-9]+))?(-dirty)?$/);
                     
-                    if (gitDescribe) {
-                        // Parse git describe output: v3.23.1-109-g3ee29b2-dirty
-                        const match = gitDescribe.match(/^v([^-]+)(?:-(\d+)-g([a-f0-9]+))?(-dirty)?$/);
+                    if (match) {
+                        const [, baseVersion, commitsAhead, shortHash, isDirty] = match;
                         
-                        if (match) {
-                            const [, baseVersion, commitsAhead, shortHash, isDirty] = match;
+                        if (commitsAhead && parseInt(commitsAhead) > 0) {
+                            // We're ahead of the latest tag - this is development
+                            const commits = parseInt(commitsAhead);
+                            const dirtyFlag = isDirty ? '-dirty' : '';
                             
-                            if (commitsAhead && parseInt(commitsAhead) > 0) {
-                                // We're ahead of the latest tag - this is development
-                                const commits = parseInt(commitsAhead);
-                                const dirtyFlag = isDirty ? '-dirty' : '';
-                                
-                                // For development builds, show as dev version ahead of the base
-                                // Calculate next logical version based on base
-                                const versionParts = baseVersion.split('.');
-                                const major = parseInt(versionParts[0]) || 0;
-                                const minor = parseInt(versionParts[1]) || 0;
-                                const patch = parseInt(versionParts[2]) || 0;
-                                
-                                // Increment minor version for development
-                                const nextVersion = `${major}.${minor + 1}.0`;
-                                currentVersion = `${nextVersion}-dev.${commits}+${shortHash}${dirtyFlag}`;
-                            } else if (isDirty) {
-                                // On a tag but with uncommitted changes
-                                currentVersion = `${baseVersion}-dirty`;
-                            } else {
-                                // Exactly on a tag
-                                currentVersion = baseVersion;
-                            }
+                            // For development builds, show as dev version ahead of the base
+                            // Calculate next logical version based on base
+                            const versionParts = baseVersion.split('.');
+                            const major = parseInt(versionParts[0]) || 0;
+                            const minor = parseInt(versionParts[1]) || 0;
+                            const patch = parseInt(versionParts[2]) || 0;
+                            
+                            // Increment minor version for development
+                            const nextVersion = `${major}.${minor + 1}.0`;
+                            currentVersion = `${nextVersion}-dev.${commits}+${shortHash}${dirtyFlag}`;
+                            isDevelopment = true;
+                        } else if (isDirty) {
+                            // On a tag but with uncommitted changes
+                            currentVersion = `${baseVersion}-dirty`;
                         } else {
-                            // Fallback if git describe doesn't match expected pattern
-                            console.warn('[VersionUtils] Could not parse git describe output:', gitDescribe);
-                            currentVersion = gitDescribe.replace(/^v/, '');
+                            // Exactly on a tag
+                            currentVersion = baseVersion;
                         }
                     } else {
-                        throw new Error('git describe returned empty');
+                        // Fallback if git describe doesn't match expected pattern
+                        console.warn('[VersionUtils] Could not parse git describe output:', gitDescribe);
+                        currentVersion = gitDescribe.replace(/^v/, '');
                     }
-                } catch (versionError) {
-                    console.log('[VersionUtils] Could not calculate RC version from git, using package.json');
-                    // Fall back to package.json version
-                    currentVersion = packageJson.version;
+                } else {
+                    throw new Error('git describe returned empty');
                 }
+            } catch (versionError) {
+                console.log('[VersionUtils] Could not calculate version from git, using package.json');
+                // Fall back to package.json version
+                currentVersion = packageJson.version;
             }
         } catch (gitError) {
             // Git not available or not a git repo
@@ -92,7 +90,7 @@ function getCurrentVersionInfo() {
         return {
             version: currentVersion,
             gitBranch: gitBranch,
-            isDevelopment: isDevelopment || gitBranch === 'develop' || process.env.NODE_ENV === 'development'
+            isDevelopment: isDevelopment || process.env.NODE_ENV === 'development'
         };
     } catch (error) {
         console.warn('[VersionUtils] Error getting current version:', error.message);
@@ -318,47 +316,12 @@ function calculateNextVersion(currentVersion, bumpType) {
 
 /**
  * Check if current branch should trigger a stable release
- * (i.e., we're on main branch and last commit was a merge from develop)
- * @returns {boolean} True if this should trigger a stable release
+ * (kept for backwards compatibility but always returns false)
+ * @returns {boolean} Always false since we no longer use branch-based workflow
  */
 function shouldTriggerStableRelease() {
-    try {
-        const { execSync } = require('child_process');
-        const gitDir = path.join(__dirname, '..');
-        
-        // Check if we're on main branch
-        const currentBranch = execSync('git branch --show-current', { 
-            cwd: gitDir, 
-            encoding: 'utf8',
-            windowsHide: true
-        }).trim();
-        
-        if (currentBranch !== 'main') {
-            return false;
-        }
-        
-        // Check if the last commit was a merge from develop
-        try {
-            const lastCommitMessage = execSync('git log -1 --pretty=format:%s', { 
-                cwd: gitDir, 
-                encoding: 'utf8',
-                windowsHide: true
-            }).trim();
-            
-            // Look for merge commit patterns from develop
-            const isMergeFromDevelop = lastCommitMessage.includes('Merge branch \'develop\'') ||
-                                    lastCommitMessage.includes('Merge pull request') ||
-                                    lastCommitMessage.includes('develop');
-            
-            return isMergeFromDevelop;
-        } catch (error) {
-            return false;
-        }
-        
-    } catch (error) {
-        console.warn('[VersionUtils] Error checking for stable release trigger:', error.message);
-        return false;
-    }
+    // No longer using branch-based workflow - all commits go directly to main
+    return false;
 }
 
 module.exports = {
