@@ -23,9 +23,10 @@ This tool automatically checks:
 
 **Quick Check:**
 ```bash
-# Use Pulse's automated permission checker
-cd /opt/pulse
-./scripts/check-pve-permissions.sh
+# Download and run permission checker on your PVE node
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pve-permissions.sh
+chmod +x check-pve-permissions.sh
+./check-pve-permissions.sh
 ```
 
 **Manual Solution:**
@@ -46,14 +47,15 @@ pveum acl modify / --users user@pam --roles PVEAuditor
 
 **PVE Backups Missing:**
 ```bash
-# Use Pulse's automated permission checker
-cd /opt/pulse
-./scripts/check-pve-permissions.sh
+# Download and run permission checker on your PVE node
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pve-permissions.sh
+chmod +x check-pve-permissions.sh
+./check-pve-permissions.sh
 
 # Automatically fix permission issues
-./scripts/check-pve-permissions.sh --fix
+./check-pve-permissions.sh --fix
 
-# Manual fix - need additional permission for storage
+# Manual fix - grant storage permission for Extended Mode
 pveum acl modify /storage --users user@pam --roles PVEDatastoreAdmin
 ```
 
@@ -123,62 +125,47 @@ Pulse includes scripts to automatically verify and fix API token permissions:
 
 **For Proxmox VE:**
 ```bash
-# Run from Pulse installation directory
-cd /opt/pulse
-./scripts/check-pve-permissions.sh
+# Download and run Pulse's automated permission checker
+# IMPORTANT: Run this ON your Proxmox VE node, not on the Pulse server
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pve-permissions.sh
+chmod +x check-pve-permissions.sh
+./check-pve-permissions.sh
 
 # Automatically fix permission issues
-./scripts/check-pve-permissions.sh --fix
-
-# Or specify token details directly
-./scripts/check-pve-permissions.sh --url https://proxmox:8006 \
-  --token-id user@pam!token --token-secret your-secret
-
-# Specify token details with automatic fix
-./scripts/check-pve-permissions.sh --url https://proxmox:8006 \
-  --token-id user@pam!token --token-secret your-secret --fix
+./check-pve-permissions.sh --fix
 ```
 
 **For Proxmox Backup Server:**
 ```bash
-# Run from Pulse installation directory
-cd /opt/pulse
-./scripts/check-pbs-permissions.sh
+# Download and run Pulse's PBS permission checker
+# IMPORTANT: Run this ON your PBS server, not on the Pulse server
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pbs-permissions.sh
+chmod +x check-pbs-permissions.sh
+./check-pbs-permissions.sh
 
-# Automatically fix permission issues (requires admin credentials)
-./scripts/check-pbs-permissions.sh --fix
-
-# Or specify token details directly
-./scripts/check-pbs-permissions.sh --url https://pbs:8007 \
-  --token-id user@pbs!token --token-secret your-secret
-
-# Specify token details with automatic fix
-./scripts/check-pbs-permissions.sh --url https://pbs:8007 \
-  --token-id user@pbs!token --token-secret your-secret --fix \
-  --admin-user admin@pbs --admin-password your-admin-password
+# Automatically fix permission issues
+./check-pbs-permissions.sh --fix
 ```
 
 These scripts will:
-- ✓ Test API connectivity
-- ✓ Verify token authentication
-- ✓ Check all required permissions
-- ✓ Provide specific fixes for any issues found
-- ✓ Automatically apply fixes with --fix flag
-- ✓ Work without jq installed (important for Docker environments)
-- ✓ Correctly parse and validate permissions
+- ✓ Detect all users with API tokens
+- ✓ Check privilege separation settings
+- ✓ Verify permissions for each token
+- ✓ Identify if you're in Secure or Extended mode
+- ✓ Provide exact commands to fix any issues
+- ✓ Optionally apply fixes automatically with --fix flag
 
 **Understanding Token Permissions:**
 
-1. **Token WITH privilege separation (default):**
+1. **Token WITH privilege separation (privsep=1):**
    ```bash
-   # Must set permissions on BOTH user AND token
-   pveum acl modify / --users user@pam --roles PVEAuditor
+   # Set permissions on TOKEN only
    pveum acl modify / --tokens user@pam!token --roles PVEAuditor
    ```
 
-2. **Token WITHOUT privilege separation (recommended):**
+2. **Token WITHOUT privilege separation (privsep=0 - recommended):**
    ```bash
-   # Only set permissions on user
+   # Set permissions on USER only
    pveum acl modify / --users user@pam --roles PVEAuditor
    ```
 

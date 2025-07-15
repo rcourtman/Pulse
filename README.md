@@ -156,6 +156,39 @@ Most common cause: Missing API token permissions. The diagnostic tool will tell 
 
 [Full Troubleshooting Guide →](docs/TROUBLESHOOTING.md)
 
+## Diagnostic Tools
+
+Pulse includes automated scripts to diagnose and fix permission issues:
+
+### For Proxmox VE
+```bash
+# Run on your PVE node (not Pulse server)
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pve-permissions.sh
+chmod +x check-pve-permissions.sh
+./check-pve-permissions.sh
+
+# Auto-fix issues
+./check-pve-permissions.sh --fix
+```
+
+### For Proxmox Backup Server
+```bash
+# Run on your PBS server (not Pulse server)
+curl -O https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/check-pbs-permissions.sh
+chmod +x check-pbs-permissions.sh
+./check-pbs-permissions.sh
+
+# Auto-fix issues
+./check-pbs-permissions.sh --fix
+```
+
+These scripts will:
+- Detect all API tokens and their settings
+- Check current permissions
+- Identify Secure vs Extended mode
+- Provide exact fix commands
+- Optionally apply fixes automatically
+
 ## Choosing Installation Method
 
 | Method | Best For | Pros | Cons |
