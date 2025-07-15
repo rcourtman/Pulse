@@ -333,19 +333,8 @@ app.get('/api/diagnostics', async (req, res) => {
         
         const report = await toolToUse.runDiagnostics();
         
-        // Format the report for easy reading
-        const formattedReport = {
-            ...report,
-            summary: {
-                hasIssues: report.recommendations && report.recommendations.some(r => r.severity === 'critical'),
-                criticalIssues: report.recommendations ? report.recommendations.filter(r => r.severity === 'critical').length : 0,
-                warnings: report.recommendations ? report.recommendations.filter(r => r.severity === 'warning').length : 0,
-                info: report.recommendations ? report.recommendations.filter(r => r.severity === 'info').length : 0,
-                isTimingIssue: report.state && report.state.dataAge === null && report.state.serverUptime < 90
-            }
-        };
-        
-        res.json(formattedReport);
+        // The report already includes summary from generateReport
+        res.json(report);
     } catch (error) {
         console.error("Error running diagnostics:", error);
         console.error("Stack trace:", error.stack);
