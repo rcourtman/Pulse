@@ -14,22 +14,17 @@ setting_up_container
 network_check
 update_os
 
-NODE_VERSION="22" setup_nodejs
-
 msg_info "Installing NUT"
 $STD apt-get install -y nut-client
 msg_ok "Installed NUT"
 
-msg_info "Installing Peanut"
-RELEASE=$(curl -fsSL https://api.github.com/repos/Brandawg93/PeaNUT/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
-curl -fsSL "https://api.github.com/repos/Brandawg93/PeaNUT/tarball/${RELEASE}" -o "peanut.tar.gz"
-mkdir -p /opt/peanut
-tar -xzf peanut.tar.gz -C /opt/peanut --strip-components=1
-rm peanut.tar.gz
+NODE_VERSION="22" NODE_MODULE="pnpm" setup_nodejs
+fetch_and_deploy_gh_release "peanut" "Brandawg93/PeaNUT" "tarball" "latest" "/opt/peanut"
+
+msg_info "Setup Peanut"
 cd /opt/peanut
-$STD npm install -g pnpm
 $STD pnpm i
-$STD pnpm run build
+$STD pnpm run build:local
 cp -r .next/static .next/standalone/.next/
 mkdir -p /opt/peanut/.next/standalone/config
 mkdir -p /etc/peanut/
@@ -40,7 +35,7 @@ NUT_HOST: 0.0.0.0
 NUT_PORT: 3493
 EOF
 ln -sf /etc/peanut/settings.yml /opt/peanut/.next/standalone/config/settings.yml
-msg_ok "Installed Peanut"
+msg_ok "Setup Peanut"
 
 msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/peanut.service
