@@ -40,7 +40,8 @@ class DiagnosticTool {
             permissions: { proxmox: [], pbs: [] },
             connectivity: { proxmox: [], pbs: [] },
             recentErrors: [],
-            recommendations: []
+            recommendations: [],
+            permissionAnalysis: null // Will be populated after permission checks
         };
 
         try {
@@ -131,6 +132,13 @@ class DiagnosticTool {
         } catch (e) {
             console.error('Error getting recent errors:', e);
             report.recentErrors = [];
+        }
+        
+        // Analyze permission mode
+        try {
+            this.analyzePermissionMode(report);
+        } catch (e) {
+            console.error('Error analyzing permissions:', e);
         }
         
         // Generate recommendations
@@ -715,13 +723,18 @@ class DiagnosticTool {
                                                         );
                                                         
                                                         if (backupData && backupData.data) {
-                                                            accessibleStorages++;
+                                                            const backupCount = backupData.data.data ? backupData.data.data.length : 0;
+                                                            // Only count as accessible if we can actually see backups
+                                                            // API success with 0 backups means Datastore.Audit only
+                                                            if (backupCount > 0) {
+                                                                accessibleStorages++;
+                                                            }
                                                             storageDetails.push({
                                                                 node: node.node,
                                                                 storage: storage.storage,
                                                                 type: storage.type,
-                                                                accessible: true,
-                                                                backupCount: backupData.data.data ? backupData.data.data.length : 0
+                                                                accessible: backupCount > 0,
+                                                                backupCount: backupCount
                                                             });
                                                         }
                                                     } catch (storageError) {
@@ -761,6 +774,7 @@ class DiagnosticTool {
                             };
                             
                             // Set overall storage backup access status
+                            // Only true if we can actually see backup files, not just call the API
                             permCheck.canAccessStorageBackups = totalStoragesTested > 0 && accessibleStorages > 0;
                             
                         } catch (error) {
@@ -1142,6 +1156,90 @@ class DiagnosticTool {
         }
     }
 
+    analyzePermissionMode(report) {
+        // Initialize permission analysis
+        report.permissionAnalysis = {
+            mode: 'unknown',
+            hasStorageAccess: false,
+            pveInstances: [],
+            pbsInstances: [],
+            details: {
+                canMonitorCore: false,
+                canViewPveBackups: false,
+                canViewPbsBackups: false,
+                canViewSnapshots: false
+            }
+        };
+        
+        // Analyze PVE permissions
+        if (report.permissions && report.permissions.proxmox && Array.isArray(report.permissions.proxmox)) {
+            report.permissions.proxmox.forEach(perm => {
+                const instance = {
+                    name: perm.name,
+                    hasBasicAccess: false,
+                    hasStorageAccess: false,
+                    storageDetails: null
+                };
+                
+                // Check basic monitoring permissions (PVEAuditor level)
+                if (perm.canConnect && perm.canListNodes && perm.canListVMs && 
+                    perm.canListContainers && perm.canGetNodeStats) {
+                    instance.hasBasicAccess = true;
+                    report.permissionAnalysis.details.canMonitorCore = true;
+                    report.permissionAnalysis.details.canViewSnapshots = true; // Snapshots come from VM/CT config
+                }
+                
+                // Check storage backup access (requires Datastore.Allocate)
+                if (perm.canAccessStorageBackups && perm.storageBackupAccess) {
+                    instance.hasStorageAccess = true;
+                    report.permissionAnalysis.hasStorageAccess = true;
+                    report.permissionAnalysis.details.canViewPveBackups = true;
+                    
+                    instance.storageDetails = {
+                        accessible: perm.storageBackupAccess.accessibleStorages,
+                        total: perm.storageBackupAccess.totalStoragesTested
+                    };
+                }
+                
+                report.permissionAnalysis.pveInstances.push(instance);
+            });
+        }
+        
+        // Analyze PBS permissions
+        if (report.permissions && report.permissions.pbs && Array.isArray(report.permissions.pbs)) {
+            report.permissions.pbs.forEach(perm => {
+                const instance = {
+                    name: perm.name,
+                    hasAccess: false
+                };
+                
+                if (perm.canConnect && perm.canListDatastores && perm.canListBackups) {
+                    instance.hasAccess = true;
+                    report.permissionAnalysis.details.canViewPbsBackups = true;
+                }
+                
+                report.permissionAnalysis.pbsInstances.push(instance);
+            });
+        }
+        
+        // Determine overall mode
+        const hasAnyPveInstance = report.permissionAnalysis.pveInstances.length > 0;
+        const hasBasicPveAccess = report.permissionAnalysis.pveInstances.some(i => i.hasBasicAccess);
+        const hasStorageAccess = report.permissionAnalysis.pveInstances.some(i => i.hasStorageAccess);
+        
+        if (!hasAnyPveInstance) {
+            report.permissionAnalysis.mode = 'not_configured';
+        } else if (!hasBasicPveAccess) {
+            report.permissionAnalysis.mode = 'insufficient';
+        } else if (hasStorageAccess) {
+            report.permissionAnalysis.mode = 'extended';
+        } else {
+            report.permissionAnalysis.mode = 'secure';
+        }
+        
+        // Don't add recommendations here - we'll show the comparison in the main table
+    }
+
     generateRecommendations(report) {
         // Check for overly permissive tokens and security concerns
         if (report.permissions) {
@@ -1173,8 +1271,9 @@ class DiagnosticTool {
                         }
                     }
                     
-                    // Explain the PVEDatastoreAdmin requirement if they're missing backup access
-                    if (perm.canListStorage && !perm.canAccessStorageBackups && 
+                    // Only explain PVEDatastoreAdmin requirement if NOT in secure mode
+                    if (report.permissionAnalysis && report.permissionAnalysis.mode !== 'secure' &&
+                        perm.canListStorage && !perm.canAccessStorageBackups && 
                         perm.storageBackupAccess && perm.storageBackupAccess.totalStoragesTested > 0) {
                         // They already get a critical error, but add an explanation
                         report.recommendations.push({
@@ -1268,38 +1367,29 @@ class DiagnosticTool {
                             });
                         }
                         if (perm.canListStorage && !perm.canAccessStorageBackups) {
-                            const storageAccess = perm.storageBackupAccess;
-                            if (storageAccess && storageAccess.totalStoragesTested > 0) {
-                                const inaccessibleStorages = storageAccess.totalStoragesTested - storageAccess.accessibleStorages;
-                                if (inaccessibleStorages > 0) {
+                            // Only show storage permission info if NOT in secure mode
+                            // In secure mode, not seeing storage backups is intentional
+                            if (report.permissionAnalysis && report.permissionAnalysis.mode !== 'secure') {
+                                const storageAccess = perm.storageBackupAccess;
+                                if (storageAccess && storageAccess.totalStoragesTested > 0) {
+                                    const inaccessibleStorages = storageAccess.totalStoragesTested - storageAccess.accessibleStorages;
+                                    if (inaccessibleStorages > 0) {
+                                        report.recommendations.push({
+                                            severity: 'critical',
+                                            category: 'Proxmox Storage Permissions',
+                                            message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery.\n\nThe Proxmox API requires 'Datastore.Allocate' permission to list storage contents via the API. This permission is included in the PVEDatastoreAdmin role.\n\nMost likely cause: Token has privilege separation enabled (default) but permissions were set on the token instead of the user.\n\nTo fix:\n1. Check token's privsep setting: pveum user token list <username> --output-format json\n2. If privsep=1: pveum acl modify /storage --users <username> --roles PVEDatastoreAdmin\n3. If privsep=0: pveum acl modify /storage --tokens <token-id> --roles PVEDatastoreAdmin\n\nSee README "Storage Content Visibility" section for details.`
+                                        });
+                                    }
+                                } else {
                                     report.recommendations.push({
-                                        severity: 'critical',
-                                        category: 'Proxmox Storage Permissions',
-                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery.\n\nThe Proxmox API requires 'Datastore.Allocate' permission to list storage contents via the API. This permission is included in the PVEDatastoreAdmin role.\n\nMost likely cause: Token has privilege separation enabled (default) but permissions were set on the token instead of the user.\n\nTo fix:\n1. Check token's privsep setting: pveum user token list <username> --output-format json\n2. If privsep=1: pveum acl modify /storage --users <username> --roles PVEDatastoreAdmin\n3. If privsep=0: pveum acl modify /storage --tokens <token-id> --roles PVEDatastoreAdmin\n\nSee README "Storage Content Visibility" section for details.`
+                                        severity: 'info',
+                                        category: 'Proxmox Storage',
+                                        message: `Proxmox "${perm.name}": No backup-enabled storage found to test. If you have backup storage configured, ensure it has 'backup' in its content types.`
                                     });
                                 }
-                            } else {
-                                report.recommendations.push({
-                                    severity: 'info',
-                                    category: 'Proxmox Storage',
-                                    message: `Proxmox "${perm.name}": No backup-enabled storage found to test. If you have backup storage configured, ensure it has 'backup' in its content types.`
-                                });
                             }
                         }
-                        if (perm.canAccessStorageBackups && perm.storageBackupAccess) {
-                            const storageAccess = perm.storageBackupAccess;
-                            if (storageAccess.accessibleStorages > 0) {
-                                const backupCount = storageAccess.storageDetails
-                                    .filter(s => s.accessible)
-                                    .reduce((sum, s) => sum + (s.backupCount || 0), 0);
-                                
-                                report.recommendations.push({
-                                    severity: 'info',
-                                    category: 'Backup Status',
-                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files (PBS storage excluded). Storage permissions are correctly configured.`
-                                });
-                            }
-                        }
+                        // Don't add success messages - the permission analysis already shows what's working
                     }
                 });
             }
@@ -1333,55 +1423,7 @@ class DiagnosticTool {
                     // Node name is now auto-discovered, no need to check for it
                     
                     
-                    // Add success message for PBS with backup counts and namespace info
-                    if (perm.canConnect && perm.canListDatastores && report.state && report.state.pbs && report.state.pbs.instanceDetails) {
-                        // Find the corresponding PBS instance in state data by matching name
-                        const pbsStateData = report.state.pbs.instanceDetails.find(instance => 
-                            instance.name === perm.name
-                        );
-                        
-                        if (pbsStateData && pbsStateData.datastores > 0) {
-                            let successMsg = `PBS "${perm.name}": Successfully accessing ${pbsStateData.datastores} datastore(s) with ${pbsStateData.snapshots} backup snapshots.`;
-                            
-                            // Add namespace info if available
-                            if (perm.namespaceAccess && Object.keys(perm.namespaceAccess).length > 0) {
-                                const accessibleNamespaces = Object.values(perm.namespaceAccess).filter(ns => ns.accessible);
-                                if (accessibleNamespaces.length > 0) {
-                                    const nsInfo = accessibleNamespaces.map(ns => 
-                                        `${ns.namespace || 'root'} (${ns.backupCount} backups)`
-                                    ).join(', ');
-                                    successMsg += ` Namespace access: ${nsInfo}.`;
-                                }
-                            }
-                            
-                            successMsg += ' PBS permissions are correctly configured.';
-                            
-                            report.recommendations.push({
-                                severity: 'info',
-                                category: 'Backup Status',
-                                message: successMsg
-                            });
-                        } else if (perm.canListDatastores && perm.datastoreCount > 0) {
-                            // Fallback to permission data if state data not available
-                            let successMsg = `PBS "${perm.name}": Successfully connected with ${perm.datastoreCount} datastore(s) accessible.`;
-                            
-                            // Add namespace info if available
-                            if (perm.namespaceAccess && Object.keys(perm.namespaceAccess).length > 0) {
-                                const accessibleNamespaces = Object.values(perm.namespaceAccess).filter(ns => ns.accessible);
-                                if (accessibleNamespaces.length > 0) {
-                                    successMsg += ` Can access ${accessibleNamespaces.length} namespace(s).`;
-                                }
-                            }
-                            
-                            successMsg += ' PBS permissions are correctly configured.';
-                            
-                            report.recommendations.push({
-                                severity: 'info',
-                                category: 'Backup Status',
-                                message: successMsg
-                            });
-                        }
-                    }
+                    // Don't add success messages for PBS either - permission analysis shows what's working
                 });
             }
         }
@@ -1439,8 +1481,9 @@ class DiagnosticTool {
                                   (report.state.pveBackups.storageBackups || 0);
             const totalPveSnapshots = report.state.pveBackups.guestSnapshots || 0;
             
-            // Check for storage discovery issues
-            if (report.state.pveBackups.backupTasks > 0 && report.state.pveBackups.storageBackups === 0) {
+            // Check for storage discovery issues - but not in secure mode where it's expected
+            if (report.permissionAnalysis && report.permissionAnalysis.mode !== 'secure' &&
+                report.state.pveBackups.backupTasks > 0 && report.state.pveBackups.storageBackups === 0) {
                 // We have backup tasks but no storage backups found
                 let storageIssue = false;
                 let hasBackupStorage = false;
@@ -1538,34 +1581,87 @@ class DiagnosticTool {
                 if (rec.category && rec.category.includes('Permissions Review')) hasOverlyPermissive = true;
             });
             
-            // Add a positive security message if tokens are well-configured
-            if (!hasRootTokens && !hasOverlyPermissive) {
-                // Check if any PVE tokens are non-root
-                const hasNonRootPve = report.permissions.proxmox?.some(p => 
-                    p.tokenId && !p.tokenId.startsWith('root@')
-                );
-                const hasNonRootPbs = report.permissions.pbs?.some(p => 
-                    p.tokenId && !p.tokenId.startsWith('root@')
-                );
-                
-                if (hasNonRootPve || hasNonRootPbs) {
-                    report.recommendations.push({
-                        severity: 'info',
-                        category: 'Security: Good Configuration',
-                        message: 'Your API tokens follow security best practices by using dedicated monitoring users instead of root tokens. This limits potential damage if tokens are compromised.'
-                    });
+            // Don't add redundant security messages - permission analysis already shows this
+        }
+        
+        // Add focused security recommendation for Extended Mode users
+        if (report.permissionAnalysis && report.permissionAnalysis.mode === 'extended') {
+            // Get the actual token user from the first PVE instance
+            let tokenUser = 'your-user@pam';
+            if (report.permissions && report.permissions.proxmox && report.permissions.proxmox.length > 0) {
+                const firstPve = report.permissions.proxmox[0];
+                if (firstPve.tokenId) {
+                    // Extract just the user part (before the !)
+                    tokenUser = firstPve.tokenId.split('!')[0];
                 }
+            }
+            
+            report.recommendations.push({
+                severity: 'info',
+                category: 'Security Trade-off Information',
+                message: `<strong>Understanding Your Current Permission Mode</strong>
+
+You're using Extended Mode to view PVE local storage backups. This requires the PVEDatastoreAdmin role due to how Proxmox's API works.
+
+<strong>What this means:</strong>
+• ✅ You can see .vma backup files in PVE local storage
+• ⚠️ Your token has write permissions (Datastore.Allocate) that Pulse doesn't use
+• ℹ️ This is a Proxmox API limitation, not a Pulse design choice
+
+<strong>Security considerations:</strong>
+The PVEDatastoreAdmin role includes permissions to:
+• Create or delete storage locations
+• Modify storage configurations
+• Upload or delete backup files
+
+While Pulse never uses these write permissions, they exist on your token.
+
+<strong>Your options:</strong>
+1. <strong>Keep Extended Mode</strong> if viewing PVE storage backups is important to you
+2. <strong>Switch to Secure Mode</strong> if you primarily use PBS or don't need to see .vma files
+
+<strong>To switch to Secure Mode (optional):</strong>
+<code style="font-family: monospace;">pveum acl modify /storage --delete --users ${tokenUser}</code>
+
+This removes storage permissions. After running this command:
+• ❌ PVE storage backups will no longer appear in the Backups tab
+• ✅ All other features continue working normally
+• ✅ PBS backups remain fully visible
+
+<strong>Note:</strong> There's no "right" choice here - it depends on your monitoring needs and security preferences.`
+            });
+        }
+        
+        // Add informational message for Secure Mode users about how to enable PVE backups if needed
+        if (report.permissionAnalysis && report.permissionAnalysis.mode === 'secure') {
+            // Check if there are any PVE instances configured
+            const hasPveInstances = report.permissions && report.permissions.proxmox && report.permissions.proxmox.length > 0;
+            
+            if (hasPveInstances) {
+                const tokenId = report.permissions.proxmox[0].tokenId || '';
+                const username = tokenId ? tokenId.split('!')[0] : 'your-user@pam';
+                const tokenName = tokenId ? tokenId.split('!')[1] : '';
+                
+                // For tokens with privsep=0, permissions go on the user
+                // For tokens with privsep=1, permissions would go on the token
+                // Since most Pulse users use noprivsep tokens, default to user permissions
+                report.recommendations.push({
+                    severity: 'info',
+                    category: 'Current Mode: Secure',
+                    message: `You're in Secure Mode with read-only access. PVE storage backups are not visible in this mode.
+
+<strong>If you need to see PVE storage backups:</strong>
+Grant the PVEDatastoreAdmin role on /storage:
+
+<code style="font-family: monospace;">pveum acl modify /storage --users ${username} --roles PVEDatastoreAdmin</code>
+
+Note: This grants write permissions that Pulse doesn't use, but is required by Proxmox to view storage contents.
+${tokenName === 'noprivsep' ? '(Your token has privilege separation disabled, so permissions are set on the user)' : ''}`
+                });
             }
         }
         
-        // Add success message if everything looks good
-        if (report.recommendations.length === 0) {
-            report.recommendations.push({
-                severity: 'info',
-                category: 'Status',
-                message: 'Configuration appears to be correct. If you\'re still experiencing issues, check the application logs for errors.'
-            });
-        }
+        // Don't add generic success messages - recommendations should only show actual issues
     }
 
     sanitizeUrl(url) {

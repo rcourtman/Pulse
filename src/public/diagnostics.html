@@ -4,692 +4,902 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pulse Diagnostics</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/output.css">
     <style>
-        pre { 
-            white-space: pre-wrap; 
-            word-wrap: break-word; 
-            max-width: 100%;
+        .diagnostics-table {
+            width: 100%;
+            border-collapse: collapse;
         }
-        .recommendation {
-            margin-bottom: 0.5rem;
-            padding: 0.5rem 0.75rem;
+        .diagnostics-table th {
+            background-color: #f3f4f6;
+            padding: 1rem 1.5rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .diagnostics-table td {
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
+            color: #111827;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .diagnostics-table tbody tr:hover {
+            background-color: #f9fafb;
+        }
+        .diagnostics-table tbody tr.section-divider td {
+            border-top: 2px solid #d1d5db;
+        }
+        
+        /* Dark mode using Pulse's dark class */
+        .dark .diagnostics-table th {
+            background-color: #111827;
+            color: #9ca3af;
+            border-bottom-color: #374151;
+        }
+        .dark .diagnostics-table td {
+            color: #f3f4f6;
+            border-bottom-color: #374151;
+        }
+        .dark .diagnostics-table tbody tr:hover {
+            background-color: rgba(55, 65, 81, 0.3);
+        }
+        .dark .diagnostics-table tbody tr.section-divider td {
+            border-top-color: #4b5563;
+        }
+        
+        /* Cell styles */
+        .category-cell {
+            font-weight: 500;
+            color: #111827;
+        }
+        .item-cell {
+            color: #374151;
+        }
+        .status-cell {
+            font-weight: 500;
+        }
+        .details-cell {
+            color: #6b7280;
+            font-size: 0.75rem;
+        }
+        
+        /* Dark mode cells */
+        .dark .category-cell { color: #f3f4f6; }
+        .dark .item-cell { color: #d1d5db; }
+        .dark .details-cell { color: #9ca3af; }
+        
+        /* Status colors */
+        .status-ok { color: #059669; }
+        .status-warning { color: #d97706; }
+        .status-error { color: #dc2626; }
+        .status-info { color: #2563eb; }
+        
+        .dark .status-ok { color: #34d399; }
+        .dark .status-warning { color: #fbbf24; }
+        .dark .status-error { color: #f87171; }
+        .dark .status-info { color: #60a5fa; }
+        
+        /* Zebra striping */
+        .diagnostics-table tbody tr:nth-child(even) {
+            background-color: rgba(249, 250, 251, 0.5);
+        }
+        .dark .diagnostics-table tbody tr:nth-child(even) {
+            background-color: rgba(31, 41, 55, 0.2);
+        }
+        
+        /* Status badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.125rem 0.625rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .status-badge-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .status-badge-warning {
+            background-color: #fed7aa;
+            color: #92400e;
+        }
+        .status-badge-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .dark .status-badge-success {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+        .dark .status-badge-warning {
+            background-color: rgba(251, 146, 60, 0.2);
+            color: #fbbf24;
+        }
+        .dark .status-badge-error {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+        
+        /* Feature comparison table */
+        .feature-comparison {
+            width: 100%;
+            font-size: 0.875rem;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+        }
+        .feature-comparison th {
+            padding: 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .dark .feature-comparison th {
+            background-color: #374151;
+            border-bottom-color: #4b5563;
+        }
+        .feature-comparison td {
+            padding: 0.5rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .dark .feature-comparison td {
+            border-bottom-color: #374151;
+        }
+        .feature-comparison tbody tr:hover {
+            background-color: #f9fafb;
+        }
+        .dark .feature-comparison tbody tr:hover {
+            background-color: #374151;
+        }
+        .feature-comparison .current-secure td:nth-child(2) {
+            background-color: rgba(16, 185, 129, 0.1);
+            font-weight: 600;
+        }
+        .feature-comparison .current-extended td:nth-child(3) {
+            background-color: rgba(251, 146, 60, 0.1);
+            font-weight: 600;
+        }
+        .dark .feature-comparison .current-secure td:nth-child(2) {
+            background-color: rgba(16, 185, 129, 0.15);
+        }
+        .dark .feature-comparison .current-extended td:nth-child(3) {
+            background-color: rgba(251, 146, 60, 0.15);
+        }
+        
+        /* Permission guidance styles */
+        .permission-guidance {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        .guidance-option {
+            padding: 1rem;
+            background-color: #f9fafb;
             border-radius: 0.375rem;
+            border: 1px solid #e5e7eb;
         }
-        .severity-critical { 
-            background-color: #fef2f2; 
-            border: 1px solid #dc2626;
-            border-left-width: 4px;
+        .dark .guidance-option {
+            background-color: #374151;
+            border-color: #4b5563;
         }
-        .severity-warning { 
-            background-color: #fffbeb; 
-            border: 1px solid #f59e0b;
-            border-left-width: 4px;
+        .guidance-option strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #111827;
         }
-        .severity-info { 
-            background-color: #f0f9ff; 
-            border: 1px solid #3b82f6;
-            border-left-width: 4px;
+        .dark .guidance-option strong {
+            color: #f3f4f6;
         }
-        .severity-success {
-            background-color: #f0fdf4;
-            border: 1px solid #16a34a;
-            border-left-width: 4px;
+        .guidance-option ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .guidance-option li {
+            padding: 0.25rem 0;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        .dark .guidance-option li {
+            color: #9ca3af;
+        }
+        
+        /* Responsive guidance on smaller screens */
+        @media (max-width: 768px) {
+            .permission-guidance {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Permission icons */
+        .permission-item {
+            display: flex;
+            align-items: center;
+            padding: 0.125rem 0;
+            font-size: 0.875rem;
+        }
+        .permission-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+        }
+        .permission-granted {
+            color: #059669;
+        }
+        .permission-denied {
+            color: #dc2626;
+        }
+        .permission-partial {
+            color: #d97706;
+        }
+        .dark .permission-granted {
+            color: #34d399;
+        }
+        .dark .permission-denied {
+            color: #f87171;
+        }
+        .dark .permission-partial {
+            color: #fbbf24;
+        }
+        
+        /* Token display */
+        .token-display {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+            font-size: 0.875rem;
+            background-color: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            display: inline-block;
+        }
+        .dark .token-display {
+            background-color: #374151;
+        }
+        
+        /* Security warnings */
+        .security-warning {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            gap: 0.5rem;
+        }
+        .security-optimal {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .security-elevated {
+            background-color: #fed7aa;
+            color: #92400e;
+        }
+        .security-high-risk {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .dark .security-optimal {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+        .dark .security-elevated {
+            background-color: rgba(251, 146, 60, 0.2);
+            color: #fbbf24;
+        }
+        .dark .security-high-risk {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+        .security-icon {
+            width: 1.25rem;
+            height: 1.25rem;
         }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h1 class="text-3xl font-bold mb-6 text-gray-800">Pulse Diagnostics</h1>
-            
-            <div id="loading" class="text-center py-8">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <p class="mt-4 text-gray-600">Running diagnostics...</p>
+<body class="bg-gray-100 dark:bg-gray-900">
+    <!-- Loading animation -->
+    <div id="loading-container" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="relative inline-block">
+                <!-- Pulse logo animation -->
+                <svg width="120" height="120" viewBox="0 0 120 120" class="animate-pulse">
+                    <!-- Outer circle -->
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.2"/>
+                    
+                    <!-- Pulse wave animation -->
+                    <circle cx="60" cy="60" r="30" fill="none" stroke="#3b82f6" stroke-width="3" opacity="0">
+                        <animate attributeName="r" from="30" to="50" dur="2s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" from="0.8" to="0" dur="2s" repeatCount="indefinite"/>
+                    </circle>
+                    
+                    <!-- Second pulse wave -->
+                    <circle cx="60" cy="60" r="30" fill="none" stroke="#3b82f6" stroke-width="3" opacity="0">
+                        <animate attributeName="r" from="30" to="50" dur="2s" begin="1s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" from="0.8" to="0" dur="2s" begin="1s" repeatCount="indefinite"/>
+                    </circle>
+                    
+                    <!-- Center heartbeat line -->
+                    <path d="M 30 60 L 40 60 L 45 45 L 50 75 L 55 35 L 60 65 L 65 40 L 70 70 L 75 50 L 80 60 L 90 60" 
+                          fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite"/>
+                    </path>
+                    
+                    <!-- Center dot -->
+                    <circle cx="60" cy="60" r="5" fill="#3b82f6">
+                        <animate attributeName="r" values="5;7;5" dur="1.5s" repeatCount="indefinite"/>
+                    </circle>
+                </svg>
+            </div>
+            <p class="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">Collecting diagnostics...</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Analyzing system health and permissions</p>
+        </div>
+    </div>
+
+    <div id="main-content" class="container mx-auto px-4 py-8 max-w-6xl hidden">
+        <!-- Navigation bar -->
+        <div class="mb-4">
+            <a href="/" class="inline-flex items-center text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Pulse Dashboard
+            </a>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Pulse Diagnostics</h1>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    System status and configuration overview • Generated: <span id="report-time"></span>
+                </p>
             </div>
             
-            <div id="error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <strong>Error:</strong> <span id="error-message"></span>
-            </div>
-            
-            <div id="results" class="hidden">
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">System Information</h2>
-                    <div class="bg-gray-50 p-4 rounded">
-                        <p><strong>Pulse Version:</strong> <span id="version"></span></p>
-                        <p><strong>Report Generated:</strong> <span id="timestamp"></span></p>
+            <div class="p-6">
+                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                    <table class="diagnostics-table">
+                        <thead>
+                            <tr>
+                                <th width="15%">Category</th>
+                                <th width="25%">Item</th>
+                                <th width="25%">Status</th>
+                                <th width="35%">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagnostics-tbody">
+                            <!-- Content will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Token Permissions Table -->
+                <div id="token-permissions-section" class="mt-6 hidden">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">API Token Permissions</h3>
+                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                        <table class="diagnostics-table">
+                            <thead>
+                                <tr>
+                                    <th width="20%">Server</th>
+                                    <th width="25%">Token</th>
+                                    <th width="35%">Permissions</th>
+                                    <th width="20%">Security</th>
+                                </tr>
+                            </thead>
+                            <tbody id="token-permissions-tbody">
+                                <!-- Content will be populated by JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="mt-4">
-                        <button onclick="copySanitizedReport()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mr-2">
-                            Copy Sanitized Report
-                        </button>
-                        <span id="copy-feedback" class="hidden text-green-600 font-semibold">✓ Report copied to clipboard!</span>
+                    
+                    <!-- Security implications explanation -->
+                    <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <h4 class="font-semibold text-sm mb-2 text-blue-900 dark:text-blue-300">Security Implications</h4>
+                        <div class="text-sm space-y-2 text-blue-800 dark:text-blue-200">
+                            <div class="flex items-center gap-3">
+                                <div class="security-warning security-optimal flex-shrink-0">
+                                    <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                    </svg>
+                                    <span>Read-Only</span>
+                                </div>
+                                <span>Optimal security. Token can only view data, cannot make any changes.</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="security-warning security-elevated flex-shrink-0">
+                                    <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                    <span>Write Access</span>
+                                </div>
+                                <span>Token has write permissions. If compromised, could modify storage configurations or delete data.</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="security-warning security-high-risk flex-shrink-0">
+                                    <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                    <span>Root User</span>
+                                </div>
+                                <span>Using root user token. Highest risk - consider creating a dedicated monitoring user.</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Environment</h2>
-                    <div id="environment" class="bg-gray-50 p-4 rounded space-y-2"></div>
-                </div>
-                
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Network Connectivity</h2>
-                    <div id="connectivity" class="space-y-4"></div>
-                </div>
-                
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Recent Errors</h2>
-                    <div id="recent-errors"></div>
-                </div>
-                
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Recommendations</h2>
-                    <div id="recommendations"></div>
-                </div>
-                
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Permission Details</h2>
-                    <div id="permissions" class="space-y-4"></div>
-                </div>
-                
-                <div class="mb-8">
-                    <h2 class="text-2xl font-semibold mb-4 text-gray-700">Full Report</h2>
-                    <button onclick="toggleFullReport()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4">
-                        Show/Hide Full Report
-                    </button>
-                    <pre id="full-report" class="hidden bg-gray-100 p-4 rounded overflow-x-auto text-sm"></pre>
+                <!-- Recommendations section if any -->
+                <div id="recommendations-section" class="mt-6 hidden">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Recommendations</h3>
+                    <div id="recommendations-list" class="space-y-2">
+                        <!-- Recommendations will be populated here -->
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
+    
     <script>
-        let diagnosticData = null; // Store the diagnostic data globally for copy function
+        // Initialize theme from localStorage to match Pulse's theme
+        (function() {
+            const theme = localStorage.getItem('theme') || 'system';
+            const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            
+            function applyTheme() {
+                const isDark = theme === 'dark' || (theme === 'system' && darkModeMediaQuery.matches);
+                document.documentElement.classList.toggle('dark', isDark);
+            }
+            
+            applyTheme();
+            
+            // Listen for system theme changes if using system theme
+            if (theme === 'system') {
+                darkModeMediaQuery.addEventListener('change', applyTheme);
+            }
+            
+            // Listen for theme changes from other Pulse pages
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'theme') {
+                    location.reload(); // Reload to apply new theme
+                }
+            });
+        })();
         
-        async function runDiagnostics() {
+        async function loadDiagnostics() {
             try {
                 const response = await fetch('/api/diagnostics');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
                 const data = await response.json();
-                diagnosticData = data; // Store for copy function
-                displayResults(data);
-            } catch (error) {
-                showError(error.message);
-            }
-        }
-
-        function displayResults(data) {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('results').classList.remove('hidden');
-            
-            // Basic info
-            document.getElementById('version').textContent = data.version || 'Unknown';
-            document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleString();
-            
-            // Environment info
-            const envContainer = document.getElementById('environment');
-            if (data.environment) {
-                const env = data.environment;
-                envContainer.innerHTML = `
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p><strong>Node.js:</strong> ${env.nodeVersion}</p>
-                            <p><strong>Platform:</strong> ${env.platform} (${env.arch})</p>
-                            <p><strong>OS:</strong> ${env.osType} ${env.osRelease}</p>
-                            <p><strong>Docker:</strong> ${env.dockerDetected ? 'Yes' : 'No'}</p>
-                        </div>
-                        <div>
-                            <p><strong>CPU Cores:</strong> ${env.cpuCount}</p>
-                            <p><strong>Memory:</strong> ${env.usedMemory || (parseInt(env.totalMemory) - parseInt(env.freeMemory)) + ' MB'} / ${env.totalMemory}</p>
-                            <p><strong>Process Memory:</strong> ${env.nodeMemoryUsage.heapUsed} heap</p>
-                            <p><strong>Uptime:</strong> ${env.uptime}</p>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Network Connectivity
-            const connContainer = document.getElementById('connectivity');
-            if (data.connectivity) {
-                let connHtml = '';
                 
-                // Proxmox connections
-                if (data.connectivity.proxmox && data.connectivity.proxmox.length > 0) {
-                    connHtml += '<h3 class="text-lg font-semibold mb-2">Proxmox VE</h3>';
-                    connHtml += '<div class="bg-gray-50 p-4 rounded mb-4">';
-                    data.connectivity.proxmox.forEach(conn => {
-                        const statusIcon = conn.reachable ? '✅' : '❌';
-                        const statusText = conn.reachable ? 'Connected' : conn.errorType || 'Failed';
-                        const timeText = conn.responseTime ? `${conn.responseTime}ms` : 'N/A';
-                        connHtml += `
-                            <div class="mb-2">
-                                <strong>${conn.name}:</strong> ${statusIcon} ${statusText} 
-                                <span class="text-sm text-gray-600">(Response time: ${timeText})</span>
-                                ${conn.error ? `<div class="text-red-600 text-sm">${conn.error}</div>` : ''}
-                            </div>
-                        `;
-                    });
-                    connHtml += '</div>';
-                }
+                // Update timestamp
+                document.getElementById('report-time').textContent = new Date().toLocaleString();
                 
-                // PBS connections
-                if (data.connectivity.pbs && data.connectivity.pbs.length > 0) {
-                    connHtml += '<h3 class="text-lg font-semibold mb-2">Proxmox Backup Server</h3>';
-                    connHtml += '<div class="bg-gray-50 p-4 rounded">';
-                    data.connectivity.pbs.forEach(conn => {
-                        const statusIcon = conn.reachable ? '✅' : '❌';
-                        const statusText = conn.reachable ? 'Connected' : conn.errorType || 'Failed';
-                        const timeText = conn.responseTime ? `${conn.responseTime}ms` : 'N/A';
-                        connHtml += `
-                            <div class="mb-2">
-                                <strong>${conn.name}:</strong> ${statusIcon} ${statusText}
-                                <span class="text-sm text-gray-600">(Response time: ${timeText})</span>
-                                ${conn.error ? `<div class="text-red-600 text-sm">${conn.error}</div>` : ''}
-                            </div>
-                        `;
-                    });
-                    connHtml += '</div>';
-                }
+                const tbody = document.getElementById('diagnostics-tbody');
+                let rows = [];
                 
-                connContainer.innerHTML = connHtml || '<p class="text-gray-600">No connections configured</p>';
-            }
-            
-            // Recent Errors
-            const errorsContainer = document.getElementById('recent-errors');
-            if (data.recentErrors && data.recentErrors.length > 0) {
-                errorsContainer.innerHTML = `
-                    <div class="bg-red-50 p-4 rounded space-y-2">
-                        ${data.recentErrors.map(error => `
-                            <div class="border-b border-red-200 pb-2 mb-2">
-                                <div class="text-sm text-gray-600">${new Date(error.timestamp).toLocaleString()} - ${error.context}</div>
-                                <div class="text-red-700 font-semibold">${error.type}: ${error.message}</div>
-                                ${error.stack ? `<pre class="text-xs text-gray-600 overflow-x-auto mt-1">${error.stack}</pre>` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } else {
-                errorsContainer.innerHTML = '<p class="text-green-600 bg-green-50 p-4 rounded">✓ No recent errors</p>';
-            }
-            
-            // Recommendations
-            const recsContainer = document.getElementById('recommendations');
-            if (data.recommendations && data.recommendations.length > 0) {
-                // Count by severity
-                const critical = data.recommendations.filter(r => r.severity === 'critical');
-                const warnings = data.recommendations.filter(r => r.severity === 'warning');
-                const info = data.recommendations.filter(r => r.severity === 'info');
+                // System Information
+                rows.push({
+                    category: 'System',
+                    item: 'Pulse Version',
+                    status: data.version || 'Unknown',
+                    details: ''
+                });
                 
-                // Create summary
-                let summaryHtml = '<div class="mb-4 p-3 bg-gray-100 rounded">';
-                summaryHtml += '<h3 class="font-semibold mb-2">Summary</h3>';
-                summaryHtml += '<div class="flex gap-6 text-sm">';
-                if (critical.length > 0) {
-                    summaryHtml += `<span class="text-red-600 font-semibold">❌ ${critical.length} Critical</span>`;
-                }
-                if (warnings.length > 0) {
-                    summaryHtml += `<span class="text-yellow-600 font-semibold">⚠️ ${warnings.length} Warning${warnings.length > 1 ? 's' : ''}</span>`;
-                }
-                if (info.length > 0) {
-                    summaryHtml += `<span class="text-blue-600 font-semibold">ℹ️ ${info.length} Info</span>`;
-                }
-                summaryHtml += '</div></div>';
-                
-                // Group and display recommendations
-                let recsHtml = '';
-                
-                // Critical issues first
-                if (critical.length > 0) {
-                    critical.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, ' ');
-                        recsHtml += `
-                            <div class="recommendation severity-critical">
-                                <div class="text-sm">
-                                    <span class="font-semibold">❌ CRITICAL: ${rec.category}</span> - ${formattedMessage}
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                
-                // Warnings
-                if (warnings.length > 0) {
-                    warnings.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, ' ');
-                        recsHtml += `
-                            <div class="recommendation severity-warning">
-                                <div class="text-sm">
-                                    <span class="font-semibold">⚠️ WARNING: ${rec.category}</span> - ${formattedMessage}
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                
-                // Info messages (these are often "everything is good" messages)
-                if (info.length > 0) {
-                    info.forEach(rec => {
-                        const formattedMessage = rec.message.replace(/\n/g, ' ');
-                        // Check if it's a success/good message
-                        const isSuccess = rec.message.includes('successfully') || 
-                                        rec.message.includes('correctly configured') || 
-                                        rec.message.includes('No issues') ||
-                                        rec.message.includes('appears to be correct');
-                        
-                        recsHtml += `
-                            <div class="recommendation ${isSuccess ? 'severity-success' : 'severity-info'}">
-                                <div class="text-sm">
-                                    <span class="font-semibold">${isSuccess ? '✅' : 'ℹ️'} ${isSuccess ? 'OK' : 'INFO'}: ${rec.category}</span> - ${formattedMessage}
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                
-                recsContainer.innerHTML = summaryHtml + recsHtml;
-            } else {
-                recsContainer.innerHTML = '<p class="text-gray-600">No issues found</p>';
-            }
-            
-            // Permissions
-            const permsContainer = document.getElementById('permissions');
-            
-            // PVE Permissions
-            if (data.permissions && data.permissions.proxmox) {
-                const pveHtml = data.permissions.proxmox.map(perm => `
-                    <div class="bg-gray-50 p-4 rounded">
-                        <h3 class="font-semibold text-lg mb-2">Proxmox: ${perm.name}</h3>
-                        <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
-                        ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
-                        <div class="grid grid-cols-2 gap-2 text-sm mt-3">
-                            <div class="${perm.canConnect ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canConnect ? '✅' : '❌'} Connection
-                            </div>
-                            <div class="${perm.canListNodes ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListNodes ? '✅' : '❌'} List Nodes
-                            </div>
-                            <div class="${perm.canListVMs ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListVMs ? '✅' : '❌'} List VMs
-                            </div>
-                            <div class="${perm.canListContainers ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListContainers ? '✅' : '❌'} List Containers
-                            </div>
-                            <div class="${perm.canGetNodeStats ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canGetNodeStats ? '✅' : '❌'} Node Stats
-                            </div>
-                            <div class="${perm.canListStorage ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListStorage ? '✅' : '❌'} List Storage
-                            </div>
-                            <div class="${perm.canAccessStorageBackups ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canAccessStorageBackups ? '✅' : '❌'} Access Backups
-                            </div>
-                        </div>
-                        ${perm.storageBackupAccess ? `
-                            <p class="mt-2 text-sm">
-                                Storage Access: ${perm.storageBackupAccess.accessibleStorages} of ${perm.storageBackupAccess.totalStoragesTested} accessible
-                            </p>
-                        ` : ''}
-                        ${perm.errors && perm.errors.length > 0 ? `
-                            <div class="mt-2 text-red-600 text-sm">
-                                Errors: ${perm.errors.join(', ')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('');
-                permsContainer.innerHTML += '<h3 class="text-xl font-semibold mb-2">Proxmox VE</h3>' + pveHtml;
-            }
-            
-            // PBS Permissions
-            if (data.permissions && data.permissions.pbs && data.permissions.pbs.length > 0) {
-                const pbsHtml = data.permissions.pbs.map(perm => `
-                    <div class="bg-gray-50 p-4 rounded">
-                        <h3 class="font-semibold text-lg mb-2">PBS: ${perm.name}</h3>
-                        <p class="text-sm text-gray-600 mb-2">${perm.host}</p>
-                        ${perm.tokenId ? `<p class="text-sm text-gray-600 mb-2">Token: ${perm.tokenId.split('!')[0]}!***</p>` : ''}
-                        <div class="grid grid-cols-2 gap-2 text-sm mt-3">
-                            <div class="${perm.canConnect ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canConnect ? '✅' : '❌'} Connection
-                            </div>
-                            <div class="${perm.canListDatastores ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListDatastores ? '✅' : '❌'} List Datastores
-                            </div>
-                            <div class="${perm.canListBackups ? 'text-green-700' : 'text-red-700'}">
-                                ${perm.canListBackups ? '✅' : '❌'} List Backups
-                            </div>
-                        </div>
-                        ${perm.errors && perm.errors.length > 0 ? `
-                            <div class="mt-2 text-red-600 text-sm">
-                                Errors: ${perm.errors.join(', ')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('');
-                permsContainer.innerHTML += '<h3 class="text-xl font-semibold mb-2 mt-4">Proxmox Backup Server</h3>' + pbsHtml;
-            }
-            
-            // Full report
-            document.getElementById('full-report').textContent = JSON.stringify(data, null, 2);
-        }
-
-        function showError(message) {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('error').classList.remove('hidden');
-            document.getElementById('error-message').textContent = message;
-        }
-
-        function toggleFullReport() {
-            document.getElementById('full-report').classList.toggle('hidden');
-        }
-
-        function sanitizeReport(report) {
-            // Deep clone the report to avoid modifying the original
-            const sanitized = JSON.parse(JSON.stringify(report));
-            
-            // Sanitize environment section
-            if (sanitized.environment) {
-                if (sanitized.environment.workingDirectory) {
-                    sanitized.environment.workingDirectory = '/opt/pulse';
-                }
-                // Sanitize environment variables
-                if (sanitized.environment.environmentVariables) {
-                    const env = sanitized.environment.environmentVariables;
-                    // Sanitize email addresses
-                    if (env.ALERT_FROM_EMAIL) env.ALERT_FROM_EMAIL = '[EMAIL]';
-                    if (env.ALERT_TO_EMAIL) env.ALERT_TO_EMAIL = '[EMAIL]';
-                    // Sanitize hostnames
-                    if (env.PBS_HOST) env.PBS_HOST = '[HOSTNAME]';
-                }
-            }
-            
-            // Sanitize connectivity section
-            if (sanitized.connectivity) {
-                if (sanitized.connectivity.proxmox) {
-                    sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map((conn, idx) => ({
-                        ...conn,
-                        host: '[HOSTNAME]',
-                        name: `pve-server-${idx + 1}`
-                    }));
-                }
-                if (sanitized.connectivity.pbs) {
-                    sanitized.connectivity.pbs = sanitized.connectivity.pbs.map((conn, idx) => ({
-                        ...conn,
-                        host: '[HOSTNAME]',
-                        name: `pbs-server-${idx + 1}`
-                    }));
-                }
-            }
-            
-            // Sanitize state section
-            if (sanitized.state) {
-                if (sanitized.state.nodes) {
-                    const nodeMapping = {};
-                    let nodeCounter = 1;
-                    Object.keys(sanitized.state.nodes).forEach(nodeName => {
-                        nodeMapping[nodeName] = `node-${nodeCounter++}`;
+                if (data.environment) {
+                    rows.push({
+                        category: 'System',
+                        item: 'Environment',
+                        status: `${data.environment.platform} (${data.environment.arch})`,
+                        details: `Node ${data.environment.nodeVersion}, ${data.environment.cpuCount} CPUs`
                     });
                     
-                    const sanitizedNodes = {};
-                    Object.entries(sanitized.state.nodes).forEach(([nodeName, nodeData]) => {
-                        const sanitizedNodeName = nodeMapping[nodeName];
-                        const sanitizedData = { ...nodeData };
-                        
-                        // Sanitize any nested node names
-                        Object.keys(sanitizedData).forEach(key => {
-                            if (typeof sanitizedData[key] === 'string' && (key.match(/^\d+$/) || key === 'node')) {
-                                // Check if it's a node name
-                                if (['minipc', 'delly', 'pi', 'pimox', 'proxmox'].some(name => sanitizedData[key].includes(name))) {
-                                    sanitizedData[key] = `node-${Object.keys(nodeMapping).indexOf(sanitizedData[key]) + 1 || 'X'}`;
+                    rows.push({
+                        category: 'System',
+                        item: 'Memory',
+                        status: data.environment.usedMemory + ' / ' + data.environment.totalMemory,
+                        details: `Process: ${data.environment.nodeMemoryUsage.heapUsed}`
+                    });
+                }
+                
+                // Connectivity
+                if (data.connectivity) {
+                    if (data.connectivity.proxmox) {
+                        data.connectivity.proxmox.forEach(pve => {
+                            rows.push({
+                                category: 'Connectivity',
+                                item: `PVE: ${pve.name}`,
+                                status: pve.reachable ? '<span class="status-badge status-badge-success">Connected</span>' : '<span class="status-badge status-badge-error">Disconnected</span>',
+                                details: pve.reachable ? `${pve.responseTime}ms` : (pve.error || 'Connection failed')
+                            });
+                        });
+                    }
+                    
+                    if (data.connectivity.pbs) {
+                        data.connectivity.pbs.forEach(pbs => {
+                            rows.push({
+                                category: 'Connectivity',
+                                item: `PBS: ${pbs.name}`,
+                                status: pbs.reachable ? '<span class="status-badge status-badge-success">Connected</span>' : '<span class="status-badge status-badge-error">Disconnected</span>',
+                                details: pbs.reachable ? `${pbs.responseTime}ms` : (pbs.error || 'Connection failed')
+                            });
+                        });
+                    }
+                }
+                
+                // Permission Analysis - Simplified summary
+                if (data.permissionAnalysis) {
+                    const pa = data.permissionAnalysis;
+                    
+                    let modeHtml = '';
+                    let modeDescription = '';
+                    switch(pa.mode) {
+                        case 'secure':
+                            modeHtml = '<span class="status-badge status-badge-success">Secure Mode</span>';
+                            modeDescription = 'Read-only access (recommended) - Cannot view PVE storage backups';
+                            break;
+                        case 'extended':
+                            modeHtml = '<span class="status-badge status-badge-warning">Extended Mode</span>';
+                            modeDescription = 'Full visibility including PVE storage - Has write permissions';
+                            break;
+                        case 'insufficient':
+                            modeHtml = '<span class="status-badge status-badge-error">Insufficient Permissions</span>';
+                            modeDescription = 'Missing basic monitoring permissions - Grant PVEAuditor role';
+                            break;
+                        default:
+                            modeHtml = '<span class="status-badge">Unknown</span>';
+                            modeDescription = 'Unable to determine permission level';
+                    }
+                    
+                    rows.push({
+                        category: 'Permissions',
+                        item: 'Overall Mode',
+                        status: modeHtml,
+                        details: modeDescription
+                    });
+                }
+                
+                // Enhance connectivity info with permission details
+                if (data.connectivity && data.permissions) {
+                    // Add permission details to connectivity
+                    if (data.connectivity.proxmox && data.permissions.proxmox) {
+                        data.connectivity.proxmox.forEach(conn => {
+                            const perm = data.permissions.proxmox.find(p => p.name === conn.name);
+                            if (perm && conn.reachable) {
+                                const capabilities = [];
+                                if (perm.canListVMs) capabilities.push('VMs');
+                                if (perm.canListContainers) capabilities.push('LXCs');
+                                if (perm.canAccessStorageBackups) capabilities.push('Storage Backups');
+                                if (capabilities.length > 0) {
+                                    // Find the row and update it
+                                    const rowIndex = rows.findIndex(r => r.item === `PVE: ${conn.name}`);
+                                    if (rowIndex >= 0) {
+                                        rows[rowIndex].details += ` • Access: ${capabilities.join(', ')}`;
+                                    }
                                 }
                             }
                         });
+                    }
+                    
+                    if (data.connectivity.pbs && data.permissions.pbs) {
+                        data.connectivity.pbs.forEach(conn => {
+                            const perm = data.permissions.pbs.find(p => p.name === conn.name);
+                            if (perm && conn.reachable && perm.canListBackups) {
+                                const rowIndex = rows.findIndex(r => r.item === `PBS: ${conn.name}`);
+                                if (rowIndex >= 0) {
+                                    rows[rowIndex].details += ' • Can list backups';
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // Render table with improved styling
+                tbody.innerHTML = rows.map((row, idx) => {
+                    const categoryChanged = idx === 0 || rows[idx-1].category !== row.category;
+                    const isFirstInCategory = categoryChanged;
+                    
+                    // Apply section divider for new categories (except first)
+                    const rowClass = categoryChanged && idx > 0 ? 'section-divider' : '';
+                    
+                    return `
+                        <tr class="${rowClass}">
+                            <td class="category-cell">${categoryChanged ? row.category : ''}</td>
+                            <td class="item-cell">${row.item}</td>
+                            <td class="status-cell">${row.status}</td>
+                            <td class="details-cell">${row.details}</td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                // Handle recommendations
+                if (data.recommendations && data.recommendations.length > 0) {
+                    document.getElementById('recommendations-section').classList.remove('hidden');
+                    const recsList = document.getElementById('recommendations-list');
+                    
+                    recsList.innerHTML = data.recommendations.map(rec => {
+                        let iconClass = '';
+                        let textClass = '';
+                        switch(rec.severity) {
+                            case 'critical': 
+                                iconClass = 'text-red-600 dark:text-red-400';
+                                textClass = 'text-red-900 dark:text-white';
+                                break;
+                            case 'warning': 
+                                iconClass = 'text-yellow-600 dark:text-yellow-400';
+                                textClass = 'text-yellow-900 dark:text-white';
+                                break;
+                            default: 
+                                iconClass = 'text-blue-600 dark:text-blue-400';
+                                textClass = 'text-blue-900 dark:text-white';
+                        }
                         
-                        sanitizedNodes[sanitizedNodeName] = {
-                            ...sanitizedData,
-                            node: sanitizedNodeName,
-                            // Sanitize storage names
-                            storages: nodeData.storages ? Object.entries(nodeData.storages).reduce((acc, [storageName, storageData], idx) => {
-                                acc[`storage-${sanitizedNodeName.split('-')[1]}-${idx + 1}`] = {
-                                    ...storageData,
-                                    storage: `storage-${sanitizedNodeName.split('-')[1]}-${idx + 1}`
+                        return `
+                            <div class="p-3 rounded-lg border ${
+                                rec.severity === 'critical' ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' :
+                                rec.severity === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800' :
+                                'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                            }">
+                                <div class="flex items-start">
+                                    <span class="${iconClass} mr-2">${
+                                        rec.severity === 'critical' ? '❌' :
+                                        rec.severity === 'warning' ? '⚠️' : 'ℹ️'
+                                    }</span>
+                                    <div class="flex-1 ${textClass}">
+                                        <div class="font-semibold text-sm">${rec.category}</div>
+                                        <div class="text-sm mt-1 opacity-90">${rec.message.includes('<table') ? rec.message : rec.message.replace(/\n/g, '<br>')}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    document.getElementById('recommendations-section').classList.add('hidden');
+                }
+                
+                // Populate token permissions table
+                if (data.permissions && (data.permissions.proxmox?.length > 0 || data.permissions.pbs?.length > 0)) {
+                    document.getElementById('token-permissions-section').classList.remove('hidden');
+                    const tokenTbody = document.getElementById('token-permissions-tbody');
+                    let tokenRows = '';
+                    
+                    // Helper function to render permission icon
+                    const renderPermission = (granted, label, details = '') => {
+                        const icon = granted ? 
+                            '<svg class="permission-icon permission-granted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' :
+                            '<svg class="permission-icon permission-denied" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+                        
+                        return `<div class="permission-item">
+                            ${icon}
+                            <span>${label}${details ? ` <span class="text-gray-500 dark:text-gray-400">${details}</span>` : ''}</span>
+                        </div>`;
+                    };
+                    
+                    // Helper function to analyze security level
+                    const analyzeSecurityLevel = (perm, type) => {
+                        if (type === 'pve') {
+                            // Check if token is root
+                            const isRoot = perm.tokenId && perm.tokenId.startsWith('root@');
+                            
+                            // Check permission levels
+                            const hasBasicMonitoring = perm.canListNodes && perm.canListVMs && 
+                                                      perm.canListContainers && perm.canGetNodeStats;
+                            const hasStorageAccess = perm.canAccessStorageBackups;
+                            
+                            if (!perm.canConnect) {
+                                return {
+                                    level: 'error',
+                                    html: '<span class="text-gray-500">N/A</span>',
+                                    description: ''
                                 };
-                                return acc;
-                            }, {}) : {}
-                        };
-                    });
-                    sanitized.state.nodes = sanitizedNodes;
-                }
-                
-                // Sanitize pbs section
-                if (sanitized.state.pbs) {
-                    if (sanitized.state.pbs.sampleBackupIds) {
-                        sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, idx) => `backup-id-${idx + 1}`);
-                    }
-                    if (sanitized.state.pbs.instanceDetails) {
-                        sanitized.state.pbs.instanceDetails = sanitized.state.pbs.instanceDetails.map((instance, idx) => ({
-                            ...instance,
-                            name: `pbs-server-${idx + 1}`
-                        }));
-                    }
-                }
-                
-                // Sanitize storageDebug section
-                if (sanitized.state.storageDebug && sanitized.state.storageDebug.storageByNode) {
-                    sanitized.state.storageDebug.storageByNode = sanitized.state.storageDebug.storageByNode.map((nodeInfo, idx) => ({
-                        ...nodeInfo,
-                        node: `node-${idx + 1}`,
-                        storages: nodeInfo.storages ? nodeInfo.storages.map((storage, sIdx) => ({
-                            ...storage,
-                            name: storage.name.includes('pbs-') ? `pbs-storage-${idx + 1}-${sIdx + 1}` : `storage-${idx + 1}-${sIdx + 1}`
-                        })) : []
-                    }));
-                }
-                
-                if (sanitized.state.backupServers) {
-                    sanitized.state.backupServers = Object.entries(sanitized.state.backupServers).reduce((acc, [serverName, serverData], idx) => {
-                        const sanitizedName = `pbs-server-${idx + 1}`;
-                        acc[sanitizedName] = {
-                            ...serverData,
-                            nodes: serverData.nodes ? Object.entries(serverData.nodes).reduce((nodeAcc, [nodeName, nodeData], nodeIdx) => {
-                                const sanitizedNodeName = nodeName === 'localhost' || nodeName.includes('auto-discovered') ? nodeName : `pbs-node-${idx + 1}-${nodeIdx + 1}`;
-                                nodeAcc[sanitizedNodeName] = {
-                                    ...nodeData,
-                                    node: sanitizedNodeName
+                            }
+                            
+                            if (isRoot) {
+                                return {
+                                    level: 'high-risk',
+                                    html: `<div class="security-warning security-high-risk">
+                                        <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                        </svg>
+                                        <span>Root User</span>
+                                    </div>`,
+                                    description: 'Using root token - high security risk'
                                 };
-                                return nodeAcc;
-                            }, {}) : {},
-                            datastores: serverData.datastores ? serverData.datastores.map((ds, dsIdx) => ({
-                                ...ds,
-                                name: `datastore-${idx + 1}-${dsIdx + 1}`,
-                                path: ds.path ? ds.path.replace(/\/[^\/]+$/, '/[PATH]') : ds.path
-                            })) : [],
-                            backups: serverData.backups ? serverData.backups.map((backup, backupIdx) => ({
-                                ...backup,
-                                'backup-id': `backup-${backupIdx + 1}`,
-                                'backup-group': backup['backup-group'] ? backup['backup-group'].replace(/^[^\/]+/, 'namespace-1') : backup['backup-group']
-                            })) : []
-                        };
-                        return acc;
-                    }, {});
-                }
-            }
-            
-            // Sanitize recommendations
-            if (sanitized.recommendations) {
-                sanitized.recommendations = sanitized.recommendations.map(rec => ({
-                    ...rec,
-                    message: rec.message
-                        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP-ADDRESS]')
-                        .replace(/https?:\/\/[^\/\s:]+/g, 'https://[HOSTNAME]')
-                        .replace(/node\s+'[^']+'/g, "node '[NODE-NAME]'")
-                        .replace(/node\s+"[^"]+"/g, 'node "[NODE-NAME]"')
-                        .replace(/host\s+'[^']+'/g, "host '[HOSTNAME]'")
-                        .replace(/host\s+"[^"]+"/g, 'host "[HOSTNAME]"')
-                        .replace(/:\d{4,5}\b/g, ':[PORT]')
-                }));
-            }
-            
-            // Sanitize errors
-            if (sanitized.errors) {
-                sanitized.errors = sanitized.errors.map(error => ({
-                    ...error,
-                    message: error.message
-                        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
-                        .replace(/https?:\/\/[^\/\s:]+/g, 'https://[HOSTNAME]')
-                        .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
-                        .replace(/:\d{4,5}\b/g, ':[PORT]')
-                }));
-            }
-            
-            // Sanitize configuration section
-            if (sanitized.configuration) {
-                if (sanitized.configuration.proxmox) {
-                    sanitized.configuration.proxmox = sanitized.configuration.proxmox.map((config, idx) => ({
-                        ...config,
-                        host: '[HOSTNAME]',
-                        name: `pve-server-${idx + 1}`
-                    }));
-                }
-                if (sanitized.configuration.pbs) {
-                    sanitized.configuration.pbs = sanitized.configuration.pbs.map((config, idx) => ({
-                        ...config,
-                        host: '[HOSTNAME]',
-                        name: `pbs-server-${idx + 1}`
-                    }));
-                }
-            }
-            
-            // Sanitize permissions  
-            if (sanitized.permissions) {
-                if (sanitized.permissions.proxmox) {
-                    sanitized.permissions.proxmox = sanitized.permissions.proxmox.map((perm, idx) => ({
-                        ...perm,
-                        name: `pve-server-${idx + 1}`,
-                        host: '[HOSTNAME]',
-                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId,
-                        storageBackupAccess: perm.storageBackupAccess ? {
-                            ...perm.storageBackupAccess,
-                            storageDetails: perm.storageBackupAccess.storageDetails ? perm.storageBackupAccess.storageDetails.map((detail, dIdx) => ({
-                                ...detail,
-                                node: `node-${dIdx + 1}`,
-                                storage: detail.storage.includes('pbs-') ? `pbs-storage-${dIdx + 1}` : `storage-${dIdx + 1}`
-                            })) : []
-                        } : undefined
-                    }));
-                }
-                if (sanitized.permissions.pbs) {
-                    sanitized.permissions.pbs = sanitized.permissions.pbs.map((perm, idx) => ({
-                        ...perm,
-                        name: `pbs-server-${idx + 1}`,
-                        host: '[HOSTNAME]',
-                        tokenId: perm.tokenId ? perm.tokenId.replace(/^[^@]+/, 'user').replace(/![^!]+$/, '!***') : perm.tokenId
-                    }));
-                }
-            }
-            
-            // Add sanitization notice
-            sanitized.sanitizationNotice = 'This report has been sanitized to remove sensitive information (hostnames, IPs, node names, etc.)';
-            
-            return sanitized;
-        }
-
-        async function copySanitizedReport() {
-            if (!diagnosticData) {
-                alert('No diagnostic data available. Please wait for the diagnostics to complete.');
-                return;
-            }
-            
-            // Sanitize the diagnostic data
-            const sanitizedData = sanitizeReport(diagnosticData);
-
-            // Format the report for GitHub
-            let formattedReport = '## Pulse Diagnostics Report\n\n';
-            
-            // Add basic info
-            formattedReport += `**Version:** ${sanitizedData.version || 'Unknown'}\n`;
-            formattedReport += `**Generated:** ${new Date(sanitizedData.timestamp).toLocaleString()}\n\n`;
-            
-            // Add recommendations summary
-            if (sanitizedData.recommendations && sanitizedData.recommendations.length > 0) {
-                formattedReport += '### Issues Found\n\n';
-                
-                // Group by severity
-                const critical = sanitizedData.recommendations.filter(r => r.severity === 'critical');
-                const warnings = sanitizedData.recommendations.filter(r => r.severity === 'warning');
-                const info = sanitizedData.recommendations.filter(r => r.severity === 'info');
-                
-                if (critical.length > 0) {
-                    formattedReport += '#### Critical Issues\n';
-                    critical.forEach(rec => {
-                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
-                    });
-                    formattedReport += '\n';
-                }
-                
-                if (warnings.length > 0) {
-                    formattedReport += '#### Warnings\n';
-                    warnings.forEach(rec => {
-                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
-                    });
-                    formattedReport += '\n';
-                }
-                
-                if (info.length > 0) {
-                    formattedReport += '#### Information\n';
-                    info.forEach(rec => {
-                        formattedReport += `- **${rec.category}:** ${rec.message.replace(/\n/g, '\n  ')}\n`;
-                    });
-                    formattedReport += '\n';
-                }
-            } else {
-                formattedReport += '### ✅ No Issues Found\n\n';
-            }
-            
-            // Add collapsible full report
-            formattedReport += '<details>\n<summary><b>Full Diagnostic Report (Click to expand)</b></summary>\n\n';
-            formattedReport += '```json\n';
-            formattedReport += JSON.stringify(sanitizedData, null, 2);
-            formattedReport += '\n```\n\n</details>\n';
-            
-            // Copy to clipboard
-            try {
-                await navigator.clipboard.writeText(formattedReport);
-                
-                // Show feedback
-                const feedback = document.getElementById('copy-feedback');
-                feedback.classList.remove('hidden');
-                setTimeout(() => {
-                    feedback.classList.add('hidden');
-                }, 3000);
-            } catch (err) {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = formattedReport;
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-999999px';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                
-                try {
-                    document.execCommand('copy');
-                    // Show feedback
-                    const feedback = document.getElementById('copy-feedback');
-                    feedback.classList.remove('hidden');
-                    setTimeout(() => {
-                        feedback.classList.add('hidden');
-                    }, 3000);
-                } catch (err) {
-                    alert('Failed to copy report to clipboard. Please try selecting and copying manually.');
+                            }
+                            
+                            if (hasStorageAccess) {
+                                return {
+                                    level: 'elevated',
+                                    html: `<div class="security-warning security-elevated">
+                                        <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                        </svg>
+                                        <span>Write Access</span>
+                                    </div>`,
+                                    description: 'Has Datastore.Allocate permission (can modify storage)'
+                                };
+                            }
+                            
+                            if (hasBasicMonitoring) {
+                                return {
+                                    level: 'optimal',
+                                    html: `<div class="security-warning security-optimal">
+                                        <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                        </svg>
+                                        <span>Read-Only</span>
+                                    </div>`,
+                                    description: 'Optimal security - read-only access'
+                                };
+                            }
+                            
+                            return {
+                                level: 'error',
+                                html: '<span class="text-red-600 dark:text-red-400">Insufficient</span>',
+                                description: 'Missing required permissions'
+                            };
+                        } else {
+                            // PBS security analysis
+                            const isRoot = perm.tokenId && perm.tokenId.startsWith('root@');
+                            
+                            if (!perm.canConnect) {
+                                return {
+                                    level: 'error',
+                                    html: '<span class="text-gray-500">N/A</span>',
+                                    description: ''
+                                };
+                            }
+                            
+                            if (isRoot) {
+                                return {
+                                    level: 'elevated',
+                                    html: `<div class="security-warning security-elevated">
+                                        <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                        </svg>
+                                        <span>Root User</span>
+                                    </div>`,
+                                    description: 'Using root token - consider dedicated user'
+                                };
+                            }
+                            
+                            // PBS tokens with just Datastore.Audit are optimal
+                            if (perm.canListDatastores && perm.canListBackups) {
+                                return {
+                                    level: 'optimal',
+                                    html: `<div class="security-warning security-optimal">
+                                        <svg class="security-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                        </svg>
+                                        <span>Read-Only</span>
+                                    </div>`,
+                                    description: 'Optimal security - read-only access'
+                                };
+                            }
+                            
+                            return {
+                                level: 'error',
+                                html: '<span class="text-red-600 dark:text-red-400">Insufficient</span>',
+                                description: 'Missing required permissions'
+                            };
+                        }
+                    };
+                    
+                    // Process Proxmox tokens
+                    if (data.permissions.proxmox) {
+                        data.permissions.proxmox.forEach(perm => {
+                            const serverInfo = `<strong>${perm.name}</strong><br><span class="text-sm text-gray-600 dark:text-gray-400">Proxmox VE</span>`;
+                            const tokenInfo = perm.tokenId ? 
+                                `<span class="token-display">${perm.tokenId}</span>` : 
+                                '<span class="text-gray-500">No token configured</span>';
+                            
+                            let permissions = '';
+                            if (perm.canConnect) {
+                                // Basic permissions
+                                permissions += renderPermission(perm.canListNodes, 'List nodes');
+                                permissions += renderPermission(perm.canListVMs, 'List VMs');
+                                permissions += renderPermission(perm.canListContainers, 'List containers');
+                                permissions += renderPermission(perm.canGetNodeStats, 'Get node statistics');
+                                permissions += renderPermission(perm.canListStorage, 'List storage');
+                                
+                                // Storage backup access with details
+                                if (perm.storageBackupAccess && perm.storageBackupAccess.totalStoragesTested > 0) {
+                                    const accessible = perm.storageBackupAccess.accessibleStorages;
+                                    const total = perm.storageBackupAccess.totalStoragesTested;
+                                    const hasAccess = accessible > 0;
+                                    const details = hasAccess ? 
+                                        `(${accessible}/${total} storages)` : 
+                                        `(0/${total} storages - needs Datastore.Allocate)`;
+                                    permissions += renderPermission(hasAccess, 'Access storage backups', details);
+                                } else {
+                                    permissions += renderPermission(perm.canAccessStorageBackups, 'Access storage backups');
+                                }
+                            } else {
+                                permissions = '<div class="text-red-600 dark:text-red-400">Cannot connect</div>';
+                            }
+                            
+                            const security = analyzeSecurityLevel(perm, 'pve');
+                            
+                            tokenRows += `
+                                <tr>
+                                    <td>${serverInfo}</td>
+                                    <td>${tokenInfo}</td>
+                                    <td>${permissions}</td>
+                                    <td title="${security.description}">${security.html}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    
+                    // Process PBS tokens
+                    if (data.permissions.pbs) {
+                        data.permissions.pbs.forEach(perm => {
+                            const serverInfo = `<strong>${perm.name}</strong><br><span class="text-sm text-gray-600 dark:text-gray-400">Proxmox Backup Server</span>`;
+                            const tokenInfo = perm.tokenId ? 
+                                `<span class="token-display">${perm.tokenId}</span>` : 
+                                '<span class="text-gray-500">No token configured</span>';
+                            
+                            let permissions = '';
+                            if (perm.canConnect) {
+                                permissions += renderPermission(perm.canListDatastores, 'List datastores');
+                                permissions += renderPermission(perm.canListBackups, 'List backups');
+                                
+                                // Namespace support
+                                if (perm.canListNamespaces) {
+                                    const nsCount = perm.discoveredNamespaces ? perm.discoveredNamespaces.length : 0;
+                                    permissions += renderPermission(true, 'List namespaces', nsCount > 0 ? `(${nsCount} found)` : '');
+                                }
+                                
+                                // Show namespace access details if available
+                                if (perm.namespaceAccess && Object.keys(perm.namespaceAccess).length > 0) {
+                                    const accessibleNs = Object.values(perm.namespaceAccess).filter(ns => ns.accessible).length;
+                                    const totalNs = Object.keys(perm.namespaceAccess).length;
+                                    permissions += renderPermission(accessibleNs > 0, 'Namespace access', `(${accessibleNs}/${totalNs} namespaces)`);
+                                }
+                            } else {
+                                permissions = '<div class="text-red-600 dark:text-red-400">Cannot connect</div>';
+                            }
+                            
+                            const security = analyzeSecurityLevel(perm, 'pbs');
+                            
+                            tokenRows += `
+                                <tr>
+                                    <td>${serverInfo}</td>
+                                    <td>${tokenInfo}</td>
+                                    <td>${permissions}</td>
+                                    <td title="${security.description}">${security.html}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    
+                    tokenTbody.innerHTML = tokenRows;
+                } else {
+                    document.getElementById('token-permissions-section').classList.add('hidden');
                 }
                 
-                document.body.removeChild(textArea);
+            } catch (error) {
+                console.error('Failed to load diagnostics:', error);
+                document.getElementById('diagnostics-tbody').innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center text-red-600">
+                            Failed to load diagnostics: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            } finally {
+                // Hide loading animation and show content
+                document.getElementById('loading-container').style.display = 'none';
+                document.getElementById('main-content').classList.remove('hidden');
             }
         }
-
-        // Run diagnostics on page load
-        runDiagnostics();
+        
+        // Load diagnostics on page load
+        loadDiagnostics();
+        
+        // Refresh every 30 seconds
+        setInterval(loadDiagnostics, 30000);
     </script>
 </body>
 </html>

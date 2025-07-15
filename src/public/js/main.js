@@ -28,6 +28,82 @@
 document.addEventListener('DOMContentLoaded', function() {
     const PulseApp = window.PulseApp || {};
 
+    // Check if we should show the security enhancement banner for v3.43+
+    function checkSecurityEnhancementBanner(currentVersion) {
+        const BANNER_KEY = 'pulse-security-banner-shown';
+        const TARGET_VERSION = '3.43.0';
+        
+        // Check if we've already shown the banner
+        if (localStorage.getItem(BANNER_KEY) === 'true') {
+            return;
+        }
+        
+        // Parse version (handle -rc and -dev suffixes)
+        const versionMatch = currentVersion.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+        if (!versionMatch) return;
+        
+        const major = parseInt(versionMatch[1]);
+        const minor = parseInt(versionMatch[2]);
+        const patch = parseInt(versionMatch[3]);
+        
+        // Check if version is 3.43.0 or higher
+        if (major > 3 || (major === 3 && minor > 43) || (major === 3 && minor === 43 && patch >= 0)) {
+            // Show the banner using a custom notification
+            setTimeout(() => {
+                const banner = document.createElement('div');
+                banner.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-2xl w-full mx-4';
+                banner.innerHTML = `
+                    <div class="bg-blue-50 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800 rounded-lg shadow-lg p-4">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3 flex-1">
+                                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                    🔒 Security Enhancement in v${currentVersion}
+                                </h3>
+                                <div class="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                                    <p>Pulse now supports minimal permissions mode for improved security. 
+                                    Run diagnostics to check your current permission level.</p>
+                                </div>
+                                <div class="mt-3 flex space-x-3">
+                                    <button onclick="window.location.href='/diagnostics.html'; this.closest('.fixed').remove();" 
+                                            class="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 underline">
+                                        Check Diagnostics
+                                    </button>
+                                    <button onclick="localStorage.setItem('${BANNER_KEY}', 'true'); this.closest('.fixed').remove();" 
+                                            class="text-sm font-medium text-gray-600 hover:text-gray-500 dark:text-gray-400 dark:hover:text-gray-300">
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="ml-3 flex-shrink-0">
+                                <button onclick="localStorage.setItem('${BANNER_KEY}', 'true'); this.closest('.fixed').remove();" 
+                                        class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400">
+                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(banner);
+                
+                // Auto-remove after 30 seconds if not dismissed
+                setTimeout(() => {
+                    if (banner.parentNode) {
+                        banner.style.transition = 'opacity 0.5s';
+                        banner.style.opacity = '0';
+                        setTimeout(() => banner.remove(), 500);
+                    }
+                }, 30000);
+            }, 2000); // Show after 2 seconds to not interfere with initial load
+        }
+    }
+
     function updateAllUITables() {
         if (!PulseApp.state || !PulseApp.state.get('initialDataReceived')) {
             return;
@@ -229,6 +305,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const isVersionRC = data.version && data.version.includes('-rc');
                     const isVersionDev = data.version && data.version.includes('-dev');
                     document.title = isVersionDev ? 'Pulse DEV' : (isVersionRC ? 'Pulse RC' : 'Pulse');
+                    
+                    // Security enhancement banner removed per user request
+                    // checkSecurityEnhancementBanner(data.version);
                     
                     // Check if update is available
                     if (data.updateAvailable && data.latestVersion) {
