@@ -1620,6 +1620,11 @@ PulseApp.ui.dashboard = (() => {
             // Show charts controls
             if (PulseApp.ui.chartsControls) {
                 PulseApp.ui.chartsControls.showChartsControls();
+                // Auto-select the largest available time window when charts are toggled on
+                if (PulseApp.charts && PulseApp.charts.getLargestAvailableTimeRange) {
+                    const largestRange = PulseApp.charts.getLargestAvailableTimeRange();
+                    PulseApp.ui.chartsControls.setTimeRange(largestRange);
+                }
             }
             
             
