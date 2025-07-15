@@ -8,6 +8,7 @@ PulseApp.ui.storage = (() => {
     let storageChartData = null; // Cache storage chart data
     let isUpdatingCharts = false; // Prevent concurrent chart updates
     let chartUpdateTimeout = null; // Debounce timer for chart updates
+    let currentStorageView = 'node'; // 'node' or 'storage'
 
     function _initMobileScrollIndicators() {
         const tableContainer = document.querySelector('#storage .table-container');
@@ -148,6 +149,91 @@ PulseApp.ui.storage = (() => {
     }
 
     let currentSortOrder = 'name'; // 'name', 'usage-asc', 'usage-desc'
+
+    // Transform node-centric storage data to storage-centric view
+    function transformToStorageView(nodes) {
+        const storageMap = new Map();
+        const pbsStorageByCapacity = new Map(); // Track PBS storages by capacity signature
+        
+        nodes.forEach(node => {
+            if (!node || !node.node || !Array.isArray(node.storage)) return;
+            
+            node.storage.forEach(store => {
+                // For local storage, keep it separate per node
+                const isLocal = store.shared === 0;
+                const key = isLocal ? `${node.node}:${store.storage}` : store.storage;
+                
+                // For PBS storage, check if we've seen this capacity signature before
+                if (store.type === 'pbs' && store.total > 0) {
+                    const capacityKey = `${store.total}-${store.used}-${store.avail}`;
+                    if (pbsStorageByCapacity.has(capacityKey)) {
+                        // This PBS storage has the same capacity as another - likely the same physical storage
+                        const existingKey = pbsStorageByCapacity.get(capacityKey);
+                        const existing = storageMap.get(existingKey);
+                        if (existing && existing.type === 'pbs') {
+                            // Add this as an alias
+                            if (!existing.aliases) {
+                                existing.aliases = [];
+                            }
+                            // Check if this alias already exists
+                            const aliasExists = existing.aliases.some(alias => alias.name === store.storage);
+                            if (!aliasExists) {
+                                existing.aliases.push({
+                                    name: store.storage,
+                                    node: node.node
+                                });
+                            }
+                            // Also add this node to the nodes list if not already there
+                            if (!existing.nodes.includes(node.node)) {
+                                existing.nodes.push(node.node);
+                            }
+                            return; // Skip adding as separate entry
+                        }
+                    } else {
+                        pbsStorageByCapacity.set(capacityKey, key);
+                    }
+                }
+                
+                if (!storageMap.has(key)) {
+                    // First occurrence
+                    storageMap.set(key, {
+                        storage: store.storage,
+                        type: store.type,
+                        content: store.content,
+                        shared: store.shared,
+                        enabled: store.enabled,
+                        active: store.active,
+                        used: store.used,
+                        avail: store.avail,
+                        total: store.total,
+                        reportingNode: store.total > 0 ? node.node : null,
+                        nodes: [node.node],
+                        isLocal: isLocal,
+                        originalNode: isLocal ? node.node : null
+                    });
+                } else {
+                    // Subsequent occurrences - add node to access list
+                    const existing = storageMap.get(key);
+                    if (!existing.nodes.includes(node.node)) {
+                        existing.nodes.push(node.node);
+                    }
+                    
+                    // Update data from the node that reports actual capacity
+                    if (store.total > 0) {
+                        existing.used = store.used;
+                        existing.avail = store.avail;
+                        existing.total = store.total;
+                        existing.reportingNode = node.node;
+                        // Update enabled/active status if this is the reporting node
+                        existing.enabled = store.enabled;
+                        existing.active = store.active;
+                    }
+                }
+            });
+        });
+        
+        return Array.from(storageMap.values());
+    }
 
     function calculateStorageSummary(nodes) {
         let totalUsed = 0;
@@ -324,6 +410,173 @@ PulseApp.ui.storage = (() => {
         }
     }
 
+    // Update storage table for storage-centric view
+    function _updateStorageTableStorageView(tableBody, storageData) {
+        // Clear existing content
+        tableBody.innerHTML = '';
+        
+        if (storageData.length === 0) {
+            const emptyRow = document.createElement('tr');
+            if (PulseApp.ui.emptyStates) {
+                emptyRow.innerHTML = `<td colspan="8" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+            } else {
+                emptyRow.innerHTML = '<td colspan="8" class="p-4 text-center text-gray-500 dark:text-gray-400">No storage data available.</td>';
+            }
+            tableBody.appendChild(emptyRow);
+            return;
+        }
+        
+        // Sort storage data based on current sort order
+        let sortedData = [...storageData];
+        if (currentSortOrder === 'usage-desc') {
+            sortedData.sort((a, b) => {
+                const percentA = a.total > 0 ? (a.used / a.total) * 100 : 0;
+                const percentB = b.total > 0 ? (b.used / b.total) * 100 : 0;
+                return percentB - percentA;
+            });
+        } else if (currentSortOrder === 'usage-asc') {
+            sortedData.sort((a, b) => {
+                const percentA = a.total > 0 ? (a.used / a.total) * 100 : 0;
+                const percentB = b.total > 0 ? (b.used / b.total) * 100 : 0;
+                return percentA - percentB;
+            });
+        } else {
+            // Default name sort
+            sortedData.sort((a, b) => a.storage.localeCompare(b.storage));
+        }
+        
+        // Create rows for each storage
+        sortedData.forEach(store => {
+            const row = _createStorageViewRow(store);
+            tableBody.appendChild(row);
+        });
+    }
+    
+    // Create a row for storage-centric view
+    function _createStorageViewRow(store) {
+        const row = document.createElement('tr');
+        const isDisabled = store.enabled === 0 || store.active === 0;
+        const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+        const isWarning = usagePercent >= 80 && usagePercent < 90;
+        const isCritical = usagePercent >= 90;
+        
+        // Use helper with special row handling
+        let specialBgClass = '';
+        let additionalClasses = '';
+        
+        if (isDisabled) {
+            additionalClasses = 'opacity-50 grayscale-[50%]';
+        }
+        if (isCritical) {
+            specialBgClass = 'bg-red-50 dark:bg-red-900/10';
+        } else if (isWarning) {
+            specialBgClass = 'bg-yellow-50 dark:bg-yellow-900/10';
+        }
+        
+        // Replace the existing row element with one from helper
+        const newRow = PulseApp.ui.common.createTableRow({
+            classes: additionalClasses,
+            isSpecialRow: !!(specialBgClass),
+            specialBgClass: specialBgClass
+        });
+        
+        // Copy attributes from original row
+        row.className = newRow.className;
+
+        const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
+        const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
+        const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass, `${usagePercent.toFixed(0)}%`);
+
+        const sharedText = store.shared === 1 
+            ? '<span class="text-green-600 dark:text-green-400 text-xs">Shared</span>' 
+            : '<span class="text-gray-400 dark:text-gray-500 text-xs">Local</span>';
+
+        // Use cached content badge HTML instead of processing inline
+        const contentBadges = getContentBadgesHTML(store.content);
+
+        const warningBadge = isCritical ? ' <span class="inline-block w-2 h-2 bg-red-500 rounded-full ml-1"></span>' : 
+                            (isWarning ? ' <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full ml-1"></span>' : '');
+
+        // Create sticky storage name column - simplified now
+        let storageName = store.storage || 'N/A';
+        
+        if (store.isLocal) {
+            // For local storage, show which node it belongs to
+            storageName = `${store.storage} (${store.originalNode})`;
+        } else if (store.aliases && store.aliases.length > 0) {
+            // For PBS storage with aliases, show the primary name
+            // Additional names will be shown in the Nodes column
+            storageName = store.storage;
+        }
+        
+        const storageNameContent = `<span class="font-medium">${storageName}${warningBadge}</span>`;
+        const stickyStorageCell = PulseApp.ui.common.createStickyColumn(storageNameContent, {
+            additionalClasses: 'text-gray-700 dark:text-gray-300 min-w-[150px]'
+        });
+        row.appendChild(stickyStorageCell);
+        
+        // Create nodes column
+        let nodesContent = '';
+        let nodesTitle = '';
+        if (store.isLocal) {
+            nodesContent = `<span class="text-gray-500 text-xs truncate block">Local to ${store.originalNode}</span>`;
+            nodesTitle = `Local to ${store.originalNode}`;
+        } else if (store.aliases && store.aliases.length > 0) {
+            // For PBS storage with aliases, show all remote names
+            const uniqueNames = new Set([store.storage, ...store.aliases.map(a => a.name)]);
+            const allNames = Array.from(uniqueNames).join(', ');
+            const nodesList = store.nodes.join(', ');
+            nodesContent = `
+                <div class="text-xs max-w-[150px]">
+                    <div class="text-gray-600 dark:text-gray-400 truncate">${nodesList}</div>
+                    <div class="text-gray-500 dark:text-gray-500 text-xs truncate">PBS: ${allNames}</div>
+                </div>
+            `;
+            nodesTitle = `Nodes: ${nodesList}\nPBS remotes: ${allNames}`;
+        } else {
+            // For other shared storage
+            const nodesText = store.nodes.join(', ');
+            if (store.reportingNode && store.nodes.length > 1) {
+                nodesContent = `
+                    <div class="text-xs max-w-[150px]">
+                        <div class="text-gray-600 dark:text-gray-400 truncate">${nodesText}</div>
+                        <div class="text-gray-500 dark:text-gray-500 text-xs truncate">(capacity from ${store.reportingNode})</div>
+                    </div>
+                `;
+                nodesTitle = `Nodes: ${nodesText}\nCapacity reported from: ${store.reportingNode}`;
+            } else {
+                nodesContent = `<span class="text-xs text-gray-600 dark:text-gray-400 truncate block">${nodesText}</span>`;
+                nodesTitle = `Nodes: ${nodesText}`;
+            }
+        }
+        const nodesCell = PulseApp.ui.common.createTableCell(nodesContent, 'p-1 px-2 min-w-[100px] max-w-[150px]');
+        nodesCell.title = nodesTitle;
+        row.appendChild(nodesCell);
+        
+        // Create content cell with truncation
+        const contentCell = PulseApp.ui.common.createTableCell(
+            `<div class="truncate max-w-[120px]">${contentBadges}</div>`, 
+            'p-1 px-2 whitespace-nowrap text-xs'
+        );
+        contentCell.title = store.content || '';
+        row.appendChild(contentCell);
+        
+        row.appendChild(PulseApp.ui.common.createTableCell(store.type || 'N/A', 'p-1 px-2 whitespace-nowrap text-xs'));
+        row.appendChild(PulseApp.ui.common.createTableCell(sharedText, 'p-1 px-2 whitespace-nowrap text-center'));
+        
+        // Create dual content structure for usage cell (progress bar + chart)
+        // Use the reporting node for charts (node that has the actual capacity data)
+        const nodeForChart = store.reportingNode || store.nodes[0] || store.originalNode || 'unknown';
+        const storageId = `${nodeForChart}-${store.storage}`;
+        const chartId = `chart-${storageId}-disk`;
+        const storageChartHTML = `<div id="${chartId}" class="usage-chart-container h-3.5 w-full" data-storage-id="${store.storage}" data-node="${nodeForChart}"></div>`;
+        const usageCellHTML = `<div class="w-full"><div class="metric-text">${usageBarHTML}</div><div class="metric-chart">${storageChartHTML}</div></div>`;
+        row.appendChild(PulseApp.ui.common.createTableCell(usageCellHTML, 'p-1 px-2 min-w-[200px]'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.avail), 'p-1 px-2 whitespace-nowrap'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.total), 'p-1 px-2 whitespace-nowrap'));
+        return row;
+    }
+
     // Update existing storage row without destroying chart containers
     function _updateStorageRow(row, store) {
         // Only update cells that need updating, preserve chart containers
@@ -388,9 +641,9 @@ PulseApp.ui.storage = (() => {
             tbody.innerHTML = '';
             const emptyRow = document.createElement('tr');
             if (PulseApp.ui.emptyStates) {
-                emptyRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+                emptyRow.innerHTML = `<td colspan="${colSpan}" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
             } else {
-                emptyRow.innerHTML = '<td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No node or storage data available.</td>';
+                emptyRow.innerHTML = `<td colspan="${colSpan}" class="p-4 text-center text-gray-500 dark:text-gray-400">No node or storage data available.</td>`;
             }
             tbody.appendChild(emptyRow);
             return;
@@ -437,9 +690,9 @@ PulseApp.ui.storage = (() => {
             tbody.innerHTML = '';
             const emptyRow = document.createElement('tr');
             if (PulseApp.ui.emptyStates) {
-                emptyRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+                emptyRow.innerHTML = `<td colspan="${colSpan}" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
             } else {
-                emptyRow.innerHTML = '<td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No storage data found associated with nodes.</td>';
+                emptyRow.innerHTML = `<td colspan="${colSpan}" class="p-4 text-center text-gray-500 dark:text-gray-400">No storage data found associated with nodes.</td>`;
             }
             tbody.appendChild(emptyRow);
             return;
@@ -447,44 +700,39 @@ PulseApp.ui.storage = (() => {
 
         const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
 
-        // Create or update table header if needed
+        // Always recreate table header to handle view changes
         let thead = table.querySelector('thead');
         if (!thead) {
             thead = document.createElement('thead');
-            const sortIndicator = (order) => {
-                if (currentSortOrder === order) {
-                    return order === 'usage-desc' ? ' ↓' : ' ↑';
-                }
-                return '';
-            };
-            
-            thead.innerHTML = `
-                <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
-                  <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Content</th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Type</th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Shared</th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" id="usage-sort-header">
-                    Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}
-                  </th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Avail</th>
-                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Total</th>
-                </tr>
-              `;
             table.insertBefore(thead, tbody);
-        } else {
-            // Update sort header if needed
-            const sortHeader = table.querySelector('#usage-sort-header');
-            if (sortHeader) {
-                const sortIndicator = (order) => {
-                    if (currentSortOrder === order) {
-                        return order === 'usage-desc' ? ' ↓' : ' ↑';
-                    }
-                    return '';
-                };
-                sortHeader.innerHTML = `Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}`;
-            }
         }
+        
+        const sortIndicator = (order) => {
+            if (currentSortOrder === order) {
+                return order === 'usage-desc' ? ' ↓' : ' ↑';
+            }
+            return '';
+        };
+        
+        const nodesHeader = currentStorageView === 'storage' ? 
+            '<th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 min-w-[100px] max-w-[150px]">Nodes</th>' : '';
+        
+        const colSpan = currentStorageView === 'storage' ? 8 : 7;
+        
+        thead.innerHTML = `
+            <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
+              <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2 min-w-[150px]">Storage</th>
+              ${nodesHeader}
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 ${currentStorageView === 'storage' ? 'max-w-[120px]' : ''}">Content</th>
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Type</th>
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Shared</th>
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" id="usage-sort-header">
+                Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}
+              </th>
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Avail</th>
+              <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Total</th>
+            </tr>
+          `;
         
         // Get the table container for scroll position preservation
         const tableContainer = storageContainer.querySelector('.table-container')
@@ -508,7 +756,7 @@ PulseApp.ui.storage = (() => {
         });
         
         // Set CSS variables for column widths with responsive limits
-        const storageColWidth = Math.min(Math.max(maxStorageLength * 7 + 12, 100), 200);
+        const storageColWidth = Math.min(Math.max(maxStorageLength * 7 + 12, 150), 250);
         const typeColWidth = Math.min(Math.max(maxTypeLength * 7 + 12, 60), 120);
         const htmlElement = document.documentElement;
         if (htmlElement) {
@@ -516,8 +764,15 @@ PulseApp.ui.storage = (() => {
             htmlElement.style.setProperty('--storage-type-col-width', `${typeColWidth}px`);
         }
 
-        // Use incremental update instead of rebuilding
-        _updateStorageTableIncremental(tbody, storageByNode, sortedNodeNames);
+        // Use different update methods based on current view
+        if (currentStorageView === 'storage') {
+            // Transform data to storage-centric view
+            const storageData = transformToStorageView(nodes);
+            _updateStorageTableStorageView(tbody, storageData);
+        } else {
+            // Use incremental update for node view
+            _updateStorageTableIncremental(tbody, storageByNode, sortedNodeNames);
+        }
         
         // Add click handler for sort (only if not already added)
         const usageSortHeader = document.getElementById('usage-sort-header');
@@ -1002,6 +1257,27 @@ PulseApp.ui.storage = (() => {
         if (storageChartsToggleCheckbox) {
             storageChartsToggleCheckbox.addEventListener('change', toggleStorageChartsMode);
         }
+        
+        // Initialize storage view toggle
+        const storageViewInputs = document.querySelectorAll('input[name="storage-view"]');
+        
+        // Restore saved storage view preference
+        const savedStorageView = localStorage.getItem('pulseStorageView');
+        if (savedStorageView) {
+            currentStorageView = savedStorageView;
+            const savedInput = document.querySelector(`input[name="storage-view"][value="${savedStorageView}"]`);
+            if (savedInput) {
+                savedInput.checked = true;
+            }
+        }
+        
+        storageViewInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                currentStorageView = e.target.value;
+                localStorage.setItem('pulseStorageView', currentStorageView);
+                updateStorageInfo();
+            });
+        });
 
         // Initialize storage time range controls
         const storageTimeRangeInputs = document.querySelectorAll('input[name="storage-time-range"]');
