@@ -950,7 +950,7 @@ install_script() {
       exit 0
       ;;
     *)
-      echo -e "\n${CROSS}${RD}Invalid option, please try again.${CL}\n"
+      echo -e "${CROSS}${RD}Invalid option, please try again.${CL}"
       ;;
     esac
   done
