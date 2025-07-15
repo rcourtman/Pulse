@@ -210,28 +210,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.version) {
                     versionSpan.textContent = data.version;
                     
-                    // Check if this is a release candidate
+                    // Check if this is a release candidate or development version
                     const versionBadge = document.getElementById('version-badge');
                     if (versionBadge && data.version) {
-                        const isVersionRC = data.version.includes('-rc') || 
-                                           data.version.includes('-alpha') || 
-                                           data.version.includes('-beta');
-                        const isDevelopBranch = data.isDevelopment || data.gitBranch === 'develop';
-                        const isRC = isVersionRC || isDevelopBranch;
+                        const isVersionRC = data.version.includes('-rc');
+                        const isVersionDev = data.version.includes('-dev');
                         
-                        if (isRC) {
+                        if (isVersionDev) {
+                            versionBadge.textContent = 'DEV';
+                            versionBadge.classList.remove('hidden');
+                        } else if (isVersionRC) {
                             versionBadge.textContent = 'RC';
                             versionBadge.classList.remove('hidden');
                         }
                     }
                     
                     // Also update the page title
-                    const isVersionRC = data.version && (data.version.includes('-rc') || 
-                                       data.version.includes('-alpha') || 
-                                       data.version.includes('-beta'));
-                    const isDevelopBranch = data.isDevelopment || data.gitBranch === 'develop';
-                    const isRC = isVersionRC || isDevelopBranch;
-                    document.title = isRC ? 'Pulse RC' : 'Pulse';
+                    const isVersionRC = data.version && data.version.includes('-rc');
+                    const isVersionDev = data.version && data.version.includes('-dev');
+                    document.title = isVersionDev ? 'Pulse DEV' : (isVersionRC ? 'Pulse RC' : 'Pulse');
                     
                     // Check if update is available
                     if (data.updateAvailable && data.latestVersion) {
