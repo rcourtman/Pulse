@@ -321,7 +321,7 @@ rm /opt/pulse/data/alert-rules.json
 ## FAQ
 
 **Q: Why does Pulse need PVEDatastoreAdmin for read-only access?**
-A: Proxmox API limitation - viewing backup contents requires this permission even for read-only access.
+A: Proxmox API limitation - viewing backup contents requires this permission even for read-only access. Unfortunately, PVEDatastoreAdmin includes write permissions. See our [Security Guide](../SECURITY.md#api-token-permissions-and-security) for details and mitigation strategies.
 
 **Q: Can I run multiple Pulse instances?**
 A: Yes, each instance is independent. Use different ports and storage locations.

@@ -71,6 +71,8 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 For backup visibility, also add:
    - Path: `/storage`
    - Role: `PVEDatastoreAdmin`
+   
+**⚠️ Security Notice**: PVEDatastoreAdmin includes write permissions. See [Security Guide](SECURITY.md#api-token-permissions-and-security) for important details.
 
 </details>
 
@@ -113,6 +115,7 @@ Key security features:
 - Rate limiting on API endpoints
 
 For production use, always use Private mode with HTTPS via reverse proxy. See [Security Guide](SECURITY.md) for detailed information.
+
 
 ## Documentation
 

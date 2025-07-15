@@ -237,4 +237,94 @@ For security-related questions:
 - Check [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
 - For security vulnerabilities, please report privately via GitHub Security tab
 
-Remember: Pulse is a monitoring tool that only reads data from Proxmox. The main security concern is preventing unauthorized users from viewing your infrastructure details.
+## API Token Permissions and Security
+
+### Understanding the Permission Requirements
+
+Pulse requires specific permissions to monitor your Proxmox infrastructure:
+
+#### Basic Monitoring (VMs, Containers, Nodes)
+- **Required**: `PVEAuditor` role on `/`
+- **Risk Level**: Low - This is a read-only role
+
+#### Backup Monitoring
+- **Required**: `PVEDatastoreAdmin` role on `/storage` or specific storages
+- **Risk Level**: Medium to High - Includes write permissions
+
+### The PVEDatastoreAdmin Security Concern
+
+**Important Security Notice**: Due to Proxmox VE API limitations, viewing backup content requires `PVEDatastoreAdmin`, which grants these permissions:
+
+**What Pulse Actually Uses:**
+- ✅ List backup files (`Datastore.Audit`)
+- ✅ View backup metadata
+
+**What PVEDatastoreAdmin Allows:**
+- ⚠️ Delete backup files (`Datastore.Allocate`)
+- ⚠️ Create/modify datastores
+- ⚠️ Upload ISOs and templates
+- ⚠️ Consume storage space
+
+This is a [known Proxmox limitation](https://forum.proxmox.com/threads/listing-storage-content-requires-write-permissions.122211/) where read-only access to backup content isn't possible.
+
+### Risk Mitigation Strategies
+
+#### 1. Minimize Permission Scope
+Instead of granting permissions on `/storage` (all storages):
+```bash
+# Better: Grant only to specific backup storages
+pveum acl modify /storage/backup-storage --users pulse@pam --roles PVEDatastoreAdmin
+pveum acl modify /storage/nfs-backup --users pulse@pam --roles PVEDatastoreAdmin
+```
+
+#### 2. Use Dedicated Backup Storage
+Create storage exclusively for backups:
+- Reduces risk if token is compromised
+- Limits potential damage to backup data only
+- No risk to VM disks or ISO storage
+
+#### 3. Prefer PBS for New Deployments
+Proxmox Backup Server has proper read-only permissions:
+```bash
+# PBS only needs DatastoreAudit (truly read-only)
+proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse@pbs!monitoring'
+```
+
+#### 4. Network Security
+- Run Pulse on an isolated management network
+- Use firewall rules to restrict Pulse's outbound connections
+- Ensure Pulse cannot be accessed from untrusted networks
+
+#### 5. Token Security Best Practices
+- **Regular Rotation**: Rotate API tokens every 90 days
+- **Audit Logs**: Monitor `/var/log/pveproxy/access.log` for token usage
+- **Unique Tokens**: Use dedicated tokens for Pulse, not shared with other tools
+- **Secure Storage**: Store tokens encrypted, never in plain text
+
+#### 6. Alternative Approaches
+If the write permissions are unacceptable for your security policy:
+- Monitor only VMs/containers (skip backup monitoring)
+- Use PBS exclusively for backups (proper read-only permissions)
+- Consider using Proxmox's built-in backup job notifications instead
+
+### Monitoring Token Usage
+
+Check API token activity:
+```bash
+# View recent API token usage
+grep "pulse@pam!token" /var/log/pveproxy/access.log | tail -20
+
+# Monitor for suspicious activity (deletes, uploads)
+grep "pulse@pam!token" /var/log/pveproxy/access.log | grep -E "(DELETE|POST|PUT)"
+```
+
+### Security Incident Response
+
+If you suspect token compromise:
+1. **Immediately revoke the token**: `pveum user token remove pulse@pam token-name`
+2. **Check logs** for unauthorized actions
+3. **Verify backup integrity**
+4. **Create new token with minimal required permissions**
+5. **Update Pulse configuration**
+
+Remember: While Pulse only reads data, the required permissions allow write access due to Proxmox API design. Always follow the principle of least privilege and implement appropriate compensating controls.
