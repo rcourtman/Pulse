@@ -1188,6 +1188,32 @@ PulseApp.charts = (() => {
 
     initVisibilityObserver();
     
+    // Get the largest available time range based on data availability
+    function getLargestAvailableTimeRange() {
+        // Check each time range from largest to smallest
+        const timeRanges = [
+            '10080', // 7d
+            '1440',  // 24h
+            '720',   // 12h
+            '240',   // 4h
+            '60',    // 1h
+            '30',    // 30m
+            '15',    // 15m
+            '5'      // 5m
+        ];
+        
+        // Find the first (largest) enabled radio button
+        for (const range of timeRanges) {
+            const radio = document.querySelector(`input[name="time-range"][value="${range}"]:not(:disabled)`);
+            if (radio) {
+                return range;
+            }
+        }
+        
+        // Default to 1h if nothing is found (shouldn't happen)
+        return '60';
+    }
+    
     return {
         createUsageChartHTML,
         createSparklineHTML,
@@ -1203,6 +1229,7 @@ PulseApp.charts = (() => {
         createOrUpdateChart,
         updateTimeRangeAvailability,
         showChartPlaceholders,
+        getLargestAvailableTimeRange,
         // Expose for testing
         cleanupProcessedCache,
         observeChartVisibility
