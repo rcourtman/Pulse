@@ -580,9 +580,14 @@ router.post('/rules/reload', async (req, res) => {
 // Endpoint to trigger immediate alert evaluation
 router.post('/evaluate', async (req, res) => {
     try {
+        // Get current state
+        const currentState = stateManager.getState();
+        const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
         
-        stateManager.alertManager.evaluateCurrentState();
-        res.json({ success: true, message: "Alert evaluation triggered" });
+        // Manually trigger checkMetrics instead of evaluateCurrentState
+        await stateManager.alertManager.checkMetrics(allGuests, currentState.metrics || []);
+        
+        res.json({ success: true, message: "Alert evaluation triggered via checkMetrics" });
     } catch (error) {
         console.error("Error triggering alert evaluation:", error);
         res.status(500).json({ error: "Failed to trigger alert evaluation" });
@@ -710,6 +715,44 @@ router.get('/status', (req, res) => {
     } catch (error) {
         console.error("Error getting alert status:", error);
         res.status(500).json({ error: "Failed to get alert status" });
+    }
+});
+
+// Debug endpoint to check threshold evaluation
+router.get('/debug-thresholds', (req, res) => {
+    try {
+        const currentState = stateManager.getState();
+        const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+        const rule = stateManager.alertManager.getRules().find(r => r.type === 'per_guest_thresholds');
+        
+        const debugInfo = {
+            ruleFound: !!rule,
+            ruleEnabled: rule?.enabled,
+            globalThresholds: rule?.globalThresholds,
+            guestCount: allGuests.length,
+            guestsWithHighMemory: []
+        };
+        
+        // Check each guest's memory
+        allGuests.forEach(guest => {
+            if (guest.mem && guest.maxmem) {
+                const memoryPercentage = (guest.mem / guest.maxmem) * 100;
+                if (memoryPercentage > 20) {
+                    debugInfo.guestsWithHighMemory.push({
+                        name: guest.name,
+                        vmid: guest.vmid,
+                        node: guest.node,
+                        memoryPercentage: memoryPercentage.toFixed(2),
+                        threshold: rule?.globalThresholds?.memory || 'not set'
+                    });
+                }
+            }
+        });
+        
+        res.json(debugInfo);
+    } catch (error) {
+        console.error("Error in debug-thresholds:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 
