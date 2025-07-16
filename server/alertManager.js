@@ -327,6 +327,7 @@ class AlertManager extends EventEmitter {
     }
 
     async checkMetrics(guests, metrics) {
+        
         // Check if alerts are globally disabled
         if (process.env.ALERTS_ENABLED === 'false') {
             return;
@@ -1706,6 +1707,12 @@ class AlertManager extends EventEmitter {
             });
             
             this.emit('ruleUpdated', { ruleId, updates });
+            
+            // Trigger immediate evaluation if rule was enabled
+            if (rule.enabled) {
+                this.evaluateCurrentState();
+            }
+            
             return true;
         }
         return false;
@@ -4311,6 +4318,11 @@ Pulse Monitoring System`,
                 return;
             }
             
+            if (!thresholdConfig.enabled) {
+                console.log('[AlertManager] Threshold config is disabled, skipping evaluation');
+                return;
+            }
+            
             const globalThresholds = thresholdConfig.globalThresholds || {};
             const guestThresholds = thresholdConfig.guestThresholds || {};
             const alertDuration = thresholdConfig.duration || 0; // Get duration from config
@@ -4393,16 +4405,25 @@ Pulse Monitoring System`,
                     metricsCount: exceededMetrics.length,
                     startTime: timestamp,
                     lastUpdate: timestamp,
-                    state: 'pending', // Start in pending state
+                    state: alertDuration === 0 ? 'active' : 'pending', // If duration is 0, trigger immediately
                     acknowledged: false,
                     message: `${alertName}: ${metricsDetail}`,
                     notificationChannels: ['dashboard'],
                     emailSent: false,
-                    webhookSent: false
+                    webhookSent: false,
+                    triggeredAt: alertDuration === 0 ? timestamp : undefined // Set triggeredAt if immediate
                 };
                 
                 this.activeAlerts.set(alertKey, newAlert);
-                console.log(`[AlertManager] Created pending bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
+                
+                if (alertDuration === 0) {
+                    console.log(`[AlertManager] Created active bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded (immediate trigger)`);
+                    this.triggerAlert(newAlert).catch(error => {
+                        console.error(`[AlertManager] Error triggering alert ${newAlert.id}:`, error);
+                    });
+                } else {
+                    console.log(`[AlertManager] Created pending bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
+                }
             } else if (existingAlert.state === 'pending') {
                 // Check if duration threshold is met
                 const elapsedTime = timestamp - existingAlert.startTime;
