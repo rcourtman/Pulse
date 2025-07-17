@@ -485,10 +485,26 @@ PulseApp.charts = (() => {
         const maxValue = Math.max(...values);
         const valueRange = maxValue - minValue;
         
+        // Smart scaling: if min is close to 0 or data range includes 0, pin 0 to bottom
+        let scalingMin = minValue;
+        let scalingMax = maxValue;
+        
+        // For percentage metrics (0-100), always include 0 if we're below 20%
+        const isPercentageMetric = metric === 'cpu' || metric === 'memory' || metric === 'disk';
+        if (isPercentageMetric && minValue < 20) {
+            scalingMin = 0;
+        }
+        // For I/O metrics, if minimum is very small (< 1% of max), include 0
+        else if (!isPercentageMetric && minValue < maxValue * 0.01) {
+            scalingMin = 0;
+        }
+        
+        const scalingRange = scalingMax - scalingMin;
+        
         const chartAreaWidth = config.width - 2 * config.padding;
         const chartAreaHeight = config.height - 2 * config.padding;
         
-        const yScale = valueRange > 0 ? chartAreaHeight / valueRange : 0;
+        const yScale = scalingRange > 0 ? chartAreaHeight / scalingRange : 0;
         const xScale = chartAreaWidth / Math.max(1, chartData.length - 1);
 
         // Build line path
@@ -498,7 +514,7 @@ PulseApp.charts = (() => {
         
         chartData.forEach((point, index) => {
             const x = config.padding + index * xScale;
-            const y = config.height - config.padding - (valueRange > 0 ? (point.value - minValue) * yScale : chartAreaHeight / 2);
+            const y = config.height - config.padding - (scalingRange > 0 ? (point.value - scalingMin) * yScale : chartAreaHeight / 2);
             
             if (index === 0) {
                 lineData += `M ${x} ${y}`;
@@ -528,6 +544,8 @@ PulseApp.charts = (() => {
             overlay._config = config;
             overlay._minValue = minValue;
             overlay._maxValue = maxValue;
+            overlay._scalingMin = scalingMin;
+            overlay._scalingMax = scalingMax;
             // Ensure overlay is interactive after data update
             overlay.style.pointerEvents = 'all';
         }
@@ -1096,11 +1114,26 @@ PulseApp.charts = (() => {
         const chartAreaWidth = config.width - 2 * config.padding;
         const chartAreaHeight = config.height - 2 * config.padding;
         const xScale = chartAreaWidth / Math.max(1, data.length - 1);
-        const valueRange = maxValue - minValue;
-        const yScale = valueRange > 0 ? chartAreaHeight / valueRange : 0;
+        
+        // Use same smart scaling as in updateChartPath
+        let scalingMin = minValue;
+        let scalingMax = maxValue;
+        
+        // Get metric from overlay data
+        const overlayMetric = overlay._metric;
+        const isPercentageMetric = overlayMetric === 'cpu' || overlayMetric === 'memory' || overlayMetric === 'disk';
+        if (isPercentageMetric && minValue < 20) {
+            scalingMin = 0;
+        }
+        else if (!isPercentageMetric && minValue < maxValue * 0.01) {
+            scalingMin = 0;
+        }
+        
+        const scalingRange = scalingMax - scalingMin;
+        const yScale = scalingRange > 0 ? chartAreaHeight / scalingRange : 0;
         
         const x = config.padding + index * xScale;
-        const y = config.height - config.padding - (valueRange > 0 ? (point.value - minValue) * yScale : chartAreaHeight / 2);
+        const y = config.height - config.padding - (scalingRange > 0 ? (point.value - scalingMin) * yScale : chartAreaHeight / 2);
         
         // Get the actual rendered size of the SVG to calculate proper circle size
         const svgRect = svg.getBoundingClientRect();
