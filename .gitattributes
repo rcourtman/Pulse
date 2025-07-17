@@ -26,6 +26,7 @@ SECURITY.md linguist-documentation
 # ---------------------------------------
 # Exclude generated/config files
 *.json linguist-generated
+frontend/public/json/*.json linguist-generated=false
 *.lock linguist-generated
 *.yml linguist-generated
 *.yaml linguist-generated
