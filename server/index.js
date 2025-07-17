@@ -762,10 +762,11 @@ function gracefulShutdown(signal) {
     if (metricTimeoutId) clearTimeout(metricTimeoutId);
     
     // Clean up file watchers
-    if (envWatcher) {
-        envWatcher.close();
-        envWatcher = null;
-    }
+    // envWatcher disabled - no need to close
+    // if (envWatcher) {
+    //     envWatcher.close();
+    //     envWatcher = null;
+    // }
     if (devWatcher) {
         devWatcher.close();
         devWatcher = null;
@@ -1101,8 +1102,11 @@ async function startServer() {
         // Schedule the first metric run *after* the initial discovery completes and server is listening
         scheduleNextMetric(); 
         
-        // Watch .env file for changes
-        setupEnvFileWatcher();
+        // DISABLED: .env file watcher causes issues with user experience
+        // - Toast notifications disappear when the service restarts
+        // - WebSocket connections are reset, losing real-time updates
+        // - The app already has reloadConfiguration() which applies settings without restart
+        // setupEnvFileWatcher();
         
         // Setup hot reload in development mode
         if (process.env.NODE_ENV === 'development' && chokidar) {
@@ -1118,6 +1122,7 @@ async function startServer() {
             ignored: [
               /(^|[\\\/])\../, // ignore dotfiles
               /node_modules/,  // ignore node_modules
+              /\.env$/,        // ignore .env file to prevent reload loops
               /\.log$/,        // ignore log files
               /\.tmp$/,        // ignore temp files
               /\.test\.js$/,   // ignore test files
@@ -1126,6 +1131,7 @@ async function startServer() {
               /alert-rules\.json$/, // ignore alert rules runtime data
               /custom-thresholds\.json$/, // ignore custom thresholds runtime data
               /active-alerts\.json$/, // ignore active alerts runtime data
+              /alert-history\.json$/, // ignore alert history runtime data
               /notification-history\.json$/, // ignore notification history runtime data
               /metrics-snapshot\.json\.gz$/, // ignore metrics persistence snapshots
               /\.metrics-snapshot\.tmp\.gz$/, // ignore metrics persistence temp files
