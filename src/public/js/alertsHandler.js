@@ -559,8 +559,47 @@ PulseApp.alerts = (() => {
                         </div>
                         <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
                             ${(() => {
+                                // Check if alert has exceededMetrics array (bundled alerts)
+                                if (alert.exceededMetrics && Array.isArray(alert.exceededMetrics)) {
+                                    return alert.exceededMetrics.map(m => {
+                                        const name = m.metricType.charAt(0).toUpperCase() + m.metricType.slice(1);
+                                        const currentVal = Math.round(m.currentValue);
+                                        const thresholdVal = Math.round(m.threshold);
+                                        
+                                        // Determine color based on how much it exceeds threshold
+                                        const excess = currentVal - thresholdVal;
+                                        let barColor = isResolved || isAcknowledged ? 'bg-gray-400' : 'bg-red-500';
+                                        if (!isResolved && !isAcknowledged) {
+                                            if (excess <= 5) barColor = 'bg-yellow-500';
+                                            if (excess > 20) barColor = 'bg-red-600';
+                                        }
+                                        
+                                        return `
+                                            <div class="mb-0.5">
+                                                <div class="flex justify-between text-xs mb-0.5">
+                                                    <span class="font-medium">${name}</span>
+                                                    <span>${currentVal}% / ${thresholdVal}%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
+                                                    <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${Math.min(thresholdVal, 100)}%; z-index: 1;"></div>
+                                                    <div class="${barColor} h-2 rounded absolute top-0 left-0" style="width: ${Math.min(currentVal, 100)}%; z-index: 2;"></div>
+                                                    ${thresholdVal < 100 && thresholdVal > 0 ? `<div class="absolute top-0 bg-orange-400 h-2" style="left: ${thresholdVal}%; width: 2px; z-index: 3;"></div>` : ''}
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('');
+                                }
+                                
+                                // Fallback to parsing message for older alerts
                                 const parts = alert.message.split(': ');
                                 const metricsText = parts.slice(1).join(': ');
+                                
+                                // If no metrics in message and alert has metric field, display it
+                                if (!metricsText && alert.metric && alert.metric !== 'bundled') {
+                                    const metricName = alert.metric.charAt(0).toUpperCase() + alert.metric.slice(1);
+                                    return `<div class="mb-1">${metricName} threshold exceeded</div>`;
+                                }
+                                
                                 const metrics = metricsText.split(', ');
                                 
                                 return metrics.map(metric => {
