@@ -1092,7 +1092,8 @@ class AlertManager extends EventEmitter {
                     })) : null,
                 emailSent: Boolean(alert.emailSent || this.notificationStatus?.get(alert.id)?.emailSent),
                 webhookSent: Boolean(alert.webhookSent || this.notificationStatus?.get(alert.id)?.webhookSent),
-                notificationChannels: this.getEnabledNotificationChannels(alert)
+                notificationChannels: this.getEnabledNotificationChannels(alert),
+                exceededMetrics: alert.exceededMetrics || null
             };
             
             // Handle node alerts differently - they don't have guest property
@@ -1643,7 +1644,8 @@ class AlertManager extends EventEmitter {
                 type: alert.guest.type,
                 endpointId: alert.guest.endpointId
             },
-            metric: alert.rule.metric,
+            metric: alert.metric || alert.rule.metric,
+            exceededMetrics: alert.exceededMetrics,
             resolvedAt: alert.resolvedAt,
             resolved: true,
             duration: alert.resolvedAt - alert.triggeredAt,
