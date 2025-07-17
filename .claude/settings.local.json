@@ -44,7 +44,11 @@
       "Bash(sudo journalctl:*)",
       "Bash(ping:*)",
       "Bash(nslookup:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(apt:*)",
+      "Bash(apt install:*)",
+      "Bash(/home/pulse/mcp-remote-claude/run.sh:*)",
+      "Bash(visudo:*)"
     ]
   }
 }

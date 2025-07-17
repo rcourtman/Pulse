@@ -206,7 +206,6 @@ router.post('/test-email', async (req, res) => {
 // Test webhook endpoint
 router.post('/test-webhook', async (req, res) => {
     try {
-        
         // Get webhook URL from request body or environment
         const webhookUrl = req.body?.url || process.env.WEBHOOK_URL;
         
@@ -217,8 +216,8 @@ router.post('/test-webhook', async (req, res) => {
             });
         }
         
-        // If URL is provided in body, test that specific URL
-        if (req.body?.url) {
+        // Always use the same test webhook logic regardless of source
+        if (true) {
             // Direct webhook test with provided URL
             
             // Detect webhook type based on URL
@@ -319,16 +318,6 @@ router.post('/test-webhook', async (req, res) => {
                     success: false,
                     error: errorMessage
                 });
-            }
-        } else {
-            // Use the alert manager to send a test webhook with env URL
-            const testResult = await stateManager.alertManager.sendTestWebhook();
-            
-            if (testResult.success) {
-                res.json({ success: true, message: 'Test webhook sent successfully' });
-            } else {
-                console.error('[Test Webhook] Failed to send test webhook:', testResult.error);
-                res.status(400).json({ success: false, error: testResult.error || 'Failed to send test webhook' });
             }
         }
     } catch (error) {
@@ -778,7 +767,7 @@ router.post('/config-debug', (req, res) => {
 });
 
 // Per-guest alert configuration endpoint
-router.post('/config', (req, res) => {
+router.post('/config', async (req, res) => {
     console.log('[API] /alerts/config endpoint called at', new Date().toISOString());
     
     // Wrap everything in try-catch to catch any error
@@ -872,6 +861,50 @@ router.post('/config', (req, res) => {
             });
             
             if (success) {
+                // Update environment variables for cooldown settings
+                try {
+                    const configApi = require('../configApi');
+                    const configInstance = new configApi();
+                    
+                    // Update email cooldown environment variables
+                    if (alertConfig.emailCooldowns) {
+                        await configInstance.updateEnvironmentVariable('ALERT_EMAIL_COOLDOWN_MINUTES', 
+                            String(alertConfig.emailCooldowns.cooldownMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_EMAIL_DEBOUNCE_MINUTES', 
+                            String(alertConfig.emailCooldowns.debounceMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_MAX_EMAILS_PER_HOUR', 
+                            String(alertConfig.emailCooldowns.maxEmailsPerHour || 100));
+                    }
+                    
+                    // Update webhook cooldown environment variables
+                    if (alertConfig.webhookCooldowns) {
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_COOLDOWN_MINUTES', 
+                            String(alertConfig.webhookCooldowns.cooldownMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_DEBOUNCE_MINUTES', 
+                            String(alertConfig.webhookCooldowns.debounceMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_MAX_CALLS_PER_HOUR', 
+                            String(alertConfig.webhookCooldowns.maxCallsPerHour || 100));
+                    }
+                    
+                    // Also update email batching settings if cooldowns are 0
+                    if (alertConfig.emailCooldowns && alertConfig.emailCooldowns.cooldownMinutes === 0) {
+                        await configInstance.updateEnvironmentVariable('EMAIL_BATCH_ENABLED', 'false');
+                        await configInstance.updateEnvironmentVariable('EMAIL_BATCH_WINDOW_MS', '0');
+                    }
+                    
+                    // Update webhook batching settings if cooldowns are 0
+                    if (alertConfig.webhookCooldowns && alertConfig.webhookCooldowns.cooldownMinutes === 0) {
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_BATCH_WINDOW_MS', '0');
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_PRIORITY_DELAY', '0');
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_ANNOUNCEMENT_DELAY', '0');
+                    }
+                    
+                    console.log('[API] Updated environment variables for alert cooldowns');
+                } catch (envError) {
+                    console.error('[API] Error updating environment variables:', envError);
+                    // Continue anyway - the rule was updated successfully
+                }
+                
                 res.json({ 
                     success: true, 
                     message: 'Alert configuration updated successfully' 
@@ -886,6 +919,51 @@ router.post('/config', (req, res) => {
             // Create new rule
             try {
                 const newRule = stateManager.alertManager.addRule(rule);
+                
+                // Update environment variables for cooldown settings
+                try {
+                    const configApi = require('../configApi');
+                    const configInstance = new configApi();
+                    
+                    // Update email cooldown environment variables
+                    if (alertConfig.emailCooldowns) {
+                        await configInstance.updateEnvironmentVariable('ALERT_EMAIL_COOLDOWN_MINUTES', 
+                            String(alertConfig.emailCooldowns.cooldownMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_EMAIL_DEBOUNCE_MINUTES', 
+                            String(alertConfig.emailCooldowns.debounceMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_MAX_EMAILS_PER_HOUR', 
+                            String(alertConfig.emailCooldowns.maxEmailsPerHour || 100));
+                    }
+                    
+                    // Update webhook cooldown environment variables
+                    if (alertConfig.webhookCooldowns) {
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_COOLDOWN_MINUTES', 
+                            String(alertConfig.webhookCooldowns.cooldownMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_DEBOUNCE_MINUTES', 
+                            String(alertConfig.webhookCooldowns.debounceMinutes || 0));
+                        await configInstance.updateEnvironmentVariable('ALERT_WEBHOOK_MAX_CALLS_PER_HOUR', 
+                            String(alertConfig.webhookCooldowns.maxCallsPerHour || 100));
+                    }
+                    
+                    // Also update email batching settings if cooldowns are 0
+                    if (alertConfig.emailCooldowns && alertConfig.emailCooldowns.cooldownMinutes === 0) {
+                        await configInstance.updateEnvironmentVariable('EMAIL_BATCH_ENABLED', 'false');
+                        await configInstance.updateEnvironmentVariable('EMAIL_BATCH_WINDOW_MS', '0');
+                    }
+                    
+                    // Update webhook batching settings if cooldowns are 0
+                    if (alertConfig.webhookCooldowns && alertConfig.webhookCooldowns.cooldownMinutes === 0) {
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_BATCH_WINDOW_MS', '0');
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_PRIORITY_DELAY', '0');
+                        await configInstance.updateEnvironmentVariable('WEBHOOK_ANNOUNCEMENT_DELAY', '0');
+                    }
+                    
+                    console.log('[API] Updated environment variables for alert cooldowns');
+                } catch (envError) {
+                    console.error('[API] Error updating environment variables:', envError);
+                    // Continue anyway - the rule was created successfully
+                }
+                
                 res.json({ 
                     success: true, 
                     message: 'Alert configuration created successfully',
