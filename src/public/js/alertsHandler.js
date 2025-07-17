@@ -13,6 +13,8 @@ PulseApp.alerts = (() => {
     let toastRateLimitCount = 0;
     let lastToastTime = 0;
     let pendingAlertToasts = [];
+    let timestampUpdateInterval = null;
+    let serverTimeOffset = 0; // Offset between server and client clocks
 
     // Configuration - More subtle and less intrusive
     const MAX_NOTIFICATIONS = 3; // Reduced from 5
@@ -64,16 +66,53 @@ PulseApp.alerts = (() => {
 
     async function loadInitialData() {
         try {
+            // First, calculate server time offset
+            const startTime = Date.now();
             const [alertsResponse, groupsResponse] = await Promise.all([
                 fetch('/api/alerts'),
                 fetch('/api/alerts/groups')
             ]);
             
+            // Use the server's response time to estimate clock offset
+            if (alertsResponse.headers.get('date')) {
+                const serverTime = new Date(alertsResponse.headers.get('date')).getTime();
+                const clientTime = Date.now();
+                const requestDuration = clientTime - startTime;
+                // Estimate server time at moment of request (compensate for network delay)
+                const estimatedServerTime = serverTime - (requestDuration / 2);
+                serverTimeOffset = estimatedServerTime - startTime;
+                console.log(`[Alerts] Clock offset detected: ${Math.round(serverTimeOffset / 1000)}s (server ahead)`);
+            }
+            
             if (alertsResponse.ok) {
                 const alertsData = await alertsResponse.json();
+                
+                // Active alerts are ONLY what the server says is active
                 activeAlerts = alertsData.active || [];
                 alertRules = alertsData.rules || [];
                 alertMetrics = alertsData.stats?.metrics || {};
+                
+                // Load persisted history from server
+                if (alertsData.history) {
+                    alertHistory = alertsData.history;
+                    console.log(`[Alerts] Loaded ${alertHistory.length} alerts from server history`);
+                }
+                
+                // Merge active alerts into history (in case some are already acknowledged)
+                activeAlerts.forEach(alert => {
+                    const existingIndex = alertHistory.findIndex(h => h.id === alert.id);
+                    if (existingIndex >= 0) {
+                        // Update existing entry with latest data
+                        alertHistory[existingIndex] = alert;
+                    } else {
+                        // Add new alert to history
+                        alertHistory.unshift(alert);
+                    }
+                });
+                
+                // Sort history by triggeredAt (newest first)
+                alertHistory.sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
+                
                 updateHeaderIndicator();
             } else {
                 console.error('[Alerts] Failed to fetch alerts:', alertsResponse.status);
@@ -300,12 +339,18 @@ PulseApp.alerts = (() => {
         
         alertDropdown.classList.remove('hidden');
         updateDropdownContent();
+        
+        // Start live timestamp updates
+        startTimestampUpdates();
     }
 
     function closeDropdown() {
         if (!alertDropdown) return;
         
         alertDropdown.classList.add('hidden');
+        
+        // Stop timestamp updates when dropdown is closed
+        stopTimestampUpdates();
     }
 
     function updateDropdownContent() {
@@ -316,106 +361,154 @@ PulseApp.alerts = (() => {
             return;
         }
 
-        const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
-        const acknowledgedAlerts = activeAlerts.filter(a => a.acknowledged);
-
-        // Check if acknowledged section was previously expanded
-        const acknowledgedSection = alertDropdown.querySelector('.acknowledged-alerts-content');
-        const wasExpanded = acknowledgedSection && !acknowledgedSection.classList.contains('hidden');
-        const scrollPosition = acknowledgedSection ? acknowledgedSection.scrollTop : 0;
-
-        if (activeAlerts.length === 0) {
+        const now = Date.now();
+        
+        // Combine active alerts and history
+        const allAlerts = [];
+        
+        // Add active alerts from server (these are the only truly active ones)
+        activeAlerts.forEach(alert => {
+            allAlerts.push({...alert, isActive: true});
+        });
+        
+        // Add alerts from history that are actually resolved
+        alertHistory.forEach(alert => {
+            // Skip if this alert is already in activeAlerts
+            if (activeAlerts.find(a => a.id === alert.id)) {
+                return;
+            }
+            
+            // Only include resolved alerts from history
+            if (alert.resolved) {
+                allAlerts.push({...alert, isActive: false});
+            }
+        });
+        
+        // Sort by triggeredAt timestamp (newest first)
+        allAlerts.sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
+        
+        if (allAlerts.length === 0) {
             alertDropdown.innerHTML = `
                 <div class="p-3 text-center text-gray-500 dark:text-gray-400">
                     <svg class="w-6 h-6 mx-auto mb-1 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                         ${ALERT_ICONS.active}
                     </svg>
-                    <p class="text-xs mb-3">No active alerts</p>
+                    <p class="text-xs mb-3">No alerts</p>
                 </div>
             `;
             return;
         }
 
-        let content = '';
+        // Group alerts by time periods
+        const timeGroups = {
+            recent: [],      // Last 5 minutes
+            lastHour: [],    // 5 mins - 1 hour
+            lastDay: [],     // 1 hour - 24 hours
+            older: []        // Older than 24 hours
+        };
+        
+        allAlerts.forEach(alert => {
+            const age = now - (alert.triggeredAt || 0);
+            if (age < 5 * 60 * 1000) {
+                timeGroups.recent.push(alert);
+            } else if (age < 60 * 60 * 1000) {
+                timeGroups.lastHour.push(alert);
+            } else if (age < 24 * 60 * 60 * 1000) {
+                timeGroups.lastDay.push(alert);
+            } else {
+                timeGroups.older.push(alert);
+            }
+        });
 
-        // Unacknowledged alerts section
+        let content = '';
+        
+        // Unacknowledged alerts header
+        const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged && !a.resolved);
         if (unacknowledgedAlerts.length > 0) {
             content += `
                 <div class="border-b border-gray-200 dark:border-gray-700 p-2">
                     <div class="flex items-center justify-between">
                         <h3 class="text-xs font-medium text-gray-900 dark:text-gray-100">
-                            ${unacknowledgedAlerts.length} alert${unacknowledgedAlerts.length !== 1 ? 's' : ''}
+                            ${unacknowledgedAlerts.length} active alert${unacknowledgedAlerts.length !== 1 ? 's' : ''}
                         </h3>
-                        <button onclick="PulseApp.alerts.markAllAsAcknowledged()" 
+                        <button onclick="event.stopPropagation(); PulseApp.alerts.markAllAsAcknowledged()" 
                                 class="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none">
                             Ack All
                         </button>
                     </div>
                 </div>
-                <div class="max-h-80 overflow-y-auto">
-                    ${unacknowledgedAlerts.map(alert => createCompactAlertCard(alert, false)).join('')}
-                </div>
             `;
         }
-
-        if (acknowledgedAlerts.length > 0) {
-            const acknowledgedSection = `
-                <div class="border-t border-gray-200 dark:border-gray-700">
-                    <button onclick="PulseApp.alerts.toggleAcknowledgedSection()" 
-                            class="w-full p-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center justify-between acknowledged-toggle">
-                        <span>${acknowledgedAlerts.length} acknowledged alert${acknowledgedAlerts.length !== 1 ? 's' : ''}</span>
-                        <svg class="w-3 h-3 transform transition-transform ${wasExpanded ? 'rotate-180' : ''}" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                        </svg>
-                    </button>
-                    <div class="acknowledged-alerts-content max-h-32 overflow-y-auto ${wasExpanded ? '' : 'hidden'}">
-                        ${acknowledgedAlerts.map(alert => createCompactAlertCard(alert, true)).join('')}
+        
+        content += '<div class="max-h-96 overflow-y-auto">';
+        
+        // Helper function to create time group section
+        const createTimeGroup = (title, alerts) => {
+            if (alerts.length === 0) return '';
+            
+            return `
+                <div class="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                    <div class="px-2 py-1 bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400 font-medium sticky top-0 z-10">
+                        ${title}
                     </div>
+                    ${alerts.map(alert => createCompactAlertCard(alert, alert.acknowledged || alert.resolved)).join('')}
                 </div>
             `;
-            content += acknowledgedSection;
-        }
-
-        // If only acknowledged alerts exist
-        if (unacknowledgedAlerts.length === 0 && acknowledgedAlerts.length > 0) {
-            content = `
-                <div class="p-3 text-center text-gray-500 dark:text-gray-400">
-                    <svg class="w-6 h-6 mx-auto mb-1 text-green-300 dark:text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                        ${ALERT_ICONS.resolved}
-                    </svg>
-                    <p class="text-xs">All alerts acknowledged</p>
-                </div>
-                ${content}
-            `;
-        }
-
+        };
+        
+        // Add time groups
+        content += createTimeGroup('Recent', timeGroups.recent);
+        content += createTimeGroup('Last Hour', timeGroups.lastHour);
+        content += createTimeGroup('Last 24 Hours', timeGroups.lastDay);
+        content += createTimeGroup('Older', timeGroups.older);
+        
+        content += '</div>';
+        
+        // Preserve scroll position when updating content
+        const scrollContainer = alertDropdown.querySelector('.max-h-96.overflow-y-auto');
+        const currentScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
         
         alertDropdown.innerHTML = content;
-
-        // Restore scroll position if acknowledged section exists and was expanded
-        if (wasExpanded && scrollPosition > 0) {
-            const newAcknowledgedSection = alertDropdown.querySelector('.acknowledged-alerts-content');
-            if (newAcknowledgedSection) {
-                newAcknowledgedSection.scrollTop = scrollPosition;
-            }
+        
+        // Restore scroll position after updating
+        const newScrollContainer = alertDropdown.querySelector('.max-h-96.overflow-y-auto');
+        if (newScrollContainer && currentScrollTop > 0) {
+            newScrollContainer.scrollTop = currentScrollTop;
         }
     }
 
     function createCompactAlertCard(alert, acknowledged = false) {
-        const alertColor = 'border-amber-400';
-        const alertBg = 'bg-amber-50 dark:bg-amber-900/10';
+        const isResolved = alert.resolved || false;
+        const isAcknowledged = acknowledged || alert.acknowledged || false;
         
-        // If acknowledged, heavily grey out the entire card
-        const cardClasses = acknowledged ? 
-            'border-l-2 border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0 opacity-60' :
-            `border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
+        // Visual hierarchy:
+        // 1. Active unacknowledged: Full color (amber) - demands attention
+        // 2. Acknowledged: Greyed out - seen but still active
+        // 3. Resolved: Greyed out - no longer active
+        let alertColor, alertBg, cardClasses;
         
-        const duration = Math.max(0, Math.round((Date.now() - alert.triggeredAt) / 1000));
-        const durationStr = duration < 60 ? `${duration}s ago` : 
-                           duration < 3600 ? `${Math.round(duration/60)}m ago` : 
-                           `${Math.round(duration/3600)}h ago`;
+        if (isResolved) {
+            // Resolved alerts - muted appearance
+            alertColor = 'border-gray-300 dark:border-gray-500';
+            alertBg = 'bg-gray-50/50 dark:bg-transparent';
+            cardClasses = `relative border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0`;
+        } else if (isAcknowledged) {
+            // Acknowledged but not resolved - grey out like resolved, but with a subtle green hint
+            alertColor = 'border-gray-300 dark:border-gray-500';
+            alertBg = 'bg-gray-50/50 dark:bg-transparent';
+            cardClasses = `border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0`;
+        } else {
+            // Active unacknowledged alerts - full color and prominent
+            alertColor = 'border-amber-500 dark:border-amber-400';
+            alertBg = 'bg-amber-50 dark:bg-amber-900/20';
+            cardClasses = `border-l-4 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
+        }
         
-        const icon = ALERT_ICONS.active;
+        const triggeredAt = alert.triggeredAt || (Date.now() + serverTimeOffset);
+        const duration = Math.max(0, Math.round(((Date.now() + serverTimeOffset) - triggeredAt) / 1000));
+        const durationStr = formatDuration(duration);
+        
+        const icon = isResolved ? ALERT_ICONS.resolved : ALERT_ICONS.active;
         
         let currentValueDisplay = '';
         if (alert.metric === 'status') {
@@ -439,15 +532,18 @@ PulseApp.alerts = (() => {
             currentValueDisplay = alert.currentValue || '';
         }
         
-        // Muted text classes for acknowledged alerts
-        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500' : 'text-xs font-medium text-gray-900 dark:text-gray-100';
-        const valueClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
-        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
+        // Muted text classes for acknowledged/resolved alerts
+        const nameClass = isResolved || isAcknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-400' : 
+                         'text-xs font-medium text-gray-900 dark:text-gray-100';
+        const valueClass = isResolved || isAcknowledged ? 'text-xs text-gray-500 dark:text-gray-400' : 
+                          'text-xs text-gray-600 dark:text-gray-400';
+        const ruleClass = isResolved || isAcknowledged ? 'text-xs text-gray-500 dark:text-gray-400' : 
+                         'text-xs text-gray-600 dark:text-gray-400';
         
         return `
             <div class="${cardClasses}">
                 <div class="flex items-center space-x-2">
-                    <div class="flex-shrink-0 ${acknowledged ? 'opacity-50' : ''}">
+                    <div class="flex-shrink-0 ${isResolved || isAcknowledged ? 'opacity-60' : ''}">
                         ${icon}
                     </div>
                     <div class="flex-1 min-w-0">
@@ -458,7 +554,8 @@ PulseApp.alerts = (() => {
                             <span class="${valueClass}">
                                 ${currentValueDisplay}
                             </span>
-                            ${acknowledged ? '<span class="text-xs bg-green-500/70 text-white px-1 rounded opacity-70">✓</span>' : ''}
+                            ${isResolved ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">resolved</span>' : 
+                              isAcknowledged ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">ack</span>' : ''}
                         </div>
                         <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
                             ${(() => {
@@ -478,9 +575,11 @@ PulseApp.alerts = (() => {
                                         
                                         // Determine color based on how much it exceeds threshold
                                         const excess = currentVal - thresholdVal;
-                                        let barColor = 'bg-red-500';
-                                        if (excess <= 5) barColor = 'bg-yellow-500';
-                                        if (excess > 20) barColor = 'bg-red-600';
+                                        let barColor = isResolved || isAcknowledged ? 'bg-gray-400' : 'bg-red-500';
+                                        if (!isResolved && !isAcknowledged) {
+                                            if (excess <= 5) barColor = 'bg-yellow-500';
+                                            if (excess > 20) barColor = 'bg-red-600';
+                                        }
                                         
                                         return `
                                             <div class="mb-0.5">
@@ -514,10 +613,12 @@ PulseApp.alerts = (() => {
                                         
                                         // Determine color based on how much it exceeds threshold
                                         const excessRatio = currentMBps / thresholdMBps;
-                                        let barColor = 'bg-blue-500';
-                                        if (excessRatio > 1) barColor = 'bg-yellow-500';
-                                        if (excessRatio > 2) barColor = 'bg-orange-500';
-                                        if (excessRatio > 5) barColor = 'bg-red-500';
+                                        let barColor = isResolved || isAcknowledged ? 'bg-gray-400' : 'bg-blue-500';
+                                        if (!isResolved && !isAcknowledged) {
+                                            if (excessRatio > 1) barColor = 'bg-yellow-500';
+                                            if (excessRatio > 2) barColor = 'bg-orange-500';
+                                            if (excessRatio > 5) barColor = 'bg-red-500';
+                                        }
                                         
                                         return `
                                             <div class="mb-0.5">
@@ -538,12 +639,19 @@ PulseApp.alerts = (() => {
                                     return `<div class="mb-1">${trimmed}</div>`;
                                 }).join('');
                             })()}
-                            <div class="mt-1 text-xs text-gray-500">${durationStr}${acknowledged ? ' • acknowledged' : ''}</div>
+                            <div class="mt-1 text-xs text-gray-500 alert-timestamp" 
+                                 data-triggered-at="${alert.triggeredAt || (Date.now() + serverTimeOffset)}"
+                                 data-resolved-at="${alert.resolvedAt || ''}"
+                                 data-is-resolved="${isResolved}"
+                                 data-is-acknowledged="${isAcknowledged}">
+                                ${durationStr}
+                                ${isResolved && alert.resolvedAt ? ` • resolved ${formatDuration(Math.max(0, Math.round(((Date.now() + serverTimeOffset) - alert.resolvedAt) / 1000)))}` : isAcknowledged ? ' • acknowledged' : ''}
+                            </div>
                         </div>
                     </div>
                     <div class="flex-shrink-0 space-x-1">
-                        ${!acknowledged ? `
-                            <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
+                        ${!isAcknowledged && !isResolved && alert.isActive ? `
+                            <button onclick="event.stopPropagation(); PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
                                     class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none transition-all"
                                     data-alert-id="${alert.id}"
                                     title="Acknowledge alert">
@@ -576,6 +684,11 @@ PulseApp.alerts = (() => {
             console.log('[Alerts] Alert storm subsided. Resuming normal operation.');
         }
         
+        // Ensure alert has a triggeredAt timestamp
+        if (!alert.triggeredAt) {
+            alert.triggeredAt = now;
+        }
+        
         // For bundled alerts, check by guest only (not rule ID) to prevent duplicates
         const existingIndex = activeAlerts.findIndex(a => {
             if (alert.rule?.type === 'guest_bundled' || a.rule?.type === 'guest_bundled') {
@@ -593,8 +706,20 @@ PulseApp.alerts = (() => {
         
         if (existingIndex >= 0) {
             activeAlerts[existingIndex] = alert;
+            // Update in history too if it exists
+            const historyIndex = alertHistory.findIndex(h => h.id === alert.id);
+            if (historyIndex >= 0) {
+                alertHistory[historyIndex] = alert;
+            }
         } else {
             activeAlerts.unshift(alert);
+            
+            // Add to history with timestamp
+            const alertWithTimestamp = {
+                ...alert,
+                triggeredAt: alert.triggeredAt || now
+            };
+            alertHistory.unshift(alertWithTimestamp);
             
             // Limit the size of activeAlerts array
             if (activeAlerts.length > MAX_ACTIVE_ALERTS) {
@@ -609,6 +734,11 @@ PulseApp.alerts = (() => {
                 } else {
                     activeAlerts = activeAlerts.slice(0, MAX_ACTIVE_ALERTS);
                 }
+            }
+            
+            // Limit history size
+            if (alertHistory.length > 200) {
+                alertHistory = alertHistory.slice(0, 200);
             }
             
             // Queue toast notification
@@ -639,12 +769,30 @@ PulseApp.alerts = (() => {
     }
 
     function handleResolvedAlert(alert) {
+        console.log('[Alerts] Handling resolved alert:', alert);
         
-        activeAlerts = activeAlerts.filter(a => 
-            !(a.guest.vmid === alert.guest.vmid && 
-              a.guest.node === alert.guest.node && 
-              a.ruleId === alert.ruleId)
-        );
+        // Find the alert in activeAlerts by ID
+        const activeIndex = activeAlerts.findIndex(a => a.id === alert.id);
+        
+        if (activeIndex >= 0) {
+            // Mark as resolved and move to history
+            const resolvedAlert = {
+                ...activeAlerts[activeIndex],
+                resolved: true,
+                resolvedAt: Date.now() + serverTimeOffset
+            };
+            
+            // Add to history
+            alertHistory.unshift(resolvedAlert);
+            
+            // Limit history size
+            if (alertHistory.length > 200) {
+                alertHistory = alertHistory.slice(0, 200);
+            }
+            
+            // Remove from active alerts
+            activeAlerts.splice(activeIndex, 1);
+        }
         
         updateHeaderIndicator();
         
@@ -768,25 +916,38 @@ PulseApp.alerts = (() => {
     const acknowledgeInProgress = new Set();
     
     async function acknowledgeAlert(alertId, ruleId) {
+        console.log('[Alerts] Acknowledging alert:', alertId, ruleId);
+        
         // Prevent duplicate acknowledgements
         if (acknowledgeInProgress.has(alertId)) {
+            console.log('[Alerts] Acknowledge already in progress for:', alertId);
             return;
         }
         
         acknowledgeInProgress.add(alertId);
         
         // Optimistically update the UI immediately
-        const alertIndex = activeAlerts.findIndex(a => a.id === alertId);
+        // First check activeAlerts
+        let alertIndex = activeAlerts.findIndex(a => a.id === alertId);
+        let targetArray = activeAlerts;
+        
+        // If not found in activeAlerts, check alertHistory
+        if (alertIndex < 0) {
+            alertIndex = alertHistory.findIndex(a => a.id === alertId);
+            targetArray = alertHistory;
+            console.log('[Alerts] Alert not in activeAlerts, found in history at index:', alertIndex);
+        }
+        
         if (alertIndex >= 0) {
             // Store original state in case we need to rollback
             const originalState = {
-                acknowledged: activeAlerts[alertIndex].acknowledged,
-                acknowledgedAt: activeAlerts[alertIndex].acknowledgedAt
+                acknowledged: targetArray[alertIndex].acknowledged,
+                acknowledgedAt: targetArray[alertIndex].acknowledgedAt
             };
             
             // Update local state immediately
-            activeAlerts[alertIndex].acknowledged = true;
-            activeAlerts[alertIndex].acknowledgedAt = Date.now();
+            targetArray[alertIndex].acknowledged = true;
+            targetArray[alertIndex].acknowledgedAt = Date.now() + serverTimeOffset;
             
             // Update UI immediately
             updateHeaderIndicator();
@@ -807,13 +968,13 @@ PulseApp.alerts = (() => {
                 
                 if (!response.ok) {
                     // Rollback on failure
-                    activeAlerts[alertIndex].acknowledged = originalState.acknowledged;
-                    activeAlerts[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
+                    targetArray[alertIndex].acknowledged = originalState.acknowledged;
+                    targetArray[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
                     
                     // Cancel cleanup
-                    if (acknowledgedCleanupTimers.has(alertId)) {
-                        clearTimeout(acknowledgedCleanupTimers.get(alertId));
-                        acknowledgedCleanupTimers.delete(alertId);
+                    if (cleanupTimeouts.has(alertId)) {
+                        clearTimeout(cleanupTimeouts.get(alertId));
+                        cleanupTimeouts.delete(alertId);
                     }
                     
                     // Update UI to reflect rollback
@@ -831,13 +992,13 @@ PulseApp.alerts = (() => {
                 
                 // Rollback on network error
                 if (alertIndex >= 0) {
-                    activeAlerts[alertIndex].acknowledged = originalState.acknowledged;
-                    activeAlerts[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
+                    targetArray[alertIndex].acknowledged = originalState.acknowledged;
+                    targetArray[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
                     
                     // Cancel cleanup
-                    if (acknowledgedCleanupTimers.has(alertId)) {
-                        clearTimeout(acknowledgedCleanupTimers.get(alertId));
-                        acknowledgedCleanupTimers.delete(alertId);
+                    if (cleanupTimeouts.has(alertId)) {
+                        clearTimeout(cleanupTimeouts.get(alertId));
+                        cleanupTimeouts.delete(alertId);
                     }
                     
                     // Update UI
@@ -961,7 +1122,7 @@ PulseApp.alerts = (() => {
                     const alertIndex = activeAlerts.findIndex(a => a.id === alert.id);
                     if (alertIndex >= 0) {
                         activeAlerts[alertIndex].acknowledged = true;
-                        activeAlerts[alertIndex].acknowledgedAt = Date.now();
+                        activeAlerts[alertIndex].acknowledgedAt = Date.now() + serverTimeOffset;
                         
                         // Schedule cleanup of this acknowledged alert after 5 minutes
                         scheduleAcknowledgedCleanup(alert.id);
@@ -994,17 +1155,8 @@ PulseApp.alerts = (() => {
     function updateAlertsFromState(state) {
         if (state && state.alerts) {
             if (state.alerts.active) {
-                // Preserve local acknowledgment state to prevent race conditions
-                const newAlerts = state.alerts.active.map(serverAlert => {
-                    const localAlert = activeAlerts.find(local => local.id === serverAlert.id);
-                    if (localAlert && localAlert.acknowledged && !serverAlert.acknowledged) {
-                        // Keep local acknowledgment if server hasn't caught up yet
-                        return { ...serverAlert, acknowledged: true, acknowledgedAt: localAlert.acknowledgedAt };
-                    }
-                    return serverAlert;
-                });
-                
-                activeAlerts = newAlerts;
+                // Trust the server's active alerts list
+                activeAlerts = state.alerts.active || [];
                 updateHeaderIndicator();
                 if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                     updateDropdownContent();
@@ -1023,7 +1175,7 @@ PulseApp.alerts = (() => {
             activeAlerts[existingIndex] = { 
                 ...activeAlerts[existingIndex], 
                 acknowledged: true, 
-                acknowledgedAt: alert.acknowledgedAt || Date.now(),
+                acknowledgedAt: alert.acknowledgedAt || (Date.now() + serverTimeOffset),
                 acknowledgedBy: alert.acknowledgedBy
             };
             updateHeaderIndicator();
@@ -1041,6 +1193,108 @@ PulseApp.alerts = (() => {
         
         // Also reload the alert data to get any new rules
         loadInitialData();
+    }
+    
+    // Format duration with proper units
+    function formatDuration(seconds) {
+        if (seconds < 60) {
+            return `${seconds}s`;
+        } else if (seconds < 120) {
+            // Show "1m 15s" format for 60-119 seconds
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            if (remainingSeconds === 0) {
+                return `${minutes}m`;
+            }
+            return `${minutes}m ${remainingSeconds}s`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            return `${minutes}m`;
+        } else if (seconds < 86400) {
+            const hours = Math.floor(seconds / 3600);
+            const remainingMinutes = Math.floor((seconds % 3600) / 60);
+            if (remainingMinutes === 0) {
+                return `${hours}h`;
+            }
+            return `${hours}h ${remainingMinutes}m`;
+        } else {
+            const days = Math.floor(seconds / 86400);
+            return `${days}d`;
+        }
+    }
+    
+    // Start live timestamp updates
+    function startTimestampUpdates() {
+        // Clear any existing interval
+        stopTimestampUpdates();
+        
+        // Update timestamps immediately
+        updateAllTimestamps();
+        
+        // Then update every second
+        timestampUpdateInterval = setInterval(updateAllTimestamps, 1000);
+    }
+    
+    // Stop timestamp updates
+    function stopTimestampUpdates() {
+        if (timestampUpdateInterval) {
+            clearInterval(timestampUpdateInterval);
+            timestampUpdateInterval = null;
+        }
+    }
+    
+    // Update all visible timestamps
+    function updateAllTimestamps() {
+        if (!alertDropdown || alertDropdown.classList.contains('hidden')) return;
+        
+        // Adjust current time by server offset to match server clock
+        const now = Date.now() + serverTimeOffset;
+        const timestampElements = alertDropdown.querySelectorAll('.alert-timestamp');
+        
+        if (timestampElements.length === 0) {
+            console.log('[Alerts] No timestamp elements found');
+            return;
+        }
+        
+        timestampElements.forEach((element, index) => {
+            const triggeredAt = parseInt(element.dataset.triggeredAt);
+            const resolvedAt = element.dataset.resolvedAt ? parseInt(element.dataset.resolvedAt) : null;
+            const isResolved = element.dataset.isResolved === 'true';
+            const isAcknowledged = element.dataset.isAcknowledged === 'true';
+            
+            if (triggeredAt && !isNaN(triggeredAt)) {
+                // Calculate duration, handling clock skew
+                const rawDiff = now - triggeredAt;
+                let duration;
+                
+                if (rawDiff < -60000) {
+                    // If more than 1 minute in the future, likely clock skew
+                    // Use the stored alert's triggeredAt as a baseline
+                    duration = 0;
+                } else if (rawDiff < 0) {
+                    // Small future timestamps (< 1 min) show as just triggered
+                    duration = 0;
+                } else {
+                    duration = Math.round(rawDiff / 1000);
+                }
+                
+                let text = formatDuration(duration);
+                
+                if (isResolved && resolvedAt) {
+                    const resolvedDuration = Math.max(0, Math.round((now - resolvedAt) / 1000));
+                    text += ` • resolved ${formatDuration(resolvedDuration)}`;
+                } else if (isAcknowledged) {
+                    text += ' • acknowledged';
+                }
+                
+                // Only update if text has changed to avoid unnecessary DOM updates
+                if (element.textContent !== text) {
+                    element.textContent = text;
+                }
+            } else {
+                console.log('[Alerts] Invalid triggeredAt:', element.dataset.triggeredAt, 'for element:', element);
+            }
+        });
     }
     
     // Cleanup function to prevent memory leaks
@@ -1062,6 +1316,9 @@ PulseApp.alerts = (() => {
             clearTimeout(toastProcessingTimeout);
             toastProcessingTimeout = null;
         }
+        
+        // Clear timestamp update interval
+        stopTimestampUpdates();
         
         // Clear pending toasts
         pendingAlertToasts = [];
