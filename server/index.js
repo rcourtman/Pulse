@@ -822,6 +822,7 @@ let devWatcher = null;
 let reloadDebounceTimer = null;
 let lastReloadTime = 0;
 global.lastReloadTime = 0;  // Make it globally accessible
+global.isUIUpdatingEnv = false;  // Flag to track UI updates to .env
 
 function setupEnvFileWatcher() {
     // Use same logic as ConfigApi to find .env file
@@ -841,6 +842,12 @@ function setupEnvFileWatcher() {
     
     envWatcher = fs.watch(envPath, (eventType, filename) => {
         if (eventType === 'change') {
+            // Skip reload if UI is updating the file
+            if (global.isUIUpdatingEnv) {
+                console.log('.env file changed by UI, skipping hot reload');
+                return;
+            }
+            
             // Debounce the reload to avoid multiple reloads for rapid changes
             clearTimeout(reloadDebounceTimer);
             reloadDebounceTimer = setTimeout(async () => {
@@ -850,7 +857,7 @@ function setupEnvFileWatcher() {
                     return;
                 }
                 
-                console.log('.env file changed, triggering service restart...');
+                console.log('.env file changed externally, triggering service restart...');
                 global.lastReloadTime = now;
                 
                 try {

@@ -24,7 +24,7 @@ const TIMEOUTS = {
 const UPDATE_INTERVALS = {
     METRICS: process.env.PULSE_METRIC_INTERVAL_MS ? parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) : 2000,
     DISCOVERY: process.env.PULSE_DISCOVERY_INTERVAL_MS ? parseInt(process.env.PULSE_DISCOVERY_INTERVAL_MS, 10) : 30000,
-    ALERT_EVALUATION: 15000,     // Alert evaluation interval
+    ALERT_EVALUATION: process.env.PULSE_ALERT_EVALUATION_INTERVAL_MS ? parseInt(process.env.PULSE_ALERT_EVALUATION_INTERVAL_MS, 10) : 15000,     // Alert evaluation interval
     METRICS_PERSISTENCE: {
         INITIAL: 30000,          // First 2 minutes: every 30s
         MEDIUM: 60000,           // 2-5 minutes: every 60s

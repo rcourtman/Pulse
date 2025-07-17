@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "remote-claude": {
+      "command": "/home/pulse/mcp-remote-claude/server-concurrent-batch.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

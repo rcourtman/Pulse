@@ -83,6 +83,12 @@ class WebhookBatcher extends EventEmitter {
             clearTimeout(this.batchTimeout);
         }
         
+        // If batch window is 0, process immediately
+        if (this.config.batchWindowMs === 0) {
+            this.processBatch();
+            return;
+        }
+        
         this.batchTimeout = setTimeout(() => {
             this.processBatch();
         }, this.config.batchWindowMs);
