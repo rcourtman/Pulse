@@ -43,6 +43,7 @@ function update_script() {
     msg_ok "Backed up Bar Assistant"
 
     fetch_and_deploy_gh_release "bar-assistant" "karlomikus/bar-assistant" "tarball" "latest" "/opt/bar-assistant"
+    setup_composer
 
     msg_info "Updating ${APP} to ${RELEASE_BARASSISTANT}"
     cp -r /opt/bar-assistant-backup/.env /opt/bar-assistant/.env

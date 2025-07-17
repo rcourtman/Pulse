@@ -40,6 +40,7 @@ function update_script() {
     msg_ok "Backed up data"
 
     fetch_and_deploy_gh_release "firefly" "firefly-iii/firefly-iii" "prebuild" "latest" "/opt/firefly" "FireflyIII-*.zip"
+    setup_composer
 
     msg_info "Updating ${APP} to v${RELEASE}"
     rm -rf /opt/firefly/storage
