@@ -148,10 +148,11 @@ class ConfigApi {
             // Write back to .env file
             await this.writeEnvFile(existingConfig);
             
-            // Reset flag after a delay to ensure file watcher sees it
+            // Reset flag after a longer delay to ensure file watcher debounce completes
+            // The file watcher has its own debounce, so we need to wait longer
             setTimeout(() => {
                 global.isUIUpdatingEnv = false;
-            }, 100);
+            }, 3000); // 3 seconds should be enough for the file watcher debounce
             
             // Reload configuration in the application
             // Make this asynchronous to prevent frontend freezing
@@ -899,10 +900,11 @@ class ConfigApi {
             
             console.log(`[ConfigApi] Updated environment variable ${variableName} = ${value}`);
             
-            // Reset flag after a delay to ensure file watcher sees it
+            // Reset flag after a longer delay to ensure file watcher debounce completes
+            // The file watcher has its own debounce, so we need to wait longer
             setTimeout(() => {
                 global.isUIUpdatingEnv = false;
-            }, 100);
+            }, 3000); // 3 seconds should be enough for the file watcher debounce
             
             return { success: true };
         } catch (error) {

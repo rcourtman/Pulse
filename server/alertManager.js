@@ -8,6 +8,7 @@ const WebhookBatcher = require('./webhookBatcher');
 const alertPatches = require('./alertManagerPatches');
 const DebounceHandler = require('./debounceHandler');
 const EmailService = require('./emailService');
+const alertHistory = require('./alertHistoryPersistence');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -99,6 +100,7 @@ class AlertManager extends EventEmitter {
         this.loadAlertRules();
         this.loadActiveAlerts();
         this.loadNotificationHistory();
+        this.loadAlertHistory();
         
         // Initialize custom threshold manager
         this.initializeCustomThresholds();
@@ -121,6 +123,10 @@ class AlertManager extends EventEmitter {
             this.cleanupResolvedAlerts();
             this.cleanupExpiredCooldowns();
             this.updateMetrics();
+            // Also cleanup persistent history
+            alertHistory.cleanup().catch(error => {
+                console.error('[AlertManager] History cleanup error:', error);
+            });
         }, 300000); // Every 5 minutes
         
         // Watch alert rules file for changes
@@ -307,8 +313,10 @@ class AlertManager extends EventEmitter {
                             // Resolve existing alert if value dropped below threshold
                             existingAlert.state = 'resolved';
                             existingAlert.resolvedAt = timestamp;
-                            this.emit('alertResolved', existingAlert);
-                            this.activeAlerts.delete(alertKey);
+                            // Properly resolve the alert to update history
+                            this.resolveAlert(existingAlert).catch(error => {
+                                console.error(`[AlertManager] Error resolving node alert: ${error}`);
+                            });
                             console.log(`[AlertManager] Node alert resolved: ${existingAlert.message}`);
                         }
                     });
@@ -496,7 +504,9 @@ class AlertManager extends EventEmitter {
                         existingAlert.state = 'resolved';
                         existingAlert.resolvedAt = timestamp;
                         existingAlert.resolveReason = 'New incident detected';
-                        this.resolveAlert(existingAlert);
+                        this.resolveAlert(existingAlert).catch(error => {
+                            console.error('[AlertManager] Error resolving alert:', error);
+                        });
                     }
                     
                     // Create new alert with permanent ID and safe copies of rule/guest objects
@@ -539,7 +549,9 @@ class AlertManager extends EventEmitter {
                     existingAlert.resolvedAt = timestamp;
                     existingAlert.resolveReason = 'Condition cleared';
                     if (existingAlert.rule.autoResolve) {
-                        this.resolveAlert(existingAlert);
+                        this.resolveAlert(existingAlert).catch(error => {
+                            console.error('[AlertManager] Error resolving alert:', error);
+                        });
                     }
                 }
             }
@@ -1503,7 +1515,123 @@ class AlertManager extends EventEmitter {
         }
     }
 
-    resolveAlert(alert) {
+    /**
+     * Check alerts in history and resolve any that no longer meet trigger conditions
+     */
+    async checkAndResolveHistoricalAlerts(allGuests, currentMetrics) {
+        try {
+            let resolvedCount = 0;
+            const now = Date.now();
+            
+            // Load persistent history to check
+            const persistentHistory = await alertHistory.loadHistory();
+            console.log(`[AlertManager] Checking ${persistentHistory.length} historical alerts for resolution`);
+            
+            // Check each unresolved alert in persistent history
+            for (const histAlert of persistentHistory) {
+                if (histAlert.resolved) continue;
+                
+                // For bundled alerts, check if conditions still exist
+                if (histAlert.metric === 'bundled' && histAlert.guest) {
+                    const guest = allGuests.find(g => 
+                        g.vmid === histAlert.guest.vmid && 
+                        g.node === histAlert.guest.node
+                    );
+                    
+                    if (guest) {
+                        // Re-evaluate the guest to see if alert conditions still exist
+                        const globalThresholds = this.getGlobalThresholds();
+                        const guestThresholds = this.getGuestSpecificThresholds(guest);
+                        const guestMetrics = currentMetrics[`${guest.node}_${guest.vmid}`];
+                        
+                        // Check all metrics for this guest
+                        const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+                        const exceededMetrics = [];
+                        
+                        for (const metricType of metrics) {
+                            const metricResult = this.evaluateMetricForGuest(guest, metricType, guestThresholds, globalThresholds, guestMetrics);
+                            if (metricResult && metricResult.isExceeded) {
+                                exceededMetrics.push(metricResult);
+                            }
+                        }
+                        
+                        // If no metrics exceed thresholds, resolve the alert
+                        if (exceededMetrics.length === 0) {
+                            histAlert.resolved = true;
+                            histAlert.resolvedAt = now;
+                            histAlert.duration = histAlert.duration || (now - histAlert.triggeredAt);
+                            
+                            console.log(`[AlertManager] Resolving historical bundled alert ${histAlert.id} for ${guest.name} - no metrics exceed thresholds`);
+                            
+                            // Update in persistent history
+                            try {
+                                await alertHistory.updateInHistory(histAlert.id, {
+                                    resolved: true,
+                                    resolvedAt: histAlert.resolvedAt,
+                                    duration: histAlert.duration
+                                });
+                                
+                                // Also update in-memory history
+                                const memIndex = this.alertHistory.findIndex(h => h.id === histAlert.id);
+                                if (memIndex >= 0) {
+                                    this.alertHistory[memIndex].resolved = true;
+                                    this.alertHistory[memIndex].resolvedAt = histAlert.resolvedAt;
+                                    this.alertHistory[memIndex].duration = histAlert.duration;
+                                }
+                                
+                                resolvedCount++;
+                            } catch (error) {
+                                console.error(`[AlertManager] Failed to update resolved status for alert ${histAlert.id}:`, error);
+                            }
+                            
+                            continue;
+                        }
+                    }
+                }
+                
+                // Check if this alert is still in activeAlerts
+                const isStillActive = Array.from(this.activeAlerts.values()).some(
+                    active => active.id === histAlert.id
+                );
+                
+                if (!isStillActive) {
+                    // Alert is not active anymore, mark it as resolved
+                    histAlert.resolved = true;
+                    histAlert.resolvedAt = histAlert.resolvedAt || now;
+                    histAlert.duration = histAlert.duration || (histAlert.resolvedAt - histAlert.triggeredAt);
+                    
+                    // Update in persistent history
+                    try {
+                        await alertHistory.updateInHistory(histAlert.id, {
+                            resolved: true,
+                            resolvedAt: histAlert.resolvedAt,
+                            duration: histAlert.duration
+                        });
+                        
+                        // Also update in-memory history
+                        const memIndex = this.alertHistory.findIndex(h => h.id === histAlert.id);
+                        if (memIndex >= 0) {
+                            this.alertHistory[memIndex].resolved = true;
+                            this.alertHistory[memIndex].resolvedAt = histAlert.resolvedAt;
+                            this.alertHistory[memIndex].duration = histAlert.duration;
+                        }
+                        
+                        resolvedCount++;
+                    } catch (error) {
+                        console.error(`[AlertManager] Failed to update resolved status for alert ${histAlert.id}:`, error);
+                    }
+                }
+            }
+            
+            if (resolvedCount > 0) {
+                console.log(`[AlertManager] Auto-resolved ${resolvedCount} historical alerts that are no longer active`);
+            }
+        } catch (error) {
+            console.error('[AlertManager] Error checking historical alerts:', error);
+        }
+    }
+
+    async resolveAlert(alert) {
         const alertInfo = {
             id: alert.id, // Use the stored alert ID
             ruleId: alert.rule.id,
@@ -1517,12 +1645,33 @@ class AlertManager extends EventEmitter {
             },
             metric: alert.rule.metric,
             resolvedAt: alert.resolvedAt,
+            resolved: true,
             duration: alert.resolvedAt - alert.triggeredAt,
-            message: this.generateResolvedMessage(alert)
+            message: this.generateResolvedMessage(alert),
+            triggeredAt: alert.triggeredAt,
+            currentValue: alert.currentValue,
+            threshold: alert.threshold
         };
 
         // Add to history
-        this.addToHistory(alertInfo);
+        await this.addToHistory(alertInfo);
+        
+        // Update in persistent history
+        try {
+            console.log(`[AlertManager] Updating alert ${alert.id} as resolved in persistent history`);
+            const updated = await alertHistory.updateInHistory(alert.id, {
+                resolved: true,
+                resolvedAt: alert.resolvedAt,
+                duration: alert.resolvedAt - alert.triggeredAt
+            });
+            if (updated) {
+                console.log(`[AlertManager] Successfully marked alert ${alert.id} as resolved in history`);
+            } else {
+                console.log(`[AlertManager] Alert ${alert.id} not found in history to update`);
+            }
+        } catch (error) {
+            console.error('[AlertManager] Failed to update resolved alert in history:', error);
+        }
 
         // Apply suppression if configured
         if (alert.rule.suppressionTime > 0) {
@@ -1628,10 +1777,44 @@ class AlertManager extends EventEmitter {
         return `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
-    addToHistory(alertInfo) {
+    async loadAlertHistory() {
+        try {
+            const persistedHistory = await alertHistory.loadHistory();
+            // Merge with in-memory history, avoiding duplicates
+            const historyMap = new Map();
+            
+            // Add persisted history first
+            persistedHistory.forEach(alert => {
+                historyMap.set(alert.id, alert);
+            });
+            
+            // Add current in-memory history (may have newer data)
+            this.alertHistory.forEach(alert => {
+                if (!historyMap.has(alert.id)) {
+                    historyMap.set(alert.id, alert);
+                }
+            });
+            
+            this.alertHistory = Array.from(historyMap.values())
+                .sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
+            
+            console.log(`[AlertManager] Loaded ${this.alertHistory.length} alerts from history`);
+        } catch (error) {
+            console.error('[AlertManager] Failed to load alert history:', error);
+        }
+    }
+
+    async addToHistory(alertInfo) {
         this.alertHistory.unshift(alertInfo);
         if (this.alertHistory.length > this.maxHistorySize) {
             this.alertHistory = this.alertHistory.slice(0, this.maxHistorySize);
+        }
+        
+        // Save to persistent history
+        try {
+            await alertHistory.addToHistory(alertInfo);
+        } catch (error) {
+            console.error('[AlertManager] Failed to persist alert to history:', error);
         }
     }
 
@@ -1732,7 +1915,9 @@ class AlertManager extends EventEmitter {
             
             // Trigger immediate evaluation if rule was enabled
             if (rule.enabled) {
-                this.evaluateCurrentState();
+                this.evaluateCurrentState().catch(error => {
+                    console.error('[AlertManager] Error evaluating state after rule update:', error);
+                });
             }
             
             return true;
@@ -1847,7 +2032,9 @@ class AlertManager extends EventEmitter {
         this.emit('ruleAdded', fullRule);
         
         // Trigger immediate evaluation for the new rule
-        this.evaluateCurrentState();
+        this.evaluateCurrentState().catch(error => {
+            console.error('[AlertManager] Error evaluating state after adding rule:', error);
+        });
         
         return fullRule;
     }
@@ -1900,7 +2087,9 @@ class AlertManager extends EventEmitter {
         }
         
         // Trigger immediate evaluation of newly enabled rules against current state
-        this.evaluateCurrentState();
+        this.evaluateCurrentState().catch(error => {
+            console.error('[AlertManager] Error evaluating state after refreshing rules:', error);
+        });
         
         this.emit('rulesRefreshed', { activeRules: nowActiveRules.size, disabledRules });
     }
@@ -1909,7 +2098,7 @@ class AlertManager extends EventEmitter {
      * Evaluate current system state against all enabled rules
      * This should be called when rules are enabled to check for immediate alerts
      */
-    evaluateCurrentState() {
+    async evaluateCurrentState() {
         try {
             // Get current state from state manager
             const stateManager = require('./state');
@@ -1935,6 +2124,9 @@ class AlertManager extends EventEmitter {
                 }
                 return;
             }
+
+            // Check and resolve any alerts in history that no longer meet conditions
+            await this.checkAndResolveHistoricalAlerts(allGuests, currentMetrics);
 
             // For immediate evaluation, we need to check existing conditions and create alerts immediately
             // This bypasses the normal duration-based pending state
@@ -4310,18 +4502,22 @@ Pulse Monitoring System`,
         } else {
             // No thresholds exceeded - resolve alert if it exists
             if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
+                const wasActive = existingAlert.state === 'active';
                 existingAlert.state = 'resolved';
                 existingAlert.resolvedAt = timestamp;
                 
                 console.log(`[AlertManager] Resolved bundled alert for ${guest.name}`);
                 
-                // Emit resolved event if it was active
-                if (existingAlert.state === 'active') {
-                    this.emit('alertResolved', existingAlert);
+                // Properly resolve the alert if it was active
+                if (wasActive) {
+                    // Call the proper resolveAlert function to update history
+                    await this.resolveAlert(existingAlert).catch(error => {
+                        console.error(`[AlertManager] Error resolving bundled alert: ${error}`);
+                    });
+                } else {
+                    // Just remove if it was pending
+                    this.activeAlerts.delete(alertKey);
                 }
-                
-                // Remove from active alerts
-                this.activeAlerts.delete(alertKey);
             }
         }
     }
@@ -4507,11 +4703,10 @@ Pulse Monitoring System`,
                 
                 console.log(`[AlertManager] Resolved simple ${metricType.toUpperCase()} alert for ${guest.name}`);
                 
-                // Emit resolved event
-                this.emit('alertResolved', existingAlert);
-                
-                // Remove from active alerts
-                this.activeAlerts.delete(alertKey);
+                // Properly resolve the alert
+                this.resolveAlert(existingAlert).catch(error => {
+                    console.error(`[AlertManager] Error resolving simple ${metricType} alert: ${error}`);
+                });
             }
         }
     }

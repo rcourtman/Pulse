@@ -40,10 +40,14 @@ router.get('/', ValidationMiddleware.validateQuery({
             const stats = stateManager.alertManager.getEnhancedAlertStats();
             const rules = stateManager.alertManager.getRules();
             
+            // Get alert history
+            const history = stateManager.alertManager.alertHistory || [];
+            
             alertInfo = {
                 active: activeAlerts,
                 stats: stats,
-                rules: rules
+                rules: rules,
+                history: history.slice(0, 200) // Limit to recent 200 for performance
             };
             
             // Test serialization of each part to identify the issue
