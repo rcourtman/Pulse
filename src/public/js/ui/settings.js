@@ -1837,10 +1837,10 @@ PulseApp.ui.settings = (() => {
                 const embeddingChanged = originalEmbedding !== newEmbedding || originalOrigins !== newOrigins;
                 
                 // Check if security mode changed (normalize to string for comparison)
-                const originalSecurityMode = (currentConfig.advanced?.security?.mode || 'private').toString();
+                const originalSecurityMode = (currentConfig.advanced?.security?.mode || 'public').toString();
                 // If SECURITY_MODE is undefined, preserve the original value
                 const newSecurityMode = config.SECURITY_MODE !== undefined ? 
-                    (config.SECURITY_MODE || 'private').toString() : 
+                    (config.SECURITY_MODE || 'public').toString() : 
                     originalSecurityMode;
                 const securityModeChanged = originalSecurityMode !== newSecurityMode;
                 

@@ -90,7 +90,7 @@ class ConfigApi {
                         // Don't send password for security
                     },
                     security: {
-                        mode: config.SECURITY_MODE || 'private',
+                        mode: config.SECURITY_MODE || 'public',
                         auditLog: config.AUDIT_LOG === 'true',
                         bcryptRounds: parseInt(config.BCRYPT_ROUNDS || '10', 10),
                         maxLoginAttempts: parseInt(config.MAX_LOGIN_ATTEMPTS || '5', 10),
@@ -130,6 +130,9 @@ class ConfigApi {
      */
     async saveConfig(config) {
         try {
+            // Set flag to prevent hot reload
+            global.isUIUpdatingEnv = true;
+            
             // Read existing .env file to preserve other settings
             const existingConfig = await this.readEnvFile();
             
@@ -145,6 +148,11 @@ class ConfigApi {
             // Write back to .env file
             await this.writeEnvFile(existingConfig);
             
+            // Reset flag after a delay to ensure file watcher sees it
+            setTimeout(() => {
+                global.isUIUpdatingEnv = false;
+            }, 100);
+            
             // Reload configuration in the application
             // Make this asynchronous to prevent frontend freezing
             setImmediate(() => {
@@ -156,6 +164,8 @@ class ConfigApi {
             return { success: true };
         } catch (error) {
             console.error('Error saving configuration:', error);
+            // Reset flag on error
+            global.isUIUpdatingEnv = false;
             throw error;
         }
     }
@@ -872,6 +882,9 @@ class ConfigApi {
      */
     async updateEnvironmentVariable(variableName, value) {
         try {
+            // Set flag to prevent hot reload
+            global.isUIUpdatingEnv = true;
+            
             // Read current configuration
             const config = await this.readEnvFile();
             
@@ -886,9 +899,16 @@ class ConfigApi {
             
             console.log(`[ConfigApi] Updated environment variable ${variableName} = ${value}`);
             
+            // Reset flag after a delay to ensure file watcher sees it
+            setTimeout(() => {
+                global.isUIUpdatingEnv = false;
+            }, 100);
+            
             return { success: true };
         } catch (error) {
             console.error(`[ConfigApi] Error updating environment variable ${variableName}:`, error);
+            // Reset flag on error
+            global.isUIUpdatingEnv = false;
             throw error;
         }
     }

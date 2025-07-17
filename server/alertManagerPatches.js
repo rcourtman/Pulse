@@ -312,7 +312,11 @@ module.exports = {
             emailSent: alert.emailSent,
             webhookSent: alert.webhookSent,
             incidentType: alert.incidentType,
-            notificationChannels: alert.notificationChannels
+            notificationChannels: alert.notificationChannels,
+            // Add bundled alert specific fields
+            metric: alert.metric,
+            exceededMetrics: alert.exceededMetrics,
+            metricsCount: alert.metricsCount
         };
         
         if (alert.type === 'node_threshold') {

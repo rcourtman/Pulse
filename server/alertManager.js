@@ -288,7 +288,7 @@ class AlertManager extends EventEmitter {
                                     state: 'active',
                                     severity: currentValue > threshold + 10 ? 'critical' : 'warning',
                                     message: `Node ${node.displayName || node.node}: ${metric.toUpperCase()}: ${currentValue.toFixed(0)}% (≥${threshold}%)`,
-                                    notificationChannels: ['dashboard'], // Will be updated by sendNotifications based on rule
+                                    notificationChannels: this.determineNotificationChannels(perGuestRule?.notifications || { dashboard: true, email: false, webhook: false }),
                                     rule: {
                                         id: 'per_guest_thresholds',
                                         name: `Node ${metric} threshold`,
@@ -784,13 +784,13 @@ class AlertManager extends EventEmitter {
             if (cooldownConfig.cooldownMinutes !== undefined && cooldownConfig.defaultCooldownMinutes === undefined) {
                 cooldownConfig = {
                     defaultCooldownMinutes: cooldownConfig.cooldownMinutes,
-                    debounceDelayMinutes: cooldownConfig.debounceMinutes || 2,
+                    debounceDelayMinutes: cooldownConfig.debounceMinutes !== undefined ? cooldownConfig.debounceMinutes : 2,
                     maxEmailsPerHour: cooldownConfig.maxEmailsPerHour || 4
                 };
             }
             
-            // Ensure cooldownConfig has valid values
-            if (!cooldownConfig.defaultCooldownMinutes || isNaN(cooldownConfig.defaultCooldownMinutes)) {
+            // Ensure cooldownConfig has valid values (allow 0 as valid)
+            if (cooldownConfig.defaultCooldownMinutes === undefined || cooldownConfig.defaultCooldownMinutes === null || isNaN(cooldownConfig.defaultCooldownMinutes)) {
                 cooldownConfig.defaultCooldownMinutes = 15; // Fallback to 15 minutes
             }
             
@@ -880,16 +880,16 @@ class AlertManager extends EventEmitter {
             if (cooldownConfig.cooldownMinutes !== undefined && cooldownConfig.defaultCooldownMinutes === undefined) {
                 cooldownConfig = {
                     defaultCooldownMinutes: cooldownConfig.cooldownMinutes,
-                    debounceDelayMinutes: cooldownConfig.debounceMinutes || 1,
+                    debounceDelayMinutes: cooldownConfig.debounceMinutes !== undefined ? cooldownConfig.debounceMinutes : 1,
                     maxCallsPerHour: cooldownConfig.maxCallsPerHour || 10
                 };
             }
             
-            // Ensure cooldownConfig has valid values
-            if (!cooldownConfig.defaultCooldownMinutes || isNaN(cooldownConfig.defaultCooldownMinutes)) {
+            // Ensure cooldownConfig has valid values (allow 0 as valid)
+            if (cooldownConfig.defaultCooldownMinutes === undefined || cooldownConfig.defaultCooldownMinutes === null || isNaN(cooldownConfig.defaultCooldownMinutes)) {
                 cooldownConfig.defaultCooldownMinutes = 5; // Fallback to 5 minutes for webhooks
             }
-            if (!cooldownConfig.debounceDelayMinutes || isNaN(cooldownConfig.debounceDelayMinutes)) {
+            if (cooldownConfig.debounceDelayMinutes === undefined || cooldownConfig.debounceDelayMinutes === null || isNaN(cooldownConfig.debounceDelayMinutes)) {
                 cooldownConfig.debounceDelayMinutes = 1; // Fallback to 1 minute
             }
             
@@ -1080,8 +1080,7 @@ class AlertManager extends EventEmitter {
                     })) : null,
                 emailSent: Boolean(alert.emailSent || this.notificationStatus?.get(alert.id)?.emailSent),
                 webhookSent: Boolean(alert.webhookSent || this.notificationStatus?.get(alert.id)?.webhookSent),
-                notificationChannels: Array.isArray(this.notificationStatus?.get(alert.id)?.channels) ? 
-                    this.notificationStatus.get(alert.id).channels.map(c => String(c)) : []
+                notificationChannels: this.getEnabledNotificationChannels(alert)
             };
             
             // Handle node alerts differently - they don't have guest property
@@ -1175,6 +1174,29 @@ class AlertManager extends EventEmitter {
                 notificationChannels: ['email']
             };
         }
+    }
+
+    // Helper function to get enabled notification channels based on rule settings
+    getEnabledNotificationChannels(alert) {
+        const channels = [];
+        
+        // Dashboard is always included
+        channels.push('dashboard');
+        
+        // Check rule notifications settings
+        if (alert.rule?.notifications) {
+            // Check email - enabled if email is true AND email transporter is configured
+            if (alert.rule.notifications.email && this.emailTransporter) {
+                channels.push('email');
+            }
+            
+            // Check webhook - enabled if webhook is true AND webhook URL is configured
+            if (alert.rule.notifications.webhook && process.env.WEBHOOK_URL) {
+                channels.push('webhook');
+            }
+        }
+        
+        return channels;
     }
 
     // Helper function to sanitize currentValue for safe serialization
@@ -3765,197 +3787,6 @@ Pulse Monitoring System`,
             return { success: false, error: error.message };
         }
     }
-    
-    async sendTestWebhook() {
-        try {
-            console.log('[AlertManager] Sending test webhook...');
-            
-            const webhookUrl = process.env.WEBHOOK_URL;
-            if (!webhookUrl) {
-                return { success: false, error: 'No webhook URL configured' };
-            }
-            
-            // Detect webhook type based on URL
-            const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
-            const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
-            
-            let testPayload;
-            
-            if (isDiscord) {
-                // Discord-specific format
-                testPayload = {
-                    embeds: [{
-                        title: '🧪 Alert System Test',
-                        description: 'This is a test alert from Pulse monitoring system',
-                        color: 3447003, // Blue
-                        fields: [
-                            {
-                                name: 'Alert Rule',
-                                value: 'Test Alert',
-                                inline: true
-                            },
-                            {
-                                name: 'VM/Container',
-                                value: 'Test VM (999)',
-                                inline: true
-                            },
-                            {
-                                name: 'Node',
-                                value: 'test-node',
-                                inline: true
-                            },
-                            {
-                                name: 'Status',
-                                value: '✅ Alert system is working',
-                                inline: false
-                            }
-                        ],
-                        footer: {
-                            text: 'Pulse Alert System'
-                        },
-                        timestamp: new Date().toISOString()
-                    }]
-                };
-            } else if (isSlack) {
-                // Slack-specific format
-                testPayload = {
-                    text: '🧪 *Alert System Test*',
-                    attachments: [{
-                        color: 'good',
-                        title: 'Test Alert',
-                        text: 'This is a test alert from Pulse monitoring system',
-                        fields: [
-                            {
-                                title: 'VM/Container',
-                                value: 'Test VM (999)',
-                                short: true
-                            },
-                            {
-                                title: 'Node',
-                                value: 'test-node',
-                                short: true
-                            },
-                            {
-                                title: 'Status',
-                                value: '✅ Alert system is working',
-                                short: false
-                            }
-                        ],
-                        footer: 'Pulse Alert System',
-                        ts: Math.floor(Date.now() / 1000)
-                    }]
-                };
-            } else {
-                // Generic webhook format with multiple structures for compatibility
-                // This works with Teams, Home Assistant, IFTTT, Zapier, n8n, and other services
-                const testAlert = {
-                    id: 'test-' + Date.now(),
-                    rule: {
-                        name: 'Test Alert',
-                        description: 'This is a test webhook notification',
-                        severity: 'info',
-                        metric: 'test'
-                    },
-                    guest: {
-                        name: 'Test VM',
-                        id: '999',
-                        vmid: '999',
-                        type: 'qemu',
-                        node: 'test-node',
-                        status: 'running'
-                    },
-                    value: 75,
-                    threshold: 80,
-                    emoji: '🧪'
-                };
-                
-                testPayload = {
-                    timestamp: new Date().toISOString(),
-                    alert: testAlert,
-                    // Include Discord-style embeds for compatibility with services that support it
-                    embeds: [{
-                        title: '🧪 Alert System Test',
-                        description: 'This is a test alert from Pulse monitoring system',
-                        color: 3447003, // Blue
-                        fields: [
-                            {
-                                name: 'Alert Rule',
-                                value: 'Test Alert',
-                                inline: true
-                            },
-                            {
-                                name: 'VM/Container',
-                                value: 'Test VM (999)',
-                                inline: true
-                            },
-                            {
-                                name: 'Node',
-                                value: 'test-node',
-                                inline: true
-                            },
-                            {
-                                name: 'Status',
-                                value: '✅ Alert system is working',
-                                inline: false
-                            }
-                        ],
-                        footer: {
-                            text: 'Pulse Alert System'
-                        },
-                        timestamp: new Date().toISOString()
-                    }],
-                    // Include Slack-style format for compatibility
-                    text: '🧪 *Alert System Test*',
-                    attachments: [{
-                        color: 'good',
-                        title: 'Test Alert',
-                        text: 'This is a test alert from Pulse monitoring system',
-                        fields: [
-                            {
-                                title: 'VM/Container',
-                                value: 'Test VM (999)',
-                                short: true
-                            },
-                            {
-                                title: 'Node',
-                                value: 'test-node',
-                                short: true
-                            },
-                            {
-                                title: 'Status',
-                                value: '✅ Alert system is working',
-                                short: false
-                            }
-                        ],
-                        footer: 'Pulse Alert System',
-                        ts: Math.floor(Date.now() / 1000)
-                    }]
-                };
-            }
-            
-            // Send webhook without cooldown checks
-            const response = await axios.post(webhookUrl, testPayload, {
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Pulse-Alert-System/1.0'
-                }
-            });
-            
-            console.log('[AlertManager] Test webhook sent successfully, status:', response.status);
-            return { success: true };
-            
-        } catch (error) {
-            console.error('[AlertManager] Error sending test webhook:', error.message);
-            if (error.response) {
-                return { success: false, error: `Webhook returned ${error.response.status}: ${error.response.statusText}` };
-            } else if (error.request) {
-                return { success: false, error: 'No response from webhook URL' };
-            } else {
-                return { success: false, error: error.message };
-            }
-        }
-    }
 
     async sendTestAlertEmail({ alertName, testAlert, config }) {
         try {
@@ -4152,9 +3983,25 @@ Pulse Monitoring System`,
                     }]
                 };
             } else {
+                // Add simplified fields for easier automation parsing
+                const simplifiedAlert = {
+                    ...alert,
+                    // Add explicit single/multiple indicator
+                    isSingleMetric: alert.metricsCount === 1,
+                    isMultipleMetrics: alert.metricsCount > 1,
+                    // Add the primary metric for single metric alerts
+                    primaryMetric: alert.exceededMetrics && alert.exceededMetrics.length > 0 
+                        ? alert.exceededMetrics[0].metricType 
+                        : alert.metric,
+                    // Add human-readable alert type
+                    alertType: alert.metricsCount === 1 
+                        ? `${alert.exceededMetrics[0].metricType}_threshold` 
+                        : 'multiple_thresholds'
+                };
+                
                 payload = {
                     timestamp: new Date().toISOString(),
-                    alert: alert
+                    alert: simplifiedAlert
                 };
             }
             
@@ -4391,7 +4238,9 @@ Pulse Monitoring System`,
                     rule: {
                         id: 'guest-bundled',
                         name: alertName,
-                        description: `Bundled guest alert for multiple metrics`,
+                        description: exceededMetrics.length > 1 
+                            ? `Alert: ${exceededMetrics.length} metrics exceeded thresholds`
+                            : `Alert: ${exceededMetrics[0].metricType} threshold exceeded`,
                         group: 'guest_bundled',
                         tags: ['bundled', ...exceededMetrics.map(m => m.metricType)],
                         type: 'guest_bundled',
@@ -4408,7 +4257,7 @@ Pulse Monitoring System`,
                     state: alertDuration === 0 ? 'active' : 'pending', // If duration is 0, trigger immediately
                     acknowledged: false,
                     message: `${alertName}: ${metricsDetail}`,
-                    notificationChannels: ['dashboard'],
+                    notificationChannels: this.determineNotificationChannels(notificationSettings),
                     emailSent: false,
                     webhookSent: false,
                     triggeredAt: alertDuration === 0 ? timestamp : undefined // Set triggeredAt if immediate
@@ -4435,6 +4284,8 @@ Pulse Monitoring System`,
                     existingAlert.metricsCount = exceededMetrics.length;
                     existingAlert.message = `${alertName}: ${metricsDetail}`;
                     existingAlert.rule.tags = ['bundled', ...exceededMetrics.map(m => m.metricType)];
+                    // Update notification channels based on current rule settings
+                    existingAlert.notificationChannels = this.determineNotificationChannels(existingAlert.rule.notifications);
                     
                     console.log(`[AlertManager] Triggered bundled alert for ${guest.name} after ${elapsedTime}ms`);
                     
@@ -4630,7 +4481,7 @@ Pulse Monitoring System`,
                     state: 'active',
                     acknowledged: false,
                     message: `${guest.name} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid}) on ${guest.node} - ${alertName}`,
-                    notificationChannels: ['dashboard'],
+                    notificationChannels: this.determineNotificationChannels(matchingRule?.notifications || { dashboard: true, email: true, webhook: true }),
                     emailSent: false,
                     webhookSent: false
                 };
@@ -4663,6 +4514,31 @@ Pulse Monitoring System`,
                 this.activeAlerts.delete(alertKey);
             }
         }
+    }
+
+    /**
+     * Determine which notification channels should be enabled for an alert
+     * @param {Object} notifications - The notifications object from the rule
+     * @returns {Array} Array of enabled notification channels
+     */
+    determineNotificationChannels(notifications) {
+        const channels = ['dashboard']; // Dashboard is always included
+        
+        if (!notifications) {
+            return channels;
+        }
+        
+        // Check if email is enabled and configured
+        if (notifications.email && this.emailTransporter) {
+            channels.push('email');
+        }
+        
+        // Check if webhook is enabled and configured  
+        if (notifications.webhook && process.env.WEBHOOK_URL) {
+            channels.push('webhook');
+        }
+        
+        return channels;
     }
 }
 
