@@ -11,10 +11,11 @@
 ## Key Features
 
 - **Real-time Monitoring** - Live updates for VMs, containers, and storage via WebSockets
-- **Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Gotify, Telegram, ntfy.sh)
+- **Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Gotify, Telegram, ntfy.sh, Teams)
+- **Alert History** - Persistent storage of alert events with detailed metrics and timeline
 - **Unified Backups** - Single view for PBS backups, PVE backups, and snapshots
 - **PBS Push Mode** - Monitor isolated/firewalled PBS servers without inbound connections
-- **Modern UI** - Responsive design with dark/light themes and virtual scrolling
+- **Modern UI** - Responsive design with dark/light themes, virtual scrolling, and storage view toggle
 - **Lightweight** - Minimal resource usage, stops polling when no clients connected
 
 [View Screenshots →](docs/SCREENSHOTS.md)
@@ -107,8 +108,8 @@ proxmox-backup-manager acl update /datastore DatastoreAudit --auth-id 'pulse@pbs
 All configuration is done through the web interface - no file editing required!
 
 - **Settings** (gear icon) - Add/modify Proxmox connections, configure alerts
-- **Alerts** - Set CPU/Memory/Disk thresholds, configure notifications
-- **Updates** - Built-in updater for non-Docker installations
+- **Alerts** - Set CPU/Memory/Disk thresholds, configure notifications, view alert history
+- **Updates** - Built-in updater for non-Docker installations with stable/RC channel selection
 
 For advanced configuration options, see [Configuration Guide](docs/CONFIGURATION.md).
 
@@ -116,8 +117,8 @@ For advanced configuration options, see [Configuration Guide](docs/CONFIGURATION
 
 Pulse offers two simple security modes:
 
-- **Public Mode** - No authentication required (for trusted networks only)
-- **Private Mode** (Default) - Authentication required with CSRF protection
+- **Public Mode** (Default) - No authentication required (for trusted networks only)
+- **Private Mode** - Authentication required with CSRF protection
 
 Key security features:
 - Session-based authentication with configurable timeouts
