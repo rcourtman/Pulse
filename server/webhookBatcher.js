@@ -162,7 +162,6 @@ class WebhookBatcher extends EventEmitter {
      * Send a summary webhook for multiple alerts
      */
     async sendSummaryWebhook(batch) {
-        const axios = require('axios');
         const webhookUrl = batch[0].webhookUrl; // All should have the same URL
         
         // Group alerts by type
@@ -199,6 +198,7 @@ class WebhookBatcher extends EventEmitter {
         const summaryAlert = {
             id: `summary-${Date.now()}`,
             type: 'summary',
+            priority: batch.some(b => b.priority === 'critical') ? 'critical' : 'high',
             rule: {
                 name: 'Multiple Alerts Summary',
                 description: `${summary.total} alerts triggered simultaneously`
@@ -219,18 +219,11 @@ class WebhookBatcher extends EventEmitter {
             console.log(`[WebhookBatcher] Summary byType:`, JSON.stringify(summary.byType));
             console.log(`[WebhookBatcher] Summary alerts sample:`, JSON.stringify(summary.alerts.slice(0, 2)));
             
-            const response = await axios.post(webhookUrl, {
-                timestamp: new Date().toISOString(),
-                alert: summaryAlert,
-                isBatch: true,
-                batchSize: summary.total
-            }, {
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Pulse-Alert-System/1.0'
-                }
-            });
+            // Use the new notification service
+            const NotificationService = require('./notificationServices');
+            const notificationService = new NotificationService();
+            
+            const response = await notificationService.send(webhookUrl, summaryAlert);
             
             console.log(`[WebhookBatcher] Summary webhook sent successfully (${response.status})`);
             

@@ -1579,8 +1579,17 @@ class AlertManager extends EventEmitter {
                         // Check if this specific metric still exceeds threshold
                         const metricResult = this.evaluateMetricForGuest(guest, histAlert.metric, guestThresholds, globalThresholds, guestMetrics);
                         
-                        // If metric no longer exceeds threshold, resolve the alert
+                        // If metric no longer exceeds threshold, check if we should resolve
                         if (!metricResult || !metricResult.isExceeded) {
+                            // Get the rule configuration to check autoResolve setting
+                            const rule = Array.from(this.alertRules.values()).find(r => r.type === 'per_guest_thresholds');
+                            
+                            // Check if auto-resolve is disabled
+                            if (rule?.autoResolve === false) {
+                                console.log(`[AlertManager] Auto-resolve disabled for ${histAlert.metric} alert ${histAlert.id} for ${guest.name}, keeping alert active`);
+                                continue;
+                            }
+                            
                             histAlert.resolved = true;
                             histAlert.resolvedAt = now;
                             histAlert.duration = histAlert.duration || (now - histAlert.triggeredAt);
@@ -4091,143 +4100,11 @@ Pulse Monitoring System`,
             
             console.log(`[AlertManager] Sending direct webhook for alert ${alert.id} - ${alert.rule?.name}`);
             
-            // Detect webhook type based on URL
-            const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
-            const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
+            // Use the new notification service
+            const NotificationService = require('./notificationServices');
+            const notificationService = new NotificationService();
             
-            let payload;
-            
-            if (isDiscord) {
-                // Discord-specific format
-                const color = alert.type === 'summary' ? 0xFF4500 : // Orange for summary
-                            alert.priority === 'critical' ? 0xFF0000 : // Red for critical
-                            alert.priority === 'high' ? 0xFFA500 : // Orange for high
-                            0xFFFF00; // Yellow for normal
-                
-                const fields = [];
-                
-                if (alert.type === 'summary') {
-                    // Summary alert fields
-                    fields.push(
-                        { name: 'Total Alerts', value: alert.summary.total.toString(), inline: true },
-                        { name: 'Critical', value: alert.summary.critical.toString(), inline: true }
-                    );
-                    
-                    // Add breakdown by type
-                    for (const [type, count] of Object.entries(alert.summary.byType)) {
-                        if (count > 0) {
-                            fields.push({
-                                name: type.toUpperCase(),
-                                value: `${count} alert${count > 1 ? 's' : ''}`,
-                                inline: true
-                            });
-                        }
-                    }
-                } else {
-                    // Regular alert fields
-                    fields.push(
-                        { name: 'VM/Container', value: `${alert.guest.name} (${alert.guest.vmid})`, inline: true },
-                        { name: 'Node', value: alert.guest.node, inline: true },
-                        { name: 'Type', value: alert.guest.type.toUpperCase(), inline: true }
-                    );
-                    
-                    if (alert.metric && alert.currentValue !== undefined) {
-                        fields.push({
-                            name: 'Metric',
-                            value: `${alert.metric.toUpperCase()}: ${alert.currentValue}`,
-                            inline: true
-                        });
-                    }
-                    
-                    if (alert.exceededMetrics && alert.exceededMetrics.length > 0) {
-                        const metricsText = alert.exceededMetrics.map(m => 
-                            `${m.metricType.toUpperCase()}: ${m.currentValue}%`
-                        ).join('\n');
-                        fields.push({
-                            name: 'Exceeded Metrics',
-                            value: metricsText,
-                            inline: false
-                        });
-                    }
-                }
-                
-                payload = {
-                    embeds: [{
-                        title: alert.type === 'summary' ? '🚨 Multiple Alerts Summary' : `🚨 ${alert.rule.name}`,
-                        description: alert.type === 'summary' ? 
-                            `${alert.summary.total} alerts triggered simultaneously` :
-                            alert.rule.description || alert.message,
-                        color: color,
-                        fields: fields,
-                        footer: {
-                            text: 'Pulse Alert System'
-                        },
-                        timestamp: new Date().toISOString()
-                    }]
-                };
-            } else if (isSlack) {
-                // Slack-specific format
-                const color = alert.type === 'summary' ? 'warning' :
-                            alert.priority === 'critical' ? 'danger' :
-                            alert.priority === 'high' ? 'warning' : '#FFFF00';
-                
-                const fields = [];
-                
-                if (alert.type === 'summary') {
-                    fields.push(
-                        { title: 'Total Alerts', value: alert.summary.total.toString(), short: true },
-                        { title: 'Critical', value: alert.summary.critical.toString(), short: true }
-                    );
-                } else {
-                    fields.push(
-                        { title: 'VM/Container', value: `${alert.guest.name} (${alert.guest.vmid})`, short: true },
-                        { title: 'Node', value: alert.guest.node, short: true }
-                    );
-                }
-                
-                payload = {
-                    text: alert.type === 'summary' ? '🚨 *Multiple Alerts Summary*' : `🚨 *${alert.rule.name}*`,
-                    attachments: [{
-                        color: color,
-                        title: alert.type === 'summary' ? 'Alert Summary' : alert.rule.name,
-                        text: alert.type === 'summary' ?
-                            `${alert.summary.total} alerts triggered simultaneously` :
-                            alert.rule.description || alert.message,
-                        fields: fields,
-                        footer: 'Pulse Alert System',
-                        ts: Math.floor(Date.now() / 1000)
-                    }]
-                };
-            } else {
-                // Add simplified fields for easier automation parsing
-                const simplifiedAlert = {
-                    ...alert,
-                    // Add explicit single/multiple indicator
-                    isSingleMetric: alert.metricsCount === 1,
-                    isMultipleMetrics: alert.metricsCount > 1,
-                    // Add the primary metric for single metric alerts
-                    primaryMetric: alert.exceededMetrics && alert.exceededMetrics.length > 0 
-                        ? alert.exceededMetrics[0].metricType 
-                        : alert.metric,
-                    // Add human-readable alert type
-                    alertType: alert.metricsCount === 1 
-                        ? `${alert.exceededMetrics[0].metricType}_threshold` 
-                        : 'multiple_thresholds'
-                };
-                
-                payload = {
-                    timestamp: new Date().toISOString(),
-                    alert: simplifiedAlert
-                };
-            }
-            
-            const response = await axios.post(webhookUrl, payload, {
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Pulse-Alert-System/1.0'
-                }
-            });
+            const response = await notificationService.send(webhookUrl, alert);
             
             console.log(`[AlertManager] Webhook sent successfully for alert ${alert.id} (${response.status})`);
             return { success: true };
@@ -4489,7 +4366,7 @@ Pulse Monitoring System`,
                     group: 'guest_threshold',
                     tags: [metricType],
                     type: 'guest_threshold',
-                        autoResolve: true,
+                        autoResolve: thresholdConfig?.autoResolve !== false,
                         duration: alertDuration,
                         notifications: notificationSettings
                     },
@@ -4559,6 +4436,12 @@ Pulse Monitoring System`,
         const existingAlert = this.activeAlerts.get(alertKey);
         
         if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
+            // Check if auto-resolve is enabled
+            if (existingAlert.rule?.autoResolve === false) {
+                console.log(`[AlertManager] Auto-resolve disabled for ${metricType} alert for ${guest.name}, keeping alert active`);
+                return;
+            }
+            
             const wasActive = existingAlert.state === 'active';
             existingAlert.state = 'resolved';
             existingAlert.resolvedAt = timestamp;
