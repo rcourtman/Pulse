@@ -22,8 +22,9 @@
 
 ## Support Development
 
-If you find Pulse useful, consider supporting its development:
+Pulse is a solo hobby project developed in my free time. If you find it useful, your support helps keep me motivated and covers hosting costs.
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?label=Sponsors&logo=GitHub%20Sponsors&style=for-the-badge)](https://github.com/sponsors/rcourtman)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## Quick Start (2 minutes)
