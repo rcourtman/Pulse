@@ -1966,10 +1966,10 @@ class AlertManager extends EventEmitter {
             clearTimeout(this.resolvedBatchTimeout);
         }
         
-        // Set a short timeout (10ms) to batch resolutions from the same evaluation cycle
+        // Set a longer timeout (50ms) to ensure all resolutions from the same evaluation cycle are batched
         this.resolvedBatchTimeout = setTimeout(() => {
             this.processPendingResolvedBatch();
-        }, 10);
+        }, 50);
 
         console.info(`[ALERT RESOLVED] ${alertInfo.message}`);
 
