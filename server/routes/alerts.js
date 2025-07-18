@@ -570,6 +570,66 @@ router.post('/rules/reload', async (req, res) => {
     }
 });
 
+// Clear alert history - optionally permanent
+router.post('/history/clear', async (req, res) => {
+    try {
+        // Check for permanent flag in query params or body
+        const permanent = req.query.permanent === 'true' || req.body?.permanent === true;
+        
+        await stateManager.alertManager.clearAlertHistory(permanent);
+        
+        res.json({ 
+            success: true, 
+            message: permanent ? 
+                "Alert history permanently cleared" : 
+                "Alert history cache cleared and reloaded",
+            permanent: permanent
+        });
+    } catch (error) {
+        console.error("Error clearing alert history:", error);
+        res.status(500).json({ error: "Failed to clear alert history" });
+    }
+});
+
+// Delete alert history (alias for permanent clear)
+router.delete('/history', async (req, res) => {
+    try {
+        await stateManager.alertManager.clearAlertHistory(true);
+        res.json({ 
+            success: true, 
+            message: "Alert history permanently deleted"
+        });
+    } catch (error) {
+        console.error("Error deleting alert history:", error);
+        res.status(500).json({ error: "Failed to delete alert history" });
+    }
+});
+
+// Clear all active alerts
+router.post('/active/clear', async (req, res) => {
+    try {
+        // Clear active alerts in memory
+        stateManager.alertManager.activeAlerts.clear();
+        
+        // Save the empty state to disk
+        await stateManager.alertManager.saveActiveAlerts();
+        
+        // Emit update to connected clients
+        stateManager.io?.emit('alertsUpdate', {
+            active: [],
+            history: stateManager.alertManager.getAlertHistory()
+        });
+        
+        res.json({ 
+            success: true, 
+            message: "All active alerts cleared"
+        });
+    } catch (error) {
+        console.error("Error clearing active alerts:", error);
+        res.status(500).json({ error: "Failed to clear active alerts" });
+    }
+});
+
 // Endpoint to trigger immediate alert evaluation
 router.post('/evaluate', async (req, res) => {
     try {

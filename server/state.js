@@ -351,6 +351,24 @@ function addPerformanceSnapshot(type, duration, errorCount) {
 async function checkAlertsForMetrics() {
   try {
     const allGuests = [...state.vms, ...state.containers];
+    console.log(`[State Manager] Checking alerts for ${allGuests.length} guests`);
+    
+    // Write to debug file
+    const fs = require('fs');
+    fs.appendFileSync('/opt/pulse/state-debug.log', `[${new Date().toISOString()}] checkAlertsForMetrics called with ${allGuests.length} guests\n`);
+    
+    // Log a sample of guest data to see what we're working with
+    if (allGuests.length > 0) {
+      const sampleGuest = allGuests[0];
+      console.log(`[State Manager] Sample guest data:`, {
+        name: sampleGuest.name,
+        disk: sampleGuest.disk,
+        maxdisk: sampleGuest.maxdisk,
+        status: sampleGuest.status
+      });
+      fs.appendFileSync('/opt/pulse/state-debug.log', `[${new Date().toISOString()}] Sample: ${sampleGuest.name} disk=${sampleGuest.disk} maxdisk=${sampleGuest.maxdisk}\n`);
+    }
+    
     await alertManager.checkMetrics(allGuests, state.metrics);
     
     // Also check node alerts if we have per-guest threshold rule with node thresholds

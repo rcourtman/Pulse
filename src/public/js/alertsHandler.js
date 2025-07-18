@@ -66,6 +66,7 @@ PulseApp.alerts = (() => {
 
     async function loadInitialData() {
         try {
+            alertsInitialized = true; // Set this early so we can show notifications for initial alerts
             // First, calculate server time offset
             const startTime = Date.now();
             const [alertsResponse, groupsResponse] = await Promise.all([
@@ -99,16 +100,19 @@ PulseApp.alerts = (() => {
                 }
                 
                 // Merge active alerts into history (in case some are already acknowledged)
-                activeAlerts.forEach(alert => {
-                    const existingIndex = alertHistory.findIndex(h => h.id === alert.id);
-                    if (existingIndex >= 0) {
-                        // Update existing entry with latest data
-                        alertHistory[existingIndex] = alert;
-                    } else {
-                        // Add new alert to history
-                        alertHistory.unshift(alert);
-                    }
-                });
+                if (Array.isArray(activeAlerts)) {
+                    activeAlerts.forEach(alert => {
+                        if (!alert) return;
+                        const existingIndex = alertHistory.findIndex(h => h && h.id === alert.id);
+                        if (existingIndex >= 0) {
+                            // Update existing entry with latest data
+                            alertHistory[existingIndex] = alert;
+                        } else {
+                            // Add new alert to history
+                            alertHistory.unshift(alert);
+                        }
+                    });
+                }
                 
                 // Sort history by triggeredAt (newest first)
                 alertHistory.sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
@@ -130,11 +134,18 @@ PulseApp.alerts = (() => {
     }
 
     function createNotificationContainer() {
+        // Remove any existing container first
+        const existing = document.getElementById('pulse-notifications');
+        if (existing) {
+            existing.remove();
+        }
+        
         notificationContainer = document.createElement('div');
         notificationContainer.id = 'pulse-notifications';
-        notificationContainer.className = 'fixed bottom-4 right-4 z-40 space-y-2 pointer-events-none';
-        notificationContainer.style.maxWidth = '280px';
+        notificationContainer.className = 'fixed bottom-4 right-4 z-50 space-y-2';
+        notificationContainer.style.cssText = 'position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; max-width: 280px; pointer-events: none;';
         document.body.appendChild(notificationContainer);
+        console.log('[Alerts] Notification container created:', notificationContainer);
     }
 
     function setupHeaderIndicator() {
@@ -278,9 +289,7 @@ PulseApp.alerts = (() => {
     // Process queued toast notifications
     let toastProcessingTimeout = null;
     function processToastQueue() {
-        if (!window.PulseApp || !window.PulseApp.ui || !window.PulseApp.ui.toast) {
-            return;
-        }
+        console.log('[Alerts] processToastQueue called, pending:', pendingAlertToasts.length);
         
         // Don't process during alert storm
         if (alertStormMode) {
@@ -303,14 +312,22 @@ PulseApp.alerts = (() => {
             
             if (recentAlerts.length === 1) {
                 // Single alert
-                window.PulseApp.ui.toast.warning(`Alert: ${recentAlerts[0].guest} - ${recentAlerts[0].message}`);
+                const alert = recentAlerts[0];
+                showNotification({
+                    message: `Alert: ${alert.guest}`,
+                    guest: { name: alert.guest }
+                }, 'alert');
             } else if (recentAlerts.length > 1) {
                 // Multiple alerts - show summary
                 const guestNames = [...new Set(recentAlerts.map(a => a.guest))];
                 if (guestNames.length <= 3) {
-                    window.PulseApp.ui.toast.warning(`Alerts: ${guestNames.join(', ')}`);
+                    showNotification({
+                        message: `Alerts: ${guestNames.join(', ')}`
+                    }, 'alert');
                 } else {
-                    window.PulseApp.ui.toast.warning(`${recentAlerts.length} alerts from ${guestNames.length} guests`);
+                    showNotification({
+                        message: `${recentAlerts.length} alerts from ${guestNames.length} guests`
+                    }, 'alert');
                 }
             }
             
@@ -356,33 +373,41 @@ PulseApp.alerts = (() => {
     function updateDropdownContent() {
         if (!alertDropdown) return;
         
-        // During alert storm, skip updates if too frequent
-        if (alertStormMode && dropdownUpdateTimeout) {
-            return;
-        }
+        try {
+            // During alert storm, skip updates if too frequent
+            if (alertStormMode && dropdownUpdateTimeout) {
+                return;
+            }
 
-        const now = Date.now();
+            const now = Date.now() + serverTimeOffset;
         
         // Combine active alerts and history
         const allAlerts = [];
         
         // Add active alerts from server (these are the only truly active ones)
-        activeAlerts.forEach(alert => {
-            allAlerts.push({...alert, isActive: true});
-        });
+        if (Array.isArray(activeAlerts)) {
+            activeAlerts.forEach(alert => {
+                if (alert) {
+                    allAlerts.push({...alert, isActive: true});
+                }
+            });
+        }
         
         // Add alerts from history that are actually resolved
-        alertHistory.forEach(alert => {
-            // Skip if this alert is already in activeAlerts
-            if (activeAlerts.find(a => a.id === alert.id)) {
-                return;
-            }
+        if (Array.isArray(alertHistory)) {
+            alertHistory.forEach(alert => {
+                if (!alert) return;
+                // Skip if this alert is already in activeAlerts
+                if (activeAlerts.find(a => a && a.id === alert.id)) {
+                    return;
+                }
             
-            // Only include resolved alerts from history
-            if (alert.resolved) {
-                allAlerts.push({...alert, isActive: false});
-            }
-        });
+                // Only include resolved alerts from history
+                if (alert.resolved) {
+                    allAlerts.push({...alert, isActive: false});
+                }
+            });
+        }
         
         // Sort by triggeredAt timestamp (newest first)
         allAlerts.sort((a, b) => (b.triggeredAt || 0) - (a.triggeredAt || 0));
@@ -408,7 +433,13 @@ PulseApp.alerts = (() => {
         };
         
         allAlerts.forEach(alert => {
-            const age = now - (alert.triggeredAt || 0);
+            // If no triggeredAt, put in recent (these are likely new alerts)
+            if (!alert.triggeredAt) {
+                timeGroups.recent.push(alert);
+                return;
+            }
+            
+            const age = now - alert.triggeredAt;
             if (age < 5 * 60 * 1000) {
                 timeGroups.recent.push(alert);
             } else if (age < 60 * 60 * 1000) {
@@ -475,9 +506,38 @@ PulseApp.alerts = (() => {
         if (newScrollContainer && currentScrollTop > 0) {
             newScrollContainer.scrollTop = currentScrollTop;
         }
+    } catch (error) {
+        console.error('[Alerts] Error updating dropdown content:', error);
+        // Attempt to show a basic error message in the dropdown
+        if (alertDropdown) {
+            alertDropdown.innerHTML = `
+                <div class="p-4 text-sm text-red-600 dark:text-red-400">
+                    Error displaying alerts. Please refresh the page.
+                </div>
+            `;
+        }
+    }
     }
 
     function createCompactAlertCard(alert, acknowledged = false) {
+        // Add safety checks for malformed alert objects
+        if (!alert || !alert.guest) {
+            console.error('[Alerts] Invalid alert object:', alert);
+            return '';
+        }
+        
+        // Debug logging to see what data we have
+        console.log('[Alerts] Creating card for alert:', {
+            id: alert.id,
+            metric: alert.metric,
+            rule: alert.rule,
+            currentValue: alert.currentValue,
+            threshold: alert.threshold,
+            message: alert.message,
+            guest: alert.guest?.name,
+            fullAlert: alert
+        });
+        
         const isResolved = alert.resolved || false;
         const isAcknowledged = acknowledged || alert.acknowledged || false;
         
@@ -504,32 +564,43 @@ PulseApp.alerts = (() => {
             cardClasses = `border-l-4 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
         }
         
-        const triggeredAt = alert.triggeredAt || (Date.now() + serverTimeOffset);
-        const duration = Math.max(0, Math.round(((Date.now() + serverTimeOffset) - triggeredAt) / 1000));
+        // Use triggeredAt, or fall back to acknowledgedAt for ack alerts, or current time as last resort
+        const triggeredAt = alert.triggeredAt || alert.acknowledgedAt || (Date.now() + serverTimeOffset);
+        // For resolved alerts, use the actual duration. For active alerts, calculate from now
+        const duration = isResolved && alert.resolvedAt ? 
+            Math.max(0, Math.round((alert.resolvedAt - triggeredAt) / 1000)) :
+            Math.max(0, Math.round(((Date.now() + serverTimeOffset) - triggeredAt) / 1000));
         const durationStr = formatDuration(duration);
         
         const icon = isResolved ? ALERT_ICONS.resolved : ALERT_ICONS.active;
         
         let currentValueDisplay = '';
-        if (alert.metric === 'status') {
-            currentValueDisplay = alert.currentValue;
-        } else if (alert.metric === 'network_combined' || alert.currentValue === 'anomaly_detected') {
-            currentValueDisplay = 'Network anomaly';
-        } else if (typeof alert.currentValue === 'number') {
-            const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
-            currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
-        } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
-            const values = [];
-            for (const [metric, value] of Object.entries(alert.currentValue)) {
-                const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
-                const formattedValue = typeof value === 'number' 
-                    ? `${Math.round(value)}${isPercentageMetric ? '%' : ''}`
-                    : value;
-                values.push(`${metric}: ${formattedValue}`);
+        try {
+            if (alert.metric === 'status') {
+                currentValueDisplay = alert.currentValue || '';
+            } else if (alert.metric === 'network_combined' || alert.currentValue === 'anomaly_detected') {
+                currentValueDisplay = 'Network anomaly';
+            } else if (typeof alert.currentValue === 'number') {
+                const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
+                currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
+            } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
+                const values = [];
+                for (const [metric, value] of Object.entries(alert.currentValue)) {
+                    const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
+                    const formattedValue = typeof value === 'number' 
+                        ? `${Math.round(value)}${isPercentageMetric ? '%' : ''}`
+                        : value;
+                    values.push(`${metric}: ${formattedValue}`);
+                }
+                currentValueDisplay = values.join(', ');
+            } else {
+                // Don't display duration strings as current value
+                const isDurationString = typeof alert.currentValue === 'string' && /^\d+[smhd]$/.test(alert.currentValue);
+                currentValueDisplay = isDurationString ? '' : (alert.currentValue || '');
             }
-            currentValueDisplay = values.join(', ');
-        } else {
-            currentValueDisplay = alert.currentValue || '';
+        } catch (e) {
+            console.error('[Alerts] Error processing currentValue:', e, alert);
+            currentValueDisplay = '';
         }
         
         // Muted text classes for acknowledged/resolved alerts
@@ -549,24 +620,42 @@ PulseApp.alerts = (() => {
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center space-x-1">
                             <span class="${nameClass}">
-                                ${alert.guest.type === 'node' ? `Node: ${alert.guest.name}` : alert.guest.name}
+                                ${alert.guest?.type === 'node' ? `Node: ${alert.guest.name || 'Unknown'}` : (alert.guest?.name || 'Unknown Guest')}
                             </span>
+                            ${alert.metric && alert.metric !== 'bundled' ? `
+                                <span class="text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
+                                    ${alert.metric.toUpperCase()}
+                                </span>
+                            ` : ''}
                             <span class="${valueClass}">
-                                ${currentValueDisplay}
+                                ${alert.metric === 'bundled' ? '' : currentValueDisplay}
                             </span>
                             ${isResolved ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">resolved</span>' : 
                               isAcknowledged ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">ack</span>' : ''}
                         </div>
                         <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
                             ${(() => {
-                                // Check if alert has exceededMetrics array (bundled alerts)
-                                if (alert.exceededMetrics && Array.isArray(alert.exceededMetrics)) {
-                                    return alert.exceededMetrics.map(m => {
-                                        const name = m.metricType.charAt(0).toUpperCase() + m.metricType.slice(1);
-                                        const currentVal = Math.round(m.currentValue);
-                                        const thresholdVal = Math.round(m.threshold);
-                                        
-                                        // Determine color based on how much it exceeds threshold
+                                // Skip showing message details for acknowledgment alerts
+                                if (alert.message && alert.message.includes('acknowledged by')) {
+                                    return '';
+                                }
+                                // Handle legacy bundled alerts
+                                if (alert.metric === 'bundled') {
+                                    return '<div class="text-xs text-gray-500 dark:text-gray-400">Multiple metrics (legacy alert)</div>';
+                                }
+                                
+                                // Display metric information if available
+                                if (alert.metric && alert.metric !== 'bundled') {
+                                    const metricName = alert.metric.charAt(0).toUpperCase() + alert.metric.slice(1);
+                                    const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
+                                    
+                                    // If we have current and threshold values
+                                    if (alert.currentValue !== undefined && alert.threshold !== undefined) {
+                                        const currentVal = Math.round(alert.currentValue || 0);
+                                        const thresholdVal = Math.round(alert.threshold || 0);
+                                    
+                                    // Only show progress bar for percentage metrics
+                                    if (isPercentageMetric) {
                                         const excess = currentVal - thresholdVal;
                                         let barColor = isResolved || isAcknowledged ? 'bg-gray-400' : 'bg-red-500';
                                         if (!isResolved && !isAcknowledged) {
@@ -577,8 +666,8 @@ PulseApp.alerts = (() => {
                                         return `
                                             <div class="mb-0.5">
                                                 <div class="flex justify-between text-xs mb-0.5">
-                                                    <span class="font-medium">${name}</span>
-                                                    <span>${currentVal}% / ${thresholdVal}%</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">Threshold</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">${thresholdVal}%</span>
                                                 </div>
                                                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
                                                     <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${Math.min(thresholdVal, 100)}%; z-index: 1;"></div>
@@ -587,17 +676,41 @@ PulseApp.alerts = (() => {
                                                 </div>
                                             </div>
                                         `;
-                                    }).join('');
+                                        } else {
+                                            // For I/O metrics, just show the values
+                                            return `
+                                                <div class="mb-0.5">
+                                                    <div class="flex justify-between text-xs">
+                                                        <span class="font-medium">${metricName}</span>
+                                                        <span>${formatMetricValue(currentVal, alert.metric)} / ${formatMetricValue(thresholdVal, alert.metric)}</span>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }
+                                    } else {
+                                        // No threshold data, just show metric name
+                                        return `<div class="text-xs font-medium">${metricName} alert</div>`;
+                                    }
                                 }
                                 
                                 // Fallback to parsing message for older alerts
+                                if (!alert.message) {
+                                    return '';
+                                }
+                                
                                 const parts = alert.message.split(': ');
                                 const metricsText = parts.slice(1).join(': ');
                                 
-                                // If no metrics in message and alert has metric field, display it
-                                if (!metricsText && alert.metric && alert.metric !== 'bundled') {
+                                // Always show metric info if available but no detailed display
+                                if (alert.metric && alert.metric !== 'bundled') {
                                     const metricName = alert.metric.charAt(0).toUpperCase() + alert.metric.slice(1);
-                                    return `<div class="mb-1">${metricName} threshold exceeded</div>`;
+                                    const value = alert.currentValue ? ` (${formatMetricValue(alert.currentValue, alert.metric)})` : '';
+                                    return `<div class="text-xs">${metricName} threshold exceeded${value}</div>`;
+                                }
+                                
+                                // If no metrics in message, show basic info
+                                if (!metricsText) {
+                                    return '<div class="text-xs">Threshold exceeded</div>';
                                 }
                                 
                                 const metrics = metricsText.split(', ');
@@ -623,8 +736,8 @@ PulseApp.alerts = (() => {
                                         return `
                                             <div class="mb-0.5">
                                                 <div class="flex justify-between text-xs mb-0.5">
-                                                    <span class="font-medium">${name}</span>
-                                                    <span>${currentVal}% / ${thresholdVal}%</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">Threshold</span>
+                                                    <span class="text-gray-500 dark:text-gray-400">${thresholdVal}%</span>
                                                 </div>
                                                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
                                                     <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${Math.min(thresholdVal, 100)}%; z-index: 1;"></div>
@@ -679,12 +792,14 @@ PulseApp.alerts = (() => {
                                 }).join('');
                             })()}
                             <div class="mt-1 text-xs text-gray-500 alert-timestamp" 
-                                 data-triggered-at="${alert.triggeredAt || (Date.now() + serverTimeOffset)}"
+                                 data-triggered-at="${alert.triggeredAt || alert.acknowledgedAt || (Date.now() + serverTimeOffset)}"
                                  data-resolved-at="${alert.resolvedAt || ''}"
                                  data-is-resolved="${isResolved}"
                                  data-is-acknowledged="${isAcknowledged}">
-                                ${durationStr}
-                                ${isResolved && alert.resolvedAt ? ` • resolved ${formatDuration(Math.max(0, Math.round(((Date.now() + serverTimeOffset) - alert.resolvedAt) / 1000)))}` : isAcknowledged ? ' • acknowledged' : ''}
+                                ${isResolved ? 
+                                    formatTimestamp(triggeredAt) + ' • ' + durationStr : 
+                                    durationStr}
+                                ${!isResolved && isAcknowledged ? ' • acknowledged' : ''}
                             </div>
                         </div>
                     </div>
@@ -714,9 +829,9 @@ PulseApp.alerts = (() => {
             if (!alertStormMode) {
                 alertStormMode = true;
                 console.warn('[Alerts] Alert storm detected! Entering protective mode.');
-                if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
-                    window.PulseApp.ui.toast.warning('High alert volume detected - notifications limited');
-                }
+                showNotification({
+                    message: 'High alert volume detected - notifications limited'
+                }, 'warning');
             }
         } else if (alertStormMode && alertsReceivedTimestamps.length < ALERT_STORM_THRESHOLD / 2) {
             alertStormMode = false;
@@ -728,19 +843,13 @@ PulseApp.alerts = (() => {
             alert.triggeredAt = now;
         }
         
-        // For bundled alerts, check by guest only (not rule ID) to prevent duplicates
+        // Check for duplicate alerts by guest and metric
         const existingIndex = activeAlerts.findIndex(a => {
-            if (alert.rule?.type === 'guest_bundled' || a.rule?.type === 'guest_bundled') {
-                // For bundled alerts, match by guest only
-                return a.guest.vmid === alert.guest.vmid && 
-                       a.guest.node === alert.guest.node &&
-                       a.guest.endpointId === alert.guest.endpointId;
-            } else {
-                // For other alerts, match by rule and guest
-                return a.ruleId === alert.ruleId && 
-                       a.guest.vmid === alert.guest.vmid && 
-                       a.guest.node === alert.guest.node;
-            }
+            // Match by guest and metric type
+            return a.metric === alert.metric &&
+                   a.guest.vmid === alert.guest.vmid && 
+                   a.guest.node === alert.guest.node &&
+                   a.guest.endpointId === alert.guest.endpointId;
         });
         
         if (existingIndex >= 0) {
@@ -781,6 +890,7 @@ PulseApp.alerts = (() => {
             }
             
             // Queue toast notification
+            console.log('[Alerts] Queueing toast for new alert:', alert.guest.name);
             pendingAlertToasts.push({
                 guest: alert.guest.name,
                 message: alert.message,
@@ -808,50 +918,58 @@ PulseApp.alerts = (() => {
     }
 
     function handleResolvedAlert(alert) {
-        console.log('[Alerts] Handling resolved alert:', alert);
-        
-        // Find the alert in activeAlerts by ID
-        const activeIndex = activeAlerts.findIndex(a => a.id === alert.id);
-        
-        if (activeIndex >= 0) {
-            // Mark as resolved and move to history
-            const resolvedAlert = {
-                ...activeAlerts[activeIndex],
-                resolved: true,
-                resolvedAt: Date.now() + serverTimeOffset
-            };
+        try {
+            console.log('[Alerts] Handling resolved alert:', alert);
             
-            // Add to history
-            alertHistory.unshift(resolvedAlert);
+            // Find the alert in activeAlerts by ID
+            const activeIndex = activeAlerts.findIndex(a => a.id === alert.id);
             
-            // Limit history size
-            if (alertHistory.length > 200) {
-                alertHistory = alertHistory.slice(0, 200);
+            if (activeIndex >= 0) {
+                // Mark as resolved and move to history
+                const resolvedAlert = {
+                    ...activeAlerts[activeIndex],
+                    resolved: true,
+                    resolvedAt: Date.now() + serverTimeOffset
+                };
+                
+                // Add to history
+                alertHistory.unshift(resolvedAlert);
+                
+                // Limit history size
+                if (alertHistory.length > 200) {
+                    alertHistory = alertHistory.slice(0, 200);
+                }
+                
+                // Remove from active alerts
+                activeAlerts.splice(activeIndex, 1);
             }
             
-            // Remove from active alerts
-            activeAlerts.splice(activeIndex, 1);
+            updateHeaderIndicator();
+            
+            // Show toast notification when alert is resolved - use the correct function
+            if (alert && alert.guest && alert.guest.name) {
+                showNotification({
+                    message: `Resolved: ${alert.guest.name}`,
+                    guest: alert.guest
+                }, 'resolved');
+            }
+            
+            if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                updateDropdownContent();
+            }
+            
+            document.dispatchEvent(new CustomEvent('pulseAlertResolved', { detail: alert }));
+        } catch (error) {
+            console.error('[Alerts] Error handling resolved alert:', error);
         }
-        
-        updateHeaderIndicator();
-        
-        // Show toast notification when alert is resolved
-        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
-            window.PulseApp.ui.toast.success(`Resolved: ${alert.guest.name} - ${alert.message}`);
-        }
-        
-        if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
-            updateDropdownContent();
-        }
-        
-        document.dispatchEvent(new CustomEvent('pulseAlertResolved', { detail: alert }));
     }
 
     function updateHeaderIndicator() {
         const indicator = document.getElementById('alerts-indicator');
         if (!indicator) return;
 
-        const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
+        const unacknowledgedAlerts = Array.isArray(activeAlerts) ? 
+            activeAlerts.filter(a => a && !a.acknowledged) : [];
         const count = unacknowledgedAlerts.length;
         
         // Always show the button, just change its appearance based on unacknowledged alert count
@@ -877,6 +995,8 @@ PulseApp.alerts = (() => {
     }
 
     function showNotification(alert, type = 'alert') {
+        console.log('[Alerts] showNotification called:', { alert, type });
+        
         // Ensure notification container exists
         if (!notificationContainer) {
             createNotificationContainer();
@@ -890,6 +1010,9 @@ PulseApp.alerts = (() => {
         if (type === 'resolved') {
             colorClass = 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200';
             title = 'Resolved';
+        } else if (type === 'warning') {
+            colorClass = 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-200';
+            title = 'Warning';
         } else {
             colorClass = 'bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200';
             title = alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert';
@@ -923,6 +1046,7 @@ PulseApp.alerts = (() => {
         `;
 
         notificationContainer.appendChild(notification);
+        console.log('[Alerts] Notification added to DOM:', { message, type, container: notificationContainer });
 
         requestAnimationFrame(() => {
             notification.className = notification.className.replace('opacity-0 translate-y-2 scale-95', 'opacity-100 translate-y-0 scale-100');
@@ -1193,9 +1317,71 @@ PulseApp.alerts = (() => {
 
     function updateAlertsFromState(state) {
         if (state && state.alerts) {
-            if (state.alerts.active) {
+            // Ensure activeAlerts is always an array
+            if (state.alerts.active !== undefined) {
+                const previousAlerts = [...activeAlerts];
                 // Trust the server's active alerts list
-                activeAlerts = state.alerts.active || [];
+                activeAlerts = Array.isArray(state.alerts.active) ? state.alerts.active : [];
+                console.log('[Alerts] Updated active alerts:', activeAlerts.length);
+                
+                // Check for new alerts that weren't in the previous list
+                const previousIds = new Set(previousAlerts.map(a => a.id));
+                const newAlerts = activeAlerts.filter(alert => !previousIds.has(alert.id) && !alert.acknowledged && !alert.resolved);
+                
+                // Show notifications for new alerts
+                if (newAlerts.length > 0) {
+                    console.log('[Alerts] Detected new alerts:', newAlerts.length, 'alertsInitialized:', alertsInitialized);
+                    
+                    // Group alerts by metric type
+                    const alertsByMetric = {};
+                    newAlerts.forEach(alert => {
+                        const metric = alert.metric || 'unknown';
+                        if (!alertsByMetric[metric]) {
+                            alertsByMetric[metric] = [];
+                        }
+                        alertsByMetric[metric].push(alert);
+                    });
+                    
+                    // Show grouped notifications
+                    Object.entries(alertsByMetric).forEach(([metric, alerts]) => {
+                        console.log('[Alerts] Processing metric group:', metric, 'with', alerts.length, 'alerts');
+                        
+                        if (alerts.length === 1) {
+                            // Single alert for this metric
+                            const alert = alerts[0];
+                            const guestName = alert.guest?.name || 'Unknown';
+                            showNotification({
+                                message: `${metric.charAt(0).toUpperCase() + metric.slice(1)} alert: ${guestName}`,
+                                guest: alert.guest,
+                                metric: alert.metric
+                            }, 'alert');
+                        } else {
+                            // Multiple alerts for this metric
+                            const guestNames = alerts
+                                .map(a => a.guest?.name)
+                                .filter(Boolean);
+                            
+                            if (guestNames.length === 0) {
+                                // No guest names available
+                                showNotification({
+                                    message: `${alerts.length} ${metric} alerts`,
+                                    metric: metric
+                                }, 'alert');
+                            } else if (guestNames.length <= 3) {
+                                showNotification({
+                                    message: `${metric.charAt(0).toUpperCase() + metric.slice(1)} alerts: ${guestNames.join(', ')}`,
+                                    metric: metric
+                                }, 'alert');
+                            } else {
+                                showNotification({
+                                    message: `${alerts.length} ${metric} alerts from multiple guests`,
+                                    metric: metric
+                                }, 'alert');
+                            }
+                        }
+                    });
+                }
+                
                 updateHeaderIndicator();
                 if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                     updateDropdownContent();
@@ -1234,6 +1420,44 @@ PulseApp.alerts = (() => {
         loadInitialData();
     }
     
+    // Get metric unit
+    function getMetricUnit(metric) {
+        switch(metric) {
+            case 'diskread':
+            case 'diskwrite':
+            case 'netin':
+            case 'netout':
+                return 'B/s';
+            case 'cpu':
+            case 'memory':
+            case 'disk':
+                return '%';
+            default:
+                return '';
+        }
+    }
+    
+    // Format metric value with appropriate unit
+    function formatMetricValue(value, metric) {
+        const unit = getMetricUnit(metric);
+        if (unit === 'B/s') {
+            // Convert bytes/s to human readable
+            if (value >= 1073741824) {
+                return `${(value / 1073741824).toFixed(1)}GB/s`;
+            } else if (value >= 1048576) {
+                return `${(value / 1048576).toFixed(1)}MB/s`;
+            } else if (value >= 1024) {
+                return `${(value / 1024).toFixed(1)}KB/s`;
+            } else {
+                return `${value}B/s`;
+            }
+        } else if (unit === '%') {
+            return `${Math.round(value)}%`;
+        } else {
+            return `${value}`;
+        }
+    }
+    
     // Format duration with proper units
     function formatDuration(seconds) {
         if (seconds < 60) {
@@ -1262,6 +1486,47 @@ PulseApp.alerts = (() => {
         }
     }
     
+    // Format timestamp to readable time
+    function formatTimestamp(timestamp, skipDate = false) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        
+        // If skipDate is true, just return time
+        if (skipDate) {
+            return date.toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+        
+        // If it's today, just show the time
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+        
+        // If it's yesterday
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) {
+            return 'Yesterday ' + date.toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+        
+        // Otherwise show date and time
+        return date.toLocaleDateString('en-GB', { 
+            day: 'numeric',
+            month: 'short'
+        }) + ' ' + date.toLocaleTimeString('en-GB', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+    }
+    
     // Start live timestamp updates
     function startTimestampUpdates() {
         // Clear any existing interval
@@ -1286,43 +1551,27 @@ PulseApp.alerts = (() => {
     function updateAllTimestamps() {
         if (!alertDropdown || alertDropdown.classList.contains('hidden')) return;
         
-        // Adjust current time by server offset to match server clock
-        const now = Date.now() + serverTimeOffset;
-        const timestampElements = alertDropdown.querySelectorAll('.alert-timestamp');
+        // Don't update resolved alerts timestamps - they don't change
+        const timestampElements = alertDropdown.querySelectorAll('.alert-timestamp[data-is-resolved="false"]');
         
         if (timestampElements.length === 0) {
-            console.log('[Alerts] No timestamp elements found');
             return;
         }
         
-        timestampElements.forEach((element, index) => {
+        // Adjust current time by server offset to match server clock
+        const now = Date.now() + serverTimeOffset;
+        
+        timestampElements.forEach((element) => {
             const triggeredAt = parseInt(element.dataset.triggeredAt);
-            const resolvedAt = element.dataset.resolvedAt ? parseInt(element.dataset.resolvedAt) : null;
-            const isResolved = element.dataset.isResolved === 'true';
             const isAcknowledged = element.dataset.isAcknowledged === 'true';
             
             if (triggeredAt && !isNaN(triggeredAt)) {
-                // Calculate duration, handling clock skew
+                // Calculate duration for active alerts only
                 const rawDiff = now - triggeredAt;
-                let duration;
-                
-                if (rawDiff < -60000) {
-                    // If more than 1 minute in the future, likely clock skew
-                    // Use the stored alert's triggeredAt as a baseline
-                    duration = 0;
-                } else if (rawDiff < 0) {
-                    // Small future timestamps (< 1 min) show as just triggered
-                    duration = 0;
-                } else {
-                    duration = Math.round(rawDiff / 1000);
-                }
+                const duration = Math.max(0, Math.round(rawDiff / 1000));
                 
                 let text = formatDuration(duration);
-                
-                if (isResolved && resolvedAt) {
-                    const resolvedDuration = Math.max(0, Math.round((now - resolvedAt) / 1000));
-                    text += ` • resolved ${formatDuration(resolvedDuration)}`;
-                } else if (isAcknowledged) {
+                if (isAcknowledged) {
                     text += ' • acknowledged';
                 }
                 
@@ -1330,8 +1579,6 @@ PulseApp.alerts = (() => {
                 if (element.textContent !== text) {
                     element.textContent = text;
                 }
-            } else {
-                console.log('[Alerts] Invalid triggeredAt:', element.dataset.triggeredAt, 'for element:', element);
             }
         });
     }
@@ -1381,6 +1628,59 @@ PulseApp.alerts = (() => {
         }
     }
 
+    // Acknowledge all alerts for a specific VM
+    async function acknowledgeVMAlerts(vmid, node, endpointId) {
+        console.log(`[Alerts] Acknowledging all alerts for VM ${vmid} on node ${node}`);
+        
+        // Find all unacknowledged alerts for this VM
+        const vmAlerts = activeAlerts.filter(a => 
+            !a.acknowledged && 
+            !a.resolved &&
+            a.guest.vmid === vmid &&
+            a.guest.node === node &&
+            a.guest.endpointId === endpointId
+        );
+        
+        if (vmAlerts.length === 0) {
+            console.log('[Alerts] No unacknowledged alerts found for this VM');
+            return;
+        }
+        
+        console.log(`[Alerts] Found ${vmAlerts.length} alerts to acknowledge`);
+        
+        // Acknowledge each alert
+        for (const alert of vmAlerts) {
+            await acknowledgeAlert(alert.id, alert.ruleId);
+        }
+        
+        showToastNotification(`Acknowledged ${vmAlerts.length} alert${vmAlerts.length !== 1 ? 's' : ''} for ${vmAlerts[0].guest.name}`, 'success');
+    }
+    
+    // Test function to manually trigger a notification
+    function testNewAlertNotification() {
+        console.log('[Alerts] Testing new alert notification...');
+        
+        // First check if container exists
+        if (!notificationContainer) {
+            console.log('[Alerts] Container does not exist, creating it...');
+            createNotificationContainer();
+        }
+        
+        // Create a simple test div
+        const testDiv = document.createElement('div');
+        testDiv.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: red; color: white; padding: 20px; z-index: 99999; font-size: 18px; font-weight: bold; border: 3px solid black;';
+        testDiv.textContent = 'TEST ALERT NOTIFICATION';
+        testDiv.onclick = () => testDiv.remove();
+        document.body.appendChild(testDiv);
+        console.log('[Alerts] Added red test div to body');
+        
+        // Also try the regular notification
+        showNotification({
+            message: 'Test Alert: debian',
+            guest: { name: 'debian' }
+        }, 'alert');
+    }
+    
     // Public API
     return {
         init,
@@ -1389,6 +1689,8 @@ PulseApp.alerts = (() => {
         hideAlertsDropdown: closeDropdown,
         updateAlertsFromState,
         acknowledgeAlert,
+        acknowledgeVMAlerts,
+        testNewAlertNotification,  // Add to public API for testing
         suppressAlert,
         markAllAsAcknowledged,
         toggleAcknowledgedSection,
