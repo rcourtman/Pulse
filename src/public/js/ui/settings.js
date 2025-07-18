@@ -618,12 +618,12 @@ PulseApp.ui.settings = (() => {
                                id="webhook-url-input"
                                value="${config.WEBHOOK_URL || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" 
-                               placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..."
+                               placeholder="Enter webhook URL (Discord, Slack, Gotify, Telegram, ntfy.sh, etc.)"
                                oninput="PulseApp.ui.settings.updateWebhookStatus()">
                         <div class="mt-2 text-xs text-gray-600 dark:text-gray-400">
                             <details class="cursor-pointer">
                                 <summary class="hover:text-gray-800 dark:hover:text-gray-200">
-                                    <i class="fas fa-question-circle"></i> How to get a webhook URL?
+                                    <i class="fas fa-question-circle"></i> Supported services & how to get webhook URLs
                                 </summary>
                                 <div class="mt-2 space-y-3 bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
                                     <div>
@@ -640,6 +640,30 @@ PulseApp.ui.settings = (() => {
                                             <li>1. Go to your Slack workspace → Apps</li>
                                             <li>2. Search for "Incoming Webhooks"</li>
                                             <li>3. Add to channel and copy the URL</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Gotify:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Create an application in Gotify</li>
+                                            <li>2. Copy the application token</li>
+                                            <li>3. Format: https://gotify.domain/message?token=YOUR_TOKEN</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Telegram:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Create a bot with @BotFather</li>
+                                            <li>2. Get your chat ID (message @userinfobot)</li>
+                                            <li>3. Format: https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage?chat_id=YOUR_CHAT_ID</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">ntfy.sh:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Choose a topic name (e.g., "pulse-alerts")</li>
+                                            <li>2. Format: https://ntfy.sh/YOUR_TOPIC</li>
+                                            <li>3. Subscribe to the topic in the ntfy app</li>
                                         </ol>
                                     </div>
                                     <div>
@@ -661,7 +685,7 @@ PulseApp.ui.settings = (() => {
                                     <div class="pt-2 border-t border-gray-200 dark:border-gray-600">
                                         <p class="text-xs">
                                             <i class="fas fa-info-circle text-blue-500"></i>
-                                            Pulse automatically formats messages for Discord and Slack.
+                                            Pulse automatically detects and formats messages for Discord, Slack, Gotify, Telegram, and ntfy.sh.
                                             Other services receive standard JSON payloads.
                                         </p>
                                     </div>
@@ -4105,7 +4129,21 @@ docker compose up -d</code></pre>
             console.log('[Settings] Test webhook response:', response);
             
             if (response.success) {
-                PulseApp.ui.toast.success('Webhook test sent successfully!');
+                let successMessage = 'Webhook test sent successfully!';
+                if (response.service) {
+                    const serviceNames = {
+                        'discord': 'Discord',
+                        'slack': 'Slack',
+                        'gotify': 'Gotify',
+                        'telegram': 'Telegram',
+                        'ntfy': 'ntfy.sh',
+                        'teams': 'Microsoft Teams',
+                        'generic': 'Generic webhook'
+                    };
+                    const serviceName = serviceNames[response.service] || response.service;
+                    successMessage = `${serviceName} webhook test sent successfully!`;
+                }
+                PulseApp.ui.toast.success(successMessage);
                 
                 // Show additional status info if there are cooldowns
                 if (statusResponse.activeCooldowns && statusResponse.activeCooldowns.length > 0) {
@@ -4129,14 +4167,34 @@ docker compose up -d</code></pre>
             const statusResponse = await PulseApp.apiClient.get('/api/webhook-status');
             const statusIndicator = document.getElementById('webhook-status-indicator');
             const cooldownInfo = document.getElementById('webhook-cooldown-info');
+            const webhookUrlInput = document.getElementById('webhook-url-input');
             
             if (!statusIndicator) return;
+            
+            // Detect service type from URL if available
+            let serviceType = '';
+            if (webhookUrlInput && webhookUrlInput.value) {
+                const url = webhookUrlInput.value;
+                if (url.includes('discord.com/api/webhooks')) {
+                    serviceType = ' (Discord)';
+                } else if (url.includes('slack.com') || url.includes('hooks.slack.com')) {
+                    serviceType = ' (Slack)';
+                } else if (url.includes('/message?token=') || (url.includes('/message') && url.includes('token='))) {
+                    serviceType = ' (Gotify)';
+                } else if (url.includes('api.telegram.org/bot')) {
+                    serviceType = ' (Telegram)';
+                } else if (url.includes('ntfy.sh') || url.includes('/publish')) {
+                    serviceType = ' (ntfy.sh)';
+                } else if (url.includes('webhook.office.com') || url.includes('outlook.office.com/webhook')) {
+                    serviceType = ' (Teams)';
+                }
+            }
             
             if (!statusResponse.enabled) {
                 statusIndicator.innerHTML = '<span class="text-red-600 dark:text-red-400">🔴 Disabled</span>';
                 if (cooldownInfo) cooldownInfo.textContent = 'Webhooks are globally disabled';
             } else if (statusResponse.configured) {
-                statusIndicator.innerHTML = '<span class="text-green-600 dark:text-green-400">🟢 Enabled</span>';
+                statusIndicator.innerHTML = `<span class="text-green-600 dark:text-green-400">🟢 Enabled${serviceType}</span>`;
                 
                 // Show cooldown info if any
                 if (cooldownInfo && statusResponse.activeCooldowns && statusResponse.activeCooldowns.length > 0) {

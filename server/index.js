@@ -131,9 +131,6 @@ const { app, server } = createServer();
 const alertsRouter = require('./routes/alerts');
 app.use('/api/alerts', alertsRouter);
 
-// Mount test alerts router
-const testAlertsRouter = require('./routes/test-alerts');
-app.use('/api/test', testAlertsRouter);
 
 // State endpoint - returns current state data
 app.get('/api/state', (req, res) => {
