@@ -136,7 +136,7 @@ class AlertHistoryPersistence {
             ruleId: alert.rule?.id || alert.ruleId,
             ruleName: alert.rule?.name || 'Unknown',
             message: alert.message || this.generateMessage(alert),
-            metric: alert.rule?.metric || alert.metric,
+            metric: alert.metric || alert.rule?.metric,
             threshold: alert.effectiveThreshold || alert.threshold,
             currentValue: alert.currentValue,
             guest: {

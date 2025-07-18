@@ -131,6 +131,10 @@ const { app, server } = createServer();
 const alertsRouter = require('./routes/alerts');
 app.use('/api/alerts', alertsRouter);
 
+// Mount test alerts router
+const testAlertsRouter = require('./routes/test-alerts');
+app.use('/api/test', testAlertsRouter);
+
 // State endpoint - returns current state data
 app.get('/api/state', (req, res) => {
     try {
@@ -589,10 +593,11 @@ async function runMetricCycle() {
     console.warn('[Metrics Cycle] Previous cycle still running, skipping this run');
     return;
   }
-  if (io.engine.clientsCount === 0) {
-    scheduleNextMetric(); 
-    return;
-  }
+  // Disabled: Allow metrics to run even without clients for alerts to work
+  // if (io.engine.clientsCount === 0) {
+  //   scheduleNextMetric(); 
+  //   return;
+  // }
   isMetricsRunning = true;
   
   const startTime = Date.now();
