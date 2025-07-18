@@ -270,7 +270,7 @@ PulseApp.ui.alerts = (() => {
             updateNotificationStatus();
             
             // Update save message
-            updateAlertSaveMessage();
+            updateAlertSaveMessage(true);
             
             // Update cooldown settings visibility based on toggle states
             const emailToggle = document.getElementById('alert-email-toggle');
@@ -568,7 +568,7 @@ PulseApp.ui.alerts = (() => {
         updateResetButtonVisibility(hasCustomGuests);
         
         // Update save message
-        updateAlertSaveMessage();
+        updateAlertSaveMessage(true);
         
         // Changes will be saved when user clicks save button
     }
@@ -752,7 +752,7 @@ PulseApp.ui.alerts = (() => {
         }
     }
     
-    function updateAlertSaveMessage() {
+    function updateAlertSaveMessage(fromUserInteraction = false) {
         const saveMessage = document.getElementById('alert-save-message');
         if (!saveMessage || !isAlertsMode) return;
         
@@ -762,12 +762,14 @@ PulseApp.ui.alerts = (() => {
             updateSaveMessageTimeout = null;
         }
         
-        // Show calculating state immediately
-        saveMessage.textContent = 'Calculating...';
-        saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-amber-600', 'dark:text-amber-400');
-        saveMessage.classList.add('text-gray-500', 'dark:text-gray-400');
+        // Only show calculating state if this is from user interaction (slider change)
+        if (fromUserInteraction) {
+            saveMessage.textContent = 'Calculating...';
+            saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-amber-600', 'dark:text-amber-400');
+            saveMessage.classList.add('text-gray-500', 'dark:text-gray-400');
+        }
         
-        // Debounce the calculation to prevent rapid updates while dragging
+        // Debounce the calculation to prevent rapid updates
         updateSaveMessageTimeout = setTimeout(() => {
             // Count how many guests would trigger alerts
             let guestTriggerCount = 0;
@@ -795,7 +797,7 @@ PulseApp.ui.alerts = (() => {
             
             // Clear the timeout reference
             updateSaveMessageTimeout = null;
-        }, 300); // 300ms debounce delay
+        }, fromUserInteraction ? 300 : 100); // Shorter delay for API updates
     }
     
     
@@ -957,7 +959,7 @@ PulseApp.ui.alerts = (() => {
         updateResetButtonVisibility(false);
         
         // Update save message
-        updateAlertSaveMessage();
+        updateAlertSaveMessage(true);
         
         PulseApp.ui.toast?.success('Global thresholds reset to defaults - click Save to apply');
     }
@@ -1150,7 +1152,7 @@ PulseApp.ui.alerts = (() => {
         updateResetButtonVisibility(hasCustomGuests);
         
         // Update save message
-        updateAlertSaveMessage();
+        updateAlertSaveMessage(true);
         
         // Changes will be saved when user clicks save button
     }
@@ -1235,7 +1237,7 @@ PulseApp.ui.alerts = (() => {
         
         if (isAlertsMode) {
             transformTableToAlertsMode();
-            updateAlertSaveMessage();
+            updateAlertSaveMessage(true);
         }
         
         PulseApp.ui.toast?.success('All alert thresholds cleared - click Save to apply');
