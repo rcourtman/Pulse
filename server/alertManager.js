@@ -118,6 +118,10 @@ class AlertManager extends EventEmitter {
         this.debounceHandler = new DebounceHandler(this);
         this.debounceHandler.start();
         
+        // Initialize alert batching for simultaneous triggers
+        this.pendingAlertBatch = [];
+        this.batchTimeout = null;
+        
         // Cleanup timer for resolved alerts and expired cooldowns
         this.cleanupInterval = setInterval(() => {
             this.cleanupResolvedAlerts();
@@ -1513,7 +1517,6 @@ class AlertManager extends EventEmitter {
             // Add to history
             this.addToHistory(alertInfo);
             
-            // Send notifications with properly formatted alert info
             // For node alerts, ensure guest property is set
             if (alert.type === 'node_threshold' && !alert.guest) {
                 alert.guest = {
@@ -1524,7 +1527,19 @@ class AlertManager extends EventEmitter {
                     endpointId: alert.nodeId || 'unknown'
                 };
             }
-            await this.sendNotifications(alert);
+            
+            // Add to batch instead of sending immediately
+            this.pendingAlertBatch.push(alert);
+            
+            // Clear any existing timeout
+            if (this.batchTimeout) {
+                clearTimeout(this.batchTimeout);
+            }
+            
+            // Set a very short timeout (10ms) to batch alerts from the same evaluation cycle
+            this.batchTimeout = setTimeout(() => {
+                this.processPendingAlertBatch();
+            }, 10);
             
             // Save active alerts and notification history to disk
             this.saveActiveAlerts();
@@ -1547,6 +1562,211 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    /**
+     * Process pending alert batch - send individual or grouped notifications
+     */
+    async processPendingAlertBatch() {
+        const alerts = [...this.pendingAlertBatch];
+        this.pendingAlertBatch = [];
+        this.batchTimeout = null;
+        
+        if (alerts.length === 0) return;
+        
+        console.log(`[AlertManager] Processing batch of ${alerts.length} alerts`);
+        
+        // If only one alert, send it normally
+        if (alerts.length === 1) {
+            await this.sendNotifications(alerts[0]);
+            return;
+        }
+        
+        // Group alerts by notification type
+        const emailAlerts = alerts.filter(a => a.notificationChannels?.includes('email'));
+        const webhookAlerts = alerts.filter(a => a.notificationChannels?.includes('webhook'));
+        
+        // Send grouped email if multiple email alerts
+        if (emailAlerts.length > 1) {
+            console.log(`[AlertManager] Sending grouped email for ${emailAlerts.length} alerts`);
+            await this.sendGroupedEmailNotification(emailAlerts);
+        } else if (emailAlerts.length === 1) {
+            await this.sendEmailNotification(emailAlerts[0]);
+        }
+        
+        // Send grouped webhook if multiple webhook alerts
+        if (webhookAlerts.length > 1) {
+            console.log(`[AlertManager] Sending grouped webhook for ${webhookAlerts.length} alerts`);
+            await this.sendGroupedWebhookNotification(webhookAlerts);
+        } else if (webhookAlerts.length === 1) {
+            await this.sendWebhookNotification(webhookAlerts[0]);
+        }
+        
+        // Mark alerts as sent
+        for (const alert of alerts) {
+            const status = this.notificationStatus.get(alert.id) || {};
+            
+            if (alert.notificationChannels?.includes('email')) {
+                alert.emailSent = true;
+                status.emailSent = true;
+            }
+            if (alert.notificationChannels?.includes('webhook')) {
+                alert.webhookSent = true;
+                status.webhookSent = true;
+            }
+            
+            this.notificationStatus.set(alert.id, status);
+        }
+    }
+    
+    /**
+     * Send a grouped email notification for multiple alerts
+     */
+    async sendGroupedEmailNotification(alerts) {
+        if (!this.emailTransporter) {
+            console.log('[AlertManager] Email not configured, skipping grouped email notification');
+            return;
+        }
+        
+        try {
+            const subject = `🚨 Pulse Alert: ${alerts.length} alerts triggered`;
+            
+            // Group alerts by metric type
+            const alertsByMetric = {};
+            for (const alert of alerts) {
+                const metric = alert.metric || 'unknown';
+                if (!alertsByMetric[metric]) {
+                    alertsByMetric[metric] = [];
+                }
+                alertsByMetric[metric].push(alert);
+            }
+            
+            // Prepare email configuration
+            const config = await this.loadEmailConfig();
+            const fromEmail = config.from || process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local';
+            const toEmail = config.to || process.env.ALERT_TO_EMAIL;
+            const smtpHost = config.host || process.env.SMTP_HOST || 'localhost';
+            const smtpPort = config.port || process.env.SMTP_PORT || '587';
+            
+            // Prepare alert data for the template
+            const alertDetails = [];
+            for (const [metric, metricAlerts] of Object.entries(alertsByMetric)) {
+                for (const alert of metricAlerts) {
+                    const value = alert.currentValue || 0;
+                    const threshold = alert.threshold || 0;
+                    const displayValue = value < 1 ? value.toFixed(1) : Math.round(value);
+                    const displayThreshold = threshold < 1 ? threshold.toFixed(1) : Math.round(threshold);
+                    
+                    alertDetails.push({
+                        guestName: alert.guest?.name || 'Unknown',
+                        guestType: alert.guest?.type || 'unknown',
+                        guestId: alert.guest?.vmid || 'N/A',
+                        node: alert.guest?.node || 'unknown',
+                        metric: metric.toUpperCase(),
+                        currentValue: `${displayValue}%`,
+                        threshold: `${displayThreshold}%`,
+                        status: alert.guest?.status || 'unknown'
+                    });
+                }
+            }
+            
+            // Group by node for summary
+            const alertsByNode = {};
+            for (const alert of alerts) {
+                const node = alert.guest?.node || 'unknown';
+                if (!alertsByNode[node]) alertsByNode[node] = 0;
+                alertsByNode[node]++;
+            }
+            
+            // Prepare alertsByType in the format expected by the template
+            const alertsByType = {};
+            for (const [metric, metricAlerts] of Object.entries(alertsByMetric)) {
+                alertsByType[metric] = metricAlerts.map(alert => ({
+                    guest: alert.guest?.name || 'Unknown',
+                    value: alert.currentValue || 0,
+                    threshold: alert.threshold || 0
+                }));
+            }
+            
+            // Use the unified template with summary type
+            const html = this.generateEmailTemplate({
+                type: 'summary',
+                data: {
+                    title: `Alert Summary: ${alerts.length} alerts`,
+                    subtitle: 'Multiple alerts triggered',
+                    fromEmail: fromEmail,
+                    toEmail: toEmail,
+                    smtpHost: smtpHost,
+                    smtpPort: smtpPort,
+                    alerts: alerts,
+                    alertsByType: alertsByType,
+                    alertsByNode: alertsByNode,
+                    totalCount: alerts.length
+                }
+            });
+            
+            // Generate plain text version
+            let text = `PULSE ALERT: ${alerts.length} alerts triggered\n\n`;
+            for (const [metric, metricAlerts] of Object.entries(alertsByMetric)) {
+                text += `${metric.toUpperCase()} ALERTS (${metricAlerts.length}):\n`;
+                for (const alert of metricAlerts) {
+                    const value = alert.currentValue || 0;
+                    const threshold = alert.threshold || 0;
+                    const displayValue = value < 1 ? value.toFixed(1) : Math.round(value);
+                    const displayThreshold = threshold < 1 ? threshold.toFixed(1) : Math.round(threshold);
+                    text += `  - ${alert.guest?.name}: ${displayValue}% (threshold: ${displayThreshold}%)\n`;
+                }
+                text += '\n';
+            }
+            text += `\nTime: ${new Date().toLocaleString()}\n`;
+            text += '---\nThis alert was generated by Pulse monitoring system.';
+            
+            const mailOptions = {
+                from: fromEmail,
+                to: toEmail,
+                subject: subject,
+                html: html
+            };
+            
+            await this.emailTransporter.sendMail(mailOptions);
+            console.log('[AlertManager] Grouped email sent successfully');
+        } catch (error) {
+            console.error('[AlertManager] Failed to send grouped email:', error);
+        }
+    }
+    
+    /**
+     * Send a grouped webhook notification for multiple alerts
+     */
+    async sendGroupedWebhookNotification(alerts) {
+        const webhookUrl = process.env.WEBHOOK_URL;
+        if (!webhookUrl) {
+            console.log('[AlertManager] Webhook not configured, skipping grouped webhook notification');
+            return;
+        }
+        
+        try {
+            // Create a summary payload
+            const summary = {
+                type: 'grouped_alerts',
+                count: alerts.length,
+                alerts: alerts.map(alert => ({
+                    guest: alert.guest?.name || 'Unknown',
+                    metric: alert.metric,
+                    value: alert.currentValue,
+                    threshold: alert.threshold,
+                    message: alert.message
+                })),
+                triggeredAt: Date.now()
+            };
+            
+            const NotificationService = require('./notificationServices');
+            const notificationService = new NotificationService();
+            await notificationService.send(webhookUrl, summary);
+            console.log('[AlertManager] Grouped webhook sent successfully');
+        } catch (error) {
+            console.error('[AlertManager] Failed to send grouped webhook:', error);
+        }
+    }
+    
     /**
      * Check alerts in history and resolve any that no longer meet trigger conditions
      */

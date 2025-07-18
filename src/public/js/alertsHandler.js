@@ -13,6 +13,8 @@ PulseApp.alerts = (() => {
     let toastRateLimitCount = 0;
     let lastToastTime = 0;
     let pendingAlertToasts = [];
+    let pendingResolvedToasts = [];
+    let resolvedToastTimeout = null;
     let timestampUpdateInterval = null;
     let serverTimeOffset = 0; // Offset between server and client clocks
 
@@ -283,6 +285,38 @@ PulseApp.alerts = (() => {
             openDropdown();
         } else {
             closeDropdown();
+        }
+    }
+    
+    // Process queued resolved toast notifications
+    function processResolvedToastQueue() {
+        console.log('[Alerts] processResolvedToastQueue called, pending:', pendingResolvedToasts.length);
+        
+        if (pendingResolvedToasts.length === 0) return;
+        
+        // Group all pending resolved alerts
+        const resolvedAlerts = [...pendingResolvedToasts];
+        pendingResolvedToasts = [];
+        
+        if (resolvedAlerts.length === 1) {
+            // Single resolved alert
+            const alert = resolvedAlerts[0];
+            showNotification({
+                message: alert.message,
+                guest: { name: alert.guest }
+            }, 'resolved');
+        } else {
+            // Multiple resolved alerts - show summary
+            const guestNames = [...new Set(resolvedAlerts.map(a => a.guest))];
+            if (guestNames.length <= 3) {
+                showNotification({
+                    message: `Resolved: ${guestNames.join(', ')}`
+                }, 'resolved');
+            } else {
+                showNotification({
+                    message: `${resolvedAlerts.length} alerts resolved`
+                }, 'resolved');
+            }
         }
     }
     
@@ -582,7 +616,9 @@ PulseApp.alerts = (() => {
                 currentValueDisplay = 'Network anomaly';
             } else if (typeof alert.currentValue === 'number') {
                 const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
-                currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
+                // Show decimal for values < 1%
+                const displayValue = alert.currentValue < 1 ? alert.currentValue.toFixed(1) : Math.round(alert.currentValue);
+                currentValueDisplay = `${displayValue}${isPercentageMetric ? '%' : ''}`;
             } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
                 const values = [];
                 for (const [metric, value] of Object.entries(alert.currentValue)) {
@@ -651,8 +687,8 @@ PulseApp.alerts = (() => {
                                     
                                     // If we have current and threshold values
                                     if (alert.currentValue !== undefined && alert.threshold !== undefined) {
-                                        const currentVal = Math.round(alert.currentValue || 0);
-                                        const thresholdVal = Math.round(alert.threshold || 0);
+                                        const currentVal = alert.currentValue < 1 ? parseFloat((alert.currentValue || 0).toFixed(1)) : Math.round(alert.currentValue || 0);
+                                        const thresholdVal = alert.threshold < 1 ? parseFloat((alert.threshold || 0).toFixed(1)) : Math.round(alert.threshold || 0);
                                     
                                     // Only show progress bar for percentage metrics
                                     if (isPercentageMetric) {
@@ -897,8 +933,13 @@ PulseApp.alerts = (() => {
                 timestamp: now
             });
             
-            // Process toast queue
-            processToastQueue();
+            // Schedule toast processing with a small delay to allow grouping
+            if (!toastProcessingTimeout) {
+                toastProcessingTimeout = setTimeout(() => {
+                    toastProcessingTimeout = null;
+                    processToastQueue();
+                }, 100); // 100ms delay to collect simultaneous alerts
+            }
         }
         
         updateHeaderIndicator();
@@ -946,12 +987,22 @@ PulseApp.alerts = (() => {
             
             updateHeaderIndicator();
             
-            // Show toast notification when alert is resolved - use the correct function
+            // Queue resolved toast notification
             if (alert && alert.guest && alert.guest.name) {
-                showNotification({
+                console.log('[Alerts] Queueing toast for resolved alert:', alert.guest.name);
+                pendingResolvedToasts.push({
+                    guest: alert.guest.name,
                     message: `Resolved: ${alert.guest.name}`,
-                    guest: alert.guest
-                }, 'resolved');
+                    timestamp: Date.now()
+                });
+                
+                // Schedule resolved toast processing with a small delay to allow grouping
+                if (!resolvedToastTimeout) {
+                    resolvedToastTimeout = setTimeout(() => {
+                        resolvedToastTimeout = null;
+                        processResolvedToastQueue();
+                    }, 100); // 100ms delay to collect simultaneous resolved alerts
+                }
             }
             
             if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
@@ -1608,6 +1659,13 @@ PulseApp.alerts = (() => {
         
         // Clear pending toasts
         pendingAlertToasts = [];
+        pendingResolvedToasts = [];
+        
+        // Clear timeouts
+        if (resolvedToastTimeout) {
+            clearTimeout(resolvedToastTimeout);
+            resolvedToastTimeout = null;
+        }
         
         // Remove socket listeners if needed
         if (window.socket) {
