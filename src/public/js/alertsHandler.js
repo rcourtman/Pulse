@@ -1001,7 +1001,7 @@ PulseApp.alerts = (() => {
                     resolvedToastTimeout = setTimeout(() => {
                         resolvedToastTimeout = null;
                         processResolvedToastQueue();
-                    }, 100); // 100ms delay to collect simultaneous resolved alerts
+                    }, 200); // 200ms delay to collect simultaneous resolved alerts
                 }
             }
             
