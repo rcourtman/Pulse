@@ -4207,6 +4207,10 @@ Pulse Monitoring System`,
      */
     formatMetricValue(value, metricType) {
         if (metricType === 'cpu' || metricType === 'memory' || metricType === 'disk') {
+            // Show decimal places for values < 1%
+            if (value < 1) {
+                return `${value.toFixed(1)}%`;
+            }
             return `${Math.round(value)}%`;
         } else if (metricType === 'diskread' || metricType === 'diskwrite' || metricType === 'netin' || metricType === 'netout') {
             // Format as MB/s or similar
@@ -4388,12 +4392,12 @@ Pulse Monitoring System`,
                 this.activeAlerts.set(alertKey, newAlert);
                 
                 if (alertDuration === 0) {
-                    console.log(`[AlertManager] Created active bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded (immediate trigger)`);
+                    console.log(`[AlertManager] Created active individual ${metricType} alert for ${guest.name} (immediate trigger)`);
                     this.triggerAlert(newAlert).catch(error => {
                         console.error(`[AlertManager] Error triggering alert ${newAlert.id}:`, error);
                     });
                 } else {
-                    console.log(`[AlertManager] Created pending bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
+                    console.log(`[AlertManager] Created pending individual ${metricType} alert for ${guest.name}`);
                 }
             } else if (existingAlert.state === 'pending') {
                 // Check if duration threshold is met
