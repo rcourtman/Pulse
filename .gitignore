@@ -62,6 +62,9 @@ CLAUDE.md
 # Cursor IDE configuration/rules
 .cursor/ 
 
+# Claude IDE configuration
+.claude/
+
 # macOS
 .DS_Store 
 
@@ -150,6 +153,9 @@ tailwind.config.js
 # Runtime data files (ensure all JSON files in data/ are ignored except templates)
 data/*.json
 data/metrics-snapshot.json.gz
+data/*.backup
+data/*.bak
+data/*.old
 !data/*.json.template
 !data/*.json.example
 debug-archive/
