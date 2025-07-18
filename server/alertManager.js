@@ -122,6 +122,10 @@ class AlertManager extends EventEmitter {
         this.pendingAlertBatch = [];
         this.batchTimeout = null;
         
+        // Initialize resolved alert batching for simultaneous resolutions
+        this.pendingResolvedBatch = [];
+        this.resolvedBatchTimeout = null;
+        
         // Cleanup timer for resolved alerts and expired cooldowns
         this.cleanupInterval = setInterval(() => {
             this.cleanupResolvedAlerts();
@@ -1618,6 +1622,25 @@ class AlertManager extends EventEmitter {
     }
     
     /**
+     * Process pending resolved alert batch - emit as individual or grouped events
+     */
+    async processPendingResolvedBatch() {
+        const resolvedAlerts = [...this.pendingResolvedBatch];
+        this.pendingResolvedBatch = [];
+        this.resolvedBatchTimeout = null;
+        
+        if (resolvedAlerts.length === 0) return;
+        
+        console.log(`[AlertManager] Processing batch of ${resolvedAlerts.length} resolved alerts`);
+        
+        // Emit each resolved alert individually
+        // The frontend will handle grouping them for display
+        for (const alertInfo of resolvedAlerts) {
+            this.emit('alertResolved', alertInfo);
+        }
+    }
+    
+    /**
      * Send a grouped email notification for multiple alerts
      */
     async sendGroupedEmailNotification(alerts) {
@@ -1935,8 +1958,18 @@ class AlertManager extends EventEmitter {
             }, alert.rule.suppressionTime, 'Auto-suppression after resolution');
         }
 
-        // Emit event for external handling
-        this.emit('alertResolved', alertInfo);
+        // Add to batch instead of emitting immediately
+        this.pendingResolvedBatch.push(alertInfo);
+        
+        // Clear any existing timeout
+        if (this.resolvedBatchTimeout) {
+            clearTimeout(this.resolvedBatchTimeout);
+        }
+        
+        // Set a short timeout (10ms) to batch resolutions from the same evaluation cycle
+        this.resolvedBatchTimeout = setTimeout(() => {
+            this.processPendingResolvedBatch();
+        }, 10);
 
         console.info(`[ALERT RESOLVED] ${alertInfo.message}`);
 
