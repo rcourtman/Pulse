@@ -12,6 +12,7 @@ PulseApp.ui.alerts = (() => {
     let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
     let autoResolve = true; // Track whether alerts should auto-resolve
     let isSliderDragging = false; // Track if any slider is being dragged
+    let updateSaveMessageTimeout = null; // Debounce timeout for alert count calculation
 
     function init() {
         // Get DOM elements
@@ -755,30 +756,46 @@ PulseApp.ui.alerts = (() => {
         const saveMessage = document.getElementById('alert-save-message');
         if (!saveMessage || !isAlertsMode) return;
         
-        // Count how many guests would trigger alerts
-        let guestTriggerCount = 0;
-        const dashboardData = PulseApp.state?.get('dashboardData') || [];
-        
-        dashboardData.forEach(guest => {
-            const guestThresholds = guestAlertThresholds[guest.id] || {};
-            if (checkGuestWouldTriggerAlerts(guest.id, guestThresholds)) {
-                guestTriggerCount++;
-            }
-        });
-        
-        
-        // Update message
-        if (guestTriggerCount > 0) {
-            let message = '';
-            message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
-            saveMessage.textContent = message;
-            saveMessage.classList.remove('text-green-600', 'dark:text-green-400');
-            saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
-        } else {
-            saveMessage.textContent = 'No alerts will trigger';
-            saveMessage.classList.remove('text-amber-600', 'dark:text-amber-400');
-            saveMessage.classList.add('text-green-600', 'dark:text-green-400');
+        // Clear any existing timeout
+        if (updateSaveMessageTimeout) {
+            clearTimeout(updateSaveMessageTimeout);
+            updateSaveMessageTimeout = null;
         }
+        
+        // Show calculating state immediately
+        saveMessage.textContent = 'Calculating...';
+        saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-amber-600', 'dark:text-amber-400');
+        saveMessage.classList.add('text-gray-500', 'dark:text-gray-400');
+        
+        // Debounce the calculation to prevent rapid updates while dragging
+        updateSaveMessageTimeout = setTimeout(() => {
+            // Count how many guests would trigger alerts
+            let guestTriggerCount = 0;
+            const dashboardData = PulseApp.state?.get('dashboardData') || [];
+            
+            dashboardData.forEach(guest => {
+                const guestThresholds = guestAlertThresholds[guest.id] || {};
+                if (checkGuestWouldTriggerAlerts(guest.id, guestThresholds)) {
+                    guestTriggerCount++;
+                }
+            });
+            
+            // Update message
+            if (guestTriggerCount > 0) {
+                let message = '';
+                message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
+                saveMessage.textContent = message;
+                saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-gray-500', 'dark:text-gray-400');
+                saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
+            } else {
+                saveMessage.textContent = 'No alerts will trigger';
+                saveMessage.classList.remove('text-amber-600', 'dark:text-amber-400', 'text-gray-500', 'dark:text-gray-400');
+                saveMessage.classList.add('text-green-600', 'dark:text-green-400');
+            }
+            
+            // Clear the timeout reference
+            updateSaveMessageTimeout = null;
+        }, 300); // 300ms debounce delay
     }
     
     
