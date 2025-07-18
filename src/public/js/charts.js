@@ -385,7 +385,7 @@ PulseApp.charts = (() => {
                 }
                 
                 // Update hover indicator position
-                updateHoverIndicator(svg, closestIndex, point, currentData, currentConfig, minValue, maxValue);
+                updateHoverIndicator(svg, closestIndex, point, currentData, currentConfig, minValue, maxValue, currentMetric);
             }
         }
 
@@ -1098,7 +1098,7 @@ PulseApp.charts = (() => {
     }
     
     // Helper function to update hover indicator
-    function updateHoverIndicator(svg, index, point, data, config, minValue, maxValue) {
+    function updateHoverIndicator(svg, index, point, data, config, minValue, maxValue, metric) {
         // Create a separate group for the hover indicator to maintain aspect ratio
         let hoverGroup = svg.querySelector('.hover-indicator-group');
         if (!hoverGroup) {
@@ -1119,9 +1119,8 @@ PulseApp.charts = (() => {
         let scalingMin = minValue;
         let scalingMax = maxValue;
         
-        // Get metric from overlay data
-        const overlayMetric = overlay._metric;
-        const isPercentageMetric = overlayMetric === 'cpu' || overlayMetric === 'memory' || overlayMetric === 'disk';
+        // Get metric from parameter
+        const isPercentageMetric = metric === 'cpu' || metric === 'memory' || metric === 'disk';
         if (isPercentageMetric && minValue < 20) {
             scalingMin = 0;
         }
