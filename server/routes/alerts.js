@@ -136,6 +136,84 @@ router.post('/:alertId/acknowledge',
     }
 });
 
+// Manual resolve endpoint
+router.post('/:alertId/resolve', 
+    ValidationMiddleware.validateParams({
+        fields: {
+            alertId: { type: 'string', pattern: /^[a-zA-Z0-9_-]+$/ }
+        }
+    }),
+    ValidationMiddleware.validateBody({
+        fields: {
+            resolvedBy: { type: 'string', maxLength: 100, default: 'admin' },
+            reason: { type: 'string', maxLength: 500, default: 'Manually resolved' }
+        }
+    }),
+    async (req, res) => {
+    try {
+        const { alertId } = req.params;
+        const { resolvedBy, reason } = req.body;
+        
+        const alertManager = req.app.locals.alertManager;
+        const activeAlerts = alertManager.getActiveAlerts();
+        
+        // Find the alert key that matches our alertId
+        let alertKey = null;
+        let alertToResolve = null;
+        
+        for (const [key, alert] of activeAlerts.entries()) {
+            if (key === alertId || alert.id === alertId) {
+                alertKey = key;
+                alertToResolve = alert;
+                break;
+            }
+        }
+        
+        if (alertToResolve) {
+            // Mark alert as resolved
+            alertToResolve.state = 'resolved';
+            alertToResolve.resolved = true;
+            alertToResolve.resolvedAt = Date.now();
+            alertToResolve.resolvedBy = resolvedBy;
+            alertToResolve.resolveReason = reason;
+            
+            // Remove from active alerts
+            activeAlerts.delete(alertKey);
+            
+            // Add to alert history
+            const history = alertManager.getAlertHistory();
+            const historyEntry = {
+                ...alertToResolve,
+                resolvedAt: alertToResolve.resolvedAt,
+                resolved: true,
+                duration: alertToResolve.resolvedAt - alertToResolve.triggeredAt
+            };
+            history.unshift(historyEntry);
+            
+            // Limit history size
+            if (history.length > 500) {
+                history.splice(500);
+            }
+            
+            // Save state
+            alertManager.saveState();
+            
+            console.log(`[AlertManager] Alert ${alertId} manually resolved by ${resolvedBy}`);
+            
+            res.json({ 
+                success: true, 
+                alert: alertToResolve,
+                message: `Alert ${alertId} resolved successfully` 
+            });
+        } else {
+            res.status(404).json({ error: "Alert not found" });
+        }
+    } catch (error) {
+        console.error("Error resolving alert:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
 // Alert suppression endpoint
 router.post('/suppress',
     ValidationMiddleware.validateBody({
