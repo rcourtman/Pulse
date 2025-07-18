@@ -179,35 +179,17 @@ class WebhookBatcher extends EventEmitter {
             const alert = item.alert;
             const node = alert.guest?.node || 'unknown';
             
-            // Handle bundled alerts differently
-            if (alert.metric === 'bundled' && alert.exceededMetrics) {
-                // Extract actual metrics from bundled alert
-                alert.exceededMetrics.forEach(exceeded => {
-                    const metricType = exceeded.metricType || 'unknown';
-                    summary.byType[metricType] = (summary.byType[metricType] || 0) + 1;
-                });
-                
-                // Include bundled alert details
-                summary.alerts.push({
-                    id: alert.id,
-                    name: alert.guest?.name || 'Unknown',
-                    metrics: alert.exceededMetrics.map(m => `${m.metricType}: ${m.currentValue}%`).join(', '),
-                    priority: item.priority,
-                    isBundled: true
-                });
-            } else {
-                // Regular alert
-                const metric = alert.metric || alert.rule?.metric || 'unknown';
-                summary.byType[metric] = (summary.byType[metric] || 0) + 1;
-                
-                summary.alerts.push({
-                    id: alert.id,
-                    name: alert.guest?.name || 'Unknown',
-                    metric: metric,
-                    value: alert.currentValue || alert.value,
-                    priority: item.priority
-                });
-            }
+            // Handle individual alerts
+            const metricType = alert.metric || 'unknown';
+            summary.byType[metricType] = (summary.byType[metricType] || 0) + 1;
+            
+            // Include alert details
+            summary.alerts.push({
+                id: alert.id,
+                name: alert.guest?.name || 'Unknown',
+                metric: `${metricType}: ${alert.currentValue || 'N/A'}`,
+                priority: item.priority
+            });
             
             // Count by node
             summary.byNode[node] = (summary.byNode[node] || 0) + 1;
