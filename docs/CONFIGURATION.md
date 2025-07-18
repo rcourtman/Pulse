@@ -100,7 +100,7 @@ Configure custom thresholds for specific VMs through the web interface:
 
 ### Webhook Notifications
 
-Supports Discord, Slack, Teams, and generic webhooks:
+Supports Discord, Slack, Gotify, Telegram, ntfy.sh, Teams, and generic webhooks:
 
 ```env
 WEBHOOK_URL=https://discord.com/api/webhooks/...
@@ -110,7 +110,11 @@ WEBHOOK_ENABLED=true
 **Setting up webhooks:**
 - **Discord**: Server Settings → Integrations → Webhooks → New Webhook
 - **Slack**: Apps → Incoming Webhooks → Add to Slack
+- **Gotify**: Create app token, use format: `https://gotify.domain/message?token=YOUR_TOKEN`
+- **Telegram**: Create bot with @BotFather, use format: `https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage?chat_id=YOUR_CHAT_ID`
+- **ntfy.sh**: Choose a topic, use format: `https://ntfy.sh/YOUR_TOPIC`
 - **Teams**: Channel → Connectors → Incoming Webhook
+- **Generic**: Any webhook URL receives standard JSON payloads
 
 ### Email Notifications
 

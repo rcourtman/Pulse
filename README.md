@@ -11,7 +11,7 @@
 ## Key Features
 
 - **Real-time Monitoring** - Live updates for VMs, containers, and storage via WebSockets
-- **Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Teams)
+- **Smart Alerts** - Configurable thresholds with email and webhook notifications (Discord, Slack, Gotify, Telegram, ntfy.sh)
 - **Unified Backups** - Single view for PBS backups, PVE backups, and snapshots
 - **PBS Push Mode** - Monitor isolated/firewalled PBS servers without inbound connections
 - **Modern UI** - Responsive design with dark/light themes and virtual scrolling

@@ -220,109 +220,62 @@ router.post('/test-webhook', async (req, res) => {
             });
         }
         
-        // Always use the same test webhook logic regardless of source
-        if (true) {
-            // Direct webhook test with provided URL
+        // Use the new notification service for test alerts
+        const NotificationService = require('../notificationServices');
+        const notificationService = new NotificationService();
+        
+        // Create a test alert object
+        const testAlert = {
+            id: 'test-' + Date.now(),
+            type: 'test',
+            priority: 'normal',
+            rule: {
+                name: 'Webhook Configuration Test',
+                description: 'This is a test alert to verify webhook configuration'
+            },
+            guest: {
+                name: 'Test VM',
+                vmid: '999',
+                node: 'test-node',
+                type: 'test',
+                status: 'running'
+            },
+            metric: 'test',
+            currentValue: 'Test successful',
+            threshold: 'N/A',
+            message: 'Webhook configuration test successful!',
+            test: true
+        };
+        
+        try {
+            const response = await notificationService.send(webhookUrl, testAlert);
             
-            // Detect webhook type based on URL
-            const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
-            const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
+            res.json({ 
+                success: true, 
+                message: 'Test webhook sent successfully!',
+                status: response.status,
+                service: notificationService.detectService(webhookUrl)
+            });
+        } catch (error) {
+            console.error('[Test Webhook] Failed to send test webhook:', error);
             
-            let testPayload;
-            
-            if (isDiscord) {
-                // Discord-specific format
-                testPayload = {
-                    embeds: [{
-                        title: '🧪 Webhook Test Alert',
-                        description: 'This is a test alert to verify webhook configuration',
-                        color: 3447003, // Blue
-                        fields: [
-                            {
-                                name: 'Status',
-                                value: '✅ Webhook configuration test successful!',
-                                inline: false
-                            }
-                        ],
-                        footer: {
-                            text: 'Pulse Monitoring System'
-                        },
-                        timestamp: new Date().toISOString()
-                    }]
-                };
-            } else if (isSlack) {
-                // Slack-specific format
-                testPayload = {
-                    text: '🧪 *Webhook Test Alert*',
-                    attachments: [{
-                        color: 'good',
-                        title: 'Test Alert',
-                        text: 'This is a test alert from Pulse monitoring system',
-                        fields: [
-                            {
-                                title: 'Status',
-                                value: '✅ Webhook configuration test successful!',
-                                short: false
-                            }
-                        ],
-                        footer: 'Pulse Monitoring - Test',
-                        ts: Math.floor(Date.now() / 1000)
-                    }]
-                };
-            } else {
-                // Generic webhook format
-                testPayload = {
-                    timestamp: new Date().toISOString(),
-                    alert: {
-                        id: 'test-' + Date.now(),
-                        rule: {
-                            name: 'Webhook Configuration Test',
-                            description: 'This is a test webhook notification',
-                            severity: 'info',
-                            metric: 'webhook'
-                        },
-                        guest: {
-                            name: 'Test VM',
-                            node: 'test-node'
-                        },
-                        value: 100,
-                        message: 'Webhook configuration test successful!'
-                    },
-                    test: true
-                };
-            }
-            
-            try {
-                const response = await axios.post(webhookUrl, testPayload, {
-                    timeout: 10000,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Pulse-Monitoring/1.0'
-                    }
-                });
-                
-                res.json({ 
-                    success: true, 
-                    message: 'Test webhook sent successfully!',
-                    status: response.status
-                });
-            } catch (error) {
-                console.error('[Test Webhook] Failed to send test webhook:', error);
-                
-                let errorMessage = 'Failed to send test webhook';
-                if (error.response) {
-                    errorMessage = `Webhook failed: ${error.response.status} ${error.response.statusText}`;
-                } else if (error.request) {
-                    errorMessage = `Webhook failed: No response from ${webhookUrl}`;
-                } else {
-                    errorMessage = `Webhook failed: ${error.message}`;
+            let errorMessage = 'Failed to send test webhook';
+            if (error.response) {
+                errorMessage = `Webhook failed: ${error.response.status} ${error.response.statusText}`;
+                if (error.response.data) {
+                    errorMessage += ` - ${JSON.stringify(error.response.data)}`;
                 }
-                
-                res.status(400).json({
-                    success: false,
-                    error: errorMessage
-                });
+            } else if (error.request) {
+                errorMessage = `Webhook failed: No response from ${webhookUrl}`;
+            } else {
+                errorMessage = `Webhook failed: ${error.message}`;
             }
+            
+            res.status(400).json({
+                success: false,
+                error: errorMessage,
+                service: notificationService.detectService(webhookUrl)
+            });
         }
     } catch (error) {
         console.error('[Test Webhook] Error sending test webhook:', error);
