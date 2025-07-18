@@ -20,6 +20,12 @@
 
 [View Screenshots →](docs/SCREENSHOTS.md)
 
+## Support Development
+
+If you find Pulse useful, consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
 ## Quick Start (2 minutes)
 
 ### Prerequisites
@@ -218,12 +224,6 @@ MIT License - see [LICENSE](LICENSE) file.
 ## Trademark Notice
 
 Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. This project is not affiliated with or endorsed by Proxmox Server Solutions GmbH.
-
-## Support
-
-If you find Pulse useful, consider supporting development:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ---
 
