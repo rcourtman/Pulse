@@ -1,5 +1,22 @@
 const axios = require('axios');
 
+/**
+ * Notification Service Module
+ * 
+ * Provides unified notification handling for multiple external services.
+ * Automatically detects service type from webhook URL and formats messages accordingly.
+ * 
+ * Supported services:
+ * - Discord: Rich embeds with color-coded alerts
+ * - Slack: Formatted attachments with fields
+ * - Gotify: JSON with title, message, and priority (1-5)
+ * - Telegram: Markdown messages via Bot API (requires chat_id in URL)
+ * - ntfy.sh: Topic-based notifications with priority and tags
+ * - Microsoft Teams: Adaptive Cards with facts and sections
+ * - Generic webhooks: Standard JSON payload
+ * 
+ * @since v3.44.0
+ */
 class NotificationService {
     constructor() {
         this.services = {
