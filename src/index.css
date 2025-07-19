@@ -7,6 +7,8 @@
   /* Simple native range input styling */
   input[type="range"] {
     @apply appearance-none w-full h-2 bg-gray-300 dark:bg-gray-600 rounded-full outline-none cursor-pointer;
+    /* Modern touch-action to prevent scroll interference on mobile */
+    touch-action: pan-y pinch-zoom;
   }
   
   input[type="range"]::-webkit-slider-thumb {
@@ -44,5 +46,37 @@
     overflow: hidden;
     width: 100%;
     display: block;
+  }
+}
+
+/* Mobile slider protection */
+@media (max-width: 640px) {
+  /* Wrapper for sliders on mobile */
+  .slider-wrapper {
+    position: relative;
+    width: 100%;
+  }
+  
+  /* Invisible overlay that blocks touch on sliders by default */
+  .slider-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    /* Block pointer events to prevent accidental slider changes */
+    pointer-events: auto;
+  }
+  
+  /* When actively interacting with slider, remove overlay */
+  .slider-wrapper.slider-active::before {
+    pointer-events: none;
+  }
+  
+  /* Additional protection during scroll */
+  body.is-scrolling input[type="range"] {
+    pointer-events: none !important;
   }
 }
