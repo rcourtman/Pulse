@@ -185,10 +185,23 @@ PulseApp.alerts = (() => {
             alertDropdown.style.position = 'fixed';
             alertDropdown.style.zIndex = '1000';
             alertDropdown.style.top = '60px';
-            alertDropdown.style.right = '20px';
-            alertDropdown.style.width = '420px';
-            alertDropdown.style.maxHeight = '500px';
+            
+            // Mobile-responsive positioning
+            if (window.innerWidth < 640) {
+                // On mobile, use full width with small margins
+                alertDropdown.style.left = '10px';
+                alertDropdown.style.right = '10px';
+                alertDropdown.style.width = 'auto';
+                alertDropdown.style.maxWidth = 'calc(100vw - 20px)';
+            } else {
+                // On desktop, position from right
+                alertDropdown.style.right = '20px';
+                alertDropdown.style.width = '420px';
+            }
+            
+            alertDropdown.style.maxHeight = '80vh'; // Use viewport height for better mobile support
             alertDropdown.style.overflowY = 'auto';
+            alertDropdown.style.overflowX = 'hidden'; // Prevent horizontal scroll
             
             // Append dropdown to body for better positioning control
             document.body.appendChild(alertDropdown);
@@ -274,6 +287,18 @@ PulseApp.alerts = (() => {
             if (e.key === 'Escape') {
                 closeDropdown();
             }
+        });
+        
+        // Handle window resize to update dropdown position
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                // If dropdown is open, update its position
+                if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                    openDropdown(); // This will recalculate position based on new window size
+                }
+            }, 100);
         });
     }
 
@@ -385,7 +410,21 @@ PulseApp.alerts = (() => {
         if (indicator) {
             const rect = indicator.getBoundingClientRect();
             alertDropdown.style.top = (rect.bottom + 8) + 'px';
-            alertDropdown.style.right = (window.innerWidth - rect.right) + 'px';
+            
+            // Mobile-responsive positioning
+            if (window.innerWidth < 640) {
+                // On mobile, use full width with small margins
+                alertDropdown.style.left = '10px';
+                alertDropdown.style.right = '10px';
+                alertDropdown.style.width = 'auto';
+                alertDropdown.style.maxWidth = 'calc(100vw - 20px)';
+            } else {
+                // On desktop, position from right
+                alertDropdown.style.left = 'auto';
+                alertDropdown.style.right = (window.innerWidth - rect.right) + 'px';
+                alertDropdown.style.width = '420px';
+                alertDropdown.style.maxWidth = '';
+            }
         }
         
         alertDropdown.classList.remove('hidden');

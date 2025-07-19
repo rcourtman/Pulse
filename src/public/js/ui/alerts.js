@@ -8,11 +8,28 @@ PulseApp.ui.alerts = (() => {
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
+    let globalNodeThresholds = {}; // Store global node thresholds
+    let _nodeThresholds = {}; // Internal storage
+    let nodeThresholds = new Proxy(_nodeThresholds, {
+        set(target, property, value) {
+            console.log(`[nodeThresholds PROXY] Setting ${property} to:`, JSON.stringify(value));
+            console.trace(); // Show stack trace to see where it's being modified
+            target[property] = value;
+            return true;
+        },
+        deleteProperty(target, property) {
+            console.log(`[nodeThresholds PROXY] Deleting ${property}`);
+            console.trace();
+            delete target[property];
+            return true;
+        }
+    }); // Store per-node thresholds with logging
     let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
     let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
     let autoResolve = true; // Track whether alerts should auto-resolve
     let isSliderDragging = false; // Track if any slider is being dragged
     let updateSaveMessageTimeout = null; // Debounce timeout for alert count calculation
+    let justResetThresholds = false; // Flag to prevent reloading after reset
 
     function init() {
         // Get DOM elements
@@ -40,6 +57,20 @@ PulseApp.ui.alerts = (() => {
         
         // Load notification status
         updateNotificationStatus();
+        
+        // Update node list if nodes are available
+        const nodesData = PulseApp.state?.get('nodesData');
+        if (nodesData && nodesData.length > 0) {
+            // Node list updates handled by dashboard.js now
+        }
+        
+        // Always try again after a short delay to ensure it shows
+        setTimeout(() => {
+            const delayedNodesData = PulseApp.state?.get('nodesData');
+            if (delayedNodesData && delayedNodesData.length > 0) {
+                // Node list updates handled by dashboard.js now
+            }
+        }, 500);
         
         // Set default auto-resolve state
         const autoResolveToggle = document.getElementById('alert-auto-resolve-toggle');
@@ -80,6 +111,31 @@ PulseApp.ui.alerts = (() => {
         if (webhookToggle) {
             webhookToggle.addEventListener('change', handleWebhookToggle);
         }
+        
+        // Status monitoring checkboxes
+        const vmDownCheckbox = document.getElementById('alert-vm-down');
+        if (vmDownCheckbox) {
+            vmDownCheckbox.addEventListener('change', handleStatusMonitoringChange);
+        }
+        
+        const vmUpCheckbox = document.getElementById('alert-vm-up');
+        if (vmUpCheckbox) {
+            vmUpCheckbox.addEventListener('change', handleStatusMonitoringChange);
+        }
+        
+        // Node monitoring checkboxes
+        const nodeDownCheckbox = document.getElementById('alert-node-down');
+        if (nodeDownCheckbox) {
+            nodeDownCheckbox.addEventListener('change', handleNodeStatusChange);
+        }
+        
+        const nodeUpCheckbox = document.getElementById('alert-node-up');
+        if (nodeUpCheckbox) {
+            nodeUpCheckbox.addEventListener('change', handleNodeStatusChange);
+        }
+        
+        // Node threshold sliders
+        setupNodeThresholdSliders();
         
         // Save button
         const saveButton = document.getElementById('save-alert-config');
@@ -180,12 +236,7 @@ PulseApp.ui.alerts = (() => {
         const enabled = event.target.checked;
         const isEmail = type === 'email';
         
-        // Show/hide cooldown settings
-        const cooldownSettingsId = isEmail ? 'email-cooldown-settings' : 'webhook-cooldown-settings';
-        const cooldownSettings = document.getElementById(cooldownSettingsId);
-        if (cooldownSettings) {
-            cooldownSettings.style.display = enabled ? 'block' : 'none';
-        }
+        // Cooldown settings removed - using hardcoded defaults
         
         try {
             // Get current config
@@ -239,6 +290,99 @@ PulseApp.ui.alerts = (() => {
         
         // Changes will be saved when user clicks save button
     }
+    
+    function handleStatusMonitoringChange(event) {
+        // Update save message to show unsaved changes
+        updateAlertSaveMessage(false);
+        
+        // Changes will be saved when user clicks save button
+    }
+    
+    function handleNodeStatusChange(event) {
+        // Update save message to show unsaved changes
+        updateAlertSaveMessage(false);
+        
+        // Changes will be saved when user clicks save button
+    }
+    
+    function setupNodeThresholdSliders() {
+        // CPU slider
+        const cpuSlider = document.getElementById('global-node-cpu');
+        const cpuValue = document.getElementById('global-node-cpu-value');
+        if (cpuSlider && cpuValue) {
+            cpuSlider.value = globalNodeThresholds.cpu || 80;
+            cpuValue.textContent = `${cpuSlider.value}%`;
+            
+            cpuSlider.addEventListener('input', (e) => {
+                cpuValue.textContent = `${e.target.value}%`;
+                globalNodeThresholds.cpu = parseInt(e.target.value);
+                updateAlertSaveMessage(false);
+            });
+        }
+        
+        // Memory slider
+        const memorySlider = document.getElementById('global-node-memory');
+        const memoryValue = document.getElementById('global-node-memory-value');
+        if (memorySlider && memoryValue) {
+            memorySlider.value = globalNodeThresholds.memory || 85;
+            memoryValue.textContent = `${memorySlider.value}%`;
+            
+            memorySlider.addEventListener('input', (e) => {
+                memoryValue.textContent = `${e.target.value}%`;
+                globalNodeThresholds.memory = parseInt(e.target.value);
+                updateAlertSaveMessage(false);
+            });
+        }
+        
+        // Disk slider
+        const diskSlider = document.getElementById('global-node-disk');
+        const diskValue = document.getElementById('global-node-disk-value');
+        if (diskSlider && diskValue) {
+            diskSlider.value = globalNodeThresholds.disk || 90;
+            diskValue.textContent = `${diskSlider.value}%`;
+            
+            diskSlider.addEventListener('input', (e) => {
+                diskValue.textContent = `${e.target.value}%`;
+                globalNodeThresholds.disk = parseInt(e.target.value);
+                updateAlertSaveMessage(false);
+            });
+        }
+    }
+    
+    function updateNodeList_DEPRECATED() {
+        const nodeListContainer = document.getElementById('node-threshold-list');
+        const perNodeSection = document.getElementById('per-node-thresholds');
+        
+        if (!nodeListContainer) return;
+        
+        // Get current nodes from state
+        const nodesData = PulseApp.state?.get('nodesData') || [];
+        
+        if (nodesData.length === 0) {
+            perNodeSection?.classList.add('hidden');
+            return;
+        }
+        
+        perNodeSection?.classList.remove('hidden');
+        nodeListContainer.innerHTML = '';
+        
+        nodesData.forEach(node => {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50';
+            
+            const hasCustom = nodeThresholds[node.node] && Object.keys(nodeThresholds[node.node]).length > 0;
+            
+            nodeDiv.innerHTML = `
+                <span class="text-xs text-gray-700 dark:text-gray-300">${node.displayName || node.node}</span>
+                <button class="text-xs px-2 py-1 ${hasCustom ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'} hover:text-blue-700 dark:hover:text-blue-300" 
+                        onclick="PulseApp.ui.alerts.showNodeThresholdModal('${node.node}')">
+                    ${hasCustom ? 'Edit' : 'Customize'}
+                </button>
+            `;
+            
+            nodeListContainer.appendChild(nodeDiv);
+        });
+    }
 
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
@@ -272,24 +416,24 @@ PulseApp.ui.alerts = (() => {
             // Update save message
             updateAlertSaveMessage(true);
             
-            // Update cooldown settings visibility based on toggle states
-            const emailToggle = document.getElementById('alert-email-toggle');
-            const emailCooldownSettings = document.getElementById('email-cooldown-settings');
-            if (emailToggle && emailCooldownSettings) {
-                emailCooldownSettings.style.display = emailToggle.checked ? 'block' : 'none';
-            }
-            
-            const webhookToggle = document.getElementById('alert-webhook-toggle');
-            const webhookCooldownSettings = document.getElementById('webhook-cooldown-settings');
-            if (webhookToggle && webhookCooldownSettings) {
-                webhookCooldownSettings.style.display = webhookToggle.checked ? 'block' : 'none';
-            }
+            // Cooldown settings removed - using hardcoded defaults
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
             
             // Transform table to show threshold inputs
             transformTableToAlertsMode();
+            
+            // Update node list for per-node overrides
+            const nodesData = PulseApp.state?.get('nodesData');
+            if (nodesData && nodesData.length > 0) {
+                // Node list updates handled by dashboard.js now
+            }
+            
+            // Force dashboard to update to show alert controls
+            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
+                PulseApp.ui.dashboard.updateDashboardTable();
+            }
             
         } else {
             // Don't show the main threshold row - let the threshold module control its visibility
@@ -322,6 +466,11 @@ PulseApp.ui.alerts = (() => {
             
             // Don't re-apply threshold filtering when exiting alerts mode
             // Thresholds should only be applied when the threshold toggle is explicitly checked
+            
+            // Force dashboard to update to remove alert controls
+            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
+                PulseApp.ui.dashboard.updateDashboardTable();
+            }
         }
     }
 
@@ -339,6 +488,15 @@ PulseApp.ui.alerts = (() => {
                 diskwrite: '',
                 netin: '',
                 netout: ''
+            };
+        }
+        
+        // Initialize global node thresholds
+        if (!globalNodeThresholds || Object.keys(globalNodeThresholds).length === 0) {
+            globalNodeThresholds = {
+                cpu: 80,
+                memory: 85,
+                disk: 90
             };
         }
         
@@ -782,11 +940,81 @@ PulseApp.ui.alerts = (() => {
                 }
             });
             
-            // Update message
-            if (guestTriggerCount > 0) {
-                let message = '';
-                message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
-                saveMessage.textContent = message;
+            // Count how many nodes would trigger alerts
+            let nodeTriggerCount = 0;
+            const nodesData = PulseApp.state?.get('nodesData') || [];
+            
+            // Check if node monitoring is enabled
+            const nodeDownCheckbox = document.getElementById('alert-node-down');
+            const nodeMonitoringEnabled = nodeDownCheckbox ? nodeDownCheckbox.checked : true;
+            
+            if (nodeMonitoringEnabled) {
+                console.log('[updateAlertSaveMessage] Checking nodes, nodeThresholds:', JSON.stringify(nodeThresholds));
+                nodesData.forEach(node => {
+                    // Only check online nodes for metric thresholds
+                    if (node.status !== 'online') return;
+                    
+                    // Check if node has any custom thresholds
+                    const customThresholds = nodeThresholds[node.node] || {};
+                    const hasCustom = Object.keys(customThresholds).length > 0;
+                    
+                    // Only check nodes that have custom thresholds set
+                    // If no custom thresholds, node uses global defaults which shouldn't trigger alerts
+                    if (!hasCustom) return;
+                    
+                    // Calculate node metrics as percentages
+                    const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+                    const memPercent = (node.mem && node.maxmem > 0) ? (node.mem / node.maxmem * 100) : 0;
+                    const diskPercent = (node.disk && node.maxdisk > 0) ? (node.disk / node.maxdisk * 100) : 0;
+                    
+                    console.log(`[updateAlertSaveMessage] Checking node ${node.node} with custom thresholds:`, customThresholds);
+                    console.log(`[updateAlertSaveMessage] Node metrics: cpu=${cpuPercent}%, memory=${memPercent}%, disk=${diskPercent}%`);
+                    
+                    // Check each metric against thresholds
+                    let wouldTrigger = false;
+                    
+                    // Check CPU
+                    if (customThresholds.cpu !== undefined && customThresholds.cpu !== '') {
+                        console.log(`[updateAlertSaveMessage] ${node.node} cpu: value=${cpuPercent}, threshold=${customThresholds.cpu}, exceeds=${cpuPercent >= customThresholds.cpu}`);
+                        if (cpuPercent >= customThresholds.cpu) {
+                            wouldTrigger = true;
+                        }
+                    }
+                    
+                    // Check Memory
+                    if (customThresholds.memory !== undefined && customThresholds.memory !== '') {
+                        console.log(`[updateAlertSaveMessage] ${node.node} memory: value=${memPercent}, threshold=${customThresholds.memory}, exceeds=${memPercent >= customThresholds.memory}`);
+                        if (memPercent >= customThresholds.memory) {
+                            wouldTrigger = true;
+                        }
+                    }
+                    
+                    // Check Disk
+                    if (customThresholds.disk !== undefined && customThresholds.disk !== '') {
+                        console.log(`[updateAlertSaveMessage] ${node.node} disk: value=${diskPercent}, threshold=${customThresholds.disk}, exceeds=${diskPercent >= customThresholds.disk}`);
+                        if (diskPercent >= customThresholds.disk) {
+                            wouldTrigger = true;
+                        }
+                    }
+                    
+                    if (wouldTrigger) {
+                        console.log(`[updateAlertSaveMessage] Node ${node.node} WILL trigger alert`);
+                        nodeTriggerCount++;
+                    }
+                });
+            }
+            
+            // Update message to include both guest and node alerts
+            const totalTriggers = guestTriggerCount + nodeTriggerCount;
+            if (totalTriggers > 0) {
+                let messages = [];
+                if (guestTriggerCount > 0) {
+                    messages.push(`${guestTriggerCount} guest${guestTriggerCount !== 1 ? 's' : ''}`);
+                }
+                if (nodeTriggerCount > 0) {
+                    messages.push(`${nodeTriggerCount} node${nodeTriggerCount !== 1 ? 's' : ''}`);
+                }
+                saveMessage.textContent = `${messages.join(' and ')} will trigger alerts`;
                 saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-gray-500', 'dark:text-gray-400');
                 saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
             } else {
@@ -820,6 +1048,13 @@ PulseApp.ui.alerts = (() => {
             globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
         );
         
+        // Check if any node thresholds have been set
+        // A node has changes if it has any thresholds defined (even if they match defaults)
+        const hasNodeChanges = Object.keys(nodeThresholds).some(nodeName => {
+            return nodeThresholds[nodeName] && Object.keys(nodeThresholds[nodeName]).length > 0;
+        });
+        
+        
         // Global row should never be dimmed - it's the master control
         if (globalThresholdsRow) {
             globalThresholdsRow.style.opacity = '';
@@ -827,8 +1062,8 @@ PulseApp.ui.alerts = (() => {
         }
         
         if (resetButton) {
-            // Enable button if there are custom values OR any global changes
-            if (hasCustomValues || hasGlobalChanges) {
+            // Enable button if there are custom values, global changes, or node changes
+            if (hasCustomValues || hasGlobalChanges || hasNodeChanges) {
                 resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 resetButton.disabled = false;
             } else {
@@ -898,11 +1133,15 @@ PulseApp.ui.alerts = (() => {
     }
 
     function resetGlobalThresholds() {
+        console.log('[RESET] Starting reset');
+        console.log('[RESET] Before clear - nodeThresholds:', JSON.stringify(nodeThresholds));
+        
         // Store old values for smooth updates
         const oldThresholds = { ...globalThresholds };
         
         // Clear all individual thresholds
         guestAlertThresholds = {};
+        Object.keys(_nodeThresholds).forEach(key => delete nodeThresholds[key]);  // Clear node thresholds too
         
         // Reset to defaults
         globalThresholds = {
@@ -912,7 +1151,8 @@ PulseApp.ui.alerts = (() => {
             diskread: '',
             diskwrite: '',
             netin: '',
-            netout: ''
+            netout: '',
+            status: 1  // Default to enabled (alert when down)
         };
         
         // Update the UI controls
@@ -950,6 +1190,17 @@ PulseApp.ui.alerts = (() => {
             }
             
             updateRowStylingOnly();
+            
+            // Don't update the dashboard - it will reload the values
+            // Just reset the sliders directly
+            console.log('[RESET] Resetting node sliders in DOM');
+            document.querySelectorAll('.node-header input[type="range"]').forEach(slider => {
+                const metric = slider.id.split('-').pop();
+                const defaultValue = metric === 'cpu' ? 80 : metric === 'memory' ? 85 : 90;
+                console.log(`[RESET] Setting ${slider.id} from ${slider.value} to ${defaultValue}`);
+                slider.value = defaultValue;
+                slider.classList.remove('custom-threshold');
+            });
         }
         
         // Clear any tooltip positioning issues that might have occurred during reset
@@ -958,10 +1209,8 @@ PulseApp.ui.alerts = (() => {
         // Update reset button - should be disabled after reset since everything is cleared
         updateResetButtonVisibility(false);
         
-        // Update save message
+        // Update save message to show there are unsaved changes
         updateAlertSaveMessage(true);
-        
-        PulseApp.ui.toast?.success('Global thresholds reset to defaults - click Save to apply');
     }
 
     function transformTableToAlertsMode() {
@@ -1162,20 +1411,26 @@ PulseApp.ui.alerts = (() => {
         const emailToggle = document.getElementById('alert-email-toggle');
         const webhookToggle = document.getElementById('alert-webhook-toggle');
         
-        // Get email cooldown settings
-        const cooldownMinutes = document.getElementById('alert-cooldown-minutes');
-        const debounceMinutes = document.getElementById('alert-debounce-minutes');
-        const maxEmailsPerHour = document.getElementById('alert-max-emails-hour');
+        // Use hardcoded cooldown defaults
+        // Email: 15min cooldown, 2min delay, 4/hour max
+        // Webhook: 5min cooldown, 1min delay, 10/hour max
         
-        // Get webhook cooldown settings
-        const webhookCooldownMinutes = document.getElementById('webhook-cooldown-minutes');
-        const webhookDebounceMinutes = document.getElementById('webhook-debounce-minutes');
-        const webhookMaxCallsPerHour = document.getElementById('webhook-max-calls-hour');
+        // Get status monitoring settings
+        const vmDownCheckbox = document.getElementById('alert-vm-down');
+        const vmUpCheckbox = document.getElementById('alert-vm-up');
+        
+        // Get node status monitoring settings
+        const nodeDownCheckbox = document.getElementById('alert-node-down');
+        const nodeUpCheckbox = document.getElementById('alert-node-up');
+        
+        console.log('[saveAlertConfig] Saving with nodeThresholds:', JSON.stringify(nodeThresholds));
         
         const alertConfig = {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
+            globalNodeThresholds: globalNodeThresholds,
+            nodeThresholds: nodeThresholds,
             alertLogic: alertLogic,
             duration: alertDuration,
             autoResolve: autoResolve,
@@ -1185,14 +1440,44 @@ PulseApp.ui.alerts = (() => {
                 webhook: webhookToggle ? webhookToggle.checked : false
             },
             emailCooldowns: {
-                cooldownMinutes: cooldownMinutes ? parseInt(cooldownMinutes.value) : 15,
-                debounceMinutes: debounceMinutes ? parseInt(debounceMinutes.value) : 2,
-                maxEmailsPerHour: maxEmailsPerHour ? parseInt(maxEmailsPerHour.value) : 4
+                cooldownMinutes: 15,
+                debounceMinutes: 2,
+                maxEmailsPerHour: 4
             },
             webhookCooldowns: {
-                cooldownMinutes: webhookCooldownMinutes ? parseInt(webhookCooldownMinutes.value) : 5,
-                debounceMinutes: webhookDebounceMinutes ? parseInt(webhookDebounceMinutes.value) : 1,
-                maxCallsPerHour: webhookMaxCallsPerHour ? parseInt(webhookMaxCallsPerHour.value) : 10
+                cooldownMinutes: 5,
+                debounceMinutes: 1,
+                maxCallsPerHour: 10
+            },
+            states: {
+                vm_down: {
+                    enabled: vmDownCheckbox ? vmDownCheckbox.checked : true,
+                    from: ['running', 'online'],
+                    to: ['stopped', 'offline', 'paused'],
+                    notify: 'on_change',
+                    message: '{name} has stopped'
+                },
+                vm_up: {
+                    enabled: vmUpCheckbox ? vmUpCheckbox.checked : false,
+                    from: ['stopped', 'offline', 'paused'],
+                    to: ['running', 'online'],
+                    notify: 'on_change',
+                    message: '{name} has started'
+                },
+                node_down: {
+                    enabled: nodeDownCheckbox ? nodeDownCheckbox.checked : true,
+                    from: ['online'],
+                    to: ['offline', 'unknown'],
+                    notify: 'on_change',
+                    message: 'Node {name} is offline'
+                },
+                node_up: {
+                    enabled: nodeUpCheckbox ? nodeUpCheckbox.checked : false,
+                    from: ['offline', 'unknown'],
+                    to: ['online'],
+                    notify: 'on_change',
+                    message: 'Node {name} is back online'
+                }
             },
             enabled: true,
             lastUpdated: new Date().toISOString()
@@ -1215,7 +1500,6 @@ PulseApp.ui.alerts = (() => {
                 // Clear any unsaved changes indicator
                 const saveButton = document.getElementById('save-alert-config');
                 if (saveButton) {
-                    saveButton.textContent = 'Save Changes';
                     saveButton.classList.remove('animate-pulse');
                 }
                 
@@ -1244,6 +1528,14 @@ PulseApp.ui.alerts = (() => {
     }
 
     async function loadSavedConfiguration() {
+        console.log('[loadSavedConfiguration] Called, justResetThresholds:', justResetThresholds);
+        
+        // Skip loading if we just reset thresholds
+        if (justResetThresholds) {
+            console.log('[loadSavedConfiguration] Skipping due to justResetThresholds flag');
+            return;
+        }
+        
         try {
             const response = await fetch('/api/alerts/config');
             const result = await response.json();
@@ -1302,6 +1594,42 @@ PulseApp.ui.alerts = (() => {
                     guestAlertThresholds = config.guestThresholds;
                 }
                 
+                // Load node thresholds
+                if (config.globalNodeThresholds) {
+                    globalNodeThresholds = { ...globalNodeThresholds, ...config.globalNodeThresholds };
+                    
+                    // Update UI
+                    const cpuSlider = document.getElementById('global-node-cpu');
+                    const cpuValue = document.getElementById('global-node-cpu-value');
+                    if (cpuSlider && cpuValue && globalNodeThresholds.cpu) {
+                        cpuSlider.value = globalNodeThresholds.cpu;
+                        cpuValue.textContent = `${globalNodeThresholds.cpu}%`;
+                    }
+                    
+                    const memorySlider = document.getElementById('global-node-memory');
+                    const memoryValue = document.getElementById('global-node-memory-value');
+                    if (memorySlider && memoryValue && globalNodeThresholds.memory) {
+                        memorySlider.value = globalNodeThresholds.memory;
+                        memoryValue.textContent = `${globalNodeThresholds.memory}%`;
+                    }
+                    
+                    const diskSlider = document.getElementById('global-node-disk');
+                    const diskValue = document.getElementById('global-node-disk-value');
+                    if (diskSlider && diskValue && globalNodeThresholds.disk) {
+                        diskSlider.value = globalNodeThresholds.disk;
+                        diskValue.textContent = `${globalNodeThresholds.disk}%`;
+                    }
+                }
+                
+                if (config.nodeThresholds) {
+                    console.log('[loadSavedConfiguration] Loading nodeThresholds from config:', JSON.stringify(config.nodeThresholds));
+                    console.log('[loadSavedConfiguration] Current nodeThresholds before:', JSON.stringify(nodeThresholds));
+                    // Clear existing and copy saved values
+                    Object.keys(_nodeThresholds).forEach(key => delete nodeThresholds[key]);
+                    Object.assign(nodeThresholds, config.nodeThresholds);
+                    console.log('[loadSavedConfiguration] nodeThresholds after:', JSON.stringify(nodeThresholds));
+                }
+                
                 
                 // Load alert duration
                 if (config.duration !== undefined) {
@@ -1321,52 +1649,30 @@ PulseApp.ui.alerts = (() => {
                     }
                 }
                 
-                // Load email cooldown settings
-                if (config.emailCooldowns) {
-                    const cooldownMinutes = document.getElementById('alert-cooldown-minutes');
-                    const debounceMinutes = document.getElementById('alert-debounce-minutes');
-                    const maxEmailsPerHour = document.getElementById('alert-max-emails-hour');
+                // Cooldown settings are now hardcoded - no UI elements to update
+                
+                // Load state monitoring settings
+                if (config.states) {
+                    const vmDownCheckbox = document.getElementById('alert-vm-down');
+                    const vmUpCheckbox = document.getElementById('alert-vm-up');
                     
-                    if (cooldownMinutes && config.emailCooldowns.cooldownMinutes !== undefined) {
-                        cooldownMinutes.value = config.emailCooldowns.cooldownMinutes;
+                    if (vmDownCheckbox && config.states.vm_down) {
+                        vmDownCheckbox.checked = config.states.vm_down.enabled !== false;
                     }
-                    if (debounceMinutes && config.emailCooldowns.debounceMinutes !== undefined) {
-                        debounceMinutes.value = config.emailCooldowns.debounceMinutes;
+                    if (vmUpCheckbox && config.states.vm_up) {
+                        vmUpCheckbox.checked = config.states.vm_up.enabled === true;
                     }
-                    if (maxEmailsPerHour && config.emailCooldowns.maxEmailsPerHour !== undefined) {
-                        maxEmailsPerHour.value = config.emailCooldowns.maxEmailsPerHour;
-                    }
-                }
-                
-                // Load webhook cooldown settings
-                if (config.webhookCooldowns) {
-                    const webhookCooldownMinutes = document.getElementById('webhook-cooldown-minutes');
-                    const webhookDebounceMinutes = document.getElementById('webhook-debounce-minutes');
-                    const webhookMaxCallsPerHour = document.getElementById('webhook-max-calls-hour');
                     
-                    if (webhookCooldownMinutes && config.webhookCooldowns.cooldownMinutes !== undefined) {
-                        webhookCooldownMinutes.value = config.webhookCooldowns.cooldownMinutes;
+                    // Load node status settings
+                    const nodeDownCheckbox = document.getElementById('alert-node-down');
+                    const nodeUpCheckbox = document.getElementById('alert-node-up');
+                    
+                    if (nodeDownCheckbox && config.states.node_down) {
+                        nodeDownCheckbox.checked = config.states.node_down.enabled !== false;
                     }
-                    if (webhookDebounceMinutes && config.webhookCooldowns.debounceMinutes !== undefined) {
-                        webhookDebounceMinutes.value = config.webhookCooldowns.debounceMinutes;
+                    if (nodeUpCheckbox && config.states.node_up) {
+                        nodeUpCheckbox.checked = config.states.node_up.enabled === true;
                     }
-                    if (webhookMaxCallsPerHour && config.webhookCooldowns.maxCallsPerHour !== undefined) {
-                        webhookMaxCallsPerHour.value = config.webhookCooldowns.maxCallsPerHour;
-                    }
-                }
-                
-                // Show/hide email cooldown settings based on email toggle state
-                const emailToggle = document.getElementById('alert-email-toggle');
-                const emailCooldownSettings = document.getElementById('email-cooldown-settings');
-                if (emailToggle && emailCooldownSettings) {
-                    emailCooldownSettings.style.display = emailToggle.checked ? 'block' : 'none';
-                }
-                
-                // Show/hide webhook cooldown settings based on webhook toggle state
-                const webhookToggle = document.getElementById('alert-webhook-toggle');
-                const webhookCooldownSettings = document.getElementById('webhook-cooldown-settings');
-                if (webhookToggle && webhookCooldownSettings) {
-                    webhookCooldownSettings.style.display = webhookToggle.checked ? 'block' : 'none';
                 }
                 
                 
@@ -1509,6 +1815,193 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    // Toggle between custom and default thresholds for a node
+    function toggleNodeCustomThresholds(nodename) {
+        if (nodeThresholds[nodename]) {
+            // Remove custom thresholds to use defaults
+            delete nodeThresholds[nodename];
+            
+            // Remove custom-threshold class from all sliders for this node
+            ['cpu', 'memory', 'disk'].forEach(metric => {
+                const slider = document.getElementById(`node-${nodename}-${metric}`);
+                if (slider) {
+                    slider.classList.remove('custom-threshold');
+                }
+            });
+            
+            PulseApp.ui.toast?.success(`Node ${nodename} reset to default thresholds`);
+        } else {
+            // Create custom thresholds from current slider values
+            const cpuSlider = document.getElementById(`node-${nodename}-cpu`);
+            const memorySlider = document.getElementById(`node-${nodename}-memory`);
+            const diskSlider = document.getElementById(`node-${nodename}-disk`);
+            
+            if (cpuSlider && memorySlider && diskSlider) {
+                nodeThresholds[nodename] = {
+                    cpu: parseInt(cpuSlider.value),
+                    memory: parseInt(memorySlider.value),
+                    disk: parseInt(diskSlider.value)
+                };
+                
+                // Add custom-threshold class to all sliders
+                [cpuSlider, memorySlider, diskSlider].forEach(slider => {
+                    slider.classList.add('custom-threshold');
+                });
+                
+                PulseApp.ui.toast?.success(`Node ${nodename} now using custom thresholds`);
+            }
+        }
+        
+        
+        updateAlertSaveMessage(false);
+    }
+
+    // DEPRECATED - Node list is now handled by dashboard.js enhancing existing node rows
+    function updateNodeList_DEPRECATED(nodes) {
+        if (!nodes || nodes.length === 0 || !isAlertsMode) {
+            // Remove any existing node rows
+            document.querySelectorAll('.node-threshold-row').forEach(row => row.remove());
+            return;
+        }
+        
+        // Get the main table body
+        const tableBody = document.querySelector('#main-table tbody');
+        if (!tableBody) return;
+        
+        // Remove any existing node rows first
+        document.querySelectorAll('.node-threshold-row').forEach(row => row.remove());
+        
+        // Find the insertion point (after GLOBAL row, or at the beginning if not found)
+        const globalRow = document.getElementById('global-alert-thresholds-row');
+        let insertionPoint = globalRow ? globalRow.nextElementSibling : tableBody.firstChild;
+        
+        nodes.forEach(node => {
+            const nodeThreshold = nodeThresholds[node.node] || globalNodeThresholds;
+            const hasCustom = nodeThresholds[node.node] ? true : false;
+            
+            const tr = document.createElement('tr');
+            tr.className = 'node-threshold-row bg-blue-50 dark:bg-blue-900/20 border-b border-gray-300 dark:border-gray-600';
+            tr.id = `node-threshold-row-${node.node}`;
+            tr.setAttribute('data-node-row', 'true');
+            
+            tr.innerHTML = `
+                <td class="sticky left-0 z-10 py-1 px-2 align-middle bg-blue-50 dark:bg-blue-900/20">
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-blue-700 dark:text-blue-300 font-semibold">${node.node.toUpperCase()}</span>
+                            <button data-node="${node.node}" 
+                                    class="node-threshold-button text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                                ${hasCustom ? 'Custom' : 'Default'}
+                            </button>
+                        </div>
+                    </div>
+                </td>
+                <td class="py-1 px-2 align-middle text-xs text-gray-500">node</td>
+                <td class="py-1 px-2 align-middle">-</td>
+                <td class="py-1 px-2 align-middle">-</td>
+                <td class="py-1 px-2 align-middle">
+                    <input type="range" 
+                           id="node-${node.node}-cpu" 
+                           data-node="${node.node}"
+                           data-metric="cpu"
+                           min="0" max="100" step="5" 
+                           value="${nodeThreshold.cpu || 80}" 
+                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                </td>
+                <td class="py-1 px-2 align-middle">
+                    <input type="range" 
+                           id="node-${node.node}-memory" 
+                           data-node="${node.node}"
+                           data-metric="memory"
+                           min="0" max="100" step="5" 
+                           value="${nodeThreshold.memory || 85}" 
+                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                </td>
+                <td class="py-1 px-2 align-middle">
+                    <input type="range" 
+                           id="node-${node.node}-disk" 
+                           data-node="${node.node}"
+                           data-metric="disk"
+                           min="0" max="100" step="5" 
+                           value="${nodeThreshold.disk || 90}" 
+                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                </td>
+                <td class="py-1 px-2 align-middle">-</td>
+                <td class="py-1 px-2 align-middle">-</td>
+                <td class="py-1 px-2 align-middle">-</td>
+                <td class="py-1 px-2 align-middle">-</td>
+            `;
+            
+            // Insert the row at the appropriate position
+            if (insertionPoint) {
+                tableBody.insertBefore(tr, insertionPoint);
+            } else {
+                tableBody.appendChild(tr);
+            }
+        });
+        
+        // Add event listeners after creating all rows
+        document.querySelectorAll('.node-threshold-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const nodename = e.target.dataset.node;
+                showNodeThresholdModal(nodename);
+            });
+        });
+        
+        document.querySelectorAll('.node-threshold-slider').forEach(slider => {
+            slider.addEventListener('change', (e) => {
+                const nodename = e.target.dataset.node;
+                const metric = e.target.dataset.metric;
+                updateNodeThreshold(nodename, metric, e.target.value);
+            });
+        });
+        
+    }
+    
+    // New function to handle inline node threshold changes
+    function updateNodeThreshold(nodename, metric, value) {
+        console.log(`[updateNodeThreshold] Called: ${nodename}, ${metric}, ${value}`);
+        console.log(`[updateNodeThreshold] Current nodeThresholds:`, JSON.stringify(nodeThresholds));
+        
+        const globalNodeDefaults = { cpu: 80, memory: 85, disk: 90 };
+        const intValue = parseInt(value);
+        
+        if (!nodeThresholds[nodename]) {
+            nodeThresholds[nodename] = {};
+        }
+        
+        // Check if this value is different from the global node default
+        if (intValue !== globalNodeDefaults[metric]) {
+            nodeThresholds[nodename][metric] = intValue;
+        } else {
+            // If setting back to default, remove this metric
+            delete nodeThresholds[nodename][metric];
+            
+            // If no custom metrics left for this node, remove the node entirely
+            if (Object.keys(nodeThresholds[nodename]).length === 0) {
+                delete nodeThresholds[nodename];
+            }
+        }
+        
+        console.log(`[updateNodeThreshold] After update:`, JSON.stringify(nodeThresholds));
+        
+        // Find the specific slider that was changed
+        const slider = document.getElementById(`node-${nodename}-${metric}`);
+        if (slider) {
+            if (intValue !== globalNodeDefaults[metric]) {
+                slider.classList.add('custom-threshold');
+            } else {
+                slider.classList.remove('custom-threshold');
+            }
+        }
+        
+        // Update reset button visibility
+        const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+        updateResetButtonVisibility(hasCustomGuests);
+        
+        updateAlertSaveMessage(false);
+    }
+
 
 
 
@@ -1520,12 +2013,21 @@ PulseApp.ui.alerts = (() => {
         setSliderDragging: (dragging) => { isSliderDragging = dragging; },
         getGuestThresholds: () => guestAlertThresholds,
         getGlobalThresholds: () => globalThresholds,
+        nodeThresholds: nodeThresholds, // Direct reference for both read and write
+        globalNodeThresholds: globalNodeThresholds,
+        getNodeThresholds: () => nodeThresholds, // Getter for debugging
+        isJustResetThresholds: () => justResetThresholds, // Expose as getter function
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
         updateRowStylingOnly: updateRowStylingOnly,
         getActiveAlertsForGuest: getActiveAlertsForGuest,
         loadSavedConfiguration: loadSavedConfiguration,
         updateNotificationStatus: updateNotificationStatus,
-        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts
+        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts,
+        toggleNodeCustomThresholds: toggleNodeCustomThresholds,
+        // updateNodeList removed - handled by dashboard.js now
+        updateNodeThreshold: updateNodeThreshold,
+        init: init
     };
 })();
+

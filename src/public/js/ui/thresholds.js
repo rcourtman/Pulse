@@ -172,7 +172,13 @@ PulseApp.ui.thresholds = (() => {
                     
                     // Apply thresholds if any are active
                     if (hasActiveThresholds) {
-                        updateRowStylingOnly(thresholdState);
+                        console.log('[Thresholds] Toggle ON - calling updateDashboardTable');
+                        // Need full dashboard update to ensure node headers are shown when grouped
+                        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
+                            PulseApp.ui.dashboard.updateDashboardTable();
+                        } else {
+                            updateRowStylingOnly(thresholdState);
+                        }
                     }
                 } else {
                     // Hide threshold row and settings
@@ -182,6 +188,11 @@ PulseApp.ui.thresholds = (() => {
                     
                     // Clear all threshold styling when toggle is turned off
                     clearAllStyling();
+                    
+                    // Force full dashboard update to restore node headers
+                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
+                        PulseApp.ui.dashboard.updateDashboardTable();
+                    }
             
             // Also clear any alert-specific styling
             const rows = document.querySelectorAll('#main-table tbody tr[data-id]');
