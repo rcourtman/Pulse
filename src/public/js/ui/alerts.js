@@ -703,6 +703,7 @@ PulseApp.ui.alerts = (() => {
         
     }
 
+
     // Lightweight update function matching threshold system pattern
     function updateGlobalThreshold(metricType, newValue, shouldSave = true) {
         globalThresholds[metricType] = newValue;

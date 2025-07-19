@@ -46,6 +46,7 @@ PulseApp.ui.thresholds = (() => {
         _setupResetButtonListener();
         _setupHideModeListener();
         _setupThresholdToggleListener();
+        _setupScrollDetection();
     }
 
     function applyInitialThresholdUI() {
@@ -92,6 +93,22 @@ PulseApp.ui.thresholds = (() => {
                 });
                 sliderElement.addEventListener('mousedown', _handleThresholdDragStart);
                 sliderElement.addEventListener('touchstart', _handleThresholdDragStart, { passive: true });
+                
+                // Handle wrapper activation for mobile
+                const wrapper = sliderElement.closest('.slider-wrapper');
+                if (wrapper) {
+                    // Activate wrapper on intentional interaction
+                    sliderElement.addEventListener('touchstart', (e) => {
+                        wrapper.classList.add('slider-active');
+                    }, { passive: true });
+                    
+                    // Deactivate after interaction ends
+                    sliderElement.addEventListener('touchend', (e) => {
+                        setTimeout(() => {
+                            wrapper.classList.remove('slider-active');
+                        }, 300);
+                    }, { passive: true });
+                }
             } else {
                 console.warn(`Slider element not found for type: ${type}`);
             }
@@ -111,6 +128,7 @@ PulseApp.ui.thresholds = (() => {
             }
         }
     }
+
 
     function _setupDragEndListeners() {
         document.addEventListener('mouseup', _handleThresholdDragEnd);
@@ -136,6 +154,63 @@ PulseApp.ui.thresholds = (() => {
                 updateDashboardFromThreshold();
             });
         }
+    }
+
+    function _setupScrollDetection() {
+        let scrollTimeout;
+        let isScrolling = false;
+        
+        // Detect scroll start/end on the window
+        window.addEventListener('scroll', () => {
+            if (!isScrolling) {
+                isScrolling = true;
+                document.body.classList.add('is-scrolling');
+            }
+            
+            // Clear the timeout
+            clearTimeout(scrollTimeout);
+            
+            // Set a timeout to detect when scrolling has stopped
+            scrollTimeout = setTimeout(() => {
+                isScrolling = false;
+                document.body.classList.remove('is-scrolling');
+            }, 150); // 150ms after scroll stops
+        }, { passive: true });
+        
+        // Also detect touch scroll on the body and main content areas
+        const scrollableElements = [
+            document.body,
+            document.getElementById('main-content'),
+            document.querySelector('.overflow-x-auto')
+        ].filter(Boolean);
+        
+        scrollableElements.forEach(element => {
+            let touchStartY = 0;
+            
+            element.addEventListener('touchstart', (e) => {
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+            
+            element.addEventListener('touchmove', (e) => {
+                const touchY = e.touches[0].clientY;
+                const deltaY = Math.abs(touchY - touchStartY);
+                
+                // If moved more than 5px vertically, it's a scroll
+                if (deltaY > 5 && !isScrolling) {
+                    isScrolling = true;
+                    document.body.classList.add('is-scrolling');
+                    
+                    // Clear any existing timeout
+                    clearTimeout(scrollTimeout);
+                    
+                    // Set timeout for scroll end
+                    scrollTimeout = setTimeout(() => {
+                        isScrolling = false;
+                        document.body.classList.remove('is-scrolling');
+                    }, 150);
+                }
+            }, { passive: true });
+        });
     }
 
     function _setupThresholdToggleListener() {
@@ -616,13 +691,15 @@ PulseApp.ui.thresholds = (() => {
 
     function createThresholdSliderHtml(id, min, max, step, value, additionalClasses = '') {
         return `
-            <input type="range" 
-                   id="${id}"
-                   min="${min}" 
-                   max="${max}" 
-                   step="${step}" 
-                   value="${value || min}"
-                   class="custom-slider w-full ${additionalClasses}">
+            <div class="slider-wrapper">
+                <input type="range" 
+                       id="${id}"
+                       min="${min}" 
+                       max="${max}" 
+                       step="${step}" 
+                       value="${value || min}"
+                       class="custom-slider w-full ${additionalClasses}">
+            </div>
         `;
     }
 
@@ -677,6 +754,22 @@ PulseApp.ui.thresholds = (() => {
                 PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
             }
         }, { passive: true });
+        
+        // Handle wrapper activation for mobile
+        const wrapper = sliderElement.closest('.slider-wrapper');
+        if (wrapper) {
+            // Activate wrapper on intentional interaction
+            sliderElement.addEventListener('touchstart', (e) => {
+                wrapper.classList.add('slider-active');
+            }, { passive: true });
+            
+            // Deactivate after interaction ends
+            sliderElement.addEventListener('touchend', (e) => {
+                setTimeout(() => {
+                    wrapper.classList.remove('slider-active');
+                }, 300);
+            }, { passive: true });
+        }
     }
 
     function applyThresholdDimmingNow() {
