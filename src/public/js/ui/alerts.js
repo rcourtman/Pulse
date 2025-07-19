@@ -738,6 +738,62 @@ PulseApp.ui.alerts = (() => {
     }
 
     // Check if a node would trigger alerts based on current threshold settings
+    function checkNodeWouldTriggerAlerts(nodeName) {
+        // Get node data
+        const nodesData = PulseApp.state?.get('nodesData') || [];
+        const node = nodesData.find(n => n.node === nodeName);
+        if (!node) {
+            return false;
+        }
+        
+        // Only check online nodes (determined by uptime > 0)
+        const isOnline = node && node.uptime > 0;
+        if (!isOnline) {
+            return false;
+        }
+        
+        // Get thresholds - either custom for this node or global node thresholds
+        const customThresholds = nodeThresholds[nodeName] || {};
+        const effectiveThresholds = Object.keys(customThresholds).length > 0 
+            ? customThresholds 
+            : globalNodeThresholds;
+        
+        // If no thresholds are set at all, return false
+        if (!effectiveThresholds || Object.keys(effectiveThresholds).length === 0) {
+            return false;
+        }
+        
+        // Calculate node metrics as percentages
+        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+        const memPercent = (node.mem && node.maxmem > 0) ? (node.mem / node.maxmem * 100) : 0;
+        const diskPercent = (node.disk && node.maxdisk > 0) ? (node.disk / node.maxdisk * 100) : 0;
+        
+        // Check each metric against thresholds
+        let wouldTrigger = false;
+        
+        // Check CPU
+        if (effectiveThresholds.cpu !== undefined && effectiveThresholds.cpu !== '') {
+            if (cpuPercent >= effectiveThresholds.cpu) {
+                wouldTrigger = true;
+            }
+        }
+        
+        // Check Memory
+        if (effectiveThresholds.memory !== undefined && effectiveThresholds.memory !== '') {
+            if (memPercent >= effectiveThresholds.memory) {
+                wouldTrigger = true;
+            }
+        }
+        
+        // Check Disk
+        if (effectiveThresholds.disk !== undefined && effectiveThresholds.disk !== '') {
+            if (diskPercent >= effectiveThresholds.disk) {
+                wouldTrigger = true;
+            }
+        }
+        
+        return wouldTrigger;
+    }
 
     // Check if a guest would trigger alerts based on current threshold settings
     function checkGuestWouldTriggerAlerts(guestId, guestThresholds) {
@@ -850,6 +906,24 @@ PulseApp.ui.alerts = (() => {
                 hasAnyCustomValues = true;
             }
             
+            // Check if this guest would trigger alerts
+            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
+            
+            // Apply or remove yellow highlighting based on whether guest would trigger alerts
+            if (wouldTriggerAlerts) {
+                // Add thick left border to first cell only
+                const firstCell = row.querySelector('td:first-child');
+                if (firstCell) {
+                    firstCell.style.borderLeft = '4px solid #f59e0b';
+                }
+            } else {
+                // Clear the border
+                const firstCell = row.querySelector('td:first-child');
+                if (firstCell) {
+                    firstCell.style.borderLeft = '';
+                }
+            }
+            
             // Update slider styling for each metric
             const metricTypes = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
             metricTypes.forEach(metricType => {
@@ -953,7 +1027,8 @@ PulseApp.ui.alerts = (() => {
                 console.log('[updateAlertSaveMessage] Checking nodes, nodeThresholds:', JSON.stringify(nodeThresholds));
                 nodesData.forEach(node => {
                     // Only check online nodes for metric thresholds
-                    if (node.status !== 'online') return;
+                    const isOnline = node && node.uptime > 0;
+                    if (!isOnline) return;
                     
                     // Check if node has any custom thresholds
                     const customThresholds = nodeThresholds[node.node] || {};
@@ -1115,6 +1190,12 @@ PulseApp.ui.alerts = (() => {
             row.style.transition = '';
             row.removeAttribute('data-alert-dimmed');
             row.removeAttribute('data-alert-mixed');
+            
+            // Clear yellow highlighting
+            const firstCell = row.querySelector('td:first-child');
+            if (firstCell) {
+                firstCell.style.borderLeft = '';
+            }
             
             // Clear ALL cell-level styling
             const allCells = row.querySelectorAll('td');
@@ -2001,6 +2082,14 @@ PulseApp.ui.alerts = (() => {
         updateResetButtonVisibility(hasCustomGuests);
         
         updateAlertSaveMessage(false);
+        
+        // Clear dragging state before forcing update
+        isSliderDragging = false;
+        
+        // Force dashboard update to refresh node row styling
+        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
+            PulseApp.ui.dashboard.updateDashboardTable();
+        }
     }
 
 
@@ -2025,6 +2114,7 @@ PulseApp.ui.alerts = (() => {
         loadSavedConfiguration: loadSavedConfiguration,
         updateNotificationStatus: updateNotificationStatus,
         checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts,
+        checkNodeWouldTriggerAlerts: checkNodeWouldTriggerAlerts,
         toggleNodeCustomThresholds: toggleNodeCustomThresholds,
         // updateNodeList removed - handled by dashboard.js now
         updateNodeThreshold: updateNodeThreshold,
