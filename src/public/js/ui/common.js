@@ -326,6 +326,10 @@ PulseApp.ui.common = (() => {
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
         const baseClasses = 'px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400';
         
+        // Check if node would trigger alerts
+        const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(text) || false;
+        const borderStyle = wouldTriggerAlerts ? 'style="border-left: 4px solid #f59e0b;"' : '';
+        
         // Check if we can make this node name clickable
         const hostUrl = PulseApp.utils.getHostUrl(text);
         let nodeContent = text;
@@ -336,7 +340,7 @@ PulseApp.ui.common = (() => {
         
         // Always create individual cells so first one can be sticky
         // Match the exact structure from backups tab that works
-        let html = `<${cellTag} class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeContent}</${cellTag}>`;
+        let html = `<${cellTag} class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50" ${borderStyle}>${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
             html += `<${cellTag} class="${baseClasses}"></${cellTag}>`;
