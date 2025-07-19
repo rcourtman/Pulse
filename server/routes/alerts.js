@@ -920,6 +920,11 @@ router.post('/config', async (req, res) => {
             createdAt: alertConfig.lastUpdated || new Date().toISOString()
         };
         
+        // Save state rules if provided
+        if (alertConfig.states && stateManager.alertManager.stateMonitor) {
+            await stateManager.alertManager.stateMonitor.saveStateRules(alertConfig.states);
+        }
+        
         // Check if the rule already exists
         if (!stateManager || !stateManager.alertManager) {
             console.error('[API] Alert manager not initialized:', {
@@ -1097,12 +1102,20 @@ router.get('/config', (req, res) => {
         const existingRule = allRules.find(r => r.id === 'per-guest-alerts');
         
         if (existingRule && existingRule.type === 'per_guest_thresholds') {
+            // Get state rules if available
+            let states = {};
+            if (stateManager.alertManager.stateMonitor) {
+                states = stateManager.alertManager.stateMonitor.getStateRules();
+            }
+            
             res.json({
                 success: true,
                 config: {
                     type: 'per_guest_thresholds',
                     globalThresholds: existingRule.globalThresholds || {},
                     guestThresholds: existingRule.guestThresholds || {},
+                    globalNodeThresholds: existingRule.globalNodeThresholds || {},
+                    nodeThresholds: existingRule.nodeThresholds || {},
                     alertLogic: existingRule.alertLogic || 'and',
                     duration: existingRule.duration || 0,
                     notifications: existingRule.notifications || {
@@ -1112,11 +1125,18 @@ router.get('/config', (req, res) => {
                     },
                     emailCooldowns: existingRule.emailCooldowns || {},
                     webhookCooldowns: existingRule.webhookCooldowns || {},
+                    states: states,
                     enabled: existingRule.enabled,
                     lastUpdated: existingRule.lastUpdated || existingRule.createdAt
                 }
             });
         } else {
+            // Get state rules if available
+            let states = {};
+            if (stateManager.alertManager.stateMonitor) {
+                states = stateManager.alertManager.stateMonitor.getStateRules();
+            }
+            
             // Return empty config if no per-guest rule exists
             res.json({
                 success: true,
@@ -1124,6 +1144,8 @@ router.get('/config', (req, res) => {
                     type: 'per_guest_thresholds',
                     globalThresholds: {},
                     guestThresholds: {},
+                    globalNodeThresholds: {},
+                    nodeThresholds: {},
                     alertLogic: 'and',
                     duration: 0,
                     notifications: {
@@ -1133,6 +1155,7 @@ router.get('/config', (req, res) => {
                     },
                     emailCooldowns: {},
                     webhookCooldowns: {},
+                    states: states,
                     enabled: true,
                     lastUpdated: null
                 }

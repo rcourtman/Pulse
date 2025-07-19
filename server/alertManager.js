@@ -9,6 +9,7 @@ const alertPatches = require('./alertManagerPatches');
 const DebounceHandler = require('./debounceHandler');
 const EmailService = require('./emailService');
 const alertHistory = require('./alertHistoryPersistence');
+const StateMonitor = require('./stateMonitor');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -95,6 +96,9 @@ class AlertManager extends EventEmitter {
         
         // Initialize alert groups
         this.initializeAlertGroups();
+        
+        // Initialize state monitor
+        this.stateMonitor = new StateMonitor(path.join(__dirname, '../data'));
         
         // Load persisted state
         this.loadAlertRules();
@@ -270,8 +274,23 @@ class AlertManager extends EventEmitter {
                         const threshold = nodeSpecificThresholds[metric] !== undefined 
                             ? nodeSpecificThresholds[metric] 
                             : globalNodeThresholds?.[metric];
+                        
+                        const alertKey = `node_${nodeId}_${metric}`;
+                        const existingAlert = this.activeAlerts.get(alertKey);
                             
-                        if (threshold === undefined || threshold === '') return;
+                        if (threshold === undefined || threshold === '') {
+                            // No threshold defined - resolve any existing alert
+                            if (existingAlert && existingAlert.type === 'node_threshold') {
+                                existingAlert.state = 'resolved';
+                                existingAlert.resolvedAt = timestamp;
+                                existingAlert.resolveReason = 'Threshold removed';
+                                this.resolveAlert(existingAlert).catch(error => {
+                                    console.error(`[AlertManager] Error resolving node alert: ${error}`);
+                                });
+                                console.log(`[AlertManager] Node alert resolved (threshold removed): ${existingAlert.message}`);
+                            }
+                            return;
+                        }
                         
                         let currentValue = 0;
                         if (metric === 'cpu' && node.cpu !== undefined) {
@@ -284,11 +303,10 @@ class AlertManager extends EventEmitter {
                             return; // Skip if metric not available
                         }
                         
-                        const alertKey = `node_${nodeId}_${metric}`;
-                        const existingAlert = this.activeAlerts.get(alertKey);
+                        console.log(`[AlertManager] Node ${nodeId} ${metric}: value=${currentValue.toFixed(1)}%, threshold=${threshold}%`);
                         
                         if (currentValue > threshold) {
-                            if (!existingAlert) {
+                            if (!existingAlert || existingAlert.state === 'resolved') {
                                 // Create new alert
                                 const alert = {
                                     id: `${alertKey}_${timestamp}`,
@@ -302,14 +320,24 @@ class AlertManager extends EventEmitter {
                                     state: 'active',
                                     severity: currentValue > threshold + 10 ? 'critical' : 'warning',
                                     message: `Node ${node.displayName || node.node}: ${metric.toUpperCase()}: ${currentValue.toFixed(0)}% (≥${threshold}%)`,
-                                    notificationChannels: this.determineNotificationChannels(perGuestRule?.notifications || { dashboard: true, email: false, webhook: false }),
+                                    notificationChannels: this.determineNotificationChannels(perGuestRule?.notifications || { dashboard: true, email: true, webhook: true }),
                                     rule: {
                                         id: 'per_guest_thresholds',
                                         name: `Node ${metric} threshold`,
                                         type: 'node_threshold',
                                         group: 'node_alerts',
                                         autoResolve: perGuestRule?.autoResolve ?? true,
-                                        notifications: perGuestRule?.notifications || { dashboard: true, email: false, webhook: false }
+                                        notifications: perGuestRule?.notifications || { dashboard: true, email: true, webhook: true },
+                                        emailCooldowns: perGuestRule?.emailCooldowns || {
+                                            cooldownMinutes: 15,
+                                            debounceMinutes: 2,
+                                            maxEmailsPerHour: 4
+                                        },
+                                        webhookCooldowns: perGuestRule?.webhookCooldowns || {
+                                            cooldownMinutes: 5,
+                                            debounceMinutes: 1,
+                                            maxCallsPerHour: 10
+                                        }
                                     }
                                 };
                                 
@@ -317,7 +345,7 @@ class AlertManager extends EventEmitter {
                                 newlyTriggeredAlerts.push(alert);
                                 console.log(`[AlertManager] Node alert triggered: ${alert.message}`);
                             }
-                        } else if (existingAlert && existingAlert.type === 'node_threshold') {
+                        } else if (existingAlert && existingAlert.type === 'node_threshold' && existingAlert.state !== 'resolved') {
                             // Resolve existing alert if value dropped below threshold
                             existingAlert.state = 'resolved';
                             existingAlert.resolvedAt = timestamp;
@@ -453,8 +481,16 @@ class AlertManager extends EventEmitter {
         // Initialize guest states on first run
         this.initializeGuestStates(guests);
         
-        // Process the metrics
+        // Process threshold-based alerts
         this.checkMetrics(guests, metricsData);
+        
+        // Process state-based alerts
+        const stateAlerts = this.stateMonitor.checkTransitions(guests);
+        
+        // Handle state alerts
+        for (const stateAlert of stateAlerts) {
+            this.handleStateAlert(stateAlert);
+        }
         
         // Return any new alerts that were triggered
         const newAlerts = [];
@@ -717,26 +753,51 @@ class AlertManager extends EventEmitter {
     }
     
     getEmailCooldownKey(alert) {
-        // Create a unique key for cooldown tracking per rule, guest, and metric
+        // Create a unique key for cooldown tracking per rule, guest/node, and metric
         const ruleId = alert.rule?.id || 'unknown';
-        const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        
+        // Handle node alerts differently - they use nodeId instead of guest
+        let entityId;
+        if (alert.type === 'node_threshold') {
+            entityId = `node-${alert.nodeId || 'unknown'}`;
+        } else {
+            entityId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        }
+        
         // Use alert.metric directly (for per-guest and node alerts) or fall back to rule.metric
         const metric = alert.metric || alert.rule?.metric || 'unknown';
-        return `${ruleId}-${guestId}-${metric}`;
+        return `${ruleId}-${entityId}-${metric}`;
     }
     
     getWebhookCooldownKey(alert) {
-        // Create a unique key for cooldown tracking per rule, guest, and metric
+        // Create a unique key for cooldown tracking per rule, guest/node, and metric
         const ruleId = alert.rule?.id || 'unknown';
-        const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        
+        // Handle node alerts differently - they use nodeId instead of guest
+        let entityId;
+        if (alert.type === 'node_threshold') {
+            entityId = `node-${alert.nodeId || 'unknown'}`;
+        } else {
+            entityId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        }
+        
         // Use alert.metric directly (for per-guest and node alerts) or fall back to rule.metric
         const metric = alert.metric || alert.rule?.metric || 'unknown';
-        return `${ruleId}-${guestId}-${metric}`;
+        return `${ruleId}-${entityId}-${metric}`;
     }
 
 
 
     async sendNotifications(alert) {
+        console.log(`[AlertManager] sendNotifications called for alert:`, {
+            id: alert.id,
+            type: alert.type,
+            metric: alert.metric,
+            nodeName: alert.nodeName,
+            guest: alert.guest,
+            rule: alert.rule
+        });
+        
         // Check if we've already sent notifications for this alert
         // Check both the notification status map and the alert's own flags
         const existingStatus = this.notificationStatus.get(alert.id);
@@ -3228,6 +3289,63 @@ class AlertManager extends EventEmitter {
     }
 
     /**
+     * Handle state-based alerts
+     */
+    handleStateAlert(stateAlert) {
+        const alertKey = stateAlert.id;
+        
+        // Create alert in standard format
+        const alert = {
+            id: stateAlert.id,
+            type: 'state_change',
+            ruleId: stateAlert.rule,
+            rule: {
+                id: stateAlert.rule,
+                type: 'state_change',
+                name: stateAlert.rule === 'vm_down' ? 'VM/Container Down' : 'VM/Container Up'
+            },
+            guest: {
+                endpointId: 'proxmox',
+                node: stateAlert.node,
+                vmid: parseInt(stateAlert.guestId),
+                name: stateAlert.guestName,
+                type: stateAlert.guestType
+            },
+            message: stateAlert.message,
+            severity: stateAlert.severity,
+            transition: {
+                from: stateAlert.from,
+                to: stateAlert.to
+            },
+            state: 'active',
+            triggeredAt: stateAlert.timestamp,
+            startTime: stateAlert.timestamp,
+            lastUpdate: stateAlert.timestamp,
+            acknowledged: false,
+            emailSent: false,
+            webhookSent: false
+        };
+        
+        // Add to active alerts
+        this.activeAlerts.set(alertKey, alert);
+        
+        // Emit event for UI update
+        this.emit('alert', {
+            type: 'trigger',
+            alert: alert
+        });
+        
+        // Trigger notifications
+        this.sendNotifications(alert);
+        
+        // Save alerts
+        this.saveActiveAlerts();
+        
+        // Add to history
+        alertHistory.addAlert(alert);
+    }
+
+    /**
      * Save active alerts to disk
      */
     async saveActiveAlerts() {
@@ -3443,9 +3561,13 @@ class AlertManager extends EventEmitter {
         // Common header for all emails
         const header = `
             <div style="background: linear-gradient(135deg, #1f2937, #111827); color: white; padding: 24px; border-bottom: 3px solid #2563eb;">
-                <div style="margin-bottom: 12px;">
-                    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em;">Pulse</h1>
-                    <div style="font-size: 12px; opacity: 0.7; margin-top: 2px;">Alert Notification System</div>
+                <div style="margin-bottom: 12px; display: flex; align-items: center;">
+                    <img src="data:image/png;base64,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" 
+                         width="40" height="40" style="margin-right: 12px;" alt="Pulse Logo">
+                    <div>
+                        <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em;">Pulse</h1>
+                        <div style="font-size: 12px; opacity: 0.7; margin-top: 2px;">Alert Notification System</div>
+                    </div>
                 </div>
                 <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 12px;">
                     <h2 style="margin: 0; font-size: 16px; font-weight: 500;">${data.title}</h2>
@@ -3521,17 +3643,17 @@ class AlertManager extends EventEmitter {
                                 </div>
                             `).join('') :
                             // For single metric alerts
-                            `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                                <span style="font-weight: 500; color: #374151;">Metric</span>
-                                <span style="font-family: monospace; color: #6b7280;">${alert.metric}</span>
+                            `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                                <span style="font-weight: 500; color: #374151; min-width: 120px;">Metric</span>
+                                <span style="font-family: monospace; color: #6b7280; font-weight: 600;">${alert.metric}</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                                <span style="font-weight: 500; color: #374151;">Current Value</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                                <span style="font-weight: 500; color: #374151; min-width: 120px;">Current Value</span>
                                 <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600;">${alert.currentValue}</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
-                                <span style="font-weight: 500; color: #374151;">Threshold</span>
-                                <span style="font-family: monospace; color: #6b7280;">${alert.threshold}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                                <span style="font-weight: 500; color: #374151; min-width: 120px;">Threshold</span>
+                                <span style="font-family: monospace; color: #6b7280; font-weight: 600;">${alert.threshold}</span>
                             </div>`
                         }
                     </div>
@@ -3730,6 +3852,14 @@ class AlertManager extends EventEmitter {
     }
 
     async sendDirectEmailNotification(alert) {
+        console.log(`[AlertManager] sendDirectEmailNotification called for alert:`, {
+            id: alert.id,
+            type: alert.type,
+            metric: alert.metric,
+            nodeName: alert.nodeName,
+            guest: alert.guest
+        });
+        
         if (!this.emailTransporter) {
             throw new Error('Email transporter not configured');
         }
@@ -3904,7 +4034,21 @@ This alert was generated by Pulse monitoring system.
             html: html
         };
 
-        await this.emailTransporter.sendMail(mailOptions);
+        console.log(`[AlertManager] Sending email for ${alert.type} alert:`, {
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            alertType: alert.type,
+            alertId: alert.id
+        });
+        
+        try {
+            const result = await this.emailTransporter.sendMail(mailOptions);
+            console.log(`[AlertManager] Email sent successfully:`, result);
+        } catch (error) {
+            console.error(`[AlertManager] Email send failed:`, error);
+            throw error;
+        }
     }
     
     cleanup() {
@@ -4617,13 +4761,17 @@ Pulse Monitoring System`,
             
             const globalThresholds = thresholdConfig.globalThresholds || {};
             const guestThresholds = thresholdConfig.guestThresholds || {};
+            const nodeThresholds = thresholdConfig.nodeThresholds || {};
+            const globalNodeThresholds = thresholdConfig.globalNodeThresholds || {};
             const alertDuration = thresholdConfig.duration || 0; // Get duration from config
             const timestamp = Date.now();
             
             console.log('[AlertManager] Evaluating simple thresholds:', {
                 globalThresholds,
                 guestCount: allGuestMetrics.size,
-                alertDuration
+                alertDuration,
+                nodeThresholds: Object.keys(nodeThresholds).length,
+                globalNodeThresholds
             });
             
             const fsSync = require('fs');
@@ -4650,6 +4798,30 @@ Pulse Monitoring System`,
                     console.error(`[AlertManager] Error evaluating alerts for ${guest.name}:`, error);
                     console.error(`[AlertManager] Stack trace:`, error.stack);
                     fsSync.appendFileSync('/opt/pulse/alert-debug.log', `[${new Date().toISOString()}] ERROR evaluating ${guest.name}: ${error.message}\n${error.stack}\n`);
+                }
+            }
+            
+            // Check node metrics if we have node thresholds configured
+            if (Object.keys(nodeThresholds).length > 0 || Object.keys(globalNodeThresholds).length > 0) {
+                console.log('[AlertManager] Checking node metrics with thresholds');
+                const stateManager = require('./state');
+                const currentState = stateManager.getState();
+                const nodes = currentState?.nodes || [];
+                
+                if (nodes.length > 0) {
+                    await this.checkNodeMetrics(nodes, nodeThresholds, globalNodeThresholds);
+                    
+                    // Also check node state transitions
+                    const StateMonitor = require('./stateMonitor');
+                    if (!this.stateMonitor) {
+                        this.stateMonitor = new StateMonitor();
+                    }
+                    const nodeStateAlerts = this.stateMonitor.checkNodeTransitions(nodes);
+                    for (const alert of nodeStateAlerts) {
+                        await this.triggerAlert(alert);
+                    }
+                } else {
+                    console.log('[AlertManager] No nodes found to check');
                 }
             }
             
@@ -4702,7 +4874,17 @@ Pulse Monitoring System`,
         const existingAlert = this.activeAlerts.get(alertKey);
         
         const alertName = `${guest.name} - ${this.getReadableMetricName(metricType)}`;
-        const metricDetail = `${this.formatMetricValue(metricResult.currentValue, metricType)} (≥${this.formatMetricValue(metricResult.threshold, metricType)})`;
+        let metricDetail;
+        let description;
+        
+        if (metricType === 'status') {
+            // Special handling for status alerts
+            metricDetail = guest.status || 'Unknown';
+            description = `VM/LXC is ${metricResult.currentValue >= 1 ? 'down' : 'up'}`;
+        } else {
+            metricDetail = `${this.formatMetricValue(metricResult.currentValue, metricType)} (≥${this.formatMetricValue(metricResult.threshold, metricType)})`;
+            description = `${this.getReadableMetricName(metricType)} threshold exceeded`;
+        }
         
         if (!existingAlert) {
             // Create new individual alert
@@ -4714,7 +4896,7 @@ Pulse Monitoring System`,
                 rule: {
                     id: `guest-${metricType}`,
                     name: alertName,
-                    description: `${this.getReadableMetricName(metricType)} threshold exceeded`,
+                    description: description,
                     group: 'guest_threshold',
                     tags: [metricType],
                     type: 'guest_threshold',
@@ -4730,7 +4912,7 @@ Pulse Monitoring System`,
                     lastUpdate: timestamp,
                     state: alertDuration === 0 ? 'active' : 'pending', // If duration is 0, trigger immediately
                     acknowledged: false,
-                    message: `${alertName}: ${metricDetail}`,
+                    message: metricType === 'status' ? `${guest.name} is ${metricResult.currentValue >= 1 ? 'down' : 'up'}` : `${alertName}: ${metricDetail}`,
                     notificationChannels: this.determineNotificationChannels(notificationSettings),
                     emailSent: false,
                     webhookSent: false,
