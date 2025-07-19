@@ -837,6 +837,20 @@ PulseApp.ui.dashboard = (() => {
                     }
                 }
             });
+            
+            // Also update the yellow border on the first cell
+            const firstCell = row.querySelector('td:first-child');
+            if (firstCell) {
+                const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(nodeName) || false;
+                if (wouldTriggerAlerts) {
+                    firstCell.style.borderLeft = '4px solid #f59e0b';
+                } else {
+                    firstCell.style.borderLeft = '';
+                }
+            }
+        } else {
+            // Non-alerts mode - update border using common function
+            row.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
         }
     }
 
@@ -1342,6 +1356,9 @@ PulseApp.ui.dashboard = (() => {
         const nodeThreshold = nodeThresholds[nodeName] || globalNodeThresholds;
         const hasCustom = nodeThresholds[nodeName] && Object.keys(nodeThresholds[nodeName]).length > 0;
         
+        // Check if node would trigger alerts
+        const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(nodeName) || false;
+        
         // Get host URL for the node
         const hostUrl = PulseApp.utils.getHostUrl(nodeName);
         let nodeLink = nodeName;
@@ -1354,8 +1371,9 @@ PulseApp.ui.dashboard = (() => {
         
         let nodeContent = nodeLink;
         
-        // Create HTML matching the normal mode structure
-        let html = `<td class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeContent}</td>`;
+        // Create HTML matching the normal mode structure, with conditional border
+        const borderStyle = wouldTriggerAlerts ? 'style="border-left: 4px solid #f59e0b;"' : '';
+        let html = `<td class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50" ${borderStyle}>${nodeContent}</td>`;
         
         // Empty cells for type, status, uptime
         html += `<td class="${baseClasses}"></td>`; // Type
@@ -1641,6 +1659,17 @@ PulseApp.ui.dashboard = (() => {
         // Check if alerts mode is active
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
+        // Check if guest would trigger alerts (for all modes, not just alerts mode)
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.checkGuestWouldTriggerAlerts) {
+            const guestThresholds = PulseApp.ui.alerts.getGuestThresholds()[guest.id] || {};
+            const wouldTriggerAlerts = PulseApp.ui.alerts.checkGuestWouldTriggerAlerts(guest.id, guestThresholds);
+            
+            if (wouldTriggerAlerts) {
+                // This will be applied to the first cell after it's created
+                row.setAttribute('data-would-trigger-alert', 'true');
+            }
+        }
+        
         if (isAlertsMode) {
             // Remove all dimming in alerts mode
             row.style.opacity = '';
@@ -1768,6 +1797,12 @@ PulseApp.ui.dashboard = (() => {
             </div>
         `;
         const stickyNameCell = PulseApp.ui.common.createStickyColumn(nameContent, { title: guest.name });
+        
+        // Apply yellow border if guest would trigger alerts
+        if (row.getAttribute('data-would-trigger-alert') === 'true') {
+            stickyNameCell.style.borderLeft = '4px solid #f59e0b';
+        }
+        
         row.appendChild(stickyNameCell);
         
         // Create regular cells
