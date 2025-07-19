@@ -639,11 +639,12 @@ PulseApp.utils = (() => {
             isUsingGlobal = true;
         }
         
+        
         const selectId = `alert-select-${entityId}-${metricType}`;
         const selectHtml = PulseApp.ui.thresholds.createThresholdSelectHtml(
             selectId, 
             options, 
-            currentValue
+            currentValue.toString()  // Ensure it's a string for comparison
         );
         
         return selectHtml;

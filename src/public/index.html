@@ -1286,13 +1286,13 @@
             <!-- Main Controls -->
             <div class="space-y-4">
               <!-- Top row with main controls -->
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center gap-4">
                   <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Alert Settings</span>
-                  <div class="flex flex-wrap items-center gap-3">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
-                      <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
+                  <div class="flex items-center gap-3 text-xs">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-gray-600 dark:text-gray-400">Duration:</span>
+                      <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-blue-500">
                         <option value="0" selected>Instant</option>
                         <option value="10000">10s</option>
                         <option value="30000">30s</option>
@@ -1301,96 +1301,70 @@
                         <option value="600000">10m</option>
                       </select>
                     </div>
-                    <label class="inline-flex items-center gap-2 cursor-pointer" title="Automatically clear alerts when thresholds return to normal">
-                      <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
-                      <input type="checkbox" id="alert-auto-resolve-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" id="alert-auto-resolve-toggle" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
+                      <span class="text-gray-600 dark:text-gray-400">Auto-resolve</span>
                     </label>
                   </div>
                 </div>
-                <div class="flex items-center gap-3 sm:ml-auto">
+                <div class="flex items-center gap-2">
                   <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
-                  <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+                  <button id="save-alert-config" class="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
                     Save
                   </button>
                 </div>
               </div>
               
               
-              <!-- Cooldown Settings in a grid layout -->
-              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <!-- Email Settings Card -->
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                  <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Email Notifications</h4>
-                    <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" id="alert-email-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+              <!-- Notification Settings -->
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="alert-email-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                  <span class="text-xs text-gray-700 dark:text-gray-300">Email notifications</span>
+                </label>
+                <button id="test-email-alert" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">
+                  Test Email
+                </button>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="alert-webhook-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                  <span class="text-xs text-gray-700 dark:text-gray-300">Webhook notifications</span>
+                </label>
+                <button id="test-webhook-alert" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">
+                  Test Webhook
+                </button>
+              </div>
+            </div>
+            
+            
+            <!-- Status Monitoring Section -->
+            <div class="mt-4">
+              <div class="border-t border-blue-200 dark:border-blue-600 pt-4">
+                <h4 class="text-sm font-medium text-blue-700 dark:text-blue-300 mb-3">Status Monitoring</h4>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <!-- Nodes column -->
+                  <div>
+                    <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Nodes</h5>
+                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
+                      <input type="checkbox" id="alert-node-down" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
+                      <span class="text-xs text-gray-700 dark:text-gray-300">Offline alerts</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
+                      <input type="checkbox" id="alert-node-up" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                      <span class="text-xs text-gray-700 dark:text-gray-300">Online alerts</span>
                     </label>
                   </div>
-                  <div id="email-cooldown-settings" style="display: none;">
-                    <div class="space-y-3 mb-4">
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-cooldown-minutes">Time between emails:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-debounce-minutes">Wait before first email:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-max-emails-hour">Max emails per hour:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button id="test-email-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test email notification">
-                      Test Email
-                    </button>
-                  </div>
-                </div>
-                
-                <!-- Webhook Settings Card -->
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                  <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Webhook Notifications</h4>
-                    <label class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" id="alert-webhook-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                  
+                  <!-- VMs/Containers column -->
+                  <div>
+                    <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">VMs/Containers</h5>
+                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
+                      <input type="checkbox" id="alert-vm-down" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
+                      <span class="text-xs text-gray-700 dark:text-gray-300">Down alerts</span>
                     </label>
-                  </div>
-                  <div id="webhook-cooldown-settings" style="display: none;">
-                    <div class="space-y-3 mb-4">
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-cooldown-minutes">Time between webhooks:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="webhook-cooldown-minutes" min="1" max="120" value="5" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-debounce-minutes">Wait before first webhook:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="webhook-debounce-minutes" min="0" max="30" value="1" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
-                        </div>
-                      </div>
-                      <div class="flex items-center justify-between">
-                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-max-calls-hour">Max calls per hour:</label>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input type="number" id="webhook-max-calls-hour" min="1" max="50" value="10" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button id="test-webhook-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test webhook notification">
-                      Test Webhook
-                    </button>
+                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
+                      <input type="checkbox" id="alert-vm-up" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                      <span class="text-xs text-gray-700 dark:text-gray-300">Up alerts</span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -1673,12 +1647,12 @@
   <script src="/js/charts.js" defer></script>
   <script src="/js/ui/toastNotifications.js" defer></script>
   <script src="/js/ui/thresholds.js" defer></script>
-  <script src="/js/ui/alerts.js" defer></script>
+  <script src="/js/ui/alerts.js?v=3" defer></script>
   <script src="/js/ui/empty-states.js" defer></script>
   <script src="/js/ui/loading-skeletons.js" defer></script>
   <script src="/js/ui/common.js" defer></script>
   <script src="/js/ui/nodes.js" defer></script>
-  <script src="/js/ui/dashboard.js" defer></script>
+  <script src="/js/ui/dashboard.js?v=5" defer></script>
   <script src="/js/ui/storage.js" defer></script>
   <script src="/js/ui/backups.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
@@ -1686,6 +1660,7 @@
   <script src="/js/alertsHandler.js" defer></script>
   <script src="/js/hotReload.js" defer></script>
   <script src="/js/main.js" defer></script>
+
 
   <footer class="text-center text-xs text-gray-500 py-4">
     Pulse | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
