@@ -211,6 +211,34 @@ If running Pulse inside an LXC container on the Proxmox host you're monitoring:
 
 ### Performance Issues
 
+**Excessive DNS Queries / DNS Rate Limiting:**
+
+If your DNS server (e.g., Pi-hole) is reporting high query rates or rate limiting Pulse:
+
+**Cause:** Pulse polls metrics every 2 seconds by default for responsive monitoring. With multiple hosts using hostnames, this can create many DNS lookups.
+
+**Solutions (choose based on your needs):**
+
+1. **For responsive monitoring with reduced DNS load:**
+   - Use IP addresses instead of hostnames in your configuration
+   - This maintains 2-second updates without DNS lookups
+
+2. **If hostnames are required:**
+   - Increase the metrics interval to reduce DNS queries:
+   ```bash
+   # Add to your .env file
+   PULSE_METRIC_INTERVAL_MS=5000  # 5 seconds
+   # or
+   PULSE_METRIC_INTERVAL_MS=10000 # 10 seconds
+   ```
+   - Trade-off: Less responsive metric updates
+
+3. **Configure your DNS server:**
+   - Increase cache time for Proxmox hostnames
+   - Whitelist Pulse in your DNS rate limiter
+
+**Note:** We've increased the internal DNS cache from 1 to 5 minutes to help reduce queries, but with 2-second polling, DNS lookups still occur when using hostnames.
+
 **High Memory Usage:**
 - Reduce `BACKUP_HISTORY_DAYS` (default 365)
 - Normal memory usage: 100-200MB
