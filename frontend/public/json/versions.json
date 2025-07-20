@@ -1,8 +1,48 @@
 [
   {
+    "name": "fallenbagel/jellyseerr",
+    "version": "preview-fix-proxy-interceptors",
+    "date": "2025-07-19T22:14:56Z"
+  },
+  {
+    "name": "Luligu/matterbridge",
+    "version": "3.1.5",
+    "date": "2025-07-19T21:50:47Z"
+  },
+  {
+    "name": "ellite/Wallos",
+    "version": "v3.3.1",
+    "date": "2025-07-19T20:51:00Z"
+  },
+  {
+    "name": "pelican-dev/panel",
+    "version": "v1.0.0-beta23",
+    "date": "2025-07-19T19:49:28Z"
+  },
+  {
+    "name": "pelican-dev/wings",
+    "version": "v1.0.0-beta15",
+    "date": "2025-07-19T19:46:52Z"
+  },
+  {
+    "name": "MediaBrowser/Emby.Releases",
+    "version": "4.9.1.2",
+    "date": "2025-06-26T22:08:00Z"
+  },
+  {
+    "name": "open-webui/open-webui",
+    "version": "v0.6.18",
+    "date": "2025-07-19T19:26:14Z"
+  },
+  {
+    "name": "msgbyte/tianji",
+    "version": "v1.24.3",
+    "date": "2025-07-19T13:12:44Z"
+  },
+  {
     "name": "bunkerity/bunkerweb",
-    "version": "v1.6.3-rc1",
-    "date": "2025-07-19T11:19:52Z"
+    "version": "v1.6.2",
+    "date": "2025-07-08T13:52:33Z"
   },
   {
     "name": "pocketbase/pocketbase",
@@ -58,11 +98,6 @@
     "name": "homarr-labs/homarr",
     "version": "v1.29.0",
     "date": "2025-07-18T19:17:21Z"
-  },
-  {
-    "name": "msgbyte/tianji",
-    "version": "v1.24.1",
-    "date": "2025-07-18T17:40:16Z"
   },
   {
     "name": "theonedev/onedev",
@@ -175,11 +210,6 @@
     "date": "2025-07-16T21:53:45Z"
   },
   {
-    "name": "Luligu/matterbridge",
-    "version": "3.1.4",
-    "date": "2025-07-16T20:53:12Z"
-  },
-  {
     "name": "plexguide/Huntarr.io",
     "version": "8.1.15",
     "date": "2025-07-16T18:06:03Z"
@@ -250,11 +280,6 @@
     "date": "2025-07-15T14:43:59Z"
   },
   {
-    "name": "fallenbagel/jellyseerr",
-    "version": "v2.7.1",
-    "date": "2025-07-15T14:22:46Z"
-  },
-  {
     "name": "element-hq/synapse",
     "version": "v1.134.0",
     "date": "2025-07-15T13:43:39Z"
@@ -295,11 +320,6 @@
     "date": "2025-07-14T18:59:57Z"
   },
   {
-    "name": "open-webui/open-webui",
-    "version": "v0.6.16",
-    "date": "2025-07-14T17:39:38Z"
-  },
-  {
     "name": "prometheus/prometheus",
     "version": "v3.5.0",
     "date": "2025-07-14T16:54:21Z"
@@ -313,11 +333,6 @@
     "name": "homebridge/homebridge",
     "version": "v1.11.0",
     "date": "2025-07-13T19:22:47Z"
-  },
-  {
-    "name": "MediaBrowser/Emby.Releases",
-    "version": "4.9.1.2",
-    "date": "2025-06-26T22:08:00Z"
   },
   {
     "name": "mayswind/AriaNg",
@@ -533,16 +548,6 @@
     "name": "slskd/slskd",
     "version": "0.23.1",
     "date": "2025-07-06T23:57:52Z"
-  },
-  {
-    "name": "pelican-dev/panel",
-    "version": "v1.0.0-beta22",
-    "date": "2025-07-06T21:16:00Z"
-  },
-  {
-    "name": "pelican-dev/wings",
-    "version": "v1.0.0-beta14",
-    "date": "2025-07-06T21:07:07Z"
   },
   {
     "name": "bluenviron/mediamtx",
@@ -853,11 +858,6 @@
     "name": "glanceapp/glance",
     "version": "v0.8.4",
     "date": "2025-06-10T07:57:14Z"
-  },
-  {
-    "name": "ellite/Wallos",
-    "version": "v3.3.0",
-    "date": "2025-06-09T15:58:04Z"
   },
   {
     "name": "seanmorley15/AdventureLog",
