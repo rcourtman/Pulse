@@ -4,7 +4,7 @@ const lookup = promisify(require('dns').lookup);
 
 // Cache for DNS resolutions with size limit
 const dnsCache = new Map();
-const DNS_CACHE_TTL = 60000; // 1 minute cache
+const DNS_CACHE_TTL = 300000; // 5 minutes cache (increased from 1 minute to reduce DNS queries)
 const DNS_CACHE_MAX_SIZE = 1000; // Maximum number of cached entries
 
 // Clean up old cache entries periodically
