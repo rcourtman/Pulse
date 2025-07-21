@@ -323,24 +323,22 @@ PulseApp.ui.common = (() => {
         }
     }
 
-    function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
+    function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td', wouldTriggerAlerts = null) {
         const baseClasses = 'px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400';
-        
-        // Check if node would trigger alerts
-        const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(text) || false;
-        const borderStyle = wouldTriggerAlerts ? 'style="border-left: 4px solid #f59e0b;"' : '';
         
         // Check if we can make this node name clickable
         const hostUrl = PulseApp.utils.getHostUrl(text);
-        let nodeContent = text;
+        let nodeLink = text;
         
         if (hostUrl) {
-            nodeContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
+            nodeLink = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
         }
+        
+        let nodeContent = nodeLink;
         
         // Always create individual cells so first one can be sticky
         // Match the exact structure from backups tab that works
-        let html = `<${cellTag} class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50" ${borderStyle}>${nodeContent}</${cellTag}>`;
+        let html = `<${cellTag} class="sticky left-0 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
             html += `<${cellTag} class="${baseClasses}"></${cellTag}>`;
@@ -384,7 +382,9 @@ PulseApp.ui.common = (() => {
         const element = document.createElement(tag);
         // Add grey text color for td elements unless already has text color or disabled
         const textColorClass = includeTextColor && tag === 'td' && !additionalClasses.includes('text-') ? 'text-gray-700 dark:text-gray-300' : '';
-        element.className = `sticky left-0 z-10 ${padding} align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 ${textColorClass} ${additionalClasses}`.trim();
+        // Add background to prevent content from showing through
+        const bgClass = tag === 'td' ? 'bg-white dark:bg-gray-800' : '';
+        element.className = `sticky left-0 z-10 ${padding} align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 ${bgClass} ${textColorClass} ${additionalClasses}`.trim();
         
         if (title) {
             element.title = title;

@@ -1,4 +1,5 @@
 const AlertManager = require('./alertManager');
+const StateMonitor = require('./stateMonitor');
 
 const state = {
   nodes: [],
@@ -52,8 +53,11 @@ const state = {
   aggregatedPbsTaskSummary: {}
 };
 
-// Initialize alert manager
-const alertManager = new AlertManager();
+// Initialize state monitor first
+const stateMonitor = new StateMonitor('/opt/pulse/data');
+
+// Initialize alert manager with the same state monitor instance
+const alertManager = new AlertManager(stateMonitor);
 
 // Track performance metrics
 let performanceHistory = [];
@@ -193,6 +197,20 @@ function updateDiscoveryData({ nodes, vms, containers, pbs, pveBackups, allPbsTa
     addPerformanceSnapshot('discovery', duration, errors.length);
     
     console.log(`[State Manager] Discovery update completed. Duration: ${duration}ms, Errors: ${errors.length}`);
+    
+    // Check for state transitions after discovery update
+    // This is critical because container/VM status changes are detected during discovery
+    const allGuests = [...state.vms, ...state.containers];
+    if (allGuests.length > 0) {
+      const stateAlerts = stateMonitor.checkTransitions(allGuests);
+      if (stateAlerts.length > 0) {
+        // Process state alerts through alertManager for proper handling
+        for (const alert of stateAlerts) {
+          // Use alertManager's handleStateAlert for proper resolution logic
+          alertManager.handleStateAlert(alert);
+        }
+      }
+    }
     
   } catch (error) {
     console.error('[State Manager] Error updating discovery data:', error);
@@ -351,30 +369,65 @@ function addPerformanceSnapshot(type, duration, errorCount) {
 async function checkAlertsForMetrics() {
   try {
     const allGuests = [...state.vms, ...state.containers];
-    console.log(`[State Manager] Checking alerts for ${allGuests.length} guests`);
     
-    // Write to debug file
-    const fs = require('fs');
-    fs.appendFileSync('/opt/pulse/state-debug.log', `[${new Date().toISOString()}] checkAlertsForMetrics called with ${allGuests.length} guests\n`);
+    // First reconcile state alerts - this handles stopped containers on startup
+    await alertManager.reconcileStateAlerts(allGuests);
     
-    // Log a sample of guest data to see what we're working with
-    if (allGuests.length > 0) {
-      const sampleGuest = allGuests[0];
-      console.log(`[State Manager] Sample guest data:`, {
-        name: sampleGuest.name,
-        disk: sampleGuest.disk,
-        maxdisk: sampleGuest.maxdisk,
-        status: sampleGuest.status
-      });
-      fs.appendFileSync('/opt/pulse/state-debug.log', `[${new Date().toISOString()}] Sample: ${sampleGuest.name} disk=${sampleGuest.disk} maxdisk=${sampleGuest.maxdisk}\n`);
-    }
-    
+    // Then check metrics
     await alertManager.checkMetrics(allGuests, state.metrics);
     
     // Also check node alerts if we have per-guest threshold rule with node thresholds
     const perGuestRule = alertManager.getRules().find(r => r.type === 'per_guest_thresholds' && r.enabled);
     if (perGuestRule && (perGuestRule.nodeThresholds || perGuestRule.globalNodeThresholds)) {
       await alertManager.checkNodeMetrics(state.nodes, perGuestRule.nodeThresholds, perGuestRule.globalNodeThresholds);
+    }
+    
+    // Check for state transitions (VM/container up/down)
+    const stateAlerts = stateMonitor.checkTransitions(allGuests);
+    for (const alert of stateAlerts) {
+      // Use alertManager's handleStateAlert for proper resolution logic
+      alertManager.handleStateAlert(alert);
+    }
+    
+    // Check for node state transitions
+    const nodeStateAlerts = stateMonitor.checkNodeTransitions(state.nodes);
+    for (const alert of nodeStateAlerts) {
+      // Format node state alert for AlertManager
+      const formattedAlert = {
+        id: alert.id,
+        rule: { 
+          id: alert.rule,
+          name: alert.rule,
+          type: 'node_state_change',
+          notifications: perGuestRule ? perGuestRule.notifications : { dashboard: true, email: true, webhook: true }
+        },
+        guest: {
+          name: alert.nodeName,
+          vmid: 'node',
+          node: alert.nodeId,
+          type: 'node',
+          endpointId: alert.nodeId
+        },
+        type: 'node_state_change',
+        state: 'active',
+        startTime: alert.timestamp,
+        triggeredAt: alert.timestamp,
+        lastUpdate: alert.timestamp,
+        currentValue: alert.to,
+        threshold: null,
+        message: alert.message,
+        severity: alert.severity,
+        group: alert.group,
+        acknowledged: false,
+        emailSent: false,
+        webhookSent: false,
+        notificationChannels: alertManager.determineNotificationChannels({ dashboard: true, email: true, webhook: true })
+      };
+      
+      // Add to active alerts
+      const alertKey = `node_state_${alert.nodeId}_${alert.rule}`;
+      alertManager.activeAlerts.set(alertKey, formattedAlert);
+      await alertManager.triggerAlert(formattedAlert);
     }
   } catch (error) {
     console.error('[State Manager] Error checking alerts:', error);

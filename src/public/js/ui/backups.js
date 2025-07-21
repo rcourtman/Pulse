@@ -16,11 +16,19 @@ let unified = {
 
 const CHART_MODE_KEY = 'unified-backups-chart-mode';
 const FILTER_STATE_KEY = 'unified-backups-filters';
+const TIMESTAMP_DISPLAY_KEY = 'unified-backups-timestamp-display';
 
 function initializeUnifiedBackups() {
     if (!document.getElementById('tab-content-unified')) return;
     
     unified.mounted = true;
+    
+    // Restore timestamp display preference
+    const savedTimestampDisplay = localStorage.getItem(TIMESTAMP_DISPLAY_KEY) || 'relative';
+    const timestampRadio = document.querySelector(`input[name="timestamp-display"][value="${savedTimestampDisplay}"]`);
+    if (timestampRadio) {
+        timestampRadio.checked = true;
+    }
     
     setupEventListeners();
     initializeBackupFrequencyChart();
@@ -338,7 +346,7 @@ function renderUnifiedTable(skipTransition = false) {
                     <td class="p-1 px-2 whitespace-nowrap">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap font-medium">${item.vmid}</td>
                     <td class="p-1 px-2 whitespace-nowrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="handleNodeClick('${item.node}')">${item.node}</td>
-                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${formatFullTime(item.backupTime)}">${formatTime(item.backupTime)}</td>
+                    <td class="p-1 px-2 whitespace-nowrap text-xs ${ageColor}" title="${getTimestampDisplay() === 'relative' ? formatFullTime(item.backupTime) : formatTime(item.backupTime)}">${getTimestampDisplay() === 'relative' ? formatTime(item.backupTime) : formatFullTime(item.backupTime)}</td>
                     <td class="p-1 px-2 whitespace-nowrap ${getSizeColor(item.size)}">${item.size ? formatBytes(item.size) : '-'}</td>
                     <td class="p-1 px-2 whitespace-nowrap">${getBackupTypeIcon(item.backupType)}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-center">${getStatusIcon(item)}</td>
@@ -440,15 +448,17 @@ function groupByDate(data) {
         const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         
         let label;
+        const month = months[date.getMonth()];
+        const day = date.getDate();
+        const suffix = getDaySuffix(day);
+        const absoluteDate = `${month} ${day}${suffix}`;
+        
         if (dateOnly.getTime() === today.getTime()) {
-            label = 'Today';
+            label = getTimestampDisplay() === 'absolute' ? `Today (${absoluteDate})` : 'Today';
         } else if (dateOnly.getTime() === yesterday.getTime()) {
-            label = 'Yesterday';
+            label = getTimestampDisplay() === 'absolute' ? `Yesterday (${absoluteDate})` : 'Yesterday';
         } else {
-            const month = months[date.getMonth()];
-            const day = date.getDate();
-            const suffix = getDaySuffix(day);
-            label = `${month} ${day}${suffix}`;
+            label = absoluteDate;
         }
         
         if (!grouped[label]) {
@@ -545,19 +555,15 @@ function formatFullTime(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp * 1000);
     
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                    'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     const month = months[date.getMonth()];
     const day = date.getDate();
-    const suffix = getDaySuffix(day);
-    
-    const hours = date.getHours();
+    const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
     
-    return `${month} ${day}${suffix}, ${hour12}:${minutes} ${ampm}`;
+    return `${day} ${month} ${hours}:${minutes}`;
 }
 
 function getDaySuffix(day) {
@@ -567,6 +573,21 @@ function getDaySuffix(day) {
         case 2: return 'nd';
         case 3: return 'rd';
         default: return 'th';
+    }
+}
+
+function getTimestampDisplay() {
+    const radio = document.querySelector('input[name="timestamp-display"]:checked');
+    return radio ? radio.value : 'relative';
+}
+
+function updateTimestampToggleVisualState() {
+    // Since we're using CSS adjacent sibling selector, the visual state should update automatically
+    // This function is here for any additional visual updates if needed in the future
+    const checkedRadio = document.querySelector('input[name="timestamp-display"]:checked');
+    if (checkedRadio) {
+        // Force reflow to ensure CSS updates are applied
+        checkedRadio.offsetHeight;
     }
 }
 
@@ -648,6 +669,20 @@ function setupEventListeners() {
             updateBackupFrequencyChart();
         });
     });
+    
+    // Timestamp display toggle
+    document.querySelectorAll('input[name="timestamp-display"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            localStorage.setItem(TIMESTAMP_DISPLAY_KEY, e.target.value);
+            renderUnifiedTable();
+            
+            // Update visual state for custom toggle styling
+            updateTimestampToggleVisualState();
+        });
+    });
+    
+    // Initialize visual state on load
+    updateTimestampToggleVisualState();
     
     // Reset button
     const resetButton = document.getElementById('unified-reset-button');
