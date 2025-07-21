@@ -542,6 +542,9 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function _renderGroupedByNode(tableBody, sortedData, createRowFn) {
+        const fnStartTime = performance.now();
+        console.log(`[_renderGroupedByNode] Starting with ${sortedData.length} guests`);
+        
         const nodeGroups = {};
         let visibleNodes = new Set();
         let visibleCount = 0;
@@ -552,100 +555,84 @@ PulseApp.ui.dashboard = (() => {
             nodeGroups[nodeName].push(guest);
         });
         
-        // Instead of clearing, update existing rows and track what needs to be removed
-        const existingNodeHeaders = new Map();
-        const existingGuestRows = new Map();
-        
-        // Collect existing rows
-        Array.from(tableBody.children).forEach(row => {
-            if (row.classList.contains('node-header')) {
-                // Try to find node name from different sources depending on mode
-                let nodeName = null;
-                
-                // In alerts mode, look for the link or button with data-node
-                const nodeButton = row.querySelector('button[data-node]');
-                if (nodeButton) {
-                    nodeName = nodeButton.getAttribute('data-node');
-                } else {
-                    // In normal mode or as fallback, get text from first td
-                    const firstTd = row.querySelector('td');
-                    if (firstTd) {
-                        // Extract just the text, ignoring any child elements
-                        nodeName = firstTd.textContent.split('\n')[0].trim();
-                    }
-                }
-                
-                if (nodeName) {
-                    existingNodeHeaders.set(nodeName, row);
-                }
-            } else if (row.hasAttribute('data-id')) {
-                existingGuestRows.set(row.getAttribute('data-id'), row);
-            }
-        });
-        
-        // Track rows that should be kept
-        const rowsToKeep = new Set();
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         // Process nodes in order
         const sortedNodeNames = Object.keys(nodeGroups).sort();
-        let currentIndex = 0;
         
+        // Build all rows in a fragment first
+        const fragment = document.createDocumentFragment();
+        
+        // Add node headers and their guests together
         sortedNodeNames.forEach(nodeName => {
             visibleNodes.add(nodeName.toLowerCase());
             
-            // Get or create node header
-            let nodeHeaderRow = existingNodeHeaders.get(nodeName);
-            if (!nodeHeaderRow) {
-                nodeHeaderRow = document.createElement('tr');
-                nodeHeaderRow.className = 'node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs';
-                
-                // Initialize new row
-                if (isAlertsMode) {
-                    nodeHeaderRow.innerHTML = _createNodeAlertRow(nodeName);
-                } else {
-                    nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
-                }
+            // Create node header row
+            const nodeHeaderRow = document.createElement('tr');
+            nodeHeaderRow.className = 'node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+            nodeHeaderRow.setAttribute('data-node-name', nodeName);
+            
+            // Check alert state
+            const wouldTriggerNodeAlerts = alertStateCache.get(`node-${nodeName}`) || false;
+            if (wouldTriggerNodeAlerts) {
+                nodeHeaderRow.setAttribute('data-should-alert', 'true');
+                console.log(`[_renderGroupedByNode] Node ${nodeName} will get yellow border`);
+            }
+            
+            if (isAlertsMode) {
+                nodeHeaderRow.innerHTML = _createNodeAlertRow(nodeName);
             } else {
-                // Update existing row
-                _updateNodeRow(nodeHeaderRow, nodeName, isAlertsMode);
+                nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td', wouldTriggerNodeAlerts);
             }
             
-            rowsToKeep.add(nodeHeaderRow);
+            fragment.appendChild(nodeHeaderRow);
             
-            // Move to correct position
-            if (tableBody.children[currentIndex] !== nodeHeaderRow) {
-                tableBody.insertBefore(nodeHeaderRow, tableBody.children[currentIndex] || null);
-            }
-            currentIndex++;
-
-            // Process guests in this node
+            // Immediately add guests for this node
             nodeGroups[nodeName].forEach(guest => {
-                let guestRow = existingGuestRows.get(guest.id);
-                if (guestRow) {
-                    _updateGuestRow(guestRow, guest);
-                    existingGuestRows.delete(guest.id);
-                } else {
-                    guestRow = createRowFn(guest);
+                const wouldTriggerGuestAlerts = alertStateCache.get(`guest-${guest.id}`) || false;
+                if (wouldTriggerGuestAlerts) {
+                    console.log(`[_renderGroupedByNode] Guest ${guest.name} will get yellow border`);
                 }
                 
+                const guestRow = createRowFn(guest);
                 if (guestRow) {
-                    rowsToKeep.add(guestRow);
-                    if (tableBody.children[currentIndex] !== guestRow) {
-                        tableBody.insertBefore(guestRow, tableBody.children[currentIndex] || null);
-                    }
-                    currentIndex++;
+                    fragment.appendChild(guestRow);
                     visibleCount++;
                 }
             });
         });
         
-        // Remove rows that are no longer needed
-        Array.from(tableBody.children).forEach(row => {
-            if (!rowsToKeep.has(row)) {
-                row.remove();
+        console.log(`[_renderGroupedByNode] Row preparation completed in ${(performance.now() - fnStartTime).toFixed(2)}ms`);
+        
+        // Second pass: Replace entire table content at once
+        const domUpdateStartTime = performance.now();
+        
+        // Clear table and append all rows at once
+        tableBody.innerHTML = '';
+        
+        // Log what we're about to append
+        const allRows = fragment.querySelectorAll('tr');
+        let nodeCount = 0, guestCount = 0;
+        allRows.forEach(row => {
+            if (row.classList.contains('node-header')) {
+                if (row.getAttribute('data-should-alert') === 'true') {
+                    nodeCount++;
+                }
+            } else if (row.getAttribute('data-would-trigger-alert') === 'true') {
+                guestCount++;
             }
         });
+        console.log(`[_renderGroupedByNode] About to append: ${nodeCount} alert nodes, ${guestCount} alert guests`);
+        
+        tableBody.appendChild(fragment);
+        
+        // Check what actually got rendered
+        const renderedAlertNodes = tableBody.querySelectorAll('tr.node-header[data-should-alert="true"]').length;
+        const renderedAlertGuests = tableBody.querySelectorAll('tr[data-would-trigger-alert="true"]').length;
+        console.log(`[_renderGroupedByNode] Actually rendered: ${renderedAlertNodes} alert nodes, ${renderedAlertGuests} alert guests`);
+        
+        console.log(`[_renderGroupedByNode] DOM updates completed in ${(performance.now() - domUpdateStartTime).toFixed(2)}ms`);
+        console.log(`[_renderGroupedByNode] Total function time: ${(performance.now() - fnStartTime).toFixed(2)}ms`);
         
         return { visibleCount, visibleNodes };
     }
@@ -795,62 +782,32 @@ PulseApp.ui.dashboard = (() => {
 
     // Update an existing node row based on mode
     function _updateNodeRow(row, nodeName, isAlertsMode) {
-        const currentIsAlerts = row.querySelector('input[type="range"]') !== null;
+        // Always update the row content to ensure yellow borders are applied
+        // Use cached alert state for performance
+        const wouldTriggerAlerts = alertStateCache.get(`node-${nodeName}`) || false;
         
-        // Only recreate if switching modes
-        if (currentIsAlerts !== isAlertsMode) {
-            if (isAlertsMode) {
-                const alertRowHTML = _createNodeAlertRow(nodeName);
-                row.innerHTML = alertRowHTML;
+        if (isAlertsMode) {
+            const currentIsAlerts = row.querySelector('input[type="range"]') !== null;
+            
+            if (!currentIsAlerts) {
+                // Switching to alerts mode
+                row.innerHTML = _createNodeAlertRow(nodeName);
             } else {
-                row.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
-            }
-        } else if (isAlertsMode) {
-            // Skip updating sliders if we just reset thresholds
-            if (PulseApp.ui.alerts?.isJustResetThresholds?.()) {
-                console.log(`[_updateNodeRow] Skipping slider update for ${nodeName} due to justResetThresholds flag`);
-                return;
-            }
-            
-            // We're already in alerts mode - just update slider values and classes
-            const nodeThresholds = PulseApp.ui.alerts?.nodeThresholds || {};
-            const globalNodeDefaults = { cpu: 80, memory: 85, disk: 90 };
-            const globalNodeThresholds = PulseApp.ui.alerts?.globalNodeThresholds || globalNodeDefaults;
-            const nodeThreshold = nodeThresholds[nodeName] || {};
-            
-            // Update each slider
-            ['cpu', 'memory', 'disk'].forEach(metric => {
-                const slider = row.querySelector(`#node-${nodeName}-${metric}`);
-                if (slider) {
-                    // Update value if it has changed
-                    const newValue = nodeThreshold[metric] || globalNodeThresholds[metric] || globalNodeDefaults[metric];
-                    if (newValue !== undefined && slider.value !== String(newValue)) {
-                        slider.value = newValue;
-                    }
-                    
-                    // Update class based on whether this specific metric has a custom value
-                    const hasCustomValue = nodeThresholds[nodeName] && nodeThresholds[nodeName][metric] !== undefined;
-                    if (hasCustomValue) {
-                        slider.classList.add('custom-threshold');
+                // Already in alerts mode - nothing to update for nodes
+                
+                // Update the yellow border on the first cell using CSS class
+                const firstCell = row.querySelector('td:first-child');
+                if (firstCell) {
+                    if (wouldTriggerAlerts) {
+                        firstCell.classList.add('alert-indicator');
                     } else {
-                        slider.classList.remove('custom-threshold');
+                        firstCell.classList.remove('alert-indicator');
                     }
-                }
-            });
-            
-            // Also update the yellow border on the first cell
-            const firstCell = row.querySelector('td:first-child');
-            if (firstCell) {
-                const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(nodeName) || false;
-                if (wouldTriggerAlerts) {
-                    firstCell.style.borderLeft = '4px solid #f59e0b';
-                } else {
-                    firstCell.style.borderLeft = '';
                 }
             }
         } else {
-            // Non-alerts mode - update border using common function
-            row.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
+            // Non-alerts mode
+            row.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td', wouldTriggerAlerts);
         }
     }
 
@@ -867,6 +824,20 @@ PulseApp.ui.dashboard = (() => {
         
         // Check if alerts mode is active
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        
+        // Check if guest would trigger alerts regardless of mode
+        // This ensures the yellow border persists after leaving alerts mode
+        // Don't set the attribute here during alerts mode - let updateAlertBorders handle it
+        if (!isAlertsMode) {
+            // Use cached value for performance when not in alerts mode
+            const wouldTriggerAlerts = alertStateCache.get(`guest-${guest.id}`) || false;
+            
+            if (wouldTriggerAlerts) {
+                row.setAttribute('data-would-trigger-alert', 'true');
+            } else {
+                row.removeAttribute('data-would-trigger-alert');
+            }
+        }
         
         if (isAlertsMode) {
             // Remove all dimming attributes when in alerts mode
@@ -1148,10 +1119,16 @@ PulseApp.ui.dashboard = (() => {
     let previousTableData = null;
     let previousGroupByNode = null;
 
+    // Cache for alert states to avoid recalculating during render
+    let alertStateCache = new Map();
+    
     function updateDashboardTable() {
-        // Skip updates if slider is being dragged
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.isSliderDragging && PulseApp.ui.alerts.isSliderDragging()) {
-            return;
+        // Skip updates if syncing sliders or dragging global alert slider
+        if (PulseApp.ui.alerts) {
+            if ((PulseApp.ui.alerts.isSyncingSliders && PulseApp.ui.alerts.isSyncingSliders()) ||
+                (PulseApp.ui.alerts.isDraggingGlobalSlider && PulseApp.ui.alerts.isDraggingGlobalSlider())) {
+                return;
+            }
         }
         
         // If elements aren't initialized yet, try to initialize them
@@ -1193,6 +1170,37 @@ PulseApp.ui.dashboard = (() => {
         const filteredData = _filterDashboardData(dashboardData, searchInput, filterGuestType, filterStatus, thresholdState);
         const sortStateMain = PulseApp.state.getSortState('main');
         const sortedData = PulseApp.utils.sortData(filteredData, sortStateMain.column, sortStateMain.direction, 'main');
+        
+        // Pre-calculate all alert states to avoid staggered updates
+        alertStateCache.clear();
+        const startTime = performance.now();
+        
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.checkGuestWouldTriggerAlerts) {
+            // Calculate guest alert states
+            console.log(`[Alert Pre-calc] Starting guest calculations for ${sortedData.length} guests`);
+            sortedData.forEach(guest => {
+                const guestThresholds = PulseApp.ui.alerts.getGuestThresholds()[guest.id] || {};
+                const wouldTrigger = PulseApp.ui.alerts.checkGuestWouldTriggerAlerts(guest.vmid, guestThresholds);
+                alertStateCache.set(`guest-${guest.id}`, wouldTrigger);
+            });
+            console.log(`[Alert Pre-calc] Guest calculations done in ${(performance.now() - startTime).toFixed(2)}ms`);
+            
+            // Calculate node alert states (always calculate, not just when grouped)
+            if (PulseApp.ui.alerts.checkNodeWouldTriggerAlerts) {
+                const nodeStartTime = performance.now();
+                const nodesData = PulseApp.state.get('nodesData') || [];
+                console.log(`[Alert Pre-calc] Starting node calculations for ${nodesData.length} nodes`);
+                nodesData.forEach(node => {
+                    const wouldTrigger = PulseApp.ui.alerts.checkNodeWouldTriggerAlerts(node.node);
+                    alertStateCache.set(`node-${node.node}`, wouldTrigger);
+                    if (wouldTrigger) {
+                        console.log(`[Alert Pre-calc] Node ${node.node} would trigger alert`);
+                    }
+                });
+                console.log(`[Alert Pre-calc] Node calculations done in ${(performance.now() - nodeStartTime).toFixed(2)}ms`);
+            }
+        }
+        console.log(`[Alert Pre-calc] Total pre-calculation time: ${(performance.now() - startTime).toFixed(2)}ms`);
 
         let visibleCount = 0;
         let visibleNodes = new Set();
@@ -1201,7 +1209,9 @@ PulseApp.ui.dashboard = (() => {
         const previousIsAlertsMode = tableBodyEl?.querySelector('.node-header input[type="range"]') !== null;
         const modeChanged = previousIsAlertsMode !== isAlertsMode;
         
-        const needsFullRebuild = previousGroupByNode !== groupByNode || previousTableData === null || (modeChanged && groupByNode);
+        // Don't do full rebuild if we're dragging the global alert slider
+        const isDraggingAlertSlider = PulseApp.ui.alerts && PulseApp.ui.alerts.isDraggingGlobalSlider && PulseApp.ui.alerts.isDraggingGlobalSlider();
+        const needsFullRebuild = !isDraggingAlertSlider && (previousGroupByNode !== groupByNode || previousTableData === null || (modeChanged && groupByNode));
 
         // Destroy existing virtual scroller if switching modes or data size changes significantly
         if (virtualScroller && (groupByNode || sortedData.length <= VIRTUAL_SCROLL_THRESHOLD)) {
@@ -1255,6 +1265,9 @@ PulseApp.ui.dashboard = (() => {
             sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
         } else if (needsFullRebuild) {
             // Full rebuild for normal rendering with scroll preservation
+            const renderStartTime = performance.now();
+            console.log(`[Render] Starting full rebuild render (grouped: ${groupByNode})`);
+            
             PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
                 if (groupByNode) {
                     const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
@@ -1267,6 +1280,8 @@ PulseApp.ui.dashboard = (() => {
                 }
             });
             previousGroupByNode = groupByNode;
+            
+            console.log(`[Render] Full rebuild completed in ${(performance.now() - renderStartTime).toFixed(2)}ms`);
             
         } else {
             // Incremental update using DOM diffing with scroll preservation
@@ -1346,20 +1361,16 @@ PulseApp.ui.dashboard = (() => {
         if (PulseApp.ui.alerts && PulseApp.ui.alerts.isAlertsMode && PulseApp.ui.alerts.isAlertsMode()) {
             // Node list updates are now handled by the dashboard table update itself
             // when in alerts mode and grouped by node
+            
+            // Update alert borders after dashboard update
+            if (PulseApp.ui.alerts.updateAlertBorders) {
+                PulseApp.ui.alerts.updateAlertBorders();
+            }
         }
     }
 
     function _createNodeAlertRow(nodeName) {
-        // Get node thresholds from alerts module
-        const nodeThresholds = PulseApp.ui.alerts?.nodeThresholds || {};
-        const globalNodeThresholds = PulseApp.ui.alerts?.globalNodeThresholds || { cpu: 80, memory: 85, disk: 90 };
-        const nodeThreshold = nodeThresholds[nodeName] || globalNodeThresholds;
-        const hasCustom = nodeThresholds[nodeName] && Object.keys(nodeThresholds[nodeName]).length > 0;
-        
-        // Check if node would trigger alerts
-        const wouldTriggerAlerts = PulseApp.ui.alerts?.checkNodeWouldTriggerAlerts?.(nodeName) || false;
-        
-        // Get host URL for the node
+        // In alerts mode, just show the node name without any sliders
         const hostUrl = PulseApp.utils.getHostUrl(nodeName);
         let nodeLink = nodeName;
         if (hostUrl) {
@@ -1369,54 +1380,16 @@ PulseApp.ui.dashboard = (() => {
         // Match the exact styling from generateNodeGroupHeaderCellHTML
         const baseClasses = 'px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400';
         
-        let nodeContent = nodeLink;
+        // Create HTML matching the normal mode structure
+        let html = `<td class="sticky left-0 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeLink}</td>`;
         
-        // Create HTML matching the normal mode structure, with conditional border
-        const borderStyle = wouldTriggerAlerts ? 'style="border-left: 4px solid #f59e0b;"' : '';
-        let html = `<td class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50" ${borderStyle}>${nodeContent}</td>`;
-        
-        // Empty cells for type, status, uptime
+        // Empty cells for all columns (11 total columns)
         html += `<td class="${baseClasses}"></td>`; // Type
-        html += `<td class="${baseClasses}"></td>`; // Status  
+        html += `<td class="${baseClasses}"></td>`; // VMID
         html += `<td class="${baseClasses}"></td>`; // Uptime
-        
-        // CPU slider cell - use px-2 py-1 only for sliders
-        html += `<td class="px-2 py-1">
-                    <input type="range" 
-                           id="node-${nodeName}-cpu" 
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.cpu || 80}" 
-                           onchange="PulseApp.ui.alerts.updateNodeThreshold('${nodeName}', 'cpu', this.value)"
-                           onmousedown="PulseApp.ui.alerts.setSliderDragging(true)"
-                           ontouchstart="PulseApp.ui.alerts.setSliderDragging(true)"
-                           class="custom-slider w-full ${nodeThresholds[nodeName]?.cpu !== undefined ? 'custom-threshold' : ''}">
-                </td>`;
-        
-        // Memory slider cell
-        html += `<td class="px-2 py-1">
-                    <input type="range" 
-                           id="node-${nodeName}-memory" 
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.memory || 85}" 
-                           onchange="PulseApp.ui.alerts.updateNodeThreshold('${nodeName}', 'memory', this.value)"
-                           onmousedown="PulseApp.ui.alerts.setSliderDragging(true)"
-                           ontouchstart="PulseApp.ui.alerts.setSliderDragging(true)"
-                           class="custom-slider w-full ${nodeThresholds[nodeName]?.memory !== undefined ? 'custom-threshold' : ''}">
-                </td>`;
-        
-        // Disk slider cell
-        html += `<td class="px-2 py-1">
-                    <input type="range" 
-                           id="node-${nodeName}-disk" 
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.disk || 90}" 
-                           onchange="PulseApp.ui.alerts.updateNodeThreshold('${nodeName}', 'disk', this.value)"
-                           onmousedown="PulseApp.ui.alerts.setSliderDragging(true)"
-                           ontouchstart="PulseApp.ui.alerts.setSliderDragging(true)"
-                           class="custom-slider w-full ${nodeThresholds[nodeName]?.disk !== undefined ? 'custom-threshold' : ''}">
-                </td>`;
-        
-        // Empty cells for disk i/o and network columns
+        html += `<td class="${baseClasses}"></td>`; // CPU
+        html += `<td class="${baseClasses}"></td>`; // Memory
+        html += `<td class="${baseClasses}"></td>`; // Disk
         html += `<td class="${baseClasses}"></td>`; // Disk Read
         html += `<td class="${baseClasses}"></td>`; // Disk Write
         html += `<td class="${baseClasses}"></td>`; // Net In
@@ -1660,9 +1633,10 @@ PulseApp.ui.dashboard = (() => {
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         // Check if guest would trigger alerts (for all modes, not just alerts mode)
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.checkGuestWouldTriggerAlerts) {
-            const guestThresholds = PulseApp.ui.alerts.getGuestThresholds()[guest.id] || {};
-            const wouldTriggerAlerts = PulseApp.ui.alerts.checkGuestWouldTriggerAlerts(guest.id, guestThresholds);
+        // Don't set the attribute here during alerts mode - let updateAlertBorders handle it
+        if (!isAlertsMode) {
+            // Use cached value for performance when not in alerts mode
+            const wouldTriggerAlerts = alertStateCache.get(`guest-${guest.id}`) || false;
             
             if (wouldTriggerAlerts) {
                 // This will be applied to the first cell after it's created
@@ -1796,12 +1770,10 @@ PulseApp.ui.dashboard = (() => {
                 ${thresholdIndicator}
             </div>
         `;
-        const stickyNameCell = PulseApp.ui.common.createStickyColumn(nameContent, { title: guest.name });
-        
-        // Apply yellow border if guest would trigger alerts
-        if (row.getAttribute('data-would-trigger-alert') === 'true') {
-            stickyNameCell.style.borderLeft = '4px solid #f59e0b';
-        }
+        // Create sticky name cell
+        const stickyNameCell = PulseApp.ui.common.createStickyColumn(nameContent, { 
+            title: guest.name
+        });
         
         row.appendChild(stickyNameCell);
         
@@ -1829,16 +1801,21 @@ PulseApp.ui.dashboard = (() => {
         guestMetricDragSnapshot = {}; // Clear previous snapshot
         const currentDashboardData = PulseApp.state.get('dashboardData') || [];
         currentDashboardData.forEach(guest => {
-            if (guest && guest.uniqueId) {
-                guestMetricDragSnapshot[guest.uniqueId] = {
+            if (guest && guest.id) {
+                // Snapshot ALL metrics for alert calculations
+                guestMetricDragSnapshot[guest.id] = {
+                    cpu: guest.cpu,
+                    memory: guest.memory,
+                    disk: guest.disk,
                     diskread: guest.diskread,
                     diskwrite: guest.diskwrite,
                     netin: guest.netin,
-                    netout: guest.netout
-                    // Optionally snapshot other metrics if they also show issues
+                    netout: guest.netout,
+                    status: guest.status
                 };
             }
         });
+        console.log('[snapshotGuestMetricsForDrag] Captured snapshot for', Object.keys(guestMetricDragSnapshot).length, 'guests');
     }
 
     function clearGuestMetricSnapshots() {
@@ -2289,6 +2266,15 @@ PulseApp.ui.dashboard = (() => {
         }
     }
 
+    function clearAlertCache() {
+        console.log('[Dashboard] Clearing alert cache');
+        alertStateCache.clear();
+    }
+    
+    function updateAlertCache(key, value) {
+        alertStateCache.set(key, value);
+    }
+    
     return {
         init,
         refreshDashboardData,
@@ -2296,6 +2282,9 @@ PulseApp.ui.dashboard = (() => {
         createGuestRow,
         snapshotGuestMetricsForDrag, // Export snapshot function
         clearGuestMetricSnapshots,    // Export clear function
+        getGuestMetricSnapshot: () => guestMetricDragSnapshot, // Export getter for snapshot
+        clearAlertCache,              // Export cache management functions
+        updateAlertCache,
         toggleChartsMode,
         toggleGuestAlertDetails,
         acknowledgeAlert

@@ -15,7 +15,7 @@
   <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: dark)">
   
-  <link rel="stylesheet" href="/output.css">
+  <link rel="stylesheet" href="/output.css?v=4">
   <style>
     /* Radio button styles for unified backups tab */
     #unified-backup-all:checked ~ label[for="unified-backup-all"],
@@ -1288,92 +1288,138 @@
           </div>
 
           <!-- Alert Mode Controls -->
-          <div id="alert-mode-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
-            <!-- Main Controls -->
-            <div class="space-y-4">
-              <!-- Top row with main controls -->
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div class="flex items-center gap-4">
-                  <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Alert Settings</span>
-                  <div class="flex items-center gap-3 text-xs">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-gray-600 dark:text-gray-400">Duration:</span>
-                      <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-blue-500">
-                        <option value="0" selected>Instant</option>
-                        <option value="10000">10s</option>
-                        <option value="30000">30s</option>
-                        <option value="60000">1m</option>
-                        <option value="300000">5m</option>
-                        <option value="600000">10m</option>
-                      </select>
-                    </div>
-                    <label class="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" id="alert-auto-resolve-toggle" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
-                      <span class="text-gray-600 dark:text-gray-400">Auto-resolve</span>
+          <div id="alert-mode-controls" class="hidden mt-3 space-y-3">
+            <!-- Header with master toggle -->
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Alert Settings</h3>
+              <label class="relative inline-flex items-center cursor-pointer" title="Enable or disable all alerts">
+                <input type="checkbox" id="master-alert-toggle" class="sr-only peer" checked>
+                <div class="relative w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">All Alerts</span>
+              </label>
+            </div>
+            
+            <!-- General Settings Card -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 transition-opacity duration-200" id="general-settings-card">
+              <div class="flex items-center gap-2 mb-3">
+                <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Alert Behavior</h4>
+              </div>
+              <div class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div class="flex items-center gap-2">
+                    <label for="alert-duration-select" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">
+                      Alert Duration:
+                      <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="How long a condition must persist before triggering an alert">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      </button>
                     </label>
+                    <select id="alert-duration-select" class="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                      <option value="0" selected>Instant</option>
+                      <option value="10000">10 seconds</option>
+                      <option value="30000">30 seconds</option>
+                      <option value="60000">1 minute</option>
+                      <option value="300000">5 minutes</option>
+                      <option value="600000">10 minutes</option>
+                    </select>
                   </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="alert-auto-resolve-toggle" class="sr-only peer" checked>
+                    <div class="relative w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Auto-resolve when condition clears</span>
+                  </label>
                 </div>
-                <div class="flex items-center gap-2">
-                  <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
-                  <button id="save-alert-config" class="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
-                    Save
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span id="alert-save-message" class="text-sm text-green-600 dark:text-green-400"></span>
+                  <button id="save-alert-config" class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium w-full sm:w-auto">
+                    Save Settings
                   </button>
                 </div>
               </div>
-              
-              
-              <!-- Notification Settings -->
-              <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="alert-email-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
-                  <span class="text-xs text-gray-700 dark:text-gray-300">Email notifications</span>
-                </label>
-                <button id="test-email-alert" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">
-                  Test Email
-                </button>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" id="alert-webhook-toggle" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
-                  <span class="text-xs text-gray-700 dark:text-gray-300">Webhook notifications</span>
-                </label>
-                <button id="test-webhook-alert" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">
-                  Test Webhook
-                </button>
+            </div>
+            
+            <!-- Notification Methods Card -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 transition-opacity duration-200" id="notification-methods-card">
+              <div class="flex items-center gap-2 mb-3">
+                <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                </svg>
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Notification Methods</h4>
+              </div>
+              <div class="space-y-3">
+                <!-- Email Notification -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
+                    <div class="relative w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    <div class="ml-2">
+                      <span class="text-sm text-gray-700 dark:text-gray-300">Email notifications</span>
+                      <span id="email-config-status" class="hidden text-xs text-gray-500 dark:text-gray-400 block"></span>
+                    </div>
+                  </label>
+                  <button id="test-email-alert" class="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors w-full sm:w-auto">
+                    Test Email
+                  </button>
+                </div>
+                <!-- Webhook Notification -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
+                    <div class="relative w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    <div class="ml-2">
+                      <span class="text-sm text-gray-700 dark:text-gray-300">Webhook notifications</span>
+                      <span id="webhook-config-status" class="hidden text-xs text-gray-500 dark:text-gray-400 block"></span>
+                    </div>
+                  </label>
+                  <button id="test-webhook-alert" class="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors w-full sm:w-auto">
+                    Test Webhook
+                  </button>
+                </div>
               </div>
             </div>
             
-            
-            <!-- Status Monitoring Section -->
-            <div class="mt-4">
-              <div class="border-t border-blue-200 dark:border-blue-600 pt-4">
-                <h4 class="text-sm font-medium text-blue-700 dark:text-blue-300 mb-3">Status Monitoring</h4>
-                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                  <!-- Nodes column -->
-                  <div>
-                    <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Nodes</h5>
-                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
-                      <input type="checkbox" id="alert-node-down" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
-                      <span class="text-xs text-gray-700 dark:text-gray-300">Offline alerts</span>
-                    </label>
-                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
-                      <input type="checkbox" id="alert-node-up" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
-                      <span class="text-xs text-gray-700 dark:text-gray-300">Online alerts</span>
-                    </label>
-                  </div>
-                  
-                  <!-- VMs/Containers column -->
-                  <div>
-                    <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">VMs/Containers</h5>
-                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
-                      <input type="checkbox" id="alert-vm-down" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600" checked>
-                      <span class="text-xs text-gray-700 dark:text-gray-300">Down alerts</span>
-                    </label>
-                    <label class="flex items-center gap-1.5 cursor-pointer py-0.5">
-                      <input type="checkbox" id="alert-vm-up" class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
-                      <span class="text-xs text-gray-700 dark:text-gray-300">Up alerts</span>
-                    </label>
-                  </div>
+            <!-- Status Monitoring Card -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 transition-opacity duration-200" id="status-monitoring-card">
+              <div class="flex items-center gap-2 mb-3">
+                <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Status Monitoring</h4>
+              </div>
+              <div class="space-y-2">
+                  <h5 class="text-sm font-medium text-gray-600 dark:text-gray-400">VMs/Containers</h5>
+                  <label class="relative inline-flex items-center cursor-pointer py-1">
+                    <input type="checkbox" id="alert-vm-down" class="sr-only peer" checked>
+                    <div class="relative w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Alert when down</span>
+                  </label>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 ml-10">Auto-resolves when back up</p>
                 </div>
               </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="flex flex-wrap gap-2 pt-2">
+              <button type="button" class="text-xs px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" onclick="PulseApp.alerts.muteAlerts()" title="Temporarily disable all alerts">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                </svg>
+                Mute for 1 hour
+              </button>
+              <button type="button" class="text-xs px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" onclick="PulseApp.ui.alerts.resetToDefaults()" title="Reset all alert settings to defaults">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Reset to defaults
+              </button>
+              <div class="flex-grow"></div>
+              <span id="alert-last-triggered" class="text-xs text-gray-500 dark:text-gray-400 self-center"></span>
             </div>
           </div>
 
@@ -1565,6 +1611,18 @@
               
               <input type="radio" id="unified-lxc" name="unified-type-filter" value="LXC" class="hidden peer/lxc">
               <label for="unified-lxc" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
+            </div>
+          </div>
+          
+          <!-- Timestamp Display Toggle -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium hidden sm:inline">Time:</span>
+            <div class="timestamp-toggle-group" role="radiogroup">
+              <input type="radio" id="timestamp-relative" name="timestamp-display" value="relative" checked class="sr-only">
+              <label for="timestamp-relative" class="timestamp-toggle-option timestamp-toggle-first" title="Show relative time (e.g., 2h ago)">Relative</label>
+              
+              <input type="radio" id="timestamp-absolute" name="timestamp-display" value="absolute" class="sr-only">
+              <label for="timestamp-absolute" class="timestamp-toggle-option timestamp-toggle-last" title="Show absolute time (e.g., 19 Dec 18:45)">Absolute</label>
             </div>
           </div>
         </div>

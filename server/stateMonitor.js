@@ -1,4 +1,5 @@
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const { createLogger } = require('./utils/logger');
 
@@ -8,17 +9,50 @@ class StateMonitor {
     constructor(dataDir = '/data') {
         this.dataDir = dataDir;
         this.previousStates = new Map();
-        this.stateRules = {};
-        this.loadStateRules();
+        // Initialize with default rules immediately
+        this.stateRules = {
+            vm_down: {
+                enabled: true,
+                from: ['running', 'online'],
+                to: ['stopped', 'offline', 'paused'],
+                notify: 'on_change',
+                message: '{name} has stopped'
+            },
+            vm_up: {
+                enabled: false,
+                from: ['stopped', 'offline', 'paused'],
+                to: ['running', 'online'],
+                notify: 'on_change',
+                message: '{name} has started'
+            },
+            node_down: {
+                enabled: true,
+                from: ['online'],
+                to: ['offline', 'unknown'],
+                notify: 'on_change',
+                message: 'Node {name} is offline'
+            },
+            node_up: {
+                enabled: false,
+                from: ['offline', 'unknown'],
+                to: ['online'],
+                notify: 'on_change',
+                message: 'Node {name} is back online'
+            }
+        };
+        // Then try to load from file synchronously (will override defaults)
+        this.loadStateRulesSync();
     }
 
-    async loadStateRules() {
+    loadStateRulesSync() {
         try {
             const rulesPath = path.join(this.dataDir, 'alert-rules.json');
-            const rulesData = await fs.readFile(rulesPath, 'utf8');
+            console.log(`[StateMonitor] Loading state rules from: ${rulesPath}`);
+            const rulesData = fs.readFileSync(rulesPath, 'utf8');
             const rules = JSON.parse(rulesData);
             
             // Extract state rules from the new format, or use defaults
+            console.log(`[StateMonitor] Loaded rules object:`, JSON.stringify(rules, null, 2));
             this.stateRules = rules.states || {
                 vm_down: {
                     enabled: true,
@@ -37,17 +71,26 @@ class StateMonitor {
             };
             
             logger.info('Loaded state rules', { rules: Object.keys(this.stateRules) });
+            console.log(`[StateMonitor] Successfully loaded ${Object.keys(this.stateRules).length} state rules`);
         } catch (error) {
             logger.warn('Failed to load state rules, using defaults', { error: error.message });
-            this.stateRules = {
-                vm_down: {
-                    enabled: true,
-                    from: ['running', 'online'],
-                    to: ['stopped', 'offline', 'paused'],
-                    notify: 'on_change',
-                    message: '{name} has stopped'
-                }
-            };
+            console.log(`[StateMonitor] Failed to load state rules: ${error.message}`);
+            // Keep the default rules that were already set in constructor
+        }
+    }
+
+    async loadStateRules() {
+        try {
+            const rulesPath = path.join(this.dataDir, 'alert-rules.json');
+            const rulesData = await fsPromises.readFile(rulesPath, 'utf8');
+            const rules = JSON.parse(rulesData);
+            
+            // Extract state rules from the new format, or use defaults
+            this.stateRules = rules.states || this.stateRules;
+            
+            logger.info('Loaded state rules', { rules: Object.keys(this.stateRules) });
+        } catch (error) {
+            logger.warn('Failed to load state rules, using defaults', { error: error.message });
         }
     }
 
@@ -55,17 +98,18 @@ class StateMonitor {
         const alerts = [];
         
         for (const guest of guests) {
-            const prevState = this.previousStates.get(guest.id);
+            const prevState = this.previousStates.get(guest.vmid);
             const currState = (guest.status || '').toLowerCase();
             
             // Skip if no previous state (first time seeing this guest)
             if (!prevState) {
-                this.previousStates.set(guest.id, currState);
+                this.previousStates.set(guest.vmid, currState);
                 continue;
             }
             
             // Check if state changed
             if (prevState !== currState) {
+                console.log(`[StateMonitor] State transition detected for ${guest.name}: ${prevState} -> ${currState}`);
                 logger.debug('State transition detected', { 
                     guest: guest.name, 
                     from: prevState, 
@@ -84,7 +128,7 @@ class StateMonitor {
                 }
             }
             
-            this.previousStates.set(guest.id, currState);
+            this.previousStates.set(guest.vmid, currState);
         }
         
         return alerts;
@@ -149,18 +193,23 @@ class StateMonitor {
             .replace('{type}', guest.type === 'lxc' ? 'Container' : 'VM');
             
         return {
-            id: `state-${guest.id}-${ruleName}-${Date.now()}`,
+            id: `state-${guest.vmid}-${ruleName}-${Date.now()}`,
             type: 'state_change',
             rule: ruleName,
-            guestId: guest.id,
-            guestName: guest.name,
-            guestType: guest.type,
-            node: guest.node,
+            guest: {
+                vmid: guest.vmid,
+                name: guest.name,
+                type: guest.type,
+                node: guest.node,
+                endpointId: guest.endpointId,
+                status: guest.status
+            },
             from: fromState,
             to: toState,
             message: message,
             severity: ruleName === 'vm_down' ? 'critical' : 'info',
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            group: 'availability_alerts'
         };
     }
 
@@ -172,7 +221,7 @@ class StateMonitor {
             // Load existing rules to preserve threshold rules
             let existingRules = {};
             try {
-                const data = await fs.readFile(rulesPath, 'utf8');
+                const data = await fsPromises.readFile(rulesPath, 'utf8');
                 existingRules = JSON.parse(data);
             } catch (error) {
                 // File might not exist yet
@@ -181,7 +230,7 @@ class StateMonitor {
             // Update state rules
             existingRules.states = rules;
             
-            await fs.writeFile(rulesPath, JSON.stringify(existingRules, null, 2));
+            await fsPromises.writeFile(rulesPath, JSON.stringify(existingRules, null, 2));
             this.stateRules = rules;
             
             logger.info('Saved state rules');
