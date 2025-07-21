@@ -46,9 +46,13 @@ function update_script() {
     rm -rf /opt/firefly/storage
     cp /opt/.env /opt/firefly/.env
     cp -r /opt/storage /opt/firefly/storage
-    cd /opt/firefly
+    
     chown -R www-data:www-data /opt/firefly
-    chmod -R 775 /opt/firefly/storage
+    find /opt/firefly/storage -type d -exec chmod 775 {} \;
+    find /opt/firefly/storage -type f -exec chmod 664 {} \;
+    mkdir -p /opt/firefly/storage/framework/{cache/data,sessions,views}
+    $STD sudo -u www-data php /opt/firefly/artisan cache:clear
+
     $STD php artisan migrate --seed --force
     $STD php artisan cache:clear
     $STD php artisan view:clear
