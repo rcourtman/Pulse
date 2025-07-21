@@ -27,6 +27,47 @@
     @apply bg-blue-500 dark:bg-blue-400;
   }
 
+  /* Sticky column backgrounds to prevent content showing through */
+  tr td.sticky {
+    @apply bg-white dark:bg-gray-800;
+    padding-left: 12px; /* 8px for content + 4px for indicator */
+    position: relative;
+  }
+  
+  /* Extend background to cover any gaps */
+  tr td.sticky::after {
+    content: '';
+    position: absolute;
+    left: -10px; /* Extend beyond the cell */
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    @apply bg-white dark:bg-gray-800;
+    z-index: -1;
+  }
+  
+  /* Alert indicator using pseudo-element */
+  tr[data-would-trigger-alert="true"] td.sticky:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: #f59e0b;
+    z-index: 1;
+  }
+  
+  /* Sticky column hover state - match row hover */
+  tr:hover td.sticky {
+    @apply bg-gray-50 dark:bg-gray-700;
+  }
+  
+  /* Also update the extended background on hover */
+  tr:hover td.sticky::after {
+    @apply bg-gray-50 dark:bg-gray-700;
+  }
+
   /* Charts mode visibility toggle */
   .metric-chart {
     display: none;
@@ -46,6 +87,24 @@
     overflow: hidden;
     width: 100%;
     display: block;
+  }
+  
+  /* Timestamp toggle group styling */
+  .timestamp-toggle-group {
+    @apply inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden;
+  }
+  
+  .timestamp-toggle-option {
+    @apply flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors;
+  }
+  
+  .timestamp-toggle-option.timestamp-toggle-last {
+    @apply border-l border-gray-300 dark:border-gray-600;
+  }
+  
+  /* Styling for checked state */
+  input[name="timestamp-display"]:checked + .timestamp-toggle-option {
+    @apply bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300;
   }
 }
 

@@ -12,7 +12,7 @@ const alertHistory = require('./alertHistoryPersistence');
 const StateMonitor = require('./stateMonitor');
 
 class AlertManager extends EventEmitter {
-    constructor() {
+    constructor(stateMonitor = null) {
         super();
         this.alertRules = new Map();
         this.activeAlerts = new Map();
@@ -97,8 +97,8 @@ class AlertManager extends EventEmitter {
         // Initialize alert groups
         this.initializeAlertGroups();
         
-        // Initialize state monitor
-        this.stateMonitor = new StateMonitor(path.join(__dirname, '../data'));
+        // Initialize state monitor - use provided instance or create new one
+        this.stateMonitor = stateMonitor || new StateMonitor(path.join(__dirname, '../data'));
         
         // Load persisted state
         this.loadAlertRules();
@@ -1633,6 +1633,8 @@ class AlertManager extends EventEmitter {
     async processPendingAlertBatch() {
         const alerts = [...this.pendingAlertBatch];
         this.pendingAlertBatch = [];
+        
+        console.log(`[AlertManager] Processing ${alerts.length} pending alerts`);
         this.batchTimeout = null;
         
         if (alerts.length === 0) return;
@@ -1649,31 +1651,49 @@ class AlertManager extends EventEmitter {
         const emailAlerts = alerts.filter(a => a.notificationChannels?.includes('email'));
         const webhookAlerts = alerts.filter(a => a.notificationChannels?.includes('webhook'));
         
+        // Track successful sends
+        let emailSentSuccessfully = false;
+        let webhookSentSuccessfully = false;
+        
         // Send grouped email if multiple email alerts
-        if (emailAlerts.length > 1) {
-            console.log(`[AlertManager] Sending grouped email for ${emailAlerts.length} alerts`);
-            await this.sendGroupedEmailNotification(emailAlerts);
-        } else if (emailAlerts.length === 1) {
-            await this.sendEmailNotification(emailAlerts[0]);
+        if (emailAlerts.length > 0) {
+            try {
+                if (emailAlerts.length > 1) {
+                    console.log(`[AlertManager] Sending grouped email for ${emailAlerts.length} alerts`);
+                    await this.sendGroupedEmailNotification(emailAlerts);
+                } else {
+                    await this.sendDirectEmailNotification(emailAlerts[0]);
+                }
+                emailSentSuccessfully = true;
+            } catch (error) {
+                console.error('[AlertManager] Failed to send email notification:', error.message);
+            }
         }
         
         // Send grouped webhook if multiple webhook alerts
-        if (webhookAlerts.length > 1) {
-            console.log(`[AlertManager] Sending grouped webhook for ${webhookAlerts.length} alerts`);
-            await this.sendGroupedWebhookNotification(webhookAlerts);
-        } else if (webhookAlerts.length === 1) {
-            await this.sendWebhookNotification(webhookAlerts[0]);
+        if (webhookAlerts.length > 0) {
+            try {
+                if (webhookAlerts.length > 1) {
+                    console.log(`[AlertManager] Sending grouped webhook for ${webhookAlerts.length} alerts`);
+                    await this.sendGroupedWebhookNotification(webhookAlerts);
+                } else {
+                    await this.sendDirectWebhookNotification(webhookAlerts[0]);
+                }
+                webhookSentSuccessfully = true;
+            } catch (error) {
+                console.error('[AlertManager] Failed to send webhook notification:', error.message);
+            }
         }
         
-        // Mark alerts as sent
+        // Mark alerts as sent only if notifications were successful
         for (const alert of alerts) {
             const status = this.notificationStatus.get(alert.id) || {};
             
-            if (alert.notificationChannels?.includes('email')) {
+            if (alert.notificationChannels?.includes('email') && emailSentSuccessfully) {
                 alert.emailSent = true;
                 status.emailSent = true;
             }
-            if (alert.notificationChannels?.includes('webhook')) {
+            if (alert.notificationChannels?.includes('webhook') && webhookSentSuccessfully) {
                 alert.webhookSent = true;
                 status.webhookSent = true;
             }
@@ -1706,8 +1726,7 @@ class AlertManager extends EventEmitter {
      */
     async sendGroupedEmailNotification(alerts) {
         if (!this.emailTransporter) {
-            console.log('[AlertManager] Email not configured, skipping grouped email notification');
-            return;
+            throw new Error('Email transporter not configured');
         }
         
         try {
@@ -3289,12 +3308,118 @@ class AlertManager extends EventEmitter {
     }
 
     /**
+     * Reconcile state alerts with actual guest states
+     * This ensures stale alerts are resolved when guests come back online
+     * and creates alerts for stopped containers found on startup
+     */
+    reconcileStateAlerts(guests) {
+        // First, check each active state alert
+        for (const [key, alert] of this.activeAlerts) {
+            if (alert.type === 'state_change' && alert.rule.id === 'vm_down' && alert.state === 'active') {
+                // Find the corresponding guest
+                const guest = guests.find(g => 
+                    g.vmid === alert.guest.vmid && 
+                    g.node === alert.guest.node
+                );
+                
+                if (guest && guest.status === 'running') {
+                    // Guest is running but we have a down alert - resolve it
+                    alert.state = 'resolved';
+                    alert.resolvedAt = Date.now();
+                    alert.resolveReason = `${alert.guest.name} is running`;
+                    
+                    this.resolveAlert(alert).catch(error => {
+                        console.error(`[AlertManager] Error resolving stale alert: ${error}`);
+                    });
+                }
+            }
+        }
+        
+        // Second, check for stopped guests without alerts (missed while Pulse was down)
+        for (const guest of guests) {
+            if (guest.status === 'stopped') {
+                // Check if we already have an active down alert for this guest
+                const hasActiveDownAlert = Array.from(this.activeAlerts.values()).some(alert => 
+                    alert.type === 'state_change' &&
+                    alert.rule.id === 'vm_down' &&
+                    alert.guest.vmid === guest.vmid && 
+                    alert.guest.node === guest.node &&
+                    alert.state === 'active'
+                );
+                
+                if (!hasActiveDownAlert) {
+                    // Create a state alert for this stopped container
+                    const stateAlert = {
+                        id: `state-${guest.vmid}-vm_down-${Date.now()}`,
+                        type: 'state_change',
+                        rule: 'vm_down',
+                        guest: {
+                            vmid: guest.vmid,
+                            name: guest.name,
+                            type: guest.type,
+                            node: guest.node,
+                            endpointId: guest.endpointId || 'primary',
+                            status: guest.status
+                        },
+                        from: 'running', // Assume it was running before
+                        to: 'stopped',
+                        message: `${guest.name} has stopped`,
+                        severity: 'critical',
+                        timestamp: Date.now(),
+                        group: 'availability_alerts',
+                        guestName: guest.name,
+                        guestType: guest.type,
+                        guestId: guest.vmid,
+                        node: guest.node
+                    };
+                    
+                    // Use handleStateAlert to properly create the alert
+                    this.handleStateAlert(stateAlert);
+                }
+            }
+        }
+    }
+
+    /**
      * Handle state-based alerts
      */
     handleStateAlert(stateAlert) {
+        // For vm_up/node_up alerts, we should resolve existing vm_down/node_down alerts
+        if (stateAlert.rule === 'vm_up' || stateAlert.rule === 'node_up') {
+            // Find and resolve any existing down alert for this VM/node
+            const oppositeRule = stateAlert.rule === 'vm_up' ? 'vm_down' : 'node_down';
+            
+            // Search through active alerts for the opposite alert
+            for (const [key, existingAlert] of this.activeAlerts) {
+                const alertVmid = typeof existingAlert.guest.vmid === 'string' ? parseInt(existingAlert.guest.vmid) : existingAlert.guest.vmid;
+                const stateVmid = parseInt(stateAlert.guestId) || parseInt(stateAlert.guest?.vmid) || stateAlert.guest?.vmid;
+                const vmidMatch = alertVmid === stateVmid;
+                const nodeMatch = existingAlert.guest.node === (stateAlert.node || stateAlert.guest?.node);
+                
+                if (existingAlert.type === 'state_change' &&
+                    existingAlert.rule.id === oppositeRule &&
+                    vmidMatch &&
+                    nodeMatch &&
+                    existingAlert.state === 'active') {
+                    
+                    // Resolve the down alert
+                    existingAlert.state = 'resolved';
+                    existingAlert.resolvedAt = stateAlert.timestamp;
+                    existingAlert.resolveReason = `${stateAlert.guestName} is back online`;
+                    
+                    this.resolveAlert(existingAlert).catch(error => {
+                        console.error(`[AlertManager] Error resolving state alert: ${error}`);
+                    });
+                }
+            }
+            
+            // Don't create an up alert if up alerts are disabled
+            return;
+        }
+        
         const alertKey = stateAlert.id;
         
-        // Create alert in standard format
+        // Create alert in standard format for down alerts
         const alert = {
             id: stateAlert.id,
             type: 'state_change',
@@ -3302,14 +3427,16 @@ class AlertManager extends EventEmitter {
             rule: {
                 id: stateAlert.rule,
                 type: 'state_change',
-                name: stateAlert.rule === 'vm_down' ? 'VM/Container Down' : 'VM/Container Up'
+                name: stateAlert.rule === 'vm_down' ? 'VM/Container Down' : 'VM/Container Up',
+                autoResolve: true
             },
-            guest: {
+            guest: stateAlert.guest || {
                 endpointId: 'proxmox',
                 node: stateAlert.node,
                 vmid: parseInt(stateAlert.guestId),
                 name: stateAlert.guestName,
-                type: stateAlert.guestType
+                type: stateAlert.guestType,
+                status: stateAlert.to
             },
             message: stateAlert.message,
             severity: stateAlert.severity,
@@ -3323,7 +3450,8 @@ class AlertManager extends EventEmitter {
             lastUpdate: stateAlert.timestamp,
             acknowledged: false,
             emailSent: false,
-            webhookSent: false
+            webhookSent: false,
+            currentValue: stateAlert.to
         };
         
         // Add to active alerts
@@ -3491,6 +3619,11 @@ class AlertManager extends EventEmitter {
             // Store email config for use in notifications
             this.emailConfig = this.emailService.getConfig();
             
+            console.log('[AlertManager] Email service initialized:', {
+                provider: this.emailService.getProvider(),
+                config: this.emailConfig ? { to: this.emailConfig.to, from: this.emailConfig.from } : null
+            });
+            
             // For backward compatibility, create emailTransporter property that delegates to emailService
             if (this.emailService.getProvider()) {
                 Object.defineProperty(this, 'emailTransporter', {
@@ -3508,6 +3641,7 @@ class AlertManager extends EventEmitter {
                 });
                 
             } else {
+                console.log('[AlertManager] Email service not initialized - no provider available');
             }
         } catch (error) {
             console.error('[AlertManager] Failed to initialize email service:', error);
@@ -3560,18 +3694,14 @@ class AlertManager extends EventEmitter {
         
         // Common header for all emails
         const header = `
-            <div style="background: linear-gradient(135deg, #1f2937, #111827); color: white; padding: 24px; border-bottom: 3px solid #2563eb;">
-                <div style="margin-bottom: 12px; display: flex; align-items: center;">
-                    <img src="data:image/png;base64,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" 
-                         width="40" height="40" style="margin-right: 12px;" alt="Pulse Logo">
-                    <div>
-                        <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em;">Pulse</h1>
-                        <div style="font-size: 12px; opacity: 0.7; margin-top: 2px;">Alert Notification System</div>
-                    </div>
+            <div style="background: #1f2937; color: white; padding: 24px; border-bottom: 3px solid #2563eb;">
+                <div style="margin-bottom: 12px;">
+                    <h1 style="margin: 0; font-size: 20px; font-weight: 600;">Pulse</h1>
+                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Alert Notification System</div>
                 </div>
-                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 12px;">
-                    <h2 style="margin: 0; font-size: 16px; font-weight: 500;">${data.title}</h2>
-                    <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">${data.subtitle}</div>
+                <div style="background: #2563eb; border-radius: 6px; padding: 12px;">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 500; color: white;">${data.title}</h2>
+                    <div style="font-size: 13px; color: #dbeafe; margin-top: 4px;">${data.subtitle}</div>
                 </div>
             </div>
         `;
@@ -3651,10 +3781,11 @@ class AlertManager extends EventEmitter {
                                 <span style="font-weight: 500; color: #374151; min-width: 120px;">Current Value</span>
                                 <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600;">${alert.currentValue}</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                            ${alert.threshold !== null && alert.threshold !== undefined ? 
+                            `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
                                 <span style="font-weight: 500; color: #374151; min-width: 120px;">Threshold</span>
                                 <span style="font-family: monospace; color: #6b7280; font-weight: 600;">${alert.threshold}</span>
-                            </div>`
+                            </div>` : ''}`
                         }
                     </div>
                 </div>
@@ -3920,6 +4051,11 @@ class AlertManager extends EventEmitter {
             } else {
                 thresholdDisplay = 'Multiple thresholds';
             }
+        } else if (alert.type === 'state_change') {
+            // Handle state change alerts specially
+            metricDisplay = 'Status';
+            valueDisplay = currentValue ? currentValue.charAt(0).toUpperCase() + currentValue.slice(1) : 'Unknown';
+            thresholdDisplay = null; // State changes don't have thresholds
         } else {
             // Format single metric values
             // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
@@ -3937,7 +4073,21 @@ class AlertManager extends EventEmitter {
         const smtpHost = config.host || process.env.SMTP_HOST || 'localhost';
         const smtpPort = config.port || process.env.SMTP_PORT || '587';
         
-        const subject = `🚨 Pulse Alert: ${alert.rule.name}`;
+        // Get a better title for state change alerts
+        let alertTitle = alert.rule.name;
+        if (alert.type === 'state_change') {
+            if (alert.rule.id === 'vm_down') {
+                alertTitle = 'VM/Container Stopped';
+            } else if (alert.rule.id === 'vm_up') {
+                alertTitle = 'VM/Container Started';
+            } else if (alert.rule.id === 'node_down') {
+                alertTitle = 'Node Offline';
+            } else if (alert.rule.id === 'node_up') {
+                alertTitle = 'Node Online';
+            }
+        }
+        
+        const subject = `🚨 Pulse Alert: ${alertTitle}`;
         
         
         // Handle node vs guest alert data
@@ -3978,8 +4128,8 @@ class AlertManager extends EventEmitter {
         const html = this.generateEmailTemplate({
             type: 'alert',
             data: {
-                title: alert.rule.name,
-                subtitle: 'Alert notification',
+                title: alertTitle,
+                subtitle: 'Status monitoring alert',
                 fromEmail: fromEmail,
                 toEmail: toEmailAddresses,
                 smtpHost: smtpHost,
@@ -4617,7 +4767,7 @@ Pulse Monitoring System`,
             const config = response.data;
             
             
-            return {
+            const emailConfig = {
                 emailProvider: config.EMAIL_PROVIDER,
                 sendgridApiKey: config.SENDGRID_API_KEY,
                 sendgridFromEmail: config.SENDGRID_FROM_EMAIL,
@@ -4629,6 +4779,16 @@ Pulse Monitoring System`,
                 pass: config.SMTP_PASS,
                 secure: config.SMTP_SECURE === 'true'
             };
+            console.log('[AlertManager] Loaded email config:', {
+                provider: emailConfig.emailProvider,
+                host: emailConfig.host,
+                port: emailConfig.port,
+                user: emailConfig.user,
+                hasPass: !!emailConfig.pass,
+                from: emailConfig.from,
+                to: emailConfig.to
+            });
+            return emailConfig;
         } catch (error) {
             console.error('[AlertManager] Error loading email config from API:', error);
             // Fallback to environment variables
@@ -4812,10 +4972,7 @@ Pulse Monitoring System`,
                     await this.checkNodeMetrics(nodes, nodeThresholds, globalNodeThresholds);
                     
                     // Also check node state transitions
-                    const StateMonitor = require('./stateMonitor');
-                    if (!this.stateMonitor) {
-                        this.stateMonitor = new StateMonitor();
-                    }
+                    // StateMonitor instance should already be initialized
                     const nodeStateAlerts = this.stateMonitor.checkNodeTransitions(nodes);
                     for (const alert of nodeStateAlerts) {
                         await this.triggerAlert(alert);

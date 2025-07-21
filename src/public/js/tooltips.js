@@ -127,7 +127,7 @@ PulseApp.tooltips = (() => {
                 const numericValue = parseInt(sliderElement.value);
                 displayText = `${numericValue}%`;
             }
-        } else if (sliderElement.id.startsWith('alert-slider-') || sliderElement.id.startsWith('global-alert-') || sliderElement.id.startsWith('node-alert-slider-') || sliderElement.id.startsWith('global-node-alert-')) {
+        } else if (sliderElement.id.startsWith('alert-slider-') || sliderElement.id.startsWith('global-alert-')) {
             isAlertSlider = true;
             const numericValue = parseInt(sliderElement.value);
             displayText = `${numericValue}%`;

@@ -697,11 +697,21 @@ PulseApp.alerts = (() => {
                             <span class="${nameClass}">
                                 ${alert.guest?.type === 'node' ? `Node: ${alert.guest.name || 'Unknown'}` : (alert.guest?.name || 'Unknown Guest')}
                             </span>
-                            ${alert.metric && alert.metric !== 'bundled' ? `
-                                <span class="text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
-                                    ${alert.metric.toUpperCase()}
-                                </span>
-                            ` : ''}
+                            ${(() => {
+                                // Handle different alert types
+                                if (alert.type === 'state_change') {
+                                    // State change alerts show status
+                                    return `<span class="text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
+                                        ${alert.currentValue ? alert.currentValue.toUpperCase() : 'STATUS'}
+                                    </span>`;
+                                } else if (alert.metric && alert.metric !== 'bundled') {
+                                    // Metric alerts show the metric name
+                                    return `<span class="text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
+                                        ${alert.metric.toUpperCase()}
+                                    </span>`;
+                                }
+                                return '';
+                            })()}
                             <span class="${valueClass}">
                                 ${alert.metric === 'bundled' ? '' : currentValueDisplay}
                             </span>
@@ -717,6 +727,12 @@ PulseApp.alerts = (() => {
                                 // Handle legacy bundled alerts
                                 if (alert.metric === 'bundled') {
                                     return '<div class="text-xs text-gray-500 dark:text-gray-400">Multiple metrics (legacy alert)</div>';
+                                }
+                                
+                                // Handle state change alerts
+                                if (alert.type === 'state_change') {
+                                    const ruleName = alert.rule?.name || alert.rule?.id || 'State change';
+                                    return `<div class="text-xs font-medium">${ruleName}</div>`;
                                 }
                                 
                                 // Display metric information if available
