@@ -111,7 +111,10 @@ function getState() {
     alerts: getAlertInfo(), // Corrected: Call the local getAlertInfo function
     
     // Custom Thresholds
-    customThresholds: getCustomThresholds()
+    customThresholds: getCustomThresholds(),
+    
+    // IO Averages
+    ioAverages: alertManager.getIOAverages()
   };
 }
 

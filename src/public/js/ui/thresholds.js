@@ -42,7 +42,6 @@ PulseApp.ui.thresholds = (() => {
 
         _setupSliderListeners();
         _setupSelectListeners();
-        _setupDragEndListeners();
         _setupResetButtonListener();
         _setupHideModeListener();
         _setupThresholdToggleListener();
@@ -66,53 +65,52 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function _handleThresholdDragStart(event) {
-        PulseApp.tooltips.updateSliderTooltip(event.target);
-        isDraggingSlider = true;
-        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-            PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-        }
+        // No longer needed for number inputs
     }
 
     function _handleThresholdDragEnd() {
-        if (isDraggingSlider) {
-            isDraggingSlider = false;
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
-                PulseApp.ui.dashboard.clearGuestMetricSnapshots();
-            }
-        }
+        // No longer needed for number inputs
     }
 
     function _setupSliderListeners() {
         for (const type in sliders) {
             const sliderElement = sliders[type];
             if (sliderElement) {
-                sliderElement.addEventListener('input', (event) => {
-                    const value = event.target.value;
-                    updateThreshold(type, value);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                // Auto-select all text on focus for easy replacement
+                sliderElement.addEventListener('focus', (event) => {
+                    event.target.select();
                 });
-                sliderElement.addEventListener('mousedown', _handleThresholdDragStart);
-                sliderElement.addEventListener('touchstart', _handleThresholdDragStart, { passive: true });
                 
-                // Handle wrapper activation for mobile
-                const wrapper = sliderElement.closest('.slider-wrapper');
-                if (wrapper) {
-                    // Activate wrapper on intentional interaction
-                    sliderElement.addEventListener('touchstart', (e) => {
-                        wrapper.classList.add('slider-active');
-                    }, { passive: true });
-                    
-                    // Deactivate after interaction ends
-                    sliderElement.addEventListener('touchend', (e) => {
-                        setTimeout(() => {
-                            wrapper.classList.remove('slider-active');
-                        }, 300);
-                    }, { passive: true });
-                }
+                // Number input behavior
+                sliderElement.addEventListener('input', (event) => {
+                    let value = parseInt(event.target.value) || 0;
+                    // Clamp value to valid range
+                    value = Math.max(0, Math.min(100, value));
+                    event.target.value = value;
+                    updateThreshold(type, value);
+                });
+                
+                // Handle Enter key to blur input
+                sliderElement.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.target.blur();
+                    }
+                });
+                
+                // Handle blur to ensure valid value
+                sliderElement.addEventListener('blur', (event) => {
+                    let value = parseInt(event.target.value) || 0;
+                    value = Math.max(0, Math.min(100, value));
+                    event.target.value = value;
+                    updateThreshold(type, value);
+                });
             } else {
                 console.warn(`Slider element not found for type: ${type}`);
             }
         }
+        
+        // Setup stepper buttons
+        _setupStepperButtons();
     }
 
     function _setupSelectListeners() {
@@ -130,10 +128,6 @@ PulseApp.ui.thresholds = (() => {
     }
 
 
-    function _setupDragEndListeners() {
-        document.addEventListener('mouseup', _handleThresholdDragEnd);
-        document.addEventListener('touchend', _handleThresholdDragEnd);
-    }
 
     function _setupResetButtonListener() {
         const resetButton = document.getElementById('reset-thresholds');
@@ -154,6 +148,40 @@ PulseApp.ui.thresholds = (() => {
                 updateDashboardFromThreshold();
             });
         }
+    }
+
+
+    function _setupStepperButtons() {
+        // Use event delegation for all stepper buttons
+        document.addEventListener('click', (event) => {
+            if (!event.target.classList.contains('stepper-button')) return;
+            
+            const targetId = event.target.getAttribute('data-stepper-target');
+            const action = event.target.getAttribute('data-stepper-action');
+            const input = document.getElementById(targetId);
+            
+            if (!input) return;
+            
+            // Get current value and constraints
+            let value = parseInt(input.value) || 0;
+            const step = parseInt(input.step) || 1;
+            const min = parseInt(input.min) || 0;
+            const max = parseInt(input.max) || 100;
+            
+            // Calculate new value
+            if (action === 'increase') {
+                value = Math.min(max, value + step);
+            } else if (action === 'decrease') {
+                value = Math.max(min, value - step);
+            }
+            
+            // Update the input value directly
+            input.value = value;
+            
+            // Trigger the input event to update the model
+            const inputEvent = new Event('input', { bubbles: true });
+            input.dispatchEvent(inputEvent);
+        });
     }
 
     function _setupScrollDetection() {
@@ -691,14 +719,23 @@ PulseApp.ui.thresholds = (() => {
 
     function createThresholdSliderHtml(id, min, max, step, value, additionalClasses = '') {
         return `
-            <div class="slider-wrapper">
-                <input type="range" 
+            <div class="flex items-center gap-0.5">
+                <button type="button" data-stepper-target="${id}" data-stepper-action="decrease"
+                        class="stepper-button px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded-l bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    −
+                </button>
+                <input type="number" 
                        id="${id}"
                        min="${min}" 
                        max="${max}" 
                        step="${step}" 
                        value="${value || min}"
-                       class="custom-slider w-full ${additionalClasses}">
+                       class="w-12 px-1 py-0.5 text-xs text-center border-t border-b border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 ${additionalClasses}">
+                <button type="button" data-stepper-target="${id}" data-stepper-action="increase"
+                        class="stepper-button px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded-r bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    +
+                </button>
+                <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">%</span>
             </div>
         `;
     }
@@ -720,10 +757,9 @@ PulseApp.ui.thresholds = (() => {
     function updateSliderVisual(sliderElement) {
         if (!sliderElement) return;
         
-        const value = parseInt(sliderElement.value);
-        const min = parseInt(sliderElement.min);
+        const value = parseInt(sliderElement.value) || 0;
         
-        if (value > min) {
+        if (value > 0) {
             sliderElement.classList.add('custom-threshold');
         } else {
             sliderElement.classList.remove('custom-threshold');
@@ -734,42 +770,36 @@ PulseApp.ui.thresholds = (() => {
     function setupThresholdSliderEvents(sliderElement, onChangeCallback) {
         if (!sliderElement) return;
         
+        // Auto-select all text on focus for easy replacement
+        sliderElement.addEventListener('focus', (event) => {
+            event.target.select();
+        });
+        
+        // Number input behavior
         sliderElement.addEventListener('input', (event) => {
-            const value = event.target.value;
+            let value = parseInt(event.target.value) || 0;
+            // Clamp value to valid range
+            value = Math.max(0, Math.min(100, value));
+            event.target.value = value;
             updateSliderVisual(event.target);
             if (onChangeCallback) onChangeCallback(value, event.target);
-            PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
-        sliderElement.addEventListener('mousedown', (event) => {
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+        // Handle Enter key to blur input
+        sliderElement.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.target.blur();
             }
         });
         
-        sliderElement.addEventListener('touchstart', (event) => {
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-            }
-        }, { passive: true });
-        
-        // Handle wrapper activation for mobile
-        const wrapper = sliderElement.closest('.slider-wrapper');
-        if (wrapper) {
-            // Activate wrapper on intentional interaction
-            sliderElement.addEventListener('touchstart', (e) => {
-                wrapper.classList.add('slider-active');
-            }, { passive: true });
-            
-            // Deactivate after interaction ends
-            sliderElement.addEventListener('touchend', (e) => {
-                setTimeout(() => {
-                    wrapper.classList.remove('slider-active');
-                }, 300);
-            }, { passive: true });
-        }
+        // Handle blur to ensure valid value
+        sliderElement.addEventListener('blur', (event) => {
+            let value = parseInt(event.target.value) || 0;
+            value = Math.max(0, Math.min(100, value));
+            event.target.value = value;
+            updateSliderVisual(event.target);
+            if (onChangeCallback) onChangeCallback(value, event.target);
+        });
     }
 
     function applyThresholdDimmingNow() {
@@ -781,26 +811,9 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function updateStatusMessageForHiddenGuests(hiddenCount) {
-        const statusElement = document.getElementById('dashboard-status-text');
-        if (!statusElement) return;
-        
-        const currentText = statusElement.textContent;
-        const hideMode = PulseApp.state.get('thresholdHideMode');
-        
-        if (hideMode && hiddenCount > 0) {
-            // Add hidden count info to the status text if not already present
-            if (!currentText.includes('hidden')) {
-                const totalRows = document.querySelectorAll('#main-table tbody tr[data-id]').length;
-                const visibleRows = totalRows - hiddenCount;
-                
-                // Update the showing count to reflect visible rows
-                const updatedText = currentText.replace(
-                    /Showing (\d+) guests/,
-                    `Showing ${visibleRows} guests (${hiddenCount} hidden)`
-                );
-                statusElement.textContent = updatedText;
-            }
-        }
+        // Status message functionality removed - guest counts now shown in node rows
+        // This function is kept for compatibility but does nothing
+        return;
     }
 
     function updateNodeHeaderVisibility() {

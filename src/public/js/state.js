@@ -205,7 +205,42 @@ PulseApp.state = (() => {
             
             // Only recombine dashboard data if VMs or containers changed
             if (internalState.changeTracking.dashboard) {
-                internalState.dashboardData = [...internalState.vmsData, ...internalState.containersData];
+                // Process VMs and containers to add calculated percentage fields
+                const processedVms = internalState.vmsData.map(vm => {
+                    const processed = { ...vm };
+                    // Calculate memory percentage
+                    if (vm.mem !== undefined && vm.maxmem && vm.maxmem > 0) {
+                        processed.memory = (vm.mem / vm.maxmem) * 100;
+                    } else {
+                        processed.memory = 0;
+                    }
+                    // Calculate disk percentage
+                    if (vm.disk !== undefined && vm.maxdisk && vm.maxdisk > 0) {
+                        processed.disk = (vm.disk / vm.maxdisk) * 100;
+                    } else {
+                        processed.disk = 0;
+                    }
+                    return processed;
+                });
+                
+                const processedContainers = internalState.containersData.map(container => {
+                    const processed = { ...container };
+                    // Calculate memory percentage
+                    if (container.mem !== undefined && container.maxmem && container.maxmem > 0) {
+                        processed.memory = (container.mem / container.maxmem) * 100;
+                    } else {
+                        processed.memory = 0;
+                    }
+                    // Calculate disk percentage
+                    if (container.disk !== undefined && container.maxdisk && container.maxdisk > 0) {
+                        processed.disk = (container.disk / container.maxdisk) * 100;
+                    } else {
+                        processed.disk = 0;
+                    }
+                    return processed;
+                });
+                
+                internalState.dashboardData = [...processedVms, ...processedContainers];
             }
             
             // Mark that we've received initial data
