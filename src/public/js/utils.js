@@ -590,31 +590,34 @@ PulseApp.utils = (() => {
         
         // Determine current value based on entity type
         let currentValue = config.min;
-        let isUsingGlobal = false;
+        let hasCustomValue = false;
         
         if (entityType === 'guest' && thresholds.guest[entityId] && thresholds.guest[entityId][metricType] !== undefined) {
             currentValue = thresholds.guest[entityId][metricType];
+            hasCustomValue = true;
         } else if (entityType === 'node' && thresholds.node[entityId] && thresholds.node[entityId][metricType] !== undefined) {
             currentValue = thresholds.node[entityId][metricType];
+            hasCustomValue = true;
         } else if (thresholds.global[metricType] !== undefined && thresholds.global[metricType] !== '') {
             currentValue = thresholds.global[metricType];
-            isUsingGlobal = true;
         }
         
         const sliderId = `alert-slider-${entityId}-${metricType}`;
+        // Pass the appropriate class to the input element
+        const inputClasses = hasCustomValue ? 'custom-threshold' : 'using-global';
         const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
             sliderId, 
             config.min, 
             config.max, 
             config.step, 
-            currentValue
+            currentValue,
+            inputClasses
         );
         
-        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
         const dataAttrs = `data-${entityType}-id="${entityId}" data-metric="${metricType}"`;
         
         return `
-            <div class="${containerClass} flex items-center" ${dataAttrs}>
+            <div class="alert-threshold-input flex items-center" ${dataAttrs}>
                 ${sliderHtml}
             </div>
         `;
@@ -641,11 +644,22 @@ PulseApp.utils = (() => {
         
         
         const selectId = `alert-select-${entityId}-${metricType}`;
+        const additionalClasses = isUsingGlobal ? 'using-global' : 'custom-threshold';
         const selectHtml = PulseApp.ui.thresholds.createThresholdSelectHtml(
             selectId, 
             options, 
-            currentValue.toString()  // Ensure it's a string for comparison
+            currentValue.toString(),  // Ensure it's a string for comparison
+            additionalClasses
         );
+        
+        // For guest entities, wrap in alert-threshold-input container for consistent styling
+        if (entityType === 'guest') {
+            return `
+                <div class="alert-threshold-input" data-guest-id="${entityId}" data-metric="${metricType}">
+                    ${selectHtml}
+                </div>
+            `;
+        }
         
         return selectHtml;
     }
@@ -856,10 +870,10 @@ PulseApp.utils = (() => {
     // Common constants for alert thresholds
     const IO_ALERT_OPTIONS = [
         { value: '', label: 'No alert' },
-        { value: '1048576', label: '> 1 MB/s' },
-        { value: '10485760', label: '> 10 MB/s' },
-        { value: '52428800', label: '> 50 MB/s' },
-        { value: '104857600', label: '> 100 MB/s' }
+        { value: '1048576', label: '> 1 MB/s sustained 30s' },
+        { value: '10485760', label: '> 10 MB/s sustained 30s' },
+        { value: '52428800', label: '> 50 MB/s sustained 30s' },
+        { value: '104857600', label: '> 100 MB/s sustained 30s' }
     ];
     
     // Common CSS class constants for consistency

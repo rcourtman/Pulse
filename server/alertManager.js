@@ -22,6 +22,8 @@ class AlertManager extends EventEmitter {
         this.notificationStatus = new Map();
         this.alertGroups = new Map();
         this.guestStates = new Map(); // Track previous guest states for transition detection
+        this.ioHistory = new Map(); // Track I/O history for rolling averages
+        this.ioHistoryMaxSamples = 30; // Keep 30 samples (5 minutes at 10-second intervals)
         this.alertMetrics = {
             totalFired: 0,
             totalResolved: 0,
@@ -1105,8 +1107,8 @@ class AlertManager extends EventEmitter {
     getActiveAlerts(filters = {}) {
         const active = [];
         for (const alert of this.activeAlerts.values()) {
-            // Include both 'active' alerts and 'resolved' alerts that have autoResolve=false
-            if ((alert.state === 'active' || (alert.state === 'resolved' && !alert.rule.autoResolve)) 
+            // Include 'pending', 'active' alerts and 'resolved' alerts that have autoResolve=false
+            if ((alert.state === 'pending' || alert.state === 'active' || (alert.state === 'resolved' && !alert.rule.autoResolve)) 
                 && this.matchesFilters(alert, filters)) {
                 try {
                     const formattedAlert = this.formatAlertForAPI(alert);
@@ -1193,7 +1195,11 @@ class AlertManager extends EventEmitter {
                 webhookSent: Boolean(alert.webhookSent || this.notificationStatus?.get(alert.id)?.webhookSent),
                 notificationChannels: this.getEnabledNotificationChannels(alert),
                 currentValue: alert.currentValue || null,
-                threshold: alert.threshold || null
+                threshold: alert.threshold || null,
+                state: String(alert.state || 'active'),
+                startTime: Number(alert.startTime || alert.triggeredAt || Date.now()),
+                pendingDuration: alert.rule?.duration || 0,
+                ioSustainedPeriod: alert.rule?.ioSustainedPeriod || 30000
             };
             
             // Handle node alerts differently - they don't have guest property
@@ -1482,9 +1488,6 @@ class AlertManager extends EventEmitter {
         const currentValue = metrics[metricName] || 0;
         const timestamp = Date.now();
         
-        
-        
-        
         // Get or initialize metrics history for this guest
         if (!this.guestMetricsHistory) {
             this.guestMetricsHistory = new Map();
@@ -1507,7 +1510,7 @@ class AlertManager extends EventEmitter {
             return 0; // No rate can be calculated yet
         }
         
-        // Calculate rate using the same logic as dashboard
+        // Calculate instantaneous rate using the same logic as dashboard
         const validHistory = guestHistory.filter(entry =>
             typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
             typeof entry[metricName] === 'number' && !isNaN(entry[metricName])
@@ -1526,15 +1529,91 @@ class AlertManager extends EventEmitter {
             return 0;
         }
         
-        // Return rate in bytes per second
-        const rate = valueDiff / timeDiffSeconds;
+        // Calculate instantaneous rate in bytes per second
+        const instantRate = valueDiff / timeDiffSeconds;
         
-        // Debug logging to see actual rates
-        if (guest && guest.name && rate > 0) {
-            console.log(`[AlertManager] ${guest.name} ${metricName} rate: ${Math.round(rate/1024/1024*100)/100} MB/s`);
+        // Store the instantaneous rate in I/O history for rolling average
+        const ioKey = `${guestId}-${metricName}`;
+        if (!this.ioHistory.has(ioKey)) {
+            this.ioHistory.set(ioKey, []);
         }
         
-        return rate;
+        const ioSamples = this.ioHistory.get(ioKey);
+        ioSamples.push({
+            timestamp: timestamp,
+            rate: instantRate
+        });
+        
+        // Keep only recent samples (5 minutes worth)
+        const fiveMinutesAgo = timestamp - (5 * 60 * 1000);
+        const recentSamples = ioSamples.filter(sample => sample.timestamp > fiveMinutesAgo);
+        
+        // Limit to max samples to prevent memory issues
+        if (recentSamples.length > this.ioHistoryMaxSamples) {
+            recentSamples.splice(0, recentSamples.length - this.ioHistoryMaxSamples);
+        }
+        
+        this.ioHistory.set(ioKey, recentSamples);
+        
+        // Calculate rolling average from recent samples
+        if (recentSamples.length === 0) {
+            return instantRate; // Fallback to instant rate if no history
+        }
+        
+        const avgRate = recentSamples.reduce((sum, sample) => sum + sample.rate, 0) / recentSamples.length;
+        
+        // Debug logging to see the difference between instant and average
+        if (guest && guest.name && (instantRate > 0 || avgRate > 0)) {
+            console.log(`[AlertManager] ${guest.name} ${metricName}: instant=${Math.round(instantRate/1024/1024*100)/100} MB/s, 5min-avg=${Math.round(avgRate/1024/1024*100)/100} MB/s (${recentSamples.length} samples)`);
+        }
+        
+        // Return the rolling average instead of instantaneous rate
+        return avgRate;
+    }
+
+    // Get current IO rolling averages for all guests
+    getIOAverages() {
+        const averages = {};
+        
+        // Process each entry in ioHistory
+        for (const [key, samples] of this.ioHistory.entries()) {
+            if (samples.length === 0) continue;
+            
+            // Key format is "endpointId-node-vmid-metricName"
+            // Split carefully to handle the composite guest ID
+            const parts = key.split('-');
+            if (parts.length < 4) continue; // Invalid key format
+            
+            // Extract metric name (last part) and reconstruct guest ID
+            const metricName = parts[parts.length - 1];
+            const guestId = parts.slice(0, -1).join('-');
+            
+            // Also extract just the vmid for frontend compatibility
+            const vmid = parts[parts.length - 2];
+            
+            // Calculate current 5-minute average
+            const now = Date.now();
+            const fiveMinutesAgo = now - (5 * 60 * 1000);
+            const recentSamples = samples.filter(sample => sample.timestamp > fiveMinutesAgo);
+            
+            if (recentSamples.length > 0) {
+                const avgRate = recentSamples.reduce((sum, sample) => sum + sample.rate, 0) / recentSamples.length;
+                
+                // Store under both full guest ID and vmid for frontend compatibility
+                if (!averages[guestId]) {
+                    averages[guestId] = {};
+                }
+                averages[guestId][metricName] = avgRate;
+                
+                // Also store under just vmid for easier frontend access
+                if (!averages[vmid]) {
+                    averages[vmid] = {};
+                }
+                averages[vmid][metricName] = avgRate;
+            }
+        }
+        
+        return averages;
     }
 
     getMetricValue(metrics, metricName, guest) {
@@ -2883,6 +2962,10 @@ class AlertManager extends EventEmitter {
                 continue;
             }
             
+            // Debug logging for I/O metrics
+            if (['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType)) {
+                console.log(`[AlertManager] ${guest.name} - ${metricType}: currentValue=${currentValue} bytes/sec (${(currentValue / 1024 / 1024).toFixed(2)} MB/s), threshold=${effectiveThreshold} bytes/sec (${(effectiveThreshold / 1024 / 1024).toFixed(2)} MB/s)`);
+            }
             
             const condition = rule.condition || 'greater_than';
             const isThresholdExceeded = this.evaluateCondition(currentValue, condition, effectiveThreshold);
@@ -3727,6 +3810,38 @@ class AlertManager extends EventEmitter {
         if (type === 'alert') {
             // Real alert content
             const alert = data.alert;
+            
+            // Format alert values if they're raw
+            if (alert.metric && typeof alert.metric === 'string') {
+                const metricNames = {
+                    'cpu': 'CPU',
+                    'memory': 'Memory',
+                    'disk': 'Disk',
+                    'diskread': 'Disk Read',
+                    'diskwrite': 'Disk Write',
+                    'netin': 'Network In',
+                    'netout': 'Network Out',
+                    'NETOUT': 'Network Out',
+                    'NETIN': 'Network In',
+                    'DISKREAD': 'Disk Read',
+                    'DISKWRITE': 'Disk Write'
+                };
+                alert.metric = metricNames[alert.metric] || alert.metric;
+            }
+            
+            // Format I/O values if they're raw bytes
+            const ioMetrics = ['diskread', 'diskwrite', 'netin', 'netout'];
+            const metricLower = alert.metric?.toLowerCase();
+            if (ioMetrics.includes(metricLower)) {
+                if (typeof alert.currentValue === 'number' && alert.currentValue > 1000) {
+                    const mbps = (alert.currentValue / 1024 / 1024).toFixed(2);
+                    alert.currentValue = `${mbps} MB/s (5min avg)`;
+                }
+                if (typeof alert.threshold === 'number' && alert.threshold > 1000) {
+                    const mbps = (alert.threshold / 1024 / 1024).toFixed(2);
+                    alert.threshold = `${mbps} MB/s`;
+                }
+            }
             const statusColor = alert.type === 'triggered' ? '#dc2626' : '#10b981';
             const statusIcon = alert.type === 'triggered' ? '🚨' : '✅';
             const statusText = alert.type === 'triggered' ? 'Alert Triggered' : 'Alert Resolved';
@@ -3775,11 +3890,11 @@ class AlertManager extends EventEmitter {
                             // For single metric alerts
                             `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
                                 <span style="font-weight: 500; color: #374151; min-width: 120px;">Metric</span>
-                                <span style="font-family: monospace; color: #6b7280; font-weight: 600;">${alert.metric}</span>
+                                <span style="font-family: monospace; color: #6b7280; font-weight: 600;">${alert.metric || 'N/A'}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
                                 <span style="font-weight: 500; color: #374151; min-width: 120px;">Current Value</span>
-                                <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600;">${alert.currentValue}</span>
+                                <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600;">${alert.currentValue || 'N/A'}</span>
                             </div>
                             ${alert.threshold !== null && alert.threshold !== undefined ? 
                             `<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
@@ -4061,9 +4176,33 @@ class AlertManager extends EventEmitter {
             // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
             const metric = alert.metric || alert.rule.metric;
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
-            valueDisplay = isPercentageMetric ? `${Math.round(currentValue || 0)}%` : (currentValue || 'N/A');
-            thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
-            metricDisplay = metric ? metric.toUpperCase() : 'N/A';
+            const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metric);
+            
+            if (isPercentageMetric) {
+                valueDisplay = `${Math.round(currentValue || 0)}%`;
+                thresholdDisplay = `${effectiveThreshold || 0}%`;
+            } else if (isIOMetric) {
+                // Format I/O metrics as MB/s
+                const currentMBps = ((currentValue || 0) / 1024 / 1024).toFixed(2);
+                const thresholdMBps = ((effectiveThreshold || 0) / 1024 / 1024).toFixed(2);
+                valueDisplay = `${currentMBps} MB/s (5m avg)`;
+                thresholdDisplay = `${thresholdMBps} MB/s`;
+            } else {
+                valueDisplay = currentValue || 'N/A';
+                thresholdDisplay = effectiveThreshold || 'N/A';
+            }
+            
+            // Format metric display name
+            const metricNames = {
+                'cpu': 'CPU',
+                'memory': 'Memory',
+                'disk': 'Disk',
+                'diskread': 'Disk Read',
+                'diskwrite': 'Disk Write',
+                'netin': 'Network In',
+                'netout': 'Network Out'
+            };
+            metricDisplay = metricNames[metric] || (metric ? metric.toUpperCase() : 'N/A');
         }
 
         // Get email configuration
@@ -4961,6 +5100,9 @@ Pulse Monitoring System`,
                 }
             }
             
+            // Node alert checking temporarily disabled - only tracking guests for now
+            // TODO: Re-enable node alerts when ready to implement properly
+            /*
             // Check node metrics if we have node thresholds configured
             if (Object.keys(nodeThresholds).length > 0 || Object.keys(globalNodeThresholds).length > 0) {
                 console.log('[AlertManager] Checking node metrics with thresholds');
@@ -4981,6 +5123,7 @@ Pulse Monitoring System`,
                     console.log('[AlertManager] No nodes found to check');
                 }
             }
+            */
             
         } catch (error) {
             console.error('[AlertManager] Error in simplified threshold evaluation:', error);
@@ -5010,10 +5153,30 @@ Pulse Monitoring System`,
             if (metricResult) {
                 console.log(`[AlertManager] ${guest.name} - ${metricType}: value=${metricResult.currentValue}, threshold=${metricResult.threshold}, exceeded=${metricResult.isExceeded}`);
                 if (metricResult.isExceeded) {
+                    // Use configurable sustained period for I/O metrics, otherwise use configured duration
+                    const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType);
+                    const ioSustainedPeriod = thresholdConfig?.ioSustainedPeriod || 30000; // Default to 30s if not configured
+                    const effectiveDuration = isIOMetric ? ioSustainedPeriod : alertDuration;
+                    
                     // Create an individual alert for this metric
-                    await this.createIndividualMetricAlert(guest, metricType, metricResult, thresholdConfig, timestamp, alertDuration);
+                    await this.createIndividualMetricAlert(guest, metricType, metricResult, thresholdConfig, timestamp, effectiveDuration);
                 } else {
-                    // Metric is below threshold, resolve any existing alert
+                    // Metric is below threshold, but check hysteresis for I/O metrics
+                    const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType);
+                    const alertKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}_${metricType}`;
+                    const existingAlert = this.activeAlerts.get(alertKey);
+                    
+                    if (existingAlert && existingAlert.state === 'active' && isIOMetric) {
+                        // Apply 20% hysteresis for I/O metrics
+                        const hysteresisThreshold = metricResult.threshold * 0.8; // 20% below the trigger threshold
+                        if (metricResult.currentValue > hysteresisThreshold) {
+                            // Within hysteresis band, don't resolve yet
+                            console.log(`[AlertManager] ${guest.name} ${metricType} within hysteresis band: ${this.formatMetricValue(metricResult.currentValue, metricType)} > ${this.formatMetricValue(hysteresisThreshold, metricType)} (80% of ${this.formatMetricValue(metricResult.threshold, metricType)})`);
+                            continue; // Skip resolution
+                        }
+                    }
+                    
+                    // Outside hysteresis band or not an I/O metric, resolve the alert
                     await this.resolveIndividualMetricAlert(guest, metricType, timestamp);
                 }
             } else {
@@ -5084,7 +5247,9 @@ Pulse Monitoring System`,
                         console.error(`[AlertManager] Error triggering alert ${newAlert.id}:`, error);
                     });
                 } else {
-                    console.log(`[AlertManager] Created pending individual ${metricType} alert for ${guest.name}`);
+                    const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType);
+                    const durationDesc = isIOMetric ? '30s sustained' : `${alertDuration}ms`;
+                    console.log(`[AlertManager] Created pending individual ${metricType} alert for ${guest.name} (waiting for ${durationDesc})`);
                 }
             } else if (existingAlert.state === 'pending') {
                 // Check if duration threshold is met
@@ -5105,9 +5270,16 @@ Pulse Monitoring System`,
                 } else {
                     // Update pending alert with current data
                     existingAlert.lastUpdate = timestamp;
-                existingAlert.currentValue = metricResult.currentValue;
-                existingAlert.threshold = metricResult.threshold;
-                existingAlert.message = `${alertName}: ${metricDetail}`;
+                    existingAlert.currentValue = metricResult.currentValue;
+                    existingAlert.threshold = metricResult.threshold;
+                    existingAlert.message = `${alertName}: ${metricDetail}`;
+                    
+                    // Log progress for I/O metrics
+                    const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType);
+                    if (isIOMetric) {
+                        const remainingTime = Math.max(0, alertDuration - elapsedTime);
+                        console.log(`[AlertManager] I/O metric ${metricType} for ${guest.name} sustained for ${Math.round(elapsedTime/1000)}s, ${Math.round(remainingTime/1000)}s remaining`);
+                    }
                 }
             } else if (existingAlert.state === 'active') {
                 // Update existing active alert
@@ -5285,12 +5457,82 @@ Pulse Monitoring System`,
             return;
         }
         
-        // Check if threshold is exceeded
-        const isExceeded = currentValue >= threshold;
+        // For I/O metrics, implement hysteresis and sustained threshold
+        const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(metricType);
         
         // Create unique alert key for this guest + metric
         const alertKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}_${metricType}`;
         const existingAlert = this.activeAlerts.get(alertKey);
+        
+        // Calculate if threshold is exceeded with hysteresis for I/O metrics
+        let isExceeded;
+        if (isIOMetric) {
+            if (existingAlert && existingAlert.state === 'active') {
+                // For active alerts, use 80% of threshold for hysteresis (20% buffer)
+                isExceeded = currentValue >= (threshold * 0.8);
+            } else {
+                // For new alerts, use full threshold
+                isExceeded = currentValue >= threshold;
+            }
+        } else {
+            // Non-I/O metrics use simple threshold
+            isExceeded = currentValue >= threshold;
+        }
+        
+        // Check if I/O metric is in cooldown period
+        if (isIOMetric && !existingAlert) {
+            const cooldownKey = `${alertKey}_cooldown`;
+            if (this.ioCooldowns && this.ioCooldowns.has(cooldownKey)) {
+                const cooldown = this.ioCooldowns.get(cooldownKey);
+                if (timestamp < cooldown.cooldownUntil) {
+                    // Still in cooldown period, don't create new alert
+                    const remainingCooldown = Math.round((cooldown.cooldownUntil - timestamp) / 1000);
+                    console.log(`[AlertManager] ${guest.name} ${metricType} in cooldown for ${remainingCooldown}s more`);
+                    return;
+                } else {
+                    // Cooldown expired, remove it
+                    this.ioCooldowns.delete(cooldownKey);
+                }
+            }
+        }
+        
+        // Track sustained threshold for I/O metrics
+        if (isIOMetric) {
+            const sustainedKey = `${alertKey}_sustained`;
+            if (!this.sustainedThresholds) {
+                this.sustainedThresholds = new Map();
+            }
+            
+            if (isExceeded) {
+                // Track when threshold was first exceeded
+                if (!this.sustainedThresholds.has(sustainedKey)) {
+                    this.sustainedThresholds.set(sustainedKey, {
+                        firstExceeded: timestamp,
+                        lastChecked: timestamp
+                    });
+                    console.log(`[AlertManager] I/O threshold first exceeded for ${guest.name} ${metricType}: ${this.formatMetricValue(currentValue, metricType)}`);
+                } else {
+                    // Update last checked time
+                    const sustained = this.sustainedThresholds.get(sustainedKey);
+                    sustained.lastChecked = timestamp;
+                }
+                
+                // Check if sustained for required duration (30 seconds for I/O)
+                const sustained = this.sustainedThresholds.get(sustainedKey);
+                const sustainedDuration = timestamp - sustained.firstExceeded;
+                if (sustainedDuration < 30000) { // 30 seconds
+                    // Not sustained long enough, don't create alert yet
+                    console.log(`[AlertManager] I/O threshold for ${guest.name} ${metricType} not sustained yet (${Math.round(sustainedDuration/1000)}s < 30s)`);
+                    return;
+                }
+            } else {
+                // Threshold not exceeded, clear sustained tracking
+                if (this.sustainedThresholds.has(sustainedKey)) {
+                    console.log(`[AlertManager] Clearing sustained threshold tracking for ${guest.name} ${metricType}`);
+                    this.sustainedThresholds.delete(sustainedKey);
+                }
+            }
+        }
         
         if (isExceeded) {
             const alertName = `${this.getReadableMetricName(metricType)}: ${this.formatMetricValue(currentValue, metricType)} (≥${this.formatMetricValue(threshold, metricType)})`;
@@ -5335,12 +5577,40 @@ Pulse Monitoring System`,
                 existingAlert.message = `${guest.name} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid}) on ${guest.node} - ${alertName}`;
             }
         } else {
-            // Threshold not exceeded - resolve alert if it exists
-            if (existingAlert && existingAlert.state === 'active') {
+            // Threshold not exceeded - but for I/O metrics, apply hysteresis
+            let shouldResolve = true;
+            
+            if (existingAlert && existingAlert.state === 'active' && isIOMetric) {
+                // Apply 20% hysteresis for I/O metrics to prevent flapping
+                const hysteresisThreshold = threshold * 0.8; // 20% below the trigger threshold
+                if (currentValue > hysteresisThreshold) {
+                    shouldResolve = false;
+                    console.log(`[AlertManager] ${guest.name} ${metricType} within hysteresis band: ${this.formatMetricValue(currentValue, metricType)} > ${this.formatMetricValue(hysteresisThreshold, metricType)} (80% of ${this.formatMetricValue(threshold, metricType)})`);
+                }
+            }
+            
+            // Resolve alert if it exists and we're outside hysteresis band
+            if (existingAlert && existingAlert.state === 'active' && shouldResolve) {
                 existingAlert.state = 'resolved';
                 existingAlert.resolvedAt = timestamp;
                 
                 console.log(`[AlertManager] Resolved simple ${metricType.toUpperCase()} alert for ${guest.name}`);
+                
+                // For I/O metrics, add a cooldown period after resolution
+                if (isIOMetric) {
+                    const cooldownKey = `${alertKey}_cooldown`;
+                    if (!this.ioCooldowns) {
+                        this.ioCooldowns = new Map();
+                    }
+                    
+                    // Add 2-minute cooldown after resolution
+                    this.ioCooldowns.set(cooldownKey, {
+                        resolvedAt: timestamp,
+                        cooldownUntil: timestamp + (2 * 60 * 1000) // 2 minutes
+                    });
+                    
+                    console.log(`[AlertManager] Added 2-minute cooldown for ${guest.name} ${metricType} after resolution`);
+                }
                 
                 // Properly resolve the alert
                 this.resolveAlert(existingAlert).catch(error => {

@@ -85,59 +85,115 @@ PulseApp.ui.dashboard = (() => {
     function _setupAlertEventListeners(container) {
         if (!container) return;
         
-        // Setup event listeners for all alert sliders in this container
-        const alertSliders = container.querySelectorAll('.alert-threshold-input input[type="range"]');
-        alertSliders.forEach(slider => {
-            const container = slider.closest('.alert-threshold-input');
+        // Setup event listeners for all alert number inputs in this container
+        const alertInputs = container.querySelectorAll('.alert-threshold-input input[type="number"]');
+        alertInputs.forEach(input => {
+            const container = input.closest('.alert-threshold-input');
             const guestId = container?.getAttribute('data-guest-id');
             const metricType = container?.getAttribute('data-metric');
             
             if (guestId && metricType) {
-                slider.addEventListener('input', (event) => {
-                    // Only update tooltip during drag, don't update any DOM
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                // Auto-select all text on focus for easy replacement
+                input.addEventListener('focus', (event) => {
+                    event.target.select();
                 });
                 
-                // Save only on release
-                slider.addEventListener('change', (event) => {
-                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
-                        PulseApp.ui.alerts.setSliderDragging(false);
-                    }
-                    const value = event.target.value;
+                // Update on input change
+                input.addEventListener('input', (event) => {
+                    let value = parseInt(event.target.value) || 0;
+                    // Clamp value to valid range
+                    value = Math.max(0, Math.min(100, value));
+                    event.target.value = value;
                     // Update threshold and remove global indicator
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value.toString(), true);
+                });
+                
+                // Handle Enter key to blur input
+                input.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.target.blur();
+                    }
+                });
+                
+                // Handle blur to ensure valid value
+                input.addEventListener('blur', (event) => {
+                    let value = parseInt(event.target.value) || 0;
+                    value = Math.max(0, Math.min(100, value));
+                    event.target.value = value;
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value.toString(), true);
+                });
+            }
+        });
+        
+        // Setup event listeners for all alert select dropdowns in this container
+        const alertSelects = container.querySelectorAll('.alert-threshold-input select');
+        alertSelects.forEach(select => {
+            const container = select.closest('.alert-threshold-input');
+            const guestId = container?.getAttribute('data-guest-id');
+            const metricType = container?.getAttribute('data-metric');
+            
+            if (guestId && metricType) {
+                // Only add event listener if one doesn't already exist
+                if (!select.hasAttribute('data-listener-attached')) {
+                    select.setAttribute('data-listener-attached', 'true');
+                    
+                    // Prevent dropdown from closing when clicking on it
+                    select.addEventListener('mousedown', (event) => {
+                        event.stopPropagation();
+                    });
+                    
+                    select.addEventListener('mouseup', (event) => {
+                        event.stopPropagation();
+                    });
+                    
+                    select.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                    });
+                    
+                    select.addEventListener('focus', (event) => {
+                        event.stopPropagation();
+                    });
+                    
+                    select.addEventListener('change', (event) => {
+                        event.stopPropagation();
+                        PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, event.target.value, true);
+                    });
+                }
+            }
+        });
+        
+        // Setup event listeners for stepper buttons
+        const stepperButtons = container.querySelectorAll('.alert-threshold-input .stepper-button');
+        stepperButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                const targetId = button.getAttribute('data-stepper-target');
+                const action = button.getAttribute('data-stepper-action');
+                const input = document.getElementById(targetId);
+                
+                if (!input) return;
+                
+                const container = input.closest('.alert-threshold-input');
+                const guestId = container?.getAttribute('data-guest-id');
+                const metricType = container?.getAttribute('data-metric');
+                
+                if (!guestId || !metricType) return;
+                
+                // The stepper logic is handled by thresholds.js global handler
+                // Just need to update the guest threshold after the value changes
+                setTimeout(() => {
+                    const value = input.value;
                     PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, true);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
                     
                     // Remove global indicator visual styling
                     container.classList.remove('using-global');
                     container.removeAttribute('data-using-global');
-                });
-                
-                slider.addEventListener('mousedown', (event) => {
-                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
-                        PulseApp.ui.alerts.setSliderDragging(true);
-                    }
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                });
-                
-                slider.addEventListener('touchstart', (event) => {
-                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
-                        PulseApp.ui.alerts.setSliderDragging(true);
-                    }
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                }, { passive: true });
-            }
+                }, 0);
+            });
         });
         
         // Setup event listeners for all alert dropdowns in this container
-        const alertSelects = container.querySelectorAll('.alert-threshold-input select');
-        alertSelects.forEach(select => {
+        const alertDropdowns = container.querySelectorAll('.alert-threshold-input select');
+        alertDropdowns.forEach(select => {
             const container = select.closest('.alert-threshold-input');
             const guestId = container?.getAttribute('data-guest-id');
             const metricType = container?.getAttribute('data-metric');
@@ -196,9 +252,9 @@ PulseApp.ui.dashboard = (() => {
         function findElements() {
             searchInput = domCache.get('#dashboard-search');
             tableBodyEl = domCache.get('#main-table tbody');
-            statusElementEl = domCache.get('#dashboard-status-text');
+            // statusElementEl no longer needed - guest count moved to node rows
             
-            return tableBodyEl && statusElementEl;
+            return tableBodyEl;
         }
         
         // Try to find elements immediately
@@ -209,8 +265,7 @@ PulseApp.ui.dashboard = (() => {
                 if (!findElements()) {
                     logger.error('Critical elements still not found after retry. Dashboard may not function properly.');
                     logger.error('Missing elements:', {
-                        tableBodyEl: !!tableBodyEl,
-                        statusElementEl: !!statusElementEl
+                        tableBodyEl: !!tableBodyEl
                     });
                 }
             }, 100);
@@ -543,7 +598,6 @@ PulseApp.ui.dashboard = (() => {
 
     function _renderGroupedByNode(tableBody, sortedData, createRowFn) {
         const fnStartTime = performance.now();
-        console.log(`[_renderGroupedByNode] Starting with ${sortedData.length} guests`);
         
         const nodeGroups = {};
         let visibleNodes = new Set();
@@ -576,7 +630,6 @@ PulseApp.ui.dashboard = (() => {
             const wouldTriggerNodeAlerts = alertStateCache.get(`node-${nodeName}`) || false;
             if (wouldTriggerNodeAlerts) {
                 nodeHeaderRow.setAttribute('data-should-alert', 'true');
-                console.log(`[_renderGroupedByNode] Node ${nodeName} will get yellow border`);
             }
             
             if (isAlertsMode) {
@@ -590,9 +643,6 @@ PulseApp.ui.dashboard = (() => {
             // Immediately add guests for this node
             nodeGroups[nodeName].forEach(guest => {
                 const wouldTriggerGuestAlerts = alertStateCache.get(`guest-${guest.id}`) || false;
-                if (wouldTriggerGuestAlerts) {
-                    console.log(`[_renderGroupedByNode] Guest ${guest.name} will get yellow border`);
-                }
                 
                 const guestRow = createRowFn(guest);
                 if (guestRow) {
@@ -601,8 +651,6 @@ PulseApp.ui.dashboard = (() => {
                 }
             });
         });
-        
-        console.log(`[_renderGroupedByNode] Row preparation completed in ${(performance.now() - fnStartTime).toFixed(2)}ms`);
         
         // Second pass: Replace entire table content at once
         const domUpdateStartTime = performance.now();
@@ -622,17 +670,12 @@ PulseApp.ui.dashboard = (() => {
                 guestCount++;
             }
         });
-        console.log(`[_renderGroupedByNode] About to append: ${nodeCount} alert nodes, ${guestCount} alert guests`);
         
         tableBody.appendChild(fragment);
         
         // Check what actually got rendered
         const renderedAlertNodes = tableBody.querySelectorAll('tr.node-header[data-should-alert="true"]').length;
         const renderedAlertGuests = tableBody.querySelectorAll('tr[data-would-trigger-alert="true"]').length;
-        console.log(`[_renderGroupedByNode] Actually rendered: ${renderedAlertNodes} alert nodes, ${renderedAlertGuests} alert guests`);
-        
-        console.log(`[_renderGroupedByNode] DOM updates completed in ${(performance.now() - domUpdateStartTime).toFixed(2)}ms`);
-        console.log(`[_renderGroupedByNode] Total function time: ${(performance.now() - fnStartTime).toFixed(2)}ms`);
         
         return { visibleCount, visibleNodes };
     }
@@ -838,6 +881,7 @@ PulseApp.ui.dashboard = (() => {
                 row.removeAttribute('data-would-trigger-alert');
             }
         }
+        // In alerts mode, never set alert attributes here - only updateAlertBorders should handle them
         
         if (isAlertsMode) {
             // Remove all dimming attributes when in alerts mode
@@ -992,7 +1036,7 @@ PulseApp.ui.dashboard = (() => {
             const diskCell = cells[6];
             if (isAlertsMode && diskCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
-            } else if (guest.status === STATUS_RUNNING && guest.type === GUEST_TYPE_CT) {
+            } else if (!isAlertsMode && guest.status === STATUS_RUNNING && guest.type === GUEST_TYPE_CT) {
                 // Check if we already have the chart structure
                 const existingChartContainer = diskCell.querySelector(`#chart-${guest.id}-disk`);
                 const existingMetricText = diskCell.querySelector('.metric-text');
@@ -1010,10 +1054,14 @@ PulseApp.ui.dashboard = (() => {
                     diskCell.innerHTML = newDiskHTML;
                 }
             } else {
-                // Not running, not CT, or alerts mode without existing control
+                // Not running, not CT, or needs alert control
                 const newDiskHTML = _createDiskBarHtml(guest);
                 if (diskCell.innerHTML !== newDiskHTML) {
                     diskCell.innerHTML = newDiskHTML;
+                    // Setup event listeners if in alerts mode
+                    if (isAlertsMode) {
+                        _setupAlertEventListeners(diskCell);
+                    }
                 }
             }
 
@@ -1131,12 +1179,19 @@ PulseApp.ui.dashboard = (() => {
             }
         }
         
+        // Skip updates if user is actively editing an input or select in alerts mode
+        if (PulseApp.ui.alerts?.isAlertsMode?.() && document.activeElement && 
+            ((document.activeElement.tagName === 'INPUT' && 
+              document.activeElement.id && document.activeElement.id.includes('alert-')) ||
+             document.activeElement.tagName === 'SELECT')) {
+            return;
+        }
+        
         // If elements aren't initialized yet, try to initialize them
-        if (!tableBodyEl || !statusElementEl) {
+        if (!tableBodyEl) {
             tableBodyEl = document.querySelector('#main-table tbody');
-            statusElementEl = document.getElementById('dashboard-status-text');
             
-            if (!tableBodyEl || !statusElementEl) {
+            if (!tableBodyEl) {
                 return;
             }
         }
@@ -1149,6 +1204,26 @@ PulseApp.ui.dashboard = (() => {
         // Store current scroll position for both axes
         const currentScrollLeft = scrollableContainer.scrollLeft || 0;
         const currentScrollTop = scrollableContainer.scrollTop || 0;
+        
+        // Check if we're in alerts mode
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        
+        // Preserve focus information if in alerts mode
+        let focusedElement = null;
+        let focusedId = null;
+        let focusedValue = null;
+        let focusedSelectionStart = null;
+        let focusedSelectionEnd = null;
+        
+        if (isAlertsMode && document.activeElement && document.activeElement.tagName === 'INPUT') {
+            focusedElement = document.activeElement;
+            focusedId = focusedElement.id;
+            focusedValue = focusedElement.value;
+            if (focusedElement.type === 'number') {
+                focusedSelectionStart = focusedElement.selectionStart;
+                focusedSelectionEnd = focusedElement.selectionEnd;
+            }
+        }
 
         // Show loading skeleton if no data yet
         const currentData = PulseApp.state.get('dashboardData');
@@ -1158,18 +1233,30 @@ PulseApp.ui.dashboard = (() => {
             }
         }
 
-        refreshDashboardData();
+        // Skip data refresh if we're in alerts mode and just updating thresholds
+        // This prevents data from changing while adjusting alert thresholds
+        const skipDataRefresh = isAlertsMode && currentData && currentData.length > 0;
+        
+        if (!skipDataRefresh) {
+            refreshDashboardData();
+        }
 
         const dashboardData = PulseApp.state.get('dashboardData') || [];
         const filterGuestType = PulseApp.state.get('filterGuestType');
         const filterStatus = PulseApp.state.get('filterStatus');
         const thresholdState = PulseApp.state.getThresholdState();
         const groupByNode = PulseApp.state.get('groupByNode');
-        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
 
         const filteredData = _filterDashboardData(dashboardData, searchInput, filterGuestType, filterStatus, thresholdState);
         const sortStateMain = PulseApp.state.getSortState('main');
-        const sortedData = PulseApp.utils.sortData(filteredData, sortStateMain.column, sortStateMain.direction, 'main');
+        
+        // In alerts mode, always sort by ID to prevent row position changes
+        let sortedData;
+        if (isAlertsMode) {
+            sortedData = [...filteredData].sort((a, b) => a.id.localeCompare(b.id));
+        } else {
+            sortedData = PulseApp.utils.sortData(filteredData, sortStateMain.column, sortStateMain.direction, 'main');
+        }
         
         // Pre-calculate all alert states to avoid staggered updates
         alertStateCache.clear();
@@ -1177,30 +1264,22 @@ PulseApp.ui.dashboard = (() => {
         
         if (PulseApp.ui.alerts && PulseApp.ui.alerts.checkGuestWouldTriggerAlerts) {
             // Calculate guest alert states
-            console.log(`[Alert Pre-calc] Starting guest calculations for ${sortedData.length} guests`);
             sortedData.forEach(guest => {
                 const guestThresholds = PulseApp.ui.alerts.getGuestThresholds()[guest.id] || {};
                 const wouldTrigger = PulseApp.ui.alerts.checkGuestWouldTriggerAlerts(guest.vmid, guestThresholds);
                 alertStateCache.set(`guest-${guest.id}`, wouldTrigger);
             });
-            console.log(`[Alert Pre-calc] Guest calculations done in ${(performance.now() - startTime).toFixed(2)}ms`);
             
             // Calculate node alert states (always calculate, not just when grouped)
             if (PulseApp.ui.alerts.checkNodeWouldTriggerAlerts) {
                 const nodeStartTime = performance.now();
                 const nodesData = PulseApp.state.get('nodesData') || [];
-                console.log(`[Alert Pre-calc] Starting node calculations for ${nodesData.length} nodes`);
                 nodesData.forEach(node => {
                     const wouldTrigger = PulseApp.ui.alerts.checkNodeWouldTriggerAlerts(node.node);
                     alertStateCache.set(`node-${node.node}`, wouldTrigger);
-                    if (wouldTrigger) {
-                        console.log(`[Alert Pre-calc] Node ${node.node} would trigger alert`);
-                    }
                 });
-                console.log(`[Alert Pre-calc] Node calculations done in ${(performance.now() - nodeStartTime).toFixed(2)}ms`);
             }
         }
-        console.log(`[Alert Pre-calc] Total pre-calculation time: ${(performance.now() - startTime).toFixed(2)}ms`);
 
         let visibleCount = 0;
         let visibleNodes = new Set();
@@ -1266,7 +1345,6 @@ PulseApp.ui.dashboard = (() => {
         } else if (needsFullRebuild) {
             // Full rebuild for normal rendering with scroll preservation
             const renderStartTime = performance.now();
-            console.log(`[Render] Starting full rebuild render (grouped: ${groupByNode})`);
             
             PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
                 if (groupByNode) {
@@ -1280,8 +1358,6 @@ PulseApp.ui.dashboard = (() => {
                 }
             });
             previousGroupByNode = groupByNode;
-            
-            console.log(`[Render] Full rebuild completed in ${(performance.now() - renderStartTime).toFixed(2)}ms`);
             
         } else {
             // Incremental update using DOM diffing with scroll preservation
@@ -1357,6 +1433,29 @@ PulseApp.ui.dashboard = (() => {
             });
         }
         
+        // Restore focus if we had a focused element in alerts mode
+        if (focusedId && isAlertsMode) {
+            requestAnimationFrame(() => {
+                const newElement = document.getElementById(focusedId);
+                if (newElement && newElement.tagName === 'INPUT') {
+                    newElement.focus();
+                    // Restore the value if it was being edited
+                    if (focusedValue !== null) {
+                        newElement.value = focusedValue;
+                    }
+                    // For number inputs, restore selection
+                    if (newElement.type === 'number' && focusedSelectionStart !== null) {
+                        try {
+                            newElement.setSelectionRange(focusedSelectionStart, focusedSelectionEnd);
+                        } catch (e) {
+                            // Some browsers don't support selection on number inputs
+                            newElement.select();
+                        }
+                    }
+                }
+            });
+        }
+        
         // Re-add node threshold rows if in alerts mode
         if (PulseApp.ui.alerts && PulseApp.ui.alerts.isAlertsMode && PulseApp.ui.alerts.isAlertsMode()) {
             // Node list updates are now handled by the dashboard table update itself
@@ -1365,6 +1464,11 @@ PulseApp.ui.dashboard = (() => {
             // Update alert borders after dashboard update
             if (PulseApp.ui.alerts.updateAlertBorders) {
                 PulseApp.ui.alerts.updateAlertBorders();
+            }
+            
+            // Reapply dimming classes to ensure proper styling after dashboard update
+            if (PulseApp.ui.alerts.reapplyDimmingClasses) {
+                PulseApp.ui.alerts.reapplyDimmingClasses();
             }
         }
     }
@@ -1469,6 +1573,13 @@ PulseApp.ui.dashboard = (() => {
         const statusText = isOnline ? 'online' : (node.status || 'unknown');
         const statusColor = isOnline ? 'text-green-500' : 'text-red-500';
         
+        // Calculate guest counts for this node
+        const dashboardData = PulseApp.state?.get('dashboardData') || [];
+        const nodeGuests = dashboardData.filter(guest => guest.node === node.node);
+        const runningGuests = nodeGuests.filter(guest => guest.status === 'running').length;
+        const stoppedGuests = nodeGuests.filter(guest => guest.status === 'stopped').length;
+        const totalGuests = nodeGuests.length;
+        
         // Check if charts mode is active
         const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
         const mainContainer = document.getElementById('main');
@@ -1519,7 +1630,12 @@ PulseApp.ui.dashboard = (() => {
             <td class="sticky left-0 bg-gray-50 dark:bg-gray-800 z-10 py-1 px-2 font-medium text-gray-700 dark:text-gray-300">
                 <div class="flex items-center gap-2">
                     <span class="h-2 w-2 rounded-full ${statusColor}"></span>
-                    ${nodeNameContent}
+                    <div>
+                        ${nodeNameContent}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                            ${totalGuests} guest${totalGuests !== 1 ? 's' : ''} (${runningGuests} running, ${stoppedGuests} stopped)
+                        </div>
+                    </div>
                 </div>
             </td>
             <td class="py-1 px-2 text-gray-700 dark:text-gray-300">NODE</td>
@@ -1540,8 +1656,8 @@ PulseApp.ui.dashboard = (() => {
     function _createDiskBarHtml(guest) {
         // Check if alerts mode is active
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
-        if (isAlertsMode && guest.type === GUEST_TYPE_CT) {
-            // In alerts mode, always show alert controls for CTs regardless of running status
+        if (isAlertsMode) {
+            // In alerts mode, show alert controls for all guests regardless of running status
             return _createAlertSliderHtml(guest.id, 'disk', {
                 min: 0,
                 max: 100,
@@ -1643,6 +1759,7 @@ PulseApp.ui.dashboard = (() => {
                 row.setAttribute('data-would-trigger-alert', 'true');
             }
         }
+        // In alerts mode, never set alert attributes here - only updateAlertBorders should handle them
         
         if (isAlertsMode) {
             // Remove all dimming in alerts mode
@@ -1815,7 +1932,6 @@ PulseApp.ui.dashboard = (() => {
                 };
             }
         });
-        console.log('[snapshotGuestMetricsForDrag] Captured snapshot for', Object.keys(guestMetricDragSnapshot).length, 'guests');
     }
 
     function clearGuestMetricSnapshots() {
@@ -2267,7 +2383,6 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function clearAlertCache() {
-        console.log('[Dashboard] Clearing alert cache');
         alertStateCache.clear();
     }
     

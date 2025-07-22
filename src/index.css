@@ -108,34 +108,4 @@
   }
 }
 
-/* Mobile slider protection */
-@media (max-width: 640px) {
-  /* Wrapper for sliders on mobile */
-  .slider-wrapper {
-    position: relative;
-    width: 100%;
-  }
-  
-  /* Invisible overlay that blocks touch on sliders by default */
-  .slider-wrapper::before {
-    content: '';
-    position: absolute;
-    top: -10px;
-    bottom: -10px;
-    left: 0;
-    right: 0;
-    z-index: 5;
-    /* Block pointer events to prevent accidental slider changes */
-    pointer-events: auto;
-  }
-  
-  /* When actively interacting with slider, remove overlay */
-  .slider-wrapper.slider-active::before {
-    pointer-events: none;
-  }
-  
-  /* Additional protection during scroll */
-  body.is-scrolling input[type="range"] {
-    pointer-events: none !important;
-  }
-}
+/* Mobile protection - removed since we're using number inputs now */

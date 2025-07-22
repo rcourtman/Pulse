@@ -334,13 +334,25 @@ PulseApp.ui.common = (() => {
             nodeLink = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
         }
         
-        let nodeContent = nodeLink;
+        // Calculate guest counts for this node
+        const dashboardData = PulseApp.state?.get('dashboardData') || [];
+        const nodeGuests = dashboardData.filter(guest => guest.node === text);
+        const runningGuests = nodeGuests.filter(guest => guest.status === 'running').length;
+        const stoppedGuests = nodeGuests.filter(guest => guest.status === 'stopped').length;
+        const totalGuests = nodeGuests.length;
         
-        // Always create individual cells so first one can be sticky
-        // Match the exact structure from backups tab that works
-        let html = `<${cellTag} class="sticky left-0 ${baseClasses} bg-gray-50 dark:bg-gray-700/50">${nodeContent}</${cellTag}>`;
+        let nodeContent = `
+            <span>${nodeLink}</span>
+            <span class="text-[10px] text-gray-400 dark:text-gray-500 font-normal ml-2">
+                ${totalGuests} guest${totalGuests !== 1 ? 's' : ''} (${runningGuests} running, ${stoppedGuests} stopped)
+            </span>
+        `;
+        
+        // Create first cell that spans 3 columns for more room, and make it sticky
+        // Use the exact same background as the row for consistency
+        let html = `<${cellTag} colspan="3" class="sticky left-0 z-10 ${baseClasses} bg-gray-50 dark:bg-gray-700/50 whitespace-nowrap">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
-        for (let i = 1; i < colspan; i++) {
+        for (let i = 3; i < colspan; i++) {
             html += `<${cellTag} class="${baseClasses}"></${cellTag}>`;
         }
         return html;

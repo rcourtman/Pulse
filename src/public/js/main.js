@@ -253,7 +253,6 @@ document.addEventListener('DOMContentLoaded', function() {
             'connection-status',
             'main-table',
             'dashboard-search',
-            'dashboard-status-text',
             'app-version'
         ];
         let allFound = true;

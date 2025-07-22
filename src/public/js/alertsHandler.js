@@ -84,7 +84,6 @@ PulseApp.alerts = (() => {
                 // Estimate server time at moment of request (compensate for network delay)
                 const estimatedServerTime = serverTime - (requestDuration / 2);
                 serverTimeOffset = estimatedServerTime - startTime;
-                console.log(`[Alerts] Clock offset detected: ${Math.round(serverTimeOffset / 1000)}s (server ahead)`);
             }
             
             if (alertsResponse.ok) {
@@ -98,7 +97,6 @@ PulseApp.alerts = (() => {
                 // Load persisted history from server
                 if (alertsData.history) {
                     alertHistory = alertsData.history;
-                    console.log(`[Alerts] Loaded ${alertHistory.length} alerts from server history`);
                 }
                 
                 // Merge active alerts into history (in case some are already acknowledged)
@@ -147,7 +145,6 @@ PulseApp.alerts = (() => {
         notificationContainer.className = 'fixed bottom-4 right-4 z-50 space-y-2';
         notificationContainer.style.cssText = 'position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; max-width: 280px; pointer-events: none;';
         document.body.appendChild(notificationContainer);
-        console.log('[Alerts] Notification container created:', notificationContainer);
     }
 
     function setupHeaderIndicator() {
@@ -256,8 +253,8 @@ PulseApp.alerts = (() => {
             
             if (!indicator || !dropdown) return;
             
-            // Only handle clicks related to alerts - ignore PBS tab interactions and chart interactions
-            if (e.target.closest('.pbs-tab, .pbs-content, .pbs-section, .mini-chart, .chart-overlay')) {
+            // Only handle clicks related to alerts - ignore PBS tab interactions, chart interactions, and select dropdowns
+            if (e.target.closest('.pbs-tab, .pbs-content, .pbs-section, .mini-chart, .chart-overlay, select, .alert-threshold-input')) {
                 return;
             }
             
@@ -315,8 +312,6 @@ PulseApp.alerts = (() => {
     
     // Process queued resolved toast notifications
     function processResolvedToastQueue() {
-        console.log('[Alerts] processResolvedToastQueue called, pending:', pendingResolvedToasts.length);
-        
         if (pendingResolvedToasts.length === 0) return;
         
         // Group all pending resolved alerts
@@ -348,8 +343,6 @@ PulseApp.alerts = (() => {
     // Process queued toast notifications
     let toastProcessingTimeout = null;
     function processToastQueue() {
-        console.log('[Alerts] processToastQueue called, pending:', pendingAlertToasts.length);
-        
         // Don't process during alert storm
         if (alertStormMode) {
             pendingAlertToasts = []; // Clear queue during storm
@@ -599,25 +592,15 @@ PulseApp.alerts = (() => {
             return '';
         }
         
-        // Debug logging to see what data we have
-        console.log('[Alerts] Creating card for alert:', {
-            id: alert.id,
-            metric: alert.metric,
-            rule: alert.rule,
-            currentValue: alert.currentValue,
-            threshold: alert.threshold,
-            message: alert.message,
-            guest: alert.guest?.name,
-            fullAlert: alert
-        });
-        
         const isResolved = alert.resolved || false;
         const isAcknowledged = acknowledged || alert.acknowledged || false;
+        const isPending = alert.state === 'pending';
         
         // Visual hierarchy:
         // 1. Active unacknowledged: Full color (amber) - demands attention
-        // 2. Acknowledged: Greyed out - seen but still active
-        // 3. Resolved: Greyed out - no longer active
+        // 2. Pending: Muted amber with progress - waiting for sustained threshold
+        // 3. Acknowledged: Greyed out - seen but still active
+        // 4. Resolved: Greyed out - no longer active
         let alertColor, alertBg, cardClasses;
         
         if (isResolved) {
@@ -630,6 +613,11 @@ PulseApp.alerts = (() => {
             alertColor = 'border-gray-300 dark:border-gray-500';
             alertBg = 'bg-gray-50/50 dark:bg-transparent';
             cardClasses = `border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0`;
+        } else if (isPending) {
+            // Pending alerts - muted amber with progress indicator
+            alertColor = 'border-amber-400/50 dark:border-amber-500/50';
+            alertBg = 'bg-amber-50/50 dark:bg-amber-900/10';
+            cardClasses = `border-l-4 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
         } else {
             // Active unacknowledged alerts - full color and prominent
             alertColor = 'border-amber-500 dark:border-amber-400';
@@ -655,9 +643,20 @@ PulseApp.alerts = (() => {
                 currentValueDisplay = 'Network anomaly';
             } else if (typeof alert.currentValue === 'number') {
                 const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
-                // Show decimal for values < 1%
-                const displayValue = alert.currentValue < 1 ? alert.currentValue.toFixed(1) : Math.round(alert.currentValue);
-                currentValueDisplay = `${displayValue}${isPercentageMetric ? '%' : ''}`;
+                const isIOMetric = ['diskread', 'diskwrite', 'netin', 'netout'].includes(alert.metric);
+                
+                if (isIOMetric) {
+                    // Format I/O metrics properly
+                    currentValueDisplay = formatMetricValue(alert.currentValue, alert.metric);
+                } else if (isPercentageMetric) {
+                    // Show decimal for values < 1%
+                    const displayValue = alert.currentValue < 1 ? alert.currentValue.toFixed(1) : Math.round(alert.currentValue);
+                    currentValueDisplay = `${displayValue}%`;
+                } else {
+                    // Other numeric values
+                    const displayValue = alert.currentValue < 1 ? alert.currentValue.toFixed(1) : Math.round(alert.currentValue);
+                    currentValueDisplay = `${displayValue}`;
+                }
             } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
                 const values = [];
                 for (const [metric, value] of Object.entries(alert.currentValue)) {
@@ -716,7 +715,8 @@ PulseApp.alerts = (() => {
                                 ${alert.metric === 'bundled' ? '' : currentValueDisplay}
                             </span>
                             ${isResolved ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">resolved</span>' : 
-                              isAcknowledged ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">ack</span>' : ''}
+                              isAcknowledged ? '<span class="text-xs border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 px-1 rounded text-[10px]">ack</span>' : 
+                              isPending ? '<span class="text-xs border border-amber-400/50 dark:border-amber-500/50 text-amber-600 dark:text-amber-400 px-1 rounded text-[10px]">pending</span>' : ''}
                         </div>
                         <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
                             ${(() => {
@@ -905,6 +905,30 @@ PulseApp.alerts = (() => {
                         ` : ''}
                     </div>
                 </div>
+                ${(() => {
+                    // Show progress bar for pending I/O alerts
+                    if (isPending && ['diskread', 'diskwrite', 'netin', 'netout'].includes(alert.metric)) {
+                        const now = Date.now() + serverTimeOffset;
+                        const elapsed = now - (alert.startTime || alert.triggeredAt || now);
+                        const duration = alert.ioSustainedPeriod || 30000; // Use configured period or default to 30s
+                        const progress = Math.min(100, (elapsed / duration) * 100);
+                        const remaining = Math.max(0, duration - elapsed);
+                        const remainingSeconds = Math.ceil(remaining / 1000);
+                        
+                        return `
+                            <div class="px-3 pb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-amber-600 dark:text-amber-400">Waiting for sustained activity</span>
+                                    <span class="text-gray-500 dark:text-gray-400">${remainingSeconds}s</span>
+                                </div>
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-1.5">
+                                    <div class="bg-amber-400/70 dark:bg-amber-500/70 h-1.5 rounded transition-all duration-1000" style="width: ${progress}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    return '';
+                })()}
             </div>
         `;
     }
@@ -926,7 +950,6 @@ PulseApp.alerts = (() => {
             }
         } else if (alertStormMode && alertsReceivedTimestamps.length < ALERT_STORM_THRESHOLD / 2) {
             alertStormMode = false;
-            console.log('[Alerts] Alert storm subsided. Resuming normal operation.');
         }
         
         // Ensure alert has a triggeredAt timestamp
@@ -981,7 +1004,6 @@ PulseApp.alerts = (() => {
             }
             
             // Queue toast notification
-            console.log('[Alerts] Queueing toast for new alert:', alert.guest.name);
             pendingAlertToasts.push({
                 guest: alert.guest.name,
                 message: alert.message,
@@ -1015,8 +1037,6 @@ PulseApp.alerts = (() => {
 
     function handleResolvedAlert(alert) {
         try {
-            console.log('[Alerts] Handling resolved alert:', alert);
-            
             // Find the alert in activeAlerts by ID
             const activeIndex = activeAlerts.findIndex(a => a.id === alert.id);
             
@@ -1044,7 +1064,6 @@ PulseApp.alerts = (() => {
             
             // Queue resolved toast notification
             if (alert && alert.guest && alert.guest.name) {
-                console.log('[Alerts] Queueing toast for resolved alert:', alert.guest.name);
                 pendingResolvedToasts.push({
                     guest: alert.guest.name,
                     message: `Resolved: ${alert.guest.name}`,
@@ -1101,8 +1120,6 @@ PulseApp.alerts = (() => {
     }
 
     function showNotification(alert, type = 'alert') {
-        console.log('[Alerts] showNotification called:', { alert, type });
-        
         // Ensure notification container exists
         if (!notificationContainer) {
             createNotificationContainer();
@@ -1152,7 +1169,6 @@ PulseApp.alerts = (() => {
         `;
 
         notificationContainer.appendChild(notification);
-        console.log('[Alerts] Notification added to DOM:', { message, type, container: notificationContainer });
 
         requestAnimationFrame(() => {
             notification.className = notification.className.replace('opacity-0 translate-y-2 scale-95', 'opacity-100 translate-y-0 scale-100');
@@ -1185,11 +1201,8 @@ PulseApp.alerts = (() => {
     const acknowledgeInProgress = new Set();
     
     async function acknowledgeAlert(alertId, ruleId) {
-        console.log('[Alerts] Acknowledging alert:', alertId, ruleId);
-        
         // Prevent duplicate acknowledgements
         if (acknowledgeInProgress.has(alertId)) {
-            console.log('[Alerts] Acknowledge already in progress for:', alertId);
             return;
         }
         
@@ -1204,7 +1217,6 @@ PulseApp.alerts = (() => {
         if (alertIndex < 0) {
             alertIndex = alertHistory.findIndex(a => a.id === alertId);
             targetArray = alertHistory;
-            console.log('[Alerts] Alert not in activeAlerts, found in history at index:', alertIndex);
         }
         
         if (alertIndex >= 0) {
@@ -1428,7 +1440,6 @@ PulseApp.alerts = (() => {
                 const previousAlerts = [...activeAlerts];
                 // Trust the server's active alerts list
                 activeAlerts = Array.isArray(state.alerts.active) ? state.alerts.active : [];
-                console.log('[Alerts] Updated active alerts:', activeAlerts.length);
                 
                 // Check for new alerts that weren't in the previous list
                 const previousIds = new Set(previousAlerts.map(a => a.id));
@@ -1436,8 +1447,6 @@ PulseApp.alerts = (() => {
                 
                 // Show notifications for new alerts
                 if (newAlerts.length > 0) {
-                    console.log('[Alerts] Detected new alerts:', newAlerts.length, 'alertsInitialized:', alertsInitialized);
-                    
                     // Group alerts by metric type
                     const alertsByMetric = {};
                     newAlerts.forEach(alert => {
@@ -1450,8 +1459,6 @@ PulseApp.alerts = (() => {
                     
                     // Show grouped notifications
                     Object.entries(alertsByMetric).forEach(([metric, alerts]) => {
-                        console.log('[Alerts] Processing metric group:', metric, 'with', alerts.length, 'alerts');
-                        
                         if (alerts.length === 1) {
                             // Single alert for this metric
                             const alert = alerts[0];
@@ -1743,8 +1750,6 @@ PulseApp.alerts = (() => {
 
     // Acknowledge all alerts for a specific VM
     async function acknowledgeVMAlerts(vmid, node, endpointId) {
-        console.log(`[Alerts] Acknowledging all alerts for VM ${vmid} on node ${node}`);
-        
         // Find all unacknowledged alerts for this VM
         const vmAlerts = activeAlerts.filter(a => 
             !a.acknowledged && 
@@ -1755,11 +1760,8 @@ PulseApp.alerts = (() => {
         );
         
         if (vmAlerts.length === 0) {
-            console.log('[Alerts] No unacknowledged alerts found for this VM');
             return;
         }
-        
-        console.log(`[Alerts] Found ${vmAlerts.length} alerts to acknowledge`);
         
         // Acknowledge each alert
         for (const alert of vmAlerts) {
@@ -1771,11 +1773,8 @@ PulseApp.alerts = (() => {
     
     // Test function to manually trigger a notification
     function testNewAlertNotification() {
-        console.log('[Alerts] Testing new alert notification...');
-        
         // First check if container exists
         if (!notificationContainer) {
-            console.log('[Alerts] Container does not exist, creating it...');
             createNotificationContainer();
         }
         
@@ -1785,7 +1784,6 @@ PulseApp.alerts = (() => {
         testDiv.textContent = 'TEST ALERT NOTIFICATION';
         testDiv.onclick = () => testDiv.remove();
         document.body.appendChild(testDiv);
-        console.log('[Alerts] Added red test div to body');
         
         // Also try the regular notification
         showNotification({

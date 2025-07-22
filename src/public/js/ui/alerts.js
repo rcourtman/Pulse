@@ -52,10 +52,13 @@ PulseApp.ui.alerts = (() => {
         
         // Initialize state
         isAlertsMode = alertsToggle.checked;
-        updateAlertsMode();
         
-        // Load saved configuration
-        loadSavedConfiguration();
+        // Load saved configuration BEFORE updating alerts mode
+        // This ensures guest thresholds are loaded before transforming the table
+        loadSavedConfiguration().then(() => {
+            // Now update alerts mode after configuration is loaded
+            updateAlertsMode();
+        });
         
         // Load notification status
         updateNotificationStatus();
@@ -154,17 +157,7 @@ PulseApp.ui.alerts = (() => {
             saveButton.addEventListener('click', saveAlertConfig);
         }
         
-        // Test email button
-        const testEmailButton = document.getElementById('test-email-alert');
-        if (testEmailButton) {
-            testEmailButton.addEventListener('click', sendTestEmail);
-        }
-        
-        // Test webhook button
-        const testWebhookButton = document.getElementById('test-webhook-alert');
-        if (testWebhookButton) {
-            testWebhookButton.addEventListener('click', sendTestWebhook);
-        }
+        // Test buttons removed - testing available in Settings modal
         
         // Auto-resolve toggle
         const autoResolveToggle = document.getElementById('alert-auto-resolve-toggle');
@@ -317,7 +310,6 @@ PulseApp.ui.alerts = (() => {
         const webhookEnabled = document.getElementById('alert-webhook-toggle')?.checked || false;
         const anyMethodEnabled = emailEnabled || webhookEnabled;
         
-        console.log('[handleNotificationMethodToggle] Email:', emailEnabled, 'Webhook:', webhookEnabled, 'Any:', anyMethodEnabled);
         
         // Control the Status Monitoring card based on notification methods
         const statusCard = document.getElementById('status-monitoring-card');
@@ -376,10 +368,9 @@ PulseApp.ui.alerts = (() => {
         // Update other controls
         const controls = [
             'alert-duration-select',
+            'io-sustained-period-select',
             'alert-auto-resolve-toggle',
-            'save-alert-config',
-            'test-email-alert',
-            'test-webhook-alert'
+            'save-alert-config'
         ];
         
         controls.forEach(controlId => {
@@ -484,8 +475,21 @@ PulseApp.ui.alerts = (() => {
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
             
+            // Clear the entire alert cache FIRST before any updates
+            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearAlertCache) {
+                PulseApp.ui.dashboard.clearAlertCache();
+            }
+            
+            // Force clear any stale markers before transforming
+            forceRemoveAllYellowMarkers();
+            
             // Transform table to show threshold inputs
             transformTableToAlertsMode();
+            
+            // Apply dimming classes after transformation
+            setTimeout(() => {
+                reapplyDimmingClasses();
+            }, 50);
             
             // Update node list for per-node overrides
             const nodesData = PulseApp.state?.get('nodesData');
@@ -497,6 +501,22 @@ PulseApp.ui.alerts = (() => {
             if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
                 PulseApp.ui.dashboard.updateDashboardTable();
             }
+            
+            // Update alert borders after dashboard is ready
+            setTimeout(() => {
+                // Clear again in case dashboard update added them back
+                forceRemoveAllYellowMarkers();
+                updateAlertBorders();
+            }, 100);
+            
+            // And once more after a longer delay to ensure correct markers
+            setTimeout(() => {
+                // Don't just clear - ensure the RIGHT guests have markers
+                updateAlertBorders();
+                
+                // Log what we end up with
+                const markedRows = document.querySelectorAll('tr[data-would-trigger-alert="true"]');
+            }, 500);
             
         } else {
             // Don't show the main threshold row - let the threshold module control its visibility
@@ -517,6 +537,11 @@ PulseApp.ui.alerts = (() => {
             
             // Clear only alert-specific row styling
             clearAllAlertStyling();
+            
+            // Clear the alert cache when exiting
+            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearAlertCache) {
+                PulseApp.ui.dashboard.clearAlertCache();
+            }
             
             // Update node summary cards
             if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
@@ -652,69 +677,43 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
-    // Optimized event setup: only update tooltip during drag, defer all DOM updates until release
+    // Number input event setup for alert inputs
     function setupAlertSliderEvents(sliderElement, metricType) {
         if (!sliderElement) return;
         
-        // Track drag start and take snapshot
-        sliderElement.addEventListener('mousedown', () => {
-            isDraggingGlobalSlider = true;
-            // Take snapshot of guest metrics for responsive dragging
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-            }
-            PulseApp.tooltips.updateSliderTooltip(sliderElement);
+        // Auto-select all text on focus for easy replacement
+        sliderElement.addEventListener('focus', (event) => {
+            event.target.select();
         });
         
-        sliderElement.addEventListener('touchstart', () => {
-            isDraggingGlobalSlider = true;
-            // Take snapshot of guest metrics for responsive dragging
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-            }
-            PulseApp.tooltips.updateSliderTooltip(sliderElement);
-        }, { passive: true });
-        
-        // Update during drag - EXACTLY like threshold page
+        // Number input behavior
         sliderElement.addEventListener('input', (event) => {
-            const value = event.target.value;
-            globalThresholds[metricType] = value;
+            let value = parseInt(event.target.value) || 0;
+            // Clamp value to valid range
+            value = Math.max(0, Math.min(100, value));
+            event.target.value = value;
+            globalThresholds[metricType] = value.toString();
             
-            // Update tooltip
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-            
-            // Update borders immediately - no delays, no checks, just update
+            // Update borders immediately with current data
             updateAlertBorders();
             
-            // DON'T update child sliders during drag - wait for release
-        });
-        
-        // Update everything on release
-        sliderElement.addEventListener('change', (event) => {
-            const value = event.target.value;
-            // State already updated during drag, but update again to be safe
-            globalThresholds[metricType] = value;
-            
-            // Clear dragging flag and snapshot
-            isDraggingGlobalSlider = false;
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
-                PulseApp.ui.dashboard.clearGuestMetricSnapshots();
-            }
-            
-            // Force immediate dashboard update to reflect new thresholds
+            // Force dashboard update to reflect new thresholds
             if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
                 PulseApp.ui.dashboard.updateDashboardTable();
             }
+            
+            // Update save message with user interaction flag
+            updateAlertSaveMessage(true);
             
             // Also sync the global node threshold
             if (metricType === 'cpu' || metricType === 'memory' || metricType === 'disk') {
                 isSyncingSliders = true; // Prevent DOM updates during sync
                 if (syncTimeout) clearTimeout(syncTimeout); // Clear any existing timeout
-                globalNodeThresholds[metricType] = parseInt(value);
+                globalNodeThresholds[metricType] = value;
                 
                 // Update the corresponding global node slider
                 const nodeSlider = document.getElementById(`global-node-${metricType}`);
-                if (nodeSlider && nodeSlider.value !== value) {
+                if (nodeSlider && nodeSlider.value !== value.toString()) {
                     nodeSlider.value = value;
                     const nodeValueDisplay = document.getElementById(`global-node-${metricType}-value`);
                     if (nodeValueDisplay) {
@@ -727,25 +726,42 @@ PulseApp.ui.alerts = (() => {
             }
             
             // Update the slider's own styling based on whether it's default or custom
-            const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : metricType === 'disk' ? 90 : '';
-            if (value != defaultValue && value !== '') {
+            const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : metricType === 'disk' ? 90 : 0;
+            if (value !== defaultValue) {
                 sliderElement.classList.add('custom-threshold');
             } else {
                 sliderElement.classList.remove('custom-threshold');
             }
             
             // FIRST update child sliders - before any border calculations
-            updateGuestInputValues(metricType, value, true);
+            updateGuestInputValues(metricType, value.toString(), true);
             
             // THEN update row styling
             updateRowStylingOnly();
-            
-            // Don't need to call updateAlertBorders here since we force a dashboard update below
-            
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-            // Changes will be saved when user clicks save button
         });
         
+        // Handle Enter key to blur input
+        sliderElement.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.target.blur();
+            }
+        });
+        
+        // Handle blur to ensure valid value
+        sliderElement.addEventListener('blur', (event) => {
+            let value = parseInt(event.target.value) || 0;
+            value = Math.max(0, Math.min(100, value));
+            event.target.value = value;
+            globalThresholds[metricType] = value.toString();
+            
+            // Update styling
+            const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : metricType === 'disk' ? 90 : 0;
+            if (value !== defaultValue) {
+                sliderElement.classList.add('custom-threshold');
+            } else {
+                sliderElement.classList.remove('custom-threshold');
+            }
+        });
     }
 
     function setupGlobalThresholdEventListeners() {
@@ -856,11 +872,16 @@ PulseApp.ui.alerts = (() => {
     function checkGuestWouldTriggerAlerts(guestId, guestThresholds) {
         // Simple direct check - always use current dashboard data
         const dashboardData = PulseApp.state.get('dashboardData') || [];
-        const guest = dashboardData.find(g => g.id == guestId || g.vmid == guestId);
+        const guest = dashboardData.find(g => g.id == guestId || g.vmid == guestId || g.name == guestId);
         
         if (!guest) return false;
         if (guest.status !== 'running') return false;
         
+        // Get IO averages from state for accurate predictions
+        const ioAverages = PulseApp.state.get('ioAverages') || {};
+        const guestIOAverages = ioAverages[guestId] || {};
+        
+        // Check all metrics including I/O
         const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
         let hasAnyThresholds = false;
         let exceededThresholds = 0;
@@ -903,25 +924,58 @@ PulseApp.ui.alerts = (() => {
                 // Same issue as memory - use pre-calculated value with rounding adjustment
                 guestValue = guest.disk;
                 
+                // Fix disk value if it's in bytes instead of percentage
+                if (guestValue > 100) {
+                    // This is bytes, need to convert to percentage
+                    if (guest.maxdisk && guest.maxdisk > 0) {
+                        guestValue = Math.round(guestValue / guest.maxdisk * 100);
+                    } else if (guest.diskTotal && guest.diskTotal > 0) {
+                        guestValue = Math.round(guestValue / guest.diskTotal * 100);
+                    } else {
+                        guestValue = 0; // Can't calculate percentage without total
+                    }
+                }
+                
                 // If the value is exactly at the threshold when rounded, adjust for potential rounding
                 if (guestValue === parseFloat(thresholdValue)) {
                     guestValue = guestValue - 0.01;
                 }
             } else if (metricType === 'diskread') {
-                guestValue = guest.diskread;
+                // For I/O metrics, only use rolling average - raw values are cumulative counters
+                guestValue = guestIOAverages.diskread;
+                if (guestValue === undefined) {
+                    // No average available - skip this metric as we can't predict accurately
+                    continue;
+                }
             } else if (metricType === 'diskwrite') {
-                guestValue = guest.diskwrite;
+                // For I/O metrics, only use rolling average - raw values are cumulative counters
+                guestValue = guestIOAverages.diskwrite;
+                if (guestValue === undefined) {
+                    // No average available - skip this metric as we can't predict accurately
+                    continue;
+                }
             } else if (metricType === 'netin') {
-                guestValue = guest.netin;
+                // For I/O metrics, only use rolling average - raw values are cumulative counters
+                guestValue = guestIOAverages.netin;
+                if (guestValue === undefined) {
+                    // No average available - skip this metric as we can't predict accurately
+                    continue;
+                }
             } else if (metricType === 'netout') {
-                guestValue = guest.netout;
+                // For I/O metrics, only use rolling average - raw values are cumulative counters
+                guestValue = guestIOAverages.netout;
+                if (guestValue === undefined) {
+                    // No average available - skip this metric as we can't predict accurately
+                    continue;
+                }
             }
             
             // Skip if guest value is not available
             if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) continue;
             
             // Check if guest value exceeds threshold
-            if (guestValue >= parseFloat(thresholdValue)) {
+            const thresholdNum = parseFloat(thresholdValue);
+            if (!isNaN(thresholdNum) && guestValue >= thresholdNum) {
                 exceededThresholds++;
                 
                 // For OR logic, return true immediately if any threshold is exceeded
@@ -1006,65 +1060,178 @@ PulseApp.ui.alerts = (() => {
     }
     
     // Simple border update with basic protection
+    function reapplyDimmingClasses() {
+        if (!isAlertsMode) return;
+        
+        const tableBody = mainTable.querySelector('tbody');
+        if (!tableBody) return;
+        
+        const rows = tableBody.querySelectorAll('tr[data-id]');
+        
+        rows.forEach(row => {
+            const guestId = row.getAttribute('data-id');
+            if (!guestId) return;
+            
+            // Find all alert inputs and selects in this row
+            const inputs = row.querySelectorAll('.alert-threshold-input input[type="number"], .alert-threshold-input select[data-guest-id]');
+            
+            inputs.forEach(input => {
+                let metricType;
+                if (input.tagName === 'SELECT') {
+                    metricType = input.getAttribute('data-metric');
+                } else {
+                    const container = input.closest('.alert-threshold-input');
+                    metricType = container?.getAttribute('data-metric');
+                }
+                
+                if (!metricType) return;
+                
+                // Check if this guest has a custom value for this metric
+                const hasCustomValue = guestAlertThresholds[guestId] && 
+                                     guestAlertThresholds[guestId][metricType] !== undefined;
+                
+                // Only update if the classes need to change
+                const hasUsingGlobal = input.classList.contains('using-global');
+                const hasCustomThreshold = input.classList.contains('custom-threshold');
+                
+                if (hasCustomValue && !hasCustomThreshold) {
+                    input.classList.add('custom-threshold');
+                    input.classList.remove('using-global');
+                } else if (!hasCustomValue && !hasUsingGlobal) {
+                    input.classList.add('using-global');
+                    input.classList.remove('custom-threshold');
+                }
+            });
+        });
+    }
+
     function updateAlertBorders() {
         if (!isAlertsMode) return;
         
         const tableBody = mainTable.querySelector('tbody');
         if (!tableBody) return;
         
+        
+        
         // Use snapshot data if we're dragging, otherwise use fresh data
         let dataSource;
         if (isDraggingGlobalSlider && PulseApp.ui.dashboard && PulseApp.ui.dashboard.getGuestMetricSnapshot) {
             const snapshot = PulseApp.ui.dashboard.getGuestMetricSnapshot();
-            // Convert snapshot to array format matching dashboardData
-            dataSource = Object.keys(snapshot).map(id => ({
-                id: id,
-                ...snapshot[id]
-            }));
+            if (snapshot && Object.keys(snapshot).length > 0) {
+                // Convert snapshot to array format matching dashboardData
+                dataSource = Object.keys(snapshot).map(id => ({
+                    id: id,
+                    ...snapshot[id]
+                }));
+            } else {
+                // Fallback to fresh data if snapshot is empty
+                dataSource = PulseApp.state.get('dashboardData') || [];
+            }
         } else {
             // Get fresh data
             dataSource = PulseApp.state.get('dashboardData') || [];
         }
         
+        
         const rows = tableBody.querySelectorAll('tr[data-id]');
+        
+        
+        // First, clear all existing alert attributes to start fresh
+        rows.forEach(row => {
+            row.removeAttribute('data-would-trigger-alert');
+            // Force remove any inline styles that might be interfering
+            const firstCell = row.querySelector('td.sticky:first-child');
+            if (firstCell) {
+                firstCell.style.position = '';
+                firstCell.style.removeProperty('--before-display');
+                // Force the browser to re-render
+                firstCell.style.display = 'none';
+                void firstCell.offsetHeight; // Force reflow
+                firstCell.style.display = '';
+            }
+        });
         
         // Direct inline check - exactly like threshold page
         rows.forEach(row => {
             const guestId = row.getAttribute('data-id');
             if (!guestId) return;
             
-            const guest = dataSource.find(g => g.id === guestId);
+            // Try to find guest by ID or name
+            const guest = dataSource.find(g => g.id === guestId || g.name === guestId);
             if (!guest || guest.status !== 'running') {
-                row.removeAttribute('data-would-trigger-alert');
+                // Already removed attribute above
                 // Update cache too
                 if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateAlertCache) {
-                    PulseApp.ui.dashboard.updateAlertCache(`guest-${guestId}`, false);
+                    // If we found a guest, use its ID for cache
+                    const cacheId = guest ? guest.id : guestId;
+                    PulseApp.ui.dashboard.updateAlertCache(`guest-${cacheId}`, false);
                 }
                 return;
             }
             
+            
+            
             // Simple inline threshold check
             let triggers = false;
             
-            // Check all metrics
-            const metrics = [
-                { type: 'cpu', value: guest.cpu },
-                { type: 'memory', value: guest.memory },
-                { type: 'disk', value: guest.disk }
-            ];
             
-            // Get guest-specific thresholds if they exist
-            const guestThresholds = guestAlertThresholds[guestId] || {};
+            // Get IO averages from state for accurate predictions
+            const ioAverages = PulseApp.state.get('ioAverages') || {};
+            const guestIOAverages = ioAverages[guestId] || ioAverages[guest.id] || {};
             
-            for (const metric of metrics) {
-                // Use guest-specific threshold if it exists, otherwise use global
-                let threshold;
-                if (guestThresholds[metric.type] !== undefined) {
-                    threshold = parseFloat(guestThresholds[metric.type]);
-                } else {
-                    threshold = parseFloat(globalThresholds[metric.type]);
+            // Check all metrics - must match checkGuestWouldTriggerAlerts
+            const validMetricTypes = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+            const metrics = validMetricTypes.map(type => {
+                let value = guest[type];
+                
+                // Fix disk value if it's in bytes instead of percentage
+                if (type === 'disk' && value > 100) {
+                    // This is bytes, need to convert to percentage
+                    if (guest.maxdisk && guest.maxdisk > 0) {
+                        value = Math.round(value / guest.maxdisk * 100);
+                    } else if (guest.diskTotal && guest.diskTotal > 0) {
+                        value = Math.round(value / guest.diskTotal * 100);
+                    } else {
+                        value = 0; // Can't calculate percentage without total
+                    }
                 }
                 
+                // For I/O metrics, only use rolling average - raw values are cumulative counters
+                if (type === 'diskread' || type === 'diskwrite' || type === 'netin' || type === 'netout') {
+                    if (guestIOAverages[type] !== undefined) {
+                        value = guestIOAverages[type];
+                    } else {
+                        // No average available - skip this metric
+                        value = undefined;
+                    }
+                }
+                
+                return {
+                    type: type,
+                    value: value
+                };
+            });
+            
+            // Get guest-specific thresholds if they exist
+            // Check by both the row ID and the actual guest ID
+            const guestThresholds = guestAlertThresholds[guestId] || guestAlertThresholds[guest.id] || {};
+            
+            for (const metric of metrics) {
+                // Skip if metric value is invalid
+                if (metric.value === undefined || metric.value === null || metric.value === 'N/A') continue;
+                
+                // Use guest-specific threshold if it exists, otherwise use global
+                let thresholdValue;
+                if (guestThresholds[metric.type] !== undefined) {
+                    thresholdValue = guestThresholds[metric.type];
+                } else {
+                    thresholdValue = globalThresholds[metric.type];
+                }
+                
+                // Skip if threshold is empty or invalid
+                if (thresholdValue === '' || thresholdValue === undefined || thresholdValue === null) continue;
+                
+                const threshold = parseFloat(thresholdValue);
                 const value = parseFloat(metric.value);
                 
                 if (!isNaN(threshold) && !isNaN(value) && threshold >= 0 && value >= threshold) {
@@ -1082,9 +1249,13 @@ PulseApp.ui.alerts = (() => {
             
             // Update cache too so dashboard refresh uses correct values
             if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateAlertCache) {
-                PulseApp.ui.dashboard.updateAlertCache(`guest-${guestId}`, triggers);
+                // Use the actual guest ID for cache, not the row ID
+                PulseApp.ui.dashboard.updateAlertCache(`guest-${guest.id}`, triggers);
             }
         });
+        
+        // Log the final count
+        const markedCount = tableBody.querySelectorAll('tr[data-would-trigger-alert="true"]').length;
     }
     
     function updateAlertsCountBadge() {
@@ -1120,26 +1291,38 @@ PulseApp.ui.alerts = (() => {
         
         // Only show calculating state if this is from user interaction (slider change)
         if (fromUserInteraction) {
-            saveMessage.textContent = 'Calculating...';
+            saveMessage.textContent = '';
             saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-amber-600', 'dark:text-amber-400');
             saveMessage.classList.add('text-gray-500', 'dark:text-gray-400');
         }
         
         // Debounce the calculation to prevent rapid updates
         updateSaveMessageTimeout = setTimeout(() => {
-            // Count how many guests would trigger alerts
-            let guestTriggerCount = 0;
-            const dashboardData = PulseApp.state?.get('dashboardData') || [];
             
-            dashboardData.forEach(guest => {
-                const guestThresholds = guestAlertThresholds[guest.id] || {};
-                if (checkGuestWouldTriggerAlerts(guest.id, guestThresholds)) {
-                    guestTriggerCount++;
-                }
-            });
+            // FIRST ensure borders are updated with current data
+            updateAlertBorders();
             
-            // Count how many nodes would trigger alerts
+            // Small delay to ensure DOM is updated after updateAlertBorders
+            requestAnimationFrame(() => {
+                // THEN count how many guests would trigger alerts
+                // Use the same approach as updateAlertBorders to ensure consistency
+                let guestTriggerCount = 0;
+                const tableBody = mainTable?.querySelector('tbody');
+                
+            
+            let rows = [];
+            if (tableBody) {
+                rows = tableBody.querySelectorAll('tr[data-id]');
+                rows.forEach(row => {
+                    if (row.getAttribute('data-would-trigger-alert') === 'true') {
+                        guestTriggerCount++;
+                    }
+                });
+            }
+            
+            // Node alert counting temporarily disabled - only tracking guests for now
             let nodeTriggerCount = 0;
+            /* TODO: Re-enable node alert counting when ready
             const nodesData = PulseApp.state?.get('nodesData') || [];
             
             // Check if node monitoring is enabled
@@ -1147,7 +1330,6 @@ PulseApp.ui.alerts = (() => {
             const nodeMonitoringEnabled = nodeDownCheckbox ? nodeDownCheckbox.checked : true;
             
             if (nodeMonitoringEnabled) {
-                console.log('[updateAlertSaveMessage] Checking nodes, nodeThresholds:', JSON.stringify(nodeThresholds));
                 nodesData.forEach(node => {
                     // Only check online nodes for metric thresholds
                     const isOnline = node && node.uptime > 0;
@@ -1166,15 +1348,12 @@ PulseApp.ui.alerts = (() => {
                     const memPercent = (node.mem && node.maxmem > 0) ? (node.mem / node.maxmem * 100) : 0;
                     const diskPercent = (node.disk && node.maxdisk > 0) ? (node.disk / node.maxdisk * 100) : 0;
                     
-                    console.log(`[updateAlertSaveMessage] Checking node ${node.node} with custom thresholds:`, customThresholds);
-                    console.log(`[updateAlertSaveMessage] Node metrics: cpu=${cpuPercent}%, memory=${memPercent}%, disk=${diskPercent}%`);
                     
                     // Check each metric against thresholds
                     let wouldTrigger = false;
                     
                     // Check CPU
                     if (customThresholds.cpu !== undefined && customThresholds.cpu !== '') {
-                        console.log(`[updateAlertSaveMessage] ${node.node} cpu: value=${cpuPercent}, threshold=${customThresholds.cpu}, exceeds=${cpuPercent >= customThresholds.cpu}`);
                         if (cpuPercent >= customThresholds.cpu) {
                             wouldTrigger = true;
                         }
@@ -1182,7 +1361,6 @@ PulseApp.ui.alerts = (() => {
                     
                     // Check Memory
                     if (customThresholds.memory !== undefined && customThresholds.memory !== '') {
-                        console.log(`[updateAlertSaveMessage] ${node.node} memory: value=${memPercent}, threshold=${customThresholds.memory}, exceeds=${memPercent >= customThresholds.memory}`);
                         if (memPercent >= customThresholds.memory) {
                             wouldTrigger = true;
                         }
@@ -1190,32 +1368,105 @@ PulseApp.ui.alerts = (() => {
                     
                     // Check Disk
                     if (customThresholds.disk !== undefined && customThresholds.disk !== '') {
-                        console.log(`[updateAlertSaveMessage] ${node.node} disk: value=${diskPercent}, threshold=${customThresholds.disk}, exceeds=${diskPercent >= customThresholds.disk}`);
                         if (diskPercent >= customThresholds.disk) {
                             wouldTrigger = true;
                         }
                     }
                     
                     if (wouldTrigger) {
-                        console.log(`[updateAlertSaveMessage] Node ${node.node} WILL trigger alert`);
                         nodeTriggerCount++;
                     }
                 });
             }
+            */
             
-            // Update message to include both guest and node alerts
-            const totalTriggers = guestTriggerCount + nodeTriggerCount;
+            // Count rows with yellow markers for comparison
+            const yellowRowElements = document.querySelectorAll('tr[data-would-trigger-alert="true"]');
+            const yellowRows = yellowRowElements.length;
+            
+            // Also check if CSS is showing yellow borders that aren't reflected in attributes
+            const allRows = document.querySelectorAll('tr[data-id]');
+            let visuallyYellowCount = 0;
+            const rowsWithAttribute = [];
+            const visuallyYellowRows = [];
+            
+            allRows.forEach(row => {
+                // Check if row has the attribute
+                if (row.hasAttribute('data-would-trigger-alert')) {
+                    const value = row.getAttribute('data-would-trigger-alert');
+                    rowsWithAttribute.push({
+                        id: row.getAttribute('data-id'),
+                        value: value
+                    });
+                }
+                
+                const firstCell = row.querySelector('td.sticky:first-child');
+                if (firstCell) {
+                    const beforeStyle = window.getComputedStyle(firstCell, ':before');
+                    const bgColor = beforeStyle.backgroundColor;
+                    const width = beforeStyle.width;
+                    const content = beforeStyle.content;
+                    
+                    // Check multiple ways
+                    if (bgColor === 'rgb(245, 158, 11)' || 
+                        bgColor === '#f59e0b' ||
+                        width === '4px' ||
+                        content !== 'none') {
+                        visuallyYellowCount++;
+                        visuallyYellowRows.push({
+                            id: row.getAttribute('data-id'),
+                            bgColor: bgColor,
+                            width: width,
+                            content: content,
+                            hasAttribute: row.hasAttribute('data-would-trigger-alert')
+                        });
+                    }
+                }
+            });
+            
+            if (visuallyYellowRows.length > 0) {
+                console.log('  Visually yellow row details:', visuallyYellowRows);
+            }
+            
+            // Log which rows have yellow markers
+            const yellowRowIds = [];
+            yellowRowElements.forEach(row => {
+                const rowId = row.getAttribute('data-id');
+                const nameCell = row.querySelector('td.sticky');
+                const name = nameCell ? nameCell.textContent.trim() : 'unknown';
+                yellowRowIds.push(`${rowId} (${name})`);
+            });
+            
+            // Log the comparison
+            console.log('  Alert count calculation:', guestTriggerCount, 'guests will trigger alerts');
+            console.log('  Yellow highlighted rows:', yellowRows, 'rows have yellow markers');
+            console.log('  Visually yellow rows (CSS):', visuallyYellowCount);
+            if (rowsWithAttribute.length > 0) {
+                console.log('  Rows with data-would-trigger-alert attribute:', rowsWithAttribute);
+            }
+            if (yellowRowIds.length > 0) {
+                console.log('  Yellow rows:', yellowRowIds.join(', '));
+            }
+            if (guestTriggerCount !== yellowRows) {
+                console.log('  WARNING: Mismatch between calculated count and highlighted rows!');
+            }
+            
+            // Update message to show guest alerts only
+            const totalTriggers = guestTriggerCount; // Only counting guests now
             if (totalTriggers > 0) {
-                let messages = [];
-                if (guestTriggerCount > 0) {
-                    messages.push(`${guestTriggerCount} guest${guestTriggerCount !== 1 ? 's' : ''}`);
-                }
-                if (nodeTriggerCount > 0) {
-                    messages.push(`${nodeTriggerCount} node${nodeTriggerCount !== 1 ? 's' : ''}`);
-                }
-                saveMessage.textContent = `${messages.join(' and ')} will trigger alerts`;
+                saveMessage.textContent = `${guestTriggerCount} guest${guestTriggerCount !== 1 ? 's' : ''} will trigger alerts`;
                 saveMessage.classList.remove('text-green-600', 'dark:text-green-400', 'text-gray-500', 'dark:text-gray-400');
                 saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
+                
+                // Log which guests the calculation found
+                const triggeredGuests = [];
+                rows.forEach(row => {
+                    if (row.getAttribute('data-would-trigger-alert') === 'true') {
+                        const id = row.getAttribute('data-id');
+                        const name = row.querySelector('td.sticky')?.textContent?.trim() || 'unknown';
+                        triggeredGuests.push(`${id} (${name})`);
+                    }
+                });
             } else {
                 saveMessage.textContent = 'No alerts will trigger';
                 saveMessage.classList.remove('text-amber-600', 'dark:text-amber-400', 'text-gray-500', 'dark:text-gray-400');
@@ -1224,6 +1475,7 @@ PulseApp.ui.alerts = (() => {
             
             // Clear the timeout reference
             updateSaveMessageTimeout = null;
+            }); // End requestAnimationFrame
         }, fromUserInteraction ? 300 : 100); // Shorter delay for API updates
     }
     
@@ -1288,10 +1540,18 @@ PulseApp.ui.alerts = (() => {
             const hasIndividualForThisMetric = guestThresholds[metricType] !== undefined;
             
             if (!hasIndividualForThisMetric) {
-                const metricInput = row.querySelector(`[data-guest-id="${guestId}"][data-metric="${metricType}"] input, [data-guest-id="${guestId}"][data-metric="${metricType}"] select`);
+                // Look for inputs within alert-threshold-input containers
+                const container = row.querySelector(`.alert-threshold-input[data-guest-id="${guestId}"][data-metric="${metricType}"]`);
+                const metricInput = container ? container.querySelector('input, select') : null;
                 
                 if (metricInput) {
                     metricInput.value = newValue;
+                    
+                    // Update styling to show this is using global value
+                    if (metricInput.type === 'number' || metricInput.tagName === 'SELECT') {
+                        metricInput.classList.add('using-global');
+                        metricInput.classList.remove('custom-threshold');
+                    }
                     
                     if (metricInput.type === 'range' && !skipTooltips) {
                         PulseApp.tooltips.updateSliderTooltip(metricInput);
@@ -1318,10 +1578,15 @@ PulseApp.ui.alerts = (() => {
             row.removeAttribute('data-alert-dimmed');
             row.removeAttribute('data-alert-mixed');
             
-            // DON'T clear yellow highlighting - it should persist to show which guests
-            // would trigger alerts even when not in alerts mode
-            // Dashboard update will handle applying the yellow border based on the
-            // data-would-trigger-alert attribute
+            // Clear yellow highlighting when exiting alerts mode
+            // It will be recalculated when re-entering alerts mode
+            row.removeAttribute('data-would-trigger-alert');
+            
+            // Also clear the cache
+            const guestId = row.getAttribute('data-id');
+            if (guestId && PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateAlertCache) {
+                PulseApp.ui.dashboard.updateAlertCache(`guest-${guestId}`, false);
+            }
             
             // Clear ALL cell-level styling EXCEPT the first cell border
             const allCells = row.querySelectorAll('td');
@@ -1344,8 +1609,6 @@ PulseApp.ui.alerts = (() => {
     }
 
     function resetGlobalThresholds() {
-        console.log('[RESET] Starting reset');
-        console.log('[RESET] Before clear - nodeThresholds:', JSON.stringify(nodeThresholds));
         
         // Store old values for smooth updates
         const oldThresholds = { ...globalThresholds };
@@ -1362,8 +1625,7 @@ PulseApp.ui.alerts = (() => {
             diskread: '',
             diskwrite: '',
             netin: '',
-            netout: '',
-            status: 1  // Default to enabled (alert when down)
+            netout: ''
         };
         
         // Reset global node thresholds to defaults
@@ -1524,39 +1786,22 @@ PulseApp.ui.alerts = (() => {
             `;
             
             // Setup custom alert events using threshold system pattern
-            const slider = cell.querySelector('input[type="range"]');
-            if (slider) {
+            const input = cell.querySelector('input[type="number"]');
+            if (input) {
                 // Apply custom-threshold class if this guest has a custom value for this metric
                 const hasCustomValue = guestAlertThresholds[guestId] && guestAlertThresholds[guestId][metricType] !== undefined;
                 if (hasCustomValue) {
-                    slider.classList.add('custom-threshold');
+                    input.classList.add('custom-threshold');
+                    input.classList.remove('using-global');
+                } else {
+                    // This input is using the global value
+                    input.classList.add('using-global');
+                    input.classList.remove('custom-threshold');
                 }
                 
-                // Only update tooltip during drag, defer all updates until release
-                slider.addEventListener('input', (event) => {
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
                 
-                // Update everything on release
-                slider.addEventListener('change', (event) => {
-                    const value = event.target.value;
-                    updateGuestThreshold(guestId, metricType, value, true);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-                
-                slider.addEventListener('mousedown', (event) => {
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                });
-                
-                slider.addEventListener('touchstart', (event) => {
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                }, { passive: true });
+                // Don't add event listeners here - they're added by dashboard.js
+                // This prevents duplicate event handlers
             }
             
         } else if (config.type === 'select') {
@@ -1566,17 +1811,16 @@ PulseApp.ui.alerts = (() => {
                 selectId, config.options, currentValue
             );
             
-            // For dropdowns, we need to preserve the data attributes for event handling
-            cell.innerHTML = selectHtml;
-            // Add data attributes to the select element itself
-            const select = cell.querySelector('select');
-            if (select) {
-                select.setAttribute('data-guest-id', guestId);
-                select.setAttribute('data-metric', metricType);
-                select.addEventListener('change', (e) => {
-                    updateGuestThreshold(guestId, metricType, e.target.value);
-                });
-            }
+            // Wrap select in alert-threshold-input container for consistent styling
+            cell.innerHTML = `
+                <div class="alert-threshold-input" data-guest-id="${guestId}" data-metric="${metricType}">
+                    ${selectHtml}
+                </div>
+            `;
+            
+            // The select already has the correct classes from createThresholdSelectHtml
+            // Data attributes are on the container div
+            // Event listener will be added by dashboard.js _setupAlertEventListeners
         }
     }
 
@@ -1627,9 +1871,24 @@ PulseApp.ui.alerts = (() => {
             guestAlertThresholds[guestId][metricType] = value;
         }
         
+        // Update the input styling based on whether it's using global or custom value
+        // Try both number input and select element
+        const input = document.querySelector(`#alert-slider-${guestId}-${metricType}`) || 
+                     document.querySelector(`#alert-select-${guestId}-${metricType}`);
+        if (input) {
+            if (isMatchingGlobal || value === '') {
+                input.classList.add('using-global');
+                input.classList.remove('custom-threshold');
+            } else {
+                input.classList.add('custom-threshold');
+                input.classList.remove('using-global');
+            }
+        }
         
         // Update row styling immediately using the same pattern as threshold system
         updateRowStylingOnly();
+        
+        // Don't need to reapply all dimming - the specific input was already updated above
         
         // Update reset button state when guest thresholds change
         const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
@@ -1656,16 +1915,30 @@ PulseApp.ui.alerts = (() => {
         // Get node status monitoring settings
         const nodeDownCheckbox = document.getElementById('alert-node-down');
         
-        console.log('[saveAlertConfig] Saving with nodeThresholds:', JSON.stringify(nodeThresholds));
+        
+        // Clean globalThresholds before saving
+        const cleanGlobalThresholds = {
+            cpu: globalThresholds.cpu,
+            memory: globalThresholds.memory,
+            disk: globalThresholds.disk,
+            diskread: globalThresholds.diskread || '',
+            diskwrite: globalThresholds.diskwrite || '',
+            netin: globalThresholds.netin || '',
+            netout: globalThresholds.netout || ''
+        };
+        
+        const ioSustainedPeriodSelect = document.getElementById('io-sustained-period-select');
+        const ioSustainedPeriod = ioSustainedPeriodSelect ? parseInt(ioSustainedPeriodSelect.value) : 30000;
         
         const alertConfig = {
             type: 'per_guest_thresholds',
-            globalThresholds: globalThresholds,
+            globalThresholds: cleanGlobalThresholds,
             guestThresholds: guestAlertThresholds,
-            globalNodeThresholds: globalNodeThresholds,
-            nodeThresholds: nodeThresholds,
+            globalNodeThresholds: {},  // Empty - no node alerts
+            nodeThresholds: {},  // Empty - no node alerts
             alertLogic: alertLogic,
             duration: alertDuration,
+            ioSustainedPeriod: ioSustainedPeriod,
             autoResolve: autoResolve,
             notifications: {
                 dashboard: true,
@@ -1761,11 +2034,9 @@ PulseApp.ui.alerts = (() => {
     }
 
     async function loadSavedConfiguration() {
-        console.log('[loadSavedConfiguration] Called, justResetThresholds:', justResetThresholds);
         
         // Skip loading if we just reset thresholds
         if (justResetThresholds) {
-            console.log('[loadSavedConfiguration] Skipping due to justResetThresholds flag');
             return;
         }
         
@@ -1778,7 +2049,13 @@ PulseApp.ui.alerts = (() => {
                 
                 // Load global thresholds
                 if (config.globalThresholds) {
-                    globalThresholds = { ...globalThresholds, ...config.globalThresholds };
+                    // Only copy valid threshold fields, exclude status
+                    const validFields = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+                    validFields.forEach(field => {
+                        if (config.globalThresholds[field] !== undefined) {
+                            globalThresholds[field] = config.globalThresholds[field];
+                        }
+                    });
                     
                     // Update UI controls with loaded values
                     const cpuSlider = document.getElementById('global-alert-cpu');
@@ -1864,12 +2141,9 @@ PulseApp.ui.alerts = (() => {
                 }
                 
                 if (config.nodeThresholds) {
-                    console.log('[loadSavedConfiguration] Loading nodeThresholds from config:', JSON.stringify(config.nodeThresholds));
-                    console.log('[loadSavedConfiguration] Current nodeThresholds before:', JSON.stringify(nodeThresholds));
                     // Clear existing and copy saved values
                     Object.keys(nodeThresholds).forEach(key => delete nodeThresholds[key]);
                     Object.assign(nodeThresholds, config.nodeThresholds);
-                    console.log('[loadSavedConfiguration] nodeThresholds after:', JSON.stringify(nodeThresholds));
                 }
                 
                 
@@ -1879,6 +2153,14 @@ PulseApp.ui.alerts = (() => {
                     const alertDurationSelect = document.getElementById('alert-duration-select');
                     if (alertDurationSelect) {
                         alertDurationSelect.value = alertDuration.toString();
+                    }
+                }
+                
+                // Load I/O sustained period
+                if (config.ioSustainedPeriod !== undefined) {
+                    const ioSustainedPeriodSelect = document.getElementById('io-sustained-period-select');
+                    if (ioSustainedPeriodSelect) {
+                        ioSustainedPeriodSelect.value = config.ioSustainedPeriod.toString();
                     }
                 }
                 
@@ -2155,31 +2437,28 @@ PulseApp.ui.alerts = (() => {
                 <td class="py-1 px-2 align-middle">-</td>
                 <td class="py-1 px-2 align-middle">-</td>
                 <td class="py-1 px-2 align-middle">
-                    <input type="range" 
-                           id="node-${node.node}-cpu" 
-                           data-node="${node.node}"
-                           data-metric="cpu"
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.cpu || 80}" 
-                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                    ${PulseApp.ui.thresholds.createThresholdSliderHtml(
+                        `node-${node.node}-cpu`, 
+                        0, 100, 5, 
+                        nodeThreshold.cpu || 80,
+                        `node-threshold-slider ${hasCustom ? 'custom-threshold' : ''}`
+                    ).replace(/<input/, `<input data-node="${node.node}" data-metric="cpu"`)}
                 </td>
                 <td class="py-1 px-2 align-middle">
-                    <input type="range" 
-                           id="node-${node.node}-memory" 
-                           data-node="${node.node}"
-                           data-metric="memory"
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.memory || 85}" 
-                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                    ${PulseApp.ui.thresholds.createThresholdSliderHtml(
+                        `node-${node.node}-memory`, 
+                        0, 100, 5, 
+                        nodeThreshold.memory || 85,
+                        `node-threshold-slider ${hasCustom ? 'custom-threshold' : ''}`
+                    ).replace(/<input/, `<input data-node="${node.node}" data-metric="memory"`)}
                 </td>
                 <td class="py-1 px-2 align-middle">
-                    <input type="range" 
-                           id="node-${node.node}-disk" 
-                           data-node="${node.node}"
-                           data-metric="disk"
-                           min="0" max="100" step="5" 
-                           value="${nodeThreshold.disk || 90}" 
-                           class="node-threshold-slider custom-slider w-full ${hasCustom ? 'custom-threshold' : ''}">
+                    ${PulseApp.ui.thresholds.createThresholdSliderHtml(
+                        `node-${node.node}-disk`, 
+                        0, 100, 5, 
+                        nodeThreshold.disk || 90,
+                        `node-threshold-slider ${hasCustom ? 'custom-threshold' : ''}`
+                    ).replace(/<input/, `<input data-node="${node.node}" data-metric="disk"`)}
                 </td>
                 <td class="py-1 px-2 align-middle">-</td>
                 <td class="py-1 px-2 align-middle">-</td>
@@ -2204,10 +2483,37 @@ PulseApp.ui.alerts = (() => {
         });
         
         document.querySelectorAll('.node-threshold-slider').forEach(slider => {
-            slider.addEventListener('change', (e) => {
-                const nodename = e.target.dataset.node;
-                const metric = e.target.dataset.metric;
-                updateNodeThreshold(nodename, metric, e.target.value);
+            // Auto-select all text on focus for easy replacement
+            slider.addEventListener('focus', (event) => {
+                event.target.select();
+            });
+            
+            // Number input behavior
+            slider.addEventListener('input', (event) => {
+                let value = parseInt(event.target.value) || 0;
+                // Clamp value to valid range
+                value = Math.max(0, Math.min(100, value));
+                event.target.value = value;
+                const nodename = slider.dataset.node;
+                const metric = slider.dataset.metric;
+                updateNodeThreshold(nodename, metric, value.toString());
+            });
+            
+            // Handle Enter key to blur input
+            slider.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.target.blur();
+                }
+            });
+            
+            // Handle blur to ensure valid value
+            slider.addEventListener('blur', (event) => {
+                let value = parseInt(event.target.value) || 0;
+                value = Math.max(0, Math.min(100, value));
+                event.target.value = value;
+                const nodename = slider.dataset.node;
+                const metric = slider.dataset.metric;
+                updateNodeThreshold(nodename, metric, value.toString());
             });
         });
         
@@ -2320,10 +2626,68 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    // Nuclear option to force clear all yellow markers
+    function forceRemoveAllYellowMarkers() {
+        
+        // Remove any kill style if it exists
+        const killStyle = document.getElementById('kill-yellow-borders');
+        if (killStyle) {
+            killStyle.remove();
+        }
+        
+        // First, let's see what's actually in the DOM
+        const allRows = document.querySelectorAll('tr[data-id]');
+        
+        // Check what attributes are actually set
+        let rowsWithAttribute = 0;
+        allRows.forEach(row => {
+            const hasAttr = row.hasAttribute('data-would-trigger-alert');
+            const attrValue = row.getAttribute('data-would-trigger-alert');
+            if (hasAttr) {
+                rowsWithAttribute++;
+            }
+        });
+        
+        // Now actually remove them
+        allRows.forEach(row => {
+            // Remove the attribute multiple ways to be sure
+            row.removeAttribute('data-would-trigger-alert');
+            row.removeAttribute('data-would-trigger-alert');  // Do it twice
+            if (row.dataset.wouldTriggerAlert !== undefined) {
+                delete row.dataset.wouldTriggerAlert;
+            }
+            
+            // Set attribute to empty then remove
+            row.setAttribute('data-would-trigger-alert', '');
+            row.removeAttribute('data-would-trigger-alert');
+            
+            // Clear cache
+            const guestId = row.getAttribute('data-id');
+            if (guestId && PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateAlertCache) {
+                PulseApp.ui.dashboard.updateAlertCache(`guest-${guestId}`, false);
+            }
+        });
+        
+        // Check if they're really gone
+        const checkRows = document.querySelectorAll('tr[data-would-trigger-alert]');
+        
+        // Force full page reflow
+        document.body.style.display = 'none';
+        void document.body.offsetHeight;
+        document.body.style.display = '';
+        
+        // Remove any override styles
+        const overrideStyle = document.getElementById('alert-marker-override');
+        if (overrideStyle) {
+            overrideStyle.remove();
+        }
+    }
+    
     // Public API
     return {
         init,
         isAlertsMode: () => isAlertsMode,
+        forceRemoveAllYellowMarkers, // Export for debugging
         isSyncingSliders: () => isSyncingSliders,
         isDraggingGlobalSlider: () => isDraggingGlobalSlider,
         getGuestThresholds: () => guestAlertThresholds,
@@ -2340,7 +2704,8 @@ PulseApp.ui.alerts = (() => {
         checkNodeWouldTriggerAlerts: checkNodeWouldTriggerAlerts,
         muteAlerts: muteAlerts,
         resetToDefaults: resetToDefaults,
-        updateLastTriggeredDisplay: updateLastTriggeredDisplay
+        updateLastTriggeredDisplay: updateLastTriggeredDisplay,
+        reapplyDimmingClasses: reapplyDimmingClasses
     };
 })();
 
