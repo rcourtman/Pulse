@@ -10,7 +10,7 @@ const axios = require('axios');
  * - Discord: Rich embeds with color-coded alerts
  * - Slack: Formatted attachments with fields
  * - Gotify: JSON with title, message, and priority (1-5)
- * - Telegram: Markdown messages via Bot API (requires chat_id in URL)
+ * - Telegram: Markdown messages via Bot API (requires chat_id in URL, optional message_thread_id for topics)
  * - ntfy.sh: Topic-based notifications with priority and tags
  * - Microsoft Teams: Adaptive Cards with facts and sections
  * - Generic webhooks: Standard JSON payload
@@ -330,6 +330,10 @@ class TelegramService extends BaseNotificationService {
             throw new Error('Telegram webhook URL must include chat_id parameter');
         }
         
+        // Extract message_thread_id from URL if provided (for topic support)
+        const threadParts = webhookUrl.match(/message_thread_id=([^&]+)/);
+        const messageThreadId = threadParts ? threadParts[1] : null;
+        
         // Clean the URL to get base API endpoint
         const baseUrl = webhookUrl.split('?')[0];
         
@@ -339,6 +343,11 @@ class TelegramService extends BaseNotificationService {
             parse_mode: 'Markdown',
             disable_notification: notificationService.getPriority(alert) < 4
         };
+        
+        // Add message_thread_id if provided (for sending to specific topics)
+        if (messageThreadId) {
+            payload.message_thread_id = messageThreadId;
+        }
         
         return await this.post(baseUrl, payload);
     }
