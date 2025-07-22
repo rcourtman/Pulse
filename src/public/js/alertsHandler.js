@@ -6,6 +6,7 @@ PulseApp.alerts = (() => {
     let alertMetrics = {};
     let notificationContainer = null;
     let alertsInitialized = false;
+    let alertsEnabled = true; // Track if alerts are enabled
     let alertDropdown = null;
     let dropdownUpdateTimeout = null;
     let alertStormMode = false;
@@ -46,7 +47,6 @@ PulseApp.alerts = (() => {
     function init() {
         if (alertsInitialized) return;
         
-        
         // Add a small delay to ensure DOM is fully ready
         setTimeout(() => {
             createNotificationContainer();
@@ -54,13 +54,15 @@ PulseApp.alerts = (() => {
             setupEventListeners();
             loadInitialData();
             
-            // Ensure button is visible after initialization
-            const indicator = document.getElementById('alerts-indicator');
-            if (indicator) {
-                updateHeaderIndicator(); // Initialize with current state
-            } else {
-                console.error('[Alerts] Failed to create alerts indicator button');
-            }
+            // Check if alerts are enabled and hide/show indicator accordingly
+            checkAlertsEnabled().then(enabled => {
+                alertsEnabled = enabled;
+                const indicator = document.getElementById('alerts-indicator');
+                if (indicator) {
+                    indicator.style.display = alertsEnabled ? '' : 'none';
+                    updateHeaderIndicator(); // Initialize with current state
+                }
+            });
         }, 100);
         
         alertsInitialized = true;
@@ -1120,6 +1122,11 @@ PulseApp.alerts = (() => {
     }
 
     function showNotification(alert, type = 'alert') {
+        // Check if alerts are enabled before showing notifications
+        if (!alertsEnabled) {
+            return;
+        }
+        
         // Ensure notification container exists
         if (!notificationContainer) {
             createNotificationContainer();
@@ -1434,6 +1441,11 @@ PulseApp.alerts = (() => {
     }
 
     function updateAlertsFromState(state) {
+        // Don't process alert updates if alerts are disabled
+        if (!alertsEnabled) {
+            return;
+        }
+        
         if (state && state.alerts) {
             // Ensure activeAlerts is always an array
             if (state.alerts.active !== undefined) {
@@ -1809,6 +1821,18 @@ PulseApp.alerts = (() => {
         getAlertHistory: () => alertHistory,
         cleanup
     };
+    
+    // Check if alerts are enabled in the system configuration
+    async function checkAlertsEnabled() {
+        try {
+            const config = await PulseApp.apiClient.get('/api/config');
+            return config.advanced?.alerts?.enabled !== false;
+        } catch (error) {
+            console.error('[Alerts] Failed to check alerts enabled status:', error);
+            return true; // Default to enabled if we can't check
+        }
+    }
+    
 })();
 
 // Auto-initialize when DOM is ready
@@ -1817,3 +1841,22 @@ if (document.readyState === 'loading') {
 } else {
     PulseApp.alerts.init();
 }
+
+// Listen for alerts enabled/disabled changes from settings (global listener)
+window.addEventListener('alertsEnabledChanged', (event) => {
+    alertsEnabled = event.detail.enabled;
+    const indicator = document.getElementById('alerts-indicator');
+    
+    if (indicator) {
+        // Simply hide/show the indicator
+        indicator.style.display = alertsEnabled ? '' : 'none';
+    }
+    
+    // Close dropdown if alerts are disabled
+    if (!alertsEnabled) {
+        const dropdown = document.getElementById('alerts-dropdown');
+        if (dropdown) {
+            PulseApp.alerts.hideAlertsDropdown();
+        }
+    }
+});
