@@ -1201,7 +1201,52 @@ EOF
   # This starts the container and executes <app>-install.sh
   msg_info "Starting LXC Container"
   pct start "$CTID"
-  msg_ok "Started LXC Container"
+
+  # wait for status 'running'
+  for i in {1..10}; do
+    if pct status "$CTID" | grep -q "status: running"; then
+      msg_ok "Started LXC Container"
+      break
+    fi
+    sleep 1
+    if [ "$i" -eq 10 ]; then
+      msg_error "LXC Container did not reach running state"
+      exit 1
+    fi
+  done
+
+  if [ "$var_os" != "alpine" ]; then
+    msg_info "Waiting for network in LXC container"
+    for i in {1..10}; do
+      if pct exec "$CTID" -- ping -c1 -W1 deb.debian.org >/dev/null 2>&1; then
+        msg_ok "Network in LXC is reachable"
+        break
+      fi
+      if [ "$i" -lt 10 ]; then
+        msg_warn "No network yet in LXC (try $i/10) – waiting..."
+        sleep 3
+      else
+        msg_error "No network in LXC after waiting."
+        read -r -p "Set fallback DNS (1.1.1.1/8.8.8.8)? [y/N]: " choice
+        case "$choice" in
+        [yY]*)
+          pct set "$CTID" --nameserver 1.1.1.1
+          pct set "$CTID" --nameserver 8.8.8.8
+          if pct exec "$CTID" -- ping -c1 -W1 deb.debian.org >/dev/null 2>&1; then
+            msg_ok "Network reachable after DNS fallback"
+          else
+            msg_error "Still no network/DNS in LXC! Aborting customization."
+            exit 1
+          fi
+          ;;
+        *)
+          msg_error "Aborted by user – no DNS fallback set."
+          exit 1
+          ;;
+        esac
+      fi
+    done
+  fi
 
   msg_info "Customizing LXC Container"
   : "${tz:=Etc/UTC}"
@@ -1211,7 +1256,7 @@ EOF
 http://dl-cdn.alpinelinux.org/alpine/latest-stable/main
 http://dl-cdn.alpinelinux.org/alpine/latest-stable/community
 EOF'
-    pct exec "$CTID" -- ash -c "apk add bash newt curl openssh nano mc ncurses >/dev/null"
+    pct exec "$CTID" -- ash -c "apk add bash newt curl openssh nano mc ncurses jq >/dev/null"
   else
     sleep 3
     pct exec "$CTID" -- bash -c "sed -i '/$LANG/ s/^# //' /etc/locale.gen"
@@ -1229,7 +1274,7 @@ EOF'
       msg_warn "Skipping timezone setup – zone '$tz' not found in container"
     fi
 
-    pct exec "$CTID" -- bash -c "apt-get update >/dev/null && apt-get install -y sudo curl mc gnupg2 >/dev/null"
+    pct exec "$CTID" -- bash -c "apt-get update >/dev/null && apt-get install -y sudo curl mc gnupg2 jq >/dev/null"
   fi
   msg_ok "Customized LXC Container"
 
