@@ -156,7 +156,28 @@ function updateDiscoveryData({ nodes, vms, containers, pbs, pveBackups, allPbsTa
   
   try {
     // Update main data
-    state.nodes = nodes || [];
+    // Merge nodes to preserve storage data
+    if (nodes) {
+      const existingNodesMap = new Map();
+      state.nodes.forEach(node => {
+        existingNodesMap.set(node.node, node);
+      });
+      
+      // Update or add new nodes
+      nodes.forEach(newNode => {
+        const existing = existingNodesMap.get(newNode.node);
+        if (existing && (!newNode.storage || newNode.storage.length === 0) && existing.storage && existing.storage.length > 0) {
+          // Preserve existing storage if new node has no storage data
+          newNode.storage = existing.storage;
+        }
+        existingNodesMap.set(newNode.node, newNode);
+      });
+      
+      state.nodes = Array.from(existingNodesMap.values());
+    } else {
+      state.nodes = [];
+    }
+    
     state.vms = vms || [];
     state.containers = containers || [];
     state.pbs = pbs || [];

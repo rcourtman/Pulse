@@ -869,6 +869,7 @@ async function fetchPveDiscoveryData(currentApiClients) {
         return { nodes: [], vms: [], containers: [] };
     }
 
+
     // Detect cluster membership and prioritize endpoints
     const endpointGroups = await detectClusterMembership(currentApiClients);
 
