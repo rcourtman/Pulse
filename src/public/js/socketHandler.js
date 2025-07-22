@@ -355,17 +355,15 @@ PulseApp.socketHandler = (() => {
     }
 
     function updateStatsDisplay(stats) {
-        // Update various stats in the UI
+        // Stats display now integrated into node rows - no separate element needed
+        // Stats are still tracked for other uses
         try {
-            const statusText = document.getElementById('dashboard-status-text');
-            if (statusText && stats.totalGuests !== undefined) {
-                const runningText = stats.runningGuests ? `${stats.runningGuests} running` : '0 running';
-                const stoppedText = stats.stoppedGuests ? `${stats.stoppedGuests} stopped` : '0 stopped';
-                statusText.textContent = `${stats.totalGuests} total guests (${runningText}, ${stoppedText})`;
+            // Keep stats available for other components that might need them
+            if (stats && PulseApp.state) {
+                PulseApp.state.set('dashboardStats', stats);
             }
-
         } catch (error) {
-            console.error('[Socket] Error updating stats display:', error);
+            console.error('[Socket] Error updating stats:', error);
         }
     }
 
