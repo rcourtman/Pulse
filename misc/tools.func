@@ -807,7 +807,7 @@ function fetch_and_deploy_gh_release() {
   local max_retries=3 retry_delay=2 attempt=1 success=false resp http_code
 
   while ((attempt <= max_retries)); do
-    resp=$(curl "$api_timeout" -fsSL -w "%{http_code}" -o /tmp/gh_rel.json "${header[@]}" "$api_url") && success=true && break
+    resp=$(curl $api_timeout -fsSL -w "%{http_code}" -o /tmp/gh_rel.json "${header[@]}" "$api_url") && success=true && break
     sleep "$retry_delay"
     ((attempt++))
   done
@@ -845,7 +845,7 @@ function fetch_and_deploy_gh_release() {
     [[ -z "$url" ]] && url="https://github.com/$repo/archive/refs/tags/v$version.tar.gz"
     filename="${app_lc}-${version}.tar.gz"
 
-    curl "$download_timeout" -fsSL -o "$tmpdir/$filename" "$url" || {
+    curl $download_timeout -fsSL -o "$tmpdir/$filename" "$url" || {
       msg_error "Download failed: $url"
       rm -rf "$tmpdir"
       return 1
@@ -901,7 +901,7 @@ function fetch_and_deploy_gh_release() {
     fi
 
     filename="${url_match##*/}"
-    curl "$download_timeout" -fsSL -o "$tmpdir/$filename" "$url_match" || {
+    curl $download_timeout -fsSL -o "$tmpdir/$filename" "$url_match" || {
       msg_error "Download failed: $url_match"
       rm -rf "$tmpdir"
       return 1
@@ -944,7 +944,7 @@ function fetch_and_deploy_gh_release() {
     }
 
     filename="${asset_url##*/}"
-    curl "$download_timeout" -fsSL -o "$tmpdir/$filename" "$asset_url" || {
+    curl $download_timeout -fsSL -o "$tmpdir/$filename" "$asset_url" || {
       msg_error "Download failed: $asset_url"
       rm -rf "$tmpdir"
       return 1
@@ -1020,13 +1020,13 @@ function fetch_and_deploy_gh_release() {
     local target_file="$app"
     [[ "$use_filename" == "true" ]] && target_file="$filename"
 
-    curl "$download_timeout" -fsSL -o "$target/$target_file" "$asset_url" || {
+    curl $download_timeout -fsSL -o "$target/$target_file" "$asset_url" || {
       msg_error "Download failed: $asset_url"
       rm -rf "$tmpdir"
       return 1
     }
 
-    if [[ "$target_file" != *.jar && -f "$target/$target_file" ]]; then
+    if [[ "$tagrget_file" != *.jar && -f "$target/$target_file" ]]; then
       chmod +x "$target/$target_file"
     fi
 
