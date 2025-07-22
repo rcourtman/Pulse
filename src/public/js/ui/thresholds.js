@@ -254,11 +254,12 @@ PulseApp.ui.thresholds = (() => {
                     // Show threshold row
                     if (thresholdRow) thresholdRow.classList.remove('hidden');
                     
-                    // Check if there are active thresholds to show settings panel
+                    // Check if there are active thresholds or hide mode is on to show settings panel
                     const thresholdState = PulseApp.state.getThresholdState();
                     const hasActiveThresholds = Object.values(thresholdState).some(t => t && t.value > 0);
+                    const hideMode = PulseApp.state.get('thresholdHideMode');
                     const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
-                    if (thresholdSettingsPanel && hasActiveThresholds) {
+                    if (thresholdSettingsPanel && (hasActiveThresholds || hideMode)) {
                         thresholdSettingsPanel.classList.remove('hidden');
                     }
                     
@@ -279,6 +280,15 @@ PulseApp.ui.thresholds = (() => {
                         // Need full dashboard update to ensure node headers are shown when grouped
                         if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.updateDashboardTable) {
                             PulseApp.ui.dashboard.updateDashboardTable();
+                            
+                            // Ensure hide mode is applied if it was previously enabled
+                            const hideMode = PulseApp.state.get('thresholdHideMode');
+                            if (hideMode) {
+                                // Force immediate application of threshold filtering including hide mode
+                                setTimeout(() => {
+                                    updateDashboardFromThreshold();
+                                }, 0);
+                            }
                         } else {
                             updateRowStylingOnly(thresholdState);
                         }
@@ -371,6 +381,12 @@ PulseApp.ui.thresholds = (() => {
         const dashboardData = PulseApp.state.get('dashboardData') || [];
         let hiddenCount = 0;
         
+        // Get current filter states to ensure we respect them
+        const filterGuestType = PulseApp.state.get('filterGuestType') || 'all';
+        const filterStatus = PulseApp.state.get('filterStatus') || 'all';
+        const searchInput = document.getElementById('searchInput');
+        const searchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
+        
         // First, show all rows to reset the state
         rows.forEach(row => {
             row.style.display = '';
@@ -394,7 +410,29 @@ PulseApp.ui.thresholds = (() => {
             const guest = dashboardData.find(g => g.id === guestId);
             if (!guest) return;
             
-            // Check if guest meets thresholds
+            // First check if this row should be visible based on other filters
+            // If it's already hidden by other filters, skip threshold processing
+            const typeMatch = filterGuestType === 'all' || 
+                             (filterGuestType === 'vm' && guest.type === 'VM') || 
+                             (filterGuestType === 'lxc' && guest.type === 'CT');
+            
+            const statusMatch = filterStatus === 'all' || 
+                               (filterStatus === 'running' && guest.status === 'running') || 
+                               (filterStatus === 'stopped' && guest.status === 'stopped');
+            
+            let searchMatch = searchTerms.length === 0;
+            if (searchTerms.length > 0) {
+                const searchableText = `${guest.name} ${guest.node} ${guest.vmid} ${guest.type}`.toLowerCase();
+                searchMatch = searchTerms.some(term => searchableText.includes(term));
+            }
+            
+            // If the row doesn't match other filters, hide it and skip threshold processing
+            if (!typeMatch || !statusMatch || !searchMatch) {
+                row.style.display = 'none';
+                return;
+            }
+            
+            // Now check if guest meets thresholds
             let thresholdsMet = true;
             for (const type in thresholdState) {
                 const state = thresholdState[type];
@@ -441,9 +479,9 @@ PulseApp.ui.thresholds = (() => {
             }
         });
         
-        // Handle node headers when in hide mode
-        const hideMode = PulseApp.state.get('thresholdHideMode');
-        if (hideMode) {
+        // Always update node headers when in grouped view
+        const groupByNode = PulseApp.state.get('groupByNode');
+        if (groupByNode) {
             updateNodeHeaderVisibility();
         }
         
@@ -500,84 +538,8 @@ PulseApp.ui.thresholds = (() => {
     }
     
     function applyThresholdDimmingFast(thresholdState) {
-        const tableBody = document.querySelector('#main-table tbody');
-        if (!tableBody) return;
-        
-        const rows = tableBody.querySelectorAll('tr[data-id]');
-        const dashboardData = PulseApp.state.get('dashboardData') || [];
-        let hiddenCount = 0;
-        
-        // First, show all rows to reset the state
-        rows.forEach(row => {
-            row.style.display = '';
-        });
-        
-        rows.forEach(row => {
-            const guestId = row.getAttribute('data-id');
-            if (!guestId) return;
-            
-            // Clear alert styling inline
-            row.removeAttribute('data-alert-dimmed');
-            row.removeAttribute('data-alert-mixed');
-            
-            const guest = dashboardData.find(g => g.id === guestId);
-            if (!guest) return;
-            
-            // Check thresholds
-            let thresholdsMet = true;
-            for (const type in thresholdState) {
-                const state = thresholdState[type];
-                if (!state || state.value <= 0) continue;
-                
-                let guestValue;
-                if (type === 'cpu') guestValue = guest.cpu;
-                else if (type === 'memory') guestValue = guest.memory;
-                else if (type === 'disk') guestValue = guest.disk;
-                else if (type === 'diskread') guestValue = guest.diskread;
-                else if (type === 'diskwrite') guestValue = guest.diskwrite;
-                else if (type === 'netin') guestValue = guest.netin;
-                else if (type === 'netout') guestValue = guest.netout;
-                else continue;
-
-                if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
-                    thresholdsMet = false;
-                    break;
-                }
-                if (!(guestValue >= state.value)) {
-                    thresholdsMet = false;
-                    break;
-                }
-            }
-            
-            // Apply threshold dimming or hiding immediately
-            const hideMode = PulseApp.state.get('thresholdHideMode');
-            if (!thresholdsMet) {
-                if (hideMode) {
-                    row.style.display = 'none';
-                    row.setAttribute('data-threshold-hidden', 'true');
-                    hiddenCount++;
-                } else {
-                    row.style.opacity = '0.4';
-                    row.setAttribute('data-dimmed', 'true');
-                }
-            } else {
-                row.style.display = '';
-                row.style.opacity = '';
-                row.removeAttribute('data-dimmed');
-                row.removeAttribute('data-threshold-hidden');
-            }
-        });
-        
-        // Handle node headers when in hide mode
-        const hideMode = PulseApp.state.get('thresholdHideMode');
-        if (hideMode) {
-            updateNodeHeaderVisibility();
-        }
-        
-        // Update the status message to reflect hidden guests
-        if (hideMode && hiddenCount > 0) {
-            updateStatusMessageForHiddenGuests(hiddenCount);
-        }
+        // Just use the same logic as updateRowStylingOnly since it now respects all filters
+        updateRowStylingOnly(thresholdState);
     }
 
 
@@ -656,10 +618,11 @@ PulseApp.ui.thresholds = (() => {
             }
         }
 
-        // Show/hide settings panel based on active thresholds only if toggle is checked
+        // Show/hide settings panel based on active thresholds OR if hide mode is enabled
         const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
+        const hideMode = PulseApp.state.get('thresholdHideMode');
         if (thresholdToggle && thresholdToggle.checked && thresholdSettingsPanel) {
-            if (activeCount > 0) {
+            if (activeCount > 0 || hideMode) {
                 thresholdSettingsPanel.classList.remove('hidden');
             } else {
                 thresholdSettingsPanel.classList.add('hidden');

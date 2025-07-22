@@ -1471,6 +1471,15 @@ PulseApp.ui.dashboard = (() => {
                 PulseApp.ui.alerts.reapplyDimmingClasses();
             }
         }
+        
+        // Reapply threshold dimming if thresholds are active
+        const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
+        if (thresholdsToggle && thresholdsToggle.checked && PulseApp.ui.thresholds) {
+            // Use applyThresholdDimmingNow to immediately re-apply threshold styling
+            if (PulseApp.ui.thresholds.applyThresholdDimmingNow) {
+                PulseApp.ui.thresholds.applyThresholdDimmingNow();
+            }
+        }
     }
 
     function _createNodeAlertRow(nodeName) {
