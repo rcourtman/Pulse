@@ -41,6 +41,9 @@ function update_script() {
     rm -rf /opt/wallos/db/wallos.empty.db
     mv /opt/wallos.db /opt/wallos/db/wallos.db
     mv /opt/logos/* /opt/wallos/images/uploads/logos
+    if ! grep -q "storetotalyearlycost.php" /opt/wallos.cron; then
+      echo "30 1 * * 1 php /opt/wallos/endpoints/cronjobs/storetotalyearlycost.php >> /var/log/cron/storetotalyearlycost.log 2>&1" >> /opt/wallos.cron
+    fi
     chown -R www-data:www-data /opt/wallos
     chmod -R 755 /opt/wallos
     mkdir -p /var/log/cron
