@@ -438,14 +438,15 @@ function setup_php() {
   # install apache2 with PHP support if requested
   if [[ "$PHP_APACHE" == "YES" ]]; then
     if ! dpkg -l | grep -q "libapache2-mod-php${PHP_VERSION}"; then
-      $STD msg_info "Installing Apache with PHP${PHP_VERSION} support"
-      $STD apt-get install -y apache2 libapache2-mod-php"${PHP_VERSION}"
-      $STD msg_ok "Setup Apache with PHP${PHP_VERSION}"
+      msg_info "Installing Apache with PHP${PHP_VERSION} support"
+      $STD apt-get install -y apache2 libapache2-mod-php${PHP_VERSION}
+    else
+      msg_info "Apache with PHP${PHP_VERSION} already installed – skipping install"
     fi
   fi
 
   # setup / update PHP modules
-  $STD apt-get install -y "$MODULE_LIST"
+  $STD apt-get install -y $MODULE_LIST
   msg_ok "Setup PHP $PHP_VERSION"
 
   # optional stop old PHP-FPM service
@@ -484,14 +485,13 @@ function setup_php() {
   # enable and restart PHP-FPM if requested
   if [[ "$PHP_FPM" == "YES" ]]; then
     if systemctl list-unit-files | grep -q "php${PHP_VERSION}-fpm.service"; then
-      $STD systemctl enable php"${PHP_VERSION}"-fpm
-      $STD systemctl restart php"${PHP_VERSION}"-fpm
+      $STD systemctl enable php${PHP_VERSION}-fpm
+      $STD systemctl restart php${PHP_VERSION}-fpm
     else
       msg_warn "FPM requested but service php${PHP_VERSION}-fpm not found"
     fi
   fi
 }
-
 # ------------------------------------------------------------------------------
 # Installs or updates Composer globally.
 #
