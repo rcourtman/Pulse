@@ -44,24 +44,40 @@ PulseApp.ui.alerts = (() => {
             return;
         }
 
-        // Setup event listeners
-        setupEventListeners();
-        
-        // Initialize global thresholds
-        initializeGlobalThresholds();
-        
-        // Initialize state
-        isAlertsMode = alertsToggle.checked;
-        
-        // Load saved configuration BEFORE updating alerts mode
-        // This ensures guest thresholds are loaded before transforming the table
-        loadSavedConfiguration().then(() => {
-            // Now update alerts mode after configuration is loaded
-            updateAlertsMode();
+        // Check if alerts are enabled in the system configuration
+        checkAlertsEnabled().then(alertsEnabled => {
+            // Hide the alerts dropdown if alerts are disabled
+            const alertsToggleLabel = alertsToggle.closest('label');
+            if (alertsToggleLabel) {
+                alertsToggleLabel.style.display = alertsEnabled ? '' : 'none';
+            }
+            
+            // Only proceed with initialization if alerts are enabled
+            if (!alertsEnabled) {
+                console.log('Alerts are disabled in system configuration');
+                return;
+            }
+
+            // Setup event listeners
+            setupEventListeners();
+            setupAlertsEnabledListener();
+            
+            // Initialize global thresholds
+            initializeGlobalThresholds();
+            
+            // Initialize state
+            isAlertsMode = alertsToggle.checked;
+            
+            // Load saved configuration BEFORE updating alerts mode
+            // This ensures guest thresholds are loaded before transforming the table
+            loadSavedConfiguration().then(() => {
+                // Now update alerts mode after configuration is loaded
+                updateAlertsMode();
+            });
+            
+            // Load notification status
+            updateNotificationStatus();
         });
-        
-        // Load notification status
-        updateNotificationStatus();
         
         // Update node list if nodes are available
         const nodesData = PulseApp.state?.get('nodesData');
@@ -2681,6 +2697,36 @@ PulseApp.ui.alerts = (() => {
         if (overrideStyle) {
             overrideStyle.remove();
         }
+    }
+    
+    // Check if alerts are enabled in the system configuration
+    async function checkAlertsEnabled() {
+        try {
+            const config = await PulseApp.apiClient.get('/api/config');
+            return config.advanced?.alerts?.enabled !== false;
+        } catch (error) {
+            console.error('Failed to check alerts enabled status:', error);
+            return true; // Default to enabled if we can't check
+        }
+    }
+    
+    // Listen for alerts enabled/disabled changes from settings
+    function setupAlertsEnabledListener() {
+        // Listen for custom event from settings when alerts are toggled
+        window.addEventListener('alertsEnabledChanged', (event) => {
+            const alertsEnabled = event.detail.enabled;
+            const alertsToggleLabel = alertsToggle?.closest('label');
+            if (alertsToggleLabel) {
+                alertsToggleLabel.style.display = alertsEnabled ? '' : 'none';
+            }
+            
+            // If alerts were disabled, close the alerts mode
+            if (!alertsEnabled && isAlertsMode) {
+                alertsToggle.checked = false;
+                isAlertsMode = false;
+                updateAlertsMode();
+            }
+        });
     }
     
     // Public API

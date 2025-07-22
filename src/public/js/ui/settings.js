@@ -1942,6 +1942,14 @@ PulseApp.ui.settings = (() => {
                 } else {
                     showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
                     
+                    // Check alerts enabled status
+                    const newAlertsEnabled = config.ALERTS_ENABLED === 'true';
+                    
+                    // Always dispatch event to ensure UI is in sync
+                    window.dispatchEvent(new CustomEvent('alertsEnabledChanged', {
+                        detail: { enabled: newAlertsEnabled }
+                    }));
+                    
                     // Update alert mode notification status if alerts module is available
                     if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
                         PulseApp.ui.alerts.updateNotificationStatus();
@@ -1949,6 +1957,13 @@ PulseApp.ui.settings = (() => {
                     
                     // Update save button state
                     trackChanges();
+                    
+                    // Update currentConfig with new values
+                    if (config.ALERTS_ENABLED !== undefined) {
+                        if (!currentConfig.advanced) currentConfig.advanced = {};
+                        if (!currentConfig.advanced.alerts) currentConfig.advanced.alerts = {};
+                        currentConfig.advanced.alerts.enabled = newAlertsEnabled;
+                    }
                     
                     // Keep modal open so users can continue making changes
                 }
