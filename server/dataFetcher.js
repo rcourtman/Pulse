@@ -251,18 +251,22 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     )
   ]);
 
+
   let finalVms = (vms.status === 'fulfilled' ? vms.value : []) || [];
   let finalContainers = (containers.status === 'fulfilled' ? containers.value : []) || [];
 
   // Uptime is already included in the VM/container data from the API
   // No need for separate API calls - this reduces API calls significantly
 
-  return {
+  const result = {
     vms: finalVms,
     containers: finalContainers,
     nodeStatus: (nodeStatus.status === 'fulfilled' ? nodeStatus.value : {}) || {},
     storage: (storage.status === 'fulfilled' ? storage.value : []) || [],
   };
+  
+  
+  return result;
 }
 
 /**
@@ -454,7 +458,16 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                         finalNode.status = 'online';
                     }
                 }
-                finalNode.storage = nodeData.storage && nodeData.storage.length > 0 ? nodeData.storage : finalNode.storage;
+                // Only update storage if we have new data, otherwise preserve existing
+                if (nodeData.storage && nodeData.storage.length > 0) {
+                    finalNode.storage = nodeData.storage;
+                } else if (!finalNode.storage) {
+                    // Only set to empty array if we don't have existing storage
+                    finalNode.storage = [];
+                }
+                // Otherwise keep existing finalNode.storage unchanged
+                
+                
                 processedNodes.push(finalNode);
             } else {
                 if (result.status === 'rejected') {
@@ -516,7 +529,7 @@ function deduplicateClusterNodes(allNodes) {
                 
             if (shouldReplace) {
                 mergedNode = node;
-                // Preserve storage data from existing node if new node doesn't have it
+                // Always preserve storage data from existing node if new node doesn't have it
                 if ((!node.storage || node.storage.length === 0) && existingNode.storage && existingNode.storage.length > 0) {
                     mergedNode = {
                         ...node,
@@ -530,12 +543,18 @@ function deduplicateClusterNodes(allNodes) {
             } else {
                 // Keep existing node but merge storage data if needed
                 mergedNode = existingNode;
-                // If new node has storage data and existing doesn't, add it
-                if (node.storage && node.storage.length > 0 && (!existingNode.storage || existingNode.storage.length === 0)) {
+                // Always preserve storage - use new storage if available, otherwise keep existing
+                if (node.storage && node.storage.length > 0) {
                     mergedNode = {
                         ...existingNode,
                         storage: node.storage
                     };
+                } else if (!existingNode.storage || existingNode.storage.length === 0) {
+                    // Only clear storage if both old and new have no storage
+                    mergedNode = existingNode;
+                } else {
+                    // Keep existing storage when new node has no storage data
+                    mergedNode = existingNode;
                 }
                 
                 if (existingNode.status === 'online' && node.status !== 'online') {
