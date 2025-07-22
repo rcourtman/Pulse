@@ -656,6 +656,7 @@ PulseApp.ui.settings = (() => {
                                             <li>1. Create a bot with @BotFather</li>
                                             <li>2. Get your chat ID (message @userinfobot)</li>
                                             <li>3. Format: https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage?chat_id=YOUR_CHAT_ID</li>
+                                            <li>4. For topics: Add &message_thread_id=YOUR_THREAD_ID</li>
                                         </ol>
                                     </div>
                                     <div>

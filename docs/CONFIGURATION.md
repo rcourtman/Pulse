@@ -112,6 +112,7 @@ WEBHOOK_ENABLED=true
 - **Slack**: Apps → Incoming Webhooks → Add to Slack
 - **Gotify**: Create app token, use format: `https://gotify.domain/message?token=YOUR_TOKEN`
 - **Telegram**: Create bot with @BotFather, use format: `https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage?chat_id=YOUR_CHAT_ID`
+  - For supergroup topics, add `&message_thread_id=YOUR_THREAD_ID` to the URL
 - **ntfy.sh**: Choose a topic, use format: `https://ntfy.sh/YOUR_TOPIC`
 - **Teams**: Channel → Connectors → Incoming Webhook
 - **Generic**: Any webhook URL receives standard JSON payloads
