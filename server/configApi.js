@@ -56,6 +56,11 @@ class ConfigApi {
                     metricInterval: config.PULSE_METRIC_INTERVAL_MS,
                     discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
                     updateChannel: config.UPDATE_CHANNEL || 'stable',
+                    autoUpdate: {
+                        enabled: config.AUTO_UPDATE_ENABLED !== 'false',
+                        checkInterval: parseInt(config.AUTO_UPDATE_CHECK_INTERVAL || '24', 10),
+                        time: config.AUTO_UPDATE_TIME || '02:00'
+                    },
                     allowEmbedding: config.ALLOW_EMBEDDING === 'true',
                     allowedEmbedOrigins: config.ALLOWED_EMBED_ORIGINS || '',
                     alerts: {
@@ -113,6 +118,7 @@ class ConfigApi {
                     key.startsWith('SMTP_') ||
                     key.startsWith('ALERT_') ||
                     key.startsWith('SENDGRID_') ||
+                    key.startsWith('AUTO_UPDATE_') ||
                     key === 'EMAIL_PROVIDER') {
                     response[key] = config[key];
                 }
@@ -730,6 +736,7 @@ class ConfigApi {
             'Primary Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_NODE_NAME', 'PBS_ALLOW_SELF_SIGNED_CERT'],
             'Additional PBS Endpoints': [], // Will be populated dynamically
             'Pulse Service Settings': ['PULSE_METRIC_INTERVAL_MS', 'PULSE_DISCOVERY_INTERVAL_MS'],
+            'Update Configuration': ['UPDATE_CHANNEL', 'AUTO_UPDATE_ENABLED', 'AUTO_UPDATE_CHECK_INTERVAL', 'AUTO_UPDATE_TIME'],
             'Alert System Configuration': [
                 'ALERT_CPU_ENABLED', 'ALERT_CPU_THRESHOLD', 'ALERT_CPU_DURATION',
                 'ALERT_MEMORY_ENABLED', 'ALERT_MEMORY_THRESHOLD', 'ALERT_MEMORY_DURATION',
@@ -852,7 +859,7 @@ class ConfigApi {
         }
         
         // Write remaining groups
-        ['Pulse Service Settings', 'Alert System Configuration', 'Other Settings'].forEach(groupName => {
+        ['Pulse Service Settings', 'Update Configuration', 'Alert System Configuration', 'Other Settings'].forEach(groupName => {
             const keys = groups[groupName];
             if (keys.length > 0 && keys.some(key => config[key])) {
                 lines.push(`# ${groupName}`);
