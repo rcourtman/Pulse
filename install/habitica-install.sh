@@ -29,9 +29,10 @@ msg_info "Setup ${APPLICATION}"
 cd /opt/habitica
 $STD npm i
 $STD npm run postinstall
+cp config.json.example config.json
 $STD npm run client:build
 $STD gulp build:prod
-cp config.json.example config.json
+
 msg_ok "Setup ${APPLICATION}"
 
 msg_info "Creating Service"
