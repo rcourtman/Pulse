@@ -1,5 +1,45 @@
 [
   {
+    "name": "meilisearch/meilisearch",
+    "version": "prototype-arroy-becomes-hannoy-3",
+    "date": "2025-07-24T10:20:01Z"
+  },
+  {
+    "name": "keycloak/keycloak",
+    "version": "26.3.2",
+    "date": "2025-07-24T10:14:27Z"
+  },
+  {
+    "name": "docker/compose",
+    "version": "v2.39.0",
+    "date": "2025-07-24T08:31:49Z"
+  },
+  {
+    "name": "Checkmk/checkmk",
+    "version": "v2.3.0p35-rc2",
+    "date": "2025-07-24T07:00:54Z"
+  },
+  {
+    "name": "zwave-js/zwave-js-ui",
+    "version": "v10.10.0",
+    "date": "2025-07-24T06:15:19Z"
+  },
+  {
+    "name": "Jackett/Jackett",
+    "version": "v0.22.2187",
+    "date": "2025-07-24T05:56:26Z"
+  },
+  {
+    "name": "firefly-iii/firefly-iii",
+    "version": "v6.2.21",
+    "date": "2025-07-17T04:46:25Z"
+  },
+  {
+    "name": "steveiliop56/tinyauth",
+    "version": "v3.6.2",
+    "date": "2025-07-17T12:08:03Z"
+  },
+  {
     "name": "advplyr/audiobookshelf",
     "version": "v2.26.3",
     "date": "2025-07-23T23:16:46Z"
@@ -23,11 +63,6 @@
     "name": "fallenbagel/jellyseerr",
     "version": "preview-plex-home-profile",
     "date": "2025-07-23T16:40:31Z"
-  },
-  {
-    "name": "meilisearch/meilisearch",
-    "version": "prototype-cellulite-0",
-    "date": "2025-07-23T16:21:26Z"
   },
   {
     "name": "grokability/snipe-it",
@@ -60,29 +95,14 @@
     "date": "2025-07-22T11:22:26Z"
   },
   {
+    "name": "zabbix/zabbix",
+    "version": "7.4.1rc1",
+    "date": "2025-07-23T11:54:39Z"
+  },
+  {
     "name": "cockpit-project/cockpit",
     "version": "343",
     "date": "2025-07-23T11:21:34Z"
-  },
-  {
-    "name": "zabbix/zabbix",
-    "version": "7.0.17",
-    "date": "2025-07-23T08:11:47Z"
-  },
-  {
-    "name": "Jackett/Jackett",
-    "version": "v0.22.2185",
-    "date": "2025-07-23T05:51:56Z"
-  },
-  {
-    "name": "firefly-iii/firefly-iii",
-    "version": "v6.2.21",
-    "date": "2025-07-17T04:46:25Z"
-  },
-  {
-    "name": "steveiliop56/tinyauth",
-    "version": "v3.6.2",
-    "date": "2025-07-17T12:08:03Z"
   },
   {
     "name": "jhuckaby/Cronicle",
@@ -108,11 +128,6 @@
     "name": "esphome/esphome",
     "version": "2025.7.3",
     "date": "2025-07-22T20:09:49Z"
-  },
-  {
-    "name": "keycloak/keycloak",
-    "version": "26.2.6",
-    "date": "2025-07-17T11:16:34Z"
   },
   {
     "name": "rcourtman/Pulse",
@@ -163,11 +178,6 @@
     "name": "home-assistant/core",
     "version": "2025.7.3",
     "date": "2025-07-22T08:30:59Z"
-  },
-  {
-    "name": "Checkmk/checkmk",
-    "version": "v2.3.0p35-rc1",
-    "date": "2025-07-22T07:29:21Z"
   },
   {
     "name": "mattermost/mattermost",
@@ -540,11 +550,6 @@
     "date": "2025-07-11T13:26:54Z"
   },
   {
-    "name": "zwave-js/zwave-js-ui",
-    "version": "v10.9.0",
-    "date": "2025-07-11T12:57:54Z"
-  },
-  {
     "name": "outline/outline",
     "version": "v0.85.1",
     "date": "2025-07-11T01:17:53Z"
@@ -613,11 +618,6 @@
     "name": "TwiN/gatus",
     "version": "v5.20.0",
     "date": "2025-07-08T16:27:11Z"
-  },
-  {
-    "name": "docker/compose",
-    "version": "v2.38.2",
-    "date": "2025-07-08T09:35:14Z"
   },
   {
     "name": "photoprism/photoprism",
