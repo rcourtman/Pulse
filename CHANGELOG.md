@@ -19,6 +19,10 @@ Exercise vigilance regarding copycat or coat-tailing sites that seek to exploit 
     - Habitica: force npm to 10 [@MickLesk](https://github.com/MickLesk) ([#6192](https://github.com/community-scripts/ProxmoxVE/pull/6192))
     - sabnzbd: add uv setup in update [@MickLesk](https://github.com/MickLesk) ([#6191](https://github.com/community-scripts/ProxmoxVE/pull/6191))
 
+  - #### 🔧 Refactor
+
+    - Refactor: Headscale [@tremor021](https://github.com/tremor021) ([#6180](https://github.com/community-scripts/ProxmoxVE/pull/6180))
+
 ## 2025-07-23
 
 ### 🚀 Updated Scripts
