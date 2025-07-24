@@ -34,6 +34,7 @@ function update_script() {
         msg_ok "No update required. ${APP} is already at ${RELEASE}"
         exit
     fi
+    setup_uv
     msg_info "Updating $APP to ${RELEASE}"
     systemctl stop sabnzbd
     cp -r /opt/sabnzbd /opt/sabnzbd_backup_$(date +%s)
