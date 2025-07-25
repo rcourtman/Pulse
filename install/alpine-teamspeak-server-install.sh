@@ -17,11 +17,13 @@ msg_info "Installing dependencies"
 $STD apk add --no-cache \
   ca-certificates \
   libstdc++ \
-  libc6-compat \
-  grep
+  libc6-compat
 msg_ok "Installed dependencies"
 
-RELEASE=$(curl -fsSL https://teamspeak.com/en/downloads/#server | grep -oP 'teamspeak3-server_linux_amd64-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+RELEASE=$(curl -fsSL https://teamspeak.com/en/downloads/#server \
+  | grep -oE 'teamspeak3-server_linux_amd64-[0-9]+\.[0-9]+\.[0-9]+' \
+  | head -1 \
+  | sed 's/teamspeak3-server_linux_amd64-//')
 
 msg_info "Installing Teamspeak Server v${RELEASE}"
 mkdir -p /opt/teamspeak-server
