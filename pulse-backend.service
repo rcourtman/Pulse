@@ -1,0 +1,17 @@
+[Unit]
+Description=Pulse Backend (Go)
+After=network.target
+
+[Service]
+Type=simple
+User=pulse
+WorkingDirectory=/opt/pulse
+ExecStart=/opt/pulse/scripts/backend-watch.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:/opt/pulse/pulse.log
+StandardError=append:/opt/pulse/pulse.log
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,46 @@
+# Binaries
+/bin/
+pulse
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Node.js (for frontend-modern)
+node_modules/
+.npm/
+.yarn/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.tar.gz
+
+# Claude-specific files
+CLAUDE.md
+.claude*
+claude-*
+fix-claude-*

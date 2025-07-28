@@ -1,0 +1,584 @@
+package proxmox
+
+import (
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+)
+
+// Client represents a Proxmox VE API client
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+	auth       auth
+	config     ClientConfig
+}
+
+// ClientConfig holds configuration for the Proxmox client
+type ClientConfig struct {
+	Host        string
+	User        string
+	Password    string
+	TokenName   string
+	TokenValue  string
+	Fingerprint string
+	VerifySSL   bool
+	Timeout     time.Duration
+}
+
+// auth represents authentication details
+type auth struct {
+	user       string
+	realm      string
+	ticket     string
+	csrfToken  string
+	tokenName  string
+	tokenValue string
+	expiresAt  time.Time
+}
+
+// NewClient creates a new Proxmox VE API client
+func NewClient(cfg ClientConfig) (*Client, error) {
+	// Parse user and realm
+	parts := strings.Split(cfg.User, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid user format, expected user@realm")
+	}
+	user := parts[0]
+	realm := parts[1]
+
+	// Create HTTP client
+	transport := &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		DisableCompression:  true,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	if !cfg.VerifySSL {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	} else if cfg.Fingerprint != "" {
+		// TODO: Implement fingerprint verification
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   cfg.Timeout,
+	}
+
+	client := &Client{
+		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
+		httpClient: httpClient,
+		config:     cfg,
+		auth: auth{
+			user:       user,
+			realm:      realm,
+			tokenName:  cfg.TokenName,
+			tokenValue: cfg.TokenValue,
+		},
+	}
+
+	// Authenticate if using password
+	if cfg.Password != "" && cfg.TokenName == "" {
+		if err := client.authenticate(context.Background()); err != nil {
+			return nil, fmt.Errorf("authentication failed: %w", err)
+		}
+	}
+
+	return client, nil
+}
+
+// authenticate performs password-based authentication
+func (c *Client) authenticate(ctx context.Context) error {
+	data := url.Values{
+		"username": {c.auth.user + "@" + c.auth.realm},
+		"password": {c.config.Password},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", strings.NewReader(data.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("authentication failed: %s", string(body))
+	}
+
+	var result struct {
+		Data struct {
+			Ticket            string `json:"ticket"`
+			CSRFPreventionToken string `json:"CSRFPreventionToken"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	c.auth.ticket = result.Data.Ticket
+	c.auth.csrfToken = result.Data.CSRFPreventionToken
+	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
+
+	return nil
+}
+
+// request performs an API request
+func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
+	// Re-authenticate if needed
+	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
+		if err := c.authenticate(ctx); err != nil {
+			return nil, fmt.Errorf("re-authentication failed: %w", err)
+		}
+	}
+
+	var body io.Reader
+	if data != nil {
+		body = strings.NewReader(data.Encode())
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	if data != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	// Set authentication
+	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
+		// API token authentication
+		req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
+			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue))
+	} else if c.auth.ticket != "" {
+		// Ticket authentication
+		req.Header.Set("Cookie", "PVEAuthCookie="+c.auth.ticket)
+		if method != "GET" && c.auth.csrfToken != "" {
+			req.Header.Set("CSRFPreventionToken", c.auth.csrfToken)
+		}
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for errors
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return resp, nil
+}
+
+// get performs a GET request
+func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	return c.request(ctx, "GET", path, nil)
+}
+
+// post performs a POST request
+func (c *Client) post(ctx context.Context, path string, data url.Values) (*http.Response, error) {
+	return c.request(ctx, "POST", path, data)
+}
+
+// Node represents a Proxmox VE node
+type Node struct {
+	Node   string  `json:"node"`
+	Status string  `json:"status"`
+	CPU    float64 `json:"cpu"`
+	MaxCPU int     `json:"maxcpu"`
+	Mem    uint64  `json:"mem"`
+	MaxMem uint64  `json:"maxmem"`
+	Disk   uint64  `json:"disk"`
+	MaxDisk uint64 `json:"maxdisk"`
+	Uptime uint64  `json:"uptime"`
+	Level  string  `json:"level"`
+}
+
+// NodeStatus represents detailed node status
+type NodeStatus struct {
+	LoadAvg       []interface{} `json:"loadavg"`  // Can be float64 or string
+	KernelVersion string        `json:"kversion"`
+	PVEVersion    string        `json:"pveversion"`
+	CPUInfo       *CPUInfo      `json:"cpuinfo"`
+	RootFS        *RootFS       `json:"rootfs"`
+}
+
+// RootFS represents root filesystem information
+type RootFS struct {
+	Total uint64 `json:"total"`
+	Used  uint64 `json:"used"`
+	Free  uint64 `json:"avail"`
+}
+
+// CPUInfo represents CPU information
+type CPUInfo struct {
+	Model   string `json:"model"`
+	Cores   int    `json:"cores"`
+	Sockets int    `json:"sockets"`
+	MHz     string `json:"mhz"`
+}
+
+// GetNodes returns all nodes in the cluster
+func (c *Client) GetNodes(ctx context.Context) ([]Node, error) {
+	resp, err := c.get(ctx, "/nodes")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Node `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetNodeStatus returns detailed status for a specific node
+func (c *Client) GetNodeStatus(ctx context.Context, node string) (*NodeStatus, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/status", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data NodeStatus `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// VM represents a Proxmox VE virtual machine
+type VM struct {
+	VMID       int     `json:"vmid"`
+	Name       string  `json:"name"`
+	Node       string  `json:"node"`
+	Status     string  `json:"status"`
+	CPU        float64 `json:"cpu"`
+	CPUs       int     `json:"cpus"`
+	Mem        uint64  `json:"mem"`
+	MaxMem     uint64  `json:"maxmem"`
+	Disk       uint64  `json:"disk"`
+	MaxDisk    uint64  `json:"maxdisk"`
+	NetIn      uint64  `json:"netin"`
+	NetOut     uint64  `json:"netout"`
+	DiskRead   uint64  `json:"diskread"`
+	DiskWrite  uint64  `json:"diskwrite"`
+	Uptime     uint64  `json:"uptime"`
+	Template   int     `json:"template"`
+	Tags       string  `json:"tags"`
+	Lock       string  `json:"lock"`
+}
+
+// Container represents a Proxmox VE LXC container
+type Container struct {
+	VMID       int     `json:"vmid"`
+	Name       string  `json:"name"`
+	Node       string  `json:"node"`
+	Status     string  `json:"status"`
+	CPU        float64 `json:"cpu"`
+	CPUs       int     `json:"cpus"`
+	Mem        uint64  `json:"mem"`
+	MaxMem     uint64  `json:"maxmem"`
+	Swap       uint64  `json:"swap"`
+	MaxSwap    uint64  `json:"maxswap"`
+	Disk       uint64  `json:"disk"`
+	MaxDisk    uint64  `json:"maxdisk"`
+	NetIn      uint64  `json:"netin"`
+	NetOut     uint64  `json:"netout"`
+	DiskRead   uint64  `json:"diskread"`
+	DiskWrite  uint64  `json:"diskwrite"`
+	Uptime     uint64  `json:"uptime"`
+	Template   int     `json:"template"`
+	Tags       string  `json:"tags"`
+	Lock       string  `json:"lock"`
+}
+
+// Storage represents a Proxmox VE storage
+type Storage struct {
+	Storage   string  `json:"storage"`
+	Type      string  `json:"type"`
+	Content   string  `json:"content"`
+	Active    int     `json:"active"`
+	Enabled   int     `json:"enabled"`
+	Shared    int     `json:"shared"`
+	Total     uint64  `json:"total"`
+	Used      uint64  `json:"used"`
+	Available uint64  `json:"avail"`
+}
+
+// StorageContent represents content in a storage
+type StorageContent struct {
+	Volid        string                 `json:"volid"`
+	Content      string                 `json:"content"`
+	CTime        int64                  `json:"ctime"`
+	Format       string                 `json:"format"`
+	Size         uint64                 `json:"size"`
+	VMID         int                    `json:"vmid"`
+	Notes        string                 `json:"notes"`
+	Protected    int                    `json:"protected"`
+	Encryption   string                 `json:"encryption"`
+	Verification map[string]interface{} `json:"verification"` // PBS verification info
+	Verified     int                    `json:"verified"`      // Simple verified flag
+}
+
+// Snapshot represents a VM or container snapshot
+type Snapshot struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	SnapTime    int64  `json:"snaptime"`
+	Parent      string `json:"parent"`
+	VMID        int    `json:"vmid"`
+}
+
+// GetVMs returns all VMs on a specific node
+func (c *Client) GetVMs(ctx context.Context, node string) ([]VM, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []VM `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetContainers returns all LXC containers on a specific node
+func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Container `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetStorage returns storage information for a specific node
+func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/storage", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Storage `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetAllStorage returns storage information across all nodes
+func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
+	resp, err := c.get(ctx, "/storage")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Storage `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+
+// Task represents a Proxmox task
+type Task struct {
+	UPID      string  `json:"upid"`
+	Node      string  `json:"node"`
+	PID       int     `json:"pid"`
+	PStart    int64   `json:"pstart"`
+	StartTime int64   `json:"starttime"`
+	Type      string  `json:"type"`
+	ID        string  `json:"id"`
+	User      string  `json:"user"`
+	Status    string  `json:"status,omitempty"`
+	EndTime   int64   `json:"endtime,omitempty"`
+}
+
+// GetNodeTasks gets tasks for a specific node
+func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Task `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetBackupTasks gets all backup tasks across all nodes
+func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
+	// First get all nodes
+	nodes, err := c.GetNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTasks []Task
+	for _, node := range nodes {
+		if node.Status != "online" {
+			continue
+		}
+
+		tasks, err := c.GetNodeTasks(ctx, node.Node)
+		if err != nil {
+			// Log error but continue with other nodes
+			continue
+		}
+
+		// Filter for backup tasks
+		for _, task := range tasks {
+			if task.Type == "vzdump" {
+				allTasks = append(allTasks, task)
+			}
+		}
+	}
+
+	return allTasks, nil
+}
+
+// GetStorageContent returns the content of a specific storage
+func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []StorageContent `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	// Filter for backup content only
+	var backups []StorageContent
+	for _, content := range result.Data {
+		if content.Content == "backup" || content.Content == "vztmpl" {
+			backups = append(backups, content)
+		}
+	}
+
+	return backups, nil
+}
+
+// GetVMSnapshots returns snapshots for a specific VM
+func (c *Client) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/snapshot", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Snapshot `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	// Filter out the 'current' snapshot which is not a real snapshot
+	var snapshots []Snapshot
+	for _, snap := range result.Data {
+		if snap.Name != "current" {
+			snap.VMID = vmid
+			snapshots = append(snapshots, snap)
+		}
+	}
+
+	return snapshots, nil
+}
+
+// GetContainerSnapshots returns snapshots for a specific container
+func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/snapshot", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Snapshot `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	// Filter out the 'current' snapshot which is not a real snapshot
+	var snapshots []Snapshot
+	for _, snap := range result.Data {
+		if snap.Name != "current" {
+			snap.VMID = vmid
+			snapshots = append(snapshots, snap)
+		}
+	}
+
+	return snapshots, nil
+}

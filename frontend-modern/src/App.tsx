@@ -1,0 +1,252 @@
+import { Show, createSignal, createContext, useContext, createEffect } from 'solid-js';
+import { getGlobalWebSocketStore } from './stores/websocket-global';
+import { Dashboard } from './components/Dashboard/Dashboard';
+import StorageComponent from './components/Storage/Storage';
+import Backups from './components/Backups/Backups';
+import Settings from './components/Settings/Settings';
+import { Alerts } from './pages/Alerts';
+import { ToastContainer } from './components/Toast/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { logger } from './utils/logger';
+import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
+
+type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
+
+// Enhanced store type with proper typing
+type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
+
+// Export WebSocket context for other components
+export const WebSocketContext = createContext<EnhancedStore>();
+export const useWebSocket = () => {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    throw new Error('useWebSocket must be used within WebSocketContext.Provider');
+  }
+  return context;
+};
+
+function App() {
+  // Get singleton WebSocket store
+  const wsStore = getGlobalWebSocketStore();
+  const { state, connected } = wsStore;
+  
+  // Data update indicator
+  const [dataUpdated, setDataUpdated] = createSignal(false);
+  let updateTimeout: number;
+  
+  // Flash indicator when data updates
+  createEffect(() => {
+    // Watch for state changes
+    const updateTime = state.lastUpdate;
+    if (updateTime && updateTime !== '') {
+      setDataUpdated(true);
+      window.clearTimeout(updateTimeout);
+      updateTimeout = window.setTimeout(() => setDataUpdated(false), POLLING_INTERVALS.DATA_FLASH);
+    }
+  });
+  
+  // Tab management
+  const [activeTab, setActiveTab] = createSignal<TabType>('main');
+  
+  // Dark mode
+  const [darkMode, setDarkMode] = createSignal(
+    localStorage.getItem(STORAGE_KEYS.DARK_MODE) === 'true' || 
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !darkMode();
+    setDarkMode(newMode);
+    localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(newMode));
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    logger.trackFeature('theme', newMode ? 'dark' : 'light');
+  };
+  
+  // Initialize dark mode
+  if (darkMode()) {
+    document.documentElement.classList.add('dark');
+  }
+
+  // Pass through the store directly
+  const enhancedStore: EnhancedStore = wsStore;
+
+  return (
+    <ErrorBoundary>
+      <WebSocketContext.Provider value={enhancedStore}>
+        <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
+        <div class="container w-[95%] max-w-screen-xl mx-auto">
+          {/* Header */}
+          <div class="header flex flex-row justify-between items-center mb-2">
+            <div class="hidden md:block md:flex-1"></div>
+            <div class="flex items-center gap-1 flex-none">
+              <svg 
+                width="20" 
+                height="20" 
+                viewBox="0 0 256 256" 
+                xmlns="http://www.w3.org/2000/svg" 
+                class={`pulse-logo ${connected() && dataUpdated() ? 'animate-pulse-logo' : ''}`}
+              >
+                <title>Pulse Logo</title>
+                <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122"/>
+                <circle class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]" cx="128" cy="128" r="84"/>
+                <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26"/>
+              </svg>
+              <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+              <span class="text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900 px-1 py-0.5 rounded ml-1">RC</span>
+            </div>
+            <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
+              <button 
+                onClick={toggleDarkMode}
+                class="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none transition-colors"
+                title={darkMode() ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                <Show
+                  when={darkMode()}
+                  fallback={
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  }
+                >
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </Show>
+              </button>
+              <div class="flex items-center gap-2">
+                <div class={`status text-xs px-2 py-1 rounded-full ${
+                  connected() 
+                    ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300' 
+                    : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}>
+                  {connected() ? 'Connected' : 'Disconnected'}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Tabs */}
+          <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide" role="tablist">
+            <div 
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+                activeTab() === 'main' 
+                  ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+              }`}
+              onClick={() => setActiveTab('main')}
+              role="tab"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span>Main</span>
+            </div>
+            <div 
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+                activeTab() === 'storage' 
+                  ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+              }`}
+              onClick={() => setActiveTab('storage')}
+              role="tab"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+              <span>Storage</span>
+            </div>
+            <div 
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+                activeTab() === 'backups' 
+                  ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+              }`}
+              onClick={() => setActiveTab('backups')}
+              role="tab"
+              title="PVE backups, PBS backups, and VM/CT snapshots"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="9" y1="21" x2="9" y2="9"></line>
+              </svg>
+              <span>Backups</span>
+            </div>
+            <div 
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+                activeTab() === 'alerts' 
+                  ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+              }`}
+              onClick={() => setActiveTab('alerts')}
+              role="tab"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>Alerts</span>
+            </div>
+            <div 
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+                activeTab() === 'settings' 
+                  ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+              }`}
+              onClick={() => setActiveTab('settings')}
+              role="tab"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span>Settings</span>
+            </div>
+          </div>
+          
+          {/* Main Content */}
+          <main id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+            <div class="p-3">
+            <Show when={activeTab() === 'main'}>
+              <Dashboard 
+                vms={state.vms} 
+                containers={state.containers}
+                nodes={state.nodes}
+              />
+            </Show>
+            
+            <Show when={activeTab() === 'storage'}>
+              <StorageComponent />
+            </Show>
+            
+            <Show when={activeTab() === 'backups'}>
+              <Backups />
+            </Show>
+            
+            <Show when={activeTab() === 'alerts'}>
+              <Alerts />
+            </Show>
+            
+            <Show when={activeTab() === 'settings'}>
+              <Settings />
+            </Show>
+            </div>
+          </main>
+        </div>
+        </div>
+        <ToastContainer />
+      </WebSocketContext.Provider>
+    </ErrorBoundary>
+  );
+}
+
+export default App;

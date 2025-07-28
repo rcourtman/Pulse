@@ -1,0 +1,297 @@
+package pbs
+
+import (
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+)
+
+// Client represents a Proxmox Backup Server API client
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+	auth       auth
+	config     ClientConfig
+}
+
+// ClientConfig holds configuration for the PBS client
+type ClientConfig struct {
+	Host        string
+	User        string
+	Password    string
+	TokenName   string
+	TokenValue  string
+	Fingerprint string
+	VerifySSL   bool
+	Timeout     time.Duration
+}
+
+// auth represents authentication details
+type auth struct {
+	user       string
+	realm      string
+	ticket     string
+	csrfToken  string
+	tokenName  string
+	tokenValue string
+	expiresAt  time.Time
+}
+
+// NewClient creates a new PBS API client
+func NewClient(cfg ClientConfig) (*Client, error) {
+	// Parse user and realm
+	parts := strings.Split(cfg.User, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid user format, expected user@realm")
+	}
+	user := parts[0]
+	realm := parts[1]
+
+	// Create HTTP client
+	transport := &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		DisableCompression:  true,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	if !cfg.VerifySSL {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	} else if cfg.Fingerprint != "" {
+		// TODO: Implement fingerprint verification
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   cfg.Timeout,
+	}
+
+	client := &Client{
+		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
+		httpClient: httpClient,
+		config:     cfg,
+		auth: auth{
+			user:       user,
+			realm:      realm,
+			tokenName:  cfg.TokenName,
+			tokenValue: cfg.TokenValue,
+		},
+	}
+
+	// Authenticate if using password
+	if cfg.Password != "" && cfg.TokenName == "" {
+		if err := client.authenticate(context.Background()); err != nil {
+			return nil, fmt.Errorf("authentication failed: %w", err)
+		}
+	}
+
+	return client, nil
+}
+
+// authenticate performs password-based authentication
+func (c *Client) authenticate(ctx context.Context) error {
+	data := url.Values{
+		"username": {c.auth.user + "@" + c.auth.realm},
+		"password": {c.config.Password},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", strings.NewReader(data.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("authentication failed: %s", string(body))
+	}
+
+	var result struct {
+		Data struct {
+			Ticket            string `json:"ticket"`
+			CSRFPreventionToken string `json:"CSRFPreventionToken"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	c.auth.ticket = result.Data.Ticket
+	c.auth.csrfToken = result.Data.CSRFPreventionToken
+	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PBS tickets expire after 2 hours
+
+	return nil
+}
+
+// request performs an API request
+func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
+	// Re-authenticate if needed
+	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
+		if err := c.authenticate(ctx); err != nil {
+			return nil, fmt.Errorf("re-authentication failed: %w", err)
+		}
+	}
+
+	var body io.Reader
+	if data != nil {
+		body = strings.NewReader(data.Encode())
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	if data != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	// Set authentication
+	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
+		// API token authentication
+		req.Header.Set("Authorization", fmt.Sprintf("PBSAPIToken=%s@%s!%s:%s",
+			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue))
+	} else if c.auth.ticket != "" {
+		// Ticket authentication
+		req.Header.Set("Cookie", "PBSAuthCookie="+c.auth.ticket)
+		if method != "GET" && c.auth.csrfToken != "" {
+			req.Header.Set("CSRFPreventionToken", c.auth.csrfToken)
+		}
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for errors
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return resp, nil
+}
+
+// get performs a GET request
+func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	return c.request(ctx, "GET", path, nil)
+}
+
+// Version represents PBS version information
+type Version struct {
+	Version string `json:"version"`
+	Release string `json:"release"`
+	Repoid  string `json:"repoid"`
+}
+
+// Datastore represents a PBS datastore
+type Datastore struct {
+	Store     string `json:"store"`
+	Total     int64  `json:"total"`
+	Used      int64  `json:"used"`
+	Avail     int64  `json:"avail"`
+	GCStatus  string `json:"gc-status,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// GetVersion returns PBS version information
+func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
+	resp, err := c.get(ctx, "/version")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data Version `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// GetDatastores returns all datastores
+func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
+	resp, err := c.get(ctx, "/admin/datastore")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Datastore `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// Namespace represents a PBS namespace
+type Namespace struct {
+	NS     string `json:"ns"`
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	Parent string `json:"parent,omitempty"`
+}
+
+// ListNamespaces lists namespaces for a datastore
+func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNamespace string, maxDepth int) ([]Namespace, error) {
+	path := fmt.Sprintf("/admin/datastore/%s/namespace", datastore)
+	
+	// Build query parameters
+	params := url.Values{}
+	if parentNamespace != "" {
+		params.Set("ns", parentNamespace)
+	}
+	if maxDepth > 0 {
+		params.Set("max-depth", fmt.Sprintf("%d", maxDepth))
+	}
+	
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		// If namespace endpoint doesn't exist (older PBS versions), return empty list
+		if strings.Contains(err.Error(), "404") {
+			return []Namespace{}, nil
+		}
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Namespace `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
