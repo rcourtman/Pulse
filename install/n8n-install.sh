@@ -14,8 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  ca-certificates
+$STD apt-get install -y ca-certificates
 msg_ok "Installed Dependencies"
 
 NODE_VERSION="22" setup_nodejs
@@ -41,12 +40,13 @@ Description=n8n
 
 [Service]
 Type=simple
-EnvironmentFile="/opt/n8n.env"
+EnvironmentFile=/opt/n8n.env
 ExecStart=n8n start
+
 [Install]
 WantedBy=multi-user.target
 EOF
-$STD systemctl enable --now n8n
+systemctl enable -q --now n8n
 msg_ok "Created Service"
 
 motd_ssh
