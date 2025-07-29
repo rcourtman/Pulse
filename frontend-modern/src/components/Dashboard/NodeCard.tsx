@@ -103,7 +103,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     return `${diskPercent()}% (${formatBytes(props.node.disk.used)}/${formatBytes(props.node.disk.total)})`;
   };
 
-  const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts, 'node');
+  const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
   const nodeAlerts = createMemo(() => getResourceAlerts(props.node.id || props.node.name, activeAlerts));
   const borderClass = alertStyles.hasAlert 
     ? (alertStyles.severity === 'critical' ? 'border-red-500 border-2' : 'border-orange-500 border-2')

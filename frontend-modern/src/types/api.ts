@@ -13,6 +13,7 @@ export interface State {
   performance: Performance;
   connectionHealth: any;
   stats: Stats;
+  activeAlerts: Alert[];
   lastUpdate: string;
 }
 
@@ -273,7 +274,7 @@ export interface Alert {
   value: number;
   threshold: number;
   startTime: string;
-  lastSeen: string;
+  lastSeen?: string;
   acknowledged: boolean;
   ackTime?: string;
   ackUser?: string;

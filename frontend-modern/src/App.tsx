@@ -64,7 +64,7 @@ function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    logger.trackFeature('theme', newMode ? 'dark' : 'light');
+    logger.info('Theme changed', { mode: newMode ? 'dark' : 'light' });
   };
   
   // Initialize dark mode

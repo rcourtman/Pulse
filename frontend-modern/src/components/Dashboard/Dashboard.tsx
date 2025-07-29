@@ -9,8 +9,7 @@ import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shar
 import { POLLING_INTERVALS } from '@/constants';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
-import { parseSearchQuery, evaluateSearchQuery, parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
-import { showSuccess, showError } from '@/utils/toast';
+import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 
 interface DashboardProps {
   vms: VM[];
@@ -788,7 +787,7 @@ export function Dashboard(props: DashboardProps) {
                             showNode={false} 
                             displayMode={displayMode()} 
                             timeRange={timeRange()}
-                            alertStyles={getAlertStyles(guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`, activeAlerts, 'guest')}
+                            alertStyles={getAlertStyles(guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`, activeAlerts)}
                           />
                         </ComponentErrorBoundary>
                       )}

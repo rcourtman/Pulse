@@ -15,25 +15,69 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
+var rootCmd = &cobra.Command{
+	Use:   "pulse",
+	Short: "Pulse - Proxmox VE and PBS monitoring system",
+	Long:  `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runServer()
+	},
+}
+
+func init() {
+	// Add config command
+	rootCmd.AddCommand(configCmd)
+}
+
 func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runServer() {
 	// Initialize logger
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Load configuration
-	cfg, err := config.Load()
+	// Load new configuration system
+	loader := config.NewConfigLoader()
+	settings, err := loader.LoadConfig()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
-	// Set log level
-	if cfg.Debug {
+	// Set log level based on new settings
+	switch settings.Logging.Level {
+	case "debug":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
+	case "warn":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
+
+	// Log effective configuration
+	log.Info().
+		Int("backend_port", settings.Server.Backend.Port).
+		Int("frontend_port", settings.Server.Frontend.Port).
+		Str("log_level", settings.Logging.Level).
+		Msg("Using configuration")
+
+	// Load legacy configuration for PVE/PBS instances
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load legacy configuration")
+	}
+
+	// Override polling interval from new settings
+	cfg.PollingInterval = time.Duration(settings.Monitoring.PollingInterval) * time.Millisecond
 
 	log.Info().Msg("Starting Pulse monitoring server")
 
@@ -65,9 +109,9 @@ func main() {
 	}
 	router := api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
 
-	// Create HTTP server
+	// Create HTTP server with new configuration
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%d", cfg.Port),
+		Addr:         fmt.Sprintf("%s:%d", settings.Server.Backend.Host, settings.Server.Backend.Port),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -76,7 +120,10 @@ func main() {
 
 	// Start server
 	go func() {
-		log.Info().Int("port", cfg.Port).Msg("Server listening")
+		log.Info().
+			Str("host", settings.Server.Backend.Host).
+			Int("port", settings.Server.Backend.Port).
+			Msg("Server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Failed to start server")
 		}

@@ -222,6 +222,9 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		wsHub.BroadcastAlertResolved(alertID)
+		// Broadcast updated state immediately so frontend gets the new activeAlerts list
+		state := m.GetState()
+		wsHub.BroadcastState(state)
 	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
 		log.Info().
@@ -321,6 +324,27 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	m.state.Stats.PollingCycles++
 	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
 	m.state.Stats.WebSocketClients = wsHub.GetClientCount()
+	
+	// Sync active alerts to state
+	activeAlerts := m.alertManager.GetActiveAlerts()
+	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
+	for _, alert := range activeAlerts {
+		modelAlerts = append(modelAlerts, models.Alert{
+			ID:           alert.ID,
+			Type:         alert.Type,
+			Level:        string(alert.Level),
+			ResourceID:   alert.ResourceID,
+			ResourceName: alert.ResourceName,
+			Node:         alert.Node,
+			Instance:     alert.Instance,
+			Message:      alert.Message,
+			Value:        alert.Value,
+			Threshold:    alert.Threshold,
+			StartTime:    alert.StartTime,
+			Acknowledged: alert.Acknowledged,
+		})
+	}
+	m.state.UpdateActiveAlerts(modelAlerts)
 	
 	// Increment poll counter
 	m.mu.Lock()
@@ -642,10 +666,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll backups if enabled - but only every 10 cycles (20 seconds with 2s interval)
+	// Poll backups if enabled - using configurable cycle count
 	// This prevents slow backup/snapshot queries from blocking real-time stats
 	// Also poll on first cycle (pollCounter == 1) to ensure data loads quickly
-	if instanceCfg.MonitorBackups && (m.pollCounter%10 == 0 || m.pollCounter == 1) {
+	backupCycles := 10 // default
+	if m.config.BackupPollingCycles > 0 {
+		backupCycles = m.config.BackupPollingCycles
+	}
+	if instanceCfg.MonitorBackups && (m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1) {
 		select {
 		case <-ctx.Done():
 			return

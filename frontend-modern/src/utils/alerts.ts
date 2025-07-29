@@ -3,8 +3,7 @@ import type { Alert } from '@/types/api';
 // Get alert highlighting styles based on active alerts for a resource
 export const getAlertStyles = (
   resourceId: string, 
-  activeAlerts: Record<string, Alert>,
-  resourceType?: 'guest' | 'node' | 'storage'
+  activeAlerts: Record<string, Alert>
 ) => {
   // Find the highest severity alert for this resource
   let highestSeverity: 'critical' | 'warning' | null = null;

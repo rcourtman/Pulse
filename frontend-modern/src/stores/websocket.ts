@@ -15,9 +15,11 @@ export function createWebSocketStore(url: string) {
     pbs: [],
     metrics: [],
     pveBackups: {} as any,
+    pbsBackups: [],
     performance: {} as any,
     connectionHealth: {},
     stats: {} as any,
+    activeAlerts: [],
     lastUpdate: ''
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
@@ -39,31 +41,18 @@ export function createWebSocketStore(url: string) {
       ws = new WebSocket(url);
 
       ws.onopen = () => {
-        logger.logWebSocket('connect');
+        logger.debug('connect');
         setConnected(true);
         reconnectAttempt = 0; // Reset reconnect attempts on successful connection
         
-        // Fetch active alerts on connection
-        fetch('/api/alerts/active')
-          .then(res => res.json())
-          .then(alerts => {
-            if (Array.isArray(alerts)) {
-              // Clear existing alerts first
-              const currentAlertIds = Object.keys(activeAlerts);
-              currentAlertIds.forEach(id => setActiveAlerts(id, undefined));
-              
-              // Add new alerts
-              alerts.forEach(alert => {
-                setActiveAlerts(alert.id, alert);
-              });
-            }
-          })
-          .catch(err => console.error('[WebSocket] Failed to fetch active alerts:', err));
+        // Alerts will come with the initial state broadcast
       };
 
       ws.onmessage = (event) => {
         try {
-          const message: WSMessage = JSON.parse(event.data);
+          const data = JSON.parse(event.data);
+          
+          const message: WSMessage = data;
           
           if (message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE || message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA) {
             // Update state properties individually to ensure reactivity
@@ -80,9 +69,26 @@ export function createWebSocketStore(url: string) {
               if (message.data.performance !== undefined) setState('performance', message.data.performance);
               if (message.data.connectionHealth !== undefined) setState('connectionHealth', message.data.connectionHealth);
               if (message.data.stats !== undefined) setState('stats', message.data.stats);
+              // Sync active alerts from state
+              if (message.data.activeAlerts !== undefined) {
+                console.log('[WebSocket] Received activeAlerts:', message.data.activeAlerts);
+                
+                // First, remove all existing alerts
+                const currentAlertIds = Object.keys(activeAlerts);
+                currentAlertIds.forEach(id => {
+                  setActiveAlerts(id, undefined!);
+                });
+                
+                // Then add the new alerts
+                message.data.activeAlerts.forEach((alert: Alert) => {
+                  setActiveAlerts(alert.id, alert);
+                });
+                
+                console.log('[WebSocket] Updated activeAlerts to:', activeAlerts);
+              }
               setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
             }
-            logger.logWebSocket('message', { 
+            logger.debug('message', { 
               type: message.type, 
               hasData: !!message.data,
               nodeCount: message.data?.nodes?.length || 0,
@@ -90,7 +96,7 @@ export function createWebSocketStore(url: string) {
               containerCount: message.data?.containers?.length || 0
             });
           } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
-            logger.logWebSocket('error', message.error);
+            logger.debug('error', message.error);
           } else if (message.type === 'ping') {
             // Respond to ping with pong
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -103,16 +109,11 @@ export function createWebSocketStore(url: string) {
             // Welcome message from server
             logger.info('WebSocket connection established');
           } else if (message.type === 'alert') {
-            // New alert received
-            const alert = message.data;
-            setActiveAlerts(alert.id, alert);
-            logger.warn('New alert received', alert);
+            // Individual alerts now handled via state sync
+            logger.warn('New alert received (will sync with next state update)', message.data);
           } else if (message.type === 'alertResolved') {
-            // Alert resolved
-            const { alertId } = message.data;
-            // For Solid.js stores, we need to use the property deletion syntax
-            setActiveAlerts(alertId, undefined);
-            logger.info('Alert resolved', { alertId });
+            // Individual alert resolution now handled via state sync
+            logger.info('Alert resolved (will sync with next state update)', { alertId: message.data.alertId });
           }
         } catch (err) {
           logger.error('Failed to parse WebSocket message', err);
@@ -120,7 +121,7 @@ export function createWebSocketStore(url: string) {
       };
 
       ws.onclose = (event) => {
-        logger.logWebSocket('disconnect', { code: event.code, reason: event.reason });
+        logger.debug('disconnect', { code: event.code, reason: event.reason });
         setConnected(false);
         
         // Don't reconnect if we're already trying
@@ -149,7 +150,7 @@ export function createWebSocketStore(url: string) {
         // Don't log connection errors if we're already connected
         // Browser may show errors for initial connection attempts even after success
         if (!connected()) {
-          logger.logWebSocket('error', error);
+          logger.debug('error', error);
         }
       };
     } catch (err) {

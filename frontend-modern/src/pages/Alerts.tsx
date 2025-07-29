@@ -1924,6 +1924,7 @@ function HistoryTab() {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<any[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   
   // Ref for search input
   let searchInputRef: HTMLInputElement | undefined;
@@ -2022,8 +2023,8 @@ function HistoryTab() {
     return 'Unknown';
   };
 
-  // Prepare chronological alert data
-  const alertData = createMemo(() => {
+  // Prepare all alerts without filtering
+  const allAlertsData = createMemo(() => {
     // Combine active and historical alerts
     const allAlerts: any[] = [];
     
@@ -2055,20 +2056,37 @@ function HistoryTab() {
       });
     });
     
-    // Apply filters
-    let filtered = allAlerts;
+    return allAlerts;
+  });
+
+  // Apply filters to get the final alert data
+  const alertData = createMemo(() => {
+    let filtered = allAlertsData();
     
-    // Time filter
-    if (timeFilter() !== 'all') {
-      const now = Date.now();
-      const cutoff = {
-        '24h': now - 24 * 60 * 60 * 1000,
-        '7d': now - 7 * 24 * 60 * 60 * 1000,
-        '30d': now - 30 * 24 * 60 * 60 * 1000
-      }[timeFilter()];
+    // Selected bar filter (takes precedence over time filter)
+    if (selectedBarIndex() !== null) {
+      const trends = alertTrends();
+      const index = selectedBarIndex()!;
+      const bucketStart = trends.bucketTimes[index];
+      const bucketEnd = bucketStart + trends.bucketSize * 60 * 60 * 1000;
       
-      if (cutoff) {
-        filtered = filtered.filter(a => new Date(a.startTime).getTime() > cutoff);
+      filtered = filtered.filter(alert => {
+        const alertTime = new Date(alert.startTime).getTime();
+        return alertTime >= bucketStart && alertTime < bucketEnd;
+      });
+    } else {
+      // Time filter
+      if (timeFilter() !== 'all') {
+        const now = Date.now();
+        const cutoff = {
+          '24h': now - 24 * 60 * 60 * 1000,
+          '7d': now - 7 * 24 * 60 * 60 * 1000,
+          '30d': now - 30 * 24 * 60 * 60 * 1000
+        }[timeFilter()];
+        
+        if (cutoff) {
+          filtered = filtered.filter(a => new Date(a.startTime).getTime() > cutoff);
+        }
       }
     }
     
@@ -2125,17 +2143,33 @@ function HistoryTab() {
     const bucketSize = timeFilter() === '24h' ? 1 : timeFilter() === '7d' ? 6 : timeFilter() === '30d' ? 24 : 72; // hours per bucket
     const numBuckets = Math.min(Math.floor(timeRange / bucketSize), 30); // Limit to 30 buckets max
     
+    // Calculate start time for the chart
+    const startTime = now - timeRange * 60 * 60 * 1000;
+    
     // Initialize buckets
     const buckets = new Array(numBuckets).fill(0);
+    // bucketTimes represents the START of each bucket
     const bucketTimes = new Array(numBuckets).fill(0).map((_, i) => 
-      now - (numBuckets - i - 1) * bucketSize * 60 * 60 * 1000
+      startTime + i * bucketSize * 60 * 60 * 1000
     );
     
-    // Count alerts in each bucket
-    const startTime = now - timeRange * 60 * 60 * 1000;
-    alertData().forEach(alert => {
+    // Filter alerts based on current time filter
+    let alertsToCount = allAlertsData();
+    if (timeFilter() !== 'all') {
+      const cutoff = {
+        '24h': now - 24 * 60 * 60 * 1000,
+        '7d': now - 7 * 24 * 60 * 60 * 1000,
+        '30d': now - 30 * 24 * 60 * 60 * 1000
+      }[timeFilter()];
+      
+      if (cutoff) {
+        alertsToCount = alertsToCount.filter(a => new Date(a.startTime).getTime() > cutoff);
+      }
+    }
+    
+    alertsToCount.forEach(alert => {
       const alertTime = new Date(alert.startTime).getTime();
-      if (alertTime >= startTime) {
+      if (alertTime >= startTime && alertTime <= now) {
         const bucketIndex = Math.floor((alertTime - startTime) / (bucketSize * 60 * 60 * 1000));
         if (bucketIndex >= 0 && bucketIndex < numBuckets) {
           buckets[bucketIndex]++;
@@ -2163,15 +2197,25 @@ function HistoryTab() {
             Alert Frequency 
             <span class="text-xs text-gray-400 ml-2">({alertData().length} alerts)</span>
           </h3>
-          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <span class="flex items-center gap-1">
-              <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              {alertData().filter(a => a.level === 'warning').length} warnings
-            </span>
-            <span class="flex items-center gap-1">
-              <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-              {alertData().filter(a => a.level === 'critical').length} critical
-            </span>
+          <div class="flex items-center gap-2">
+            <Show when={selectedBarIndex() !== null}>
+              <button
+                onClick={() => setSelectedBarIndex(null)}
+                class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+              >
+                Clear filter
+              </button>
+            </Show>
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span class="flex items-center gap-1">
+                <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                {alertData().filter(a => a.level === 'warning').length} warnings
+              </span>
+              <span class="flex items-center gap-1">
+                <div class="w-2 h-2 bg-red-500 rounded-full"></div>
+                {alertData().filter(a => a.level === 'critical').length} critical
+              </span>
+            </div>
           </div>
         </div>
         
@@ -2185,24 +2229,43 @@ function HistoryTab() {
           {alertTrends().buckets.map((val, i) => {
             const scaledHeight = val > 0 ? Math.min(100, Math.max(20, Math.log(val + 1) * 20)) : 0;
             const pixelHeight = val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
-            const isRecent = i >= alertTrends().buckets.length - 3;
+            const isSelected = selectedBarIndex() === i;
             return (
-              <div class="flex-1 group relative flex items-end">
+              <div 
+                class="flex-1 group relative flex items-end cursor-pointer"
+                onClick={() => setSelectedBarIndex(i === selectedBarIndex() ? null : i)}
+              >
                 {/* Background track for all slots */}
                 <div class="absolute bottom-0 w-full h-1 bg-gray-300 dark:bg-gray-600 opacity-30 rounded-full"></div>
                 {/* Actual bar */}
                 <div 
-                  class="w-full group relative rounded-sm"
+                  class="w-full group relative rounded-sm transition-all"
                   style={{
                     height: `${pixelHeight}px`,
-                    'background-color': val > 0 ? (isRecent ? '#3b82f6' : '#9ca3af') : 'transparent'
+                    'background-color': val > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
+                    'opacity': isSelected ? '1' : '0.8',
+                    'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none'
                   }}
                   title={`${val} alert${val !== 1 ? 's' : ''}`}
                 >
                   {/* Tooltip on hover */}
                   <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                     <div class="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                      {val} alert{val !== 1 ? 's' : ''}
+                      <div class="font-semibold">{val} alert{val !== 1 ? 's' : ''}</div>
+                      <div class="text-[10px] text-gray-300">
+                        {timeFilter() === '24h' ? `${alertTrends().bucketSize} hour period` : 
+                         timeFilter() === '7d' ? `${alertTrends().bucketSize / 24} day period` :
+                         timeFilter() === '30d' ? `${alertTrends().bucketSize / 24} day period` :
+                         `${alertTrends().bucketSize / 24} day period`}
+                      </div>
+                      <div class="text-[10px] text-gray-300">
+                        {new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: timeFilter() === '24h' ? 'numeric' : undefined,
+                          minute: timeFilter() === '24h' ? '2-digit' : undefined
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>

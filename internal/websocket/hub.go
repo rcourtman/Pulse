@@ -212,6 +212,7 @@ func (h *Hub) BroadcastAlert(alert interface{}) {
 
 // BroadcastAlertResolved broadcasts alert resolution to all clients
 func (h *Hub) BroadcastAlertResolved(alertID string) {
+	log.Info().Str("alertID", alertID).Msg("Broadcasting alert resolved to WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
 		Data: map[string]string{"alertId": alertID},

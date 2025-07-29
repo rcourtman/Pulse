@@ -15,4 +15,5 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 // Initialize app with logging
 logger.info('Pulse monitoring dashboard starting');
 
+
 render(() => <App />, root!);

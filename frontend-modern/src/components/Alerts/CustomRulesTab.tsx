@@ -1,6 +1,5 @@
-import { createSignal, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { CustomAlertRule } from '@/types/alerts';
-import { showSuccess, showError } from '@/utils/toast';
 
 interface CustomRulesTabProps {
   rules: CustomAlertRule[];
@@ -9,7 +8,6 @@ interface CustomRulesTabProps {
 }
 
 export function CustomRulesTab(props: CustomRulesTabProps) {
-  const [editingRule, setEditingRule] = createSignal<string | null>(null);
 
   const deleteRule = (ruleId: string) => {
     const updatedRules = props.rules.filter(r => r.id !== ruleId);

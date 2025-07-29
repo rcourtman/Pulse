@@ -21,7 +21,24 @@ type State struct {
 	Performance      Performance       `json:"performance"`
 	ConnectionHealth map[string]bool   `json:"connectionHealth"`
 	Stats            Stats             `json:"stats"`
+	ActiveAlerts     []Alert           `json:"activeAlerts"`
 	LastUpdate       time.Time         `json:"lastUpdate"`
+}
+
+// Alert represents an active alert (simplified for State)
+type Alert struct {
+	ID           string    `json:"id"`
+	Type         string    `json:"type"`
+	Level        string    `json:"level"`
+	ResourceID   string    `json:"resourceId"`
+	ResourceName string    `json:"resourceName"`
+	Node         string    `json:"node"`
+	Instance     string    `json:"instance"`
+	Message      string    `json:"message"`
+	Value        float64   `json:"value"`
+	Threshold    float64   `json:"threshold"`
+	StartTime    time.Time `json:"startTime"`
+	Acknowledged bool      `json:"acknowledged"`
 }
 
 // Node represents a Proxmox VE node
@@ -361,6 +378,7 @@ func (s *State) GetSnapshot() State {
 		Performance:      s.Performance,
 		ConnectionHealth: make(map[string]bool),
 		Stats:            s.Stats,
+		ActiveAlerts:     append([]Alert{}, s.ActiveAlerts...),
 		LastUpdate:       s.LastUpdate,
 	}
 	
@@ -370,6 +388,13 @@ func (s *State) GetSnapshot() State {
 	}
 	
 	return snapshot
+}
+
+// UpdateActiveAlerts updates the active alerts in the state
+func (s *State) UpdateActiveAlerts(alerts []Alert) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ActiveAlerts = alerts
 }
 
 // UpdateNodes updates the nodes in the state

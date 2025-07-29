@@ -571,7 +571,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				existingAlert.Level = AlertLevelWarning
 			}
 		}
-	} else if exists && !existingAlert.Acknowledged {
+	} else if exists {
 		// Use hysteresis for resolution - only resolve if below clear threshold
 		clearThreshold := threshold.Clear
 		if clearThreshold <= 0 {
@@ -587,6 +587,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Str("metric", metricType).
 				Float64("value", value).
 				Float64("clearThreshold", clearThreshold).
+				Bool("wasAcknowledged", existingAlert.Acknowledged).
 				Msg("Alert resolved with hysteresis")
 
 			if m.onResolved != nil {

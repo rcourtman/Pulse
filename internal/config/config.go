@@ -30,6 +30,7 @@ type Config struct {
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"10s"`
 	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
+	BackupPollingCycles  int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 
 	WebhookBatchDelay time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 

@@ -107,6 +107,10 @@ func (r *Router) setupRoutes() {
 	
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", notificationHandlers.HandleNotifications)
+	
+	// Settings routes
+	r.mux.HandleFunc("/api/settings", getSettings)
+	r.mux.HandleFunc("/api/settings/update", updateSettings)
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)

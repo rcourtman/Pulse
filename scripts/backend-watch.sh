@@ -9,7 +9,7 @@ export CONFIG_PATH=/etc/pulse
 
 # Initial build
 echo "[$(date)] Building Pulse backend..."
-go build -o bin/pulse cmd/pulse/main.go || exit 1
+go build -o bin/pulse ./cmd/pulse || exit 1
 
 # Function to check if any Go files have changed
 check_go_files_changed() {
@@ -35,7 +35,7 @@ while true; do
             wait $BACKEND_PID 2>/dev/null
             
             # Rebuild
-            if go build -o bin/pulse cmd/pulse/main.go; then
+            if go build -o bin/pulse ./cmd/pulse; then
                 echo "[$(date)] Build successful"
                 break
             else
