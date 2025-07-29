@@ -39,10 +39,6 @@ const Settings: Component = () => {
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
-  const [backendPort, setBackendPort] = createSignal(3000);
-  const [frontendPort, setFrontendPort] = createSignal(7655);
-  const [showRestartModal, setShowRestartModal] = createSignal(false);
-  const [pendingPortChanges, setPendingPortChanges] = createSignal<{backend?: number, frontend?: number} | null>(null);
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -82,8 +78,6 @@ const Settings: Component = () => {
         const response = await SettingsAPI.getSettings();
         const settings = response.current;
         setPollingInterval((settings.monitoring.pollingInterval || 5000) / 1000);
-        setBackendPort(settings.server.backend.port);
-        setFrontendPort(settings.server.frontend.port);
       } catch (error) {
         console.error('Failed to load settings:', error);
       }
@@ -92,50 +86,10 @@ const Settings: Component = () => {
     }
   });
 
-  const validatePort = (port: number): string | null => {
-    if (isNaN(port) || port < 1 || port > 65535) {
-      return 'Port must be between 1 and 65535';
-    }
-    return null;
-  };
-
   const saveSettings = async () => {
     try {
       if (activeTab() === 'system') {
-        // Check if ports have changed
-        const settingsResp = await SettingsAPI.getSettings();
-        const currentSettings = settingsResp.current;
-        const currentBackendPort = currentSettings.server.backend.port;
-        const currentFrontendPort = currentSettings.server.frontend.port;
-        const portChanged = 
-          backendPort() !== currentBackendPort ||
-          frontendPort() !== currentFrontendPort;
-        
-        if (portChanged) {
-          // Validate ports
-          const backendError = validatePort(backendPort());
-          const frontendError = validatePort(frontendPort());
-          
-          if (backendError || frontendError) {
-            showError(backendError || frontendError || 'Invalid port configuration');
-            return;
-          }
-          
-          if (backendPort() === frontendPort()) {
-            showError('Backend and frontend ports must be different');
-            return;
-          }
-          
-          // Show restart confirmation modal
-          setPendingPortChanges({
-            backend: backendPort(),
-            frontend: frontendPort()
-          });
-          setShowRestartModal(true);
-          return;
-        }
-        
-        // Save other system settings without restart
+        // Save system settings
         const response = await fetch('/api/settings/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -155,40 +109,6 @@ const Settings: Component = () => {
       setHasUnsavedChanges(false);
     } catch (error) {
       showError('Failed to save settings');
-    }
-  };
-  
-  const applyPortChanges = async () => {
-    try {
-      const response = await fetch('/api/settings/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          server: {
-            backend: { port: pendingPortChanges()?.backend },
-            frontend: { port: pendingPortChanges()?.frontend }
-          },
-          monitoring: {
-            pollingInterval: pollingInterval() * 1000
-          }
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update settings');
-      }
-      
-      showSuccess('Settings saved. The application will restart...');
-      setHasUnsavedChanges(false);
-      setShowRestartModal(false);
-      
-      // The backend will handle the restart
-      setTimeout(() => {
-        window.location.href = `${window.location.protocol}//${window.location.hostname}:${pendingPortChanges()?.frontend}`;
-      }, 3000);
-    } catch (error) {
-      showError('Failed to apply port changes');
-      setShowRestartModal(false);
     }
   };
 
@@ -230,58 +150,6 @@ const Settings: Component = () => {
 
   return (
     <>
-      {/* Restart Confirmation Modal */}
-      <Show when={showRestartModal()}>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              Confirm Port Changes
-            </h3>
-            
-            <div class="space-y-4">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                Changing ports will require restarting the application. You will be automatically redirected to the new port.
-              </p>
-              
-              <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 space-y-2">
-                <div class="text-sm">
-                  <span class="text-gray-600 dark:text-gray-400">Backend Port:</span>
-                  <span class="ml-2 font-medium">{pendingPortChanges()?.backend}</span>
-                </div>
-                <div class="text-sm">
-                  <span class="text-gray-600 dark:text-gray-400">Frontend Port:</span>
-                  <span class="ml-2 font-medium">{pendingPortChanges()?.frontend}</span>
-                </div>
-              </div>
-              
-              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <p class="text-xs text-amber-800 dark:text-amber-200">
-                  <strong>Warning:</strong> Make sure these ports are not already in use by other applications.
-                </p>
-              </div>
-            </div>
-            
-            <div class="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowRestartModal(false);
-                  setPendingPortChanges(null);
-                }}
-                class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={applyPortChanges}
-                class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Apply Changes & Restart
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
       <div class="space-y-4">
       {/* Header with better styling */}
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -548,70 +416,12 @@ const Settings: Component = () => {
                     </h4>
                     
                     <div class="space-y-4">
-                      {/* Port Configuration */}
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div class="flex items-center justify-between">
                         <div>
-                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Backend Port</label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">API server port</p>
-                          <input
-                            type="number"
-                            value={backendPort()}
-                            onInput={(e) => {
-                              const val = parseInt(e.currentTarget.value);
-                              if (!isNaN(val) && val >= 1 && val <= 65535) {
-                                setBackendPort(val);
-                                setHasUnsavedChanges(true);
-                              }
-                            }}
-                            min="1"
-                            max="65535"
-                            class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-white"
-                            placeholder="3000"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Frontend Port</label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Web UI port</p>
-                          <input
-                            type="number"
-                            value={frontendPort()}
-                            onInput={(e) => {
-                              const val = parseInt(e.currentTarget.value);
-                              if (!isNaN(val)) {
-                                setFrontendPort(val);
-                                setHasUnsavedChanges(true);
-                              }
-                            }}
-                            min="1"
-                            max="65535"
-                            class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 
-                                   focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                        <div class="flex items-start gap-2">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-600 dark:text-amber-400 mt-0.5">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                            <line x1="12" y1="9" x2="12" y2="13"></line>
-                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                          </svg>
-                          <div class="text-xs text-amber-800 dark:text-amber-200">
-                            <p class="font-medium mb-1">Changing ports requires restart</p>
-                            <p>The application will restart automatically when you save port changes. Make sure the new ports are not already in use.</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div class="border-t dark:border-gray-600 pt-4">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Polling Interval</label>
-                            <p class="text-xs text-gray-600 dark:text-gray-400">
-                              How often to fetch data from servers
-                            </p>
+                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Polling Interval</label>
+                          <p class="text-xs text-gray-600 dark:text-gray-400">
+                            How often to fetch data from servers
+                          </p>
                         </div>
                         <select
                           value={pollingInterval()}
@@ -627,7 +437,6 @@ const Settings: Component = () => {
                           <option value="30">30 seconds</option>
                           <option value="60">1 minute</option>
                         </select>
-                      </div>
                       </div>
                       
                     </div>
@@ -666,6 +475,14 @@ const Settings: Component = () => {
                         <span class={`font-medium ${connected() ? 'text-green-600' : 'text-red-600'}`}>
                           {connected() ? 'Connected' : 'Disconnected'}
                         </span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Backend Port:</span>
+                        <span class="font-medium">{window.location.hostname === 'localhost' ? '3000' : '3000'}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Frontend Port:</span>
+                        <span class="font-medium">{window.location.port || (window.location.protocol === 'https:' ? '443' : '80')}</span>
                       </div>
                     </div>
                   </div>
@@ -714,9 +531,7 @@ const Settings: Component = () => {
                           },
                           websocket: {
                             connected: connected(),
-                            url: window.location.hostname === 'localhost' 
-                              ? 'ws://localhost:3000/ws' 
-                              : `ws://${window.location.hostname}:3000/ws`
+                            url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
                           },
                           nodes: nodes(),
                           state: {
