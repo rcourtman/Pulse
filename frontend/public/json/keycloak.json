@@ -6,7 +6,7 @@
   ],
   "date_created": "2024-05-02",
   "type": "ct",
-  "updateable": false,
+  "updateable": true,
   "privileged": false,
   "interface_port": 8080,
   "documentation": "https://www.keycloak.org/documentation",
@@ -28,8 +28,8 @@
     }
   ],
   "default_credentials": {
-    "username": null,
-    "password": null
+    "username": "tmpadm",
+    "password": "admin123"
   },
   "notes": [
     {
@@ -38,6 +38,10 @@
     },
     {
       "text": "This script requires some extra steps after the installation, Please checkout the `https://github.com/community-scripts/ProxmoxVE/discussions/193`",
+      "type": "info"
+    },
+    {
+      "text": "When updating, if you had modified cache-ispn.xml: Re-apply your changes to the new file, otherwise leave it unchanged.",
       "type": "info"
     }
   ]
