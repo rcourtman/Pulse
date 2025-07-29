@@ -28,6 +28,7 @@ vendor/
 node_modules/
 .npm/
 .yarn/
+frontend-modern/.vite/
 
 # Environment
 .env

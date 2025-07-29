@@ -4,6 +4,9 @@
 
 cd /opt/pulse
 
+# Set config path
+export CONFIG_PATH=/etc/pulse
+
 # Initial build
 echo "[$(date)] Building Pulse backend..."
 go build -o bin/pulse cmd/pulse/main.go || exit 1
@@ -17,7 +20,7 @@ check_go_files_changed() {
 while true; do
     # Start the backend
     echo "[$(date)] Starting Pulse backend..."
-    ./bin/pulse &
+    CONFIG_PATH=/etc/pulse ./bin/pulse &
     BACKEND_PID=$!
     
     # Monitor for changes

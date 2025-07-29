@@ -74,6 +74,7 @@ export function createWebSocketStore(url: string) {
               if (message.data.containers !== undefined) setState('containers', message.data.containers);
               if (message.data.storage !== undefined) setState('storage', message.data.storage);
               if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
+              if (message.data.pbsBackups !== undefined) setState('pbsBackups', message.data.pbsBackups);
               if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
               if (message.data.pveBackups !== undefined) setState('pveBackups', message.data.pveBackups);
               if (message.data.performance !== undefined) setState('performance', message.data.performance);

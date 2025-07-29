@@ -15,6 +15,7 @@ type State struct {
 	Containers       []Container       `json:"containers"`
 	Storage          []Storage         `json:"storage"`
 	PBSInstances     []PBSInstance     `json:"pbs"`
+	PBSBackups       []PBSBackup       `json:"pbsBackups"`
 	Metrics          []Metric          `json:"metrics"`
 	PVEBackups       PVEBackups        `json:"pveBackups"`
 	Performance      Performance       `json:"performance"`
@@ -144,6 +145,22 @@ type PBSNamespace struct {
 	Path   string `json:"path"`
 	Parent string `json:"parent,omitempty"`
 	Depth  int    `json:"depth"`
+}
+
+// PBSBackup represents a backup stored on PBS
+type PBSBackup struct {
+	ID           string    `json:"id"`          // Unique ID combining PBS instance, namespace, type, vmid, and time
+	Instance     string    `json:"instance"`    // PBS instance name
+	Datastore    string    `json:"datastore"`   
+	Namespace    string    `json:"namespace"`   
+	BackupType   string    `json:"backupType"`  // "vm" or "ct"
+	VMID         string    `json:"vmid"`        
+	BackupTime   time.Time `json:"backupTime"`  
+	Size         int64     `json:"size"`        
+	Protected    bool      `json:"protected"`   
+	Verified     bool      `json:"verified"`    
+	Comment      string    `json:"comment,omitempty"`
+	Files        []string  `json:"files,omitempty"`
 }
 
 // PBSBackupJob represents a PBS backup job
@@ -310,6 +327,7 @@ func NewState() *State {
 		Containers:       make([]Container, 0),
 		Storage:          make([]Storage, 0),
 		PBSInstances:     make([]PBSInstance, 0),
+		PBSBackups:       make([]PBSBackup, 0),
 		Metrics:          make([]Metric, 0),
 		PVEBackups: PVEBackups{
 			BackupTasks:    make([]BackupTask, 0),
@@ -333,6 +351,7 @@ func (s *State) GetSnapshot() State {
 		Containers:       append([]Container{}, s.Containers...),
 		Storage:          append([]Storage{}, s.Storage...),
 		PBSInstances:     append([]PBSInstance{}, s.PBSInstances...),
+		PBSBackups:       append([]PBSBackup{}, s.PBSBackups...),
 		Metrics:          append([]Metric{}, s.Metrics...),
 		PVEBackups: PVEBackups{
 			BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
@@ -643,3 +662,36 @@ func (s *State) SetConnectionHealth(instanceID string, healthy bool) {
 	s.ConnectionHealth[instanceID] = healthy
 }
 
+
+// UpdatePBSBackups updates PBS backups for a specific instance
+func (s *State) UpdatePBSBackups(instanceName string, backups []PBSBackup) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Create a map of existing backups excluding ones from this instance
+	backupMap := make(map[string]PBSBackup)
+	for _, backup := range s.PBSBackups {
+		if backup.Instance != instanceName {
+			backupMap[backup.ID] = backup
+		}
+	}
+	
+	// Add new backups from this instance
+	for _, backup := range backups {
+		backupMap[backup.ID] = backup
+	}
+	
+	// Convert map back to slice
+	newBackups := make([]PBSBackup, 0, len(backupMap))
+	for _, backup := range backupMap {
+		newBackups = append(newBackups, backup)
+	}
+	
+	// Sort by backup time (newest first)
+	sort.Slice(newBackups, func(i, j int) bool {
+		return newBackups[i].BackupTime.After(newBackups[j].BackupTime)
+	})
+	
+	s.PBSBackups = newBackups
+	s.LastUpdate = time.Now()
+}

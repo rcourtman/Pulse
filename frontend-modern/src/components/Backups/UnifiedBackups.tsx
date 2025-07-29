@@ -71,9 +71,21 @@ const UnifiedBackups: Component = () => {
     return useRelativeTime() ? formatRelativeTime(timestamp) : formatAbsoluteTime(timestamp);
   };
 
+  // Check if we have any backup data yet
+  const isLoading = createMemo(() => {
+    return !state.pveBackups?.guestSnapshots && 
+           !state.pveBackups?.storageBackups && 
+           !state.pbsBackups?.length && 
+           !state.pbs?.length;
+  });
+
   // Normalize all backup data into unified format
   const normalizedData = createMemo(() => {
     const unified: UnifiedBackup[] = [];
+    const seenBackups = new Set<string>(); // Track backups to avoid duplicates
+    
+    // Debug mode - remove in production
+    const debugMode = false;
 
     // Normalize snapshots
     state.pveBackups?.guestSnapshots?.forEach((snapshot: any) => {
@@ -96,10 +108,61 @@ const UnifiedBackups: Component = () => {
       });
     });
 
-    // Normalize local backups
+    // Process PBS backups FIRST from the new Go backend (state.pbsBackups)
+    // This ensures we have the complete PBS data with namespaces
+    state.pbsBackups?.forEach((backup: any) => {
+      const backupDate = new Date(backup.backupTime);
+      const dateStr = backupDate.toISOString().split('T')[0];
+      const timeStr = backupDate.toISOString().split('T')[1].split('.')[0].replace(/:/g, '');
+      const backupName = `${backup.backupType}/${backup.vmid}/${dateStr}_${timeStr}`;
+      
+      // Create a key that matches the format used by PVE storage backups
+      // Use just the timestamp in seconds (Unix time) to match ctime format
+      const backupTimeSeconds = Math.floor(backupDate.getTime() / 1000);
+      const backupKey = `${backup.vmid}-${backupTimeSeconds}`;
+      seenBackups.add(backupKey);
+      
+      if (debugMode) {
+        console.log(`PBS backup: vmid=${backup.vmid}, time=${backupTimeSeconds}, key=${backupKey}, verified=${backup.verified}`);
+      }
+      
+      unified.push({
+        backupType: 'remote',
+        vmid: parseInt(backup.vmid) || 0,
+        name: backup.comment || '',
+        type: backup.backupType === 'vm' ? 'VM' : 'LXC',
+        node: backup.instance || 'PBS',
+        backupTime: backupTimeSeconds,
+        backupName: backupName,
+        description: backup.comment || '',
+        status: backup.verified ? 'verified' : 'unverified',
+        size: backup.size || null,
+        storage: null,
+        datastore: backup.datastore || null,
+        namespace: backup.namespace || 'root',
+        verified: backup.verified || false,
+        protected: backup.protected || false
+      });
+    });
+
+    // Normalize local backups (including PBS through PVE storage)
     state.pveBackups?.storageBackups?.forEach((backup: any) => {
       // Determine if this is actually a PBS backup based on storage
       const backupType = backup.isPBS ? 'remote' : 'local';
+      
+      // Skip PBS backups that we already have from direct PBS API
+      if (backup.isPBS && backup.volid) {
+        // Check if we already have this from PBS API using the same key format
+        const backupKey = `${backup.vmid}-${backup.ctime}`;
+        
+        if (debugMode) {
+          console.log(`PVE storage backup: vmid=${backup.vmid}, ctime=${backup.ctime}, key=${backupKey}, isPBS=${backup.isPBS}, skip=${seenBackups.has(backupKey)}`);
+        }
+        
+        if (seenBackups.has(backupKey)) {
+          return; // Skip duplicate
+        }
+      }
       
       unified.push({
         backupType: backupType,
@@ -110,15 +173,16 @@ const UnifiedBackups: Component = () => {
         backupTime: backup.ctime || 0,
         backupName: backup.volid?.split('/').pop() || '',
         description: backup.notes || '', // Use notes field for PBS backup descriptions
-        status: backupType === 'remote' ? (backup.verified ? 'verified' : 'unverified') : 'ok',
+        status: 'ok', // PVE storage doesn't provide verification status
         size: backup.size || null,
         storage: backup.storage || null,
         datastore: backup.isPBS ? backup.storage : null,
         namespace: backup.isPBS ? 'root' : null,
-        verified: backup.isPBS ? backup.verified : null,
+        verified: null, // PVE storage doesn't provide verification status
         protected: backup.protected || false
       });
     });
+
 
     // Normalize PBS backups (PBS data may be structured differently in the Go backend)
     state.pbs?.forEach((pbsInstance: any) => {
@@ -1138,14 +1202,26 @@ const UnifiedBackups: Component = () => {
           }
         `}</style>
         <Show
-          when={groupedData().length > 0}
+          when={!isLoading()}
           fallback={
             <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p class="text-lg">No backups found</p>
-              <p class="text-sm mt-2">No backups, snapshots, or remote backups match your filters</p>
+              <div class="flex flex-col items-center gap-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                <p class="text-lg">Loading backup data...</p>
+                <p class="text-sm">This may take up to 20 seconds on first load</p>
+              </div>
             </div>
           }
         >
+          <Show
+            when={groupedData().length > 0}
+            fallback={
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p class="text-lg">No backups found</p>
+                <p class="text-sm mt-2">No backups, snapshots, or remote backups match your filters</p>
+              </div>
+            }
+          >
           {/* Mobile Card View - Compact */}
           <div class="block lg:hidden space-y-3">
             <For each={groupedData()}>
@@ -1428,6 +1504,7 @@ const UnifiedBackups: Component = () => {
               </For>
             </tbody>
           </table>
+          </Show>
         </Show>
       </div>
 

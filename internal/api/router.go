@@ -654,12 +654,15 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Get current state
+	state := r.monitor.GetState()
+	
 	// Return backup data structure
 	backups := map[string]interface{}{
-		"backupTasks": []interface{}{},
-		"storageBackups": []interface{}{},
-		"guestSnapshots": []interface{}{},
-		"pbsBackups": []interface{}{},
+		"backupTasks": state.PVEBackups.BackupTasks,
+		"storageBackups": state.PVEBackups.StorageBackups,
+		"guestSnapshots": state.PVEBackups.GuestSnapshots,
+		"pbsBackups": state.PBSBackups,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

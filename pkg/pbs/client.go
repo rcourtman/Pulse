@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
-
+	
+	"github.com/rs/zerolog/log"
 )
 
 // Client represents a Proxmox Backup Server API client
@@ -258,6 +260,29 @@ type Namespace struct {
 	Parent string `json:"parent,omitempty"`
 }
 
+// BackupGroup represents a group of backups for a specific VM/CT
+type BackupGroup struct {
+	BackupType  string   `json:"backup-type"`  // "vm" or "ct"
+	BackupID    string   `json:"backup-id"`    // VMID
+	LastBackup  int64    `json:"last-backup"`  // Unix timestamp
+	BackupCount int      `json:"backup-count"`
+	Files       []string `json:"files,omitempty"`
+	Owner       string   `json:"owner,omitempty"`
+}
+
+// BackupSnapshot represents a single backup snapshot
+type BackupSnapshot struct {
+	BackupType   string         `json:"backup-type"`  // "vm" or "ct"
+	BackupID     string         `json:"backup-id"`    // VMID
+	BackupTime   int64          `json:"backup-time"`  // Unix timestamp
+	Files        []interface{}  `json:"files,omitempty"` // Can be strings or objects
+	Size         int64          `json:"size"`
+	Protected    bool           `json:"protected"`
+	Comment      string         `json:"comment,omitempty"`
+	Owner        string         `json:"owner,omitempty"`
+	Verification interface{}    `json:"verification,omitempty"` // Can be string or object
+}
+
 // ListNamespaces lists namespaces for a datastore
 func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNamespace string, maxDepth int) ([]Namespace, error) {
 	path := fmt.Sprintf("/admin/datastore/%s/namespace", datastore)
@@ -294,4 +319,177 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	}
 
 	return result.Data, nil
+}
+// ListBackupGroups lists all backup groups in a datastore/namespace
+func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespace string) ([]BackupGroup, error) {
+	path := fmt.Sprintf("/admin/datastore/%s/groups", datastore)
+	
+	// Add namespace parameter if provided
+	params := url.Values{}
+	if namespace != "" {
+		params.Set("ns", namespace)
+	}
+	
+	if len(params) > 0 {
+		path = path + "?" + params.Encode()
+	}
+	
+	// Log the API call
+	log.Debug().Str("url", c.baseURL+path).Msg("PBS API: ListBackupGroups")
+	
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []BackupGroup `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode backup groups: %w", err)
+	}
+
+	log.Debug().
+		Str("namespace", namespace).
+		Int("count", len(result.Data)).
+		Msg("PBS API: Backup groups found")
+	return result.Data, nil
+}
+
+// ListBackupSnapshots lists all snapshots for a specific backup group
+func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, namespace string, backupType string, backupID string) ([]BackupSnapshot, error) {
+	path := fmt.Sprintf("/admin/datastore/%s/snapshots", datastore)
+	
+	// Build parameters
+	params := url.Values{}
+	if namespace != "" {
+		params.Set("ns", namespace)
+	}
+	params.Set("backup-type", backupType)
+	params.Set("backup-id", backupID)
+	
+	path = path + "?" + params.Encode()
+	
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []BackupSnapshot `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode snapshots: %w", err)
+	}
+
+	return result.Data, nil
+}
+
+// ListAllBackups fetches all backups from all namespaces concurrently
+func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespaces []string) (map[string][]BackupSnapshot, error) {
+	type namespaceResult struct {
+		namespace string
+		snapshots []BackupSnapshot
+		err      error
+	}
+	
+	// Channel for results
+	resultCh := make(chan namespaceResult, len(namespaces))
+	
+	// WaitGroup to track goroutines
+	var wg sync.WaitGroup
+	
+	// Semaphore to limit concurrent requests
+	sem := make(chan struct{}, 3) // Max 3 concurrent requests
+	
+	// Fetch backups from each namespace concurrently
+	for _, ns := range namespaces {
+		wg.Add(1)
+		go func(namespace string) {
+			defer wg.Done()
+			
+			// Acquire semaphore
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			
+			// Get groups first
+			groups, err := c.ListBackupGroups(ctx, datastore, namespace)
+			if err != nil {
+				log.Error().
+					Str("datastore", datastore).
+					Str("namespace", namespace).
+					Err(err).
+					Msg("Failed to list backup groups")
+				resultCh <- namespaceResult{namespace: namespace, err: err}
+				return
+			}
+			
+			log.Info().
+				Str("datastore", datastore).
+				Str("namespace", namespace).
+				Int("groups", len(groups)).
+				Msg("Found backup groups")
+			
+			var allSnapshots []BackupSnapshot
+			
+			// For each group, get snapshots
+			for _, group := range groups {
+				snapshots, err := c.ListBackupSnapshots(ctx, datastore, namespace, group.BackupType, group.BackupID)
+				if err != nil {
+					log.Error().
+						Str("datastore", datastore).
+						Str("namespace", namespace).
+						Str("type", group.BackupType).
+						Str("id", group.BackupID).
+						Err(err).
+						Msg("Failed to list snapshots")
+					continue
+				}
+				allSnapshots = append(allSnapshots, snapshots...)
+			}
+			
+			resultCh <- namespaceResult{
+				namespace: namespace,
+				snapshots: allSnapshots,
+				err:      nil,
+			}
+		}(ns)
+	}
+	
+	// Close channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+	
+	// Collect results
+	results := make(map[string][]BackupSnapshot)
+	var errors []error
+	
+	for result := range resultCh {
+		if result.err != nil {
+			errors = append(errors, fmt.Errorf("namespace %s: %w", result.namespace, result.err))
+		} else {
+			results[result.namespace] = result.snapshots
+		}
+	}
+	
+	// Return combined error if any occurred
+	if len(errors) > 0 {
+		return results, fmt.Errorf("errors fetching backups: %v", errors)
+	}
+	
+	return results, nil
 }

@@ -7,6 +7,7 @@ export interface State {
   containers: Container[];
   storage: Storage[];
   pbs: PBSInstance[];
+  pbsBackups: PBSBackup[];
   metrics: Metric[];
   pveBackups: PVEBackups;
   performance: Performance;
@@ -129,6 +130,21 @@ export interface PBSNamespace {
   path: string;
   parent: string;
   depth: number;
+}
+
+export interface PBSBackup {
+  id: string;
+  instance: string;
+  datastore: string;
+  namespace: string;
+  backupType: string;
+  vmid: string;
+  backupTime: string;
+  size: number;
+  protected: boolean;
+  verified: boolean;
+  comment: string;
+  files: string[];
 }
 
 export interface PBSBackupJob {

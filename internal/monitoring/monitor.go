@@ -284,6 +284,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("nodes", len(state.Nodes)).
 				Int("vms", len(state.VMs)).
 				Int("containers", len(state.Containers)).
+				Int("pbsBackups", len(state.PBSBackups)).
 				Msg("Broadcasting state update (ticker)")
 			wsHub.BroadcastState(state)
 			
@@ -641,9 +642,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll backups if enabled - but only every 30 cycles (60 seconds with 2s interval)
+	// Poll backups if enabled - but only every 10 cycles (20 seconds with 2s interval)
 	// This prevents slow backup/snapshot queries from blocking real-time stats
-	if instanceCfg.MonitorBackups && m.pollCounter%30 == 0 {
+	// Also poll on first cycle (pollCounter == 1) to ensure data loads quickly
+	if instanceCfg.MonitorBackups && (m.pollCounter%10 == 0 || m.pollCounter == 1) {
 		select {
 		case <-ctx.Done():
 			return
@@ -1142,6 +1144,19 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Update state
 	m.state.UpdatePBSInstances([]models.PBSInstance{pbsInst})
+	
+	// Poll backups if enabled
+	if instanceCfg.MonitorBackups {
+		log.Info().
+			Str("instance", instanceName).
+			Int("datastores", len(pbsInst.Datastores)).
+			Msg("Polling PBS backups")
+		m.pollPBSBackups(ctx, instanceName, client, pbsInst.Datastores)
+	} else {
+		log.Debug().
+			Str("instance", instanceName).
+			Msg("PBS backup monitoring disabled")
+	}
 }
 
 // GetState returns the current state
@@ -1420,3 +1435,108 @@ func (m *Monitor) Stop() {
 	log.Info().Msg("Monitor stopped")
 }
 
+
+// pollPBSBackups fetches all backups from PBS datastores
+func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
+	
+	var allBackups []models.PBSBackup
+	
+	// Process each datastore
+	for _, ds := range datastores {
+		// Get namespace paths
+		namespacePaths := make([]string, 0, len(ds.Namespaces))
+		for _, ns := range ds.Namespaces {
+			namespacePaths = append(namespacePaths, ns.Path)
+		}
+		
+		log.Info().
+			Str("instance", instanceName).
+			Str("datastore", ds.Name).
+			Int("namespaces", len(namespacePaths)).
+			Strs("namespace_paths", namespacePaths).
+			Msg("Processing datastore namespaces")
+		
+		// Fetch backups from all namespaces concurrently
+		backupsMap, err := client.ListAllBackups(ctx, ds.Name, namespacePaths)
+		if err != nil {
+			log.Error().Err(err).
+				Str("instance", instanceName).
+				Str("datastore", ds.Name).
+				Msg("Failed to fetch PBS backups")
+			continue
+		}
+		
+		// Convert PBS backups to model backups
+		for namespace, snapshots := range backupsMap {
+			for _, snapshot := range snapshots {
+				backupTime := time.Unix(snapshot.BackupTime, 0)
+				
+				// Generate unique ID
+				id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d", 
+					instanceName, ds.Name, namespace, 
+					snapshot.BackupType, snapshot.BackupID, 
+					snapshot.BackupTime)
+				
+				// Extract file names from files (which can be strings or objects)
+				var fileNames []string
+				for _, file := range snapshot.Files {
+					switch f := file.(type) {
+					case string:
+						fileNames = append(fileNames, f)
+					case map[string]interface{}:
+						if filename, ok := f["filename"].(string); ok {
+							fileNames = append(fileNames, filename)
+						}
+					}
+				}
+				
+				// Extract verification status
+				verified := false
+				if snapshot.Verification != nil {
+					switch v := snapshot.Verification.(type) {
+					case string:
+						verified = v == "ok"
+					case map[string]interface{}:
+						if state, ok := v["state"].(string); ok {
+							verified = state == "ok"
+						}
+					}
+					
+					// Debug log verification data
+					log.Debug().
+						Str("vmid", snapshot.BackupID).
+						Int64("time", snapshot.BackupTime).
+						Interface("verification", snapshot.Verification).
+						Bool("verified", verified).
+						Msg("PBS backup verification status")
+				}
+				
+				backup := models.PBSBackup{
+					ID:         id,
+					Instance:   instanceName,
+					Datastore:  ds.Name,
+					Namespace:  namespace,
+					BackupType: snapshot.BackupType,
+					VMID:       snapshot.BackupID,
+					BackupTime: backupTime,
+					Size:       snapshot.Size,
+					Protected:  snapshot.Protected,
+					Verified:   verified,
+					Comment:    snapshot.Comment,
+					Files:      fileNames,
+				}
+				
+				allBackups = append(allBackups, backup)
+			}
+		}
+	}
+	
+	log.Info().
+		Str("instance", instanceName).
+		Int("count", len(allBackups)).
+		Msg("PBS backups fetched")
+	
+	// Update state
+	m.state.UpdatePBSBackups(instanceName, allBackups)
+}
