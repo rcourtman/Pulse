@@ -8,19 +8,8 @@ export class NodesAPI {
     if (!response.ok) {
       throw new Error('Failed to fetch nodes');
     }
-    const data: NodesResponse = await response.json();
-    
-    // Transform to flat array with type field
-    const nodes: NodeConfig[] = [];
-    
-    data.pve_instances?.forEach(node => {
-      nodes.push({ ...node, type: 'pve' as const });
-    });
-    
-    data.pbs_instances?.forEach(node => {
-      nodes.push({ ...node, type: 'pbs' as const });
-    });
-    
+    // The API returns an array of nodes directly
+    const nodes: NodeConfig[] = await response.json();
     return nodes;
   }
 

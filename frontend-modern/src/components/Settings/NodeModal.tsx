@@ -95,7 +95,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     };
 
     if (data.authType === 'password') {
-      nodeData.username = data.user;
+      nodeData.user = data.user;
       if (data.password) {
         nodeData.password = data.password;
       }

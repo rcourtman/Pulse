@@ -226,7 +226,7 @@ const Settings: Component = () => {
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{node.host}</p>
                             <div class="flex flex-wrap gap-2 mt-2">
                               <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                {node.username ? `User: ${node.username}` : `Token: ${node.tokenName}`}
+                                {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                               </span>
                               {node.type === 'pve' && 'monitorVMs' in node && node.monitorVMs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">VMs</span>}
                               {node.type === 'pve' && 'monitorContainers' in node && node.monitorContainers && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Containers</span>}
@@ -317,7 +317,7 @@ const Settings: Component = () => {
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{node.host}</p>
                             <div class="flex flex-wrap gap-2 mt-2">
                               <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                {node.username ? `User: ${node.username}` : `Token: ${node.tokenName}`}
+                                {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                               </span>
                               {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Datastores</span>}
                               {node.type === 'pbs' && 'monitorSyncJobs' in node && node.monitorSyncJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Sync Jobs</span>}

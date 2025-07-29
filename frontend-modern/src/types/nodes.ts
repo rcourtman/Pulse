@@ -4,7 +4,7 @@ export interface PVENodeConfig {
   id: string;
   name: string;
   host: string;
-  username: string;
+  user: string;
   tokenName?: string;
   tokenValue?: string;
   password?: string;
@@ -19,7 +19,7 @@ export interface PBSNodeConfig {
   id: string;
   name: string;
   host: string;
-  username: string;
+  user: string;
   tokenName?: string;
   tokenValue?: string;
   password?: string;
