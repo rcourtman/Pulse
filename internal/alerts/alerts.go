@@ -41,6 +41,12 @@ type Alert struct {
 	EscalationTimes []time.Time `json:"escalationTimes,omitempty"` // Times when escalations were sent
 }
 
+// ResolvedAlert represents a recently resolved alert
+type ResolvedAlert struct {
+	*Alert
+	ResolvedTime time.Time `json:"resolvedTime"`
+}
+
 // HysteresisThreshold represents a threshold with hysteresis
 type HysteresisThreshold struct {
 	Trigger float64 `json:"trigger"` // Threshold to trigger alert
@@ -172,6 +178,9 @@ type Manager struct {
 	// New fields for deduplication and suppression
 	recentAlerts    map[string]*Alert     // Track recent alerts for deduplication
 	suppressedUntil map[string]time.Time  // Track suppression windows
+	// Recently resolved alerts (kept for 5 minutes)
+	recentlyResolved map[string]*ResolvedAlert
+	resolvedMutex    sync.RWMutex
 }
 
 // NewManager creates a new alert manager
@@ -183,6 +192,7 @@ func NewManager() *Manager {
 		alertRateLimit: make(map[string][]time.Time),
 		recentAlerts:   make(map[string]*Alert),
 		suppressedUntil: make(map[string]time.Time),
+		recentlyResolved: make(map[string]*ResolvedAlert),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -580,7 +590,31 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		
 		if value <= clearThreshold {
 			// Threshold cleared with hysteresis - auto resolve
+			resolvedAlert := &ResolvedAlert{
+				Alert:        existingAlert,
+				ResolvedTime: time.Now(),
+			}
+			
+			// Remove from active alerts
 			delete(m.activeAlerts, alertID)
+			
+			// Add to recently resolved
+			m.resolvedMutex.Lock()
+			m.recentlyResolved[alertID] = resolvedAlert
+			m.resolvedMutex.Unlock()
+			
+			log.Info().
+				Str("alertID", alertID).
+				Int("totalRecentlyResolved", len(m.recentlyResolved)).
+				Msg("Added alert to recently resolved")
+			
+			// Schedule cleanup after 5 minutes
+			go func() {
+				time.Sleep(5 * time.Minute)
+				m.resolvedMutex.Lock()
+				delete(m.recentlyResolved, alertID)
+				m.resolvedMutex.Unlock()
+			}()
 			
 			log.Info().
 				Str("resource", resourceName).
@@ -633,6 +667,34 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		alerts = append(alerts, *alert)
 	}
 	return alerts
+}
+
+// GetRecentlyResolved returns recently resolved alerts
+func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
+	m.resolvedMutex.RLock()
+	defer m.resolvedMutex.RUnlock()
+
+	resolved := make([]models.ResolvedAlert, 0, len(m.recentlyResolved))
+	for _, alert := range m.recentlyResolved {
+		resolved = append(resolved, models.ResolvedAlert{
+			Alert: models.Alert{
+				ID:           alert.ID,
+				Type:         alert.Type,
+				Level:        string(alert.Level),
+				ResourceID:   alert.ResourceID,
+				ResourceName: alert.ResourceName,
+				Node:         alert.Node,
+				Instance:     alert.Instance,
+				Message:      alert.Message,
+				Value:        alert.Value,
+				Threshold:    alert.Threshold,
+				StartTime:    alert.StartTime,
+				Acknowledged: alert.Acknowledged,
+			},
+			ResolvedTime: alert.ResolvedTime,
+		})
+	}
+	return resolved
 }
 
 // GetAlertHistory returns alert history

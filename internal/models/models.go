@@ -22,6 +22,7 @@ type State struct {
 	ConnectionHealth map[string]bool   `json:"connectionHealth"`
 	Stats            Stats             `json:"stats"`
 	ActiveAlerts     []Alert           `json:"activeAlerts"`
+	RecentlyResolved []ResolvedAlert   `json:"recentlyResolved"`
 	LastUpdate       time.Time         `json:"lastUpdate"`
 }
 
@@ -39,6 +40,12 @@ type Alert struct {
 	Threshold    float64   `json:"threshold"`
 	StartTime    time.Time `json:"startTime"`
 	Acknowledged bool      `json:"acknowledged"`
+}
+
+// ResolvedAlert represents a recently resolved alert
+type ResolvedAlert struct {
+	Alert
+	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
 // Node represents a Proxmox VE node
@@ -352,6 +359,8 @@ func NewState() *State {
 			GuestSnapshots: make([]GuestSnapshot, 0),
 		},
 		ConnectionHealth: make(map[string]bool),
+		ActiveAlerts:     make([]Alert, 0),
+		RecentlyResolved: make([]ResolvedAlert, 0),
 		LastUpdate:       time.Now(),
 	}
 }
@@ -379,6 +388,7 @@ func (s *State) GetSnapshot() State {
 		ConnectionHealth: make(map[string]bool),
 		Stats:            s.Stats,
 		ActiveAlerts:     append([]Alert{}, s.ActiveAlerts...),
+		RecentlyResolved: append([]ResolvedAlert{}, s.RecentlyResolved...),
 		LastUpdate:       s.LastUpdate,
 	}
 	
@@ -395,6 +405,13 @@ func (s *State) UpdateActiveAlerts(alerts []Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ActiveAlerts = alerts
+}
+
+// UpdateRecentlyResolved updates the recently resolved alerts in the state
+func (s *State) UpdateRecentlyResolved(resolved []ResolvedAlert) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.RecentlyResolved = resolved
 }
 
 // UpdateNodes updates the nodes in the state

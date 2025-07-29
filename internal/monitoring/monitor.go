@@ -346,6 +346,13 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	}
 	m.state.UpdateActiveAlerts(modelAlerts)
 	
+	// Sync recently resolved alerts
+	recentlyResolved := m.alertManager.GetRecentlyResolved()
+	if len(recentlyResolved) > 0 {
+		log.Info().Int("count", len(recentlyResolved)).Msg("Syncing recently resolved alerts")
+	}
+	m.state.UpdateRecentlyResolved(recentlyResolved)
+	
 	// Increment poll counter
 	m.mu.Lock()
 	m.pollCounter++

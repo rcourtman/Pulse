@@ -14,6 +14,7 @@ export interface State {
   connectionHealth: any;
   stats: Stats;
   activeAlerts: Alert[];
+  recentlyResolved: ResolvedAlert[];
   lastUpdate: string;
 }
 
@@ -279,6 +280,10 @@ export interface Alert {
   ackTime?: string;
   ackUser?: string;
   metadata?: Record<string, any>;
+}
+
+export interface ResolvedAlert extends Alert {
+  resolvedTime: string;
 }
 
 // WebSocket message types

@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { State, WSMessage, Alert } from '@/types/api';
+import type { State, WSMessage, Alert, ResolvedAlert } from '@/types/api';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 
@@ -20,9 +20,11 @@ export function createWebSocketStore(url: string) {
     connectionHealth: {},
     stats: {} as any,
     activeAlerts: [],
+    recentlyResolved: [],
     lastUpdate: ''
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+  const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
@@ -85,6 +87,23 @@ export function createWebSocketStore(url: string) {
                 });
                 
                 console.log('[WebSocket] Updated activeAlerts to:', activeAlerts);
+              }
+              // Sync recently resolved alerts
+              if (message.data.recentlyResolved !== undefined) {
+                console.log('[WebSocket] Received recentlyResolved:', message.data.recentlyResolved);
+                
+                // First, remove all existing resolved alerts
+                const currentResolvedIds = Object.keys(recentlyResolved);
+                currentResolvedIds.forEach(id => {
+                  setRecentlyResolved(id, undefined!);
+                });
+                
+                // Then add the new resolved alerts
+                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+                  setRecentlyResolved(alert.id, alert);
+                });
+                
+                console.log('[WebSocket] Updated recentlyResolved to:', recentlyResolved);
               }
               setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
             }
@@ -188,6 +207,7 @@ export function createWebSocketStore(url: string) {
   return {
     state,
     activeAlerts,
+    recentlyResolved,
     connected,
     reconnect: () => {
       ws?.close();
