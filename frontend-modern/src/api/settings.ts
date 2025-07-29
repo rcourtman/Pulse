@@ -1,8 +1,6 @@
 import type { 
-  Settings, 
   SettingsResponse, 
-  SettingsUpdateRequest,
-  MonitoringSettings 
+  SettingsUpdateRequest
 } from '@/types/settings';
 
 // System settings type matching Go backend

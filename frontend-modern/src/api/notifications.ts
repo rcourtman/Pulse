@@ -1,4 +1,3 @@
-import type { AlertConfig } from '@/types/alerts';
 
 export interface EmailProvider {
   id: string;

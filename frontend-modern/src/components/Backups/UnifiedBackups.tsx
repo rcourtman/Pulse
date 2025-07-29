@@ -88,7 +88,7 @@ const UnifiedBackups: Component = () => {
     const debugMode = false;
 
     // Normalize snapshots
-    state.pveBackups?.guestSnapshots?.forEach((snapshot: any) => {
+    state.pveBackups?.guestSnapshots?.forEach((snapshot) => {
       unified.push({
         backupType: 'snapshot',
         vmid: snapshot.vmid,
@@ -110,7 +110,7 @@ const UnifiedBackups: Component = () => {
 
     // Process PBS backups FIRST from the new Go backend (state.pbsBackups)
     // This ensures we have the complete PBS data with namespaces
-    state.pbsBackups?.forEach((backup: any) => {
+    state.pbsBackups?.forEach((backup) => {
       const backupDate = new Date(backup.backupTime);
       const dateStr = backupDate.toISOString().split('T')[0];
       const timeStr = backupDate.toISOString().split('T')[1].split('.')[0].replace(/:/g, '');
@@ -146,7 +146,7 @@ const UnifiedBackups: Component = () => {
     });
 
     // Normalize local backups (including PBS through PVE storage)
-    state.pveBackups?.storageBackups?.forEach((backup: any) => {
+    state.pveBackups?.storageBackups?.forEach((backup) => {
       // Determine if this is actually a PBS backup based on storage
       const backupType = backup.isPBS ? 'remote' : 'local';
       
@@ -211,7 +211,7 @@ const UnifiedBackups: Component = () => {
       
       // Also check datastores for snapshots (original JS structure)
       if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
-        pbsInstance.datastores.forEach((datastore: any) => {
+        pbsInstance.datastores?.forEach((datastore: any) => {
           if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
             datastore.snapshots.forEach((backup: any) => {
               let totalSize = 0;

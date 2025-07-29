@@ -5,6 +5,8 @@ import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { CustomRulesTab } from '@/components/Alerts/CustomRulesTab';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
+import { AlertsAPI } from '@/api/alerts';
+import { NotificationsAPI } from '@/api/notifications';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
 
@@ -555,7 +557,7 @@ function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any
                           onClick={() => {
                             // API call to acknowledge alert
                             AlertsAPI.acknowledge(alert.id)
-                              .catch(err => console.error('Failed to acknowledge alert:', err));
+                              .catch((err: unknown) => console.error('Failed to acknowledge alert:', err));
                           }}
                         >
                           Acknowledge
@@ -566,7 +568,7 @@ function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any
                         onClick={() => {
                           // API call to clear alert
                           AlertsAPI.clearAlert(alert.id)
-                            .catch(err => console.error('Failed to clear alert:', err));
+                            .catch((err: unknown) => console.error('Failed to clear alert:', err));
                         }}
                       >
                         Clear
@@ -1192,7 +1194,23 @@ function DestinationsTab(props: any) {
   onMount(async () => {
     try {
       const config = await NotificationsAPI.getEmailConfig();
-      setEmailConfig(config);
+      // Map API config to local format
+      setEmailConfig({
+        enabled: config.enabled,
+        provider: config.provider,
+        smtpHost: config.server,
+        smtpPort: config.port,
+        username: config.username,
+        password: config.password || '',
+        from: config.from,
+        to: config.to,
+        tls: config.tls,
+        startTLS: config.starttls,
+        replyTo: '',
+        maxRetries: 3,
+        retryDelay: 5,
+        rateLimit: 60
+      });
     } catch (err) {
       console.error('Failed to load email config:', err);
     }
