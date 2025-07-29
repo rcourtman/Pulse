@@ -12,13 +12,41 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024 * 64,  // 64KB to handle large state messages
-	WriteBufferSize: 1024 * 64,  // 64KB to handle large state messages
-	CheckOrigin: func(r *http.Request) bool {
-		// TODO: Implement proper origin checking based on config
+// SetAllowedOrigins sets the allowed origins for CORS
+func (h *Hub) SetAllowedOrigins(origins []string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.allowedOrigins = origins
+}
+
+// checkOrigin validates the origin against allowed origins
+func (h *Hub) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// No origin header, allow for non-browser clients
 		return true
-	},
+	}
+	
+	h.mu.RLock()
+	allowedOrigins := h.allowedOrigins
+	h.mu.RUnlock()
+	
+	// Check if wildcard is allowed
+	for _, allowed := range allowedOrigins {
+		if allowed == "*" {
+			return true
+		}
+		if allowed == origin {
+			return true
+		}
+	}
+	
+	log.Warn().
+		Str("origin", origin).
+		Strs("allowedOrigins", allowedOrigins).
+		Msg("WebSocket connection rejected due to CORS")
+	
+	return false
 }
 
 // Client represents a WebSocket client
@@ -32,12 +60,13 @@ type Client struct {
 
 // Hub maintains active WebSocket clients and broadcasts messages
 type Hub struct {
-	clients    map[*Client]bool
-	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
-	mu         sync.RWMutex
-	getState   func() interface{} // Function to get current state
+	clients        map[*Client]bool
+	broadcast      chan []byte
+	register       chan *Client
+	unregister     chan *Client
+	mu             sync.RWMutex
+	getState       func() interface{} // Function to get current state
+	allowedOrigins []string           // Allowed origins for CORS
 }
 
 // Message represents a WebSocket message
@@ -56,11 +85,12 @@ func (h *Hub) SetStateGetter(getState func() interface{}) {
 // NewHub creates a new WebSocket hub
 func NewHub(getState func() interface{}) *Hub {
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte, 256),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		getState:   getState,
+		clients:        make(map[*Client]bool),
+		broadcast:      make(chan []byte, 256),
+		register:       make(chan *Client),
+		unregister:     make(chan *Client),
+		getState:       getState,
+		allowedOrigins: []string{"*"}, // Default to allow all
 	}
 }
 
@@ -166,6 +196,13 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("host", r.Host).
 		Str("userAgent", r.Header.Get("User-Agent")).
 		Msg("WebSocket upgrade request")
+	
+	// Create upgrader with our origin check
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024 * 64,  // 64KB to handle large state messages
+		WriteBufferSize: 1024 * 64,  // 64KB to handle large state messages
+		CheckOrigin:     h.checkOrigin,
+	}
 		
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

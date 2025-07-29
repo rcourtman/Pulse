@@ -87,6 +87,10 @@ func runServer() {
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
+	// Set allowed origins from security settings
+	if len(settings.Security.AllowedOrigins) > 0 {
+		wsHub.SetAllowedOrigins(settings.Security.AllowedOrigins)
+	}
 	go wsHub.Run()
 
 	// Initialize reloadable monitoring system

@@ -1195,7 +1195,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 }
 
 // GetState returns the current state
-func (m *Monitor) GetState() models.State {
+func (m *Monitor) GetState() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 

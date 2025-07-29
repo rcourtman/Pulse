@@ -5,7 +5,7 @@ import (
 )
 
 // ToFrontend converts a State to StateFrontend
-func (s State) ToFrontend() StateFrontend {
+func (s *State) ToFrontend() StateFrontend {
 	// Convert nodes
 	nodes := make([]NodeFrontend, len(s.Nodes))
 	for i, n := range s.Nodes {

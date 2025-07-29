@@ -671,10 +671,11 @@ export function Dashboard(props: DashboardProps) {
 
       {/* Table */}
       <Show when={connected() && (props.nodes.length > 0 || props.vms.length > 0 || props.containers.length > 0)}>
-        <ScrollableTable 
-          class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
-          minWidth="900px"
-        >
+        <ComponentErrorBoundary name="Guest Table">
+          <ScrollableTable 
+            class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
+            minWidth="900px"
+          >
           <table class="w-full min-w-[900px] text-xs sm:text-sm table-fixed">
             <thead>
               <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -798,6 +799,7 @@ export function Dashboard(props: DashboardProps) {
             </tbody>
           </table>
         </ScrollableTable>
+        </ComponentErrorBoundary>
 
         <Show when={filteredGuests().length === 0}>
             <div class="text-center py-12 text-gray-500 dark:text-gray-400">

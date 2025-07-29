@@ -35,7 +35,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	}
 
 	r.setupRoutes()
-	return r
+	
+	// Wrap with error handler middleware only
+	// Note: TimeoutHandler breaks WebSocket upgrades
+	return ErrorHandler(r)
 }
 
 // setupRoutes configures all routes
@@ -212,7 +215,8 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 // handleState handles state requests
 func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only GET method is allowed", nil)
 		return
 	}
 
@@ -223,7 +227,8 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 			token = req.URL.Query().Get("token")
 		}
 		if token != r.config.APIToken && token != "Bearer "+r.config.APIToken {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+				"Invalid or missing API token", nil)
 			return
 		}
 	}
@@ -231,7 +236,11 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	state := r.monitor.GetState()
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(state)
+	if err := json.NewEncoder(w).Encode(state); err != nil {
+		log.Error().Err(err).Msg("Failed to encode state response")
+		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
+			"Failed to encode state data", nil)
+	}
 }
 
 // handleVersion handles version requests
@@ -254,22 +263,47 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 // handleStorage handles storage detail requests
 func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only GET method is allowed", nil)
 		return
 	}
 
 	// Extract storage ID from path
 	path := strings.TrimPrefix(req.URL.Path, "/api/storage/")
 	if path == "" {
-		http.Error(w, "Storage ID required", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_storage_id", 
+			"Storage ID is required", nil)
 		return
 	}
 
-	// TODO: Implement storage details
+	// Get current state
+	state := r.monitor.GetState()
+	
+	// Find the storage by ID
+	var storageDetail *models.Storage
+	for _, storage := range state.Storage {
+		if storage.ID == path {
+			storageDetail = &storage
+			break
+		}
+	}
+	
+	if storageDetail == nil {
+		writeErrorResponse(w, http.StatusNotFound, "storage_not_found", 
+			fmt.Sprintf("Storage with ID '%s' not found", path), nil)
+		return
+	}
+	
+	// Return storage details
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "Not implemented yet",
-	})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": storageDetail,
+		"timestamp": time.Now().Unix(),
+	}); err != nil {
+		log.Error().Err(err).Str("storage_id", path).Msg("Failed to encode storage details")
+		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
+			"Failed to encode response", nil)
+	}
 }
 
 // handleCharts handles chart data requests

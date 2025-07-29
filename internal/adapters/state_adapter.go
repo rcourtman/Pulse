@@ -22,7 +22,7 @@ func NewStateAdapter(state *models.State) interfaces.StateStore {
 }
 
 // GetSnapshot implements StateStore interface
-func (s *StateAdapter) GetSnapshot() models.State {
+func (s *StateAdapter) GetSnapshot() models.StateSnapshot {
 	return s.state.GetSnapshot()
 }
 

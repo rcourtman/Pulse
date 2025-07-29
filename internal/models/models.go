@@ -365,40 +365,6 @@ func NewState() *State {
 	}
 }
 
-// GetSnapshot returns a snapshot of the current state
-func (s *State) GetSnapshot() State {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	
-	// Create a deep copy
-	snapshot := State{
-		Nodes:            append([]Node{}, s.Nodes...),
-		VMs:              append([]VM{}, s.VMs...),
-		Containers:       append([]Container{}, s.Containers...),
-		Storage:          append([]Storage{}, s.Storage...),
-		PBSInstances:     append([]PBSInstance{}, s.PBSInstances...),
-		PBSBackups:       append([]PBSBackup{}, s.PBSBackups...),
-		Metrics:          append([]Metric{}, s.Metrics...),
-		PVEBackups: PVEBackups{
-			BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
-			StorageBackups: append([]StorageBackup{}, s.PVEBackups.StorageBackups...),
-			GuestSnapshots: append([]GuestSnapshot{}, s.PVEBackups.GuestSnapshots...),
-		},
-		Performance:      s.Performance,
-		ConnectionHealth: make(map[string]bool),
-		Stats:            s.Stats,
-		ActiveAlerts:     append([]Alert{}, s.ActiveAlerts...),
-		RecentlyResolved: append([]ResolvedAlert{}, s.RecentlyResolved...),
-		LastUpdate:       s.LastUpdate,
-	}
-	
-	// Copy map
-	for k, v := range s.ConnectionHealth {
-		snapshot.ConnectionHealth[k] = v
-	}
-	
-	return snapshot
-}
 
 // UpdateActiveAlerts updates the active alerts in the state
 func (s *State) UpdateActiveAlerts(alerts []Alert) {

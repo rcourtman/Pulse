@@ -2,7 +2,6 @@ package proxmox
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // Client represents a Proxmox VE API client
@@ -54,24 +54,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	user := parts[0]
 	realm := parts[1]
 
-	// Create HTTP client
-	transport := &http.Transport{
-		MaxIdleConns:        10,
-		IdleConnTimeout:     30 * time.Second,
-		DisableCompression:  true,
-		TLSHandshakeTimeout: 10 * time.Second,
-	}
-
-	if !cfg.VerifySSL {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	} else if cfg.Fingerprint != "" {
-		// TODO: Implement fingerprint verification
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	httpClient := &http.Client{
-		Transport: transport,
-		Timeout:   cfg.Timeout,
+	// Create HTTP client with proper TLS configuration
+	httpClient := tlsutil.CreateHTTPClient(cfg.VerifySSL, cfg.Fingerprint)
+	// Override timeout if specified
+	if cfg.Timeout > 0 {
+		httpClient.Timeout = cfg.Timeout
 	}
 
 	client := &Client{

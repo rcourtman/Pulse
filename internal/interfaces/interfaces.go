@@ -10,7 +10,7 @@ import (
 
 // StateStore defines the interface for state management
 type StateStore interface {
-	GetSnapshot() models.State
+	GetSnapshot() models.StateSnapshot
 	UpdateNodes(nodes []models.Node)
 	UpdateNodesForInstance(instanceName string, nodes []models.Node)
 	UpdateVMs(vms []models.VM)
@@ -45,7 +45,7 @@ type MetricsStore interface {
 // Monitor defines the interface for the monitoring system
 type Monitor interface {
 	Start(ctx context.Context, hub WebSocketHub)
-	GetState() models.State
+	GetState() models.StateSnapshot
 	GetStartTime() time.Time
 	GetGuestMetrics(guestID string, duration time.Duration) map[string][]types.MetricPoint
 	GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []types.MetricPoint

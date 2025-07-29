@@ -8,6 +8,7 @@ import { createTooltipSystem } from '@/components/shared/Tooltip';
 import { fetchChartData, getStorageChartData, shouldFetchChartData } from '@/stores/charts';
 import { POLLING_INTERVALS } from '@/constants';
 import type { Storage as StorageType } from '@/types/api';
+import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 
 
 const Storage: Component = () => {
@@ -369,8 +370,9 @@ const Storage: Component = () => {
       
       {/* Table Section */}
       <div class="px-3 pb-3">
-        <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-          <table id="storage-table" class="w-full text-sm border-collapse min-w-full" style="table-layout: fixed;">
+        <ComponentErrorBoundary name="Storage Table">
+          <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+            <table id="storage-table" class="w-full text-sm border-collapse min-w-full" style="table-layout: fixed;">
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-600">
                 <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 130px;">
@@ -560,6 +562,7 @@ const Storage: Component = () => {
             </tbody>
           </table>
         </div>
+        </ComponentErrorBoundary>
       </div>
       
       
