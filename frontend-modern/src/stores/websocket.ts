@@ -7,6 +7,7 @@ import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
   const [connected, setConnected] = createSignal(false);
+  const [reconnecting, setReconnecting] = createSignal(false);
   const [state, setState] = createStore<State>({
     nodes: [],
     vms: [],
@@ -45,6 +46,7 @@ export function createWebSocketStore(url: string) {
       ws.onopen = () => {
         logger.debug('connect');
         setConnected(true);
+        setReconnecting(false); // Clear reconnecting state
         reconnectAttempt = 0; // Reset reconnect attempts on successful connection
         
         // Alerts will come with the initial state broadcast
@@ -149,6 +151,7 @@ export function createWebSocketStore(url: string) {
         }
         
         isReconnecting = true;
+        setReconnecting(true);
         
         // Calculate exponential backoff delay
         const delay = Math.min(
@@ -161,6 +164,7 @@ export function createWebSocketStore(url: string) {
         
         reconnectTimeout = window.setTimeout(() => {
           isReconnecting = false;
+          setReconnecting(false);
           connect();
         }, delay);
       };
@@ -180,6 +184,7 @@ export function createWebSocketStore(url: string) {
       if (isReconnecting) return;
       
       isReconnecting = true;
+      setReconnecting(true);
       
       // Use exponential backoff for connection errors too
       const delay = Math.min(
@@ -190,6 +195,7 @@ export function createWebSocketStore(url: string) {
       reconnectAttempt++;
       reconnectTimeout = window.setTimeout(() => {
         isReconnecting = false;
+        setReconnecting(false);
         connect();
       }, delay);
     }
@@ -209,6 +215,7 @@ export function createWebSocketStore(url: string) {
     activeAlerts,
     recentlyResolved,
     connected,
+    reconnecting,
     reconnect: () => {
       ws?.close();
       window.clearTimeout(reconnectTimeout);

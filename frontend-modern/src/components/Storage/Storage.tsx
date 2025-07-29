@@ -102,7 +102,7 @@ const Storage: Component = () => {
   const filteredStorage = createMemo(() => {
     const storage = state.storage || [];
     if (viewMode() === 'storage') {
-      return storage.filter((s: any) => s.total > 0);
+      return storage.filter((s) => s.total > 0);
     }
     return storage;
   });

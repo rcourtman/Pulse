@@ -3,39 +3,25 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import { SettingsAPI } from '@/api/settings';
+import { NodesAPI } from '@/api/nodes';
+import type { NodeConfig } from '@/types/nodes';
 
 type SettingsTab = 'pve' | 'pbs' | 'system' | 'diagnostics';
 
-interface NodeConfig {
-  id: string;
-  type: 'pve' | 'pbs';
-  name: string;
-  host: string;
-  user?: string;
-  hasPassword: boolean;
-  tokenName?: string;
-  hasToken: boolean;
-  fingerprint?: string;
-  verifySSL: boolean;
-  monitorVMs?: boolean;
-  monitorContainers?: boolean;
-  monitorStorage?: boolean;
-  monitorBackups?: boolean;
-  monitorDatastores?: boolean;
-  monitorSyncJobs?: boolean;
-  monitorVerifyJobs?: boolean;
-  monitorPruneJobs?: boolean;
-  monitorGarbageJobs?: boolean;
+// Node with UI-specific fields
+type NodeConfigWithStatus = NodeConfig & {
+  hasPassword?: boolean;
+  hasToken?: boolean;
   status: 'connected' | 'disconnected' | 'error';
-}
+};
 
 const Settings: Component = () => {
   const { state, connected } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
-  const [nodes, setNodes] = createSignal<NodeConfig[]>([]);
+  const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
-  const [editingNode, setEditingNode] = createSignal<NodeConfig | null>(null);
+  const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
@@ -67,11 +53,15 @@ const Settings: Component = () => {
   onMount(async () => {
     try {
       // Load nodes
-      const nodesResponse = await fetch('/api/config/nodes');
-      if (nodesResponse.ok) {
-        const data = await nodesResponse.json();
-        setNodes(data);
-      }
+      const nodesList = await NodesAPI.getNodes();
+      // Add status and other UI fields
+      const nodesWithStatus = nodesList.map(node => ({
+        ...node,
+        hasPassword: !!node.password,
+        hasToken: !!node.tokenValue,
+        status: 'disconnected' as const
+      }));
+      setNodes(nodesWithStatus);
       
       // Load system settings
       try {
@@ -89,26 +79,16 @@ const Settings: Component = () => {
   const saveSettings = async () => {
     try {
       if (activeTab() === 'system') {
-        // Save system settings
-        const response = await fetch('/api/settings/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            monitoring: {
-              pollingInterval: pollingInterval() * 1000
-            }
-          })
+        // Save system settings using typed API
+        await SettingsAPI.updateSystemSettings({
+          pollingInterval: pollingInterval()
         });
-        
-        if (!response.ok) {
-          throw new Error('Failed to save system settings');
-        }
       }
       
       showSuccess('Settings saved successfully');
       setHasUnsavedChanges(false);
     } catch (error) {
-      showError('Failed to save settings');
+      showError(error instanceof Error ? error.message : 'Failed to save settings');
     }
   };
 
@@ -116,35 +96,29 @@ const Settings: Component = () => {
     if (!confirm('Are you sure you want to delete this node?')) return;
     
     try {
-      const response = await fetch(`/api/config/nodes/${nodeId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        setNodes(nodes().filter(n => n.id !== nodeId));
-        showSuccess('Node deleted successfully');
-      } else {
-        throw new Error('Failed to delete node');
-      }
+      await NodesAPI.deleteNode(nodeId);
+      setNodes(nodes().filter(n => n.id !== nodeId));
+      showSuccess('Node deleted successfully');
     } catch (error) {
-      showError('Failed to delete node');
+      showError(error instanceof Error ? error.message : 'Failed to delete node');
     }
   };
 
   const testNodeConnection = async (nodeId: string) => {
     try {
-      const response = await fetch(`/api/config/nodes/${nodeId}/test`, {
-        method: 'POST'
-      });
+      const node = nodes().find(n => n.id === nodeId);
+      if (!node) {
+        throw new Error('Node not found');
+      }
       
-      if (response.ok) {
-        const result = await response.json();
-        showSuccess(`Connection successful (${result.latency}ms)`);
+      const result = await NodesAPI.testConnection(node);
+      if (result.success && result.details) {
+        showSuccess(`Connection successful`);
       } else {
-        throw new Error('Connection failed');
+        throw new Error(result.message || 'Connection failed');
       }
     } catch (error) {
-      showError('Connection test failed');
+      showError(error instanceof Error ? error.message : 'Connection test failed');
     }
   };
 
@@ -580,42 +554,29 @@ const Settings: Component = () => {
           try {
             if (editingNode()) {
               // Update existing node
-              const response = await fetch(`/api/config/nodes/${editingNode()!.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(nodeData)
-              });
+              await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
               
-              if (response.ok) {
-                // Update local state
-                setNodes(nodes().map(n => 
-                  n.id === editingNode()!.id 
-                    ? { ...n, ...nodeData, hasPassword: !!nodeData.password, hasToken: !!nodeData.tokenValue }
-                    : n
-                ));
-                showSuccess('Node updated successfully');
-              } else {
-                throw new Error('Failed to update node');
-              }
+              // Update local state
+              setNodes(nodes().map(n => 
+                n.id === editingNode()!.id 
+                  ? { ...n, ...nodeData, hasPassword: !!nodeData.password, hasToken: !!nodeData.tokenValue }
+                  : n
+              ));
+              showSuccess('Node updated successfully');
             } else {
               // Add new node
-              const response = await fetch('/api/config/nodes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(nodeData)
-              });
+              await NodesAPI.addNode(nodeData as NodeConfig);
               
-              if (response.ok) {
-                // Reload nodes to get the new ID
-                const nodesResponse = await fetch('/api/config/nodes');
-                if (nodesResponse.ok) {
-                  const updatedNodes = await nodesResponse.json();
-                  setNodes(updatedNodes);
-                }
-                showSuccess('Node added successfully');
-              } else {
-                throw new Error('Failed to add node');
-              }
+              // Reload nodes to get the new ID
+              const nodesList = await NodesAPI.getNodes();
+              const nodesWithStatus = nodesList.map(node => ({
+                ...node,
+                hasPassword: !!node.password,
+                hasToken: !!node.tokenValue,
+                status: 'disconnected' as const
+              }));
+              setNodes(nodesWithStatus);
+              showSuccess('Node added successfully');
             }
             
             setShowNodeModal(false);

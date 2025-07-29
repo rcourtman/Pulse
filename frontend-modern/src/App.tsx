@@ -28,7 +28,7 @@ export const useWebSocket = () => {
 function App() {
   // Get singleton WebSocket store
   const wsStore = getGlobalWebSocketStore();
-  const { state, connected } = wsStore;
+  const { state, connected, reconnecting } = wsStore;
   
   // Data update indicator
   const [dataUpdated, setDataUpdated] = createSignal(false);
@@ -119,12 +119,20 @@ function App() {
                 </Show>
               </button>
               <div class="flex items-center gap-2">
-                <div class={`status text-xs px-2 py-1 rounded-full ${
+                <div class={`status text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
                   connected() 
                     ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300' 
+                    : reconnecting()
+                    ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300'
                     : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}>
-                  {connected() ? 'Connected' : 'Disconnected'}
+                  <Show when={reconnecting()}>
+                    <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </Show>
+                  {connected() ? 'Connected' : reconnecting() ? 'Reconnecting...' : 'Disconnected'}
                 </div>
               </div>
             </div>

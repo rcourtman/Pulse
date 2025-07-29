@@ -1,4 +1,5 @@
 import type { Alert } from '@/types/api';
+import type { AlertConfig } from '@/types/alerts';
 
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';
@@ -53,5 +54,52 @@ export class AlertsAPI {
     return response.json();
   }
 
-  // Removed unused notification test methods - not implemented in backend
+  // Alert configuration methods
+  static async getConfig(): Promise<AlertConfig> {
+    const response = await fetch(`${this.baseUrl}/config`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch alert configuration');
+    }
+    return response.json();
+  }
+
+  static async updateConfig(config: AlertConfig): Promise<{ success: boolean }> {
+    const response = await fetch(`${this.baseUrl}/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update alert configuration');
+    }
+    
+    return response.json();
+  }
+
+  static async clearAlert(alertId: string): Promise<{ success: boolean }> {
+    const response = await fetch(`${this.baseUrl}/${alertId}/clear`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to clear alert');
+    }
+    
+    return response.json();
+  }
+
+  static async clearHistory(): Promise<{ success: boolean }> {
+    const response = await fetch(`${this.baseUrl}/history`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to clear alert history');
+    }
+    
+    return response.json();
+  }
 }

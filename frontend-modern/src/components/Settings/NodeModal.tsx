@@ -86,7 +86,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     const data = formData();
     
     // Prepare data based on auth type
-    const nodeData: any = {
+    const nodeData: Partial<any> = {
       type: props.nodeType,
       name: data.name,
       host: data.host,
@@ -95,7 +95,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     };
 
     if (data.authType === 'password') {
-      nodeData.user = data.user;
+      nodeData.username = data.user;
       if (data.password) {
         nodeData.password = data.password;
       }

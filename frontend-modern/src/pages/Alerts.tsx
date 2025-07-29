@@ -324,11 +324,7 @@ export function Alerts() {
                     
                     // Save email config if on destinations tab
                     if (activeTab() === 'destinations' && destinationsRef.emailConfig) {
-                      await fetch('/api/notifications/email', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(destinationsRef.emailConfig())
-                      });
+                      await NotificationsAPI.updateEmailConfig(destinationsRef.emailConfig());
                     }
                     
                     setHasUnsavedChanges(false);
@@ -558,7 +554,7 @@ function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any
                           class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
                           onClick={() => {
                             // API call to acknowledge alert
-                            fetch(`/api/alerts/${alert.id}/acknowledge`, { method: 'POST' })
+                            AlertsAPI.acknowledge(alert.id)
                               .catch(err => console.error('Failed to acknowledge alert:', err));
                           }}
                         >
@@ -569,7 +565,7 @@ function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any
                         class="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                         onClick={() => {
                           // API call to clear alert
-                          fetch(`/api/alerts/${alert.id}/clear`, { method: 'POST' })
+                          AlertsAPI.clearAlert(alert.id)
                             .catch(err => console.error('Failed to clear alert:', err));
                         }}
                       >
@@ -1195,22 +1191,16 @@ function DestinationsTab(props: any) {
   // Load email config on mount
   onMount(async () => {
     try {
-      const res = await fetch('/api/notifications/email');
-      if (res.ok) {
-        const config = await res.json();
-        setEmailConfig(config);
-      }
+      const config = await NotificationsAPI.getEmailConfig();
+      setEmailConfig(config);
     } catch (err) {
       console.error('Failed to load email config:', err);
     }
     
     // Load webhooks
     try {
-      const res = await fetch('/api/notifications/webhooks');
-      if (res.ok) {
-        const hooks = await res.json();
-        setWebhooks(hooks);
-      }
+      const hooks = await NotificationsAPI.getWebhooks();
+      setWebhooks(hooks);
     } catch (err) {
       console.error('Failed to load webhooks:', err);
     }
@@ -1254,7 +1244,7 @@ function DestinationsTab(props: any) {
         alert(`Failed to send test webhook: ${error}`);
       }
     } catch (err) {
-      alert('Failed to send test webhook');
+      alert(`Failed to send test webhook: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setTestingWebhook(null);
     }
@@ -1941,11 +1931,8 @@ function HistoryTab() {
   // Load alert history on mount
   onMount(async () => {
     try {
-      const res = await fetch('/api/alerts/history?limit=1000');
-      if (res.ok) {
-        const history = await res.json();
-        setAlertHistory(history);
-      }
+      const history = await AlertsAPI.getHistory({ limit: 1000 });
+      setAlertHistory(history);
     } catch (err) {
       console.error('Failed to load alert history:', err);
     } finally {
@@ -2463,14 +2450,9 @@ function HistoryTab() {
                 onClick={async () => {
                   if (confirm('Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.')) {
                     try {
-                      const res = await fetch('/api/alerts/history', { method: 'DELETE' });
-                      if (res.ok) {
-                        setAlertHistory([]);
-                        console.log('Alert history cleared successfully');
-                      } else {
-                        console.error('Failed to clear alert history');
-                        alert('Failed to clear alert history. Please try again.');
-                      }
+                      await AlertsAPI.clearHistory();
+                      setAlertHistory([]);
+                      console.log('Alert history cleared successfully');
                     } catch (err) {
                       console.error('Error clearing alert history:', err);
                       alert('Error clearing alert history. Please check your connection and try again.');
