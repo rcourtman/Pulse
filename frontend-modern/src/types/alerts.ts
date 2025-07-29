@@ -50,12 +50,12 @@ export interface AlertConfig {
   guestDefaults: AlertThresholds;
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
-  customRules: CustomAlertRule[];
+  customRules?: CustomAlertRule[];
   overrides: Record<string, AlertThresholds>; // key: resource ID
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;
-  notifications: {
+  notifications?: {
     email?: {
       server: string;
       port: number;

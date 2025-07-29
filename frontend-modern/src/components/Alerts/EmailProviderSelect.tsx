@@ -1,4 +1,5 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
+import { NotificationsAPI } from '@/api/notifications';
 
 interface EmailProvider {
   name: string;
@@ -42,11 +43,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   // Load email providers
   createEffect(async () => {
     try {
-      const res = await fetch('/api/notifications/email-providers');
-      if (res.ok) {
-        const data = await res.json();
-        setProviders(data);
-      }
+      const data = await NotificationsAPI.getEmailProviders();
+      setProviders(data);
     } catch (err) {
       console.error('Failed to load email providers:', err);
     }

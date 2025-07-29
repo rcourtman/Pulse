@@ -1,4 +1,5 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
+import { NotificationsAPI } from '@/api/notifications';
 
 interface Webhook {
   id?: string;
@@ -46,11 +47,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
   // Load webhook templates
   createEffect(async () => {
     try {
-      const res = await fetch('/api/notifications/webhook-templates');
-      if (res.ok) {
-        const data = await res.json();
-        setTemplates(data);
-      }
+      const data = await NotificationsAPI.getWebhookTemplates();
+      setTemplates(data);
     } catch (err) {
       console.error('Failed to load webhook templates:', err);
     }

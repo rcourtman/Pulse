@@ -1,6 +1,8 @@
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { logger } from '@/utils/logger';
+import { ChartsAPI } from '@/api/charts';
+import type { ChartPoint } from '@/types/charts';
 
 // Chart configuration based on main branch
 export const CHART_CONFIG = {
@@ -278,12 +280,7 @@ export function processChartData(
 // Fetch chart data from API
 export async function fetchChartData(timeRange: string) {
   try {
-    const response = await fetch(`/api/charts?range=${timeRange}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await ChartsAPI.getCharts(timeRange);
     
     // Calculate time offset between server and browser
     const serverTime = data.timestamp || Date.now();
@@ -295,7 +292,7 @@ export async function fetchChartData(timeRange: string) {
       for (const guestId in data.data) {
         for (const metric in data.data[guestId]) {
           if (Array.isArray(data.data[guestId][metric])) {
-            data.data[guestId][metric] = data.data[guestId][metric].map((point: any) => ({
+            data.data[guestId][metric] = data.data[guestId][metric].map((point: ChartPoint) => ({
               ...point,
               timestamp: point.timestamp + timeOffset
             }));
@@ -309,7 +306,7 @@ export async function fetchChartData(timeRange: string) {
       for (const nodeId in data.nodeData) {
         for (const metric in data.nodeData[nodeId]) {
           if (Array.isArray(data.nodeData[nodeId][metric])) {
-            data.nodeData[nodeId][metric] = data.nodeData[nodeId][metric].map((point: any) => ({
+            data.nodeData[nodeId][metric] = data.nodeData[nodeId][metric].map((point: ChartPoint) => ({
               ...point,
               timestamp: point.timestamp + timeOffset
             }));
@@ -323,7 +320,7 @@ export async function fetchChartData(timeRange: string) {
       for (const storageId in data.storageData) {
         for (const metric in data.storageData[storageId]) {
           if (Array.isArray(data.storageData[storageId][metric])) {
-            data.storageData[storageId][metric] = data.storageData[storageId][metric].map((point: any) => ({
+            data.storageData[storageId][metric] = data.storageData[storageId][metric].map((point: ChartPoint) => ({
               ...point,
               timestamp: point.timestamp + timeOffset
             }));

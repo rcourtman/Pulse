@@ -45,9 +45,7 @@ export function Alerts() {
   // Load existing alert configuration on mount (only once)
   onMount(async () => {
     try {
-      const response = await fetch('/api/alerts/config');
-      if (response.ok) {
-        const config = await response.json();
+      const config = await AlertsAPI.getConfig();
         if (config.guestDefaults) {
           // Extract trigger values from potentially hysteresis thresholds
           setGuestDefaults({
@@ -110,7 +108,6 @@ export function Alerts() {
         if (config.schedule && scheduleRef.setScheduleConfig) {
           scheduleRef.setScheduleConfig(config.schedule);
         }
-      }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
     }
@@ -312,17 +309,7 @@ export function Alerts() {
                       }
                     };
                     
-                    const response = await fetch('/api/alerts/config', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(alertConfig)
-                    });
-                    
-                    if (!response.ok) {
-                      const errorText = await response.text();
-                      console.error('Alert config save failed:', response.status, errorText);
-                      throw new Error(`Failed to save alert config: ${errorText || response.statusText}`);
-                    }
+                    await AlertsAPI.updateConfig(alertConfig);
                     
                     // Save email config if on destinations tab
                     if (activeTab() === 'destinations' && destinationsRef.emailConfig) {
@@ -1227,18 +1214,8 @@ function DestinationsTab(props: any) {
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
-      const res = await fetch('/api/notifications/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'email' })
-      });
-      
-      if (res.ok) {
-        alert('Test email sent successfully! Check your inbox.');
-      } else {
-        const error = await res.text();
-        alert(`Failed to send test email: ${error}`);
-      }
+      await NotificationsAPI.testNotification({ type: 'email' });
+      alert('Test email sent successfully! Check your inbox.');
     } catch (err) {
       alert('Failed to send test email');
     } finally {
@@ -1249,18 +1226,8 @@ function DestinationsTab(props: any) {
   const testWebhook = async (webhookId: string) => {
     setTestingWebhook(webhookId);
     try {
-      const res = await fetch('/api/notifications/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'webhook', webhookId })
-      });
-      
-      if (res.ok) {
-        alert('Test webhook sent successfully!');
-      } else {
-        const error = await res.text();
-        alert(`Failed to send test webhook: ${error}`);
-      }
+      await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+      alert('Test webhook sent successfully!');
     } catch (err) {
       alert(`Failed to send test webhook: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {

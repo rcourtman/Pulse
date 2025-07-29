@@ -1,17 +1,29 @@
 
 export interface EmailProvider {
-  id: string;
+  id?: string;
   name: string;
-  server: string;
-  port: number;
-  security: 'none' | 'tls' | 'starttls';
+  smtpHost: string;
+  smtpPort: number;
+  tls: boolean;
+  startTLS: boolean;
+  authRequired: boolean;
+  instructions: string;
+  server?: string;
+  port?: number;
+  security?: 'none' | 'tls' | 'starttls';
 }
 
 export interface WebhookTemplate {
-  id: string;
+  id?: string;
+  service: string;
   name: string;
-  description: string;
-  template: {
+  urlPattern: string;
+  method: string;
+  headers: Record<string, string>;
+  payloadTemplate: string;
+  instructions: string;
+  description?: string;
+  template?: {
     url?: string;
     method?: string;
     headers?: Record<string, string>;
