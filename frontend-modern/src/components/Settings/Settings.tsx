@@ -59,7 +59,7 @@ const Settings: Component = () => {
         ...node,
         hasPassword: !!node.password,
         hasToken: !!node.tokenValue,
-        status: 'disconnected' as const
+        status: node.status || 'disconnected' as const
       }));
       setNodes(nodesWithStatus);
       
@@ -573,7 +573,7 @@ const Settings: Component = () => {
                 ...node,
                 hasPassword: !!node.password,
                 hasToken: !!node.tokenValue,
-                status: 'disconnected' as const
+                status: node.status || 'disconnected' as const
               }));
               setNodes(nodesWithStatus);
               showSuccess('Node added successfully');
