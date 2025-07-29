@@ -2,9 +2,10 @@ import { Component, onMount, onCleanup, createMemo, createEffect, Show } from 's
 import Sparkline from '@/components/Dashboard/Sparkline';
 import { observeChart, subscribeToChartDimension } from '@/stores/chartDimensions';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
+import type { ChartPoint } from '@/types/charts';
 
 interface DynamicChartProps {
-  data: any;
+  data: ChartPoint[] | undefined;
   metric: string;
   guestId: string;
   chartType?: 'mini' | 'sparkline' | 'storage';

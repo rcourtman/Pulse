@@ -7,6 +7,9 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
+import type { EmailConfig, Webhook } from '@/api/notifications';
+import type { HysteresisThreshold, AlertThresholds } from '@/types/alerts';
+import type { Node, VM, Container, Storage, Alert } from '@/types/api';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
 
@@ -37,8 +40,28 @@ export function Alerts() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   
   // Store references to child component data
-  let destinationsRef: any = {};
-  let scheduleRef: any = {};
+  interface DestinationsRef {
+    emailConfig?: () => EmailConfig;
+  }
+  
+  interface ScheduleConfig {
+    enabled?: boolean;
+    quietHours?: {
+      enabled: boolean;
+      start: string;
+      end: string;
+      days: Record<string, boolean>;
+    };
+    cooldown?: number;
+    groupingWindow?: number;
+  }
+  
+  interface ScheduleRef {
+    setScheduleConfig?: (config: ScheduleConfig) => void;
+  }
+  
+  let destinationsRef: DestinationsRef = {};
+  let scheduleRef: ScheduleRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
   
@@ -76,18 +99,18 @@ export function Alerts() {
           
           Object.entries(config.overrides).forEach(([key, thresholds]) => {
             // Check if it's a node override by looking for matching node
-            const node = (state.nodes || []).find((n: any) => n.id === key);
+            const node = (state.nodes || []).find((n) => n.id === key);
             if (node) {
               overridesList.push({
                 id: key,
                 name: node.name,
                 type: 'node',
                 resourceType: 'Node',
-                thresholds: extractTriggerValues(thresholds as any)
+                thresholds: extractTriggerValues(thresholds)
               });
             } else {
               // Find the guest by matching the full ID
-              const guest = [...(state.vms || []), ...(state.containers || [])].find((g: any) => g.id === key);
+              const guest = [...(state.vms || []), ...(state.containers || [])].find((g) => g.id === key);
               if (guest) {
                 overridesList.push({
                   id: key,
@@ -97,7 +120,7 @@ export function Alerts() {
                   vmid: guest.vmid,
                   node: guest.node,
                   instance: guest.instance,
-                  thresholds: extractTriggerValues(thresholds as any)
+                  thresholds: extractTriggerValues(thresholds)
                 });
               }
             }
@@ -132,19 +155,19 @@ export function Alerts() {
   }});
   
   // Helper function to extract trigger value from threshold
-  const getTriggerValue = (threshold: any): number => {
+  const getTriggerValue = (threshold: number | HysteresisThreshold | undefined): number => {
     if (typeof threshold === 'number') {
       return threshold; // Legacy format
     }
-    if (threshold && typeof threshold === 'object' && threshold.trigger) {
+    if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
       return threshold.trigger; // New hysteresis format
     }
     return 0; // Default fallback
   };
 
   // Helper to extract trigger values for all thresholds
-  const extractTriggerValues = (thresholds: any) => {
-    const result: any = {};
+  const extractTriggerValues = (thresholds: AlertThresholds): Record<string, number> => {
+    const result: Record<string, number> = {};
     Object.entries(thresholds).forEach(([key, value]) => {
       result[key] = getTriggerValue(value);
     });
@@ -261,7 +284,7 @@ export function Alerts() {
                       hysteresisMargin: 5.0,
                       overrides: overrides().reduce((acc, o) => {
                         // Convert thresholds to hysteresis format
-                        const hysteresisThresholds: any = {};
+                        const hysteresisThresholds: AlertThresholds = {};
                         Object.entries(o.thresholds).forEach(([metric, value]) => {
                           hysteresisThresholds[metric] = createHysteresisThreshold(value as number);
                         });
@@ -416,7 +439,7 @@ export function Alerts() {
 }
 
 // Overview Tab - Shows current alert status
-function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any> }) {
+function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string, Alert> }) {
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
@@ -507,7 +530,7 @@ function OverviewTab(props: { overrides: any[]; activeAlerts: Record<string, any
         >
           <div class="space-y-2">
             <For each={Object.values(props.activeAlerts)}>
-              {(alert: any) => (
+              {(alert) => (
                 <div class={`border rounded-lg p-4 ${
                   alert.level === 'critical' 
                     ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20' 
@@ -606,10 +629,11 @@ function AddOverrideForm(props: {
     const resourceId = selectedResource();
     if (!resourceId) return;
 
-    const activeThresholds: any = {};
+    const activeThresholds: Record<string, number> = {};
+    const thresholdValues = thresholds();
     Object.entries(enabledThresholds()).forEach(([key, enabled]) => {
-      if (enabled && (thresholds() as any)[key]) {
-        activeThresholds[key] = (thresholds() as any)[key];
+      if (enabled && key in thresholdValues) {
+        activeThresholds[key] = thresholdValues[key as keyof typeof thresholdValues];
       }
     });
 
@@ -711,7 +735,7 @@ function AddOverrideForm(props: {
                 {(resource) => (
                   <option value={resource.id}>
                     {resource.name}
-                    {resourceType() === 'guest' && ` (${(resource as any).vmid})`}
+                    {resourceType() === 'guest' && 'vmid' in resource && ` (${resource.vmid})`}
                   </option>
                 )}
               </For>
@@ -732,10 +756,10 @@ function AddOverrideForm(props: {
                     <label class="text-xs font-medium text-gray-600 dark:text-gray-400">
                       {metric === 'cpu' ? 'CPU' : metric === 'memory' ? 'Memory' : 'Disk'} Usage
                     </label>
-                    <span class="text-xs text-gray-500">{(thresholds() as any)[metric]}%</span>
+                    <span class="text-xs text-gray-500">{thresholds()[metric as keyof typeof thresholds]}%</span>
                   </div>
                   <ThresholdSlider
-                    value={(thresholds() as any)[metric]}
+                    value={thresholds()[metric as keyof typeof thresholds]}
                     onChange={(value) => {
                       setThresholds({
                         ...thresholds(),
@@ -837,10 +861,10 @@ function OverrideItem(props: {
                       <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
                         {key === 'cpu' ? 'CPU' : key === 'memory' ? 'Memory' : 'Disk'} Usage
                       </label>
-                      <span class="text-sm text-gray-500">{(editValues() as any)[key]}%</span>
+                      <span class="text-sm text-gray-500">{editValues()[key as keyof typeof editValues]}%</span>
                     </div>
                     <ThresholdSlider
-                      value={(editValues() as any)[key]}
+                      value={editValues()[key as keyof typeof editValues]}
                       onChange={(value) => setEditValues({
                         ...editValues(),
                         [key]: value
@@ -896,7 +920,21 @@ function OverrideItem(props: {
 }
 
 // Thresholds Tab - Improved design  
-function ThresholdsTab(props: any) {
+interface ThresholdsTabProps {
+  allGuests: () => Array<VM | Container>;
+  allNodes: () => Node[];
+  guestDefaults: () => Record<string, number>;
+  nodeDefaults: () => Record<string, number>;
+  storageDefault: () => number;
+  overrides: () => Override[];
+  setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setStorageDefault: (value: number) => void;
+  setOverrides: (value: Override[]) => void;
+  activeAlerts: () => Record<string, Alert>;
+}
+
+function ThresholdsTab(props: ThresholdsTabProps) {
   return (
     <div class="space-y-8">
       {/* Step 1: Global Default Thresholds */}
@@ -954,7 +992,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.guestDefaults().cpu}
                   onChange={(v) => {
-                    props.setGuestDefaults((prev: any) => ({...prev, cpu: v}));
+                    props.setGuestDefaults((prev) => ({...prev, cpu: v}));
                     props.onChangeAny();
                   }}
                   type="cpu"
@@ -969,7 +1007,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.guestDefaults().memory}
                   onChange={(v) => {
-                    props.setGuestDefaults((prev: any) => ({...prev, memory: v}));
+                    props.setGuestDefaults((prev) => ({...prev, memory: v}));
                     props.onChangeAny();
                   }}
                   type="memory"
@@ -984,7 +1022,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.guestDefaults().disk}
                   onChange={(v) => {
-                    props.setGuestDefaults((prev: any) => ({...prev, disk: v}));
+                    props.setGuestDefaults((prev) => ({...prev, disk: v}));
                     props.onChangeAny();
                   }}
                   type="disk"
@@ -1011,7 +1049,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.nodeDefaults.cpu}
                   onChange={(v) => {
-                    props.setNodeDefaults((prev: any) => ({...prev, cpu: v}));
+                    props.setNodeDefaults((prev) => ({...prev, cpu: v}));
                     props.onChangeAny();
                   }}
                   type="cpu"
@@ -1026,7 +1064,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.nodeDefaults.memory}
                   onChange={(v) => {
-                    props.setNodeDefaults((prev: any) => ({...prev, memory: v}));
+                    props.setNodeDefaults((prev) => ({...prev, memory: v}));
                     props.onChangeAny();
                   }}
                   type="memory"
@@ -1041,7 +1079,7 @@ function ThresholdsTab(props: any) {
                 <ThresholdSlider
                   value={props.nodeDefaults.disk}
                   onChange={(v) => {
-                    props.setNodeDefaults((prev: any) => ({...prev, disk: v}));
+                    props.setNodeDefaults((prev) => ({...prev, disk: v}));
                     props.onChangeAny();
                   }}
                   type="disk"
@@ -1108,7 +1146,7 @@ function ThresholdsTab(props: any) {
                       props.onChangeAny();
                     }}
                     onRemove={() => {
-                      props.setOverrides(props.overrides.filter((o: any) => o.id !== override.id));
+                      props.setOverrides(props.overrides.filter((o) => o.id !== override.id));
                       props.onChangeAny();
                     }}
                   />
@@ -1149,7 +1187,13 @@ function ThresholdsTab(props: any) {
 }
 
 // Destinations Tab - Notification settings
-function DestinationsTab(props: any) {
+interface DestinationsTabProps {
+  ref: DestinationsRef;
+  hasUnsavedChanges: () => boolean;
+  setHasUnsavedChanges: (value: boolean) => void;
+}
+
+function DestinationsTab(props: DestinationsTabProps) {
   // Expose emailConfig to parent
   onMount(() => {
     if (props.ref) {
@@ -1173,7 +1217,7 @@ function DestinationsTab(props: any) {
     rateLimit: 60
   });
   
-  const [webhooks, setWebhooks] = createSignal<any[]>([]);
+  const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
   
@@ -1313,7 +1357,13 @@ function DestinationsTab(props: any) {
 
 // History Tab - Alert history
 // Schedule Tab - Quiet hours, cooldown, and grouping
-function ScheduleTab(props: any) {
+interface ScheduleTabProps {
+  ref: ScheduleRef;
+  hasUnsavedChanges: () => boolean;
+  setHasUnsavedChanges: (value: boolean) => void;
+}
+
+function ScheduleTab(props: ScheduleTabProps) {
   const [quietHours, setQuietHours] = createSignal({
     enabled: false,
     start: '22:00',
@@ -1387,7 +1437,7 @@ function ScheduleTab(props: any) {
       grouping: grouping()
     });
     
-    props.ref.setScheduleConfig = (config: any) => {
+    props.ref.setScheduleConfig = (config: ScheduleConfig) => {
       if (config.quietHours) {
         setQuietHours(prev => ({
           ...prev,
@@ -1512,7 +1562,7 @@ function ScheduleTab(props: any) {
                   {(day) => (
                     <button
                       onClick={() => {
-                        const currentDays = quietHours().days as any;
+                        const currentDays = quietHours().days;
                         setQuietHours({
                           ...quietHours(),
                           days: { ...currentDays, [day.id]: !currentDays[day.id] }
@@ -1521,7 +1571,7 @@ function ScheduleTab(props: any) {
                       }}
                       title={day.fullLabel}
                       class={`px-2 py-2 text-xs rounded-lg transition-all duration-200 font-medium ${
-                        (quietHours().days as any)[day.id]
+                        quietHours().days[day.id]
                           ? 'bg-blue-500 text-white shadow-sm'
                           : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                       }`}
@@ -1532,10 +1582,10 @@ function ScheduleTab(props: any) {
                 </For>
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                <Show when={(quietHours().days as any).monday && (quietHours().days as any).tuesday && (quietHours().days as any).wednesday && (quietHours().days as any).thursday && (quietHours().days as any).friday && !(quietHours().days as any).saturday && !(quietHours().days as any).sunday}>
+                <Show when={quietHours().days.monday && quietHours().days.tuesday && quietHours().days.wednesday && quietHours().days.thursday && quietHours().days.friday && !quietHours().days.saturday && !quietHours().days.sunday}>
                   Weekdays only
                 </Show>
-                <Show when={!(quietHours().days as any).monday && !(quietHours().days as any).tuesday && !(quietHours().days as any).wednesday && !(quietHours().days as any).thursday && !(quietHours().days as any).friday && (quietHours().days as any).saturday && (quietHours().days as any).sunday}>
+                <Show when={!quietHours().days.monday && !quietHours().days.tuesday && !quietHours().days.wednesday && !quietHours().days.thursday && !quietHours().days.friday && quietHours().days.saturday && quietHours().days.sunday}>
                   Weekends only
                 </Show>
               </p>
@@ -1897,7 +1947,7 @@ function HistoryTab() {
   const [timeFilter, setTimeFilter] = createSignal(localStorage.getItem('alertHistoryTimeFilter') || '7d');
   const [severityFilter, setSeverityFilter] = createSignal(localStorage.getItem('alertHistorySeverityFilter') || 'all');
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [alertHistory, setAlertHistory] = createSignal<any[]>([]);
+  const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   
@@ -1978,18 +2028,18 @@ function HistoryTab() {
   // Get resource type (VM, CT, Node, Storage)
   const getResourceType = (resourceName: string) => {
     // Check VMs and containers
-    const vm = state.vms?.find((v: any) => v.name === resourceName);
+    const vm = state.vms?.find((v) => v.name === resourceName);
     if (vm) return 'VM';
     
-    const container = state.containers?.find((c: any) => c.name === resourceName);
+    const container = state.containers?.find((c) => c.name === resourceName);
     if (container) return 'CT';
     
     // Check nodes
-    const node = state.nodes?.find((n: any) => n.name === resourceName);
+    const node = state.nodes?.find((n) => n.name === resourceName);
     if (node) return 'Node';
     
     // Check storage
-    const storage = state.storage?.find((s: any) => s.name === resourceName || s.id === resourceName);
+    const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
     if (storage) return 'Storage';
     
     return 'Unknown';
@@ -1998,10 +2048,10 @@ function HistoryTab() {
   // Prepare all alerts without filtering
   const allAlertsData = createMemo(() => {
     // Combine active and historical alerts
-    const allAlerts: any[] = [];
+    const allAlerts: Alert[] = [];
     
     // Add active alerts
-    Object.values(activeAlerts || {}).forEach((alert: any) => {
+    Object.values(activeAlerts || {}).forEach((alert) => {
       allAlerts.push({
         ...alert,
         status: 'active',

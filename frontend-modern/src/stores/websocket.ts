@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { State, WSMessage, Alert, ResolvedAlert } from '@/types/api';
+import type { State, WSMessage, Alert, ResolvedAlert, PVEBackups, Performance, Stats } from '@/types/api';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 
@@ -15,11 +15,30 @@ export function createWebSocketStore(url: string) {
     storage: [],
     pbs: [],
     metrics: [],
-    pveBackups: {} as any,
+    pveBackups: {
+      backupTasks: [],
+      storageBackups: [],
+      guestSnapshots: []
+    } as PVEBackups,
     pbsBackups: [],
-    performance: {} as any,
+    performance: {
+      requestCount: 0,
+      errorCount: 0,
+      avgResponseTime: 0,
+      throughput: 0
+    } as Performance,
     connectionHealth: {},
-    stats: {} as any,
+    stats: {
+      totalNodes: 0,
+      totalVMs: 0,
+      totalContainers: 0,
+      totalCPU: 0,
+      totalMemory: 0,
+      totalDisk: 0,
+      totalBackups: 0,
+      oldestBackup: '',
+      newestBackup: ''
+    } as Stats,
     activeAlerts: [],
     recentlyResolved: [],
     lastUpdate: ''

@@ -1,12 +1,13 @@
 import { Component, Show, createSignal, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import type { NodeConfig } from '@/types/nodes';
 
 interface NodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   nodeType: 'pve' | 'pbs';
-  editingNode?: any;
-  onSave: (nodeData: any) => void;
+  editingNode?: NodeConfig;
+  onSave: (nodeData: Partial<NodeConfig>) => void;
 }
 
 export const NodeModal: Component<NodeModalProps> = (props) => {
@@ -36,25 +37,26 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   // Update form when editing node changes
   createEffect(() => {
     if (props.editingNode) {
+      const node = props.editingNode;
       setFormData({
-        name: props.editingNode.name || '',
-        host: props.editingNode.host || '',
-        authType: props.editingNode.user ? 'password' : 'token',
-        user: props.editingNode.user || '',
+        name: node.name || '',
+        host: node.host || '',
+        authType: node.user ? 'password' : 'token',
+        user: node.user || '',
         password: '', // Don't show existing password
-        tokenName: props.editingNode.tokenName || '',
+        tokenName: node.tokenName || '',
         tokenValue: '', // Don't show existing token
-        fingerprint: props.editingNode.fingerprint || '',
-        verifySSL: props.editingNode.verifySSL ?? true,
-        monitorVMs: props.editingNode.monitorVMs ?? true,
-        monitorContainers: props.editingNode.monitorContainers ?? true,
-        monitorStorage: props.editingNode.monitorStorage ?? true,
-        monitorBackups: props.editingNode.monitorBackups ?? true,
-        monitorDatastores: props.editingNode.monitorDatastores ?? true,
-        monitorSyncJobs: props.editingNode.monitorSyncJobs ?? true,
-        monitorVerifyJobs: props.editingNode.monitorVerifyJobs ?? true,
-        monitorPruneJobs: props.editingNode.monitorPruneJobs ?? true,
-        monitorGarbageJobs: props.editingNode.monitorGarbageJobs ?? false
+        fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
+        verifySSL: node.verifySSL ?? true,
+        monitorVMs: (node.type === 'pve' && 'monitorVMs' in node ? node.monitorVMs : true) ?? true,
+        monitorContainers: (node.type === 'pve' && 'monitorContainers' in node ? node.monitorContainers : true) ?? true,
+        monitorStorage: (node.type === 'pve' && 'monitorStorage' in node ? node.monitorStorage : true) ?? true,
+        monitorBackups: (node.type === 'pve' && 'monitorBackups' in node ? node.monitorBackups : true) ?? true,
+        monitorDatastores: (node.type === 'pbs' && 'monitorDatastores' in node ? node.monitorDatastores : true) ?? true,
+        monitorSyncJobs: (node.type === 'pbs' && 'monitorSyncJobs' in node ? node.monitorSyncJobs : true) ?? true,
+        monitorVerifyJobs: (node.type === 'pbs' && 'monitorVerifyJobs' in node ? node.monitorVerifyJobs : true) ?? true,
+        monitorPruneJobs: (node.type === 'pbs' && 'monitorPruneJobs' in node ? node.monitorPruneJobs : true) ?? true,
+        monitorGarbageJobs: (node.type === 'pbs' && 'monitorGarbageJobs' in node ? node.monitorGarbageJobs : false) ?? false
       });
     } else {
       // Reset form for new node
@@ -86,7 +88,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     const data = formData();
     
     // Prepare data based on auth type
-    const nodeData: Partial<any> = {
+    const nodeData: Partial<NodeConfig> = {
       type: props.nodeType,
       name: data.name,
       host: data.host,
@@ -108,22 +110,22 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     // Add monitor settings based on type
     if (props.nodeType === 'pve') {
-      nodeData.monitorVMs = data.monitorVMs;
-      nodeData.monitorContainers = data.monitorContainers;
-      nodeData.monitorStorage = data.monitorStorage;
-      nodeData.monitorBackups = data.monitorBackups;
+      (nodeData as any).monitorVMs = data.monitorVMs;
+      (nodeData as any).monitorContainers = data.monitorContainers;
+      (nodeData as any).monitorStorage = data.monitorStorage;
+      (nodeData as any).monitorBackups = data.monitorBackups;
     } else {
-      nodeData.monitorDatastores = data.monitorDatastores;
-      nodeData.monitorSyncJobs = data.monitorSyncJobs;
-      nodeData.monitorVerifyJobs = data.monitorVerifyJobs;
-      nodeData.monitorPruneJobs = data.monitorPruneJobs;
-      nodeData.monitorGarbageJobs = data.monitorGarbageJobs;
+      (nodeData as any).monitorDatastores = data.monitorDatastores;
+      (nodeData as any).monitorSyncJobs = data.monitorSyncJobs;
+      (nodeData as any).monitorVerifyJobs = data.monitorVerifyJobs;
+      (nodeData as any).monitorPruneJobs = data.monitorPruneJobs;
+      (nodeData as any).monitorGarbageJobs = data.monitorGarbageJobs;
     }
 
     props.onSave(nodeData);
   };
 
-  const updateField = (field: string, value: any) => {
+  const updateField = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
