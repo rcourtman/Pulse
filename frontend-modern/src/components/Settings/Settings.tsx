@@ -549,7 +549,7 @@ const Settings: Component = () => {
           setEditingNode(null);
         }}
         nodeType={activeTab() === 'pve' ? 'pve' : 'pbs'}
-        editingNode={editingNode()}
+        editingNode={editingNode() ?? undefined}
         onSave={async (nodeData) => {
           try {
             if (editingNode()) {

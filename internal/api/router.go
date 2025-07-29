@@ -317,6 +317,8 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 
 // handleCharts handles chart data requests
 func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
+	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Charts endpoint hit")
+	
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -553,6 +555,13 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	
+	log.Debug().
+		Int("guests", len(chartData)).
+		Int("nodes", len(nodeData)).
+		Int("storage", len(storageData)).
+		Str("range", timeRange).
+		Msg("Chart data response sent")
 }
 
 // handleStorageCharts handles storage chart data requests

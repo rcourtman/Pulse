@@ -21,6 +21,8 @@ export interface AlertThresholds {
   diskWriteLegacy?: number;
   networkInLegacy?: number;
   networkOutLegacy?: number;
+  // Allow indexing with string
+  [key: string]: HysteresisThreshold | number | undefined;
 }
 
 export interface CustomAlertRule {
@@ -72,13 +74,15 @@ export interface AlertConfig {
     }>;
   };
   schedule?: {
-    enabled: boolean;
+    enabled?: boolean;
     quietHours?: {
       enabled: boolean;
       start: string;
       end: string;
-      days: number[];
+      days: number[] | Record<string, boolean>;
     };
+    cooldown?: number;
+    groupingWindow?: number;
   };
 }
 

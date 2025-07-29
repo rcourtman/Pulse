@@ -103,7 +103,7 @@ export const DynamicChart: Component<DynamicChartProps> = (props) => {
         }
       >
         <Sparkline
-          data={props.data}
+          data={props.data!}
           metric={props.metric}
           guestId={props.guestId}
           chartType={chartType()}

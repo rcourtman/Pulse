@@ -110,16 +110,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
     // Add monitor settings based on type
     if (props.nodeType === 'pve') {
-      (nodeData as any).monitorVMs = data.monitorVMs;
-      (nodeData as any).monitorContainers = data.monitorContainers;
-      (nodeData as any).monitorStorage = data.monitorStorage;
-      (nodeData as any).monitorBackups = data.monitorBackups;
+      Object.assign(nodeData, {
+        monitorVMs: data.monitorVMs,
+        monitorContainers: data.monitorContainers,
+        monitorStorage: data.monitorStorage,
+        monitorBackups: data.monitorBackups
+      });
     } else {
-      (nodeData as any).monitorDatastores = data.monitorDatastores;
-      (nodeData as any).monitorSyncJobs = data.monitorSyncJobs;
-      (nodeData as any).monitorVerifyJobs = data.monitorVerifyJobs;
-      (nodeData as any).monitorPruneJobs = data.monitorPruneJobs;
-      (nodeData as any).monitorGarbageJobs = data.monitorGarbageJobs;
+      Object.assign(nodeData, {
+        monitorDatastores: data.monitorDatastores,
+        monitorSyncJobs: data.monitorSyncJobs,
+        monitorVerifyJobs: data.monitorVerifyJobs,
+        monitorPruneJobs: data.monitorPruneJobs,
+        monitorGarbageJobs: data.monitorGarbageJobs
+      });
     }
 
     props.onSave(nodeData);

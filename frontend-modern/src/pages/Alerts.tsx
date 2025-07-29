@@ -7,11 +7,55 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
-import type { EmailConfig, Webhook } from '@/api/notifications';
+import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold, AlertThresholds } from '@/types/alerts';
-import type { Node, VM, Container, Storage, Alert } from '@/types/api';
+import type { Alert } from '@/types/api';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
+
+// Webhook interface matching WebhookConfig component
+interface Webhook {
+  id?: string;
+  name: string;
+  url: string;
+  method: string;
+  service: string;
+  headers: Record<string, string>;
+  enabled: boolean;
+}
+
+// Store reference interfaces
+interface DestinationsRef {
+  emailConfig?: () => EmailConfig;
+}
+
+interface ScheduleConfig {
+  enabled?: boolean;
+  quietHours?: {
+    enabled: boolean;
+    start: string;
+    end: string;
+    days: Record<string, boolean>;
+    timezone?: string;
+  };
+  cooldown?: number;
+  groupingWindow?: number;
+  grouping?: {
+    enabled: boolean;
+    window: number;
+    byNode?: boolean;
+    byGuest?: boolean;
+  };
+  maxAlertsHour?: number;
+  escalation?: {
+    enabled: boolean;
+  };
+}
+
+interface ScheduleRef {
+  setScheduleConfig?: (config: ScheduleConfig) => void;
+  getScheduleConfig?: () => ScheduleConfig | undefined;
+}
 
 // Override interface for both guests and nodes
 interface Override {
@@ -40,26 +84,6 @@ export function Alerts() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   
   // Store references to child component data
-  interface DestinationsRef {
-    emailConfig?: () => EmailConfig;
-  }
-  
-  interface ScheduleConfig {
-    enabled?: boolean;
-    quietHours?: {
-      enabled: boolean;
-      start: string;
-      end: string;
-      days: Record<string, boolean>;
-    };
-    cooldown?: number;
-    groupingWindow?: number;
-  }
-  
-  interface ScheduleRef {
-    setScheduleConfig?: (config: ScheduleConfig) => void;
-  }
-  
   let destinationsRef: DestinationsRef = {};
   let scheduleRef: ScheduleRef = {};
   
@@ -129,7 +153,25 @@ export function Alerts() {
         }
         // Pass schedule config to schedule tab if it exists
         if (config.schedule && scheduleRef.setScheduleConfig) {
-          scheduleRef.setScheduleConfig(config.schedule);
+          // Convert days array to Record if needed
+          const scheduleConfig: ScheduleConfig = {
+            ...config.schedule,
+            quietHours: config.schedule.quietHours ? {
+              ...config.schedule.quietHours,
+              days: Array.isArray(config.schedule.quietHours.days) 
+                ? {
+                    '0': config.schedule.quietHours.days.includes(0),
+                    '1': config.schedule.quietHours.days.includes(1),
+                    '2': config.schedule.quietHours.days.includes(2),
+                    '3': config.schedule.quietHours.days.includes(3),
+                    '4': config.schedule.quietHours.days.includes(4),
+                    '5': config.schedule.quietHours.days.includes(5),
+                    '6': config.schedule.quietHours.days.includes(6),
+                  }
+                : config.schedule.quietHours.days
+            } : undefined
+          };
+          scheduleRef.setScheduleConfig(scheduleConfig);
         }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
@@ -192,12 +234,6 @@ export function Alerts() {
   });
 
   const [storageDefault, setStorageDefault] = createSignal(85);
-  
-  // Delete an override
-  const deleteOverride = (guestId: string) => {
-    setOverrides(prev => prev.filter(o => o.id !== guestId));
-    setHasUnsavedChanges(true);
-  };
   
   const tabs: { id: AlertTab; label: string; icon: string }[] = [
     { 
@@ -393,30 +429,34 @@ export function Alerts() {
           
           <Show when={activeTab() === 'thresholds'}>
             <ThresholdsTab 
-              overrides={overrides()}
+              overrides={overrides}
               setOverrides={setOverrides}
-              allGuests={allGuests()}
+              allGuests={allGuests}
               state={state}
-              guestDefaults={guestDefaults}
+              guestDefaults={guestDefaults()}
               setGuestDefaults={setGuestDefaults}
               nodeDefaults={nodeDefaults()}
               setNodeDefaults={setNodeDefaults}
-              storageDefault={storageDefault()}
+              storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
-              deleteOverride={deleteOverride}
-              onChangeAny={() => setHasUnsavedChanges(true)}
+              activeAlerts={activeAlerts}
             />
           </Show>
           
           <Show when={activeTab() === 'destinations'}>
             <DestinationsTab 
-              onChangeAny={() => setHasUnsavedChanges(true)} 
               ref={destinationsRef}
+              hasUnsavedChanges={hasUnsavedChanges}
+              setHasUnsavedChanges={setHasUnsavedChanges}
             />
           </Show>
           
           <Show when={activeTab() === 'schedule'}>
-            <ScheduleTab onChangeAny={() => setHasUnsavedChanges(true)} ref={scheduleRef} />
+            <ScheduleTab 
+              ref={scheduleRef} 
+              hasUnsavedChanges={hasUnsavedChanges}
+              setHasUnsavedChanges={setHasUnsavedChanges}
+            />
           </Show>
           
           <Show when={activeTab() === 'history'}>
@@ -921,17 +961,17 @@ function OverrideItem(props: {
 
 // Thresholds Tab - Improved design  
 interface ThresholdsTabProps {
-  allGuests: () => Array<VM | Container>;
-  allNodes: () => Node[];
-  guestDefaults: () => Record<string, number>;
-  nodeDefaults: () => Record<string, number>;
+  allGuests: () => Array<{ id: string; name: string; vmid: number; type: string; node: string; instance: string }>;
+  state: any; // State from websocket
+  guestDefaults: Record<string, number>;
+  nodeDefaults: Record<string, number>;
   storageDefault: () => number;
   overrides: () => Override[];
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
   setOverrides: (value: Override[]) => void;
-  activeAlerts: () => Record<string, Alert>;
+  activeAlerts: Record<string, Alert>;
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
@@ -963,7 +1003,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                 disk: 90
               });
               props.setStorageDefault(85);
-              props.onChangeAny();
+              // Changed
             }}
             class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
             Reset All to Defaults
@@ -987,13 +1027,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="text-xs font-medium text-gray-600 dark:text-gray-400">CPU Usage</label>
-                  <span class="text-xs text-gray-500">{props.guestDefaults().cpu}%</span>
+                  <span class="text-xs text-gray-500">{props.guestDefaults.cpu}%</span>
                 </div>
                 <ThresholdSlider
-                  value={props.guestDefaults().cpu}
+                  value={props.guestDefaults.cpu}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, cpu: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="cpu"
                 />
@@ -1002,13 +1042,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Memory Usage</label>
-                  <span class="text-xs text-gray-500">{props.guestDefaults().memory}%</span>
+                  <span class="text-xs text-gray-500">{props.guestDefaults.memory}%</span>
                 </div>
                 <ThresholdSlider
-                  value={props.guestDefaults().memory}
+                  value={props.guestDefaults.memory}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, memory: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="memory"
                 />
@@ -1017,13 +1057,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Disk Usage</label>
-                  <span class="text-xs text-gray-500">{props.guestDefaults().disk}%</span>
+                  <span class="text-xs text-gray-500">{props.guestDefaults.disk}%</span>
                 </div>
                 <ThresholdSlider
-                  value={props.guestDefaults().disk}
+                  value={props.guestDefaults.disk}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, disk: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="disk"
                 />
@@ -1050,7 +1090,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.cpu}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, cpu: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="cpu"
                 />
@@ -1065,7 +1105,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.memory}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, memory: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="memory"
                 />
@@ -1080,7 +1120,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.disk}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, disk: v}));
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="disk"
                 />
@@ -1103,13 +1143,13 @@ function ThresholdsTab(props: ThresholdsTabProps) {
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Usage Threshold</label>
-                  <span class="text-xs text-gray-500">{props.storageDefault}%</span>
+                  <span class="text-xs text-gray-500">{props.storageDefault()}%</span>
                 </div>
                 <ThresholdSlider
-                  value={props.storageDefault}
+                  value={props.storageDefault()}
                   onChange={(v) => {
                     props.setStorageDefault(v);
-                    props.onChangeAny();
+                    // Changed
                   }}
                   type="disk"
                 />
@@ -1129,25 +1169,25 @@ function ThresholdsTab(props: ThresholdsTabProps) {
         </div>
         
         {/* Existing Overrides List */}
-        <Show when={props.overrides.length > 0}>
+        <Show when={props.overrides().length > 0}>
           <div class="space-y-3 mb-6">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Active Overrides ({props.overrides.length})
+              Active Overrides ({props.overrides().length})
             </h4>
             <div class="space-y-2">
-              <For each={props.overrides}>
+              <For each={props.overrides()}>
                 {(override) => (
                   <OverrideItem
                     override={override}
                     onUpdate={(updatedOverride) => {
-                      props.setOverrides(props.overrides.map((o: Override) => 
+                      props.setOverrides(props.overrides().map((o: Override) => 
                         o.id === override.id ? updatedOverride : o
                       ));
-                      props.onChangeAny();
+                      // Changed
                     }}
                     onRemove={() => {
-                      props.setOverrides(props.overrides.filter((o) => o.id !== override.id));
-                      props.onChangeAny();
+                      props.setOverrides(props.overrides().filter((o) => o.id !== override.id));
+                      // Changed
                     }}
                   />
                 )}
@@ -1172,12 +1212,12 @@ function ThresholdsTab(props: ThresholdsTabProps) {
           </div>
           
           <AddOverrideForm 
-            guests={props.allGuests}
+            guests={props.allGuests()}
             nodes={props.state.nodes || []}
-            existingOverrides={props.overrides}
+            existingOverrides={props.overrides()}
             onAdd={(override) => {
-              props.setOverrides([...props.overrides, override]);
-              props.onChangeAny();
+              props.setOverrides([...props.overrides(), override]);
+              // Changed
             }}
           />
         </div>
@@ -1193,14 +1233,26 @@ interface DestinationsTabProps {
   setHasUnsavedChanges: (value: boolean) => void;
 }
 
+// Local email config with UI-specific fields
+interface UIEmailConfig {
+  enabled: boolean;
+  provider: string;
+  smtpHost: string;
+  smtpPort: number;
+  username: string;
+  password: string;
+  from: string;
+  to: string[];
+  tls: boolean;
+  startTLS: boolean;
+  replyTo: string;
+  maxRetries: number;
+  retryDelay: number;
+  rateLimit: number;
+}
+
 function DestinationsTab(props: DestinationsTabProps) {
-  // Expose emailConfig to parent
-  onMount(() => {
-    if (props.ref) {
-      props.ref.emailConfig = emailConfig;
-    }
-  });
-  const [emailConfig, setEmailConfig] = createSignal({
+  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
     enabled: false,
     provider: '',
     smtpHost: '',
@@ -1215,6 +1267,27 @@ function DestinationsTab(props: DestinationsTabProps) {
     maxRetries: 3,
     retryDelay: 5,
     rateLimit: 60
+  });
+  
+  // Expose emailConfig to parent (convert to API format)
+  onMount(() => {
+    if (props.ref) {
+      props.ref.emailConfig = () => {
+        const config = emailConfig();
+        return {
+          enabled: config.enabled,
+          provider: config.provider,
+          server: config.smtpHost,
+          port: config.smtpPort,
+          username: config.username,
+          password: config.password,
+          from: config.from,
+          to: config.to,
+          tls: config.tls,
+          starttls: config.startTLS
+        } as EmailConfig;
+      };
+    }
   });
   
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
@@ -1249,7 +1322,11 @@ function DestinationsTab(props: DestinationsTabProps) {
     // Load webhooks
     try {
       const hooks = await NotificationsAPI.getWebhooks();
-      setWebhooks(hooks);
+      // Map to local Webhook type
+      setWebhooks(hooks.map(h => ({
+        ...h,
+        service: 'custom' // Default service type
+      })));
     } catch (err) {
       console.error('Failed to load webhooks:', err);
     }
@@ -1297,7 +1374,7 @@ function DestinationsTab(props: DestinationsTabProps) {
               checked={emailConfig().enabled}
               onChange={(e) => {
                 setEmailConfig({...emailConfig(), enabled: e.currentTarget.checked});
-                props.onChangeAny();
+                // Changed
               }}
               class="sr-only peer" 
             />
@@ -1310,7 +1387,7 @@ function DestinationsTab(props: DestinationsTabProps) {
             config={emailConfig()}
             onChange={(config) => {
               setEmailConfig(config);
-              props.onChangeAny();
+              // Changed
             }}
             onTest={testEmailConfig}
             testing={testingEmail()}
@@ -1335,17 +1412,17 @@ function DestinationsTab(props: DestinationsTabProps) {
               ...webhook,
               id: Date.now().toString()
             }]);
-            props.onChangeAny();
+            props.setHasUnsavedChanges(true);
           }}
           onUpdate={(webhook) => {
             setWebhooks(webhooks().map(w => 
               w.id === webhook.id ? webhook : w
             ));
-            props.onChangeAny();
+            props.setHasUnsavedChanges(true);
           }}
           onDelete={(id) => {
             setWebhooks(webhooks().filter(w => w.id !== id));
-            props.onChangeAny();
+            props.setHasUnsavedChanges(true);
           }}
           onTest={testWebhook}
           testing={testingWebhook()}
@@ -1377,7 +1454,7 @@ function ScheduleTab(props: ScheduleTabProps) {
       friday: true,
       saturday: false,
       sunday: false
-    }
+    } as Record<string, boolean>
   });
   
   const [cooldown, setCooldown] = createSignal({
@@ -1439,11 +1516,12 @@ function ScheduleTab(props: ScheduleTabProps) {
     
     props.ref.setScheduleConfig = (config: ScheduleConfig) => {
       if (config.quietHours) {
+        const qh = config.quietHours;
         setQuietHours(prev => ({
           ...prev,
-          ...config.quietHours,
+          ...qh,
           // Ensure timezone is preserved if not provided
-          timezone: config.quietHours.timezone || prev.timezone
+          timezone: qh.timezone || prev.timezone
         }));
       }
       if (config.cooldown !== undefined) {
@@ -1454,23 +1532,33 @@ function ScheduleTab(props: ScheduleTabProps) {
         });
       }
       if (config.groupingWindow !== undefined) {
+        const gw = config.groupingWindow;
         setGrouping(prev => ({
           ...prev,
-          enabled: config.groupingWindow > 0,
-          window: Math.floor(config.groupingWindow / 60), // Convert seconds to minutes
+          enabled: gw > 0,
+          window: Math.floor(gw / 60), // Convert seconds to minutes
           // Preserve existing grouping preferences
           byNode: config.grouping?.byNode !== undefined ? config.grouping.byNode : prev.byNode,
           byGuest: config.grouping?.byGuest !== undefined ? config.grouping.byGuest : prev.byGuest
         }));
       }
       if (config.maxAlertsHour !== undefined) {
-        setCooldown(prev => ({ ...prev, maxAlerts: config.maxAlertsHour }));
+        setCooldown(prev => ({ ...prev, maxAlerts: config.maxAlertsHour! }));
       }
       if (config.escalation !== undefined) {
-        setEscalation(config.escalation);
+        setEscalation(prev => ({
+          ...prev,
+          enabled: config.escalation!.enabled
+        }));
       }
       if (config.grouping !== undefined) {
-        setGrouping(config.grouping);
+        setGrouping(prev => ({
+          ...prev,
+          enabled: config.grouping!.enabled,
+          window: config.grouping!.window,
+          byNode: config.grouping!.byNode ?? prev.byNode,
+          byGuest: config.grouping!.byGuest ?? prev.byGuest
+        }));
       }
     };
   }
@@ -1503,7 +1591,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={quietHours().enabled}
               onChange={(e) => {
                 setQuietHours({ ...quietHours(), enabled: e.currentTarget.checked });
-                props.onChangeAny();
+                // Changed
               }}
               class="sr-only peer"
             />
@@ -1521,7 +1609,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().start}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), start: e.currentTarget.value });
-                    props.onChangeAny();
+                    // Changed
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1533,7 +1621,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().end}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), end: e.currentTarget.value });
-                    props.onChangeAny();
+                    // Changed
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1544,7 +1632,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().timezone}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), timezone: e.currentTarget.value });
-                    props.onChangeAny();
+                    // Changed
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -1567,7 +1655,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           ...quietHours(),
                           days: { ...currentDays, [day.id]: !currentDays[day.id] }
                         });
-                        props.onChangeAny();
+                        // Changed
                       }}
                       title={day.fullLabel}
                       class={`px-2 py-2 text-xs rounded-lg transition-all duration-200 font-medium ${
@@ -1614,7 +1702,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={cooldown().enabled}
               onChange={(e) => {
                 setCooldown({ ...cooldown(), enabled: e.currentTarget.checked });
-                props.onChangeAny();
+                // Changed
               }}
               class="sr-only peer"
             />
@@ -1637,7 +1725,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     value={cooldown().minutes}
                     onChange={(e) => {
                       setCooldown({ ...cooldown(), minutes: parseInt(e.currentTarget.value) });
-                      props.onChangeAny();
+                      // Changed
                     }}
                     class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -1660,7 +1748,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     value={cooldown().maxAlerts}
                     onChange={(e) => {
                       setCooldown({ ...cooldown(), maxAlerts: parseInt(e.currentTarget.value) });
-                      props.onChangeAny();
+                      // Changed
                     }}
                     class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -1695,7 +1783,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={grouping().enabled}
               onChange={(e) => {
                 setGrouping({ ...grouping(), enabled: e.currentTarget.checked });
-                props.onChangeAny();
+                // Changed
               }}
               class="sr-only peer"
             />
@@ -1717,7 +1805,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={grouping().window}
                   onChange={(e) => {
                     setGrouping({ ...grouping(), window: parseInt(e.currentTarget.value) });
-                    props.onChangeAny();
+                    // Changed
                   }}
                   class="flex-1"
                 />
@@ -1743,7 +1831,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     checked={grouping().byNode}
                     onChange={(e) => {
                       setGrouping({ ...grouping(), byNode: e.currentTarget.checked });
-                      props.onChangeAny();
+                      // Changed
                     }}
                     class="sr-only"
                   />
@@ -1772,7 +1860,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     checked={grouping().byGuest}
                     onChange={(e) => {
                       setGrouping({ ...grouping(), byGuest: e.currentTarget.checked });
-                      props.onChangeAny();
+                      // Changed
                     }}
                     class="sr-only"
                   />
@@ -1817,7 +1905,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={escalation().enabled}
               onChange={(e) => {
                 setEscalation({ ...escalation(), enabled: e.currentTarget.checked });
-                props.onChangeAny();
+                // Changed
               }}
               class="sr-only peer"
             />
@@ -1843,7 +1931,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           const newLevels = [...escalation().levels];
                           newLevels[index()] = { ...level, after: parseInt(e.currentTarget.value) };
                           setEscalation({ ...escalation(), levels: newLevels });
-                          props.onChangeAny();
+                          // Changed
                         }}
                         class="w-16 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
@@ -1857,7 +1945,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           const newLevels = [...escalation().levels];
                           newLevels[index()] = { ...level, notify: e.currentTarget.value };
                           setEscalation({ ...escalation(), levels: newLevels });
-                          props.onChangeAny();
+                          // Changed
                         }}
                         class="flex-1 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
@@ -1871,7 +1959,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     onClick={() => {
                       const newLevels = escalation().levels.filter((_, i) => i !== index());
                       setEscalation({ ...escalation(), levels: newLevels });
-                      props.onChangeAny();
+                      // Changed
                     }}
                     class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Remove escalation level"
@@ -1892,7 +1980,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   ...escalation(),
                   levels: [...escalation().levels, { after: newAfter, notify: 'all' }]
                 });
-                props.onChangeAny();
+                // Changed
               }}
               class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center justify-center gap-2"
             >
@@ -2045,10 +2133,17 @@ function HistoryTab() {
     return 'Unknown';
   };
 
+  // Extended alert type for display
+  interface ExtendedAlert extends Alert {
+    status?: string;
+    duration?: string;
+    resourceType?: string;
+  }
+
   // Prepare all alerts without filtering
   const allAlertsData = createMemo(() => {
     // Combine active and historical alerts
-    const allAlerts: Alert[] = [];
+    const allAlerts: ExtendedAlert[] = [];
     
     // Add active alerts
     Object.values(activeAlerts || {}).forEach((alert) => {

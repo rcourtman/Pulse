@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { logger } from '@/utils/logger';
 import { ChartsAPI } from '@/api/charts';
-import type { ChartPoint } from '@/types/charts';
+import type { ChartPoint, MetricData, ChartData, NodeChartData, StorageChartData } from '@/types/charts';
 
 // Chart configuration based on main branch
 export const CHART_CONFIG = {
@@ -87,22 +87,11 @@ export interface ChartDataPoint {
   value: number;
 }
 
-// Chart data for a single metric
-export interface MetricChartData {
-  cpu?: ChartDataPoint[];
-  memory?: ChartDataPoint[];
-  disk?: ChartDataPoint[];
-  diskRead?: ChartDataPoint[];
-  diskWrite?: ChartDataPoint[];
-  networkIn?: ChartDataPoint[];
-  networkOut?: ChartDataPoint[];
-}
-
 // Store for chart data
 interface ChartStore {
-  guestData: Record<string, MetricChartData>;
-  nodeData: Record<string, MetricChartData>;
-  storageData: Record<string, MetricChartData>;
+  guestData: ChartData;
+  nodeData: NodeChartData;
+  storageData: StorageChartData;
   lastFetch: number;
   timeRange: string;
   stats: {
@@ -330,6 +319,10 @@ export async function fetchChartData(timeRange: string) {
     }
     
     // Update store
+    const guestCount = Object.keys(data.data || {}).length;
+    const nodeCount = Object.keys(data.nodeData || {}).length;
+    console.debug(`Chart data fetched: ${guestCount} guests, ${nodeCount} nodes`);
+    
     setChartStore({
       guestData: data.data || {},
       nodeData: data.nodeData || {},
@@ -358,9 +351,15 @@ const EMPTY_ARRAY: ChartDataPoint[] = [];
 // Get chart data for a specific guest and metric
 export function getGuestChartData(guestId: string, metric: string): ChartDataPoint[] {
   const guestData = chartStore.guestData[guestId];
-  if (!guestData) return EMPTY_ARRAY;
+  if (!guestData) {
+    console.debug(`No chart data for guest ${guestId}`);
+    return EMPTY_ARRAY;
+  }
   
-  const metricData = guestData[metric as keyof MetricChartData];
+  const metricData = guestData[metric as keyof MetricData];
+  if (!metricData) {
+    console.debug(`No ${metric} data for guest ${guestId}`);
+  }
   return metricData || EMPTY_ARRAY;
 }
 
@@ -369,7 +368,7 @@ export function getNodeChartData(nodeId: string, metric: string): ChartDataPoint
   const nodeData = chartStore.nodeData[nodeId];
   if (!nodeData) return EMPTY_ARRAY;
   
-  const metricData = nodeData[metric as keyof MetricChartData];
+  const metricData = nodeData[metric as keyof MetricData];
   return metricData || EMPTY_ARRAY;
 }
 
@@ -378,7 +377,7 @@ export function getStorageChartData(storageId: string, metric: string): ChartDat
   const storageData = chartStore.storageData[storageId];
   if (!storageData) return EMPTY_ARRAY;
   
-  const metricData = storageData[metric as keyof MetricChartData];
+  const metricData = storageData[metric as keyof MetricData];
   return metricData || EMPTY_ARRAY;
 }
 
