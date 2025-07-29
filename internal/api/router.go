@@ -75,6 +75,15 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	
+	// Test node configuration endpoint (for new nodes)
+	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			configHandlers.HandleTestNodeConfig(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:

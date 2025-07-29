@@ -365,6 +365,99 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+// HandleTestNodeConfig tests a node connection from provided configuration
+func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Request) {
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	var testResult map[string]interface{}
+	
+	if req.Type == "pve" {
+		// Create a temporary client to test connection
+		clientConfig := proxmox.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		client, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("Failed to create client: %v", err),
+			}
+		} else {
+			// Test connection by getting nodes list
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			
+			if nodes, err := client.GetNodes(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": fmt.Sprintf("Connection failed: %v", err),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": fmt.Sprintf("Connected to PVE cluster with %d nodes", len(nodes)),
+					"latency": latency,
+				}
+			}
+		}
+	} else if req.Type == "pbs" {
+		// Create a temporary client to test connection
+		clientConfig := pbs.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		client, err := pbs.NewClient(clientConfig)
+		if err != nil {
+			testResult = map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("Failed to create client: %v", err),
+			}
+		} else {
+			// Test connection by getting datastores
+			startTime := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			
+			if _, err := client.GetDatastores(ctx); err != nil {
+				testResult = map[string]interface{}{
+					"status":  "error",
+					"message": fmt.Sprintf("Connection failed: %v", err),
+				}
+			} else {
+				latency := time.Since(startTime).Milliseconds()
+				testResult = map[string]interface{}{
+					"status":  "success",
+					"message": fmt.Sprintf("Connected to PBS instance"),
+					"latency": latency,
+				}
+			}
+		}
+	} else {
+		http.Error(w, "Invalid node type", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(testResult)
+}
+
 // HandleTestNode tests a node connection
 func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
