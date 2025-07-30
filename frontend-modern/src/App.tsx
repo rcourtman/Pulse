@@ -1,4 +1,4 @@
-import { Show, createSignal, createContext, useContext, createEffect } from 'solid-js';
+import { Show, createSignal, createContext, useContext, createEffect, onMount } from 'solid-js';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import StorageComponent from './components/Storage/Storage';
@@ -9,6 +9,8 @@ import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
+import { UpdatesAPI } from './api/updates';
+import type { VersionInfo } from './api/updates';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -48,6 +50,9 @@ function App() {
   // Tab management
   const [activeTab, setActiveTab] = createSignal<TabType>('main');
   
+  // Version info
+  const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  
   // Dark mode
   const [darkMode, setDarkMode] = createSignal(
     localStorage.getItem(STORAGE_KEYS.DARK_MODE) === 'true' || 
@@ -71,6 +76,16 @@ function App() {
   if (darkMode()) {
     document.documentElement.classList.add('dark');
   }
+  
+  // Load version info on mount
+  onMount(async () => {
+    try {
+      const version = await UpdatesAPI.getVersion();
+      setVersionInfo(version);
+    } catch (error) {
+      console.error('Failed to load version:', error);
+    }
+  });
 
   // Pass through the store directly
   const enhancedStore: EnhancedStore = wsStore;
@@ -249,6 +264,21 @@ function App() {
             </Show>
             </div>
           </main>
+          
+          {/* Footer */}
+          <footer class="text-center text-xs text-gray-500 dark:text-gray-400 py-4">
+            Pulse | Version: {' '}
+            <a 
+              href="https://github.com/rcourtman/Pulse/releases" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              class="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {versionInfo()?.version || 'loading...'}
+            </a>
+            {versionInfo()?.isDevelopment && ' (Development)'}
+            {versionInfo()?.isDocker && ' - Docker'}
+          </footer>
         </div>
         </div>
         <ToastContainer />

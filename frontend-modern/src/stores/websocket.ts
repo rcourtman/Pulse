@@ -44,6 +44,7 @@ export function createWebSocketStore(url: string) {
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
+  const [updateProgress, setUpdateProgress] = createSignal<any>(null);
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
@@ -153,6 +154,10 @@ export function createWebSocketStore(url: string) {
           } else if (message.type === 'alertResolved') {
             // Individual alert resolution now handled via state sync
             logger.info('Alert resolved (will sync with next state update)', { alertId: message.data.alertId });
+          } else if (message.type === 'update:progress') {
+            // Update progress event
+            setUpdateProgress(message.data);
+            logger.info('Update progress:', message.data);
           }
         } catch (err) {
           logger.error('Failed to parse WebSocket message', err);
@@ -234,6 +239,7 @@ export function createWebSocketStore(url: string) {
     recentlyResolved,
     connected,
     reconnecting,
+    updateProgress,
     reconnect: () => {
       ws?.close();
       window.clearTimeout(reconnectTimeout);

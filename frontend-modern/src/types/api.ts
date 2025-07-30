@@ -324,7 +324,8 @@ export type WSMessage =
   | { type: 'pong'; data?: unknown }
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
-  | { type: 'alertResolved'; data: { alertId: string } };
+  | { type: 'alertResolved'; data: { alertId: string } }
+  | { type: 'update:progress'; data: any };
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';

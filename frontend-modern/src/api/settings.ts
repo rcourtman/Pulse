@@ -10,6 +10,10 @@ export interface SystemSettingsUpdate {
   frontendPort?: number;
   allowedOrigins?: string;
   connectionTimeout?: number; // in seconds
+  updateChannel?: string;
+  autoUpdateEnabled?: boolean;
+  autoUpdateCheckInterval?: number; // in hours
+  autoUpdateTime?: string; // HH:MM format
 }
 
 // Response types

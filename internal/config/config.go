@@ -48,7 +48,10 @@ type Config struct {
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 
 	// Update settings
-	AutoUpdateTime    string `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
+	UpdateChannel           string        `envconfig:"UPDATE_CHANNEL" default:"stable"`
+	AutoUpdateEnabled       bool          `envconfig:"AUTO_UPDATE_ENABLED" default:"false"`
+	AutoUpdateCheckInterval time.Duration `envconfig:"AUTO_UPDATE_CHECK_INTERVAL" default:"24h"`
+	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
 	
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort

@@ -10,31 +10,37 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
 // Router handles HTTP routing
 type Router struct {
-	mux        *http.ServeMux
-	config     *config.Config
-	monitor    *monitoring.Monitor
-	wsHub      *websocket.Hub
-	reloadFunc func() error
+	mux           *http.ServeMux
+	config        *config.Config
+	monitor       *monitoring.Monitor
+	wsHub         *websocket.Hub
+	reloadFunc    func() error
+	updateManager *updates.Manager
 }
 
 
 // NewRouter creates a new router instance
 func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) http.Handler {
 	r := &Router{
-		mux:        http.NewServeMux(),
-		config:     cfg,
-		monitor:    monitor,
-		wsHub:      wsHub,
-		reloadFunc: reloadFunc,
+		mux:           http.NewServeMux(),
+		config:        cfg,
+		monitor:       monitor,
+		wsHub:         wsHub,
+		reloadFunc:    reloadFunc,
+		updateManager: updates.NewManager(cfg),
 	}
 
 	r.setupRoutes()
+	
+	// Start forwarding update progress to WebSocket
+	go r.forwardUpdateProgress()
 	
 	// Wrap with error handler middleware only
 	// Note: TimeoutHandler breaks WebSocket upgrades
@@ -47,6 +53,7 @@ func (r *Router) setupRoutes() {
 	alertHandlers := NewAlertHandlers(r.monitor)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
 	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc)
+	updateHandlers := NewUpdateHandlers(r.updateManager)
 	
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -63,6 +70,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups/pve", r.handleBackupsPVE)
 	r.mux.HandleFunc("/api/backups/pbs", r.handleBackupsPBS)
 	r.mux.HandleFunc("/api/snapshots", r.handleSnapshots)
+	
+	// Update routes
+	r.mux.HandleFunc("/api/updates/check", updateHandlers.HandleCheckUpdates)
+	r.mux.HandleFunc("/api/updates/apply", updateHandlers.HandleApplyUpdate)
+	r.mux.HandleFunc("/api/updates/status", updateHandlers.HandleUpdateStatus)
 	
 	// Config management routes
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, r *http.Request) {
@@ -268,14 +280,24 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	version := map[string]interface{}{
-		"version": "2.0.0-go",
-		"build":   "development",
-		"runtime": "go",
+	versionInfo, err := updates.GetCurrentVersion()
+	if err != nil {
+		// Fallback to hardcoded version
+		version := map[string]interface{}{
+			"version": "2.0.0-go",
+			"build":   "development",
+			"runtime": "go",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(version)
+		return
 	}
-
+	
+	// Add update channel from config
+	versionInfo.Channel = r.config.UpdateChannel
+	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(version)
+	json.NewEncoder(w).Encode(versionInfo)
 }
 
 // handleStorage handles storage detail requests
@@ -1079,4 +1101,29 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 	// Default: redirect to WebSocket
 	http.Redirect(w, req, "/ws", http.StatusFound)
 }
+
+// forwardUpdateProgress forwards update progress to WebSocket clients
+func (r *Router) forwardUpdateProgress() {
+	progressChan := r.updateManager.GetProgressChannel()
+	
+	for status := range progressChan {
+		// Create update event for WebSocket
+		message := websocket.Message{
+			Type: "update:progress",
+			Data: status,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		
+		// Broadcast to all connected clients
+		r.wsHub.BroadcastMessage(message)
+		
+		// Log progress
+		log.Debug().
+			Str("status", status.Status).
+			Int("progress", status.Progress).
+			Str("message", status.Message).
+			Msg("Update progress")
+	}
+}
+
 

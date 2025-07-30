@@ -71,8 +71,9 @@ type Hub struct {
 
 // Message represents a WebSocket message
 type Message struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Type      string      `json:"type"`
+	Data      interface{} `json:"data"`
+	Timestamp string      `json:"timestamp,omitempty"`
 }
 
 // SetStateGetter sets the state getter function
@@ -234,7 +235,7 @@ func (h *Hub) BroadcastState(state interface{}) {
 		Type: "rawData",
 		Data: state,
 	}
-	h.broadcastMessage(msg)
+	h.BroadcastMessage(msg)
 }
 
 // BroadcastAlert broadcasts alert to all clients
@@ -244,7 +245,7 @@ func (h *Hub) BroadcastAlert(alert interface{}) {
 		Type: "alert",
 		Data: alert,
 	}
-	h.broadcastMessage(msg)
+	h.BroadcastMessage(msg)
 }
 
 // BroadcastAlertResolved broadcasts alert resolution to all clients
@@ -254,7 +255,7 @@ func (h *Hub) BroadcastAlertResolved(alertID string) {
 		Type: "alertResolved",
 		Data: map[string]string{"alertId": alertID},
 	}
-	h.broadcastMessage(msg)
+	h.BroadcastMessage(msg)
 }
 
 // GetClientCount returns the number of connected clients
@@ -264,8 +265,17 @@ func (h *Hub) GetClientCount() int {
 	return len(h.clients)
 }
 
-// broadcastMessage sends a message to all clients
-func (h *Hub) broadcastMessage(msg Message) {
+// Broadcast sends a custom message to all connected clients
+func (h *Hub) Broadcast(data interface{}) {
+	h.BroadcastMessage(Message{
+		Type: "custom",
+		Data: data,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+}
+
+// BroadcastMessage sends a message to all clients
+func (h *Hub) BroadcastMessage(msg Message) {
 	// Sanitize the message data to handle NaN values
 	msg.Data = sanitizeData(msg.Data)
 	
@@ -293,7 +303,7 @@ func (h *Hub) sendPing() {
 		Type: "ping",
 		Data: map[string]int64{"timestamp": time.Now().Unix()},
 	}
-	h.broadcastMessage(msg)
+	h.BroadcastMessage(msg)
 }
 
 // readPump handles incoming messages from the client

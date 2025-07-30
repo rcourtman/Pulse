@@ -1,10 +1,12 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, For, Show, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
+import { UpdatesAPI } from '@/api/updates';
 import type { NodeConfig } from '@/types/nodes';
+import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
 
 type SettingsTab = 'pve' | 'pbs' | 'system' | 'diagnostics';
 
@@ -16,7 +18,7 @@ type NodeConfigWithStatus = NodeConfig & {
 };
 
 const Settings: Component = () => {
-  const { state, connected } = useWebSocket();
+  const { state, connected, updateProgress } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
@@ -29,6 +31,16 @@ const Settings: Component = () => {
   const [frontendPort, setFrontendPort] = createSignal(7655);
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
   const [connectionTimeout, setConnectionTimeout] = createSignal(10);
+  
+  // Update settings
+  const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
+  const [updateStatus, setUpdateStatus] = createSignal<UpdateStatus | null>(null);
+  const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
+  const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
+  const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
+  const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -53,6 +65,14 @@ const Settings: Component = () => {
     }
   ];
 
+  // Update status from WebSocket events
+  createEffect(() => {
+    const progress = updateProgress();
+    if (progress) {
+      setUpdateStatus(progress);
+    }
+  });
+  
   // Load nodes and system settings on mount
   onMount(async () => {
     try {
@@ -86,6 +106,17 @@ const Settings: Component = () => {
       } catch (error) {
         console.error('Failed to load settings:', error);
       }
+      
+      // Load version information
+      try {
+        const version = await UpdatesAPI.getVersion();
+        setVersionInfo(version);
+        if (version.channel) {
+          setUpdateChannel(version.channel as 'stable' | 'rc');
+        }
+      } catch (error) {
+        console.error('Failed to load version:', error);
+      }
     } catch (error) {
       console.error('Failed to load configuration:', error);
     }
@@ -100,7 +131,11 @@ const Settings: Component = () => {
           backendPort: backendPort(),
           frontendPort: frontendPort(),
           allowedOrigins: allowedOrigins(),
-          connectionTimeout: connectionTimeout()
+          connectionTimeout: connectionTimeout(),
+          updateChannel: updateChannel(),
+          autoUpdateEnabled: autoUpdateEnabled(),
+          autoUpdateCheckInterval: autoUpdateCheckInterval(),
+          autoUpdateTime: autoUpdateTime()
         });
       }
       
@@ -143,6 +178,56 @@ const Settings: Component = () => {
       }
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Connection test failed');
+    }
+  };
+  
+  const checkForUpdates = async () => {
+    setCheckingForUpdates(true);
+    try {
+      const info = await UpdatesAPI.checkForUpdates();
+      setUpdateInfo(info);
+      if (!info.available) {
+        showSuccess('You are running the latest version');
+      }
+    } catch (error) {
+      showError('Failed to check for updates');
+      console.error('Update check error:', error);
+    } finally {
+      setCheckingForUpdates(false);
+    }
+  };
+  
+  const applyUpdate = async () => {
+    const info = updateInfo();
+    if (!info || !info.downloadUrl) {
+      showError('No update available');
+      return;
+    }
+    
+    try {
+      await UpdatesAPI.applyUpdate(info.downloadUrl);
+      showSuccess('Update started. Pulse will restart automatically.');
+      
+      // Start polling for update status
+      const pollStatus = setInterval(async () => {
+        try {
+          const status = await UpdatesAPI.getUpdateStatus();
+          setUpdateStatus(status);
+          
+          if (status.status === 'completed' || status.status === 'error') {
+            clearInterval(pollStatus);
+            if (status.status === 'error') {
+              showError(status.error || 'Update failed');
+            }
+          }
+        } catch (error) {
+          // Service might be restarting
+          console.log('Status check failed, service may be restarting');
+        }
+      }, 1000);
+    } catch (error) {
+      showError('Failed to start update');
+      console.error('Update error:', error);
     }
   };
 
@@ -565,6 +650,200 @@ const Settings: Component = () => {
                       <p class="text-xs text-amber-800 dark:text-amber-200">
                         <strong>Note:</strong> Port changes require a service restart
                       </p>
+                    </div>
+                  </div>
+                  
+                  {/* Update Settings */}
+                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                      </svg>
+                      Updates
+                    </h4>
+                    
+                    <div class="space-y-4">
+                      {/* Version Info */}
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Current Version</label>
+                          <p class="text-xs text-gray-600 dark:text-gray-400">
+                            {versionInfo()?.version || 'Loading...'} 
+                            {versionInfo()?.isDevelopment && ' (Development)'}
+                            {versionInfo()?.isDocker && ' - Docker'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={checkForUpdates}
+                          disabled={checkingForUpdates() || versionInfo()?.isDocker}
+                          class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
+                            versionInfo()?.isDocker
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {checkingForUpdates() ? (
+                            <>
+                              <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                              Checking...
+                            </>
+                          ) : (
+                            <>Check for Updates</>
+                          )}
+                        </button>
+                      </div>
+                      
+                      {/* Docker Message */}
+                      <Show when={versionInfo()?.isDocker}>
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p class="text-xs text-blue-800 dark:text-blue-200">
+                            <strong>Docker Installation:</strong> Updates are managed through Docker. Pull the latest image to update.
+                          </p>
+                        </div>
+                      </Show>
+                      
+                      {/* Update Available */}
+                      <Show when={updateInfo()?.available && !versionInfo()?.isDocker}>
+                        <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                          <div class="flex items-start justify-between mb-2">
+                            <div>
+                              <p class="text-sm font-medium text-green-800 dark:text-green-200">
+                                Update Available: {updateInfo()?.latestVersion}
+                              </p>
+                              <p class="text-xs text-green-700 dark:text-green-300 mt-1">
+                                Released: {updateInfo()?.releaseDate ? new Date(updateInfo()!.releaseDate).toLocaleDateString() : 'Unknown'}
+                              </p>
+                            </div>
+                            <Show when={!updateStatus() || updateStatus()?.status === 'idle'}>
+                              <button
+                                onClick={applyUpdate}
+                                class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                              >
+                                Apply Update
+                              </button>
+                            </Show>
+                          </div>
+                          <Show when={updateInfo()?.releaseNotes}>
+                            <details class="mt-2">
+                              <summary class="text-xs text-green-700 dark:text-green-300 cursor-pointer">Release Notes</summary>
+                              <pre class="mt-2 text-xs text-green-600 dark:text-green-400 whitespace-pre-wrap font-mono bg-green-100 dark:bg-green-900/30 p-2 rounded">
+                                {updateInfo()?.releaseNotes}
+                              </pre>
+                            </details>
+                          </Show>
+                        </div>
+                      </Show>
+                      
+                      {/* Update Progress */}
+                      <Show when={updateStatus() && updateStatus()?.status !== 'idle'}>
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div class="mb-2">
+                            <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                              {updateStatus()?.message || 'Processing update...'}
+                            </p>
+                          </div>
+                          <Show when={updateStatus()?.progress}>
+                            <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                              <div
+                                class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={`width: ${updateStatus()?.progress}%`}
+                              ></div>
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+                      
+                      {/* Update Settings */}
+                      <div class="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Channel</label>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                              Choose between stable and release candidate versions
+                            </p>
+                          </div>
+                          <select
+                            value={updateChannel()}
+                            onChange={(e) => {
+                              setUpdateChannel(e.currentTarget.value as 'stable' | 'rc');
+                              setHasUnsavedChanges(true);
+                            }}
+                            disabled={versionInfo()?.isDocker}
+                            class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
+                          >
+                            <option value="stable">Stable</option>
+                            <option value="rc">Release Candidate</option>
+                          </select>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                          <div>
+                            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Auto-Update</label>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                              Automatically install updates when available
+                            </p>
+                          </div>
+                          <label class="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={autoUpdateEnabled()}
+                              onChange={(e) => {
+                                setAutoUpdateEnabled(e.currentTarget.checked);
+                                setHasUnsavedChanges(true);
+                              }}
+                              disabled={versionInfo()?.isDocker}
+                              class="sr-only peer"
+                            />
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                          </label>
+                        </div>
+                        
+                        <Show when={autoUpdateEnabled()}>
+                          <div class="pl-4 space-y-4 border-l-2 border-gray-200 dark:border-gray-600">
+                            <div class="flex items-center justify-between">
+                              <div>
+                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Check Interval</label>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">
+                                  How often to check for updates
+                                </p>
+                              </div>
+                              <select
+                                value={autoUpdateCheckInterval()}
+                                onChange={(e) => {
+                                  setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
+                                  setHasUnsavedChanges(true);
+                                }}
+                                class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                              >
+                                <option value="6">Every 6 hours</option>
+                                <option value="12">Every 12 hours</option>
+                                <option value="24">Daily</option>
+                                <option value="168">Weekly</option>
+                              </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                              <div>
+                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Time</label>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">
+                                  Preferred time for automatic updates
+                                </p>
+                              </div>
+                              <input
+                                type="time"
+                                value={autoUpdateTime()}
+                                onChange={(e) => {
+                                  setAutoUpdateTime(e.currentTarget.value);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                              />
+                            </div>
+                          </div>
+                        </Show>
+                      </div>
                     </div>
                   </div>
                   
