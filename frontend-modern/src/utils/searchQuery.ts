@@ -112,7 +112,7 @@ function parseCondition(conditionStr: string): Condition | null {
   if (metricMatch) {
     const [, field, operator, value] = metricMatch;
     return {
-      field: field.toLowerCase() as any,
+      field: field.toLowerCase() as MetricCondition['field'],
       operator: operator as ComparisonOperator,
       value: parseFloat(value)
     } as MetricCondition;
@@ -268,14 +268,14 @@ export function evaluateFilterStack(guest: VM | Container, stack: FilterStack): 
   const results = stack.filters.map(filter => {
     if (filter.type === 'metric' && filter.field && filter.operator && filter.value !== undefined) {
       const condition: MetricCondition = {
-        field: filter.field as any,
+        field: filter.field as MetricCondition['field'],
         operator: filter.operator,
         value: filter.value as number
       };
       return evaluateMetricCondition(guest, condition);
     } else if (filter.type === 'text' && filter.field && filter.value) {
       const condition: TextCondition = {
-        field: filter.field as any,
+        field: filter.field as TextCondition['field'],
         value: filter.value as string
       };
       return evaluateTextCondition(guest, condition);

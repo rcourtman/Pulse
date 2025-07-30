@@ -106,6 +106,9 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			return fmt.Errorf("authentication failed (status %d): %s", resp.StatusCode, string(body))
+		}
 		return fmt.Errorf("authentication failed: %s", string(body))
 	}
 
@@ -173,7 +176,16 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		
+		// Create base error
+		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		
+		// Wrap with appropriate error type
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			return nil, fmt.Errorf("authentication error: %w", err)
+		}
+		
+		return nil, err
 	}
 
 	return resp, nil

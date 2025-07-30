@@ -641,17 +641,24 @@ export function Dashboard(props: DashboardProps) {
 
 
 
-      {/* Loading State */}
-      <Show when={connected() && props.nodes.length === 0 && props.vms.length === 0 && props.containers.length === 0}>
+      {/* Empty State - No PVE Nodes Configured */}
+      <Show when={connected() && props.nodes.filter(n => n.type === 'pve').length === 0 && props.vms.length === 0 && props.containers.length === 0}>
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
           <div class="text-center">
-            <div class="inline-flex items-center justify-center w-12 h-12 mb-4">
-              <svg class="animate-spin h-8 w-8 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Loading cluster data...</p>
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No Proxmox VE nodes configured</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure.</p>
+            <button
+              onClick={() => {
+                const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
+                settingsTab?.click();
+              }}
+              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Go to Settings
+            </button>
           </div>
         </div>
       </Show>

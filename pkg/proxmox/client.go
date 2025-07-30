@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
+	"github.com/rs/zerolog/log"
 )
 
 // Client represents a Proxmox VE API client
@@ -46,13 +47,31 @@ type auth struct {
 
 // NewClient creates a new Proxmox VE API client
 func NewClient(cfg ClientConfig) (*Client, error) {
-	// Parse user and realm
-	parts := strings.Split(cfg.User, "@")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid user format, expected user@realm")
+	var user, realm string
+	
+	// For token authentication, we don't need user@realm format
+	if cfg.TokenName != "" && cfg.TokenValue != "" {
+		// Extract user and realm from token name (format: user@realm!tokenname)
+		if strings.Contains(cfg.TokenName, "@") && strings.Contains(cfg.TokenName, "!") {
+			parts := strings.Split(cfg.TokenName, "!")
+			if len(parts) == 2 {
+				userRealm := parts[0]
+				userRealmParts := strings.Split(userRealm, "@")
+				if len(userRealmParts) == 2 {
+					user = userRealmParts[0]
+					realm = userRealmParts[1]
+				}
+			}
+		}
+	} else {
+		// For password authentication, parse user and realm from User field
+		parts := strings.Split(cfg.User, "@")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid user format, expected user@realm")
+		}
+		user = parts[0]
+		realm = parts[1]
 	}
-	user := parts[0]
-	realm := parts[1]
 
 	// Create HTTP client with proper TLS configuration
 	httpClient := tlsutil.CreateHTTPClient(cfg.VerifySSL, cfg.Fingerprint)
@@ -61,6 +80,23 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		httpClient.Timeout = cfg.Timeout
 	}
 
+	// Extract just the token name part for API token authentication
+	tokenName := cfg.TokenName
+	if cfg.TokenName != "" && strings.Contains(cfg.TokenName, "!") {
+		parts := strings.Split(cfg.TokenName, "!")
+		if len(parts) == 2 {
+			tokenName = parts[1] // Just the token name part (e.g., "pulse-token")
+		}
+	}
+	
+	log.Info().
+		Str("user", user).
+		Str("realm", realm).
+		Str("tokenName", tokenName).
+		Str("originalTokenName", cfg.TokenName).
+		Bool("hasTokenValue", cfg.TokenValue != "").
+		Msg("Parsed authentication details")
+
 	client := &Client{
 		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
 		httpClient: httpClient,
@@ -68,7 +104,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		auth: auth{
 			user:       user,
 			realm:      realm,
-			tokenName:  cfg.TokenName,
+			tokenName:  tokenName,
 			tokenValue: cfg.TokenValue,
 		},
 	}
@@ -104,6 +140,9 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			return fmt.Errorf("authentication failed (status %d): %s", resp.StatusCode, string(body))
+		}
 		return fmt.Errorf("authentication failed: %s", string(body))
 	}
 
@@ -152,8 +191,13 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	// Set authentication
 	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
 		// API token authentication
-		req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
-			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue))
+		authHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
+			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
+		req.Header.Set("Authorization", authHeader)
+		log.Debug().
+			Str("authHeader", authHeader).
+			Str("url", req.URL.String()).
+			Msg("Setting API token authentication")
 	} else if c.auth.ticket != "" {
 		// Ticket authentication
 		req.Header.Set("Cookie", "PVEAuthCookie="+c.auth.ticket)
@@ -171,7 +215,17 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		
+		// Create base error
+		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		
+		// Wrap with appropriate error type
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			// Import errors package at top of file
+			return nil, fmt.Errorf("authentication error: %w", err)
+		}
+		
+		return nil, err
 	}
 
 	return resp, nil
@@ -568,4 +622,71 @@ func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid in
 	}
 
 	return snapshots, nil
+}
+
+// ClusterStatus represents the cluster status response
+type ClusterStatus struct {
+	Type    string `json:"type"`    // "cluster" or "node"
+	ID      string `json:"id"`      // Node ID or cluster name
+	Name    string `json:"name"`    // Node name
+	IP      string `json:"ip"`      // Node IP address
+	Local   int    `json:"local"`   // 1 if this is the local node
+	Nodeid  int    `json:"nodeid"`  // Node ID in cluster
+	Online  int    `json:"online"`  // 1 if online
+	Level   string `json:"level"`   // Connection level
+	Quorate int    `json:"quorate"` // 1 if cluster has quorum
+}
+
+// GetClusterStatus returns the cluster status including all nodes
+func (c *Client) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) {
+	resp, err := c.get(ctx, "/cluster/status")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []ClusterStatus `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// IsClusterMember checks if this node is part of a cluster
+func (c *Client) IsClusterMember(ctx context.Context) (bool, error) {
+	status, err := c.GetClusterStatus(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// If we have more than one node entry, it's a cluster
+	nodeCount := 0
+	for _, s := range status {
+		if s.Type == "node" {
+			nodeCount++
+		}
+	}
+
+	return nodeCount > 1, nil
+}
+
+// GetClusterNodes returns all nodes in the cluster with their connection info
+func (c *Client) GetClusterNodes(ctx context.Context) ([]ClusterStatus, error) {
+	status, err := c.GetClusterStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var nodes []ClusterStatus
+	for _, s := range status {
+		if s.Type == "node" {
+			nodes = append(nodes, s)
+		}
+	}
+
+	return nodes, nil
 }

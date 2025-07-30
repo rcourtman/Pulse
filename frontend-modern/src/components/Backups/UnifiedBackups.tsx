@@ -184,8 +184,13 @@ const UnifiedBackups: Component = () => {
     });
 
 
-    // Normalize PBS backups (PBS data may be structured differently in the Go backend)
-    state.pbs?.forEach((pbsInstance: any) => {
+    // Normalize PBS backups
+    // NOTE: Legacy code - PBS backups are now handled differently in the Go backend
+    // The 'backups' field doesn't exist on PBSInstance anymore, and 'snapshots' field
+    // doesn't exist on PBSDatastore. This code is kept for reference but commented out.
+    
+    /*
+    state.pbs?.forEach((pbsInstance) => {
       // Check if backups are at the instance level
       if (pbsInstance.backups && Array.isArray(pbsInstance.backups)) {
         pbsInstance.backups.forEach((backup: any) => {
@@ -211,12 +216,12 @@ const UnifiedBackups: Component = () => {
       
       // Also check datastores for snapshots (original JS structure)
       if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
-        pbsInstance.datastores?.forEach((datastore: any) => {
+        pbsInstance.datastores?.forEach((datastore) => {
           if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
             datastore.snapshots.forEach((backup: any) => {
               let totalSize = 0;
               if (backup.files && Array.isArray(backup.files)) {
-                totalSize = backup.files.reduce((sum: number, file: any) => sum + (file.size || 0), 0);
+                totalSize = backup.files.reduce((sum: any, file: any) => sum + (file.size || 0), 0);
               }
               
               unified.push({
@@ -241,6 +246,7 @@ const UnifiedBackups: Component = () => {
         });
       }
     });
+    */
 
     return unified;
   });
@@ -776,7 +782,7 @@ const UnifiedBackups: Component = () => {
                 barsGroup.setAttribute('class', 'bars');
                 g.appendChild(barsGroup);
                 
-                data.forEach((d: any, i: number) => {
+                data.forEach((d, i) => {
                   const barHeight = d.total * yScale;
                   const x = Math.max(0, i * xScale + (xScale - barWidth) / 2);
                   const y = height - barHeight;

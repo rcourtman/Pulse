@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -75,8 +76,11 @@ type NodeResponse struct {
 	MonitorSyncJobs    bool `json:"monitorSyncJobs,omitempty"`
 	MonitorVerifyJobs  bool `json:"monitorVerifyJobs,omitempty"`
 	MonitorPruneJobs   bool `json:"monitorPruneJobs,omitempty"`
-	MonitorGarbageJobs bool `json:"monitorGarbageJobs,omitempty"`
-	Status            string `json:"status"` // "connected", "disconnected", "error"
+	MonitorGarbageJobs bool                  `json:"monitorGarbageJobs,omitempty"`
+	Status             string                `json:"status"` // "connected", "disconnected", "error"
+	IsCluster          bool                  `json:"isCluster,omitempty"`
+	ClusterName        string                `json:"clusterName,omitempty"`
+	ClusterEndpoints   []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
 // HandleGetNodes returns all configured nodes
@@ -101,6 +105,9 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 			MonitorStorage:    pve.MonitorStorage,
 			MonitorBackups:    pve.MonitorBackups,
 			Status:            h.getNodeStatus("pve", pve.Name),
+			IsCluster:         pve.IsCluster,
+			ClusterName:       pve.ClusterName,
+			ClusterEndpoints:  pve.ClusterEndpoints,
 		}
 		nodes = append(nodes, node)
 	}
@@ -136,14 +143,41 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode add node request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	
+	log.Info().
+		Str("type", req.Type).
+		Str("name", req.Name).
+		Str("host", req.Host).
+		Str("user", req.User).
+		Str("tokenName", req.TokenName).
+		Bool("hasTokenValue", req.TokenValue != "").
+		Msg("Add node request received")
 
 	// Validate request
-	if req.Name == "" || req.Host == "" {
-		http.Error(w, "Name and host are required", http.StatusBadRequest)
+	if req.Host == "" {
+		http.Error(w, "Host is required", http.StatusBadRequest)
 		return
+	}
+	
+	// Auto-generate name if not provided
+	if req.Name == "" {
+		// Extract hostname from URL
+		host := req.Host
+		if strings.HasPrefix(host, "http://") {
+			host = strings.TrimPrefix(host, "http://")
+		}
+		if strings.HasPrefix(host, "https://") {
+			host = strings.TrimPrefix(host, "https://")
+		}
+		// Remove port
+		if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
+			host = host[:colonIndex]
+		}
+		req.Name = host
 	}
 
 	if req.Type != "pve" && req.Type != "pbs" {
@@ -160,9 +194,92 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 
 	// Add to appropriate list
 	if req.Type == "pve" {
+		// Ensure host has protocol
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add port if missing
+		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				host = strings.Replace(host, "https://", "https://", 1)
+				if !strings.Contains(host[8:], ":") {
+					host += ":8006"
+				}
+			}
+		}
+		
+		// Create a temporary client to check if it's part of a cluster
+		clientConfig := proxmox.ClientConfig{
+			Host:        host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		
+		tempClient, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		// Check if node is part of a cluster
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		var clusterEndpoints []config.ClusterEndpoint
+		var isCluster bool
+		var clusterName string
+		
+		clusterNodes, err := tempClient.GetClusterNodes(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get cluster nodes")
+		} else {
+			log.Info().Int("cluster_nodes", len(clusterNodes)).Msg("Got cluster nodes")
+		}
+		
+		if err == nil && len(clusterNodes) > 1 {
+			// This is a cluster - auto-discover all nodes
+			isCluster = true
+			log.Info().
+				Str("name", req.Name).
+				Int("nodes", len(clusterNodes)).
+				Msg("Detected Proxmox cluster, auto-discovering all nodes")
+			
+			for _, clusterNode := range clusterNodes {
+				// Get the cluster name from any online node
+				if clusterName == "" && clusterNode.Online == 1 {
+					clusterName = clusterNode.Name
+				}
+				
+				endpoint := config.ClusterEndpoint{
+					NodeID:   clusterNode.ID,
+					NodeName: clusterNode.Name,
+					Host:     clusterNode.Name, // Will be resolved to IP if needed
+					Online:   clusterNode.Online == 1,
+					LastSeen: time.Now(),
+				}
+				
+				// Try to get the IP address
+				if clusterNode.IP != "" {
+					endpoint.IP = clusterNode.IP
+				}
+				
+				clusterEndpoints = append(clusterEndpoints, endpoint)
+			}
+			
+			// Use the provided name as cluster name if we couldn't get one
+			if clusterName == "" {
+				clusterName = req.Name
+			}
+		}
+		
 		pve := config.PVEInstance{
 			Name:              req.Name,
-			Host:              req.Host,
+			Host:              host, // Use normalized host
 			User:              req.User,
 			Password:          req.Password,
 			TokenName:         req.TokenName,
@@ -173,8 +290,18 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			MonitorContainers: req.MonitorContainers,
 			MonitorStorage:    req.MonitorStorage,
 			MonitorBackups:    req.MonitorBackups,
+			IsCluster:         isCluster,
+			ClusterName:       clusterName,
+			ClusterEndpoints:  clusterEndpoints,
 		}
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
+		
+		if isCluster {
+			log.Info().
+				Str("cluster", clusterName).
+				Int("endpoints", len(clusterEndpoints)).
+				Msg("Added Proxmox cluster with auto-discovered endpoints")
+		}
 	} else {
 		pbs := config.PBSInstance{
 			Name:              req.Name,
@@ -195,7 +322,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save configuration to disk
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := config.SaveConfig(h.config); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -212,6 +339,202 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// HandleTestConnection tests a node connection without saving
+func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
+	var req NodeConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode test connection request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	log.Info().
+		Str("type", req.Type).
+		Str("name", req.Name).
+		Str("host", req.Host).
+		Str("user", req.User).
+		Str("tokenName", req.TokenName).
+		Bool("hasTokenValue", req.TokenValue != "").
+		Msg("Test connection request received")
+
+	// Parse token format if needed
+	user := req.User
+	tokenName := req.TokenName
+	
+	// If tokenName contains the full format (user@realm!tokenname), parse it
+	if strings.Contains(req.TokenName, "!") {
+		parts := strings.Split(req.TokenName, "!")
+		if len(parts) == 2 {
+			user = parts[0]
+			tokenName = parts[1]
+		}
+	}
+	// If user field contains the full format, extract just the user part
+	if strings.Contains(user, "!") {
+		parts := strings.Split(user, "!")
+		if len(parts) >= 1 {
+			user = parts[0]
+		}
+	}
+	
+	log.Info().
+		Str("parsedUser", user).
+		Str("parsedTokenName", tokenName).
+		Msg("Parsed authentication details")
+
+	// Validate request
+	if req.Host == "" {
+		http.Error(w, "Host is required", http.StatusBadRequest)
+		return
+	}
+	
+	// Auto-generate name if not provided for test
+	if req.Name == "" {
+		// Extract hostname from URL
+		host := req.Host
+		if strings.HasPrefix(host, "http://") {
+			host = strings.TrimPrefix(host, "http://")
+		}
+		if strings.HasPrefix(host, "https://") {
+			host = strings.TrimPrefix(host, "https://")
+		}
+		// Remove port
+		if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
+			host = host[:colonIndex]
+		}
+		req.Name = host
+	}
+
+	if req.Type != "pve" && req.Type != "pbs" {
+		http.Error(w, "Invalid node type", http.StatusBadRequest)
+		return
+	}
+
+	// Check for authentication
+	hasAuth := (user != "" && req.Password != "") || (tokenName != "" && req.TokenValue != "")
+	if !hasAuth {
+		http.Error(w, "Authentication credentials required", http.StatusBadRequest)
+		return
+	}
+
+	// Test connection based on type
+	if req.Type == "pve" {
+		// Ensure host has protocol
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add port if missing
+		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				host = strings.Replace(host, "https://", "https://", 1)
+				if !strings.Contains(host[8:], ":") {
+					host += ":8006"
+				}
+			}
+		}
+		
+		// Create a temporary client
+		clientConfig := proxmox.ClientConfig{
+			Host:        host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,  // Pass the full token ID
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		
+		tempClient, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		// Try to get nodes to test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		nodes, err := tempClient.GetNodes(ctx)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		// Check if it's a cluster
+		isCluster := false
+		clusterNodes, err := tempClient.GetClusterNodes(ctx)
+		if err == nil && len(clusterNodes) > 1 {
+			isCluster = true
+		}
+		
+		response := map[string]interface{}{
+			"status": "success",
+			"message": fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
+			"isCluster": isCluster,
+			"nodeCount": len(nodes),
+		}
+		
+		if isCluster {
+			response["clusterNodeCount"] = len(clusterNodes)
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		// Ensure host has protocol for PBS
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add port if missing
+		if !strings.Contains(host, ":8007") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				host = strings.Replace(host, "https://", "https://", 1)
+				if !strings.Contains(host[8:], ":") {
+					host += ":8007"
+				}
+			}
+		}
+		
+		// PBS test connection
+		clientConfig := pbs.ClientConfig{
+			Host:        host,
+			User:        user,
+			Password:    req.Password,
+			TokenName:   tokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   req.VerifySSL,
+			Fingerprint: req.Fingerprint,
+		}
+		
+		tempClient, err := pbs.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		// Try to get datastores to test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		datastores, err := tempClient.GetDatastores(ctx)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"status": "success",
+			"message": fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
+			"datastoreCount": len(datastores),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
 }
 
 // HandleUpdateNode updates an existing node
@@ -294,7 +617,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Save configuration to disk
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := config.SaveConfig(h.config); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -346,7 +669,7 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Save configuration to disk
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := config.SaveConfig(h.config); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -594,20 +917,20 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 
 // HandleGetSystemSettings returns current system settings
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
+	// Get current values from running config
 	settings := config.SystemSettings{
-		PollingInterval: int(h.config.PollingInterval.Seconds()),
-	}
-	
-	// Try to load saved settings
-	if savedSettings, err := h.persistence.LoadSystemSettings(); err == nil && savedSettings != nil {
-		settings = *savedSettings
+		PollingInterval:   int(h.config.PollingInterval.Seconds()),
+		BackendPort:       h.config.BackendPort,
+		FrontendPort:      h.config.FrontendPort,
+		AllowedOrigins:    h.config.AllowedOrigins,
+		ConnectionTimeout: int(h.config.ConnectionTimeout.Seconds()),
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
 }
 
-// HandleUpdateSystemSettings updates system settings
+// HandleUpdateSystemSettings updates system settings in the unified config
 func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	var settings config.SystemSettings
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
@@ -615,28 +938,75 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 		return
 	}
 	
-	// Save settings
-	if err := h.persistence.SaveSystemSettings(settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
+	// Load unified config
+	configPath := os.Getenv("PULSE_CONFIG")
+	if configPath == "" {
+		configPath = "/etc/pulse/pulse.yml"
+	}
+	
+	manager, err := config.NewConfigManager(configPath)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load config manager")
+		http.Error(w, "Failed to load configuration", http.StatusInternalServerError)
+		return
+	}
+	
+	// Update all settings
+	err = manager.Update(func(cfg *config.UnifiedConfig) {
+		// Update polling interval
+		if settings.PollingInterval > 0 {
+			cfg.Monitoring.PollingInterval = fmt.Sprintf("%ds", settings.PollingInterval)
+		}
+		
+		// Update ports
+		if settings.BackendPort > 0 {
+			cfg.Server.Backend.Port = settings.BackendPort
+		}
+		if settings.FrontendPort > 0 {
+			cfg.Server.Frontend.Port = settings.FrontendPort
+		}
+		
+		// Update security settings
+		if settings.AllowedOrigins != "" {
+			cfg.Security.AllowedOrigins = []string{settings.AllowedOrigins}
+		}
+		
+		// Update connection timeout
+		if settings.ConnectionTimeout > 0 {
+			cfg.Monitoring.ConnectionTimeout = fmt.Sprintf("%ds", settings.ConnectionTimeout)
+		}
+	})
+	
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to save unified config")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
 	}
 	
-	// Apply polling interval to config
-	if settings.PollingInterval > 0 {
-		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
-	}
+	log.Info().
+		Int("pollingInterval", settings.PollingInterval).
+		Int("backendPort", settings.BackendPort).
+		Int("frontendPort", settings.FrontendPort).
+		Msg("Updated system settings in unified config")
 	
 	// Trigger monitor reload to apply new settings
 	if h.reloadFunc != nil {
 		if err := h.reloadFunc(); err != nil {
 			log.Error().Err(err).Msg("Failed to reload monitor after system settings update")
 			// Continue anyway - settings are saved
+		} else {
+			log.Info().
+				Int("pollingInterval", settings.PollingInterval).
+				Msg("Monitor reloaded with new polling interval")
 		}
 	}
 	
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "success",
+		"message": fmt.Sprintf("Polling interval updated to %d seconds", settings.PollingInterval),
+		"pollingInterval": settings.PollingInterval,
+	})
 }
 
 // generateNodeID creates a unique ID for a node

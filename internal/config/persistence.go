@@ -28,7 +28,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		configDir = "/etc/pulse"
 	}
 	
-	return &ConfigPersistence{
+	cp := &ConfigPersistence{
 		configDir:   configDir,
 		alertFile:   filepath.Join(configDir, "alerts.json"),
 		emailFile:   filepath.Join(configDir, "email.json"),
@@ -36,6 +36,14 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		nodesFile:   filepath.Join(configDir, "nodes.json"),
 		systemFile:  filepath.Join(configDir, "system.json"),
 	}
+	
+	log.Debug().
+		Str("configDir", configDir).
+		Str("systemFile", cp.systemFile).
+		Str("nodesFile", cp.nodesFile).
+		Msg("Config persistence initialized")
+	
+	return cp
 }
 
 // EnsureConfigDir ensures the configuration directory exists
@@ -219,7 +227,11 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	PollingInterval int `json:"pollingInterval"`
+	PollingInterval   int    `json:"pollingInterval"`
+	BackendPort       int    `json:"backendPort,omitempty"`
+	FrontendPort      int    `json:"frontendPort,omitempty"`
+	AllowedOrigins    string `json:"allowedOrigins,omitempty"`
+	ConnectionTimeout int    `json:"connectionTimeout,omitempty"`
 }
 
 // SaveNodesConfig saves nodes configuration to file

@@ -3,21 +3,23 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 // Config holds all application configuration
 type Config struct {
 	// Server settings
-	Port       int    `envconfig:"PORT" default:"3000"`
-	Debug      bool   `envconfig:"DEBUG" default:"false"`
-	ConfigPath string `envconfig:"CONFIG_PATH" default:"/config"`
-	DataPath   string `envconfig:"DATA_PATH" default:"/data"`
+	BackendHost   string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
+	BackendPort   int    `envconfig:"BACKEND_PORT" default:"3000"`
+	FrontendHost  string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
+	FrontendPort  int    `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath    string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
+	DataPath      string `envconfig:"DATA_PATH" default:"/data"`
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -26,13 +28,19 @@ type Config struct {
 	PBSInstances []PBSInstance
 
 	// Monitoring settings
-	PollingInterval      time.Duration `default:"5s"` // Controlled by system.json, not env
+	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"` // Loaded from system.json
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"10s"`
 	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
 	BackupPollingCycles  int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
+	WebhookBatchDelay    time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 
-	WebhookBatchDelay time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
+	// Logging settings
+	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
+	LogFile     string `envconfig:"LOG_FILE" default:""`
+	LogMaxSize  int    `envconfig:"LOG_MAX_SIZE" default:"100"` // MB
+	LogMaxAge   int    `envconfig:"LOG_MAX_AGE" default:"30"`   // days
+	LogCompress bool   `envconfig:"LOG_COMPRESS" default:"true"`
 
 	// Security settings
 	APIToken             string `envconfig:"API_TOKEN"`
@@ -41,12 +49,16 @@ type Config struct {
 
 	// Update settings
 	AutoUpdateTime    string `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
+	
+	// Deprecated - for backward compatibility
+	Port  int  `envconfig:"PORT"` // Maps to BackendPort
+	Debug bool `envconfig:"DEBUG" default:"false"`
 }
 
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name              string
-	Host              string
+	Host              string   // Primary endpoint (user-provided)
 	User              string
 	Password          string
 	TokenName         string
@@ -57,6 +69,21 @@ type PVEInstance struct {
 	MonitorContainers bool
 	MonitorStorage    bool
 	MonitorBackups    bool
+	
+	// Cluster support
+	IsCluster       bool              // True if this is a cluster
+	ClusterName     string            // Cluster name if applicable
+	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
+}
+
+// ClusterEndpoint represents a single node in a cluster
+type ClusterEndpoint struct {
+	NodeID   string    // Node ID in cluster
+	NodeName string    // Node name
+	Host     string    // Full URL (e.g., https://node1.lan:8006)
+	IP       string    // IP address
+	Online   bool      // Current online status
+	LastSeen time.Time // Last successful connection
 }
 
 // PBSInstance represents a Proxmox Backup Server connection
@@ -77,63 +104,134 @@ type PBSInstance struct {
 	MonitorGarbageJobs bool
 }
 
-// Load reads configuration from environment variables
+// Global config manager instance for saving
+var globalConfigManager *ConfigManager
+
+// Load reads configuration from the unified config file
 func Load() (*Config, error) {
-	// Try to load .env file
-	envPath := os.Getenv("ENV_FILE")
-	if envPath == "" {
-		envPath = ".env"
+	// Determine config file path
+	configPath := os.Getenv("PULSE_CONFIG")
+	if configPath == "" {
+		configPath = "/etc/pulse/pulse.yml"
 	}
-
-	// Check if we're running in a container
-	if _, err := os.Stat("/config/.env"); err == nil {
-		envPath = "/config/.env"
-	}
-
-	// Load .env file if it exists
-	if _, err := os.Stat(envPath); err == nil {
-		if err := godotenv.Load(envPath); err != nil {
-			return nil, fmt.Errorf("failed to load .env file: %w", err)
-		}
-	}
-
-	// Parse base configuration
-	var cfg Config
-	// Set default polling interval (will be overridden by system.json if present)
-	cfg.PollingInterval = 5 * time.Second
 	
-	if err := envconfig.Process("", &cfg); err != nil {
-		return nil, fmt.Errorf("failed to process env config: %w", err)
+	// Create config manager
+	manager, err := NewConfigManager(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
-
-	// Try to load nodes from persisted config first
-	persistence := NewConfigPersistence(cfg.ConfigPath)
-	if nodesConfig, err := persistence.LoadNodesConfig(); err == nil && nodesConfig != nil {
-		cfg.PVEInstances = nodesConfig.PVEInstances
-		cfg.PBSInstances = nodesConfig.PBSInstances
-	} else {
-		// Fall back to loading from environment variables
-		cfg.PVEInstances = loadPVEInstances()
-		cfg.PBSInstances = loadPBSInstances()
+	
+	// Store global manager for saving
+	globalConfigManager = manager
+	
+	// Get unified config
+	unified := manager.Get()
+	
+	// Convert to legacy format for compatibility
+	cfg, err := unified.ToLegacyConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert config: %w", err)
 	}
-
-	// Load system settings
-	if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-		// Apply system settings to config
-		if systemSettings.PollingInterval > 0 {
-			cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
-			log.Info().Dur("interval", cfg.PollingInterval).Msg("Using polling interval from system settings")
+	
+	// Override with environment variables if present
+	// This allows env vars to override config file for deployments
+	if port := os.Getenv("PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			cfg.BackendPort = p
+			log.Info().Int("port", p).Msg("Overriding backend port from PORT env var")
 		}
-	} else {
-		log.Info().Dur("interval", cfg.PollingInterval).Msg("Using default polling interval")
 	}
-
+	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
+		cfg.APIToken = apiToken
+		log.Info().Msg("Overriding API token from env var")
+	}
+	
+	// Set log level
+	switch cfg.LogLevel {
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "warn":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+	
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
+	
+	return cfg, nil
+}
 
-	return &cfg, nil
+// SaveConfig saves the configuration back to the YAML file
+func SaveConfig(cfg *Config) error {
+	if globalConfigManager == nil {
+		return fmt.Errorf("config manager not initialized")
+	}
+	
+	// Update the unified config with the new data
+	return globalConfigManager.Update(func(uc *UnifiedConfig) {
+		// Convert PVE instances
+		uc.Nodes.PVE = make([]PVENode, 0, len(cfg.PVEInstances))
+		for _, pve := range cfg.PVEInstances {
+			node := PVENode{
+				Name:              pve.Name,
+				Host:              pve.Host,
+				User:              pve.User,
+				Password:          pve.Password,
+				TokenName:         pve.TokenName,
+				TokenValue:        pve.TokenValue,
+				Fingerprint:       pve.Fingerprint,
+				VerifySSL:         pve.VerifySSL,
+				MonitorVMs:        pve.MonitorVMs,
+				MonitorContainers: pve.MonitorContainers,
+				MonitorStorage:    pve.MonitorStorage,
+				MonitorBackups:    pve.MonitorBackups,
+				IsCluster:         pve.IsCluster,
+				ClusterName:       pve.ClusterName,
+			}
+			
+			// Convert cluster endpoints
+			if len(pve.ClusterEndpoints) > 0 {
+				node.ClusterEndpoints = make([]ClusterEndpointConfig, 0, len(pve.ClusterEndpoints))
+				for _, ep := range pve.ClusterEndpoints {
+					node.ClusterEndpoints = append(node.ClusterEndpoints, ClusterEndpointConfig{
+						NodeID:   ep.NodeID,
+						NodeName: ep.NodeName,
+						Host:     ep.Host,
+						IP:       ep.IP,
+					})
+				}
+			}
+			
+			uc.Nodes.PVE = append(uc.Nodes.PVE, node)
+		}
+		
+		// Convert PBS instances
+		uc.Nodes.PBS = make([]PBSNode, 0, len(cfg.PBSInstances))
+		for _, pbs := range cfg.PBSInstances {
+			node := PBSNode{
+				Name:               pbs.Name,
+				Host:               pbs.Host,
+				User:               pbs.User,
+				Password:           pbs.Password,
+				TokenName:          pbs.TokenName,
+				TokenValue:         pbs.TokenValue,
+				Fingerprint:        pbs.Fingerprint,
+				VerifySSL:          pbs.VerifySSL,
+				MonitorBackups:     pbs.MonitorBackups,
+				MonitorDatastores:  pbs.MonitorDatastores,
+				MonitorSyncJobs:    pbs.MonitorSyncJobs,
+				MonitorVerifyJobs:  pbs.MonitorVerifyJobs,
+				MonitorPruneJobs:   pbs.MonitorPruneJobs,
+				MonitorGarbageJobs: pbs.MonitorGarbageJobs,
+			}
+			uc.Nodes.PBS = append(uc.Nodes.PBS, node)
+		}
+	})
 }
 
 // loadPVEInstances loads all PVE instances from environment variables
@@ -289,6 +387,22 @@ func loadPBSInstances() []PBSInstance {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
+	// Validate server settings
+	if c.BackendPort <= 0 || c.BackendPort > 65535 {
+		return fmt.Errorf("invalid backend port: %d", c.BackendPort)
+	}
+	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
+		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
+	}
+	
+	// Validate monitoring settings
+	if c.PollingInterval < time.Second {
+		return fmt.Errorf("polling interval must be at least 1 second")
+	}
+	if c.ConnectionTimeout < time.Second {
+		return fmt.Errorf("connection timeout must be at least 1 second")
+	}
+	
 	// Validate PVE instances
 	for i, pve := range c.PVEInstances {
 		if pve.Host == "" {
@@ -316,8 +430,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("PBS instance %d: either password or token authentication is required", i+1)
 		}
 	}
-
-
 
 	return nil
 }

@@ -25,6 +25,10 @@ const Settings: Component = () => {
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
+  const [backendPort, setBackendPort] = createSignal(3000);
+  const [frontendPort, setFrontendPort] = createSignal(7655);
+  const [allowedOrigins, setAllowedOrigins] = createSignal('*');
+  const [connectionTimeout, setConnectionTimeout] = createSignal(10);
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -65,9 +69,20 @@ const Settings: Component = () => {
       
       // Load system settings
       try {
-        const response = await SettingsAPI.getSettings();
-        const settings = response.current;
-        setPollingInterval((settings.monitoring.pollingInterval || 5000) / 1000);
+        const systemResponse = await fetch('/api/config/system');
+        if (systemResponse.ok) {
+          const systemSettings = await systemResponse.json();
+          setPollingInterval(systemSettings.pollingInterval || 5);
+          setBackendPort(systemSettings.backendPort || 3000);
+          setFrontendPort(systemSettings.frontendPort || 7655);
+          setAllowedOrigins(systemSettings.allowedOrigins || '*');
+          setConnectionTimeout(systemSettings.connectionTimeout || 10);
+        } else {
+          // Fallback to old endpoint
+          const response = await SettingsAPI.getSettings();
+          const settings = response.current;
+          setPollingInterval((settings.monitoring.pollingInterval || 5000) / 1000);
+        }
       } catch (error) {
         console.error('Failed to load settings:', error);
       }
@@ -81,12 +96,21 @@ const Settings: Component = () => {
       if (activeTab() === 'system') {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
-          pollingInterval: pollingInterval()
+          pollingInterval: pollingInterval(),
+          backendPort: backendPort(),
+          frontendPort: frontendPort(),
+          allowedOrigins: allowedOrigins(),
+          connectionTimeout: connectionTimeout()
         });
       }
       
-      showSuccess('Settings saved successfully');
+      showSuccess('Settings saved successfully. Service restart may be required for port changes.');
       setHasUnsavedChanges(false);
+      
+      // Reload the page after a short delay to ensure the new settings are applied
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Failed to save settings');
     }
@@ -112,8 +136,8 @@ const Settings: Component = () => {
       }
       
       const result = await NodesAPI.testConnection(node);
-      if (result.success && result.details) {
-        showSuccess(`Connection successful`);
+      if (result.status === 'success') {
+        showSuccess(result.message || 'Connection successful');
       } else {
         throw new Error(result.message || 'Connection failed');
       }
@@ -218,8 +242,20 @@ const Settings: Component = () => {
                       <div class="flex items-start justify-between">
                         <div class="flex items-start gap-3">
                           <div class={`w-3 h-3 rounded-full mt-1.5 ${
-                            node.status === 'connected' ? 'bg-green-500' : 
-                            node.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                            (() => {
+                              // Find the corresponding node in the WebSocket state
+                              const stateNode = state.nodes.find(n => n.instance === node.name);
+                              // Check if the node has an error status or is offline
+                              if (stateNode?.connectionHealth === 'error' || stateNode?.status === 'offline') {
+                                return 'bg-red-500';
+                              }
+                              // Check if we have a healthy connection
+                              if (stateNode && stateNode.status === 'online') {
+                                return 'bg-green-500';
+                              }
+                              // Default to gray if no state data
+                              return 'bg-gray-400';
+                            })()
                           }`}></div>
                           <div>
                             <h4 class="font-medium text-gray-900 dark:text-gray-100">{node.name}</h4>
@@ -233,6 +269,23 @@ const Settings: Component = () => {
                               {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Storage</span>}
                               {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Backups</span>}
                             </div>
+                            <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
+                              <div class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                <div class="font-medium mb-1">Cluster: {'clusterName' in node ? node.clusterName : 'Unknown'}</div>
+                                <div class="flex flex-wrap gap-1">
+                                  <For each={'clusterEndpoints' in node ? node.clusterEndpoints : []}>
+                                    {(endpoint) => (
+                                      <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
+                                        {endpoint.NodeName} ({endpoint.IP})
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-500 italic">
+                                  Pulse will automatically failover between cluster nodes
+                                </p>
+                              </div>
+                            </Show>
                           </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -309,8 +362,20 @@ const Settings: Component = () => {
                       <div class="flex items-start justify-between">
                         <div class="flex items-start gap-3">
                           <div class={`w-3 h-3 rounded-full mt-1.5 ${
-                            node.status === 'connected' ? 'bg-green-500' : 
-                            node.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                            (() => {
+                              // Find the corresponding PBS instance in the WebSocket state
+                              const statePBS = state.pbs.find(p => p.name === node.name);
+                              // Check if the PBS has an error status or is offline
+                              if (statePBS?.connectionHealth === 'error' || statePBS?.status === 'offline') {
+                                return 'bg-red-500';
+                              }
+                              // Check if we have a healthy connection
+                              if (statePBS && statePBS.status === 'online') {
+                                return 'bg-green-500';
+                              }
+                              // Default to gray if no state data
+                              return 'bg-gray-400';
+                            })()
                           }`}></div>
                           <div>
                             <h4 class="font-medium text-gray-900 dark:text-gray-100">{node.name}</h4>
@@ -380,7 +445,7 @@ const Settings: Component = () => {
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">System Configuration</h3>
                 
                 <div class="space-y-4">
-                  {/* Polling Settings */}
+                  {/* Performance Settings */}
                   <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -413,6 +478,93 @@ const Settings: Component = () => {
                         </select>
                       </div>
                       
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Connection Timeout</label>
+                          <p class="text-xs text-gray-600 dark:text-gray-400">
+                            Max wait time for node responses
+                          </p>
+                        </div>
+                        <select
+                          value={connectionTimeout()}
+                          onChange={(e) => {
+                            setConnectionTimeout(parseInt(e.currentTarget.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                          class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                        >
+                          <option value="5">5 seconds</option>
+                          <option value="10">10 seconds</option>
+                          <option value="20">20 seconds</option>
+                          <option value="30">30 seconds</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Network Settings */}
+                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
+                      </svg>
+                      Network Settings
+                    </h4>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Backend Port</label>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">API server port</p>
+                        <input
+                          type="number"
+                          value={backendPort()}
+                          onChange={(e) => {
+                            setBackendPort(parseInt(e.currentTarget.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                          min="1"
+                          max="65535"
+                          class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Frontend Port</label>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Web UI port</p>
+                        <input
+                          type="number"
+                          value={frontendPort()}
+                          onChange={(e) => {
+                            setFrontendPort(parseInt(e.currentTarget.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                          min="1"
+                          max="65535"
+                          class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                      <label class="text-sm font-medium text-gray-900 dark:text-gray-100">CORS Allowed Origins</label>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all)</p>
+                      <input
+                        type="text"
+                        value={allowedOrigins()}
+                        onChange={(e) => {
+                          setAllowedOrigins(e.currentTarget.value);
+                          setHasUnsavedChanges(true);
+                        }}
+                        placeholder="* or https://example.com"
+                        class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                      />
+                    </div>
+                    
+                    <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p class="text-xs text-amber-800 dark:text-amber-200">
+                        <strong>Note:</strong> Port changes require a service restart
+                      </p>
                     </div>
                   </div>
                   

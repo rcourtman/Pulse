@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,40 +45,11 @@ func runServer() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Load new configuration system
-	loader := config.NewConfigLoader()
-	settings, err := loader.LoadConfig()
+	// Load unified configuration
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
-
-	// Set log level based on new settings
-	switch settings.Logging.Level {
-	case "debug":
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case "warn":
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case "error":
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	}
-
-	// Log effective configuration
-	log.Info().
-		Int("backend_port", settings.Server.Backend.Port).
-		Int("frontend_port", settings.Server.Frontend.Port).
-		Str("log_level", settings.Logging.Level).
-		Msg("Using configuration")
-
-	// Load legacy configuration for PVE/PBS instances
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load legacy configuration")
-	}
-
-	// Override polling interval from new settings
-	cfg.PollingInterval = time.Duration(settings.Monitoring.PollingInterval) * time.Millisecond
 
 	log.Info().Msg("Starting Pulse monitoring server")
 
@@ -87,9 +59,9 @@ func runServer() {
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
-	// Set allowed origins from security settings
-	if len(settings.Security.AllowedOrigins) > 0 {
-		wsHub.SetAllowedOrigins(settings.Security.AllowedOrigins)
+	// Set allowed origins from configuration
+	if cfg.AllowedOrigins != "" && cfg.AllowedOrigins != "*" {
+		wsHub.SetAllowedOrigins(strings.Split(cfg.AllowedOrigins, ","))
 	}
 	go wsHub.Run()
 
@@ -113,9 +85,9 @@ func runServer() {
 	}
 	router := api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
 
-	// Create HTTP server with new configuration
+	// Create HTTP server with unified configuration
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", settings.Server.Backend.Host, settings.Server.Backend.Port),
+		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.BackendPort),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -125,8 +97,8 @@ func runServer() {
 	// Start server
 	go func() {
 		log.Info().
-			Str("host", settings.Server.Backend.Host).
-			Int("port", settings.Server.Backend.Port).
+			Str("host", cfg.BackendHost).
+			Int("port", cfg.BackendPort).
 			Msg("Server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Failed to start server")

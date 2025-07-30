@@ -6,10 +6,14 @@ import type {
 // System settings type matching Go backend
 export interface SystemSettingsUpdate {
   pollingInterval: number; // in seconds
+  backendPort?: number;
+  frontendPort?: number;
+  allowedOrigins?: string;
+  connectionTimeout?: number; // in seconds
 }
 
 // Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success?: boolean;
   status?: string;
   message?: string;

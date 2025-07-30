@@ -9,7 +9,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold, AlertThresholds } from '@/types/alerts';
-import type { Alert } from '@/types/api';
+import type { Alert, State } from '@/types/api';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
 
@@ -326,7 +326,7 @@ export function Alerts() {
                         });
                         acc[o.id] = hysteresisThresholds;
                         return acc;
-                      }, {} as Record<string, any>),
+                      }, {} as Record<string, AlertThresholds>),
                       schedule: scheduleRef.getScheduleConfig ? scheduleRef.getScheduleConfig() : {
                         quietHours: {
                           enabled: false,
@@ -962,7 +962,7 @@ function OverrideItem(props: {
 // Thresholds Tab - Improved design  
 interface ThresholdsTabProps {
   allGuests: () => Array<{ id: string; name: string; vmid: number; type: string; node: string; instance: string }>;
-  state: any; // State from websocket
+  state: State;
   guestDefaults: Record<string, number>;
   nodeDefaults: Record<string, number>;
   storageDefault: () => number;

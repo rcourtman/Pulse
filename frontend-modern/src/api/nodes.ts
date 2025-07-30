@@ -1,7 +1,7 @@
-import type { NodeConfig } from '@/types/nodes';
+import { NodeConfig } from '../types/nodes';
 
 export class NodesAPI {
-  private static baseUrl = '/api/config/nodes';
+  private static readonly baseUrl = '/api/config/nodes';
 
   static async getNodes(): Promise<NodeConfig[]> {
     const response = await fetch(this.baseUrl);
@@ -19,7 +19,7 @@ export class NodesAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ node }),
+      body: JSON.stringify(node),
     });
     
     if (!response.ok) {
@@ -36,7 +36,7 @@ export class NodesAPI {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ node }),
+      body: JSON.stringify(node),
     });
     
     if (!response.ok) {
@@ -61,46 +61,26 @@ export class NodesAPI {
   }
 
   static async testConnection(node: NodeConfig): Promise<{ 
-    success: boolean; 
-    message?: string;
-    details?: {
-      version?: string;
-      nodes?: string[];
-      datastores?: string[];
-      latency?: number;
-    };
+    status: string;
+    message?: string; 
+    isCluster?: boolean;
+    nodeCount?: number;
+    clusterNodeCount?: number;
+    datastoreCount?: number;
   }> {
-    // For new nodes (no ID), use the test-config endpoint
-    // For existing nodes (with ID), use the node-specific test endpoint
-    const endpoint = node.id ? `${this.baseUrl}/${node.id}/test` : `${this.baseUrl}/test-config`;
-    const body = node.id ? {} : node; // Send full config for new nodes
-    
-    const response = await fetch(endpoint, {
+    const response = await fetch(`${this.baseUrl}/test-connection`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(node),
     });
     
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Connection test failed: ${error}`);
+      throw new Error(error);
     }
     
-    const result = await response.json();
-    
-    // Convert backend response format to expected format
-    if (result.status === 'success') {
-      return {
-        success: true,
-        message: result.message,
-        details: {
-          latency: result.latency
-        }
-      };
-    } else {
-      throw new Error(result.message || 'Connection failed');
-    }
+    return response.json();
   }
 }

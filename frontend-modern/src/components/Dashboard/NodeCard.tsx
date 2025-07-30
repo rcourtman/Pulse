@@ -20,7 +20,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     );
   }
   
-  const isOnline = () => props.node.status === 'online' && props.node.uptime > 0;
+  const isOnline = () => props.node.status === 'online' && props.node.uptime > 0 && props.node.connectionHealth !== 'error';
   const cpuPercent = () => Math.round(props.node.cpu * 100);
   const memPercent = () => {
     if (!props.node.memory) return 0;

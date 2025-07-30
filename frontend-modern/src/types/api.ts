@@ -308,7 +308,7 @@ export interface Alert {
   acknowledged: boolean;
   ackTime?: string;
   ackUser?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ResolvedAlert extends Alert {
@@ -320,9 +320,9 @@ export type WSMessage =
   | { type: 'initialState'; data: State }
   | { type: 'rawData'; data: State }
   | { type: 'error'; error: string }
-  | { type: 'ping'; data?: any }
-  | { type: 'pong'; data?: any }
-  | { type: 'welcome'; data?: any }
+  | { type: 'ping'; data?: unknown }
+  | { type: 'pong'; data?: unknown }
+  | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
   | { type: 'alertResolved'; data: { alertId: string } };
 

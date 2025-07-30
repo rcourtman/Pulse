@@ -6,7 +6,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,7 +23,7 @@ type PollResult struct {
 type PollTask struct {
 	InstanceName string
 	InstanceType string // "pve" or "pbs"
-	PVEClient    *proxmox.Client
+	PVEClient    PVEClientInterface
 	PBSClient    *pbs.Client
 }
 

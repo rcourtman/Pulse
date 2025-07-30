@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -152,4 +153,37 @@ func IsRetryableError(err error) bool {
 	
 	// Check for wrapped standard errors
 	return errors.Is(err, ErrTimeout) || errors.Is(err, ErrConnectionFailed)
+}
+
+// IsAuthError checks if an error is an authentication error
+func IsAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	var monErr *MonitorError
+	if errors.As(err, &monErr) {
+		// Check type
+		if monErr.Type == ErrorTypeAuth {
+			return true
+		}
+		// Check status code for 401/403
+		if monErr.StatusCode == 401 || monErr.StatusCode == 403 {
+			return true
+		}
+	}
+	
+	// Check for wrapped standard errors
+	if errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden) {
+		return true
+	}
+	
+	// Check error message for authentication indicators
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "authentication error") || 
+		strings.Contains(errMsg, "authentication failed") ||
+		strings.Contains(errMsg, "401") || 
+		strings.Contains(errMsg, "403") ||
+		strings.Contains(errMsg, "unauthorized") ||
+		strings.Contains(errMsg, "forbidden")
 }

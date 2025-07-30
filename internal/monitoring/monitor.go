@@ -22,11 +22,25 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// PVEClientInterface defines the interface for PVE clients (both regular and cluster)
+type PVEClientInterface interface {
+	GetNodes(ctx context.Context) ([]proxmox.Node, error)
+	GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error)
+	GetVMs(ctx context.Context, node string) ([]proxmox.VM, error)
+	GetContainers(ctx context.Context, node string) ([]proxmox.Container, error)
+	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
+	GetAllStorage(ctx context.Context) ([]proxmox.Storage, error)
+	GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)
+	GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error)
+	GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
+	GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
+}
+
 // Monitor handles all monitoring operations
 type Monitor struct {
 	config         *config.Config
 	state          *models.State
-	pveClients     map[string]*proxmox.Client
+	pveClients     map[string]PVEClientInterface
 	pbsClients     map[string]*pbs.Client
 	mu             sync.RWMutex
 	startTime      time.Time
@@ -37,6 +51,8 @@ type Monitor struct {
 	configPersist  *config.ConfigPersistence
 	activePollCount int32 // Number of active polling operations
 	pollCounter    int64 // Counter for polling cycles
+	authFailures   map[string]int // Track consecutive auth failures per node
+	lastAuthAttempt map[string]time.Time // Track last auth attempt time
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -96,7 +112,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m := &Monitor{
 		config:         cfg,
 		state:          models.NewState(),
-		pveClients:     make(map[string]*proxmox.Client),
+		pveClients:     make(map[string]PVEClientInterface),
 		pbsClients:     make(map[string]*pbs.Client),
 		startTime:      time.Now(),
 		rateTracker:    NewRateTracker(),
@@ -104,6 +120,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		alertManager:   alerts.NewManager(),
 		notificationMgr: notifications.NewNotificationManager(),
 		configPersist:  config.NewConfigPersistence(""),
+		authFailures:   make(map[string]int),
+		lastAuthAttempt: make(map[string]time.Time),
 	}
 	
 	// Load saved configurations
@@ -150,23 +168,71 @@ func New(cfg *config.Config) (*Monitor, error) {
 			Bool("hasToken", pve.TokenName != "").
 			Msg("Configuring PVE instance")
 		
-		client, err := proxmox.NewClient(proxmox.ClientConfig{
-			Host:        pve.Host,
-			User:        pve.User,
-			Password:    pve.Password,
-			TokenName:   pve.TokenName,
-			TokenValue:  pve.TokenValue,
-			Fingerprint: pve.Fingerprint,
-			VerifySSL:   pve.VerifySSL,
-			Timeout:     cfg.ConnectionTimeout,
-		})
-		if err != nil {
-			monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
-			log.Error().Err(monErr).Str("instance", pve.Name).Msg("Failed to create PVE client")
-			continue
+		// Check if this is a cluster
+		if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
+			// Create cluster client
+			endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+			for _, ep := range pve.ClusterEndpoints {
+				// Use IP if available, otherwise use host
+				host := ep.IP
+				if host == "" {
+					host = ep.Host
+				}
+				// Ensure we have the full URL
+				if !strings.HasPrefix(host, "http") {
+					if pve.VerifySSL {
+						host = fmt.Sprintf("https://%s:8006", host)
+					} else {
+						host = fmt.Sprintf("https://%s:8006", host)
+					}
+				}
+				endpoints = append(endpoints, host)
+			}
+			
+			log.Info().
+				Str("cluster", pve.ClusterName).
+				Strs("endpoints", endpoints).
+				Msg("Creating cluster-aware client")
+			
+			clusterClient := proxmox.NewClusterClient(
+				pve.Name,
+				proxmox.ClientConfig{
+					User:        pve.User,
+					Password:    pve.Password,
+					TokenName:   pve.TokenName,
+					TokenValue:  pve.TokenValue,
+					Fingerprint: pve.Fingerprint,
+					VerifySSL:   pve.VerifySSL,
+					Timeout:     cfg.ConnectionTimeout,
+				},
+				endpoints,
+			)
+			m.pveClients[pve.Name] = clusterClient
+			log.Info().
+				Str("instance", pve.Name).
+				Str("cluster", pve.ClusterName).
+				Int("endpoints", len(endpoints)).
+				Msg("Cluster client created successfully")
+		} else {
+			// Create regular client
+			client, err := proxmox.NewClient(proxmox.ClientConfig{
+				Host:        pve.Host,
+				User:        pve.User,
+				Password:    pve.Password,
+				TokenName:   pve.TokenName,
+				TokenValue:  pve.TokenValue,
+				Fingerprint: pve.Fingerprint,
+				VerifySSL:   pve.VerifySSL,
+				Timeout:     cfg.ConnectionTimeout,
+			})
+			if err != nil {
+				monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
+				log.Error().Err(monErr).Str("instance", pve.Name).Msg("Failed to create PVE client")
+				continue
+			}
+			m.pveClients[pve.Name] = client
+			log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
 		}
-		m.pveClients[pve.Name] = client
-		log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
 	}
 
 	// Initialize PBS clients
@@ -379,7 +445,7 @@ func (m *Monitor) pollConcurrent(ctx context.Context) {
 		}
 		
 		wg.Add(1)
-		go func(instanceName string, c *proxmox.Client) {
+		go func(instanceName string, c PVEClientInterface) {
 			defer wg.Done()
 			// Pass context to ensure cancellation propagates
 			m.pollPVEInstance(ctx, instanceName, c)
@@ -447,7 +513,7 @@ func (m *Monitor) pollSequential(ctx context.Context) {
 }
 
 // pollPVEInstance polls a single PVE instance
-func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, client PVEClientInterface) {
 	// Check if context is cancelled
 	select {
 	case <-ctx.Done():
@@ -476,9 +542,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
 		m.state.SetConnectionHealth(instanceName, false)
+		
+		// Track auth failure if it's an authentication error
+		if errors.IsAuthError(err) {
+			m.recordAuthFailure(instanceName, "pve")
+		}
 		return
 	}
 
+	// Reset auth failures on successful connection
+	m.resetAuthFailures(instanceName, "pve")
 	m.state.SetConnectionHealth(instanceName, true)
 
 	// Convert to models
@@ -708,7 +781,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 }
 
 // pollVMs polls VMs from a PVE instance
-func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling VMs")
 
 	// Get all nodes first
@@ -804,7 +877,7 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client *prox
 }
 
 // pollContainers polls containers from a PVE instance
-func (m *Monitor) pollContainers(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollContainers(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling containers")
 
 	// Get all nodes first
@@ -902,7 +975,7 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 }
 
 // pollStorage polls storage from a PVE instance
-func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling storage")
 
 	// Get all nodes first
@@ -1029,7 +1102,7 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client *
 }
 
 // pollBackupTasks polls backup tasks from a PVE instance
-func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling backup tasks")
 
 	tasks, err := client.GetBackupTasks(ctx)
@@ -1101,9 +1174,16 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		monErr := errors.WrapConnectionError("get_pbs_version", instanceName, err)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get PBS version")
 		m.state.SetConnectionHealth("pbs-"+instanceName, false)
+		
+		// Track auth failure if it's an authentication error
+		if errors.IsAuthError(err) {
+			m.recordAuthFailure(instanceName, "pbs")
+		}
 		return
 	}
 
+	// Reset auth failures on successful connection
+	m.resetAuthFailures(instanceName, "pbs")
 	m.state.SetConnectionHealth("pbs-"+instanceName, true)
 
 	pbsInst := models.PBSInstance{
@@ -1236,7 +1316,7 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 }
 
 // pollStorageBackups polls backup files from storage
-func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling storage backups")
 	
 	// Get all nodes
@@ -1356,7 +1436,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 }
 
 // pollGuestSnapshots polls snapshots for all VMs and containers
-func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client *proxmox.Client) {
+func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
 	
 	// Create a separate context with a longer timeout for snapshot queries
@@ -1468,6 +1548,118 @@ func (m *Monitor) Stop() {
 	}
 	
 	log.Info().Msg("Monitor stopped")
+}
+
+// recordAuthFailure records an authentication failure for a node
+func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	nodeID := instanceName
+	if nodeType != "" {
+		nodeID = nodeType + "-" + instanceName
+	}
+	
+	// Increment failure count
+	m.authFailures[nodeID]++
+	m.lastAuthAttempt[nodeID] = time.Now()
+	
+	log.Warn().
+		Str("node", nodeID).
+		Int("failures", m.authFailures[nodeID]).
+		Msg("Authentication failure recorded")
+	
+	// If we've exceeded the threshold, remove the node
+	const maxAuthFailures = 5
+	if m.authFailures[nodeID] >= maxAuthFailures {
+		log.Error().
+			Str("node", nodeID).
+			Int("failures", m.authFailures[nodeID]).
+			Msg("Maximum authentication failures reached, removing node from state")
+		
+		// Remove from state based on type
+		if nodeType == "pve" {
+			m.removeFailedPVENode(instanceName)
+		} else if nodeType == "pbs" {
+			m.removeFailedPBSNode(instanceName)
+		}
+		
+		// Reset the counter since we've removed the node
+		delete(m.authFailures, nodeID)
+		delete(m.lastAuthAttempt, nodeID)
+	}
+}
+
+// resetAuthFailures resets the failure count for a node after successful auth
+func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	nodeID := instanceName
+	if nodeType != "" {
+		nodeID = nodeType + "-" + instanceName
+	}
+	
+	if count, exists := m.authFailures[nodeID]; exists && count > 0 {
+		log.Info().
+			Str("node", nodeID).
+			Int("previousFailures", count).
+			Msg("Authentication succeeded, resetting failure count")
+		
+		delete(m.authFailures, nodeID)
+		delete(m.lastAuthAttempt, nodeID)
+	}
+}
+
+// removeFailedPVENode updates a PVE node to show failed authentication status
+func (m *Monitor) removeFailedPVENode(instanceName string) {
+	// Create a failed node entry to show in UI with error status
+	failedNode := models.Node{
+		ID:               instanceName + "-failed",
+		Name:             instanceName,
+		Instance:         instanceName,
+		Status:           "offline",
+		Type:             "node",
+		ConnectionHealth: "error",
+		LastSeen:         time.Now(),
+		// Set other fields to zero values to indicate no data
+		CPU: 0,
+		Memory: models.Memory{},
+		Disk: models.Disk{},
+	}
+	
+	// Update with just the failed node
+	m.state.UpdateNodesForInstance(instanceName, []models.Node{failedNode})
+	
+	// Remove all other resources associated with this instance
+	m.state.UpdateVMsForInstance(instanceName, []models.VM{})
+	m.state.UpdateContainersForInstance(instanceName, []models.Container{})
+	m.state.UpdateStorageForInstance(instanceName, []models.Storage{})
+	m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
+	m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
+	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
+	
+	// Set connection health to false
+	m.state.SetConnectionHealth(instanceName, false)
+}
+
+// removeFailedPBSNode removes a PBS node and all its resources from state
+func (m *Monitor) removeFailedPBSNode(instanceName string) {
+	// Remove PBS instance by passing empty array
+	currentInstances := m.state.PBSInstances
+	var updatedInstances []models.PBSInstance
+	for _, inst := range currentInstances {
+		if inst.Name != instanceName {
+			updatedInstances = append(updatedInstances, inst)
+		}
+	}
+	m.state.UpdatePBSInstances(updatedInstances)
+	
+	// Remove PBS backups
+	m.state.UpdatePBSBackups(instanceName, []models.PBSBackup{})
+	
+	// Set connection health to false
+	m.state.SetConnectionHealth("pbs-"+instanceName, false)
 }
 
 

@@ -1,5 +1,14 @@
 // Node configuration types
 
+export interface ClusterEndpoint {
+  NodeID: string;
+  NodeName: string;
+  Host: string;
+  IP: string;
+  Online: boolean;
+  LastSeen: string;
+}
+
 export interface PVENodeConfig {
   id: string;
   name: string;
@@ -13,6 +22,10 @@ export interface PVENodeConfig {
   monitorContainers: boolean;
   monitorStorage: boolean;
   monitorBackups: boolean;
+  // Cluster information
+  isCluster?: boolean;
+  clusterName?: string;
+  clusterEndpoints?: ClusterEndpoint[];
 }
 
 export interface PBSNodeConfig {
