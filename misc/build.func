@@ -250,6 +250,17 @@ write_config() {
   if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Write configfile" --yesno "Do you want to write the selections to a config file?" 10 60; then
     FILEPATH="/opt/community-scripts/${NSAPP}.conf"
     [[ "$GATE" =~ ",gw=" ]] && local GATE="${GATE##,gw=}"
+
+    # Strip prefixes from parameters for config file storage
+    local SD_VALUE="${SD}"
+    local NS_VALUE="${NS}"
+    local MAC_VALUE="${MAC}"
+    local VLAN_VALUE="${VLAN}"
+    [[ "$SD" =~ ^-searchdomain= ]] && SD_VALUE="${SD#-searchdomain=}"
+    [[ "$NS" =~ ^-nameserver= ]] && NS_VALUE="${NS#-nameserver=}"
+    [[ "$MAC" =~ ^,hwaddr= ]] && MAC_VALUE="${MAC#,hwaddr=}"
+    [[ "$VLAN" =~ ^,tag= ]] && VLAN_VALUE="${VLAN#,tag=}"
+
     if [[ ! -f $FILEPATH ]]; then
       cat <<EOF >"$FILEPATH"
 # ${NSAPP} Configuration File
@@ -272,10 +283,10 @@ IPV6_METHOD="${IPV6_METHOD:-none}"
 GATE="${GATE:-none}"
 APT_CACHER_IP="${APT_CACHER_IP:-none}"
 MTU="${MTU:-1500}"
-SD="${SD:-none}"
-NS="${NS:-none}"
-MAC="${MAC:-none}"
-VLAN="${VLAN:-none}"
+SD="${SD_VALUE:-none}"
+NS="${NS_VALUE:-none}"
+MAC="${MAC_VALUE:-none}"
+VLAN="${VLAN_VALUE:-none}"
 SSH="${SSH}"
 SSH_AUTHORIZED_KEY="${SSH_AUTHORIZED_KEY}"
 TAGS="${TAGS:-none}"
@@ -310,10 +321,10 @@ IPV6_METHOD="${IPV6_METHOD:-none}"
 GATE="${GATE:-none}"
 APT_CACHER_IP="${APT_CACHER_IP:-none}"
 MTU="${MTU:-1500}"
-SD="${SD:-none}"
-NS="${NS:-none}"
-MAC="${MAC:-none}"
-VLAN="${VLAN:-none}"
+SD="${SD_VALUE:-none}"
+NS="${NS_VALUE:-none}"
+MAC="${MAC_VALUE:-none}"
+VLAN="${VLAN_VALUE:-none}"
 SSH="${SSH}"
 SSH_AUTHORIZED_KEY="${SSH_AUTHORIZED_KEY}"
 TAGS="${TAGS:-none}"
@@ -807,7 +818,36 @@ advanced_settings() {
 
   if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "ADVANCED SETTINGS COMPLETE" --yesno "Ready to create ${APP} LXC?" 10 58); then
     echo -e "${CREATING}${BOLD}${RD}Creating a ${APP} LXC using the above advanced settings${CL}"
+
+    # Strip prefixes from DNS parameters for config file storage
+    local SD_VALUE="$SD"
+    local NS_VALUE="$NS"
+    local MAC_VALUE="$MAC"
+    local VLAN_VALUE="$VLAN"
+    [[ "$SD" =~ ^-searchdomain= ]] && SD_VALUE="${SD#-searchdomain=}"
+    [[ "$NS" =~ ^-nameserver= ]] && NS_VALUE="${NS#-nameserver=}"
+    [[ "$MAC" =~ ^,hwaddr= ]] && MAC_VALUE="${MAC#,hwaddr=}"
+    [[ "$VLAN" =~ ^,tag= ]] && VLAN_VALUE="${VLAN#,tag=}"
+
+    # Temporarily store original values
+    local SD_ORIG="$SD"
+    local NS_ORIG="$NS"
+    local MAC_ORIG="$MAC"
+    local VLAN_ORIG="$VLAN"
+
+    # Set clean values for config file writing
+    SD="$SD_VALUE"
+    NS="$NS_VALUE"
+    MAC="$MAC_VALUE"
+    VLAN="$VLAN_VALUE"
+
     write_config
+
+    # Restore original formatted values for container creation
+    SD="$SD_ORIG"
+    NS="$NS_ORIG"
+    MAC="$MAC_ORIG"
+    VLAN="$VLAN_ORIG"
   else
     clear
     header_info

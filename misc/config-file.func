@@ -469,8 +469,11 @@ config_file() {
       SD=""
       echo -e "${SEARCH}${BOLD}${DGN}DNS Search Domain: ${BGN}Host${CL}"
     else
-      echo -e "${SEARCH}${BOLD}${DGN}DNS Search Domain: ${BGN}$SD${CL}"
-      SD="-searchdomain=$SD"
+      # Strip prefix if present for config file storage
+      local SD_VALUE="$SD"
+      [[ "$SD" =~ ^-searchdomain= ]] && SD_VALUE="${SD#-searchdomain=}"
+      echo -e "${SEARCH}${BOLD}${DGN}DNS Search Domain: ${BGN}$SD_VALUE${CL}"
+      SD="-searchdomain=$SD_VALUE"
     fi
   else
     if SD=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set a DNS Search Domain (leave blank for HOST)" 8 58 --title "DNS Search Domain" 3>&1 1>&2 2>&3); then
@@ -492,11 +495,14 @@ config_file() {
       NS=""
       echo -e "${NETWORK}${BOLD}${DGN}DNS Server IP Address: ${BGN}Host${CL}"
     else
-      if [[ "$NS" =~ $ip_regex ]]; then
-        echo -e "${NETWORK}${BOLD}${DGN}DNS Server IP Address: ${BGN}$NS${CL}"
-        NS="-nameserver=$NS"
+      # Strip prefix if present for config file storage
+      local NS_VALUE="$NS"
+      [[ "$NS" =~ ^-nameserver= ]] && NS_VALUE="${NS#-nameserver=}"
+      if [[ "$NS_VALUE" =~ $ip_regex ]]; then
+        echo -e "${NETWORK}${BOLD}${DGN}DNS Server IP Address: ${BGN}$NS_VALUE${CL}"
+        NS="-nameserver=$NS_VALUE"
       else
-        msg_error "Invalid IP Address format for DNS Server. Needs to be 0.0.0.0, was ${NS}"
+        msg_error "Invalid IP Address format for DNS Server. Needs to be 0.0.0.0, was ${NS_VALUE}"
         exit
       fi
     fi
@@ -519,11 +525,14 @@ config_file() {
       MAC=""
       echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}Host${CL}"
     else
-      if [[ "$MAC" =~ ^([A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2}$ ]]; then
-        echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}$MAC${CL}"
-        MAC=",hwaddr=$MAC"
+      # Strip prefix if present for config file storage
+      local MAC_VALUE="$MAC"
+      [[ "$MAC" =~ ^,hwaddr= ]] && MAC_VALUE="${MAC#,hwaddr=}"
+      if [[ "$MAC_VALUE" =~ ^([A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2}$ ]]; then
+        echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}$MAC_VALUE${CL}"
+        MAC=",hwaddr=$MAC_VALUE"
       else
-        msg_error "MAC Address must be in the format xx:xx:xx:xx:xx:xx, was ${MAC}"
+        msg_error "MAC Address must be in the format xx:xx:xx:xx:xx:xx, was ${MAC_VALUE}"
         exit
       fi
     fi
@@ -546,11 +555,14 @@ config_file() {
       VLAN=""
       echo -e "${VLANTAG}${BOLD}${DGN}Vlan: ${BGN}Host${CL}"
     else
-      if [[ "$VLAN" =~ ^-?[0-9]+$ ]]; then
-        echo -e "${VLANTAG}${BOLD}${DGN}Vlan: ${BGN}$VLAN${CL}"
-        VLAN=",tag=$VLAN"
+      # Strip prefix if present for config file storage
+      local VLAN_VALUE="$VLAN"
+      [[ "$VLAN" =~ ^,tag= ]] && VLAN_VALUE="${VLAN#,tag=}"
+      if [[ "$VLAN_VALUE" =~ ^-?[0-9]+$ ]]; then
+        echo -e "${VLANTAG}${BOLD}${DGN}Vlan: ${BGN}$VLAN_VALUE${CL}"
+        VLAN=",tag=$VLAN_VALUE"
       else
-        msg_error "VLAN must be an integer, was ${VLAN}"
+        msg_error "VLAN must be an integer, was ${VLAN_VALUE}"
         exit
       fi
     fi
