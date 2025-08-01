@@ -53,7 +53,6 @@ cd assets/
 $STD yarn install
 $STD yarn build
 chown -R www-data:www-data /opt/koillection/public/uploads
-echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Configured Koillection"
 
 msg_info "Creating Service"
