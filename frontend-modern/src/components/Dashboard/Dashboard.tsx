@@ -20,7 +20,7 @@ type StatusMode = 'all' | 'running' | 'stopped';
 
 
 export function Dashboard(props: DashboardProps) {
-  const { connected, activeAlerts } = useWebSocket();
+  const { connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [search, setSearch] = createSignal('');
   
   // Initialize from localStorage with proper type checking
@@ -504,8 +504,22 @@ export function Dashboard(props: DashboardProps) {
 
 
 
+      {/* Loading State */}
+      <Show when={connected() && !initialDataReceived()}>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div class="text-center">
+            <svg class="animate-spin mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Loading dashboard data...</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400">Connecting to monitoring service</p>
+          </div>
+        </div>
+      </Show>
+
       {/* Empty State - No PVE Nodes Configured */}
-      <Show when={connected() && props.nodes.filter(n => n.type === 'pve').length === 0 && props.vms.length === 0 && props.containers.length === 0}>
+      <Show when={connected() && initialDataReceived() && props.nodes.filter(n => n.type === 'pve').length === 0 && props.vms.length === 0 && props.containers.length === 0}>
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
           <div class="text-center">
             <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -540,7 +554,7 @@ export function Dashboard(props: DashboardProps) {
       </Show>
 
       {/* Table */}
-      <Show when={connected() && (props.nodes.length > 0 || props.vms.length > 0 || props.containers.length > 0)}>
+      <Show when={connected() && initialDataReceived() && (props.nodes.length > 0 || props.vms.length > 0 || props.containers.length > 0)}>
         <ComponentErrorBoundary name="Guest Table">
           <ScrollableTable 
             class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
@@ -680,6 +694,7 @@ export function Dashboard(props: DashboardProps) {
       </Show>
       
       {/* Stats */}
+      <Show when={connected() && initialDataReceived()}>
       <div class="mb-4">
         <div class="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
           <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -693,6 +708,7 @@ export function Dashboard(props: DashboardProps) {
           </span>
         </div>
       </div>
+      </Show>
       
       
       {/* Tooltip System */}

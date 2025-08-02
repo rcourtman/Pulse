@@ -8,6 +8,7 @@ import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 export function createWebSocketStore(url: string) {
   const [connected, setConnected] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal(false);
+  const [initialDataReceived, setInitialDataReceived] = createSignal(false);
   const [state, setState] = createStore<State>({
     nodes: [],
     vms: [],
@@ -80,6 +81,11 @@ export function createWebSocketStore(url: string) {
           if (message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE || message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA) {
             // Update state properties individually to ensure reactivity
             if (message.data) {
+              // Mark that we've received initial data
+              if (message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE) {
+                setInitialDataReceived(true);
+              }
+              
               // Only update if we have actual data, don't overwrite with empty arrays
               if (message.data.nodes !== undefined) setState('nodes', message.data.nodes);
               if (message.data.vms !== undefined) setState('vms', message.data.vms);
@@ -167,6 +173,7 @@ export function createWebSocketStore(url: string) {
       ws.onclose = (event) => {
         logger.debug('disconnect', { code: event.code, reason: event.reason });
         setConnected(false);
+        setInitialDataReceived(false);
         
         // Don't reconnect if we're already trying
         if (isReconnecting) {
@@ -239,6 +246,7 @@ export function createWebSocketStore(url: string) {
     recentlyResolved,
     connected,
     reconnecting,
+    initialDataReceived,
     updateProgress,
     reconnect: () => {
       ws?.close();
