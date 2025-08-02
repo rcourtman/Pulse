@@ -35,7 +35,19 @@ Tests all major settings including thresholds, notifications, and encryption.
 npm run test:comprehensive
 ```
 
-### 5. Run All Tests
+### 5. Email Final Test
+Comprehensive email functionality verification.
+```bash
+node test-email-final.js
+```
+
+### 6. UI Integration Test
+Tests frontend-backend integration for email.
+```bash
+node test-ui-integration.js
+```
+
+### 7. Run All Tests
 ```bash
 npm run test:all
 ```
