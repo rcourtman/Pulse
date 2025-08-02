@@ -3,23 +3,10 @@
 // Polling and update intervals (in milliseconds)
 export const POLLING_INTERVALS = {
   DEFAULT: 5000,           // 5 seconds - default polling interval
-  CHART_UPDATE: 5000,      // 5 seconds - chart data update interval
   RECONNECT_BASE: 1000,    // 1 second - base reconnect delay
   RECONNECT_MAX: 30000,    // 30 seconds - max reconnect delay
   DATA_FLASH: 1000,        // 1 second - data update indicator flash duration
   TOAST_DURATION: 5000,    // 5 seconds - default toast notification duration
-} as const;
-
-// Chart configuration
-export const CHART_INTERVALS = {
-  '5m': 5 * 60 * 1000,
-  '15m': 15 * 60 * 1000,
-  '30m': 30 * 60 * 1000,
-  '1h': 60 * 60 * 1000,
-  '4h': 4 * 60 * 60 * 1000,
-  '12h': 12 * 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
 } as const;
 
 // Display thresholds (percentages)
@@ -40,7 +27,6 @@ export const IO_THRESHOLDS = {
 // Animation durations (in milliseconds)
 export const ANIMATIONS = {
   TOAST_SLIDE: 300,      // Toast slide in/out animation
-  CHART_FADE: 150,       // Chart fade in/out animation
 } as const;
 
 // UI configuration
@@ -65,7 +51,6 @@ export const STORAGE_KEYS = {
   DISPLAY_MODE: 'displayMode',
   SORT_KEY: 'sortKey',
   SORT_DIRECTION: 'sortDirection',
-  CHART_TIME_RANGE: 'chartTimeRange',
   ALERT_THRESHOLDS: 'alertThresholds',
 } as const;
 
@@ -82,10 +67,3 @@ export const LOG_LEVELS = {
 
 export type LogLevel = keyof typeof LOG_LEVELS;
 
-// Chart dimensions
-export const CHART_DIMENSIONS = {
-  SPARKLINE: { width: 66, height: 16, padding: 1 },
-  MINI: { width: 118, height: 20, padding: 2 },
-  STORAGE: { width: 200, height: 14, padding: 1 },
-  STROKE_WIDTH: 1.5,
-} as const;

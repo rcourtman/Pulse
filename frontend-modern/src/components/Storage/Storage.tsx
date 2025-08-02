@@ -1,12 +1,9 @@
-import { Component, For, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes } from '@/utils/format';
-import { DynamicChart } from '@/components/shared/DynamicChart';
 import { createTooltipSystem } from '@/components/shared/Tooltip';
-import { fetchChartData, getStorageChartData, shouldFetchChartData } from '@/stores/charts';
-import { POLLING_INTERVALS } from '@/constants';
 import type { Storage as StorageType } from '@/types/api';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -14,8 +11,6 @@ import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 const Storage: Component = () => {
   const { state, connected, activeAlerts } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
-  const [chartsEnabled, setChartsEnabled] = createSignal(false);
-  const [timeRange, setTimeRange] = createSignal<string>('1h');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [showFilters, setShowFilters] = createSignal(
     localStorage.getItem('storageShowFilters') !== null 
@@ -26,25 +21,10 @@ const Storage: Component = () => {
   // Create tooltip system
   const TooltipComponent = createTooltipSystem();
   
-  // Time range options - match dashboard format
-  const timeRanges = [
-    { value: '5m', label: '5m' },
-    { value: '15m', label: '15m' },
-    { value: '30m', label: '30m' },
-    { value: '1h', label: '1h' },
-    { value: '4h', label: '4h' },
-    { value: '12h', label: '12h' },
-    { value: '24h', label: '24h' },
-    { value: '7d', label: '7d' }
-  ];
-  
   // Load preferences from localStorage
   createEffect(() => {
     const savedViewMode = localStorage.getItem('storageViewMode');
     if (savedViewMode === 'storage') setViewMode('storage');
-    
-    const savedChartsEnabled = localStorage.getItem('storageChartsEnabled');
-    if (savedChartsEnabled === 'true') setChartsEnabled(true);
   });
   
   // Save preferences to localStorage
@@ -53,49 +33,7 @@ const Storage: Component = () => {
   });
   
   createEffect(() => {
-    localStorage.setItem('storageChartsEnabled', chartsEnabled().toString());
-  });
-  
-  createEffect(() => {
     localStorage.setItem('storageShowFilters', showFilters().toString());
-  });
-  
-  // Chart update interval
-  let chartUpdateInterval: number | undefined;
-  
-  // Fetch chart data when charts are enabled or time range changes
-  createEffect(() => {
-    if (chartsEnabled() && connected()) {
-      // Initial fetch
-      fetchChartData(timeRange());
-      
-      // Setup periodic updates
-      chartUpdateInterval = window.setInterval(() => {
-        if (shouldFetchChartData()) {
-          fetchChartData(timeRange());
-        }
-      }, POLLING_INTERVALS.CHART_UPDATE);
-    } else {
-      // Clear interval when charts not enabled
-      if (chartUpdateInterval) {
-        window.clearInterval(chartUpdateInterval);
-        chartUpdateInterval = undefined;
-      }
-    }
-  });
-  
-  // Update charts when time range changes
-  createEffect(() => {
-    if (chartsEnabled()) {
-      fetchChartData(timeRange());
-    }
-  });
-  
-  // Cleanup on unmount
-  onCleanup(() => {
-    if (chartUpdateInterval) {
-      window.clearInterval(chartUpdateInterval);
-    }
   });
   
   // Filter storage - in storage view, filter out 0 capacity
@@ -156,14 +94,29 @@ const Storage: Component = () => {
     // Match MetricBar component styling - use the same disk/generic logic
     if (usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
     if (usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-    return 'bg-green-500/60 dark:bg-green-500/50';
+    if (usage >= 70) return 'bg-amber-500/60 dark:bg-amber-500/50';
+    if (usage >= 60) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
+    return 'bg-emerald-500/60 dark:bg-emerald-500/50';
   };
   
-  // Reset filters
   const resetFilters = () => {
     setSearchTerm('');
     setViewMode('node');
-    setChartsEnabled(false);
+  };
+  
+  const getTotalByNode = (storages: StorageType[]) => {
+    const totals = { used: 0, total: 0, free: 0 };
+    storages.forEach(s => {
+      totals.used += s.used || 0;
+      totals.total += s.total || 0;
+      totals.free += s.free || 0;
+    });
+    return totals;
+  };
+  
+  const calculateOverallUsage = (storages: StorageType[]) => {
+    const totals = getTotalByNode(storages);
+    return totals.total > 0 ? (totals.used / totals.total * 100) : 0;
   };
   
   // Handle keyboard shortcuts
@@ -171,7 +124,7 @@ const Storage: Component = () => {
   
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input, textarea, or contenteditable
+      // Ignore if user is typing in an input
       const target = e.target as HTMLElement;
       const isInputField = target.tagName === 'INPUT' || 
                           target.tagName === 'TEXTAREA' || 
@@ -181,7 +134,7 @@ const Storage: Component = () => {
       // Escape key behavior
       if (e.key === 'Escape') {
         // First check if we have search/filters to clear
-        if (searchTerm().trim() || viewMode() !== 'node' || chartsEnabled()) {
+        if (searchTerm().trim() || viewMode() !== 'node') {
           // Clear search and reset filters
           resetFilters();
           
@@ -212,109 +165,90 @@ const Storage: Component = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
   
-
   return (
-    <div id="storage" class="tab-content bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
-      <div class="p-3">
-        {/* Filter Section */}
-        <div class="storage-filter bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm mb-3">
-          {/* Filter toggle - visible on all screen sizes */}
-          <button
-            onClick={() => setShowFilters(!showFilters())}
-            class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
-          >
-            <span class="flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="4" y1="21" x2="4" y2="14"></line>
-                <line x1="4" y1="10" x2="4" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12" y2="3"></line>
-                <line x1="20" y1="21" x2="20" y2="16"></line>
-                <line x1="20" y1="12" x2="20" y2="3"></line>
-                <line x1="1" y1="14" x2="7" y2="14"></line>
-                <line x1="9" y1="8" x2="15" y2="8"></line>
-                <line x1="17" y1="16" x2="23" y2="16"></line>
-              </svg>
-              Filters & Search
-              <Show when={searchTerm() || viewMode() !== 'node' || chartsEnabled()}>
-                <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                  Active
-                </span>
-              </Show>
-            </span>
-            <svg 
-              width="16" 
-              height="16" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              stroke-width="2"
-              class={`transform transition-transform ${showFilters() ? 'rotate-180' : ''}`}
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
+    <div>
+      
+      {/* Filters and Search */}
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-4 overflow-hidden">
+        <button
+          onClick={() => setShowFilters(!showFilters())}
+          class="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+        >
+          <span class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
             </svg>
-          </button>
-          
-          <div class={`filter-controls-wrapper ${showFilters() ? 'block' : 'hidden'} p-3 border-t border-gray-200 dark:border-gray-700`}>
-            <div class="flex flex-col gap-3">
-              {/* Search Row */}
-              <div class="flex gap-2">
-                <div class="relative flex-1">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder="Search by name, node, type, or content..."
-                    value={searchTerm()}
-                    onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                    class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                           bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                           focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
-                  />
-                  <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                
-                <button
-                  onClick={resetFilters}
-                  title="Reset all filters (Esc)"
-                  class="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 
-                         bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                         rounded-lg transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                    <path d="M21 3v5h-5"/>
-                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                    <path d="M8 16H3v5"/>
-                  </svg>
-                  <span class="ml-1.5 hidden sm:inline">Reset</span>
-                </button>
+            Filters & Search
+            <Show when={searchTerm() || viewMode() !== 'node'}>
+              <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                Active
+              </span>
+            </Show>
+          </span>
+          <svg 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            stroke-width="2"
+            class={`transform transition-transform ${showFilters() ? 'rotate-180' : ''}`}
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        
+        <div class={`filter-controls-wrapper ${showFilters() ? 'block' : 'hidden'} p-3 lg:p-4 border-t border-gray-200 dark:border-gray-700`}>
+          <div class="flex flex-col gap-3">
+            {/* Search Bar Row */}
+            <div class="flex gap-2">
+              <div class="relative flex-1">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search by name, node, type, content, or status..."
+                  value={searchTerm()}
+                  onInput={(e) => setSearchTerm(e.currentTarget.value)}
+                  class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                         bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
+                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                />
+                <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
               </div>
               
-              {/* View Controls Row */}
-              <div class="flex flex-col sm:flex-row gap-3">
-                {/* View Controls */}
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">Display:</span>
-                  
-                  {/* Charts Toggle */}
-                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <button
-                      onClick={() => setChartsEnabled(!chartsEnabled())}
-                      class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        chartsEnabled()
-                          ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                      }`}
-                    >
-                      Charts {chartsEnabled() ? 'On' : 'Off'}
-                    </button>
-                  </div>
-                
-                <div class="h-6 w-px bg-gray-200 dark:bg-gray-600"></div>
-                
-                {/* View Mode Toggle */}
+              {/* Reset Button */}
+              <button 
+                onClick={resetFilters}
+                title="Reset all filters"
+                class="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 
+                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
+                       rounded-lg transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M8 16H3v5"/>
+                </svg>
+                <span class="ml-1.5 hidden sm:inline">Reset</span>
+              </button>
+            </div>
+            
+            {/* Filters Row */}
+            <div class="flex flex-col sm:flex-row gap-2">
+              {/* View Mode Toggle */}
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Group by:</span>
                 <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                   <button
                     onClick={() => setViewMode('node')}
@@ -324,7 +258,7 @@ const Storage: Component = () => {
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                   >
-                    By Node
+                    Node
                   </button>
                   <button
                     onClick={() => setViewMode('storage')}
@@ -334,99 +268,75 @@ const Storage: Component = () => {
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                   >
-                    By Storage
+                    Storage
                   </button>
                 </div>
               </div>
-              
-              {/* Chart Time Range Controls - Show when charts enabled */}
-              <Show when={chartsEnabled()}>
-                <div class="flex items-center gap-2">
-                  <div class="h-6 w-px bg-gray-200 dark:bg-gray-600"></div>
-                  <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Time Range:</span>
-                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <For each={timeRanges}>
-                      {(range) => (
-                        <button
-                          onClick={() => setTimeRange(range.value)}
-                          class={`px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
-                            timeRange() === range.value
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                          }`}
-                        >
-                          {range.label}
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
             </div>
           </div>
         </div>
       </div>
-    </div>
       
-      {/* Table Section */}
-      <div class="px-3 pb-3">
+      {/* Empty State - No Storage Configured */}
+      <Show when={connected() && sortedStorage().length === 0}>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div class="text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage found</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400">No storage repositories are configured or visible.</p>
+          </div>
+        </div>
+      </Show>
+      
+      {/* Storage Table */}
+      <Show when={connected() && sortedStorage().length > 0}>
         <ComponentErrorBoundary name="Storage Table">
-          <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-            <table id="storage-table" class="w-full text-sm border-collapse min-w-full" style="table-layout: fixed;">
-            <thead>
-              <tr class="border-b border-gray-200 dark:border-gray-600">
-                <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 130px;">
-                  Storage
-                </th>
-                <Show when={viewMode() === 'storage'}>
-                  <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 120px;">
-                    Nodes
-                  </th>
-                  <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 80px;">
-                    Type
-                  </th>
-                </Show>
-                <Show when={viewMode() === 'node'}>
-                  <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 180px;">
-                    Content
-                  </th>
-                  <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 80px;">
-                    Type
-                  </th>
-                  <th class="bg-gray-50 dark:bg-gray-700 p-1 px-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider" style="width: 50px;">
-                    Shared
-                  </th>
-                </Show>
-                <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 200px;">
-                  Usage
-                </th>
-                <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 80px;">
-                  Avail
-                </th>
-                <th class="bg-gray-100 dark:bg-gray-700 p-1 px-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider" style="width: 80px;">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-600">
-              <Show when={connected() && state.storage && state.storage.length > 0}>
-                <For each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))} fallback={<></>}>
+          <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
+                  <Show when={viewMode() === 'node'}>
+                    <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Node</th>
+                  </Show>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Content</th>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                  <Show when={viewMode() === 'node'}>
+                    <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Shared</th>
+                  </Show>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[200px]">Usage</th>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Free</th>
+                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))}>
                   {([groupName, storages]) => (
                     <>
-                      {/* Group Header for Node View */}
+                      {/* Group Header */}
                       <Show when={viewMode() === 'node'}>
-                        <tr class="node-storage-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
-                          <td colspan="7" class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <tr class="bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
+                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                             <a 
                               href={`https://${groupName}:8006`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              class="hover:text-blue-600 dark:hover:text-blue-400"
+                              class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+                              title={`Open ${groupName} web interface`}
                             >
                               {groupName}
                             </a>
-                            <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-2">
-                              ({storages.length} storage{storages.length !== 1 ? 's' : ''})
+                          </td>
+                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400" colspan="8">
+                            <span class="text-[10px]">
+                              {getTotalByNode(storages).total > 0 && (
+                                <span>
+                                  {formatBytes(getTotalByNode(storages).used)} / {formatBytes(getTotalByNode(storages).total)} ({calculateOverallUsage(storages).toFixed(1)}%)
+                                </span>
+                              )}
                             </span>
                           </td>
                         </tr>
@@ -436,8 +346,6 @@ const Storage: Component = () => {
                       <For each={storages} fallback={<></>}>
                         {(storage) => {
                           const usagePercent = storage.total > 0 ? (storage.used / storage.total * 100) : 0;
-                          // Get chart data from unified store
-                          const storageChartData = createMemo(() => getStorageChartData(storage.id, 'disk'));
                           const isDisabled = storage.status !== 'available';
                           
                           const alertStyles = getAlertStyles(storage.id || `${storage.instance}-${storage.name}`, activeAlerts);
@@ -445,75 +353,60 @@ const Storage: Component = () => {
                           
                           return (
                             <tr class={rowClass}>
-                              <td class="p-1 px-2 text-xs font-medium">
-                                <div class="flex items-center gap-1">
-                                  <span>{storage.name}</span>
-                                  <Show when={isDisabled}>
-                                    <span class="text-gray-500 dark:text-gray-400 text-[10px]">({storage.status})</span>
-                                  </Show>
+                              <td class="p-1 px-2">
+                                <div class="flex items-center gap-2">
+                                  <span class="font-medium text-gray-900 dark:text-gray-100">
+                                    {storage.name}
+                                  </span>
                                   <Show when={alertStyles.hasAlert}>
-                                    <div class="flex items-center gap-1 ml-auto">
-                                      <AlertIndicator severity={alertStyles.severity} />
+                                    <div class="flex items-center gap-1">
+                                      <AlertIndicator severity={alertStyles.severity} alerts={[]} />
                                       <Show when={alertStyles.alertCount > 1}>
-                                        <AlertCountBadge count={alertStyles.alertCount} severity={alertStyles.severity!} />
+                                        <AlertCountBadge count={alertStyles.alertCount} severity={alertStyles.severity!} alerts={[]} />
                                       </Show>
                                     </div>
                                   </Show>
                                 </div>
                               </td>
-                              
-                              <Show when={viewMode() === 'storage'}>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">
-                                  <Show when={storage.shared} fallback={
-                                    <span>{storage.node} <span class="text-[10px] text-gray-500">(Local)</span></span>
-                                  }>
-                                    <span class="text-green-600 dark:text-green-400">
-                                      All Nodes
-                                      <Show when={storage.instance}>
-                                        <span class="text-[10px] text-gray-500 ml-1">({storage.instance})</span>
-                                      </Show>
-                                    </span>
-                                  </Show>
-                                </td>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">
-                                  {storage.type}
-                                </td>
-                              </Show>
-                              
                               <Show when={viewMode() === 'node'}>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400 truncate" style="max-width: 180px;" title={storage.content}>
-                                  {storage.content}
-                                </td>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">
+                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">{storage.node}</td>
+                              </Show>
+                              <td class="p-1 px-2">
+                                <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                                  storage.type === 'dir' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' :
+                                  storage.type === 'pbs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
+                                  'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                                }`}>
                                   {storage.type}
-                                </td>
-                                <td class="p-1 px-2 text-xs text-center">
+                                </span>
+                              </td>
+                              <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">
+                                {storage.content || '-'}
+                              </td>
+                              <td class="p-1 px-2 text-xs">
+                                <span class={`${
+                                  storage.status === 'available' ? 'text-green-600 dark:text-green-400' : 
+                                  'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {storage.status || 'unknown'}
+                                </span>
+                              </td>
+                              <Show when={viewMode() === 'node'}>
+                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400">
                                   {storage.shared ? '✓' : '-'}
                                 </td>
                               </Show>
                               
                               <td class="p-1 px-2" style="width: 200px;">
-                                <Show when={chartsEnabled()}>
-                                  <DynamicChart
-                                    data={storageChartData()}
-                                    metric="disk"
-                                    guestId={storage.id}
-                                    chartType="storage"
-                                    filled
-                                    forceGray
+                                <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                  <div 
+                                    class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
+                                    style={{ width: `${usagePercent}%` }}
                                   />
-                                </Show>
-                                <Show when={!chartsEnabled()}>
-                                  <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                    <div 
-                                      class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
-                                      style={{ width: `${usagePercent}%` }}
-                                    />
-                                    <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                      <span class="truncate px-1">{formatBytes(storage.used || 0)} / {formatBytes(storage.total || 0)} ({usagePercent.toFixed(1)}%)</span>
-                                    </span>
-                                  </div>
-                                </Show>
+                                  <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                                    <span class="truncate px-1">{formatBytes(storage.used || 0)} / {formatBytes(storage.total || 0)} ({usagePercent.toFixed(1)}%)</span>
+                                  </span>
+                                </div>
                               </td>
                               <td class="p-1 px-2 text-xs">{formatBytes(storage.free || 0)}</td>
                               <td class="p-1 px-2 text-xs">{formatBytes(storage.total || 0)}</td>
@@ -524,81 +417,11 @@ const Storage: Component = () => {
                     </>
                   )}
                 </For>
-              </Show>
-              
-              {/* Empty State */}
-              <Show when={connected() && (!state.storage || state.storage.length === 0 || (viewMode() === 'storage' && filteredStorage().length === 0))}>
-                <tr>
-                  <td colspan={viewMode() === 'node' ? 7 : 7} class="p-8 text-center">
-                    <div class="text-gray-500 dark:text-gray-400">
-                      <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <p class="text-sm font-medium mb-1">No Active Storage</p>
-                      <p class="text-xs">
-                        {viewMode() === 'storage' 
-                          ? 'No storage with capacity found in the cluster.' 
-                          : 'No storage configured.'}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              </Show>
-              
-              {/* Disconnected State */}
-              <Show when={!connected()}>
-                <tr>
-                  <td colspan={viewMode() === 'node' ? 7 : 7} class="p-8 text-center">
-                    <div class="text-red-600 dark:text-red-400">
-                      <svg class="mx-auto h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p class="text-sm font-medium mb-1">Connection Lost</p>
-                      <p class="text-xs">Unable to connect to the backend server.</p>
-                    </div>
-                  </td>
-                </tr>
-              </Show>
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
         </ComponentErrorBoundary>
-      </div>
-      
-      
-      <style>{`
-        .node-storage-header {
-          font-weight: 600;
-        }
-        
-        .table-container {
-          max-height: calc(100vh - 250px);
-        }
-        
-        .scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #6b7280 transparent;
-        }
-        
-        .scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        
-        .scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .scrollbar::-webkit-scrollbar-thumb {
-          background-color: #6b7280;
-          border-radius: 4px;
-        }
-        
-        .scrollbar::-webkit-scrollbar-thumb:hover {
-          background-color: #4b5563;
-        }
-        
-      `}</style>
+      </Show>
       
       {/* Tooltip System */}
       <TooltipComponent />

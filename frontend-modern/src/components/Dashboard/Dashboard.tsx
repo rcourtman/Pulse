@@ -1,12 +1,10 @@
-import { createSignal, createMemo, createEffect, For, Show, onCleanup } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
-import { fetchChartData, shouldFetchChartData } from '@/stores/charts';
 import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { POLLING_INTERVALS } from '@/constants';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
@@ -19,8 +17,6 @@ interface DashboardProps {
 
 type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'stopped';
-type DisplayMode = 'standard' | 'charts';
-type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d';
 
 
 export function Dashboard(props: DashboardProps) {
@@ -38,19 +34,6 @@ export function Dashboard(props: DashboardProps) {
     (storedStatusMode === 'all' || storedStatusMode === 'running' || storedStatusMode === 'stopped') ? storedStatusMode : 'all'
   );
   
-  const storedDisplayMode = localStorage.getItem('dashboardDisplayMode');
-  const [displayMode, setDisplayMode] = createSignal<DisplayMode>(
-    (storedDisplayMode === 'standard' || storedDisplayMode === 'charts') ? storedDisplayMode : 'standard'
-  );
-  
-  const storedTimeRange = localStorage.getItem('dashboardTimeRange');
-  const [timeRange, setTimeRange] = createSignal<TimeRange>(
-    (storedTimeRange === '5m' || storedTimeRange === '15m' || storedTimeRange === '30m' || 
-     storedTimeRange === '1h' || storedTimeRange === '4h' || storedTimeRange === '12h' || 
-     storedTimeRange === '24h' || storedTimeRange === '7d') ? storedTimeRange : '1h'
-  );
-  
-  const [showCharts, setShowCharts] = createSignal(localStorage.getItem('dashboardShowCharts') === 'true');
   const [showFilters, setShowFilters] = createSignal(
     localStorage.getItem('dashboardShowFilters') !== null 
       ? localStorage.getItem('dashboardShowFilters') === 'true'
@@ -73,37 +56,12 @@ export function Dashboard(props: DashboardProps) {
     localStorage.setItem('dashboardStatusMode', statusMode());
   });
   
-  createEffect(() => {
-    localStorage.setItem('dashboardDisplayMode', displayMode());
-  });
-  
-  createEffect(() => {
-    localStorage.setItem('dashboardTimeRange', timeRange());
-  });
-  
-  createEffect(() => {
-    localStorage.setItem('dashboardShowCharts', showCharts().toString());
-  });
   
   
   createEffect(() => {
     localStorage.setItem('dashboardShowFilters', showFilters().toString());
   });
   
-  // Chart update interval
-  let chartUpdateInterval: number | undefined;
-  
-  // Track if chart data is loading (no longer used for blocking)
-  
-  // Preload chart data when component mounts
-  createEffect(() => {
-    // Preload chart data immediately on mount for instant charts
-    if (shouldFetchChartData()) {
-      fetchChartData(timeRange()).catch(() => {
-        // Silently handle errors during preload
-      });
-    }
-  });
 
   // Sort handler
   const handleSort = (key: keyof (VM | Container)) => {
@@ -139,10 +97,9 @@ export function Dashboard(props: DashboardProps) {
       // Escape key behavior
       if (e.key === 'Escape') {
         // First check if we have search/filters to clear
-        if (search().trim() || showCharts() || sortKey() !== 'vmid' || sortDirection() !== 'asc') {
+        if (search().trim() || sortKey() !== 'vmid' || sortDirection() !== 'asc') {
           // Clear search and reset filters
           setSearch('');
-          setShowCharts(false);
           setSortKey('vmid');
           setSortDirection('asc');
           
@@ -173,40 +130,6 @@ export function Dashboard(props: DashboardProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
   
-  // Fetch chart data when in charts mode or time range changes
-  createEffect(() => {
-    if (displayMode() === 'charts') {
-      // Fetch data without blocking the UI
-      fetchChartData(timeRange());
-      
-      // Setup periodic updates
-      chartUpdateInterval = window.setInterval(() => {
-        if (shouldFetchChartData()) {
-          fetchChartData(timeRange());
-        }
-      }, POLLING_INTERVALS.CHART_UPDATE);
-    } else {
-      // Clear interval when not in charts mode
-      if (chartUpdateInterval) {
-        window.clearInterval(chartUpdateInterval);
-        chartUpdateInterval = undefined;
-      }
-    }
-  });
-  
-  // Update charts when time range changes
-  createEffect(() => {
-    if (displayMode() === 'charts') {
-      fetchChartData(timeRange());
-    }
-  });
-  
-  // Cleanup on unmount
-  onCleanup(() => {
-    if (chartUpdateInterval) {
-      window.clearInterval(chartUpdateInterval);
-    }
-  });
 
   // Combine VMs and containers into a single list
   const allGuests = createMemo(() => {
@@ -403,7 +326,7 @@ export function Dashboard(props: DashboardProps) {
               <line x1="17" y1="16" x2="23" y2="16"></line>
             </svg>
             Filters & Search
-            <Show when={search() || viewMode() !== 'all' || statusMode() !== 'all' || showCharts()}>
+            <Show when={search() || viewMode() !== 'all' || statusMode() !== 'all'}>
               <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
                 Active
               </span>
@@ -481,7 +404,6 @@ export function Dashboard(props: DashboardProps) {
               <button 
                 onClick={() => {
                   setSearch('');
-                  setShowCharts(false);
                   setSortKey('vmid');
                   setSortDirection('asc');
                   setViewMode('all');
@@ -505,39 +427,6 @@ export function Dashboard(props: DashboardProps) {
 
             {/* Filters Row */}
             <div class="flex flex-col sm:flex-row gap-2">
-              {/* View Mode Toggle */}
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">Display:</span>
-                <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <button
-                    onClick={() => {
-                      setDisplayMode('standard');
-                      setShowCharts(false);
-                                  }}
-                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                      displayMode() === 'standard'                        ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDisplayMode('charts');
-                      setShowCharts(true);
-                                  }}
-                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                      showCharts()
-                        ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
-                  >
-                    Charts
-                  </button>
-                </div>
-              </div>
-
-              <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
               {/* Type Filter */}
               <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
@@ -608,32 +497,6 @@ export function Dashboard(props: DashboardProps) {
                   Stopped
                 </button>
               </div>
-              
-              {/* Chart Time Range Controls - Show when charts enabled */}
-              <Show when={showCharts()}>
-                <>
-                  <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">Time Range:</span>
-                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <For each={['5m', '15m', '30m', '1h', '4h', '12h'] as TimeRange[]}>
-                        {(range) => (
-                          <button
-                            onClick={() => setTimeRange(range)}
-                            class={`px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
-                              timeRange() === range
-                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                            }`}
-                          >
-                            {range}
-                          </button>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </>
-              </Show>
             </div>
           </div>
         </div>
@@ -793,8 +656,6 @@ export function Dashboard(props: DashboardProps) {
                           <GuestRow 
                             guest={guest} 
                             showNode={false} 
-                            displayMode={displayMode()} 
-                            timeRange={timeRange()}
                             alertStyles={getAlertStyles(guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`, activeAlerts)}
                           />
                         </ComponentErrorBoundary>
