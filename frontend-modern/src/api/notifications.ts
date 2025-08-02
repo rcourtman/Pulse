@@ -186,7 +186,7 @@ export class NotificationsAPI {
 
   // Testing
   static async testNotification(request: NotificationTestRequest): Promise<{ success: boolean; message?: string }> {
-    const body: any = { method: request.type };
+    const body: { method: string; config?: EmailConfig | Webhook } = { method: request.type };
     
     // Include config if provided for testing without saving
     if (request.config) {

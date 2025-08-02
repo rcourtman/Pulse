@@ -7,6 +7,10 @@
     "test:api": "node test-api-endpoints.js",
     "test:buttons": "node test-button-functionality.js",
     "test:comprehensive": "node test-comprehensive.js",
+    "test:alerts": "node test-alerts-api.js",
+    "test:thresholds": "node test-thresholds-alerts.js",
+    "test:mobile-dash": "node test-mobile-dashboard.js",
+    "test:mobile-storage": "node test-mobile-storage.js",
     "test:all": "npm run test:api && npm run test:comprehensive",
     "status": "node check-status.js"
   },
