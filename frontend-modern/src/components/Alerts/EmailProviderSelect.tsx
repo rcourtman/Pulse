@@ -202,6 +202,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Recipients (one per line)
+          <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">
+            Leave empty to send to the From address
+          </span>
         </label>
         <textarea
           value={props.config.to.join('\n')}
@@ -212,7 +215,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
               .filter(r => r.length > 0);
             props.onChange({ ...props.config, to: recipients });
           }}
-          placeholder="admin@company.com&#10;ops-team@company.com"
+          placeholder={`Leave empty to use ${props.config.from || 'From address'}\nOr add additional recipients:\nadmin@company.com\nops-team@company.com`}
           rows="3"
           class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
         />

@@ -38,11 +38,30 @@ func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Req
 
 // UpdateEmailConfig updates the email configuration
 func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.Request) {
-	var config notifications.EmailConfig
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	// Read raw body for debugging
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	
+	log.Info().
+		Str("body", string(body)).
+		Msg("Received email config update")
+	
+	var config notifications.EmailConfig
+	if err := json.Unmarshal(body, &config); err != nil {
+		log.Error().Err(err).Str("body", string(body)).Msg("Failed to parse email config")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	
+	log.Info().
+		Bool("enabled", config.Enabled).
+		Str("smtp", config.SMTPHost).
+		Str("from", config.From).
+		Int("toCount", len(config.To)).
+		Msg("Parsed email config")
 	
 	h.monitor.GetNotificationManager().SetEmailConfig(config)
 	
@@ -161,7 +180,8 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 // TestNotification sends a test notification
 func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Method string `json:"method"` // "email" or "webhook"
+		Method string                    `json:"method"` // "email" or "webhook"
+		Config *notifications.EmailConfig `json:"config,omitempty"` // Optional config for testing
 	}
 	
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -169,9 +189,33 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		return
 	}
 	
-	if err := h.monitor.GetNotificationManager().SendTestNotification(req.Method); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	// Get actual node info from monitor state
+	state := h.monitor.GetState()
+	var nodeInfo *notifications.TestNodeInfo
+	
+	// Use first available node and instance
+	if len(state.Nodes) > 0 {
+		for _, node := range state.Nodes {
+			nodeInfo = &notifications.TestNodeInfo{
+				NodeName:    node.Name,
+				InstanceURL: node.Instance,
+			}
+			break
+		}
+	}
+	
+	// If config is provided, use it for testing (without saving)
+	if req.Method == "email" && req.Config != nil {
+		if err := h.monitor.GetNotificationManager().SendTestNotificationWithConfig(req.Method, req.Config, nodeInfo); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Use saved config
+		if err := h.monitor.GetNotificationManager().SendTestNotification(req.Method); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	
 	w.Header().Set("Content-Type", "application/json")

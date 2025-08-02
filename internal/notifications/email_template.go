@@ -24,8 +24,23 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		levelBg = "#fffaeb"
 	}
 
-	subject = fmt.Sprintf("[Pulse Alert] %s - %s on %s", 
-		strings.Title(string(alert.Level)), alert.Type, alert.ResourceName)
+	// Properly format alert type (CPU, Memory, etc.)
+	alertType := alert.Type
+	switch strings.ToLower(alertType) {
+	case "cpu":
+		alertType = "CPU"
+	case "memory":
+		alertType = "Memory"
+	case "disk":
+		alertType = "Disk"
+	case "io":
+		alertType = "I/O"
+	default:
+		alertType = strings.Title(alertType)
+	}
+	
+	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s", 
+		strings.Title(string(alert.Level)), alertType, alert.ResourceName)
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -47,10 +62,10 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
         .metric-label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
         .metric-value { font-size: 24px; font-weight: 500; color: #1a1a1a; margin-top: 5px; }
         .details { background: #f8f9fa; padding: 20px; border-radius: 4px; margin: 20px 0; }
-        .detail-row { display: flex; justify-content: space-between; margin: 10px 0; padding-bottom: 10px; border-bottom: 1px solid #e9ecef; }
+        .detail-row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; padding-bottom: 10px; border-bottom: 1px solid #e9ecef; gap: 20px; }
         .detail-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .detail-label { color: #666; }
-        .detail-value { font-weight: 500; color: #1a1a1a; }
+        .detail-label { color: #666; min-width: 120px; }
+        .detail-value { font-weight: 500; color: #1a1a1a; text-align: right; flex: 1; }
         .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
         .footer a { color: #0066cc; text-decoration: none; }
         @media (max-width: 600px) {
@@ -114,8 +129,8 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
             </div>
         </div>
         <div class="footer">
-            <p>This is an automated notification from <a href="#">Pulse Monitoring</a></p>
-            <p>Configure alert settings in the Pulse dashboard</p>
+            <p>This is an automated notification from Pulse Monitoring</p>
+            <p>View alerts and configure settings in your Pulse dashboard</p>
         </div>
     </div>
 </body>
@@ -127,7 +142,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		alert.Value,
 		alert.Threshold,
 		alert.ResourceID,
-		strings.Title(alert.Type),
+		alertType,
 		alert.Node,
 		alert.Instance,
 		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
@@ -151,7 +166,7 @@ Details:
 - Duration: %s
 
 This is an automated notification from Pulse Monitoring.
-Configure alert settings in the Pulse dashboard.`,
+View alerts and configure settings in your Pulse dashboard.`,
 		strings.ToUpper(string(alert.Level)),
 		alert.ResourceName,
 		alert.ResourceName,
@@ -306,8 +321,8 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
             </table>
         </div>
         <div class="footer">
-            <p>This is an automated notification from <a href="#">Pulse Monitoring</a></p>
-            <p>Configure alert settings in the Pulse dashboard</p>
+            <p>This is an automated notification from Pulse Monitoring</p>
+            <p>View alerts and configure settings in your Pulse dashboard</p>
         </div>
     </div>
 </body>

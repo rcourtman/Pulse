@@ -371,8 +371,12 @@ export function Alerts() {
                     await AlertsAPI.updateConfig(alertConfig);
                     
                     // Save email config if on destinations tab
+                    console.log('Active tab:', activeTab());
+                    console.log('Has emailConfig:', !!destinationsRef.emailConfig);
                     if (activeTab() === 'destinations' && destinationsRef.emailConfig) {
-                      await NotificationsAPI.updateEmailConfig(destinationsRef.emailConfig());
+                      const emailData = destinationsRef.emailConfig();
+                      console.log('Saving email config:', emailData);
+                      await NotificationsAPI.updateEmailConfig(emailData);
                     }
                     
                     setHasUnsavedChanges(false);
@@ -440,6 +444,7 @@ export function Alerts() {
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
               activeAlerts={activeAlerts}
+              setHasUnsavedChanges={setHasUnsavedChanges}
             />
           </Show>
           
@@ -480,6 +485,9 @@ export function Alerts() {
 
 // Overview Tab - Shows current alert status
 function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string, Alert> }) {
+  // Loading states for buttons
+  const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
+  
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     const alerts = Object.values(props.activeAlerts);
@@ -603,25 +611,49 @@ function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string
                     <div class="flex gap-2 ml-4">
                       <Show when={!alert.acknowledged}>
                         <button 
-                          class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-                          onClick={() => {
-                            // API call to acknowledge alert
-                            AlertsAPI.acknowledge(alert.id)
-                              .catch((err: unknown) => console.error('Failed to acknowledge alert:', err));
+                          class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={processingAlerts().has(alert.id)}
+                          onClick={async () => {
+                            setProcessingAlerts(prev => new Set(prev).add(alert.id));
+                            try {
+                              await AlertsAPI.acknowledge(alert.id);
+                              showSuccess('Alert acknowledged');
+                            } catch (err) {
+                              console.error('Failed to acknowledge alert:', err);
+                              showError('Failed to acknowledge alert');
+                            } finally {
+                              setProcessingAlerts(prev => {
+                                const next = new Set(prev);
+                                next.delete(alert.id);
+                                return next;
+                              });
+                            }
                           }}
                         >
-                          Acknowledge
+                          {processingAlerts().has(alert.id) ? 'Processing...' : 'Acknowledge'}
                         </button>
                       </Show>
                       <button 
-                        class="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                        onClick={() => {
-                          // API call to clear alert
-                          AlertsAPI.clearAlert(alert.id)
-                            .catch((err: unknown) => console.error('Failed to clear alert:', err));
+                        class="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={processingAlerts().has(alert.id)}
+                        onClick={async () => {
+                          setProcessingAlerts(prev => new Set(prev).add(alert.id));
+                          try {
+                            await AlertsAPI.clearAlert(alert.id);
+                            showSuccess('Alert cleared');
+                          } catch (err) {
+                            console.error('Failed to clear alert:', err);
+                            showError('Failed to clear alert');
+                          } finally {
+                            setProcessingAlerts(prev => {
+                              const next = new Set(prev);
+                              next.delete(alert.id);
+                              return next;
+                            });
+                          }
                         }}
                       >
-                        Clear
+                        {processingAlerts().has(alert.id) ? 'Processing...' : 'Clear'}
                       </button>
                     </div>
                   </div>
@@ -972,6 +1004,7 @@ interface ThresholdsTabProps {
   setStorageDefault: (value: number) => void;
   setOverrides: (value: Override[]) => void;
   activeAlerts: Record<string, Alert>;
+  setHasUnsavedChanges: (value: boolean) => void;
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
@@ -1033,7 +1066,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.guestDefaults.cpu}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, cpu: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="cpu"
                 />
@@ -1048,7 +1081,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.guestDefaults.memory}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, memory: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="memory"
                 />
@@ -1063,7 +1096,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.guestDefaults.disk}
                   onChange={(v) => {
                     props.setGuestDefaults((prev) => ({...prev, disk: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="disk"
                 />
@@ -1090,7 +1123,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.cpu}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, cpu: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="cpu"
                 />
@@ -1105,7 +1138,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.memory}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, memory: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="memory"
                 />
@@ -1120,7 +1153,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.nodeDefaults.disk}
                   onChange={(v) => {
                     props.setNodeDefaults((prev) => ({...prev, disk: v}));
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="disk"
                 />
@@ -1149,7 +1182,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                   value={props.storageDefault()}
                   onChange={(v) => {
                     props.setStorageDefault(v);
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   type="disk"
                 />
@@ -1270,7 +1303,8 @@ function DestinationsTab(props: DestinationsTabProps) {
   });
   
   // Expose emailConfig to parent (convert to API format)
-  onMount(() => {
+  // Use createEffect instead of onMount to ensure it's always set
+  createEffect(() => {
     if (props.ref) {
       props.ref.emailConfig = () => {
         const config = emailConfig();
@@ -1335,10 +1369,35 @@ function DestinationsTab(props: DestinationsTabProps) {
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
-      await NotificationsAPI.testNotification({ type: 'email' });
+      // Get current form values and convert to backend format
+      const currentConfig = emailConfig();
+      
+      // If no recipients specified, use the from address as default recipient
+      const recipients = currentConfig.to && currentConfig.to.length > 0 
+        ? currentConfig.to 
+        : (currentConfig.from ? [currentConfig.from] : []);
+      
+      const configToTest: EmailConfig = {
+        enabled: currentConfig.enabled,
+        provider: currentConfig.provider,
+        server: currentConfig.smtpHost,
+        port: currentConfig.smtpPort,
+        username: currentConfig.username,
+        password: currentConfig.password,
+        from: currentConfig.from,
+        to: recipients,
+        tls: currentConfig.tls,
+        starttls: currentConfig.startTLS
+      };
+      
+      await NotificationsAPI.testNotification({ 
+        type: 'email',
+        config: configToTest 
+      });
       alert('Test email sent successfully! Check your inbox.');
     } catch (err) {
-      alert('Failed to send test email');
+      console.error('Failed to send test email:', err);
+      alert(`Failed to send test email: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setTestingEmail(false);
     }
@@ -1374,7 +1433,7 @@ function DestinationsTab(props: DestinationsTabProps) {
               checked={emailConfig().enabled}
               onChange={(e) => {
                 setEmailConfig({...emailConfig(), enabled: e.currentTarget.checked});
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer" 
             />
@@ -1387,7 +1446,7 @@ function DestinationsTab(props: DestinationsTabProps) {
             config={emailConfig()}
             onChange={(config) => {
               setEmailConfig(config);
-              // Changed
+              props.setHasUnsavedChanges(true);
             }}
             onTest={testEmailConfig}
             testing={testingEmail()}

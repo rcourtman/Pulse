@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rs/zerolog/log"
 )
@@ -20,6 +21,7 @@ type ConfigPersistence struct {
 	webhookFile string
 	nodesFile   string
 	systemFile  string
+	crypto      *crypto.CryptoManager
 }
 
 // NewConfigPersistence creates a new config persistence manager
@@ -28,19 +30,28 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		configDir = "/etc/pulse"
 	}
 	
+	// Initialize crypto manager
+	cryptoMgr, err := crypto.NewCryptoManager()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize crypto manager, using unencrypted storage")
+		cryptoMgr = nil
+	}
+	
 	cp := &ConfigPersistence{
 		configDir:   configDir,
 		alertFile:   filepath.Join(configDir, "alerts.json"),
-		emailFile:   filepath.Join(configDir, "email.json"),
+		emailFile:   filepath.Join(configDir, "email.enc"),
 		webhookFile: filepath.Join(configDir, "webhooks.json"),
-		nodesFile:   filepath.Join(configDir, "nodes.json"),
+		nodesFile:   filepath.Join(configDir, "nodes.enc"),
 		systemFile:  filepath.Join(configDir, "system.json"),
+		crypto:      cryptoMgr,
 	}
 	
 	log.Debug().
 		Str("configDir", configDir).
 		Str("systemFile", cp.systemFile).
 		Str("nodesFile", cp.nodesFile).
+		Bool("encryptionEnabled", cryptoMgr != nil).
 		Msg("Config persistence initialized")
 	
 	return cp
@@ -113,18 +124,13 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	return &config, nil
 }
 
-// SaveEmailConfig saves email configuration to file
+// SaveEmailConfig saves email configuration to file (encrypted)
 func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
-	// Don't save password in plain text - in production, use proper secret management
-	configToSave := config
-	if configToSave.Password != "" {
-		configToSave.Password = "***ENCRYPTED***"
-	}
-	
-	data, err := json.MarshalIndent(configToSave, "", "  ")
+	// Marshal to JSON first
+	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -133,15 +139,28 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 		return err
 	}
 	
-	if err := os.WriteFile(c.emailFile, data, 0644); err != nil {
+	// Encrypt if crypto manager is available
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+	
+	// Save with restricted permissions (owner read/write only)
+	if err := os.WriteFile(c.emailFile, data, 0600); err != nil {
 		return err
 	}
 	
-	log.Info().Str("file", c.emailFile).Msg("Email configuration saved")
+	log.Info().
+		Str("file", c.emailFile).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Email configuration saved")
 	return nil
 }
 
-// LoadEmailConfig loads email configuration from file
+// LoadEmailConfig loads email configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -149,6 +168,24 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 	data, err := os.ReadFile(c.emailFile)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Check for legacy unencrypted file
+			legacyFile := filepath.Join(c.configDir, "email.json")
+			if legacyData, err := os.ReadFile(legacyFile); err == nil {
+				// Migrate from legacy file
+				var config notifications.EmailConfig
+				if err := json.Unmarshal(legacyData, &config); err == nil {
+					log.Info().Msg("Migrating email config from legacy file")
+					// Save encrypted version
+					go func() {
+						c.mu.Lock()
+						defer c.mu.Unlock()
+						c.SaveEmailConfig(config)
+						os.Remove(legacyFile) // Remove old file
+					}()
+					return &config, nil
+				}
+			}
+			
 			// Return empty config if file doesn't exist
 			return &notifications.EmailConfig{
 				Enabled:  false,
@@ -160,17 +197,24 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 		return nil, err
 	}
 	
+	// Decrypt if crypto manager is available
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+	
 	var config notifications.EmailConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
 	
-	// Password needs to be re-entered by user for security
-	if config.Password == "***ENCRYPTED***" {
-		config.Password = ""
-	}
-	
-	log.Info().Str("file", c.emailFile).Msg("Email configuration loaded")
+	log.Info().
+		Str("file", c.emailFile).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Email configuration loaded")
 	return &config, nil
 }
 
@@ -234,7 +278,7 @@ type SystemSettings struct {
 	ConnectionTimeout int    `json:"connectionTimeout,omitempty"`
 }
 
-// SaveNodesConfig saves nodes configuration to file
+// SaveNodesConfig saves nodes configuration to file (encrypted)
 func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -253,18 +297,28 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		return err
 	}
 	
-	if err := os.WriteFile(c.nodesFile, data, 0644); err != nil {
+	// Encrypt if crypto manager is available
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+	
+	if err := os.WriteFile(c.nodesFile, data, 0600); err != nil {
 		return err
 	}
 	
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(pveInstances)).
 		Int("pbs", len(pbsInstances)).
+		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration saved")
 	return nil
 }
 
-// LoadNodesConfig loads nodes configuration from file
+// LoadNodesConfig loads nodes configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -272,10 +326,36 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	data, err := os.ReadFile(c.nodesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Check for legacy unencrypted file
+			legacyFile := filepath.Join(c.configDir, "nodes.json")
+			if legacyData, err := os.ReadFile(legacyFile); err == nil {
+				// Migrate from legacy file
+				var config NodesConfig
+				if err := json.Unmarshal(legacyData, &config); err == nil {
+					log.Info().Msg("Migrating nodes config from legacy file")
+					// Save encrypted version
+					go func() {
+						c.mu.Lock()
+						defer c.mu.Unlock()
+						c.SaveNodesConfig(config.PVEInstances, config.PBSInstances)
+						os.Remove(legacyFile) // Remove old file
+					}()
+					return &config, nil
+				}
+			}
 			// Return nil if file doesn't exist - will use env vars
 			return nil, nil
 		}
 		return nil, err
+	}
+	
+	// Decrypt if crypto manager is available
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
 	}
 	
 	var config NodesConfig
@@ -286,6 +366,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(config.PVEInstances)).
 		Int("pbs", len(config.PBSInstances)).
+		Bool("encrypted", c.crypto != nil).
 		Msg("Nodes configuration loaded")
 	return &config, nil
 }

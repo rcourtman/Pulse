@@ -14,6 +14,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// TestNodeInfo contains information about nodes for test notifications
+type TestNodeInfo struct {
+	NodeName    string
+	InstanceURL string
+}
+
 // NotificationManager handles sending notifications
 type NotificationManager struct {
 	mu           sync.RWMutex
@@ -493,6 +499,13 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 	
 	switch method {
 	case "email":
+		log.Info().
+			Bool("enabled", n.emailConfig.Enabled).
+			Str("smtp", n.emailConfig.SMTPHost).
+			Int("port", n.emailConfig.SMTPPort).
+			Str("from", n.emailConfig.From).
+			Int("toCount", len(n.emailConfig.To)).
+			Msg("Testing email notification")
 		if !n.emailConfig.Enabled {
 			return fmt.Errorf("email notifications are not enabled")
 		}
@@ -519,6 +532,71 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 	}
 }
 
+// SendTestNotificationWithConfig sends a test notification using provided config
+func (n *NotificationManager) SendTestNotificationWithConfig(method string, config *EmailConfig, nodeInfo *TestNodeInfo) error {
+	// Use actual node info if provided, otherwise use defaults
+	nodeName := "test-node"
+	instanceURL := "https://proxmox.local:8006"
+	if nodeInfo != nil {
+		if nodeInfo.NodeName != "" {
+			nodeName = nodeInfo.NodeName
+		}
+		if nodeInfo.InstanceURL != "" {
+			instanceURL = nodeInfo.InstanceURL
+		}
+	}
+	
+	testAlert := &alerts.Alert{
+		ID:           "test-alert",
+		Type:         "cpu",
+		Level:        "warning",
+		ResourceID:   "test-email-config",
+		ResourceName: "Email Configuration Test",
+		Node:         nodeName,
+		Instance:     instanceURL,
+		Message:      "This is a test alert to verify your email notification settings are working correctly",
+		Value:        85.5,
+		Threshold:    80,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"resourceType": "test",
+		},
+	}
+	
+	switch method {
+	case "email":
+		if config == nil {
+			return fmt.Errorf("email configuration is required")
+		}
+		
+		log.Info().
+			Bool("enabled", config.Enabled).
+			Str("smtp", config.SMTPHost).
+			Int("port", config.SMTPPort).
+			Str("from", config.From).
+			Int("toCount", len(config.To)).
+			Msg("Testing email notification with provided config")
+			
+		if !config.Enabled {
+			return fmt.Errorf("email notifications are not enabled in the provided configuration")
+		}
+		
+		if config.SMTPHost == "" || config.From == "" || len(config.To) == 0 {
+			return fmt.Errorf("email configuration is incomplete: SMTP host, from address, and recipients are required")
+		}
+		
+		// Generate email using template
+		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{testAlert}, true)
+		
+		// Send using provided config
+		n.sendHTMLEmail(subject, htmlBody, textBody, *config)
+		return nil
+		
+	default:
+		return fmt.Errorf("unsupported method for config-based testing: %s", method)
+	}
+}
 
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {

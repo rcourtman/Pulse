@@ -69,16 +69,42 @@ export class NotificationsAPI {
     if (!response.ok) {
       throw new Error('Failed to fetch email configuration');
     }
-    return response.json();
+    const backendConfig = await response.json();
+    
+    // Convert backend field names to frontend field names
+    return {
+      enabled: backendConfig.enabled || false,
+      provider: backendConfig.provider || '',
+      server: backendConfig.smtpHost || '',
+      port: backendConfig.smtpPort || 587,
+      username: backendConfig.username || '',
+      password: backendConfig.password || '',
+      from: backendConfig.from || '',
+      to: backendConfig.to || [],
+      tls: backendConfig.tls || false,
+      starttls: backendConfig.tls || false // Backend only has TLS field
+    };
   }
 
   static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
+    // Convert frontend field names to backend field names
+    const backendConfig = {
+      enabled: config.enabled,
+      smtpHost: config.server,
+      smtpPort: config.port,
+      username: config.username,
+      password: config.password,
+      from: config.from,
+      to: config.to,
+      tls: config.tls || config.starttls // Backend only has TLS field
+    };
+    
     const response = await fetch(`${this.baseUrl}/email`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(config),
+      body: JSON.stringify(backendConfig),
     });
     
     if (!response.ok) {
@@ -160,12 +186,19 @@ export class NotificationsAPI {
 
   // Testing
   static async testNotification(request: NotificationTestRequest): Promise<{ success: boolean; message?: string }> {
+    const body: any = { method: request.type };
+    
+    // Include config if provided for testing without saving
+    if (request.config) {
+      body.config = request.config;
+    }
+    
     const response = await fetch(`${this.baseUrl}/test`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(body),
     });
     
     if (!response.ok) {
