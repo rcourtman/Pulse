@@ -1369,28 +1369,10 @@ function DestinationsTab(props: DestinationsTabProps) {
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
-      // Get current form values and convert to backend format
-      const currentConfig = props.emailConfig();
-      
-      // Keep recipients empty if none specified - backend will use from address
-      const recipients = currentConfig.to && currentConfig.to.length > 0 
-        ? currentConfig.to 
-        : [];
-      
-      const configToTest = {
-        enabled: currentConfig.enabled,
-        smtpHost: currentConfig.smtpHost,
-        smtpPort: currentConfig.smtpPort,
-        username: currentConfig.username,
-        password: currentConfig.password,
-        from: currentConfig.from,
-        to: recipients,
-        tls: currentConfig.tls
-      };
-      
+      // Don't send config - let backend use saved config which has the actual password
       await NotificationsAPI.testNotification({ 
-        type: 'email',
-        config: configToTest 
+        type: 'email'
+        // No config - use saved backend config
       });
       alert('Test email sent successfully! Check your inbox.');
     } catch (err) {
