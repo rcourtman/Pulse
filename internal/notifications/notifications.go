@@ -598,8 +598,8 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			return fmt.Errorf("email notifications are not enabled in the provided configuration")
 		}
 		
-		if config.SMTPHost == "" || config.From == "" || len(config.To) == 0 {
-			return fmt.Errorf("email configuration is incomplete: SMTP host, from address, and recipients are required")
+		if config.SMTPHost == "" || config.From == "" {
+			return fmt.Errorf("email configuration is incomplete: SMTP host and from address are required")
 		}
 		
 		// Generate email using template
