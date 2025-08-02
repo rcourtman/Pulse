@@ -78,6 +78,24 @@ interface Override {
 }
 
 
+// Local email config with UI-specific fields
+interface UIEmailConfig {
+  enabled: boolean;
+  provider: string;
+  smtpHost: string;
+  smtpPort: number;
+  username: string;
+  password: string;
+  from: string;
+  to: string[];
+  tls: boolean;
+  startTLS: boolean;
+  replyTo: string;
+  maxRetries: number;
+  retryDelay: number;
+  rateLimit: number;
+}
+
 export function Alerts() {
   const { state, activeAlerts } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
@@ -88,6 +106,41 @@ export function Alerts() {
   let scheduleRef: ScheduleRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
+  
+  // Email configuration state moved to parent to persist across tab changes
+  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
+    enabled: false,
+    provider: '',
+    smtpHost: '',
+    smtpPort: 587,
+    username: '',
+    password: '',
+    from: '',
+    to: [] as string[],
+    tls: true,
+    startTLS: false,
+    replyTo: '',
+    maxRetries: 3,
+    retryDelay: 5,
+    rateLimit: 60
+  });
+  
+  // Set up destinationsRef.emailConfig function immediately
+  destinationsRef.emailConfig = () => {
+    const config = emailConfig();
+    return {
+      enabled: config.enabled,
+      provider: config.provider,
+      server: config.smtpHost,
+      port: config.smtpPort,
+      username: config.username,
+      password: config.password,
+      from: config.from,
+      to: config.to,
+      tls: config.tls,
+      starttls: config.startTLS
+    } as EmailConfig;
+  };
   
   // Load existing alert configuration on mount (only once)
   onMount(async () => {
@@ -172,6 +225,29 @@ export function Alerts() {
             } : undefined
           };
           scheduleRef.setScheduleConfig(scheduleConfig);
+        }
+        
+        // Load email configuration
+        try {
+          const emailConfigData = await NotificationsAPI.getEmailConfig();
+          setEmailConfig({
+            enabled: emailConfigData.enabled,
+            provider: emailConfigData.provider,
+            smtpHost: emailConfigData.server,
+            smtpPort: emailConfigData.port,
+            username: emailConfigData.username,
+            password: emailConfigData.password || '',
+            from: emailConfigData.from,
+            to: emailConfigData.to,
+            tls: emailConfigData.tls,
+            startTLS: emailConfigData.starttls,
+            replyTo: '',
+            maxRetries: 3,
+            retryDelay: 5,
+            rateLimit: 60
+          });
+        } catch (emailErr) {
+          console.error('Failed to load email configuration:', emailErr);
         }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
@@ -370,10 +446,10 @@ export function Alerts() {
                     
                     await AlertsAPI.updateConfig(alertConfig);
                     
-                    // Save email config if on destinations tab
+                    // Save email config if it exists (regardless of active tab)
                     console.log('Active tab:', activeTab());
                     console.log('Has emailConfig:', !!destinationsRef.emailConfig);
-                    if (activeTab() === 'destinations' && destinationsRef.emailConfig) {
+                    if (destinationsRef.emailConfig) {
                       const emailData = destinationsRef.emailConfig();
                       console.log('Saving email config:', emailData);
                       await NotificationsAPI.updateEmailConfig(emailData);
@@ -453,6 +529,8 @@ export function Alerts() {
               ref={destinationsRef}
               hasUnsavedChanges={hasUnsavedChanges}
               setHasUnsavedChanges={setHasUnsavedChanges}
+              emailConfig={emailConfig}
+              setEmailConfig={setEmailConfig}
             />
           </Show>
           
@@ -1264,96 +1342,18 @@ interface DestinationsTabProps {
   ref: DestinationsRef;
   hasUnsavedChanges: () => boolean;
   setHasUnsavedChanges: (value: boolean) => void;
-}
-
-// Local email config with UI-specific fields
-interface UIEmailConfig {
-  enabled: boolean;
-  provider: string;
-  smtpHost: string;
-  smtpPort: number;
-  username: string;
-  password: string;
-  from: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
-  rateLimit: number;
+  emailConfig: () => UIEmailConfig;
+  setEmailConfig: (config: UIEmailConfig) => void;
 }
 
 function DestinationsTab(props: DestinationsTabProps) {
-  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
-    enabled: false,
-    provider: '',
-    smtpHost: '',
-    smtpPort: 587,
-    username: '',
-    password: '',
-    from: '',
-    to: [] as string[],
-    tls: true,
-    startTLS: false,
-    replyTo: '',
-    maxRetries: 3,
-    retryDelay: 5,
-    rateLimit: 60
-  });
-  
-  // Expose emailConfig to parent (convert to API format)
-  // Use createEffect instead of onMount to ensure it's always set
-  createEffect(() => {
-    if (props.ref) {
-      props.ref.emailConfig = () => {
-        const config = emailConfig();
-        return {
-          enabled: config.enabled,
-          provider: config.provider,
-          server: config.smtpHost,
-          port: config.smtpPort,
-          username: config.username,
-          password: config.password,
-          from: config.from,
-          to: config.to,
-          tls: config.tls,
-          starttls: config.startTLS
-        } as EmailConfig;
-      };
-    }
-  });
   
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
   
-  // Load email config on mount
+  // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
-    try {
-      const config = await NotificationsAPI.getEmailConfig();
-      // Map API config to local format
-      setEmailConfig({
-        enabled: config.enabled,
-        provider: config.provider,
-        smtpHost: config.server,
-        smtpPort: config.port,
-        username: config.username,
-        password: config.password || '',
-        from: config.from,
-        to: config.to,
-        tls: config.tls,
-        startTLS: config.starttls,
-        replyTo: '',
-        maxRetries: 3,
-        retryDelay: 5,
-        rateLimit: 60
-      });
-    } catch (err) {
-      console.error('Failed to load email config:', err);
-    }
-    
-    // Load webhooks
     try {
       const hooks = await NotificationsAPI.getWebhooks();
       // Map to local Webhook type
@@ -1370,7 +1370,7 @@ function DestinationsTab(props: DestinationsTabProps) {
     setTestingEmail(true);
     try {
       // Get current form values and convert to backend format
-      const currentConfig = emailConfig();
+      const currentConfig = props.emailConfig();
       
       // If no recipients specified, use the from address as default recipient
       const recipients = currentConfig.to && currentConfig.to.length > 0 
@@ -1430,9 +1430,9 @@ function DestinationsTab(props: DestinationsTabProps) {
           <label class="relative inline-flex items-center cursor-pointer">
             <input 
               type="checkbox" 
-              checked={emailConfig().enabled}
+              checked={props.emailConfig().enabled}
               onChange={(e) => {
-                setEmailConfig({...emailConfig(), enabled: e.currentTarget.checked});
+                props.setEmailConfig({...props.emailConfig(), enabled: e.currentTarget.checked});
                 props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer" 
@@ -1441,11 +1441,11 @@ function DestinationsTab(props: DestinationsTabProps) {
           </label>
         </div>
         
-        <div class={`${!emailConfig().enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div class={`${!props.emailConfig().enabled ? 'opacity-50 pointer-events-none' : ''}`}>
           <EmailProviderSelect
-            config={emailConfig()}
+            config={props.emailConfig()}
             onChange={(config) => {
-              setEmailConfig(config);
+              props.setEmailConfig(config);
               props.setHasUnsavedChanges(true);
             }}
             onTest={testEmailConfig}

@@ -249,10 +249,8 @@ func (n *NotificationManager) sendGroupedAlerts() {
 func (n *NotificationManager) sendGroupedEmail(alertList []*alerts.Alert) {
 	config := n.emailConfig
 	
-	if len(config.To) == 0 {
-		log.Warn().Msg("No email recipients configured")
-		return
-	}
+	// Don't check for recipients here - sendHTMLEmail handles empty recipients
+	// by using the From address as the recipient
 	
 	// Generate email using template
 	subject, htmlBody, textBody := EmailTemplate(alertList, false)
@@ -267,10 +265,8 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 	config := n.emailConfig
 	n.mu.RUnlock()
 	
-	if len(config.To) == 0 {
-		log.Warn().Msg("No email recipients configured")
-		return
-	}
+	// Don't check for recipients here - sendHTMLEmail handles empty recipients
+	// by using the From address as the recipient
 	
 	// Generate email using template
 	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
@@ -283,9 +279,18 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, config EmailConfig) {
 	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
 	
+	// Use From address as recipient if To is empty
+	recipients := config.To
+	if len(recipients) == 0 && config.From != "" {
+		recipients = []string{config.From}
+		log.Info().
+			Str("from", config.From).
+			Msg("Using From address as recipient since To is empty")
+	}
+	
 	// Compose multipart message
 	msg := fmt.Sprintf("From: %s\r\n", config.From)
-	msg += fmt.Sprintf("To: %s\r\n", strings.Join(config.To, ", "))
+	msg += fmt.Sprintf("To: %s\r\n", strings.Join(recipients, ", "))
 	msg += fmt.Sprintf("Subject: %s\r\n", subject)
 	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	msg += "MIME-Version: 1.0\r\n"
@@ -316,16 +321,27 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 	}
 	
 	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
-	err := smtp.SendMail(addr, auth, config.From, config.To, []byte(msg))
+	
+	log.Info().
+		Str("smtp", addr).
+		Str("from", config.From).
+		Strs("to", recipients).
+		Bool("hasAuth", auth != nil).
+		Msg("Attempting to send email via SMTP")
+	
+	err := smtp.SendMail(addr, auth, config.From, recipients, []byte(msg))
 	
 	if err != nil {
 		log.Error().
 			Err(err).
+			Str("smtp", addr).
+			Strs("recipients", recipients).
 			Msg("Failed to send email notification")
 	} else {
 		log.Info().
-			Strs("recipients", config.To).
-			Msg("Email notification sent")
+			Strs("recipients", recipients).
+			Int("recipientCount", len(recipients)).
+			Msg("Email notification sent successfully")
 	}
 }
 
