@@ -179,12 +179,23 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 
 // TestNotification sends a test notification
 func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.Request) {
+	// Read body for debugging
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	
+	log.Info().
+		Str("body", string(body)).
+		Msg("Test notification request received")
+	
 	var req struct {
 		Method string                    `json:"method"` // "email" or "webhook"
 		Config *notifications.EmailConfig `json:"config,omitempty"` // Optional config for testing
 	}
 	
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -206,6 +217,15 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 	
 	// If config is provided, use it for testing (without saving)
 	if req.Method == "email" && req.Config != nil {
+		log.Info().
+			Bool("enabled", req.Config.Enabled).
+			Str("smtp", req.Config.SMTPHost).
+			Str("from", req.Config.From).
+			Int("toCount", len(req.Config.To)).
+			Strs("to", req.Config.To).
+			Bool("hasPassword", req.Config.Password != "").
+			Msg("Testing email with provided config")
+			
 		if err := h.monitor.GetNotificationManager().SendTestNotificationWithConfig(req.Method, req.Config, nodeInfo); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

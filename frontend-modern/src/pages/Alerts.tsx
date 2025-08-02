@@ -1372,22 +1372,20 @@ function DestinationsTab(props: DestinationsTabProps) {
       // Get current form values and convert to backend format
       const currentConfig = props.emailConfig();
       
-      // If no recipients specified, use the from address as default recipient
+      // Keep recipients empty if none specified - backend will use from address
       const recipients = currentConfig.to && currentConfig.to.length > 0 
         ? currentConfig.to 
-        : (currentConfig.from ? [currentConfig.from] : []);
+        : [];
       
-      const configToTest: EmailConfig = {
+      const configToTest = {
         enabled: currentConfig.enabled,
-        provider: currentConfig.provider,
-        server: currentConfig.smtpHost,
-        port: currentConfig.smtpPort,
+        smtpHost: currentConfig.smtpHost,
+        smtpPort: currentConfig.smtpPort,
         username: currentConfig.username,
         password: currentConfig.password,
         from: currentConfig.from,
         to: recipients,
-        tls: currentConfig.tls,
-        starttls: currentConfig.startTLS
+        tls: currentConfig.tls
       };
       
       await NotificationsAPI.testNotification({ 
