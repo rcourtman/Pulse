@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    container_name: pulse
+    ports:
+      - "7655:7655"  # Web UI
+      - "3000:3000"  # API (optional, only if you need direct API access)
+    volumes:
+      - pulse_config:/etc/pulse
+      - pulse_data:/data
+    environment:
+      - TZ=UTC  # Set your timezone
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7655"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pulse_config:
+    driver: local
+  pulse_data:
+    driver: local
