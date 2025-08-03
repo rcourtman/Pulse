@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -303,10 +302,16 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("Added Proxmox cluster with auto-discovered endpoints")
 		}
 	} else {
+		// Ensure user has realm for PBS
+		pbsUser := req.User
+		if req.User != "" && !strings.Contains(req.User, "@") {
+			pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
+		}
+		
 		pbs := config.PBSInstance{
 			Name:              req.Name,
 			Host:              req.Host,
-			User:              req.User,
+			User:              pbsUser,
 			Password:          req.Password,
 			TokenName:         req.TokenName,
 			TokenValue:        req.TokenValue,
@@ -500,9 +505,15 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		}
 		
 		// PBS test connection
+		// Ensure user has realm for PBS
+		pbsUser := user
+		if user != "" && !strings.Contains(user, "@") {
+			pbsUser = user + "@pbs" // Default to @pbs realm if not specified
+		}
+		
 		clientConfig := pbs.ClientConfig{
 			Host:        host,
-			User:        user,
+			User:        pbsUser,
 			Password:    req.Password,
 			TokenName:   tokenName,
 			TokenValue:  req.TokenValue,
@@ -593,7 +604,12 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pbs.Name = req.Name
 		pbs.Host = req.Host
 		if req.User != "" {
-			pbs.User = req.User
+			// Ensure user has realm for PBS
+			pbsUser := req.User
+			if !strings.Contains(req.User, "@") {
+				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
+			}
+			pbs.User = pbsUser
 		}
 		if req.Password != "" {
 			pbs.Password = req.Password
@@ -686,6 +702,129 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// HandleTestExistingNode tests a connection for an existing node using stored credentials
+func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.Request) {
+	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
+	nodeID = strings.TrimSuffix(nodeID, "/test")
+	if nodeID == "" {
+		http.Error(w, "Node ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse node ID
+	parts := strings.Split(nodeID, "-")
+	if len(parts) != 2 {
+		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		return
+	}
+
+	nodeType := parts[0]
+	index := 0
+	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get the node configuration
+	var host, user, password, tokenName, tokenValue, fingerprint string
+	var verifySSL bool
+	
+	if nodeType == "pve" && index < len(h.config.PVEInstances) {
+		pve := h.config.PVEInstances[index]
+		host = pve.Host
+		user = pve.User
+		password = pve.Password
+		tokenName = pve.TokenName
+		tokenValue = pve.TokenValue
+		fingerprint = pve.Fingerprint
+		verifySSL = pve.VerifySSL
+	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
+		pbs := h.config.PBSInstances[index]
+		host = pbs.Host
+		user = pbs.User
+		password = pbs.Password
+		tokenName = pbs.TokenName
+		tokenValue = pbs.TokenValue
+		fingerprint = pbs.Fingerprint
+		verifySSL = pbs.VerifySSL
+	} else {
+		http.Error(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	// Test the connection based on type
+	if nodeType == "pve" {
+		clientConfig := proxmox.ClientConfig{
+			Host:        host,
+			User:        user,
+			Password:    password,
+			TokenName:   tokenName,
+			TokenValue:  tokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
+		}
+		
+		tempClient, err := proxmox.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		nodes, err := tempClient.GetNodes(ctx)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"status": "success",
+			"message": fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
+			"nodeCount": len(nodes),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		// PBS test
+		clientConfig := pbs.ClientConfig{
+			Host:        host,
+			User:        user,
+			Password:    password,
+			TokenName:   tokenName,
+			TokenValue:  tokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: fingerprint,
+		}
+		
+		tempClient, err := pbs.NewClient(clientConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		datastores, err := tempClient.GetDatastores(ctx)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"status": "success",
+			"message": fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
+			"datastoreCount": len(datastores),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
 }
 
 // HandleTestNodeConfig tests a node connection from provided configuration
@@ -938,49 +1077,16 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 		return
 	}
 	
-	// Load unified config
-	configPath := os.Getenv("PULSE_CONFIG")
-	if configPath == "" {
-		configPath = "/etc/pulse/pulse.yml"
-	}
-	
-	manager, err := config.NewConfigManager(configPath)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load config manager")
-		http.Error(w, "Failed to load configuration", http.StatusInternalServerError)
-		return
-	}
-	
-	// Update all settings
-	err = manager.Update(func(cfg *config.UnifiedConfig) {
-		// Update polling interval
-		if settings.PollingInterval > 0 {
-			cfg.Monitoring.PollingInterval = fmt.Sprintf("%ds", settings.PollingInterval)
+	// Update polling interval using our persistence
+	if settings.PollingInterval > 0 {
+		if err := config.UpdatePollingInterval(settings.PollingInterval); err != nil {
+			log.Error().Err(err).Msg("Failed to save polling interval")
+			http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+			return
 		}
 		
-		// Update ports
-		if settings.BackendPort > 0 {
-			cfg.Server.Backend.Port = settings.BackendPort
-		}
-		if settings.FrontendPort > 0 {
-			cfg.Server.Frontend.Port = settings.FrontendPort
-		}
-		
-		// Update security settings
-		if settings.AllowedOrigins != "" {
-			cfg.Security.AllowedOrigins = []string{settings.AllowedOrigins}
-		}
-		
-		// Update connection timeout
-		if settings.ConnectionTimeout > 0 {
-			cfg.Monitoring.ConnectionTimeout = fmt.Sprintf("%ds", settings.ConnectionTimeout)
-		}
-	})
-	
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to save unified config")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
-		return
+		// Update the running config
+		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
 	}
 	
 	log.Info().

@@ -107,33 +107,55 @@ type PBSInstance struct {
 	MonitorGarbageJobs bool
 }
 
-// Global config manager instance for saving
-var globalConfigManager *ConfigManager
+// Global persistence instance for saving
+var globalPersistence *ConfigPersistence
 
-// Load reads configuration from the unified config file
+// Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
-	// Determine config file path
-	configPath := os.Getenv("PULSE_CONFIG")
-	if configPath == "" {
-		configPath = "/etc/pulse/pulse.yml"
+	// Initialize config with defaults
+	cfg := &Config{
+		BackendHost:          "0.0.0.0",
+		BackendPort:          3000,
+		FrontendHost:         "0.0.0.0", 
+		FrontendPort:         7655,
+		ConfigPath:           "/etc/pulse",
+		DataPath:             "/data",
+		ConcurrentPolling:    true,
+		ConnectionTimeout:    10 * time.Second,
+		MetricsRetentionDays: 7,
+		BackupPollingCycles:  10,
+		WebhookBatchDelay:    10 * time.Second,
+		LogLevel:             "info",
+		LogMaxSize:           100,
+		LogMaxAge:            30,
+		LogCompress:          true,
+		AllowedOrigins:       "*",
+		IframeEmbeddingAllow: "SAMEORIGIN",
+		PollingInterval:      3 * time.Second,
 	}
 	
-	// Create config manager
-	manager, err := NewConfigManager(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-	
-	// Store global manager for saving
-	globalConfigManager = manager
-	
-	// Get unified config
-	unified := manager.Get()
-	
-	// Convert to legacy format for compatibility
-	cfg, err := unified.ToLegacyConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert config: %w", err)
+	// Initialize persistence
+	persistence := NewConfigPersistence("/etc/pulse")
+	if persistence != nil {
+		// Store global persistence for saving
+		globalPersistence = persistence
+		// Load nodes configuration
+		if nodesConfig, err := persistence.LoadNodesConfig(); err == nil && nodesConfig != nil {
+			cfg.PVEInstances = nodesConfig.PVEInstances
+			cfg.PBSInstances = nodesConfig.PBSInstances
+			log.Info().
+				Int("pve", len(cfg.PVEInstances)).
+				Int("pbs", len(cfg.PBSInstances)).
+				Msg("Loaded nodes configuration")
+		}
+		
+		// Load system configuration
+		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+			if systemSettings.PollingInterval > 0 {
+				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
+			}
+			log.Info().Dur("interval", cfg.PollingInterval).Msg("Loaded system configuration")
+		}
 	}
 	
 	// Override with environment variables if present
@@ -169,72 +191,38 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// SaveConfig saves the configuration back to the YAML file
+// SaveConfig saves the configuration back to encrypted files
 func SaveConfig(cfg *Config) error {
-	if globalConfigManager == nil {
-		return fmt.Errorf("config manager not initialized")
+	if globalPersistence == nil {
+		return fmt.Errorf("config persistence not initialized")
 	}
 	
-	// Update the unified config with the new data
-	return globalConfigManager.Update(func(uc *UnifiedConfig) {
-		// Convert PVE instances
-		uc.Nodes.PVE = make([]PVENode, 0, len(cfg.PVEInstances))
-		for _, pve := range cfg.PVEInstances {
-			node := PVENode{
-				Name:              pve.Name,
-				Host:              pve.Host,
-				User:              pve.User,
-				Password:          pve.Password,
-				TokenName:         pve.TokenName,
-				TokenValue:        pve.TokenValue,
-				Fingerprint:       pve.Fingerprint,
-				VerifySSL:         pve.VerifySSL,
-				MonitorVMs:        pve.MonitorVMs,
-				MonitorContainers: pve.MonitorContainers,
-				MonitorStorage:    pve.MonitorStorage,
-				MonitorBackups:    pve.MonitorBackups,
-				IsCluster:         pve.IsCluster,
-				ClusterName:       pve.ClusterName,
-			}
-			
-			// Convert cluster endpoints
-			if len(pve.ClusterEndpoints) > 0 {
-				node.ClusterEndpoints = make([]ClusterEndpointConfig, 0, len(pve.ClusterEndpoints))
-				for _, ep := range pve.ClusterEndpoints {
-					node.ClusterEndpoints = append(node.ClusterEndpoints, ClusterEndpointConfig{
-						NodeID:   ep.NodeID,
-						NodeName: ep.NodeName,
-						Host:     ep.Host,
-						IP:       ep.IP,
-					})
-				}
-			}
-			
-			uc.Nodes.PVE = append(uc.Nodes.PVE, node)
-		}
-		
-		// Convert PBS instances
-		uc.Nodes.PBS = make([]PBSNode, 0, len(cfg.PBSInstances))
-		for _, pbs := range cfg.PBSInstances {
-			node := PBSNode{
-				Name:               pbs.Name,
-				Host:               pbs.Host,
-				User:               pbs.User,
-				Password:           pbs.Password,
-				TokenName:          pbs.TokenName,
-				TokenValue:         pbs.TokenValue,
-				Fingerprint:        pbs.Fingerprint,
-				VerifySSL:          pbs.VerifySSL,
-				MonitorBackups:     pbs.MonitorBackups,
-				MonitorDatastores:  pbs.MonitorDatastores,
-				MonitorSyncJobs:    pbs.MonitorSyncJobs,
-				MonitorVerifyJobs:  pbs.MonitorVerifyJobs,
-				MonitorPruneJobs:   pbs.MonitorPruneJobs,
-				MonitorGarbageJobs: pbs.MonitorGarbageJobs,
-			}
-			uc.Nodes.PBS = append(uc.Nodes.PBS, node)
-		}
-	})
+	// Save nodes configuration
+	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances); err != nil {
+		return fmt.Errorf("failed to save nodes config: %w", err)
+	}
+	
+	// Save system configuration
+	systemSettings := SystemSettings{
+		PollingInterval: int(cfg.PollingInterval.Seconds()),
+	}
+	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
+		return fmt.Errorf("failed to save system config: %w", err)
+	}
+	
+	return nil
+}
+
+// UpdatePollingInterval updates just the polling interval
+func UpdatePollingInterval(interval int) error {
+	if globalPersistence == nil {
+		return fmt.Errorf("config persistence not initialized")
+	}
+	
+	systemSettings := SystemSettings{
+		PollingInterval: interval,
+	}
+	return globalPersistence.SaveSystemSettings(systemSettings)
 }
 
 // loadPVEInstances loads all PVE instances from environment variables

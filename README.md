@@ -30,8 +30,8 @@ docker run -d \
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/pulse.git
-cd pulse
+git clone https://github.com/rcourtman/Pulse.git
+cd Pulse
 ```
 
 2. **Build the backend:**

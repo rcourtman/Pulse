@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "description": "Modern type-safe frontend for Pulse monitoring",
   "type": "module",
+  "author": "rcourtman",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rcourtman/Pulse.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rcourtman/Pulse/issues"
+  },
+  "homepage": "https://github.com/rcourtman/Pulse",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

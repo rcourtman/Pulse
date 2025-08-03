@@ -14,6 +14,8 @@ export interface PVENodeConfig {
   name: string;
   host: string;
   user: string;
+  hasPassword?: boolean;
+  hasToken?: boolean;
   tokenName?: string;
   tokenValue?: string;
   password?: string;
@@ -33,6 +35,8 @@ export interface PBSNodeConfig {
   name: string;
   host: string;
   user: string;
+  hasPassword?: boolean;
+  hasToken?: boolean;
   tokenName?: string;
   tokenValue?: string;
   password?: string;

@@ -120,7 +120,7 @@ func looksLikeCredential(value string) bool {
 // ResolveNodeCredentials resolves all credentials in a node configuration
 func (cr *CredentialResolver) ResolveNodeCredentials(node interface{}, nodeName string) error {
 	switch n := node.(type) {
-	case *PVENode:
+	case *PVEInstance:
 		var err error
 		n.Password, err = cr.ResolveValue(n.Password, fmt.Sprintf("%s.password", nodeName))
 		if err != nil {
@@ -130,7 +130,7 @@ func (cr *CredentialResolver) ResolveNodeCredentials(node interface{}, nodeName 
 		if err != nil {
 			return err
 		}
-	case *PBSNode:
+	case *PBSInstance:
 		var err error
 		n.Password, err = cr.ResolveValue(n.Password, fmt.Sprintf("%s.password", nodeName))
 		if err != nil {

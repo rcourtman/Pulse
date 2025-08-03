@@ -81,8 +81,9 @@ const Settings: Component = () => {
       // Add status and other UI fields
       const nodesWithStatus = nodesList.map(node => ({
         ...node,
-        hasPassword: !!node.password,
-        hasToken: !!node.tokenValue,
+        // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+        hasPassword: node.hasPassword ?? !!node.password,
+        hasToken: node.hasToken ?? !!node.tokenValue,
         status: node.status || 'disconnected' as const
       }));
       setNodes(nodesWithStatus);
@@ -170,7 +171,8 @@ const Settings: Component = () => {
         throw new Error('Node not found');
       }
       
-      const result = await NodesAPI.testConnection(node);
+      // Use the existing node test endpoint which uses stored credentials
+      const result = await NodesAPI.testExistingNode(nodeId);
       if (result.status === 'success') {
         showSuccess(result.message || 'Connection successful');
       } else {
@@ -990,7 +992,13 @@ const Settings: Component = () => {
               // Update local state
               setNodes(nodes().map(n => 
                 n.id === editingNode()!.id 
-                  ? { ...n, ...nodeData, hasPassword: !!nodeData.password, hasToken: !!nodeData.tokenValue }
+                  ? { 
+                      ...n, 
+                      ...nodeData, 
+                      // Update hasPassword/hasToken based on whether credentials were provided
+                      hasPassword: nodeData.password ? true : n.hasPassword,
+                      hasToken: nodeData.tokenValue ? true : n.hasToken
+                    }
                   : n
               ));
               showSuccess('Node updated successfully');
@@ -1002,8 +1010,9 @@ const Settings: Component = () => {
               const nodesList = await NodesAPI.getNodes();
               const nodesWithStatus = nodesList.map(node => ({
                 ...node,
-                hasPassword: !!node.password,
-                hasToken: !!node.tokenValue,
+                // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+                hasPassword: node.hasPassword ?? !!node.password,
+                hasToken: node.hasToken ?? !!node.tokenValue,
                 status: node.status || 'disconnected' as const
               }));
               setNodes(nodesWithStatus);

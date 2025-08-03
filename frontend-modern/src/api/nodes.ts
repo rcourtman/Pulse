@@ -83,4 +83,21 @@ export class NodesAPI {
     
     return response.json();
   }
+
+  static async testExistingNode(nodeId: string): Promise<{ 
+    status: string;
+    message?: string; 
+    latency?: number;
+  }> {
+    const response = await fetch(`${this.baseUrl}/${nodeId}/test`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+    
+    return response.json();
+  }
 }

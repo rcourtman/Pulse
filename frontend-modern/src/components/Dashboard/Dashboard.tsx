@@ -684,7 +684,7 @@ export function Dashboard(props: DashboardProps) {
         </ComponentErrorBoundary>
       </Show>
 
-      <Show when={connected() && initialDataReceived() && filteredGuests().length === 0}>
+      <Show when={connected() && initialDataReceived() && filteredGuests().length === 0 && props.nodes.filter(n => n.type === 'pve').length > 0}>
         <div class="text-center py-12 text-gray-500 dark:text-gray-400">
           <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

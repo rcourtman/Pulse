@@ -168,25 +168,7 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 	data, err := os.ReadFile(c.emailFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Check for legacy unencrypted file
-			legacyFile := filepath.Join(c.configDir, "email.json")
-			if legacyData, err := os.ReadFile(legacyFile); err == nil {
-				// Migrate from legacy file
-				var config notifications.EmailConfig
-				if err := json.Unmarshal(legacyData, &config); err == nil {
-					log.Info().Msg("Migrating email config from legacy file")
-					// Save encrypted version
-					go func() {
-						c.mu.Lock()
-						defer c.mu.Unlock()
-						c.SaveEmailConfig(config)
-						os.Remove(legacyFile) // Remove old file
-					}()
-					return &config, nil
-				}
-			}
-			
-			// Return empty config if file doesn't exist
+			// Return empty config if encrypted file doesn't exist
 			return &notifications.EmailConfig{
 				Enabled:  false,
 				SMTPPort: 587,
@@ -326,25 +308,12 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	data, err := os.ReadFile(c.nodesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Check for legacy unencrypted file
-			legacyFile := filepath.Join(c.configDir, "nodes.json")
-			if legacyData, err := os.ReadFile(legacyFile); err == nil {
-				// Migrate from legacy file
-				var config NodesConfig
-				if err := json.Unmarshal(legacyData, &config); err == nil {
-					log.Info().Msg("Migrating nodes config from legacy file")
-					// Save encrypted version
-					go func() {
-						c.mu.Lock()
-						defer c.mu.Unlock()
-						c.SaveNodesConfig(config.PVEInstances, config.PBSInstances)
-						os.Remove(legacyFile) // Remove old file
-					}()
-					return &config, nil
-				}
-			}
-			// Return nil if file doesn't exist - will use env vars
-			return nil, nil
+			// Return empty config if encrypted file doesn't exist
+			log.Info().Msg("No encrypted nodes configuration found, returning empty config")
+			return &NodesConfig{
+				PVEInstances: []PVEInstance{},
+				PBSInstances: []PBSInstance{},
+			}, nil
 		}
 		return nil, err
 	}

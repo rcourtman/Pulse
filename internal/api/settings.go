@@ -39,13 +39,22 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load current settings
-	loader := config.NewConfigLoader()
-	current, err := loader.LoadConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load current settings")
-		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
-		return
+	// Create current settings from running config
+	// Note: This endpoint seems to be for UI settings, not node configuration
+	current := &config.Settings{
+		Server: config.ServerSettings{
+			Backend: config.PortSettings{
+				Port: 3000, // These are fixed in our new system
+				Host: "0.0.0.0",
+			},
+			Frontend: config.PortSettings{
+				Port: 7655,
+				Host: "0.0.0.0",
+			},
+		},
+		Monitoring: config.MonitoringSettings{
+			PollingInterval: 3, // seconds
+		},
 	}
 
 	response := SettingsResponse{
