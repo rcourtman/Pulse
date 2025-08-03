@@ -1,6 +1,8 @@
 # Pulse Security Guide
 
-Pulse offers flexible security options to protect your credentials while maintaining ease of use for homelab environments.
+## Overview
+
+Pulse is designed as an internal monitoring tool for Proxmox environments with flexible security options to match your deployment needs, from simple homelabs to enterprise deployments.
 
 ## Security Levels
 
