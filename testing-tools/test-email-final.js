@@ -18,7 +18,7 @@ async function testEmailFunctionality() {
       smtpHost: 'smtp.gmail.com',
       smtpPort: 587,
       username: 'test@example.com',
-      password: 'zlff ruyk bxxf cxch',
+      password: 'test-app-password-placeholder',
       from: 'test@example.com',
       to: [],  // Empty recipients
       tls: true
@@ -116,7 +116,7 @@ async function testEmailFunctionality() {
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
         username: 'test@example.com',
-        password: 'zlff ruyk bxxf cxch',
+        password: 'test-app-password-placeholder',
         from: 'test@example.com',
         to: [],  // Empty as fixed
         tls: true

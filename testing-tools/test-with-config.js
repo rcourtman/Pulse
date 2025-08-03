@@ -13,7 +13,7 @@ async function testWithConfig() {
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
         username: 'test@example.com',
-        password: 'zlff ruyk bxxf cxch',
+        password: 'test-app-password-placeholder',
         from: 'test@example.com',
         to: [],  // Empty array
         tls: true
@@ -55,7 +55,7 @@ async function testWithConfig() {
         server: 'smtp.gmail.com',  // Frontend uses 'server'
         port: 587,
         username: 'test@example.com',
-        password: 'zlff ruyk bxxf cxch',
+        password: 'test-app-password-placeholder',
         from: 'test@example.com',
         to: [],
         tls: true

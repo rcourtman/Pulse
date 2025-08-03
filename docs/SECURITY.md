@@ -123,7 +123,7 @@ kind: Secret
 metadata:
   name: pulse-tokens
 stringData:
-  delly-token: "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  proxmox-token: "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -137,7 +137,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: pulse-tokens
-              key: delly-token
+              key: proxmox-token
 ```
 
 ## Migration
