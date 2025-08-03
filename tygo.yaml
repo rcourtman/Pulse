@@ -1,5 +1,0 @@
-packages:
-  - path: "./internal/models"
-    type_mappings:
-      "time.Time": "string"
-    output_path: "./frontend-modern/src/types/generated.ts"
