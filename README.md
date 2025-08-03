@@ -58,71 +58,48 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/instal
 
 ## Configuration
 
-### Web UI (Recommended)
+Pulse uses a modern, secure configuration system similar to popular apps like Radarr and Sonarr:
 
-All configuration can be done through the web interface:
-- **Settings** → **Nodes**: Add/remove Proxmox instances
-- **Settings** → **General**: Configure ports, intervals, themes
+### Everything Through the UI
+
+- **All configuration is done via the web interface** - no manual file editing needed
+- **Settings** → **Nodes**: Add/remove Proxmox instances with a simple form
+- **Settings** → **General**: Configure ports, intervals, themes, and more
 - **Alerts**: Set up thresholds and notification channels
+- **Configuration is encrypted** and stored securely with proper permissions
 
-### Configuration File
+### Zero Configuration Files
 
-For advanced users or automation, you can use `/etc/pulse/pulse.yml`:
+Unlike traditional monitoring tools:
+- **No YAML/JSON files to edit**
+- **No environment variables to set**
+- **No complex configurations**
+- **Works immediately** after installation
 
-```yaml
-# Basic configuration
-server:
-  backend:
-    port: 3000
-    host: "0.0.0.0"
-  frontend:
-    port: 7655
-    host: "0.0.0.0"
+Just open the web UI, add your Proxmox nodes through the interface, and you're done!
 
-# Proxmox nodes
-nodes:
-  pve:
-    - name: my-cluster
-      host: https://proxmox.example.com:8006
-      user: pulse@pam
-      password: your-password
-      # Or use token auth:
-      # token_name: pulse-token
-      # token_value: secret-token-value
-      verifySSL: false
+### For Docker Users
 
-# Monitoring settings
-monitoring:
-  pollingInterval: 5000      # milliseconds
-  backupPollingCycles: 10    # poll backups every N cycles
-
-# Alert settings
-alerts:
-  enabled: true
-  cpuThreshold: 80
-  memoryThreshold: 80
-  diskThreshold: 80
-```
-
-### Environment Variables
-
-All settings can be overridden with environment variables:
+The only environment variables needed are for the initial ports if you want to change defaults:
 
 ```bash
-PULSE_SERVER_FRONTEND_PORT=8080
-PULSE_MONITORING_POLLING_INTERVAL=10000
-PULSE_NODES_PVE_0_HOST=https://proxmox.local:8006
-PULSE_NODES_PVE_0_USER=monitor@pve
-PULSE_NODES_PVE_0_PASSWORD=secret
+docker run -d -p 8080:8080 \
+  -e PULSE_SERVER_FRONTEND_PORT=8080 \
+  -v pulse_config:/etc/pulse \
+  rcourtman/pulse:latest
 ```
 
-### Security Options
+Once running, all configuration is done through the web UI.
 
-See [Security Guide](docs/SECURITY.md) for credential management options:
-- Encrypted file storage (default)
-- Environment variable references
-- External secret files
-- Integration with secret management tools
+### Security
+
+Pulse automatically encrypts and secures all configuration:
+- Credentials are encrypted using AES-256-GCM
+- Configuration files have restricted permissions (0600)
+- No plaintext passwords in config files
+- Encryption keys derived from machine ID
+
+See [Security Guide](docs/SECURITY.md) for additional security options.
 
 ## Webhooks
 
@@ -167,16 +144,14 @@ services:
     volumes:
       - pulse_config:/etc/pulse
       - pulse_data:/data
-    environment:
-      - PULSE_NODES_PVE_0_HOST=https://proxmox.local:8006
-      - PULSE_NODES_PVE_0_USER=monitor@pve
-      - PULSE_NODES_PVE_0_PASSWORD=${PROXMOX_PASSWORD}
     restart: unless-stopped
 
 volumes:
   pulse_config:
   pulse_data:
 ```
+
+After starting, configure everything through the web UI at `http://localhost:7655`.
 
 ## Building from Source
 

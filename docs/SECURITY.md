@@ -2,152 +2,151 @@
 
 ## Overview
 
-Pulse is designed as an internal monitoring tool for Proxmox environments with flexible security options to match your deployment needs, from simple homelabs to enterprise deployments.
+Pulse is designed as an internal monitoring tool for Proxmox environments with enterprise-grade security built in. Unlike traditional monitoring tools that use plaintext configuration files, Pulse automatically encrypts all sensitive data.
 
-## Security Levels
+## How Pulse Security Works
 
-### Level 0: Quick Start (Default)
-- Credentials stored inline in `/etc/pulse/pulse.yml`
-- Works immediately, no extra setup required
-- **Pulse will warn you** if the file has overly permissive permissions
+### Automatic Encryption
 
-### Level 1: Basic Security (Recommended)
-Simply restrict file permissions:
-```bash
-sudo chmod 600 /etc/pulse/pulse.yml
-sudo chown pulse:pulse /etc/pulse/pulse.yml
-```
-This ensures only the pulse user can read the configuration file.
+- **All credentials are encrypted** using AES-256-GCM encryption
+- **No plaintext passwords** are ever stored on disk
+- **Encryption is automatic** - you don't need to configure anything
+- **Keys are derived from machine ID** - unique per installation
 
-### Level 2: Environment Variables
-Replace sensitive values with environment variable references:
+### Secure by Default
 
-```yaml
-nodes:
-  pve:
-    - name: homelab
-      host: https://proxmox.example.com:8006
-      user: pulse-monitor@pam
-      token_name: noprivsep
-      token_value: ${PROXMOX_TOKEN}  # Reference env variable
-```
+When you add credentials through the web UI:
+1. Data is sent over your network (use HTTPS in production)
+2. Pulse encrypts the credentials immediately
+3. Encrypted data is stored in `/etc/pulse/*.enc` files
+4. Files are automatically secured with 0600 permissions
+5. Only the Pulse service can decrypt the data
 
-Then set the environment variable:
-```bash
-# For systemd service
-sudo systemctl edit pulse-backend
-# Add:
-[Service]
-Environment="PROXMOX_TOKEN=YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+### What Gets Encrypted
 
-# For Docker
-docker run -e PROXMOX_TOKEN=your-token-here pulse
-```
-
-### Level 3: File References
-Store each credential in a separate file:
-
-```yaml
-nodes:
-  pve:
-    - name: homelab
-      token_value: file:///etc/pulse/secrets/proxmox.token
-```
-
-Setup:
-```bash
-# Create secrets directory
-sudo mkdir -p /etc/pulse/secrets
-sudo chmod 700 /etc/pulse/secrets
-
-# Create token file
-echo -n "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" | sudo tee /etc/pulse/secrets/proxmox.token
-sudo chmod 600 /etc/pulse/secrets/proxmox.token
-sudo chown pulse:pulse /etc/pulse/secrets/proxmox.token
-```
-
-## Security Warnings
-
-Pulse will automatically warn you about:
-- Config files with overly permissive permissions (readable by others)
-- Credentials stored inline when the file is world-readable
-- Secret files with incorrect permissions
-
-Example warnings:
-```
-WRN Config file has overly permissive permissions. Recommended: chmod 600 /etc/pulse/pulse.yml
-WRN The following credentials are stored inline in a world-readable file: ["pve.homelab.token_value"]
-INF 💡 Security tip: You can reference credentials more securely:
-INF   - Environment variable: token_value: ${PROXMOX_TOKEN}
-INF   - File reference: token_value: file:///etc/pulse/secrets/proxmox.token
-INF   - Or simply: chmod 600 /etc/pulse/pulse.yml
-```
+- Proxmox node credentials (passwords and API tokens)
+- Email server passwords  
+- Webhook URLs with embedded tokens
+- Any other sensitive configuration data
 
 ## Best Practices
 
-1. **For Homelab Users**: Level 1 (restricted file permissions) provides good security with zero complexity
-2. **For Docker/K8s**: Use environment variables (Level 2) for easy secret management
-3. **For Production**: Use file references (Level 3) with proper secret management tools
+### For Home Labs
 
-## Examples
+Even in trusted environments, Pulse's encryption provides peace of mind:
+- Credentials are never exposed in backups
+- Config files can't be accidentally shared
+- Protection against disk access by other users
 
-### Mixed Approach
-You can mix different methods based on your needs:
+### For Production
 
-```yaml
-nodes:
-  pve:
-    - name: production
-      token_value: ${PROD_TOKEN}  # High security for production
-    - name: homelab
-      token_value: file:///etc/pulse/secrets/homelab.token  # Moderate security
-    - name: test
-      token_value: test-token-12345  # Low security for test environment
+1. **Use HTTPS** - Put Pulse behind a reverse proxy with SSL
+2. **Use API Tokens** - More secure than passwords for Proxmox
+3. **Network Isolation** - Run Pulse in a management network
+4. **Access Control** - Use reverse proxy authentication
+5. **Regular Updates** - Keep Pulse updated for security patches
+
+## Security Architecture
+
+```
+┌─────────────┐     HTTPS      ┌─────────────┐
+│   Browser   │ ─────────────> │  Pulse UI   │
+└─────────────┘                └─────────────┘
+                                      │
+                               ┌──────┴──────┐
+                               │   Encrypt   │
+                               │  AES-256    │
+                               └──────┬──────┘
+                                      │
+                               ┌──────┴──────┐
+                               │   Storage   │
+                               │   *.enc     │
+                               │  (0600)     │
+                               └─────────────┘
 ```
 
-### Docker Compose Example
-```yaml
-version: '3.8'
-services:
-  pulse:
-    image: pulse:latest
-    environment:
-      - PROXMOX_TOKEN=${PROXMOX_TOKEN}
-      - PROXMOX2_TOKEN=${PROXMOX2_TOKEN}
-    volumes:
-      - ./pulse.yml:/etc/pulse/pulse.yml:ro
+## File Permissions
+
+Pulse automatically manages file permissions:
+
+```bash
+/etc/pulse/
+├── nodes.enc      (0600) # Encrypted node credentials
+├── email.enc      (0600) # Encrypted email settings
+├── webhooks.json  (0600) # Webhook configurations
+├── alerts.json    (0600) # Alert thresholds
+└── system.json    (0600) # System settings
 ```
 
-### Kubernetes Secret Example
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: pulse-tokens
-stringData:
-  proxmox-token: "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
----
-apiVersion: apps/v1
-kind: Deployment
-spec:
-  template:
-    spec:
-      containers:
-      - name: pulse
-        env:
-        - name: PROXMOX_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: pulse-tokens
-              key: proxmox-token
+## Comparison with Other Tools
+
+| Feature | Traditional Tools | Pulse |
+|---------|------------------|-------|
+| Password Storage | Plaintext YAML/ENV | Encrypted AES-256 |
+| Configuration | Manual file editing | Web UI only |
+| File Permissions | User responsibility | Automatic 0600 |
+| Secrets Management | Complex setup | Built-in |
+| Credential Rotation | Manual process | Simple UI update |
+
+## Advanced Security Options
+
+### Using External Secrets (Optional)
+
+While Pulse's built-in encryption is sufficient for most users, you can reference external secrets if required by your security policies:
+
+1. **Environment Variables**: In the UI, use `${VAR_NAME}` as a value
+2. **File References**: Use `file:///path/to/secret` as a value
+
+These are resolved at runtime, but the UI-based encrypted storage is recommended for simplicity.
+
+### Proxy Authentication
+
+For additional security, place Pulse behind an authenticating reverse proxy:
+
+```nginx
+location / {
+    auth_basic "Pulse Monitoring";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    proxy_pass http://localhost:7655;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
 ```
 
-## Migration
+## Security FAQ
 
-To migrate existing inline credentials:
+**Q: Where is the encryption key stored?**
+A: The key is derived from your machine ID and system characteristics. It's never stored directly.
 
-1. **Quick & Secure**: Just chmod 600 your config file
-2. **Environment Variables**: Replace values with ${VAR_NAME} and set the variables
-3. **File References**: Move tokens to separate files and update config
+**Q: Can I backup the encrypted files?**
+A: Yes, encrypted files are safe to backup. They can only be decrypted on the original system.
 
-The system remains backward compatible - existing configurations continue to work with security warnings to guide improvements.
+**Q: What if I need to migrate to new hardware?**
+A: You'll need to reconfigure through the UI. This is by design for security.
+
+**Q: Is the encryption FIPS compliant?**
+A: Pulse uses Go's standard crypto libraries with AES-256-GCM, which meets FIPS requirements.
+
+**Q: Can I audit the encryption implementation?**
+A: Yes, the source code is open. See `/internal/crypto/crypto.go` in the repository.
+
+## Reporting Security Issues
+
+If you discover a security vulnerability:
+
+1. **Do NOT** create a public GitHub issue
+2. Email security concerns to the maintainer
+3. Allow reasonable time for a fix before disclosure
+4. Help us improve security for all users
+
+## Summary
+
+Pulse provides enterprise-grade security out of the box:
+- ✅ Automatic encryption of all credentials
+- ✅ Secure file permissions
+- ✅ No plaintext secrets
+- ✅ Simple and secure by default
+- ✅ No complex configuration needed
+
+Just install Pulse, configure through the UI, and your credentials are automatically protected.
