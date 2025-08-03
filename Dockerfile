@@ -1,20 +1,25 @@
 # Build stage for Go backend
-FROM golang:1.21-alpine AS backend-builder
+FROM golang:1.23-alpine AS backend-builder
 
 WORKDIR /app
 
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Copy go mod files
+# Copy go mod files for better layer caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy only necessary source code
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o pulse ./cmd/pulse
+# Build the binary with optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -trimpath \
+    -o pulse ./cmd/pulse
 
 # Build stage for frontend
 FROM node:20-alpine AS frontend-builder
@@ -44,8 +49,7 @@ COPY --from=backend-builder /app/pulse .
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend-modern/dist ./frontend-modern/dist
 
-# Copy service files
-COPY pulse-backend.service pulse-frontend.service ./
+# Service files not needed in container
 
 # Create config directory
 RUN mkdir -p /etc/pulse /data
