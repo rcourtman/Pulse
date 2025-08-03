@@ -1,7 +1,10 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -251,8 +254,16 @@ func NewManager() *Manager {
 		},
 	}
 	
+	// Load saved active alerts
+	if err := m.LoadActiveAlerts(); err != nil {
+		log.Error().Err(err).Msg("Failed to load active alerts")
+	}
+	
 	// Start escalation checker
 	go m.escalationChecker()
+	
+	// Start periodic save of active alerts
+	go m.periodicSaveAlerts()
 	
 	return m
 }
@@ -534,6 +545,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
+			
+			// Save active alerts after adding new one
+			go func() {
+				if err := m.SaveActiveAlerts(); err != nil {
+					log.Error().Err(err).Msg("Failed to save active alerts after creation")
+				}
+			}()
 
 			log.Warn().
 				Str("alertID", alertID).
@@ -597,6 +615,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			
 			// Remove from active alerts
 			delete(m.activeAlerts, alertID)
+			
+			// Save active alerts after resolution
+			go func() {
+				if err := m.SaveActiveAlerts(); err != nil {
+					log.Error().Err(err).Msg("Failed to save active alerts after resolution")
+				}
+			}()
 			
 			// Add to recently resolved
 			m.resolvedMutex.Lock()
@@ -1179,4 +1204,107 @@ func (m *Manager) checkEscalations() {
 func (m *Manager) Stop() {
 	close(m.escalationStop)
 	m.historyManager.Stop()
+	// Save active alerts before stopping
+	if err := m.SaveActiveAlerts(); err != nil {
+		log.Error().Err(err).Msg("Failed to save active alerts on stop")
+	}
+}
+
+// SaveActiveAlerts persists active alerts to disk
+func (m *Manager) SaveActiveAlerts() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	// Create directory if it doesn't exist
+	alertsDir := "/var/lib/pulse/alerts"
+	if err := os.MkdirAll(alertsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create alerts directory: %w", err)
+	}
+	
+	// Convert map to slice for JSON encoding
+	alerts := make([]*Alert, 0, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		alerts = append(alerts, alert)
+	}
+	
+	data, err := json.MarshalIndent(alerts, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal active alerts: %w", err)
+	}
+	
+	// Write to temporary file first, then rename (atomic operation)
+	tmpFile := filepath.Join(alertsDir, "active-alerts.json.tmp")
+	finalFile := filepath.Join(alertsDir, "active-alerts.json")
+	
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write active alerts: %w", err)
+	}
+	
+	if err := os.Rename(tmpFile, finalFile); err != nil {
+		return fmt.Errorf("failed to rename active alerts file: %w", err)
+	}
+	
+	log.Info().Int("count", len(alerts)).Msg("Saved active alerts to disk")
+	return nil
+}
+
+// LoadActiveAlerts restores active alerts from disk
+func (m *Manager) LoadActiveAlerts() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	alertsFile := "/var/lib/pulse/alerts/active-alerts.json"
+	data, err := os.ReadFile(alertsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info().Msg("No active alerts file found, starting fresh")
+			return nil
+		}
+		return fmt.Errorf("failed to read active alerts: %w", err)
+	}
+	
+	var alerts []*Alert
+	if err := json.Unmarshal(data, &alerts); err != nil {
+		return fmt.Errorf("failed to unmarshal active alerts: %w", err)
+	}
+	
+	// Restore alerts to the map
+	now := time.Now()
+	restoredCount := 0
+	for _, alert := range alerts {
+		// Skip very old alerts (older than 24 hours)
+		if now.Sub(alert.StartTime) > 24*time.Hour {
+			log.Debug().Str("alertID", alert.ID).Msg("Skipping old alert during restore")
+			continue
+		}
+		
+		// Skip acknowledged alerts older than 1 hour
+		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > time.Hour {
+			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert")
+			continue
+		}
+		
+		m.activeAlerts[alert.ID] = alert
+		restoredCount++
+	}
+	
+	log.Info().Int("restored", restoredCount).Int("total", len(alerts)).Msg("Restored active alerts from disk")
+	return nil
+}
+
+// periodicSaveAlerts saves active alerts to disk periodically
+func (m *Manager) periodicSaveAlerts() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save active alerts during periodic save")
+			}
+		case <-m.escalationStop:
+			return
+		}
+	}
 }
