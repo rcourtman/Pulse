@@ -50,8 +50,8 @@ COPY pulse-backend.service pulse-frontend.service ./
 # Create config directory
 RUN mkdir -p /etc/pulse /data
 
-# Expose ports
-EXPOSE 3000 7655
+# Expose port
+EXPOSE 3000
 
 # Set environment variables
 ENV PULSE_CONFIG_DIR=/etc/pulse
@@ -65,7 +65,7 @@ USER pulse
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:7655 || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
 
 # Run the binary
 CMD ["./pulse"]

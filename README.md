@@ -43,7 +43,7 @@ Choose **one** method:
 bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
 # Option B: Docker (For existing Docker hosts)
-docker run -d -p 7655:7655 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
+docker run -d -p 7655:3000 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
 
 # Option C: Manual Install (For existing LXC/VMs)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | sudo bash
@@ -183,15 +183,15 @@ Pulse provides a REST API for integration:
 - `GET /api/backups` - Backup information
 - `GET /api/charts/:type/:id` - Historical metrics
 
-WebSocket endpoint: `ws://your-server:3000/ws` for real-time updates.
+WebSocket endpoint: `ws://your-server:7655/ws` for real-time updates.
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"Connection refused" error**
-   - Check firewall rules for ports 7655 (UI) and 3000 (API)
-   - Verify Pulse is running: `systemctl status pulse`
+   - Check firewall rules for port 7655
+   - Verify Pulse is running: `systemctl status pulse-backend`
 
 2. **"Invalid credentials" error**
    - Ensure user has at least `PVEAuditor` role
