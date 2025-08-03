@@ -46,7 +46,7 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 docker run -d -p 7655:3000 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
 
 # Option C: Manual Install (For existing LXC/VMs)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
 ### Configure Pulse
