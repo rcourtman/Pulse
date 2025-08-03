@@ -59,7 +59,7 @@ interface ScheduleRef {
 
 // Override interface for both guests and nodes
 interface Override {
-  id: string;  // Full ID (e.g. "Main-delly-105" for guest, "node-delly" for node)
+  id: string;  // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node)
   name: string;  // Display name
   type: 'guest' | 'node';
   resourceType?: string;  // VM, CT, or Node

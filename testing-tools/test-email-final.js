@@ -17,9 +17,9 @@ async function testEmailFunctionality() {
       enabled: true,
       smtpHost: 'smtp.gmail.com',
       smtpPort: 587,
-      username: 'courtmanr@gmail.com',
+      username: 'test@example.com',
       password: 'zlff ruyk bxxf cxch',
-      from: 'courtmanr@gmail.com',
+      from: 'test@example.com',
       to: [],  // Empty recipients
       tls: true
     });
@@ -78,7 +78,7 @@ async function testEmailFunctionality() {
         description: 'Email sent successfully'
       },
       {
-        pattern: 'courtmanr@gmail.com',
+        pattern: 'test@example.com',
         description: 'Correct recipient (From address)'
       }
     ];
@@ -115,9 +115,9 @@ async function testEmailFunctionality() {
         enabled: true,
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
-        username: 'courtmanr@gmail.com',
+        username: 'test@example.com',
         password: 'zlff ruyk bxxf cxch',
-        from: 'courtmanr@gmail.com',
+        from: 'test@example.com',
         to: [],  // Empty as fixed
         tls: true
       }
@@ -144,7 +144,7 @@ async function testEmailFunctionality() {
     console.log('- Backend accepts empty recipients and uses From address');
     console.log('- SMTP connection is established with proper auth');
     console.log('- Frontend sends correct field names (smtpHost, not server)');
-    console.log('- Emails are sent to courtmanr@gmail.com');
+    console.log('- Emails are sent to test@example.com');
   } else {
     console.log('❌ SOME TESTS FAILED!');
     console.log('\nPlease check the failed tests above.');

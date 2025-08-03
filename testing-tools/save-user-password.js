@@ -13,9 +13,9 @@ async function saveUserPassword() {
       enabled: true,
       smtpHost: 'smtp.gmail.com',
       smtpPort: 587,
-      username: 'courtmanr@gmail.com',
+      username: 'test@example.com',
       password: 'zlff ruyk bxxf cxch',  // User's app password
-      from: 'courtmanr@gmail.com',
+      from: 'test@example.com',
       to: [],  // Empty as user wants
       tls: true
     };

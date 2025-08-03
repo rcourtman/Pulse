@@ -9,9 +9,9 @@ async function testNoConfig() {
     enabled: true,
     smtpHost: 'smtp.gmail.com',
     smtpPort: 587,
-    username: 'courtmanr@gmail.com',
+    username: 'test@example.com',
     password: 'zlff ruyk bxxf cxch',
-    from: 'courtmanr@gmail.com',
+    from: 'test@example.com',
     to: [],
     tls: true
   });

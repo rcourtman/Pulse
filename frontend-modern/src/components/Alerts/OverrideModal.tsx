@@ -3,7 +3,7 @@ import { Portal } from 'solid-js/web';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 
 interface Override {
-  id?: string;  // Full guest ID (e.g. "Main-delly-105")
+  id?: string;  // Full guest ID (e.g. "Main-node1-105")
   guestName: string;
   vmid: number;
   type: string;

@@ -19,7 +19,7 @@ async function testEmailConfiguration() {
   try {
     // Navigate to Pulse
     console.log('1. Navigating to Pulse dashboard...');
-    await page.goto('http://192.168.0.123:7655');
+    await page.goto('http://localhost:7655');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
     

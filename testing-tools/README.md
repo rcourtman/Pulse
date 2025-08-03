@@ -67,6 +67,6 @@ UI tests may create screenshot files:
 
 ## Notes
 
-- Tests run against `http://localhost:3000` (backend) and `http://192.168.0.123:7655` (frontend)
+- Tests run against `http://localhost:3000` (backend) and `http://localhost:7655` (frontend)
 - Playwright tests run in headless mode by default
 - All tests are non-destructive and clean up after themselves

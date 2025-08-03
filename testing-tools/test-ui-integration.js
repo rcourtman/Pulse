@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const axios = require('axios');
 
-const FRONTEND_URL = 'http://192.168.0.123:7655';
+const FRONTEND_URL = 'http://localhost:7655';
 
 async function testUIIntegration() {
   console.log('=== UI INTEGRATION TEST ===\n');

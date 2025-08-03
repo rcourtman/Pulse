@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const FRONTEND_URL = 'http://192.168.0.123:7655';
+const FRONTEND_URL = 'http://localhost:7655';
 
 async function testUIEmail() {
   console.log('=== TESTING EMAIL VIA UI ===\n');
@@ -52,7 +52,7 @@ async function testUIEmail() {
       console.log('\n✅ No console errors detected');
     }
     
-    console.log('\n✅ Test completed - check your email at courtmanr@gmail.com');
+    console.log('\n✅ Test completed - check your email at test@example.com');
     
   } catch (error) {
     console.error('Error:', error.message);

@@ -12,9 +12,9 @@ async function testWithConfig() {
         enabled: true,
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
-        username: 'courtmanr@gmail.com',
+        username: 'test@example.com',
         password: 'zlff ruyk bxxf cxch',
-        from: 'courtmanr@gmail.com',
+        from: 'test@example.com',
         to: [],  // Empty array
         tls: true
       }
@@ -33,9 +33,9 @@ async function testWithConfig() {
         enabled: true,
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
-        username: 'courtmanr@gmail.com',
+        username: 'test@example.com',
         password: '',  // Empty password
-        from: 'courtmanr@gmail.com',
+        from: 'test@example.com',
         to: [],
         tls: true
       }
@@ -54,9 +54,9 @@ async function testWithConfig() {
         enabled: true,
         server: 'smtp.gmail.com',  // Frontend uses 'server'
         port: 587,
-        username: 'courtmanr@gmail.com',
+        username: 'test@example.com',
         password: 'zlff ruyk bxxf cxch',
-        from: 'courtmanr@gmail.com',
+        from: 'test@example.com',
         to: [],
         tls: true
       }

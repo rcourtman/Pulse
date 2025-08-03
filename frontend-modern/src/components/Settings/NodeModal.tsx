@@ -255,7 +255,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           type="text"
                           value={formData().host}
                           onInput={(e) => updateField('host', e.currentTarget.value)}
-                          placeholder="https://192.168.1.100:8006"
+                          placeholder="https://proxmox.example.com:8006"
                           required
                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />

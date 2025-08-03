@@ -2,7 +2,7 @@ const axios = require('axios');
 const { chromium } = require('playwright');
 
 const API_BASE = 'http://localhost:3000/api';
-const FRONTEND_URL = 'http://192.168.0.123:7655';
+const FRONTEND_URL = 'http://localhost:7655';
 
 // Test results tracking
 const results = {

@@ -24,10 +24,10 @@ Replace sensitive values with environment variable references:
 nodes:
   pve:
     - name: homelab
-      host: https://delly.lan:8006
+      host: https://proxmox.example.com:8006
       user: pulse-monitor@pam
       token_name: noprivsep
-      token_value: ${DELLY_TOKEN}  # Reference env variable
+      token_value: ${PROXMOX_TOKEN}  # Reference env variable
 ```
 
 Then set the environment variable:
@@ -36,10 +36,10 @@ Then set the environment variable:
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="DELLY_TOKEN=832a5439-86f1-4b60-8c21-b628b70114cd"
+Environment="PROXMOX_TOKEN=YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 
 # For Docker
-docker run -e DELLY_TOKEN=your-token-here pulse
+docker run -e PROXMOX_TOKEN=your-token-here pulse
 ```
 
 ### Level 3: File References
@@ -49,7 +49,7 @@ Store each credential in a separate file:
 nodes:
   pve:
     - name: homelab
-      token_value: file:///etc/pulse/secrets/delly.token
+      token_value: file:///etc/pulse/secrets/proxmox.token
 ```
 
 Setup:
@@ -59,9 +59,9 @@ sudo mkdir -p /etc/pulse/secrets
 sudo chmod 700 /etc/pulse/secrets
 
 # Create token file
-echo -n "832a5439-86f1-4b60-8c21-b628b70114cd" | sudo tee /etc/pulse/secrets/delly.token
-sudo chmod 600 /etc/pulse/secrets/delly.token
-sudo chown pulse:pulse /etc/pulse/secrets/delly.token
+echo -n "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" | sudo tee /etc/pulse/secrets/proxmox.token
+sudo chmod 600 /etc/pulse/secrets/proxmox.token
+sudo chown pulse:pulse /etc/pulse/secrets/proxmox.token
 ```
 
 ## Security Warnings
@@ -76,8 +76,8 @@ Example warnings:
 WRN Config file has overly permissive permissions. Recommended: chmod 600 /etc/pulse/pulse.yml
 WRN The following credentials are stored inline in a world-readable file: ["pve.homelab.token_value"]
 INF 💡 Security tip: You can reference credentials more securely:
-INF   - Environment variable: token_value: ${DELLY_TOKEN}
-INF   - File reference: token_value: file:///etc/pulse/secrets/delly.token
+INF   - Environment variable: token_value: ${PROXMOX_TOKEN}
+INF   - File reference: token_value: file:///etc/pulse/secrets/proxmox.token
 INF   - Or simply: chmod 600 /etc/pulse/pulse.yml
 ```
 
@@ -110,8 +110,8 @@ services:
   pulse:
     image: pulse:latest
     environment:
-      - DELLY_TOKEN=${DELLY_TOKEN}
-      - PIMOX_TOKEN=${PIMOX_TOKEN}
+      - PROXMOX_TOKEN=${PROXMOX_TOKEN}
+      - PROXMOX2_TOKEN=${PROXMOX2_TOKEN}
     volumes:
       - ./pulse.yml:/etc/pulse/pulse.yml:ro
 ```
@@ -123,7 +123,7 @@ kind: Secret
 metadata:
   name: pulse-tokens
 stringData:
-  delly-token: "832a5439-86f1-4b60-8c21-b628b70114cd"
+  delly-token: "YOUR-TOKEN-HERE-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -133,7 +133,7 @@ spec:
       containers:
       - name: pulse
         env:
-        - name: DELLY_TOKEN
+        - name: PROXMOX_TOKEN
           valueFrom:
             secretKeyRef:
               name: pulse-tokens

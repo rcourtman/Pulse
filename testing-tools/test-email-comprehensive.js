@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const axios = require('axios');
 const { spawn } = require('child_process');
 
-const FRONTEND_URL = 'http://192.168.0.123:7655';
+const FRONTEND_URL = 'http://localhost:7655';
 const BACKEND_URL = 'http://localhost:3000';
 
 async function runComprehensiveEmailTest() {
@@ -22,9 +22,9 @@ async function runComprehensiveEmailTest() {
         enabled: true,
         smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
-        username: 'courtmanr@gmail.com',
+        username: 'test@example.com',
         password: 'zlff ruyk bxxf cxch',
-        from: 'courtmanr@gmail.com',
+        from: 'test@example.com',
         to: [],
         tls: true
       }
@@ -48,7 +48,7 @@ async function runComprehensiveEmailTest() {
     const response = await axios.get(`${BACKEND_URL}/api/notifications/email`);
     const config = response.data;
     
-    if (config.from === 'courtmanr@gmail.com') {
+    if (config.from === 'test@example.com') {
       results.passed.push('Email configuration properly saved');
       console.log('✅ PASS: Email configuration found');
       console.log('  From:', config.from);

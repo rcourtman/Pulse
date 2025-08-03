@@ -46,7 +46,7 @@ async function testEmailDetailed() {
     console.log('\n❌ Email send failed - check logs above for details');
   } else if (logOutput.includes('Email notification sent')) {
     console.log('\n✅ Email appears to have been sent successfully');
-    console.log('   Check your email at: courtmanr@gmail.com');
+    console.log('   Check your email at: test@example.com');
   } else {
     console.log('\n🤔 Could not determine email status from logs');
   }

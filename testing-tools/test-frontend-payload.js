@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const FRONTEND_URL = 'http://192.168.0.123:7655';
+const FRONTEND_URL = 'http://localhost:7655';
 
 async function testFrontendPayload() {
   console.log('=== TESTING FRONTEND EMAIL PAYLOAD ===\n');
