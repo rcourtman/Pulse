@@ -86,8 +86,9 @@ func runServer() {
 	router := api.NewRouter(cfg, reloadableMonitor.GetMonitor(), wsHub, reloadFunc)
 
 	// Create HTTP server with unified configuration
+	// In production, serve everything (frontend + API) on the frontend port
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.BackendPort),
+		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -98,7 +99,7 @@ func runServer() {
 	go func() {
 		log.Info().
 			Str("host", cfg.BackendHost).
-			Int("port", cfg.BackendPort).
+			Int("port", cfg.FrontendPort).
 			Msg("Server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Failed to start server")

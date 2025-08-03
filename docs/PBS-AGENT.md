@@ -16,7 +16,7 @@ Use the PBS Agent when:
 ┌─────────────┐           ┌─────────────┐
 │     PBS     │  Push →   │    Pulse    │
 │   (Agent)   │ --------> │   Server    │
-│  Port: 8007 │           │ Port: 3000  │
+│  Port: 8007 │           │ Port: 7655  │
 └─────────────┘           └─────────────┘
 ```
 
@@ -62,7 +62,7 @@ sudo nano /etc/pulse-agent/config.yml
 ```yaml
 # Pulse server details
 pulse:
-  url: http://your-pulse-server:3000
+  url: http://your-pulse-server:7655
   token: your-agent-token  # Generated in Pulse UI
 
 # PBS connection
@@ -127,7 +127,7 @@ sudo systemctl enable --now pulse-pbs-agent
 
 ```yaml
 pulse:
-  url: http://pulse.example.com:3000  # Your Pulse server
+  url: http://pulse.example.com:7655  # Your Pulse server
   token: abc123...                     # Agent auth token
   timeout: 30                          # Connection timeout (seconds)
   retryInterval: 60                    # Retry interval on failure
@@ -150,7 +150,7 @@ agent:
 All settings can be overridden with environment variables:
 
 ```bash
-PULSE_URL=http://pulse:3000
+PULSE_URL=http://pulse:7655
 PULSE_TOKEN=your-token
 PBS_HOST=https://localhost:8007
 PBS_USER=monitor@pbs
@@ -180,7 +180,7 @@ sudo journalctl -u pulse-pbs-agent -f
 
 **Agent can't connect to Pulse**:
 - Verify Pulse server URL is correct
-- Check network connectivity: `curl http://pulse-server:3000/api/health`
+- Check network connectivity: `curl http://pulse-server:7655/api/health`
 - Ensure firewall allows outbound connections
 - Verify agent token is valid
 

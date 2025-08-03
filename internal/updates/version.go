@@ -2,6 +2,7 @@ package updates
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -119,10 +120,21 @@ func GetCurrentVersion() (*VersionInfo, error) {
 		}, nil
 	}
 	
-	// Fallback to hardcoded version for releases
-	// This should be updated by the build process
+	// Try to read from VERSION file
+	versionBytes, err := os.ReadFile("VERSION")
+	if err == nil {
+		return &VersionInfo{
+			Version:       strings.TrimSpace(string(versionBytes)),
+			Build:         "release",
+			Runtime:       "go",
+			IsDevelopment: false,
+			IsDocker:      isDockerEnvironment(),
+		}, nil
+	}
+	
+	// Final fallback
 	return &VersionInfo{
-		Version:       "2.0.0",
+		Version:       "4.0.0",
 		Build:         "release",
 		Runtime:       "go",
 		IsDevelopment: false,

@@ -43,7 +43,7 @@ Choose **one** method:
 bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
 # Option B: Docker (For existing Docker hosts)
-docker run -d -p 7655:3000 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
+docker run -d -p 7655:7655 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
 
 # Option C: Manual Install (For existing LXC/VMs)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
@@ -176,12 +176,46 @@ npm run build
 
 Pulse provides a REST API for integration:
 
+### Core Endpoints
 - `GET /api/state` - Current state of all resources
-- `GET /api/nodes` - Node configuration
-- `GET /api/alerts` - Alert status and history
-- `POST /api/alerts/acknowledge` - Acknowledge alerts
-- `GET /api/backups` - Backup information
-- `GET /api/charts/:type/:id` - Historical metrics
+- `GET /api/health` - Health check endpoint
+- `GET /api/version` - Version information
+- `GET /api/diagnostics` - System diagnostics
+
+### Monitoring
+- `GET /api/charts` - Historical metrics data
+- `GET /api/storage/:id` - Storage detail information
+- `GET /api/storage-charts` - Storage charts data
+
+### Configuration
+- `GET /api/config/nodes` - Get node configurations
+- `POST /api/config/nodes` - Add new node
+- `PUT /api/config/nodes/:id` - Update node
+- `DELETE /api/config/nodes/:id` - Delete node
+- `POST /api/config/nodes/test-connection` - Test node connection
+- `GET /api/config/system` - System settings
+- `PUT /api/config/system` - Update system settings
+
+### Alerts & Notifications
+- `GET /api/alerts` - Alert configuration and history
+- `POST /api/alerts/:action` - Alert actions (acknowledge, etc.)
+- `GET /api/notifications` - Notification settings
+- `PUT /api/notifications` - Update notifications
+
+### Backups
+- `GET /api/backups` - All backup information
+- `GET /api/backups/pve` - PVE backups only
+- `GET /api/backups/pbs` - PBS backups only
+- `GET /api/snapshots` - VM/CT snapshots
+
+### Updates
+- `GET /api/updates/check` - Check for updates
+- `POST /api/updates/apply` - Apply update
+- `GET /api/updates/status` - Update status
+
+### Settings
+- `GET /api/settings` - Get all settings
+- `POST /api/settings/update` - Update settings
 
 WebSocket endpoint: `ws://your-server:7655/ws` for real-time updates.
 

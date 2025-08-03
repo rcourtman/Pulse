@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -282,9 +283,10 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 
 	versionInfo, err := updates.GetCurrentVersion()
 	if err != nil {
-		// Fallback to hardcoded version
+		// Fallback to VERSION file
+		versionBytes, _ := os.ReadFile("VERSION")
 		version := map[string]interface{}{
-			"version": "2.0.0-go",
+			"version": strings.TrimSpace(string(versionBytes)),
 			"build":   "development",
 			"runtime": "go",
 		}
@@ -644,9 +646,10 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	state := r.monitor.GetState()
 	
 	// System info
+	versionInfo, _ := updates.GetCurrentVersion()
 	systemInfo := map[string]interface{}{
-		"version":        "2.0.0-go",
-		"build":          "production",
+		"version":        versionInfo.Version,
+		"build":          versionInfo.Build,
 		"runtime":        "Go 1.21",
 		"uptime":         time.Since(r.monitor.GetStartTime()).Seconds(),
 		"polling_interval": r.config.PollingInterval.Seconds(),

@@ -64,7 +64,7 @@ API tokens are more secure and recommended for production use. They can be creat
 4. Look at Pulse logs: `journalctl -u pulse -f`
 
 ### Connection refused errors
-- Ensure ports 7655 (UI) and 3000 (API) are not blocked
+- Ensure port 7655 is not blocked
 - Check if Pulse is running: `systemctl status pulse`
 - Verify bind addresses in configuration
 
