@@ -170,6 +170,13 @@ func Load() (*Config, error) {
 		cfg.APIToken = apiToken
 		log.Info().Msg("Overriding API token from env var")
 	}
+	if updateChannel := os.Getenv("UPDATE_CHANNEL"); updateChannel != "" {
+		cfg.UpdateChannel = updateChannel
+		log.Info().Str("channel", updateChannel).Msg("Overriding update channel from env var")
+	} else if updateChannel := os.Getenv("PULSE_UPDATE_CHANNEL"); updateChannel != "" {
+		cfg.UpdateChannel = updateChannel
+		log.Info().Str("channel", updateChannel).Msg("Overriding update channel from PULSE_ env var")
+	}
 	
 	// Set log level
 	switch cfg.LogLevel {
