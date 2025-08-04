@@ -56,3 +56,4 @@ release/
 
 # Development scripts
 scripts/backend-watch.sh
+temp/
