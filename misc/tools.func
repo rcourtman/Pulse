@@ -523,7 +523,7 @@ function setup_composer() {
   fi
 
   chmod +x "$COMPOSER_BIN"
-  composer diagnose >/dev/null 2>&1
+  $STD composer diagnose
   msg_ok "Setup Composer"
 }
 
