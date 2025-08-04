@@ -257,6 +257,8 @@ func (m *Manager) getLatestRelease(ctx context.Context) (*ReleaseInfo, error) {
 	if channel == "" {
 		channel = "stable"
 	}
+	
+	log.Info().Str("channel", channel).Msg("Checking for updates")
 
 	// GitHub API URL
 	url := "https://api.github.com/repos/rcourtman/Pulse/releases"
@@ -292,15 +294,17 @@ func (m *Manager) getLatestRelease(ctx context.Context) (*ReleaseInfo, error) {
 		return &release, nil
 	}
 
-	// For RC channel, get all releases and find latest RC
+	// For RC channel, get all releases and find latest
 	var releases []ReleaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
 	// Find latest release (including prereleases)
-	if len(releases) > 0 {
-		return &releases[0], nil
+	// GitHub API returns releases sorted by created_at desc, so first is latest
+	for _, release := range releases {
+		// For RC channel, accept any release (including prereleases)
+		return &release, nil
 	}
 
 	return nil, fmt.Errorf("no releases found")
