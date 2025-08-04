@@ -1,4 +1,4 @@
-# <img src="frontend-modern/public/pulse-icon.svg" alt="Pulse Logo" width="32" height="32" style="vertical-align: middle"> Pulse for Proxmox
+# <img src="frontend-modern/public/logo.svg" alt="Pulse Logo" width="32" height="32" style="vertical-align: middle"> Pulse for Proxmox
 
 [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
