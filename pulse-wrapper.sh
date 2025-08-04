@@ -30,6 +30,9 @@ if [ ! -f "$SCRIPT_DIR/$BINARY" ]; then
     exit 1
 fi
 
+# Make the correct binary executable (in case permissions were lost)
+chmod +x "$SCRIPT_DIR/$BINARY" 2>/dev/null || true
+
 # On first run, clean up other architecture binaries to save space
 if [ -f "$SCRIPT_DIR/.first-run-cleanup" ]; then
     echo "Cleaning up unused architecture binaries..."

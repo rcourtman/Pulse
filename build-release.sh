@@ -52,8 +52,10 @@ for build_name in "${!builds[@]}"; do
     
     # Copy files
     cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/pulse"
+    mkdir -p "$staging_dir/frontend-modern"
     cp -r frontend-modern/dist "$staging_dir/frontend-modern/"
-    cp README.md LICENSE pulse.service install.sh "$staging_dir/"
+    cp README.md LICENSE install.sh "$staging_dir/"
+    # Note: pulse.service might not exist in Go version
     
     # Create tarball
     cd "$staging_dir"
@@ -86,8 +88,10 @@ for build_name in "${!builds[@]}"; do
 done
 
 # Copy common files
+mkdir -p "$universal_staging/frontend-modern"
 cp -r frontend-modern/dist "$universal_staging/frontend-modern/"
-cp README.md LICENSE pulse.service install.sh pulse-wrapper.sh "$universal_staging/"
+cp README.md LICENSE install.sh pulse-wrapper.sh "$universal_staging/"
+echo "$VERSION" > "$universal_staging/VERSION"
 
 # Rename wrapper to 'pulse' for seamless usage
 cp pulse-wrapper.sh "$universal_staging/pulse"
