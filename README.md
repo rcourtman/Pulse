@@ -42,8 +42,8 @@ Choose **one** method:
 # Option A: Automated LXC Container (Easiest)
 bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
-# Option B: Docker (For existing Docker hosts)
-docker run -d -p 7655:7655 -v pulse_config:/etc/pulse -v pulse_data:/data rcourtman/pulse:latest
+# Option B: Docker (Multi-arch: AMD64, ARM64, ARMv7)
+docker run -d -p 7655:7655 -v pulse_data:/data --restart unless-stopped rcourtman/pulse:latest
 
 # Option C: Manual Install (For existing LXC/VMs)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
@@ -80,14 +80,25 @@ Just open the web UI, add your Proxmox nodes through the interface, and you're d
 
 ### For Docker Users
 
+Pulse provides multi-architecture Docker images supporting:
+- **linux/amd64** - Intel/AMD 64-bit servers
+- **linux/arm64** - 64-bit ARM (Raspberry Pi 4/5, Apple Silicon)
+- **linux/arm/v7** - 32-bit ARM (Raspberry Pi 2/3)
+
 The only environment variables needed are for the initial ports if you want to change defaults:
 
 ```bash
 docker run -d -p 8080:8080 \
   -e PULSE_SERVER_FRONTEND_PORT=8080 \
-  -v pulse_config:/etc/pulse \
+  -v pulse_data:/data \
+  --restart unless-stopped \
   rcourtman/pulse:latest
 ```
+
+Available Docker tags:
+- `rcourtman/pulse:latest` - Latest stable release
+- `rcourtman/pulse:4` - Latest v4.x release
+- `rcourtman/pulse:4.0.0` - Specific version
 
 Once running, all configuration is done through the web UI.
 
@@ -137,17 +148,15 @@ version: '3.8'
 
 services:
   pulse:
-    image: rcourtman/pulse:latest
+    image: rcourtman/pulse:latest  # Multi-arch: AMD64, ARM64, ARMv7
     container_name: pulse
     ports:
       - "7655:7655"
     volumes:
-      - pulse_config:/etc/pulse
       - pulse_data:/data
     restart: unless-stopped
 
 volumes:
-  pulse_config:
   pulse_data:
 ```
 
