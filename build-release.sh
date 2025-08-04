@@ -55,6 +55,9 @@ for build_name in "${!builds[@]}"; do
     mkdir -p "$staging_dir/frontend-modern"
     cp -r frontend-modern/dist "$staging_dir/frontend-modern/"
     cp README.md LICENSE install.sh "$staging_dir/"
+    # Copy v3 migration shim
+    mkdir -p "$staging_dir/server"
+    cp server/index.js "$staging_dir/server/" 2>/dev/null || true
     # Note: pulse.service might not exist in Go version
     
     # Create tarball
@@ -92,6 +95,9 @@ mkdir -p "$universal_staging/frontend-modern"
 cp -r frontend-modern/dist "$universal_staging/frontend-modern/"
 cp README.md LICENSE install.sh pulse-wrapper.sh "$universal_staging/"
 echo "$VERSION" > "$universal_staging/VERSION"
+# Copy v3 migration shim
+mkdir -p "$universal_staging/server"
+cp server/index.js "$universal_staging/server/" 2>/dev/null || true
 
 # Rename wrapper to 'pulse' for seamless usage
 cp pulse-wrapper.sh "$universal_staging/pulse"
