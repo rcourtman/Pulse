@@ -47,6 +47,42 @@ check_root() {
     fi
 }
 
+check_pre_v4_installation() {
+    # Check for Node.js version indicators
+    if [[ -f "$INSTALL_DIR/.env" ]] || \
+       [[ -d "$INSTALL_DIR/node_modules" ]] || \
+       [[ -f "$INSTALL_DIR/package.json" ]] || \
+       [[ -f "$INSTALL_DIR/server.js" ]] || \
+       [[ -d "$INSTALL_DIR/backend" ]] || \
+       [[ -d "$INSTALL_DIR/frontend" ]] || \
+       systemctl list-unit-files --no-legend | grep -q "pulse-backend.service"; then
+        
+        echo
+        print_error "Pre-v4 Pulse Installation Detected"
+        echo
+        echo -e "${BLUE}=========================================================${NC}"
+        echo -e "${YELLOW}Pulse v4 is a complete rewrite that requires migration${NC}"
+        echo -e "${BLUE}=========================================================${NC}"
+        echo
+        echo "Your current installation appears to be a pre-v4 version."
+        echo "Due to fundamental architecture changes, automatic upgrade is not supported."
+        echo
+        echo -e "${GREEN}Recommended approach:${NC}"
+        echo "1. Create a fresh LXC container or VM"
+        echo "2. Install Pulse v4 in the new environment"
+        echo "3. Configure your nodes through the new web UI"
+        echo "4. Reference your old .env file for credentials if needed"
+        echo
+        echo -e "${YELLOW}Your existing data is preserved at: $INSTALL_DIR${NC}"
+        echo
+        echo "For more information, see:"
+        echo "https://github.com/rcourtman/Pulse/releases/v4.0.0"
+        echo -e "${BLUE}=========================================================${NC}"
+        echo
+        exit 1
+    fi
+}
+
 detect_os() {
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
@@ -220,6 +256,7 @@ main() {
     print_header
     check_root
     detect_os
+    check_pre_v4_installation
     
     if check_existing_installation; then
         print_info "Existing Pulse installation detected"

@@ -177,6 +177,11 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		return fmt.Errorf("updates cannot be applied in Docker environment")
 	}
 
+	// Check for pre-v4 installation
+	if isPreV4Installation() {
+		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
+	}
+
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	// Create temp directory
@@ -533,4 +538,35 @@ func (m *Manager) updateStatus(status string, progress int, message string) {
 	case m.progressChan <- statusCopy:
 	default:
 	}
+}
+
+// isPreV4Installation checks if this is a pre-v4 (Node.js based) installation
+func isPreV4Installation() bool {
+	// Check for .env file (used by Node.js version)
+	if _, err := os.Stat("/opt/pulse/.env"); err == nil {
+		return true
+	}
+	
+	// Check for old service names
+	cmd := exec.Command("systemctl", "list-unit-files", "--no-legend", "pulse-backend.service")
+	if output, err := cmd.Output(); err == nil && len(output) > 0 {
+		return true
+	}
+	
+	// Check for Node.js artifacts
+	nodeArtifacts := []string{
+		"/opt/pulse/package.json",
+		"/opt/pulse/node_modules",
+		"/opt/pulse/server.js",
+		"/opt/pulse/backend",
+		"/opt/pulse/frontend",
+	}
+	
+	for _, artifact := range nodeArtifacts {
+		if _, err := os.Stat(artifact); err == nil {
+			return true
+		}
+	}
+	
+	return false
 }

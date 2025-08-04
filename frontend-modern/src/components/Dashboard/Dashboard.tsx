@@ -289,9 +289,7 @@ export function Dashboard(props: DashboardProps) {
     <div>
       {/* Node Summary Cards */}
       <div id="node-summary-cards-container" class="mb-3">
-        <Show when={props.nodes.length > 0} fallback={
-          <p class="text-sm text-gray-500 dark:text-gray-400">Loading node summary...</p>
-        }>
+        <Show when={props.nodes.length > 0}>
           <div class="flex flex-wrap gap-2">
             <For each={props.nodes}>
               {(node) => (
