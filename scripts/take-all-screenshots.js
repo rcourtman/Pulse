@@ -58,27 +58,62 @@ async function clickAndWait(page, selector, waitTime = 1000) {
 
 async function ensureDarkTheme(page) {
   try {
+    // Wait a bit for theme system to initialize
+    await wait(1000);
+    
     // First check if we're already in dark mode
     const isDarkMode = await page.evaluate(() => {
       return document.documentElement.classList.contains('dark');
     });
     
+    console.log(`Current theme mode: ${isDarkMode ? 'dark' : 'light'}`);
+    
     if (!isDarkMode) {
-      // Try various theme toggle selectors
+      // Try to find and click the theme toggle
+      // Look for common theme toggle selectors
       const themeSelectors = [
-        '[aria-label="Toggle theme"]',
-        'button[title*="theme"]',
-        'button[aria-label*="theme"]',
+        'button[aria-label="Toggle theme"]',
+        'button[title*="theme" i]',
+        'button[aria-label*="theme" i]',
+        'button:has(svg[class*="moon"])',
+        'button:has(svg[class*="sun"])',
         '.theme-toggle',
-        'button:has-text("Theme")'
+        'button:has-text("Theme")',
+        '[data-theme-toggle]'
       ];
       
       for (const selector of themeSelectors) {
-        if (await clickAndWait(page, selector, 500)) {
-          console.log('Switched to dark theme');
-          break;
+        try {
+          const element = page.locator(selector).first();
+          if (await element.count() > 0) {
+            await element.click();
+            await wait(1000); // Wait for theme transition
+            
+            // Verify dark mode is now active
+            const nowDark = await page.evaluate(() => {
+              return document.documentElement.classList.contains('dark');
+            });
+            
+            if (nowDark) {
+              console.log('✅ Successfully switched to dark theme');
+              return;
+            }
+          }
+        } catch (e) {
+          // Continue trying other selectors
         }
       }
+      
+      // If no toggle found, try to force dark mode via localStorage or class
+      await page.evaluate(() => {
+        document.documentElement.classList.remove('light');
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+        localStorage.setItem('pulse-theme', 'dark');
+      });
+      console.log('⚠️  Forced dark mode via DOM manipulation');
+    } else {
+      console.log('✅ Already in dark mode');
     }
   } catch (e) {
     console.log('Could not set dark theme:', e.message);
