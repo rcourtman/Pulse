@@ -52,3 +52,7 @@ RELEASE_CHECKLIST.md
 CHANGELOG.md
 pulse-release/
 pulse-release-staging/
+release/
+
+# Development scripts
+scripts/backend-watch.sh
