@@ -123,11 +123,16 @@ download_pulse() {
     
     # Download and extract
     cd /tmp
-    wget -q -O pulse.tar.gz "https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-amd64.tar.gz"
+    wget -q -O pulse.tar.gz "https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}.tar.gz"
     
     mkdir -p "$INSTALL_DIR"
     tar -xzf pulse.tar.gz -C "$INSTALL_DIR"
     rm pulse.tar.gz
+    
+    # Make all pulse binaries executable
+    chmod +x "$INSTALL_DIR"/pulse-* 2>/dev/null || true
+    
+    print_info "Pulse will auto-detect and use the correct binary for your architecture"
 }
 
 setup_directories() {

@@ -23,41 +23,45 @@ npm run build
 cd ..
 
 # Build for different architectures
-architectures=(
-    "linux/amd64"
-    "linux/arm64"
-    "linux/arm/v7"
+declare -A builds=(
+    ["linux-amd64"]="GOOS=linux GOARCH=amd64"
+    ["linux-arm64"]="GOOS=linux GOARCH=arm64"
+    ["linux-armv7"]="GOOS=linux GOARCH=arm GOARM=7"
 )
 
-for arch in "${architectures[@]}"; do
-    echo "Building for $arch..."
+for build_name in "${!builds[@]}"; do
+    echo "Building for $build_name..."
     
-    os=$(echo $arch | cut -d'/' -f1)
-    arch_name=$(echo $arch | cut -d'/' -f2)
-    
-    # Convert arch names
-    case $arch_name in
-        "arm/v7") arch_suffix="armv7" ;;
-        *) arch_suffix=$arch_name ;;
-    esac
+    # Get build environment
+    build_env="${builds[$build_name]}"
     
     # Build binary
-    GOOS=$os GOARCH=${arch_name%/*} GOARM=${arch_name#*/} \
-        go build -ldflags="-s -w -X main.version=${VERSION}" \
-        -trimpath -o $BUILD_DIR/pulse-$os-$arch_suffix ./cmd/pulse
+    env $build_env go build \
+        -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/updates.version=${VERSION}" \
+        -trimpath \
+        -o "$BUILD_DIR/pulse-$build_name" \
+        ./cmd/pulse
     
     # Create release archive
-    tar_name="pulse-v${VERSION}-${os}-${arch_suffix}.tar.gz"
+    tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
     
-    cd $BUILD_DIR
-    tar -czf ../$RELEASE_DIR/$tar_name \
-        pulse-$os-$arch_suffix \
-        ../frontend-modern/dist \
-        ../README.md \
-        ../LICENSE \
-        ../pulse.service \
-        ../install.sh
-    cd ..
+    # Create staging directory
+    staging_dir="$BUILD_DIR/pulse-staging"
+    rm -rf "$staging_dir"
+    mkdir -p "$staging_dir"
+    
+    # Copy files
+    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/pulse"
+    cp -r frontend-modern/dist "$staging_dir/frontend-modern/"
+    cp README.md LICENSE pulse.service install.sh "$staging_dir/"
+    
+    # Create tarball
+    cd "$staging_dir"
+    tar -czf "../../$RELEASE_DIR/$tar_name" .
+    cd ../..
+    
+    # Cleanup staging
+    rm -rf "$staging_dir"
     
     echo "Created $RELEASE_DIR/$tar_name"
 done
@@ -65,5 +69,47 @@ done
 # Create checksums
 cd $RELEASE_DIR
 sha256sum *.tar.gz > checksums.txt
+cd ..
 
 echo "Release build complete! Files in $RELEASE_DIR/"
+ls -lh $RELEASE_DIR/
+
+# Create universal release tarball with all architectures
+echo "Creating universal release tarball..."
+universal_staging="$BUILD_DIR/pulse-staging"
+rm -rf "$universal_staging"
+mkdir -p "$universal_staging"
+
+# Copy all architecture binaries
+for build_name in "${!builds[@]}"; do
+    cp "$BUILD_DIR/pulse-$build_name" "$universal_staging/"
+done
+
+# Copy common files
+cp -r frontend-modern/dist "$universal_staging/frontend-modern/"
+cp README.md LICENSE pulse.service install.sh pulse-wrapper.sh "$universal_staging/"
+
+# Rename wrapper to 'pulse' for seamless usage
+cp pulse-wrapper.sh "$universal_staging/pulse"
+chmod +x "$universal_staging/pulse"
+
+# Create first-run cleanup flag
+touch "$universal_staging/.first-run-cleanup"
+
+# Create the universal tarball (this is what the community script expects)
+cd "$universal_staging"
+tar -czf "../../$RELEASE_DIR/pulse-v${VERSION}.tar.gz" .
+cd ../..
+
+# Cleanup
+rm -rf "$universal_staging"
+
+echo "Created universal release: $RELEASE_DIR/pulse-v${VERSION}.tar.gz"
+
+# Update checksums
+cd $RELEASE_DIR
+sha256sum *.tar.gz > checksums.txt
+cd ..
+
+echo "Final release contents:"
+ls -lh $RELEASE_DIR/

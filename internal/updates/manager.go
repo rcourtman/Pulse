@@ -166,8 +166,9 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
-	// Validate download URL
-	if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
+	// Validate download URL - allow both public and private repos for testing
+	if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") &&
+		!strings.HasPrefix(downloadURL, "https://github.com/rcourtman/pulse-go-rewrite/releases/download/") {
 		return fmt.Errorf("invalid download URL")
 	}
 
@@ -253,8 +254,8 @@ func (m *Manager) getLatestRelease(ctx context.Context) (*ReleaseInfo, error) {
 		channel = "stable"
 	}
 
-	// GitHub API URL
-	url := "https://api.github.com/repos/rcourtman/Pulse/releases"
+	// GitHub API URL - use private repo for testing
+	url := "https://api.github.com/repos/rcourtman/pulse-go-rewrite/releases"
 	if channel == "stable" {
 		url += "/latest"
 	}
