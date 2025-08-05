@@ -119,6 +119,15 @@ v4 has its own authentication system. Default credentials on fresh install:
 - No authentication by default
 - Set up security mode in Settings → Security
 
+### No Configuration Export/Import
+**By Design**: v4 does NOT support configuration export/import for security reasons:
+- Proxmox API tokens with write permissions are stored encrypted
+- These tokens can access/modify your infrastructure
+- Export functionality would create a security vulnerability
+- Each Pulse instance maintains its own isolated credential store
+
+**Best Practice**: Document your configuration separately (node names, thresholds) but re-enter credentials manually for each instance.
+
 ## 📚 Additional Resources
 
 - [Pulse v4 Release Notes](https://github.com/rcourtman/Pulse/releases/tag/v4.0.0)
