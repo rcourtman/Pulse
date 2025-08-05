@@ -19,7 +19,7 @@ type Config struct {
 	FrontendHost  string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
 	FrontendPort  int    `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath    string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
-	DataPath      string `envconfig:"DATA_PATH" default:"/data"`
+	DataPath      string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance

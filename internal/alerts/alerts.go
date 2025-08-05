@@ -10,6 +10,7 @@ import (
 	"time"
 	
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -188,9 +189,10 @@ type Manager struct {
 
 // NewManager creates a new alert manager
 func NewManager() *Manager {
+	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	m := &Manager{
 		activeAlerts:   make(map[string]*Alert),
-		historyManager: NewHistoryManager("/var/lib/pulse/alerts"),
+		historyManager: NewHistoryManager(alertsDir),
 		escalationStop: make(chan struct{}),
 		alertRateLimit: make(map[string][]time.Time),
 		recentAlerts:   make(map[string]*Alert),
@@ -1216,7 +1218,7 @@ func (m *Manager) SaveActiveAlerts() error {
 	defer m.mu.RUnlock()
 	
 	// Create directory if it doesn't exist
-	alertsDir := "/var/lib/pulse/alerts"
+	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	if err := os.MkdirAll(alertsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
 	}
@@ -1253,7 +1255,7 @@ func (m *Manager) LoadActiveAlerts() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	
-	alertsFile := "/var/lib/pulse/alerts/active-alerts.json"
+	alertsFile := filepath.Join(utils.GetDataDir(), "alerts", "active-alerts.json")
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
 		if os.IsNotExist(err) {

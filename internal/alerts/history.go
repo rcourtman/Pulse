@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -41,7 +42,7 @@ type HistoryManager struct {
 // NewHistoryManager creates a new history manager
 func NewHistoryManager(dataDir string) *HistoryManager {
 	if dataDir == "" {
-		dataDir = "/var/lib/pulse"
+		dataDir = utils.GetDataDir()
 	}
 
 	hm := &HistoryManager{
