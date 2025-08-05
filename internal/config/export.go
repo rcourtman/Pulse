@@ -113,6 +113,11 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to unmarshal import data: %w", err)
 	}
 
+	// Check version compatibility (warn but don't fail)
+	if exportData.Version != "4.0" {
+		// Log warning but continue - future versions might be compatible
+		fmt.Printf("Warning: Config was exported from version %s, current version is 4.0\n", exportData.Version)
+	}
 	// Import all configurations
 	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances); err != nil {
 		return fmt.Errorf("failed to import nodes config: %w", err)

@@ -94,6 +94,14 @@ pulse config import -i pulse-backup.enc
 
 # Automated deployment (CI/CD)
 PULSE_PASSPHRASE=secret pulse config import -i backup.enc --force
+
+# Docker with auto-import on first run
+docker run -d \
+  -v pulse_data:/data \
+  -v $(pwd)/pulse-backup.enc:/config.enc:ro \
+  -e PULSE_INIT_CONFIG_FILE=/config.enc \
+  -e PULSE_INIT_CONFIG_PASSPHRASE=secret \
+  rcourtman/pulse:latest
 ```
 
 **Security Notes:**

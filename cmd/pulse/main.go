@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -44,6 +46,13 @@ func runServer() {
 	// Initialize logger
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
+	// Check for auto-import on first startup
+	if shouldAutoImport() {
+		if err := performAutoImport(); err != nil {
+			log.Error().Err(err).Msg("Auto-import failed, continuing with normal startup")
+		}
+	}
 
 	// Load unified configuration
 	cfg, err := config.Load()
@@ -126,4 +135,70 @@ func runServer() {
 	reloadableMonitor.Stop()
 
 	log.Info().Msg("Server stopped")
+}
+
+// shouldAutoImport checks if auto-import environment variables are set
+func shouldAutoImport() bool {
+	// Check if config already exists
+	configPath := os.Getenv("PULSE_DATA_DIR")
+	if configPath == "" {
+		configPath = "/etc/pulse"
+	}
+	
+	// If nodes.enc already exists, skip auto-import
+	if _, err := os.Stat(filepath.Join(configPath, "nodes.enc")); err == nil {
+		return false
+	}
+	
+	// Check for auto-import environment variables
+	return os.Getenv("PULSE_INIT_CONFIG_DATA") != "" || 
+	       os.Getenv("PULSE_INIT_CONFIG_FILE") != ""
+}
+
+// performAutoImport imports configuration from environment variables
+func performAutoImport() error {
+	configData := os.Getenv("PULSE_INIT_CONFIG_DATA")
+	configFile := os.Getenv("PULSE_INIT_CONFIG_FILE")
+	configPass := os.Getenv("PULSE_INIT_CONFIG_PASSPHRASE")
+	
+	if configPass == "" {
+		return fmt.Errorf("PULSE_INIT_CONFIG_PASSPHRASE is required for auto-import")
+	}
+	
+	var encryptedData string
+	
+	// Get data from file or direct data
+	if configFile != "" {
+		data, err := os.ReadFile(configFile)
+		if err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		encryptedData = string(data)
+	} else if configData != "" {
+		// Try to decode base64 if it looks encoded
+		if decoded, err := base64.StdEncoding.DecodeString(configData); err == nil {
+			encryptedData = string(decoded)
+		} else {
+			encryptedData = configData
+		}
+	} else {
+		return fmt.Errorf("no config data provided")
+	}
+	
+	// Load configuration path
+	configPath := os.Getenv("PULSE_DATA_DIR")
+	if configPath == "" {
+		configPath = "/etc/pulse"
+	}
+	
+	// Create persistence manager
+	persistence := config.NewConfigPersistence(configPath)
+	
+	// Import configuration
+	if err := persistence.ImportConfig(encryptedData, configPass); err != nil {
+		return fmt.Errorf("failed to import configuration: %w", err)
+	}
+	
+	log.Info().Msg("Configuration auto-imported successfully")
+	return nil
 }
