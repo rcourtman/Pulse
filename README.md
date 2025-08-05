@@ -81,6 +81,12 @@ Unlike traditional monitoring tools:
 
 Just open the web UI, add your Proxmox nodes through the interface, and you're done!
 
+### Data Storage
+
+- **Docker**: All data stored in `/data` (mount with `-v pulse_data:/data`)
+- **Manual Install**: All data stored in `/etc/pulse`
+- **Configuration**: Everything is managed through the web UI
+
 ### Configuration Backup & Migration
 
 Pulse v4.0.3+ supports encrypted configuration export/import for backup and migration:

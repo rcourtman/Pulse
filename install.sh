@@ -14,8 +14,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 INSTALL_DIR="/opt/pulse"
-CONFIG_DIR="/etc/pulse"
-DATA_DIR="/var/lib/pulse"
+CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
 SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
 REQUIRED_GO_VERSION="1.21"
@@ -176,11 +175,10 @@ setup_directories() {
     
     # Create directories
     mkdir -p "$CONFIG_DIR"
-    mkdir -p "$DATA_DIR"
     mkdir -p "$INSTALL_DIR"
     
     # Set permissions
-    chown -R pulse:pulse "$CONFIG_DIR" "$DATA_DIR" "$INSTALL_DIR"
+    chown -R pulse:pulse "$CONFIG_DIR" "$INSTALL_DIR"
     chmod 700 "$CONFIG_DIR"
 }
 
@@ -209,7 +207,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR $CONFIG_DIR $DATA_DIR
+ReadWritePaths=$INSTALL_DIR $CONFIG_DIR
 
 [Install]
 WantedBy=multi-user.target
