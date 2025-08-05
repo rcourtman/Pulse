@@ -55,10 +55,10 @@ COPY --from=frontend-builder /app/frontend-modern/dist ./frontend-modern/dist
 RUN mkdir -p /etc/pulse /data
 
 # Expose port
-EXPOSE 3000
+EXPOSE 7655
 
 # Set environment variables
-ENV PULSE_CONFIG_DIR=/etc/pulse
+# Only PULSE_DATA_DIR is used - all node config is done via web UI
 ENV PULSE_DATA_DIR=/data
 
 # Create non-root user
@@ -69,7 +69,7 @@ USER pulse
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:7655 || exit 1
 
 # Run the binary
 CMD ["./pulse"]

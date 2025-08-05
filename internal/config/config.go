@@ -12,6 +12,7 @@ import (
 )
 
 // Config holds all application configuration
+// NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
 	BackendHost   string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
@@ -158,8 +159,8 @@ func Load() (*Config, error) {
 		}
 	}
 	
-	// Override with environment variables if present
-	// This allows env vars to override config file for deployments
+	// Limited environment variable support
+	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
 	if port := os.Getenv("PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			cfg.BackendPort = p
@@ -232,156 +233,6 @@ func UpdatePollingInterval(interval int) error {
 	return globalPersistence.SaveSystemSettings(systemSettings)
 }
 
-// loadPVEInstances loads all PVE instances from environment variables
-func loadPVEInstances() []PVEInstance {
-	var instances []PVEInstance
-
-	// Check for single instance (backward compatibility with JavaScript version)
-	if host := os.Getenv("PROXMOX_HOST"); host != "" {
-		// Parse token ID format: user@realm!tokenname
-		tokenID := os.Getenv("PROXMOX_TOKEN_ID")
-		tokenSecret := os.Getenv("PROXMOX_TOKEN_SECRET")
-		
-		var tokenName, tokenUser string
-		if tokenID != "" {
-			// Split user@realm!tokenname
-			parts := strings.Split(tokenID, "!")
-			if len(parts) == 2 {
-				tokenUser = parts[0]
-				tokenName = parts[1]
-			}
-		}
-		
-		instance := PVEInstance{
-			Name:              os.Getenv("PROXMOX_NODE_NAME"),
-			Host:              host,
-			User:              tokenUser,
-			Password:          "",
-			TokenName:         tokenName,
-			TokenValue:        tokenSecret,
-			Fingerprint:       os.Getenv("PROXMOX_FINGERPRINT"),
-			VerifySSL:         os.Getenv("PROXMOX_ALLOW_SELF_SIGNED_CERTS") != "true",
-			MonitorVMs:        os.Getenv("PROXMOX_MONITOR_VMS") != "false",
-			MonitorContainers: os.Getenv("PROXMOX_MONITOR_CONTAINERS") != "false",
-			MonitorStorage:    os.Getenv("PROXMOX_MONITOR_STORAGE") != "false",
-			MonitorBackups:    os.Getenv("PROXMOX_MONITOR_BACKUPS") != "false",
-		}
-		if instance.Name == "" {
-			instance.Name = "Main"
-		}
-		instances = append(instances, instance)
-	}
-
-	// Check for multiple instances (PROXMOX_HOST_2, PROXMOX_HOST_3, etc.)
-	for i := 2; i <= 10; i++ {
-		suffix := fmt.Sprintf("_%d", i)
-		if host := os.Getenv("PROXMOX_HOST" + suffix); host != "" {
-			// Parse token ID format: user@realm!tokenname
-			tokenID := os.Getenv("PROXMOX_TOKEN_ID" + suffix)
-			tokenSecret := os.Getenv("PROXMOX_TOKEN_SECRET" + suffix)
-			
-			var tokenName, tokenUser string
-			if tokenID != "" {
-				// Split user@realm!tokenname
-				parts := strings.Split(tokenID, "!")
-				if len(parts) == 2 {
-					tokenUser = parts[0]
-					tokenName = parts[1]
-				}
-			}
-			
-			instance := PVEInstance{
-				Name:              os.Getenv("PROXMOX_NODE_NAME" + suffix),
-				Host:              host,
-				User:              tokenUser,
-				Password:          "",
-				TokenName:         tokenName,
-				TokenValue:        tokenSecret,
-				Fingerprint:       os.Getenv("PROXMOX_FINGERPRINT" + suffix),
-				VerifySSL:         os.Getenv("PROXMOX_ALLOW_SELF_SIGNED_CERTS"+suffix) != "true",
-				MonitorVMs:        os.Getenv("PROXMOX_MONITOR_VMS"+suffix) != "false",
-				MonitorContainers: os.Getenv("PROXMOX_MONITOR_CONTAINERS"+suffix) != "false",
-				MonitorStorage:    os.Getenv("PROXMOX_MONITOR_STORAGE"+suffix) != "false",
-				MonitorBackups:    os.Getenv("PROXMOX_MONITOR_BACKUPS"+suffix) != "false",
-			}
-			if instance.Name == "" {
-				instance.Name = fmt.Sprintf("PVE-%d", i)
-			}
-			instances = append(instances, instance)
-		}
-	}
-
-	return instances
-}
-
-// loadPBSInstances loads all PBS instances from environment variables
-func loadPBSInstances() []PBSInstance {
-	var instances []PBSInstance
-
-	// Check for single instance (backward compatibility)
-	if host := os.Getenv("PBS_HOST"); host != "" {
-		// Parse token ID format: user@realm!tokenname
-		tokenID := os.Getenv("PBS_TOKEN_ID")
-		tokenSecret := os.Getenv("PBS_TOKEN_SECRET")
-		
-		var tokenName, tokenUser string
-		if tokenID != "" {
-			// Split user@realm!tokenname
-			parts := strings.Split(tokenID, "!")
-			if len(parts) == 2 {
-				tokenUser = parts[0]  // e.g., "admin@pbs"
-				tokenName = parts[1]  // e.g., "pulse-readonly"
-			}
-		}
-		
-		instance := PBSInstance{
-			Name:               "Main",
-			Host:               host,
-			User:               tokenUser,  // User@realm part
-			Password:           "",
-			TokenName:          tokenName,  // Just the token name
-			TokenValue:         tokenSecret,
-			Fingerprint:        os.Getenv("PBS_FINGERPRINT"),
-			VerifySSL:          os.Getenv("PBS_ALLOW_SELF_SIGNED_CERTS") != "true",
-			MonitorBackups:     os.Getenv("PBS_MONITOR_BACKUPS") != "false",
-			MonitorDatastores:  os.Getenv("PBS_MONITOR_DATASTORES") != "false",
-			MonitorSyncJobs:    os.Getenv("PBS_MONITOR_SYNC_JOBS") != "false",
-			MonitorVerifyJobs:  os.Getenv("PBS_MONITOR_VERIFY_JOBS") != "false",
-			MonitorPruneJobs:   os.Getenv("PBS_MONITOR_PRUNE_JOBS") != "false",
-			MonitorGarbageJobs: os.Getenv("PBS_MONITOR_GARBAGE_JOBS") != "false",
-		}
-		instances = append(instances, instance)
-	}
-
-	// Check for multiple instances
-	for i := 1; i <= 10; i++ {
-		suffix := fmt.Sprintf("_%d", i)
-		if host := os.Getenv("PBS_HOST" + suffix); host != "" {
-			instance := PBSInstance{
-				Name:               os.Getenv("PBS_NAME" + suffix),
-				Host:               host,
-				User:               os.Getenv("PBS_USER" + suffix),
-				Password:           os.Getenv("PBS_PASSWORD" + suffix),
-				TokenName:          os.Getenv("PBS_TOKEN_NAME" + suffix),
-				TokenValue:         os.Getenv("PBS_TOKEN_VALUE" + suffix),
-				Fingerprint:        os.Getenv("PBS_FINGERPRINT" + suffix),
-				VerifySSL:          os.Getenv("PBS_VERIFY_SSL"+suffix) != "false",
-				MonitorBackups:     os.Getenv("PBS_MONITOR_BACKUPS"+suffix) != "false",
-				MonitorDatastores:  os.Getenv("PBS_MONITOR_DATASTORES"+suffix) != "false",
-				MonitorSyncJobs:    os.Getenv("PBS_MONITOR_SYNC_JOBS"+suffix) != "false",
-				MonitorVerifyJobs:  os.Getenv("PBS_MONITOR_VERIFY_JOBS"+suffix) != "false",
-				MonitorPruneJobs:   os.Getenv("PBS_MONITOR_PRUNE_JOBS"+suffix) != "false",
-				MonitorGarbageJobs: os.Getenv("PBS_MONITOR_GARBAGE_JOBS"+suffix) != "false",
-			}
-			if instance.Name == "" {
-				instance.Name = fmt.Sprintf("PBS-%d", i)
-			}
-			instances = append(instances, instance)
-		}
-	}
-
-	return instances
-}
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
