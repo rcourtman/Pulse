@@ -47,6 +47,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=backend-builder /app/pulse .
 
+# Copy VERSION file
+COPY --from=backend-builder /app/VERSION .
+
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend-modern/dist ./frontend-modern/dist
 
