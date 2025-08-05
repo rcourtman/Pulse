@@ -48,13 +48,31 @@ type auth struct {
 
 // NewClient creates a new PBS API client
 func NewClient(cfg ClientConfig) (*Client, error) {
-	// Parse user and realm
-	parts := strings.Split(cfg.User, "@")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid user format, expected user@realm")
+	var user, realm string
+	
+	// For token auth, user might be empty or in a different format
+	if cfg.TokenName != "" && cfg.TokenValue != "" {
+		// Token authentication - user is optional
+		if cfg.User != "" {
+			parts := strings.Split(cfg.User, "@")
+			if len(parts) == 2 {
+				user = parts[0]
+				realm = parts[1]
+			} else {
+				// If no realm specified, default to pbs
+				user = cfg.User
+				realm = "pbs"
+			}
+		}
+	} else {
+		// Password authentication - user@realm format is required
+		parts := strings.Split(cfg.User, "@")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid user format, expected user@realm")
+		}
+		user = parts[0]
+		realm = parts[1]
 	}
-	user := parts[0]
-	realm := parts[1]
 
 	// Create HTTP client with proper TLS configuration
 	httpClient := tlsutil.CreateHTTPClient(cfg.VerifySSL, cfg.Fingerprint)

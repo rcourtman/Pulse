@@ -302,10 +302,28 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("Added Proxmox cluster with auto-discovered endpoints")
 		}
 	} else {
-		// Ensure user has realm for PBS
+		// Parse PBS authentication details
 		pbsUser := req.User
-		if req.User != "" && !strings.Contains(req.User, "@") {
-			pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
+		pbsTokenName := req.TokenName
+		
+		// Handle different token input formats
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Check if token name contains the full format (user@realm!tokenname)
+			if strings.Contains(req.TokenName, "!") {
+				parts := strings.Split(req.TokenName, "!")
+				if len(parts) == 2 {
+					// Extract user from token ID if not already provided
+					if pbsUser == "" {
+						pbsUser = parts[0]
+					}
+					pbsTokenName = parts[1]
+				}
+			}
+		}
+		
+		// Ensure user has realm for PBS (if using user/password or token with user)
+		if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
 		
 		pbs := config.PBSInstance{
@@ -313,7 +331,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			Host:              req.Host,
 			User:              pbsUser,
 			Password:          req.Password,
-			TokenName:         req.TokenName,
+			TokenName:         pbsTokenName,
 			TokenValue:        req.TokenValue,
 			Fingerprint:       req.Fingerprint,
 			VerifySSL:         req.VerifySSL,
@@ -505,17 +523,35 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		}
 		
 		// PBS test connection
-		// Ensure user has realm for PBS
+		// Parse PBS authentication details
 		pbsUser := user
-		if user != "" && !strings.Contains(user, "@") {
-			pbsUser = user + "@pbs" // Default to @pbs realm if not specified
+		pbsTokenName := tokenName
+		
+		// Handle different token input formats
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Check if token name contains the full format (user@realm!tokenname)
+			if strings.Contains(req.TokenName, "!") && tokenName == req.TokenName {
+				parts := strings.Split(req.TokenName, "!")
+				if len(parts) == 2 {
+					// Extract user from token ID if not already provided
+					if pbsUser == "" {
+						pbsUser = parts[0]
+					}
+					pbsTokenName = parts[1]
+				}
+			}
+		}
+		
+		// Ensure user has realm for PBS (if using user/password or token with user)
+		if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
 		
 		clientConfig := pbs.ClientConfig{
 			Host:        host,
 			User:        pbsUser,
 			Password:    req.Password,
-			TokenName:   tokenName,
+			TokenName:   pbsTokenName,
 			TokenValue:  req.TokenValue,
 			VerifySSL:   req.VerifySSL,
 			Fingerprint: req.Fingerprint,
