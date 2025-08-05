@@ -136,6 +136,39 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
+	// Config export/import routes (requires API token for security)
+	r.mux.HandleFunc("/api/config/export", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Check for API token if configured
+			if r.config.APIToken != "" {
+				authHeader := req.Header.Get("X-API-Token")
+				if authHeader != r.config.APIToken {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+			}
+			configHandlers.HandleExportConfig(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	
+	r.mux.HandleFunc("/api/config/import", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Check for API token if configured
+			if r.config.APIToken != "" {
+				authHeader := req.Header.Get("X-API-Token")
+				if authHeader != r.config.APIToken {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+			}
+			configHandlers.HandleImportConfig(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	
 	// Alert routes
 	r.mux.HandleFunc("/api/alerts/", alertHandlers.HandleAlerts)
 	
