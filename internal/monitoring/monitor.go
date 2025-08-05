@@ -119,7 +119,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		metricsHistory: NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
 		alertManager:   alerts.NewManager(),
 		notificationMgr: notifications.NewNotificationManager(),
-		configPersist:  config.NewConfigPersistence(""),
+		configPersist:  config.NewConfigPersistence(cfg.DataPath),
 		authFailures:   make(map[string]int),
 		lastAuthAttempt: make(map[string]time.Time),
 	}

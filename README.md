@@ -81,6 +81,27 @@ Unlike traditional monitoring tools:
 
 Just open the web UI, add your Proxmox nodes through the interface, and you're done!
 
+### Configuration Backup & Migration
+
+Pulse v4.0.3+ supports encrypted configuration export/import for backup and migration:
+
+```bash
+# Export configuration (prompts for passphrase)
+pulse config export -o pulse-backup.enc
+
+# Import on another instance
+pulse config import -i pulse-backup.enc
+
+# Automated deployment (CI/CD)
+PULSE_PASSPHRASE=secret pulse config import -i backup.enc --force
+```
+
+**Security Notes:**
+- Exports are encrypted with AES-256-GCM using your passphrase
+- Credentials remain encrypted throughout the export/import process
+- API endpoints (`/api/config/export`, `/api/config/import`) require API_TOKEN if configured
+- Perfect for Docker deployments and infrastructure as code workflows
+
 ### For Docker Users
 
 Pulse provides multi-architecture Docker images supporting:

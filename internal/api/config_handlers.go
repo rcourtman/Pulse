@@ -1150,3 +1150,100 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 func generateNodeID(nodeType string, index int) string {
 	return fmt.Sprintf("%s-%d", nodeType, index)
 }
+
+// ExportConfigRequest represents a request to export configuration
+type ExportConfigRequest struct {
+	Passphrase string `json:"passphrase"`
+}
+
+// ImportConfigRequest represents a request to import configuration
+type ImportConfigRequest struct {
+	Data       string `json:"data"`
+	Passphrase string `json:"passphrase"`
+}
+
+// HandleExportConfig exports all configuration with encryption
+func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Request) {
+	var req ExportConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode export request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Passphrase == "" {
+		http.Error(w, "Passphrase is required", http.StatusBadRequest)
+		return
+	}
+
+	// Export configuration
+	exportedData, err := h.persistence.ExportConfig(req.Passphrase)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to export configuration")
+		http.Error(w, "Failed to export configuration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Msg("Configuration exported successfully")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "success",
+		"data":   exportedData,
+	})
+}
+
+// HandleImportConfig imports configuration from encrypted export
+func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Request) {
+	var req ImportConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode import request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Passphrase == "" {
+		http.Error(w, "Passphrase is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Data == "" {
+		http.Error(w, "Import data is required", http.StatusBadRequest)
+		return
+	}
+
+	// Import configuration
+	if err := h.persistence.ImportConfig(req.Data, req.Passphrase); err != nil {
+		log.Error().Err(err).Msg("Failed to import configuration")
+		http.Error(w, "Failed to import configuration: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Reload configuration from disk
+	newConfig, err := config.Load()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to reload configuration after import")
+		http.Error(w, "Configuration imported but failed to reload", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the config reference
+	*h.config = *newConfig
+
+	// Reload monitor with new configuration
+	if h.reloadFunc != nil {
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after import")
+			http.Error(w, "Configuration imported but failed to apply changes", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Info().Msg("Configuration imported successfully")
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Configuration imported successfully",
+	})
+}
