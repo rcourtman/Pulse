@@ -29,14 +29,15 @@ Until the helper scripts are updated, users should:
    docker run -d --name pulse -p 7655:7655 rcourtman/pulse:latest
    ```
 
-## What Needs to Be Done
+## Current Status
 
-1. Submit a PR to community-scripts/ProxmoxVE to update the Pulse helper script
-2. The new script should:
-   - Install Go dependencies (not Node.js)
-   - Download the pre-built binary (not clone and build)
-   - Create proper systemd service for the Go binary
-   - Use port 7655 (not 3000)
+**A PR has been submitted** to update the Proxmox VE helper scripts for Pulse v4. Once merged, the helper script will work correctly with the Go version.
+
+The updated script will:
+- Download the pre-built binary (not install Node.js)
+- Create proper systemd service for the Go binary
+- Use port 7655 (not 3000)
+- Handle the new directory structure
 
 ## For Users Getting Errors
 
