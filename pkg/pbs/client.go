@@ -52,8 +52,21 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	
 	// For token auth, user might be empty or in a different format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
-		// Token authentication - user is optional
-		if cfg.User != "" {
+		// Token authentication - parse the token name to extract user info if needed
+		if strings.Contains(cfg.TokenName, "!") {
+			// Token name contains full format: user@realm!tokenname
+			parts := strings.Split(cfg.TokenName, "!")
+			if len(parts) == 2 && strings.Contains(parts[0], "@") {
+				userParts := strings.Split(parts[0], "@")
+				if len(userParts) == 2 {
+					user = userParts[0]
+					realm = userParts[1]
+					// Update token name to just the token part
+					cfg.TokenName = parts[1]
+				}
+			}
+		} else if cfg.User != "" {
+			// User provided separately
 			parts := strings.Split(cfg.User, "@")
 			if len(parts) == 2 {
 				user = parts[0]
@@ -63,6 +76,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 				user = cfg.User
 				realm = "pbs"
 			}
+		} else {
+			return nil, fmt.Errorf("token authentication requires user information either in token name (user@realm!tokenname) or user field")
 		}
 	} else {
 		// Password authentication - user@realm format is required

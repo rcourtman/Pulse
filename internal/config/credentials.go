@@ -23,9 +23,10 @@ func NewCredentialResolver() *CredentialResolver {
 
 // ResolveValue resolves a credential value that might be:
 // - A literal value (backwards compatible)
-// - An environment variable reference: ${VAR_NAME}
+// - An environment variable reference: ${VAR_NAME} (for secrets, not node config)
 // - A file reference: file:///path/to/secret
 // - Future: vault://path/to/secret, keyring://secret-name, etc.
+// NOTE: This is for credential values only, not for node configuration which is done via UI
 func (cr *CredentialResolver) ResolveValue(value string, fieldName string) (string, error) {
 	if value == "" {
 		return "", nil

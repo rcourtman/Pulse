@@ -67,28 +67,30 @@ If you were using Docker for v3, the process is simpler:
      --name pulse \
      -p 7655:7655 \
      -v pulse-data:/data \
-     -e PROXMOX_HOST=your-proxmox-host \
-     -e PROXMOX_USER=your-api-user \
-     -e PROXMOX_TOKEN_NAME=your-token-name \
-     -e PROXMOX_TOKEN_VALUE=your-token-value \
      rcourtman/pulse:latest
    ```
 
 3. **Configure through the web UI** at http://localhost:7655
+   - All node configuration is done through the UI
+   - No environment variables needed for Proxmox credentials
 
 ## 📋 Configuration Reference
 
 ### Environment Variables (v3 → v4)
 
+**Important**: v4 does NOT use environment variables for node configuration. All configuration is done through the web UI.
+
 | v3 Variable | v4 Equivalent | Notes |
 |------------|---------------|-------|
-| `PROXMOX_HOST` | Same | Now configured via UI |
-| `PROXMOX_USER` | Same | Now configured via UI |
-| `PROXMOX_PASSWORD` | Same | Password OR token |
-| `PROXMOX_TOKEN_ID` | Split into `PROXMOX_TOKEN_NAME` | Token auth recommended |
-| `PROXMOX_TOKEN_SECRET` | `PROXMOX_TOKEN_VALUE` | Token auth recommended |
-| `DISCORD_WEBHOOK` | Configure in UI | Settings → Notifications |
-| `EMAIL_*` | Configure in UI | Settings → Notifications |
+| `PROXMOX_HOST` | UI Configuration | Settings → Nodes → Add Node |
+| `PROXMOX_USER` | UI Configuration | Settings → Nodes → Add Node |
+| `PROXMOX_PASSWORD` | UI Configuration | Encrypted storage via UI |
+| `PROXMOX_TOKEN_ID` | UI Configuration | Split into name/value in UI |
+| `PROXMOX_TOKEN_SECRET` | UI Configuration | Token auth recommended |
+| `DISCORD_WEBHOOK` | UI Configuration | Settings → Notifications |
+| `EMAIL_*` | UI Configuration | Settings → Notifications |
+
+The only environment variable v4 supports is `PULSE_DATA_DIR` for Docker deployments to specify the data directory.
 
 ### Key Differences
 

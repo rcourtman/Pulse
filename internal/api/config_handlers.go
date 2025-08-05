@@ -530,20 +530,15 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		// Handle different token input formats
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Check if token name contains the full format (user@realm!tokenname)
-			if strings.Contains(req.TokenName, "!") && tokenName == req.TokenName {
-				parts := strings.Split(req.TokenName, "!")
-				if len(parts) == 2 {
-					// Extract user from token ID if not already provided
-					if pbsUser == "" {
-						pbsUser = parts[0]
-					}
-					pbsTokenName = parts[1]
-				}
+			if strings.Contains(req.TokenName, "!") {
+				// Token name is in full format, leave it as is
+				// The PBS client will parse it
+			} else if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+				// User provided separately without realm, add default realm
+				pbsUser = pbsUser + "@pbs"
 			}
-		}
-		
-		// Ensure user has realm for PBS (if using user/password or token with user)
-		if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+		} else if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+			// Password auth: ensure user has realm
 			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
 		
