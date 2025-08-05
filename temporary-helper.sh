@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Temporary Pulse v4 Helper Script for Proxmox VE
 # Use this until the official helper script is updated
+# TODO: Remove this file once PR to community-scripts/ProxmoxVE is merged
 
 set -euo pipefail
 
