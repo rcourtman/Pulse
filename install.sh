@@ -115,7 +115,7 @@ install_dependencies() {
     # Install Go if not present or version is too old
     if ! command -v go &> /dev/null; then
         print_info "Installing Go..."
-        wget -q -O go.tar.gz https://go.dev/dl/go1.23.linux-amd64.tar.gz
+        wget -q -O go.tar.gz https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
         tar -C /usr/local -xzf go.tar.gz
         rm go.tar.gz
         export PATH=$PATH:/usr/local/go/bin
