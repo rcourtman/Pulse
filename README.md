@@ -6,6 +6,8 @@
 
 **Real-time monitoring for Proxmox VE and PBS with alerts, webhooks, and a clean web interface.**
 
+> **⚠️ IMPORTANT: Upgrading from v3?** See the [Migration Guide](docs/MIGRATION_V3_TO_V4.md) - automatic upgrades will break your installation!
+
 ![Pulse Dashboard](docs/images/01-dashboard.png)
 
 ## Key Features
@@ -39,14 +41,15 @@ Pulse is a solo hobby project developed in my free time. If you find it useful, 
 Choose **one** method:
 
 ```bash
-# Option A: Automated LXC Container (Easiest)
-bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
-
-# Option B: Docker (Multi-arch: AMD64, ARM64, ARMv7)
+# Option A: Docker (Multi-arch: AMD64, ARM64, ARMv7) - RECOMMENDED
 docker run -d -p 7655:7655 -v pulse_data:/data --restart unless-stopped rcourtman/pulse:latest
 
-# Option C: Manual Install (For existing LXC/VMs)
+# Option B: Manual Install (For existing LXC/VMs)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+
+# Option C: Proxmox Helper Script (TEMPORARILY BROKEN - see issue #251)
+# The community helper script is still configured for v3 and will fail
+# bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 ```
 
 ### Configure Pulse
