@@ -114,7 +114,7 @@ var globalPersistence *ConfigPersistence
 // Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
 	// Get data directory from environment
-	dataDir := "/var/lib/pulse"
+	dataDir := "/etc/pulse"
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		dataDir = dir
 	}
