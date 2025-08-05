@@ -113,14 +113,20 @@ var globalPersistence *ConfigPersistence
 
 // Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
+	// Get data directory from environment
+	dataDir := "/var/lib/pulse"
+	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
+		dataDir = dir
+	}
+	
 	// Initialize config with defaults
 	cfg := &Config{
 		BackendHost:          "0.0.0.0",
 		BackendPort:          3000,
 		FrontendHost:         "0.0.0.0", 
 		FrontendPort:         7655,
-		ConfigPath:           "/etc/pulse",
-		DataPath:             "/data",
+		ConfigPath:           dataDir,
+		DataPath:             dataDir,
 		ConcurrentPolling:    true,
 		ConnectionTimeout:    10 * time.Second,
 		MetricsRetentionDays: 7,
@@ -136,7 +142,7 @@ func Load() (*Config, error) {
 	}
 	
 	// Initialize persistence
-	persistence := NewConfigPersistence("/etc/pulse")
+	persistence := NewConfigPersistence(dataDir)
 	if persistence != nil {
 		// Store global persistence for saving
 		globalPersistence = persistence
