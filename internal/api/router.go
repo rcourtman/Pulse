@@ -24,6 +24,7 @@ type Router struct {
 	wsHub         *websocket.Hub
 	reloadFunc    func() error
 	updateManager *updates.Manager
+	exportLimiter *RateLimiter
 }
 
 
@@ -36,6 +37,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		wsHub:         wsHub,
 		reloadFunc:    reloadFunc,
 		updateManager: updates.NewManager(cfg),
+		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
 	}
 
 	r.setupRoutes()
@@ -136,38 +138,90 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
-	// Config export/import routes (requires API token for security)
-	r.mux.HandleFunc("/api/config/export", func(w http.ResponseWriter, req *http.Request) {
-		if req.Method == http.MethodPost {
-			// Check for API token if configured
-			if r.config.APIToken != "" {
-				authHeader := req.Header.Get("X-API-Token")
-				if authHeader != r.config.APIToken {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
+	// Security status route
+	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			status := map[string]interface{}{
+				"apiTokenConfigured": r.config.APIToken != "",
+				"requiresAuth": r.config.APIToken != "",
+				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
+				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
 			}
-			configHandlers.HandleExportConfig(w, req)
+			json.NewEncoder(w).Encode(status)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 	
-	r.mux.HandleFunc("/api/config/import", func(w http.ResponseWriter, req *http.Request) {
+	// Config export/import routes (requires API token for security)
+	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			// Check for API token if configured
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
 				if authHeader != r.config.APIToken {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Msg("Unauthorized export attempt")
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
+			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
+				// If no API token and unprotected export not explicitly allowed
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Msg("Export blocked - API token required")
+				http.Error(w, "Export requires API_TOKEN to be set (or set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
+				return
 			}
+			
+			// Log successful export attempt
+			log.Info().
+				Str("ip", req.RemoteAddr).
+				Bool("authenticated", r.config.APIToken != "").
+				Msg("Configuration export initiated")
+			
+			configHandlers.HandleExportConfig(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	
+	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Check for API token if configured
+			if r.config.APIToken != "" {
+				authHeader := req.Header.Get("X-API-Token")
+				if authHeader != r.config.APIToken {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Msg("Unauthorized import attempt")
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
+				// If no API token and unprotected import not explicitly allowed
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Msg("Import blocked - API token required")
+				http.Error(w, "Import requires API_TOKEN to be set (or set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
+				return
+			}
+			
+			// Log successful import attempt
+			log.Info().
+				Str("ip", req.RemoteAddr).
+				Bool("authenticated", r.config.APIToken != "").
+				Msg("Configuration import initiated")
+			
 			configHandlers.HandleImportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 	
 	// Alert routes
 	r.mux.HandleFunc("/api/alerts/", alertHandlers.HandleAlerts)
