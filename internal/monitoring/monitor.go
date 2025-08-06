@@ -931,7 +931,7 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 				Status:   ct.Status,
 				Type:     "lxc",
 				CPU:      safeFloat(ct.CPU), // Already in percentage
-				CPUs:     ct.CPUs,
+				CPUs:     int(ct.CPUs),
 				Memory: models.Memory{
 					Total: int64(ct.MaxMem),
 					Used:  int64(ct.Mem),

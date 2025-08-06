@@ -112,7 +112,9 @@ export function GuestRow(props: GuestRowProps) {
       </Show>
 
       {/* Uptime */}
-      <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+      <td class={`p-1 px-2 text-sm whitespace-nowrap ${
+        props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
+      }`}>
         <Show when={isRunning()} fallback="-">
           {formatUptime(props.guest.uptime)}
         </Show>

@@ -7,12 +7,41 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
+
+// FlexInt handles JSON fields that can be either int or string
+type FlexInt int
+
+func (f *FlexInt) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as int first
+	var i int
+	if err := json.Unmarshal(data, &i); err == nil {
+		*f = FlexInt(i)
+		return nil
+	}
+	
+	// If that fails, try as string
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	
+	// Parse string to float first (handles "1.5" format from cpulimit)
+	floatVal, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return err
+	}
+	
+	// Convert to int
+	*f = FlexInt(int(floatVal))
+	return nil
+}
 
 // Client represents a Proxmox VE API client
 type Client struct {
@@ -346,7 +375,7 @@ type Container struct {
 	Node       string  `json:"node"`
 	Status     string  `json:"status"`
 	CPU        float64 `json:"cpu"`
-	CPUs       int     `json:"cpus"`
+	CPUs       FlexInt `json:"cpus"`
 	Mem        uint64  `json:"mem"`
 	MaxMem     uint64  `json:"maxmem"`
 	Swap       uint64  `json:"swap"`
