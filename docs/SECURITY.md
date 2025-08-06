@@ -35,6 +35,16 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 - **Minimum Passphrase**: 12 characters required
 - **Security Tab**: Check status in Settings → Security
 
+### What's Encrypted in Exports
+- Node credentials (passwords, API tokens)
+- PBS credentials
+- Email settings passwords
+
+### What's NOT Encrypted
+- Node hostnames and IPs
+- Threshold settings
+- General configuration
+
 ## Troubleshooting
 
 **Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
