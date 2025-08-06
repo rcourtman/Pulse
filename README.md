@@ -44,12 +44,11 @@ Choose **one** method:
 # Option A: Docker (Multi-arch: AMD64, ARM64, ARMv7) - RECOMMENDED
 docker run -d -p 7655:7655 -v pulse_data:/data --restart unless-stopped rcourtman/pulse:latest
 
-# Option B: Manual Install (For existing LXC/VMs)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+# Option B: Proxmox Helper Script - Creates dedicated LXC container
+bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
-# Option C: Proxmox Helper Script (Fix in progress - PR submitted)
-# The helper script is being updated for v4. Until merged, use Option A or B
-# bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+# Option C: Manual Install (For existing LXC/VMs)
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
 ### Configure Pulse
