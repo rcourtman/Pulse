@@ -41,6 +41,10 @@ const Settings: Component = () => {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
   const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
   const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
+  
+  // Diagnostics
+  const [diagnosticsData, setDiagnosticsData] = createSignal<any>(null);
+  const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -861,6 +865,99 @@ const Settings: Component = () => {
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">System Diagnostics</h3>
                 
                 <div class="space-y-4">
+                  {/* Live Connection Diagnostics */}
+                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Connection Diagnostics</h4>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                      Test all configured node connections and view detailed status
+                    </p>
+                    <button
+                      onClick={async () => {
+                        setRunningDiagnostics(true);
+                        try {
+                          const response = await fetch('/api/diagnostics');
+                          const diag = await response.json();
+                          setDiagnosticsData(diag);
+                        } catch (err) {
+                          console.error('Failed to fetch diagnostics:', err);
+                          showError('Failed to run diagnostics');
+                        } finally {
+                          setRunningDiagnostics(false);
+                        }
+                      }}
+                      disabled={runningDiagnostics()}
+                      class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {runningDiagnostics() ? 'Running...' : 'Run Diagnostics'}
+                    </button>
+                    
+                    <Show when={diagnosticsData()}>
+                      <div class="mt-4 space-y-3">
+                        {/* System Info */}
+                        <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                          <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">System</h5>
+                          <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
+                            <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
+                            <div>Uptime: {Math.floor((diagnosticsData()?.uptime || 0) / 60)} minutes</div>
+                            <div>Runtime: {diagnosticsData()?.system?.goVersion || 'Unknown'}</div>
+                            <div>Memory: {diagnosticsData()?.system?.memoryMB || 0} MB</div>
+                          </div>
+                        </div>
+                        
+                        {/* Nodes Status */}
+                        <Show when={diagnosticsData()?.nodes?.length > 0}>
+                          <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                            <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PVE Nodes</h5>
+                            <For each={diagnosticsData()?.nodes || []}>
+                              {(node: any) => (
+                                <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
+                                  <div class="flex justify-between items-center mb-1">
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">{node.name}</span>
+                                    <span class={`px-2 py-0.5 rounded text-white text-xs ${
+                                      node.connected ? 'bg-green-500' : 'bg-red-500'
+                                    }`}>
+                                      {node.connected ? 'Connected' : 'Failed'}
+                                    </span>
+                                  </div>
+                                  <div class="text-gray-600 dark:text-gray-400">
+                                    <div>Host: {node.host}</div>
+                                    <div>Auth: {node.authMethod?.replace('_', ' ')}</div>
+                                    <Show when={node.error}>
+                                      <div class="text-red-500 mt-1 break-words">{node.error}</div>
+                                    </Show>
+                                  </div>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                        
+                        {/* PBS Status */}
+                        <Show when={diagnosticsData()?.pbs?.length > 0}>
+                          <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                            <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PBS Instances</h5>
+                            <For each={diagnosticsData()?.pbs || []}>
+                              {(pbs: any) => (
+                                <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
+                                  <div class="flex justify-between items-center mb-1">
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">{pbs.name}</span>
+                                    <span class={`px-2 py-0.5 rounded text-white text-xs ${
+                                      pbs.connected ? 'bg-green-500' : 'bg-red-500'
+                                    }`}>
+                                      {pbs.connected ? 'Connected' : 'Failed'}
+                                    </span>
+                                  </div>
+                                  <Show when={pbs.error}>
+                                    <div class="text-red-500 break-words">{pbs.error}</div>
+                                  </Show>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
                   {/* System Information */}
                   <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">System Information</h4>
