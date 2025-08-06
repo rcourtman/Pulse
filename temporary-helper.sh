@@ -107,7 +107,7 @@ fi
 echo -e "\n${BL}Creating LXC Container...${CL}"
 echo "Using template: $TEMPLATE"
 
-# Create container
+# Create container (without password to avoid PVE 9 issues)
 pct create $CTID "$TEMPLATE" \
     --hostname $CT_NAME \
     --memory $MEMORY \
@@ -116,13 +116,29 @@ pct create $CTID "$TEMPLATE" \
     --net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
     --features nesting=1 \
     --unprivileged 1 \
-    --onboot 1 \
-    --password "pulse" \
-    --start 1
+    --onboot 1 || {
+    echo -e "${RD}Failed to create container${CL}"
+    exit 1
+}
 
-# Wait for container to start
+# Start container
+echo -e "${BL}Starting container...${CL}"
+pct start $CTID || {
+    echo -e "${RD}Failed to start container${CL}"
+    exit 1
+}
+
+# Wait for container to fully start
 echo -e "${BL}Waiting for container to start...${CL}"
-sleep 5
+for i in {1..30}; do
+    if pct status $CTID | grep -q "running"; then
+        break
+    fi
+    sleep 1
+done
+
+# Additional wait for network
+sleep 3
 
 # Update container and install Pulse
 echo -e "\n${BL}Installing Pulse v4...${CL}"
@@ -137,8 +153,13 @@ CT_IP=$(pct exec $CTID -- ip -4 addr show eth0 | grep inet | awk '{print $2}' | 
 echo -e "\n${GN}✓ Pulse v4 Installation Complete!${CL}"
 echo -e "\nContainer ID: ${BL}$CTID${CL}"
 echo -e "Container Name: ${BL}$CT_NAME${CL}"
-echo -e "IP Address: ${BL}$CT_IP${CL}"
-echo -e "Container root password: ${BL}pulse${CL}"
-echo -e "\n${BL}Access Pulse at: ${GN}http://$CT_IP:7655${CL}"
+if [ -n "$CT_IP" ]; then
+    echo -e "IP Address: ${BL}$CT_IP${CL}"
+    echo -e "\n${BL}Access Pulse at: ${GN}http://$CT_IP:7655${CL}"
+else
+    echo -e "IP Address: ${RD}Could not determine IP - check container networking${CL}"
+    echo -e "\n${BL}Access Pulse at: ${GN}http://<container-ip>:7655${CL}"
+fi
 echo -e "\n${BL}Note:${CL} Pulse v4 uses port 7655 (not 3000)"
-echo -e "No authentication required by default for the web UI\n"
+echo -e "No authentication required by default for the web UI"
+echo -e "\nTo access container: ${BL}pct enter $CTID${CL}\n"
