@@ -181,7 +181,6 @@ go run cmd/pulse/*.go
 - [Releases](https://github.com/rcourtman/Pulse/releases)
 - [Docker Hub](https://hub.docker.com/r/rcourtman/pulse)
 - [Issues](https://github.com/rcourtman/Pulse/issues)
-- [Discord](https://discord.gg/hEEupTH2x3)
 
 ## License
 
