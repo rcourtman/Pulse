@@ -112,7 +112,6 @@ function App() {
                 <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26"/>
               </svg>
               <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
-              <span class="text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900 px-1 py-0.5 rounded ml-1">RC</span>
             </div>
             <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
               <button 

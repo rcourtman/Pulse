@@ -8,7 +8,7 @@ import { UpdatesAPI } from '@/api/updates';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
 
-type SettingsTab = 'pve' | 'pbs' | 'system' | 'diagnostics';
+type SettingsTab = 'pve' | 'pbs' | 'system' | 'security' | 'diagnostics';
 
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
@@ -45,6 +45,19 @@ const Settings: Component = () => {
   // Diagnostics
   const [diagnosticsData, setDiagnosticsData] = createSignal<any>(null);
   const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
+  
+  // Security
+  const [securityStatus, setSecurityStatus] = createSignal<{
+    apiTokenConfigured: boolean; 
+    requiresAuth: boolean;
+    exportProtected: boolean;
+    unprotectedExportAllowed: boolean;
+  } | null>(null);
+  const [exportPassphrase, setExportPassphrase] = createSignal('');
+  const [importPassphrase, setImportPassphrase] = createSignal('');
+  const [importFile, setImportFile] = createSignal<File | null>(null);
+  const [showExportDialog, setShowExportDialog] = createSignal(false);
+  const [showImportDialog, setShowImportDialog] = createSignal(false);
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -61,6 +74,11 @@ const Settings: Component = () => {
       id: 'system', 
       label: 'System',
       icon: 'M12 4v16m4-11h4m-4 6h4M8 9H4m4 6H4'
+    },
+    { 
+      id: 'security', 
+      label: 'Security',
+      icon: 'M12 2L3.5 7v6c0 4.67 3.5 9.03 8.5 10 5-.97 8.5-5.33 8.5-10V7L12 2z'
     },
     { 
       id: 'diagnostics', 
@@ -80,6 +98,17 @@ const Settings: Component = () => {
   // Load nodes and system settings on mount
   onMount(async () => {
     try {
+      // Load security status
+      try {
+        const response = await fetch('/api/security/status');
+        if (response.ok) {
+          const status = await response.json();
+          setSecurityStatus(status);
+        }
+      } catch (err) {
+        console.error('Failed to fetch security status:', err);
+      }
+      
       // Load nodes
       const nodesList = await NodesAPI.getNodes();
       // Add status and other UI fields
@@ -234,6 +263,90 @@ const Settings: Component = () => {
     } catch (error) {
       showError('Failed to start update');
       console.error('Update error:', error);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!exportPassphrase()) {
+      showError('Please enter a passphrase');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/config/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ passphrase: exportPassphrase() }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      
+      const data = await response.json();
+      
+      // Create and download file
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pulse-config-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showSuccess('Configuration exported successfully');
+      setShowExportDialog(false);
+      setExportPassphrase('');
+    } catch (error) {
+      showError('Failed to export configuration');
+      console.error('Export error:', error);
+    }
+  };
+  
+  const handleImport = async () => {
+    if (!importPassphrase()) {
+      showError('Please enter the passphrase');
+      return;
+    }
+    
+    if (!importFile()) {
+      showError('Please select a file to import');
+      return;
+    }
+    
+    try {
+      const fileContent = await importFile()!.text();
+      const exportData = JSON.parse(fileContent);
+      
+      const response = await fetch('/api/config/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          passphrase: importPassphrase(),
+          data: exportData.data,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      
+      showSuccess('Configuration imported successfully. Reloading...');
+      setShowImportDialog(false);
+      setImportPassphrase('');
+      setImportFile(null);
+      
+      // Reload page to apply new configuration
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error) {
+      showError('Failed to import configuration');
+      console.error('Import error:', error);
     }
   };
 
@@ -858,6 +971,143 @@ const Settings: Component = () => {
             </div>
           </Show>
           
+          {/* Security Tab */}
+          <Show when={activeTab() === 'security'}>
+            <div class="space-y-6">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Security</h3>
+                
+                <Show when={securityStatus()}>
+                  <Show
+                    when={!securityStatus()?.apiTokenConfigured}
+                    fallback={
+                      <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
+                        <div class="flex items-start">
+                          <svg class="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          <div>
+                            <p class="text-sm font-medium text-green-800 dark:text-green-200">API Protection Enabled</p>
+                            <p class="text-xs text-green-700 dark:text-green-300 mt-1">
+                              Your Pulse instance is protected with API token authentication.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                      <div class="flex items-start">
+                        <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <p class="text-sm font-medium text-yellow-800 dark:text-yellow-200">API Protection Not Configured</p>
+                          <p class="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                            Your Pulse instance is currently running without API authentication. 
+                            All configuration endpoints are accessible without credentials.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+                </Show>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Configure API Token</h4>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                    Setting an API token will require authentication for all configuration changes and exports.
+                  </p>
+                  
+                  <div class="space-y-3">
+                    <div class="bg-gray-50 dark:bg-gray-900 rounded p-3">
+                      <p class="text-xs font-mono text-gray-700 dark:text-gray-300 mb-2">For systemd service:</p>
+                      <pre class="text-xs bg-black text-green-400 p-2 rounded overflow-x-auto">
+sudo systemctl edit pulse
+# Add these lines:
+[Service]
+Environment="API_TOKEN=your-secure-token-here"
+
+# Then restart:
+sudo systemctl restart pulse</pre>
+                    </div>
+                    
+                    <div class="bg-gray-50 dark:bg-gray-900 rounded p-3">
+                      <p class="text-xs font-mono text-gray-700 dark:text-gray-300 mb-2">For Docker:</p>
+                      <pre class="text-xs bg-black text-green-400 p-2 rounded overflow-x-auto">
+docker run -d \
+  -e API_TOKEN=your-secure-token \
+  -p 7655:7655 \
+  -v pulse-data:/data \
+  rcourtman/pulse:latest</pre>
+                    </div>
+                  </div>
+                  
+                  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 mt-4">
+                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Security Note:</strong> Choose a strong, random token. You can generate one with: <code class="font-mono">openssl rand -hex 32</code>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export/Import Security</h3>
+                
+                <Show when={securityStatus() && !securityStatus()!.exportProtected}>
+                  <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                      <svg class="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <p class="text-sm font-medium text-red-800 dark:text-red-200">Export/Import Blocked</p>
+                        <p class="text-xs text-red-700 dark:text-red-300 mt-1">
+                          Configuration export/import requires API token protection.
+                        </p>
+                        <p class="text-xs text-red-700 dark:text-red-300 mt-1">
+                          For homelab use, set <code class="font-mono bg-red-100 dark:bg-red-800 px-1 rounded">ALLOW_UNPROTECTED_EXPORT=true</code>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Show>
+                
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Configuration Export</h4>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                        Export your entire configuration including all nodes and settings. Data is encrypted with your passphrase.
+                      </p>
+                      <button
+                        onClick={() => setShowExportDialog(true)}
+                        disabled={securityStatus() ? !securityStatus()!.exportProtected : false}
+                        class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Export Configuration
+                      </button>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Configuration Import</h4>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                        Import a previously exported configuration. Requires the passphrase used during export.
+                      </p>
+                      <button
+                        onClick={() => setShowImportDialog(true)}
+                        disabled={securityStatus() ? !securityStatus()!.exportProtected : false}
+                        class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Import Configuration
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Show>
+          
           {/* Diagnostics Tab */}
           <Show when={activeTab() === 'diagnostics'}>
             <div class="space-y-6">
@@ -1124,6 +1374,122 @@ const Settings: Component = () => {
         }}
       />
     </div>
+      {/* Export Dialog */}
+      <Show when={showExportDialog()}>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export Configuration</h3>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Encryption Passphrase
+                </label>
+                <input
+                  type="password"
+                  value={exportPassphrase()}
+                  onInput={(e) => setExportPassphrase(e.currentTarget.value)}
+                  placeholder="Enter a strong passphrase"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  This passphrase will be required to import the configuration later
+                </p>
+              </div>
+              
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                  <strong>Security Note:</strong> The exported file will contain encrypted credentials. Keep it secure and remember your passphrase.
+                </p>
+              </div>
+              
+              <div class="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportDialog(false);
+                    setExportPassphrase('');
+                  }}
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={!exportPassphrase()}
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+      
+      {/* Import Dialog */}
+      <Show when={showImportDialog()}>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Import Configuration</h3>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Configuration File
+                </label>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    if (file) setImportFile(file);
+                  }}
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Decryption Passphrase
+                </label>
+                <input
+                  type="password"
+                  value={importPassphrase()}
+                  onInput={(e) => setImportPassphrase(e.currentTarget.value)}
+                  placeholder="Enter the passphrase used during export"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+                <p class="text-xs text-yellow-700 dark:text-yellow-300">
+                  <strong>Warning:</strong> Importing will replace all current configuration. This action cannot be undone.
+                </p>
+              </div>
+              
+              <div class="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowImportDialog(false);
+                    setImportPassphrase('');
+                    setImportFile(null);
+                  }}
+                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={!importPassphrase() || !importFile()}
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
     </>
   );
 };

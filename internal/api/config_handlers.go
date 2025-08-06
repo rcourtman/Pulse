@@ -1175,6 +1175,12 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Passphrase is required", http.StatusBadRequest)
 		return
 	}
+	
+	// Require strong passphrase (at least 12 characters)
+	if len(req.Passphrase) < 12 {
+		http.Error(w, "Passphrase must be at least 12 characters long", http.StatusBadRequest)
+		return
+	}
 
 	// Export configuration
 	exportedData, err := h.persistence.ExportConfig(req.Passphrase)

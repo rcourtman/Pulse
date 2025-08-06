@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -130,12 +131,39 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 		return nil, fmt.Errorf("failed to parse latest version: %w", err)
 	}
 
-	// Find download URL
+	// Find download URL for current architecture
 	downloadURL := ""
+	arch := runtime.GOARCH
+	// Map Go architecture names to release asset names
+	archMap := map[string]string{
+		"amd64": "amd64",
+		"arm64": "arm64",
+		"arm":   "armv7",
+	}
+	
+	targetArch, ok := archMap[arch]
+	if !ok {
+		targetArch = arch // Use as-is if not in map
+	}
+	
+	// Look for architecture-specific binary
+	targetName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", release.TagName, targetArch)
 	for _, asset := range release.Assets {
-		if strings.HasPrefix(asset.Name, "pulse-") && strings.HasSuffix(asset.Name, ".tar.gz") {
+		if asset.Name == targetName {
 			downloadURL = asset.BrowserDownloadURL
 			break
+		}
+	}
+	
+	// Fallback to any pulse tarball if exact match not found
+	if downloadURL == "" {
+		for _, asset := range release.Assets {
+			if strings.HasPrefix(asset.Name, "pulse-") && 
+			   strings.Contains(asset.Name, "linux") && 
+			   strings.HasSuffix(asset.Name, ".tar.gz") {
+				downloadURL = asset.BrowserDownloadURL
+				break
+			}
 		}
 	}
 
