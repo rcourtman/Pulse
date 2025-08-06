@@ -123,16 +123,6 @@ Access it at: Settings → Security
 3. **Regular backups** - Export configurations periodically
 4. **Update regularly** - Keep Pulse updated for security patches
 
-## Security Checklist
-
-- [ ] API token configured (if accessible outside localhost)
-- [ ] Strong export/import passphrase (16+ characters)
-- [ ] Network properly firewalled
-- [ ] HTTPS proxy configured (for production)
-- [ ] Regular security updates applied
-- [ ] Audit logs monitored
-- [ ] Exported configs stored securely
-
 ## Troubleshooting
 
 ### Export/Import Blocked
@@ -147,6 +137,3 @@ Access it at: Settings → Security
 **Error**: "Passphrase must be at least 12 characters long"
 **Solution**: Use a longer, more secure passphrase
 
-## Security Disclosure
-
-Found a security issue? Please email security@[domain] with details.
