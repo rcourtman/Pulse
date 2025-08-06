@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -120,21 +121,29 @@ func GetCurrentVersion() (*VersionInfo, error) {
 		}, nil
 	}
 	
-	// Try to read from VERSION file
-	versionBytes, err := os.ReadFile("VERSION")
-	if err == nil {
-		return &VersionInfo{
-			Version:       strings.TrimSpace(string(versionBytes)),
-			Build:         "release",
-			Runtime:       "go",
-			IsDevelopment: false,
-			IsDocker:      isDockerEnvironment(),
-		}, nil
+	// Try to read from VERSION file in multiple locations
+	versionPaths := []string{
+		"VERSION",
+		"/opt/pulse/VERSION",
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+	}
+	
+	for _, path := range versionPaths {
+		versionBytes, err := os.ReadFile(path)
+		if err == nil {
+			return &VersionInfo{
+				Version:       strings.TrimSpace(string(versionBytes)),
+				Build:         "release",
+				Runtime:       "go",
+				IsDevelopment: false,
+				IsDocker:      isDockerEnvironment(),
+			}, nil
+		}
 	}
 	
 	// Final fallback
 	return &VersionInfo{
-		Version:       "4.0.3",
+		Version:       "4.0.4",
 		Build:         "release",
 		Runtime:       "go",
 		IsDevelopment: false,
