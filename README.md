@@ -41,11 +41,11 @@ Pulse is a solo hobby project developed in my free time. If you find it useful, 
 Choose **one** method:
 
 ```bash
-# Option A: Docker (Multi-arch: AMD64, ARM64, ARMv7) - RECOMMENDED
-docker run -d -p 7655:7655 -v pulse_data:/data --restart unless-stopped rcourtman/pulse:latest
-
-# Option B: Proxmox Helper Script - Creates dedicated LXC container
+# Option A: Proxmox Helper Script - Creates dedicated LXC container (EASIEST)
 bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+
+# Option B: Docker (Multi-arch: AMD64, ARM64, ARMv7)
+docker run -d -p 7655:7655 -v pulse_data:/data --restart unless-stopped rcourtman/pulse:latest
 
 # Option C: Manual Install (For existing LXC/VMs)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
