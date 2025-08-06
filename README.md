@@ -67,25 +67,10 @@ volumes:
   pulse_data:
 ```
 
-### Unraid
-Available in Community Applications - search "Pulse for Proxmox"
 
 ## PBS Agent (Push Mode)
 
-For isolated PBS servers that can't be reached directly:
-
-```bash
-# On PBS server
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install-pbs-agent.sh | sudo bash
-
-# Configure
-sudo nano /etc/pulse-pbs-agent/config.json
-# Add pulse_url and api_key
-
-sudo systemctl restart pulse-pbs-agent
-```
-
-[PBS Agent Details →](docs/PBS-AGENT.md)
+For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
 
 ## Configuration
 
