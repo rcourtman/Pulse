@@ -48,7 +48,6 @@ fix-claude-*
 backend
 
 # Release process files
-RELEASE_CHECKLIST.md
 CHANGELOG.md
 pulse-release/
 pulse-release-staging/
