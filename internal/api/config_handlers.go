@@ -27,7 +27,7 @@ type ConfigHandlers struct {
 func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error) *ConfigHandlers {
 	return &ConfigHandlers{
 		config:       cfg,
-		persistence:  config.NewConfigPersistence(cfg.ConfigPath),
+		persistence:  config.NewConfigPersistence(cfg.DataPath),
 		monitor:      monitor,
 		reloadFunc:   reloadFunc,
 	}

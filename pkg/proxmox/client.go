@@ -719,3 +719,86 @@ func (c *Client) GetClusterNodes(ctx context.Context) ([]ClusterStatus, error) {
 
 	return nodes, nil
 }
+
+// GetVMConfig returns the configuration for a specific VM
+func (c *Client) GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetVMAgentInfo returns guest agent information for a VM if available
+func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-osinfo", node, vmid))
+	if err != nil {
+		// Guest agent might not be installed or running
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetVMStatus returns detailed VM status including balloon info
+func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMStatus, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/current", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data VMStatus `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// VMStatus represents detailed VM status
+type VMStatus struct {
+	Status     string  `json:"status"`
+	CPU        float64 `json:"cpu"`
+	CPUs       int     `json:"cpus"`
+	Mem        uint64  `json:"mem"`
+	MaxMem     uint64  `json:"maxmem"`
+	Balloon    uint64  `json:"balloon"`
+	BalloonMin uint64  `json:"balloon_min"`
+	FreeMem    uint64  `json:"freemem"`
+	MemInfo    *struct {
+		Used  uint64 `json:"used"`
+		Free  uint64 `json:"free"`
+		Total uint64 `json:"total"`
+	} `json:"meminfo,omitempty"`
+	Disk       uint64  `json:"disk"`
+	MaxDisk    uint64  `json:"maxdisk"`
+	DiskRead   uint64  `json:"diskread"`
+	DiskWrite  uint64  `json:"diskwrite"`
+	NetIn      uint64  `json:"netin"`
+	NetOut     uint64  `json:"netout"`
+	Uptime     uint64  `json:"uptime"`
+	Agent      int     `json:"agent"`
+}

@@ -337,6 +337,45 @@ func (cc *ClusterClient) GetContainerSnapshots(ctx context.Context, node string,
 	return result, err
 }
 
+func (cc *ClusterClient) GetVMStatus(ctx context.Context, node string, vmid int) (*VMStatus, error) {
+	var result *VMStatus
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		status, err := client.GetVMStatus(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = status
+		return nil
+	})
+	return result, err
+}
+
+func (cc *ClusterClient) GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		config, err := client.GetVMConfig(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = config
+		return nil
+	})
+	return result, err
+}
+
+func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		info, err := client.GetVMAgentInfo(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = info
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterHealthInfo returns detailed health information about the cluster
 func (cc *ClusterClient) GetClusterHealthInfo() models.ClusterHealth {
 	cc.mu.RLock()
