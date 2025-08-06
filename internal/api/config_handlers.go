@@ -344,8 +344,8 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		h.config.PBSInstances = append(h.config.PBSInstances, pbs)
 	}
 
-	// Save configuration to disk
-	if err := config.SaveConfig(h.config); err != nil {
+	// Save configuration to disk using our persistence instance
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -663,8 +663,8 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Save configuration to disk
-	if err := config.SaveConfig(h.config); err != nil {
+	// Save configuration to disk using our persistence instance
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -715,8 +715,8 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Save configuration to disk
-	if err := config.SaveConfig(h.config); err != nil {
+	// Save configuration to disk using our persistence instance
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
