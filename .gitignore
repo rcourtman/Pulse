@@ -23,6 +23,8 @@ Thumbs.db
 *.test
 *.out
 vendor/
+pulse-test
+test-pulse
 
 # Node.js (for frontend-modern)
 node_modules/
@@ -39,6 +41,7 @@ frontend-modern/.vite/
 dist/
 build/
 *.tar.gz
+pulse-fixes*.tar.gz
 
 # Claude-specific files
 CLAUDE.md
@@ -57,3 +60,4 @@ release/
 scripts/backend-watch.sh
 temp/
 RELEASE_CHECKLIST.md
+DOCKER_PUSH_INSTRUCTIONS.md
