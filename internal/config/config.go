@@ -272,19 +272,26 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate PBS instances
+	// Validate and auto-fix PBS instances
+	validPBS := []PBSInstance{}
 	for i, pbs := range c.PBSInstances {
 		if pbs.Host == "" {
-			return fmt.Errorf("PBS instance %d: host is required", i+1)
+			log.Warn().Int("instance", i+1).Msg("PBS instance missing host, skipping")
+			continue
 		}
+		// Auto-fix missing protocol
 		if !strings.HasPrefix(pbs.Host, "http://") && !strings.HasPrefix(pbs.Host, "https://") {
-			return fmt.Errorf("PBS instance %d: host must start with http:// or https://", i+1)
+			pbs.Host = "https://" + pbs.Host
+			log.Info().Str("host", pbs.Host).Msg("PBS host auto-corrected to include https://")
 		}
-		// Must have either password or token
+		// Check authentication
 		if pbs.Password == "" && (pbs.TokenName == "" || pbs.TokenValue == "") {
-			return fmt.Errorf("PBS instance %d: either password or token authentication is required", i+1)
+			log.Warn().Int("instance", i+1).Str("host", pbs.Host).Msg("PBS instance missing authentication, skipping")
+			continue
 		}
+		validPBS = append(validPBS, pbs)
 	}
+	c.PBSInstances = validPBS
 
 	return nil
 }

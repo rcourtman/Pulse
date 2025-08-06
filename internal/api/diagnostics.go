@@ -1,0 +1,203 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"runtime"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rs/zerolog/log"
+)
+
+// DiagnosticsInfo contains comprehensive diagnostic information
+type DiagnosticsInfo struct {
+	Version     string                    `json:"version"`
+	Runtime     string                    `json:"runtime"`
+	Uptime      float64                  `json:"uptime"`
+	Nodes       []NodeDiagnostic         `json:"nodes"`
+	PBS         []PBSDiagnostic          `json:"pbs"`
+	System      SystemDiagnostic         `json:"system"`
+	Errors      []string                 `json:"errors"`
+}
+
+// NodeDiagnostic contains diagnostic info for a Proxmox node
+type NodeDiagnostic struct {
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Host         string                 `json:"host"`
+	Type         string                 `json:"type"`
+	AuthMethod   string                 `json:"authMethod"`
+	Connected    bool                   `json:"connected"`
+	Error        string                 `json:"error,omitempty"`
+	Details      map[string]interface{} `json:"details,omitempty"`
+	LastPoll     string                 `json:"lastPoll,omitempty"`
+	ClusterInfo  map[string]interface{} `json:"clusterInfo,omitempty"`
+}
+
+// PBSDiagnostic contains diagnostic info for a PBS instance
+type PBSDiagnostic struct {
+	ID         string                 `json:"id"`
+	Name       string                 `json:"name"`
+	Host       string                 `json:"host"`
+	Connected  bool                   `json:"connected"`
+	Error      string                 `json:"error,omitempty"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+}
+
+// SystemDiagnostic contains system-level diagnostic info
+type SystemDiagnostic struct {
+	OS           string  `json:"os"`
+	Arch         string  `json:"arch"`
+	GoVersion    string  `json:"goVersion"`
+	NumCPU       int     `json:"numCPU"`
+	NumGoroutine int     `json:"numGoroutine"`
+	MemoryMB     uint64  `json:"memoryMB"`
+}
+
+// handleDiagnostics returns comprehensive diagnostic information
+func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	diag := DiagnosticsInfo{
+		Errors: []string{},
+	}
+
+	// Version info
+	if versionInfo, err := updates.GetCurrentVersion(); err == nil {
+		diag.Version = versionInfo.Version
+		diag.Runtime = versionInfo.Runtime
+	} else {
+		diag.Version = "unknown"
+		diag.Runtime = "go"
+	}
+
+	// Uptime
+	diag.Uptime = time.Since(r.monitor.GetStartTime()).Seconds()
+
+	// System info
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	diag.System = SystemDiagnostic{
+		OS:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+		GoVersion:    runtime.Version(),
+		NumCPU:       runtime.NumCPU(),
+		NumGoroutine: runtime.NumGoroutine(),
+		MemoryMB:     memStats.Alloc / 1024 / 1024,
+	}
+
+	// Test each configured node
+	nodes := r.config.GetNodes()
+	for _, node := range nodes {
+		nodeDiag := NodeDiagnostic{
+			ID:   node.ID,
+			Name: node.Name,
+			Host: node.Host,
+			Type: node.Type,
+		}
+
+		// Determine auth method
+		if node.TokenName != "" && node.TokenValue != "" {
+			nodeDiag.AuthMethod = "api_token"
+		} else if node.Username != "" && node.Password != "" {
+			nodeDiag.AuthMethod = "username_password"
+		} else {
+			nodeDiag.AuthMethod = "none"
+			nodeDiag.Error = "No authentication configured"
+		}
+
+		// Test connection
+		if node.Type == "pve" {
+			testCfg := proxmox.ClientConfig{
+				Host:         node.Host,
+				Username:     node.Username,
+				Password:     node.Password,
+				TokenName:    node.TokenName,
+				TokenValue:   node.TokenValue,
+				SkipTLSVerify: node.SkipTLSVerify,
+			}
+
+			client, err := proxmox.NewClient(testCfg)
+			if err != nil {
+				nodeDiag.Connected = false
+				nodeDiag.Error = err.Error()
+			} else {
+				// Try to get cluster status
+				if clusterStatus, err := client.GetClusterStatus(ctx); err != nil {
+					nodeDiag.Connected = false
+					nodeDiag.Error = "Connection established but cluster status failed: " + err.Error()
+				} else {
+					nodeDiag.Connected = true
+					nodeDiag.ClusterInfo = map[string]interface{}{
+						"nodes": len(clusterStatus),
+					}
+					
+					// Get node details
+					if nodes, err := client.GetNodes(ctx); err == nil && len(nodes) > 0 {
+						nodeDiag.Details = map[string]interface{}{
+							"node_count": len(nodes),
+							"version": nodes[0].PVEVersion,
+						}
+					}
+				}
+			}
+		}
+
+		diag.Nodes = append(diag.Nodes, nodeDiag)
+	}
+
+	// Test PBS instances
+	pbsNodes := r.config.GetPBSNodes()
+	for _, pbsNode := range pbsNodes {
+		pbsDiag := PBSDiagnostic{
+			ID:   pbsNode.ID,
+			Name: pbsNode.Name,
+			Host: pbsNode.Host,
+		}
+
+		// Test connection
+		testCfg := pbs.ClientConfig{
+			Host:         pbsNode.Host,
+			Username:     pbsNode.Username,
+			Password:     pbsNode.Password,
+			TokenName:    pbsNode.TokenName,
+			TokenValue:   pbsNode.TokenValue,
+			Fingerprint:  pbsNode.Fingerprint,
+			SkipTLSVerify: pbsNode.SkipTLSVerify,
+		}
+
+		client, err := pbs.NewClient(testCfg)
+		if err != nil {
+			pbsDiag.Connected = false
+			pbsDiag.Error = err.Error()
+		} else {
+			// Try to get version
+			if version, err := client.GetVersion(ctx); err != nil {
+				pbsDiag.Connected = false
+				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
+			} else {
+				pbsDiag.Connected = true
+				pbsDiag.Details = map[string]interface{}{
+					"version": version.Version,
+				}
+			}
+		}
+
+		diag.PBS = append(diag.PBS, pbsDiag)
+	}
+
+	// Add any recent errors from logs (this would need a log collector)
+	// For now, just check basic connectivity
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(diag); err != nil {
+		log.Error().Err(err).Msg("Failed to encode diagnostics")
+		http.Error(w, "Failed to generate diagnostics", http.StatusInternalServerError)
+	}
+}
