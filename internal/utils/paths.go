@@ -9,5 +9,5 @@ func GetDataDir() string {
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		return dir
 	}
-	return "/var/lib/pulse"
+	return "/etc/pulse"
 }

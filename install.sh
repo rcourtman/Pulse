@@ -201,6 +201,7 @@ RestartSec=3
 StandardOutput=journal
 StandardError=journal
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PULSE_DATA_DIR=$CONFIG_DIR"
 
 # Security hardening
 NoNewPrivileges=true
