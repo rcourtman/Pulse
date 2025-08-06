@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -93,19 +92,18 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Test each configured node
-	nodes := r.config.GetNodes()
-	for _, node := range nodes {
+	for _, node := range r.config.PVEInstances {
 		nodeDiag := NodeDiagnostic{
-			ID:   node.ID,
+			ID:   node.Name,
 			Name: node.Name,
 			Host: node.Host,
-			Type: node.Type,
+			Type: "pve",
 		}
 
 		// Determine auth method
 		if node.TokenName != "" && node.TokenValue != "" {
 			nodeDiag.AuthMethod = "api_token"
-		} else if node.Username != "" && node.Password != "" {
+		} else if node.User != "" && node.Password != "" {
 			nodeDiag.AuthMethod = "username_password"
 		} else {
 			nodeDiag.AuthMethod = "none"
@@ -113,15 +111,14 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Test connection
-		if node.Type == "pve" {
-			testCfg := proxmox.ClientConfig{
-				Host:         node.Host,
-				Username:     node.Username,
-				Password:     node.Password,
-				TokenName:    node.TokenName,
-				TokenValue:   node.TokenValue,
-				SkipTLSVerify: node.SkipTLSVerify,
-			}
+		testCfg := proxmox.ClientConfig{
+			Host:         node.Host,
+			User:         node.User,
+			Password:     node.Password,
+			TokenName:    node.TokenName,
+			TokenValue:   node.TokenValue,
+			VerifySSL:    node.VerifySSL,
+		}
 
 			client, err := proxmox.NewClient(testCfg)
 			if err != nil {
@@ -142,21 +139,18 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 					if nodes, err := client.GetNodes(ctx); err == nil && len(nodes) > 0 {
 						nodeDiag.Details = map[string]interface{}{
 							"node_count": len(nodes),
-							"version": nodes[0].PVEVersion,
 						}
 					}
 				}
 			}
-		}
 
 		diag.Nodes = append(diag.Nodes, nodeDiag)
 	}
 
 	// Test PBS instances
-	pbsNodes := r.config.GetPBSNodes()
-	for _, pbsNode := range pbsNodes {
+	for _, pbsNode := range r.config.PBSInstances {
 		pbsDiag := PBSDiagnostic{
-			ID:   pbsNode.ID,
+			ID:   pbsNode.Name,
 			Name: pbsNode.Name,
 			Host: pbsNode.Host,
 		}
@@ -164,12 +158,12 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 		// Test connection
 		testCfg := pbs.ClientConfig{
 			Host:         pbsNode.Host,
-			Username:     pbsNode.Username,
+			User:         pbsNode.User,
 			Password:     pbsNode.Password,
 			TokenName:    pbsNode.TokenName,
 			TokenValue:   pbsNode.TokenValue,
 			Fingerprint:  pbsNode.Fingerprint,
-			SkipTLSVerify: pbsNode.SkipTLSVerify,
+			VerifySSL:    pbsNode.VerifySSL,
 		}
 
 		client, err := pbs.NewClient(testCfg)

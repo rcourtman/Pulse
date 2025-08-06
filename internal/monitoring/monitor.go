@@ -34,6 +34,7 @@ type PVEClientInterface interface {
 	GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error)
 	GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
 	GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
+	GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error)
 }
 
 // Monitor handles all monitoring operations
@@ -824,6 +825,28 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
+			// For running VMs, try to get detailed status with balloon info
+			memUsed := vm.Mem
+			memTotal := vm.MaxMem
+			
+			if vm.Status == "running" {
+				// Try to get detailed VM status for more accurate memory reporting
+				if vmStatus, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil {
+					// If balloon is enabled and different from max mem, use actual memory usage
+					if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
+						// For balloon-enabled VMs, mem shows current balloon size
+						// Use the actual allocated memory (balloon) as total
+						memTotal = vmStatus.Balloon
+						// Use reported memory usage
+						memUsed = vmStatus.Mem
+						// If we have free memory info from guest agent, use it for more accuracy
+						if vmStatus.FreeMem > 0 && vmStatus.FreeMem < vmStatus.Balloon {
+							memUsed = vmStatus.Balloon - vmStatus.FreeMem
+						}
+					}
+				}
+			}
+
 			modelVM := models.VM{
 				ID:       guestID,
 				VMID:     vm.VMID,
@@ -835,10 +858,10 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 				CPU:      safeFloat(vm.CPU), // Already in percentage
 				CPUs:     vm.CPUs,
 				Memory: models.Memory{
-					Total: int64(vm.MaxMem),
-					Used:  int64(vm.Mem),
-					Free:  int64(vm.MaxMem - vm.Mem),
-					Usage: safePercentage(float64(vm.Mem), float64(vm.MaxMem)),
+					Total: int64(memTotal),
+					Used:  int64(memUsed),
+					Free:  int64(memTotal - memUsed),
+					Usage: safePercentage(float64(memUsed), float64(memTotal)),
 				},
 				Disk: models.Disk{
 					Total: int64(vm.MaxDisk),
