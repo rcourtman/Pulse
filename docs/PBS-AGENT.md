@@ -2,12 +2,9 @@
 
 For PBS servers behind firewalls or in isolated networks that can't be reached by Pulse directly.
 
-## Quick Install
+## Installation
 
-On your PBS server:
-```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install-pbs-agent.sh | sudo bash
-```
+The PBS agent needs to be manually installed on your PBS server. Build from source or download from releases.
 
 ## Configuration
 
