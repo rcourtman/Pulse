@@ -219,7 +219,8 @@ const Settings: Component = () => {
   const checkForUpdates = async () => {
     setCheckingForUpdates(true);
     try {
-      const info = await UpdatesAPI.checkForUpdates();
+      // Pass the current channel selection (from UI, not saved config)
+      const info = await UpdatesAPI.checkForUpdates(updateChannel());
       setUpdateInfo(info);
       if (!info.available) {
         showSuccess('You are running the latest version');

@@ -28,7 +28,11 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := r.Context()
-	info, err := h.manager.CheckForUpdates(ctx)
+	
+	// Get channel from query parameter if provided
+	channel := r.URL.Query().Get("channel")
+	
+	info, err := h.manager.CheckForUpdatesWithChannel(ctx, channel)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to check for updates")
 		http.Error(w, "Failed to check for updates", http.StatusInternalServerError)

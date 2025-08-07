@@ -28,8 +28,9 @@ export interface VersionInfo {
 }
 
 export class UpdatesAPI {
-  static async checkForUpdates(): Promise<UpdateInfo> {
-    const response = await fetch('/api/updates/check');
+  static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
+    const url = channel ? `/api/updates/check?channel=${channel}` : '/api/updates/check';
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error('Failed to check for updates');
     }
