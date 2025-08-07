@@ -156,18 +156,65 @@ download_pulse() {
     
     print_info "Latest version: $LATEST_RELEASE"
     
-    # Download and extract
+    # Detect architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            PULSE_ARCH="amd64"
+            ;;
+        aarch64)
+            PULSE_ARCH="arm64"
+            ;;
+        armv7l)
+            PULSE_ARCH="armv7"
+            ;;
+        *)
+            print_error "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+    esac
+    
+    print_info "Detected architecture: $ARCH ($PULSE_ARCH)"
+    
+    # Download architecture-specific release
+    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
+    print_info "Downloading from: $DOWNLOAD_URL"
+    
     cd /tmp
-    wget -q -O pulse.tar.gz "https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}.tar.gz"
+    if ! wget -q -O pulse.tar.gz "$DOWNLOAD_URL"; then
+        print_error "Failed to download Pulse release"
+        exit 1
+    fi
     
-    mkdir -p "$INSTALL_DIR"
-    tar -xzf pulse.tar.gz -C "$INSTALL_DIR"
-    rm pulse.tar.gz
+    # Stop service if running (for updates)
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        print_info "Stopping existing Pulse service..."
+        systemctl stop $SERVICE_NAME
+    fi
     
-    # Make all pulse binaries executable
-    chmod +x "$INSTALL_DIR"/pulse-* 2>/dev/null || true
+    # Extract to temporary directory first
+    TEMP_EXTRACT="/tmp/pulse-extract-$$"
+    mkdir -p "$TEMP_EXTRACT"
+    tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    print_info "Pulse will auto-detect and use the correct binary for your architecture"
+    # Copy binary to /usr/local/bin
+    if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
+        cp "$TEMP_EXTRACT/pulse" /usr/local/bin/pulse
+        chmod +x /usr/local/bin/pulse
+        print_success "Pulse binary installed to /usr/local/bin/pulse"
+    else
+        print_error "Pulse binary not found in archive"
+        exit 1
+    fi
+    
+    # Copy VERSION file if present
+    if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
+        mkdir -p "$INSTALL_DIR"
+        cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
+    fi
+    
+    # Cleanup
+    rm -rf "$TEMP_EXTRACT" pulse.tar.gz
 }
 
 setup_directories() {
@@ -195,7 +242,7 @@ Type=simple
 User=pulse
 Group=pulse
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/pulse
+ExecStart=/usr/local/bin/pulse
 Restart=always
 RestartSec=3
 StandardOutput=journal
