@@ -836,7 +836,7 @@ const Settings: Component = () => {
                                 Released: {updateInfo()?.releaseDate ? new Date(updateInfo()!.releaseDate).toLocaleDateString() : 'Unknown'}
                               </p>
                             </div>
-                            <Show when={!updateStatus() || updateStatus()?.status === 'idle'}>
+                            <Show when={!updateStatus() || updateStatus()?.status === 'idle' || updateStatus()?.status === 'available'}>
                               <button
                                 onClick={applyUpdate}
                                 class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
