@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// FlexInt handles JSON fields that can be either int or string
+// FlexInt handles JSON fields that can be int, float, or string (for cpulimit support)
 type FlexInt int
 
 func (f *FlexInt) UnmarshalJSON(data []byte) error {
@@ -23,6 +23,13 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	var i int
 	if err := json.Unmarshal(data, &i); err == nil {
 		*f = FlexInt(i)
+		return nil
+	}
+	
+	// Try as float (handles cpulimit like 1.5)
+	var fl float64
+	if err := json.Unmarshal(data, &fl); err == nil {
+		*f = FlexInt(int(fl))
 		return nil
 	}
 	

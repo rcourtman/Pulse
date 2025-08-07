@@ -273,12 +273,24 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	}
 	defer resp.Body.Close()
 
+	// Read the body to check for HTML error pages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check if response is HTML (error page) instead of JSON
+	if len(body) > 0 && body[0] == '<' {
+		// Try to extract error message from HTML if possible
+		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
+	}
+
 	var result struct {
 		Data []Datastore `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
 	}
 
 	return result.Data, nil
