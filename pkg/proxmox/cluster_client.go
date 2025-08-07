@@ -86,6 +86,11 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		if err != nil {
 			// Mark as unhealthy
 			cc.nodeHealth[selectedEndpoint] = false
+			log.Error().
+				Str("cluster", cc.name).
+				Str("endpoint", selectedEndpoint).
+				Err(err).
+				Msg("Failed to create client for cluster endpoint")
 			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
 		}
 		

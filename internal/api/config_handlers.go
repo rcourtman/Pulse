@@ -512,13 +512,20 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 			host = "https://" + host
 		}
-		// Add port if missing
-		if !strings.Contains(host, ":8007") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				host = strings.Replace(host, "https://", "https://", 1)
-				if !strings.Contains(host[8:], ":") {
-					host += ":8007"
-				}
+		// Add port if missing (PBS defaults to port 8007)
+		if strings.HasPrefix(host, "https://") {
+			// Check if there's already a port specified after the protocol
+			hostWithoutProtocol := host[8:] // Remove "https://"
+			if !strings.Contains(hostWithoutProtocol, ":") {
+				// No port specified, add default PBS port
+				host += ":8007"
+			}
+		} else if strings.HasPrefix(host, "http://") {
+			// Check if there's already a port specified after the protocol
+			hostWithoutProtocol := host[7:] // Remove "http://"
+			if !strings.Contains(hostWithoutProtocol, ":") {
+				// No port specified, add default PBS port
+				host += ":8007"
 			}
 		}
 		

@@ -179,6 +179,15 @@ func New(cfg *config.Config) (*Monitor, error) {
 				if host == "" {
 					host = ep.Host
 				}
+				
+				// Skip if no host information
+				if host == "" {
+					log.Warn().
+						Str("node", ep.NodeName).
+						Msg("Skipping cluster endpoint with no host/IP")
+					continue
+				}
+				
 				// Ensure we have the full URL
 				if !strings.HasPrefix(host, "http") {
 					if pve.VerifySSL {
@@ -188,6 +197,17 @@ func New(cfg *config.Config) (*Monitor, error) {
 					}
 				}
 				endpoints = append(endpoints, host)
+			}
+			
+			// If no valid endpoints, fall back to single node mode
+			if len(endpoints) == 0 {
+				log.Warn().
+					Str("instance", pve.Name).
+					Msg("No valid cluster endpoints found, falling back to single node mode")
+				endpoints = []string{pve.Host}
+				if !strings.HasPrefix(endpoints[0], "http") {
+					endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
+				}
 			}
 			
 			log.Info().
