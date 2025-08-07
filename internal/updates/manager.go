@@ -214,9 +214,11 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
-	// Validate download URL
-	if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
-		return fmt.Errorf("invalid download URL")
+	// Validate download URL (allow test server URLs when PULSE_UPDATE_SERVER is set)
+	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
+		if !strings.HasPrefix(downloadURL, "https://github.com/rcourtman/Pulse/releases/download/") {
+			return fmt.Errorf("invalid download URL")
+		}
 	}
 
 	// Check if Docker
@@ -316,8 +318,12 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	
 	log.Info().Str("channel", channel).Msg("Checking for updates")
 
-	// GitHub API URL
-	url := "https://api.github.com/repos/rcourtman/Pulse/releases"
+	// GitHub API URL (can be overridden for testing)
+	baseURL := os.Getenv("PULSE_UPDATE_SERVER")
+	if baseURL == "" {
+		baseURL = "https://api.github.com"
+	}
+	url := baseURL + "/repos/rcourtman/Pulse/releases"
 	if channel == "stable" {
 		url += "/latest"
 	}
