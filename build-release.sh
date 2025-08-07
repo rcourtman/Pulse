@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+# Use Go 1.23 if available
+if [ -x /usr/local/go/bin/go ]; then
+    export PATH=/usr/local/go/bin:$PATH
+fi
+
 VERSION=${1:-$(cat VERSION)}
 BUILD_DIR="build"
 RELEASE_DIR="release"

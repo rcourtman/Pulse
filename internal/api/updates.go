@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -66,9 +67,9 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Start update in background
+	// Start update in background with a new context (not request context which gets cancelled)
 	go func() {
-		ctx := r.Context()
+		ctx := context.Background()
 		if err := h.manager.ApplyUpdate(ctx, req.DownloadURL); err != nil {
 			log.Error().Err(err).Msg("Failed to apply update")
 		}
