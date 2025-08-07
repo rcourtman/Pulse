@@ -523,46 +523,64 @@ func (m *Manager) restoreBackup(backupDir string) error {
 
 // applyUpdateFiles copies update files to the installation directory
 func (m *Manager) applyUpdateFiles(extractDir string) error {
-	pulseDir := "/opt/pulse"
-	
 	// Check if the pulse binary exists in the extracted directory
 	pulseBinary := filepath.Join(extractDir, "pulse")
 	if _, err := os.Stat(pulseBinary); err != nil {
 		return fmt.Errorf("pulse binary not found in extract: %w", err)
 	}
 	
-	// Copy the pulse binary
-	cmd := exec.Command("cp", pulseBinary, filepath.Join(pulseDir, "pulse"))
+	// Detect where the current binary is running from
+	binaryPath, err := os.Executable()
+	if err != nil {
+		// Fallback to default location
+		binaryPath = "/usr/local/bin/pulse"
+	}
+	
+	// Copy the pulse binary to the detected location
+	cmd := exec.Command("cp", pulseBinary, binaryPath)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy pulse binary: %w", err)
 	}
 	
-	// Copy frontend directory if it exists
+	// Copy frontend directory if it exists 
+	// Note: Frontend is usually embedded in the binary for v4, but copy for compatibility
 	frontendSrc := filepath.Join(extractDir, "frontend-modern")
 	if _, err := os.Stat(frontendSrc); err == nil {
-		frontendDst := filepath.Join(pulseDir, "frontend-modern")
+		// Try /opt/pulse first
+		frontendDst := "/opt/pulse/frontend-modern"
 		cmd = exec.Command("cp", "-r", frontendSrc, frontendDst+".new")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to copy frontend: %w", err)
+		if err := cmd.Run(); err == nil {
+			// Remove old and rename new
+			os.RemoveAll(frontendDst)
+			os.Rename(frontendDst+".new", frontendDst)
 		}
-		// Remove old and rename new
-		os.RemoveAll(frontendDst)
-		os.Rename(frontendDst+".new", frontendDst)
 	}
 	
-	// Copy VERSION file if it exists
+	// Copy VERSION file if it exists (to both locations for compatibility)
 	versionSrc := filepath.Join(extractDir, "VERSION")
 	if _, err := os.Stat(versionSrc); err == nil {
-		cmd = exec.Command("cp", versionSrc, filepath.Join(pulseDir, "VERSION"))
+		// Copy to /opt/pulse
+		cmd = exec.Command("cp", versionSrc, "/opt/pulse/VERSION")
+		cmd.Run() // Ignore error, this location might not exist
+		
+		// Copy to binary directory
+		binaryDir := filepath.Dir(binaryPath)
+		cmd = exec.Command("cp", versionSrc, filepath.Join(binaryDir, "VERSION"))
 		if err := cmd.Run(); err != nil {
 			log.Warn().Err(err).Msg("Failed to copy VERSION file")
 		}
 	}
 
-	// Set permissions
-	cmd = exec.Command("chown", "-R", "pulse:pulse", pulseDir)
-	if err := cmd.Run(); err != nil {
-		log.Warn().Err(err).Msg("Failed to set ownership")
+	// Set permissions on binary
+	cmd = exec.Command("chmod", "+x", binaryPath)
+	cmd.Run()
+	
+	// Set ownership if /opt/pulse exists
+	if _, err := os.Stat("/opt/pulse"); err == nil {
+		cmd = exec.Command("chown", "-R", "pulse:pulse", "/opt/pulse")
+		if err := cmd.Run(); err != nil {
+			log.Warn().Err(err).Msg("Failed to set ownership")
+		}
 	}
 
 	return nil
@@ -570,22 +588,27 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 
 // restartService attempts to restart the Pulse service
 func (m *Manager) restartService() error {
-	// Try systemctl first
-	cmd := exec.Command("systemctl", "restart", "pulse-backend")
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
+	// Try different service names (pulse-backend for dev, pulse for prod)
+	serviceNames := []string{"pulse", "pulse-backend"}
+	
+	for _, service := range serviceNames {
+		// Try systemctl first
+		cmd := exec.Command("systemctl", "restart", service)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
 
-	// Try with sudo
-	cmd = exec.Command("sudo", "systemctl", "restart", "pulse-backend")
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
+		// Try with sudo
+		cmd = exec.Command("sudo", "systemctl", "restart", service)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
 
-	// Try pkexec (polkit)
-	cmd = exec.Command("pkexec", "systemctl", "restart", "pulse-backend")
-	if err := cmd.Run(); err == nil {
-		return nil
+		// Try pkexec (polkit)
+		cmd = exec.Command("pkexec", "systemctl", "restart", service)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
 	}
 
 	return fmt.Errorf("failed to restart service")
