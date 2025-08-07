@@ -61,7 +61,7 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 
 	// Load existing history
 	if err := hm.loadHistory(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load alert history, starting fresh")
+		log.Error().Err(err).Msg("Failed to load alert history")
 	}
 
 	// Start periodic save routine
@@ -131,10 +131,19 @@ func (hm *HistoryManager) loadHistory() error {
 	// Try loading from main file first
 	data, err := os.ReadFile(hm.historyFile)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
+		}
+		
 		// Try backup file
 		data, err = os.ReadFile(hm.backupFile)
 		if err != nil {
-			return fmt.Errorf("failed to load history: %w", err)
+			if os.IsNotExist(err) {
+				// Both files don't exist - this is normal on first startup
+				log.Debug().Msg("No alert history files found, starting fresh")
+				return nil
+			}
+			return fmt.Errorf("failed to load backup history: %w", err)
 		}
 		log.Info().Msg("Loaded alert history from backup file")
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -243,7 +244,23 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
 	
 	// Serve static files from frontend build
+	// First try to find frontend relative to the executable
 	staticDir := "./frontend-modern/dist"
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		possibleDir := filepath.Join(execDir, "frontend-modern", "dist")
+		if _, err := os.Stat(possibleDir); err == nil {
+			staticDir = possibleDir
+		}
+	}
+	// Fallback to working directory
+	if _, err := os.Stat(staticDir); err != nil {
+		// Try /opt/pulse as last resort
+		if _, err := os.Stat("/opt/pulse/frontend-modern/dist"); err == nil {
+			staticDir = "/opt/pulse/frontend-modern/dist"
+		}
+	}
+	log.Info().Str("staticDir", staticDir).Msg("Serving frontend from")
 	fileServer := http.FileServer(http.Dir(staticDir))
 	r.mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Try to serve the file
