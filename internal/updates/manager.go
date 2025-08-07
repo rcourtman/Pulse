@@ -82,10 +82,26 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 	return m.progressChan
 }
 
-// CheckForUpdates checks GitHub for available updates
+// CheckForUpdates checks GitHub for available updates using saved config channel
 func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
-	// Check cache first
-	if m.checkCache != nil && time.Since(m.cacheTime) < m.cacheDuration {
+	return m.CheckForUpdatesWithChannel(ctx, "")
+}
+
+// CheckForUpdatesWithChannel checks GitHub for available updates with optional channel override
+func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*UpdateInfo, error) {
+	// Use provided channel or fall back to config
+	if channel == "" {
+		channel = m.config.UpdateChannel
+	}
+	if channel == "" {
+		channel = "stable"
+	}
+	
+	// Don't use cache when channel is explicitly provided (UI might have changed it)
+	useCache := channel == m.config.UpdateChannel || channel == ""
+	
+	// Check cache first (only if using saved channel)
+	if useCache && m.checkCache != nil && time.Since(m.cacheTime) < m.cacheDuration {
 		return m.checkCache, nil
 	}
 
@@ -105,14 +121,16 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
 		}
-		m.checkCache = info
-		m.cacheTime = time.Now()
+		if useCache {
+			m.checkCache = info
+			m.cacheTime = time.Now()
+		}
 		m.updateStatus("idle", 0, "Updates not available in Docker")
 		return info, nil
 	}
 
-	// Get latest release from GitHub
-	release, err := m.getLatestRelease(ctx)
+	// Get latest release from GitHub with specified channel
+	release, err := m.getLatestReleaseForChannel(ctx, channel)
 	if err != nil {
 		m.updateStatus("error", 0, "Failed to check for updates")
 		return nil, err
@@ -177,9 +195,11 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 		IsPrerelease:   release.Prerelease,
 	}
 
-	// Cache the result
-	m.checkCache = info
-	m.cacheTime = time.Now()
+	// Cache the result (only if using saved channel)
+	if useCache {
+		m.checkCache = info
+		m.cacheTime = time.Now()
+	}
 
 	status := "idle"
 	message := "No updates available"
@@ -279,9 +299,17 @@ func (m *Manager) GetStatus() UpdateStatus {
 	return m.status
 }
 
-// getLatestRelease fetches the latest release from GitHub
+// getLatestRelease fetches the latest release from GitHub using saved config
 func (m *Manager) getLatestRelease(ctx context.Context) (*ReleaseInfo, error) {
 	channel := m.config.UpdateChannel
+	if channel == "" {
+		channel = "stable"
+	}
+	return m.getLatestReleaseForChannel(ctx, channel)
+}
+
+// getLatestReleaseForChannel fetches the latest release from GitHub for a specific channel
+func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string) (*ReleaseInfo, error) {
 	if channel == "" {
 		channel = "stable"
 	}
@@ -497,28 +525,38 @@ func (m *Manager) restoreBackup(backupDir string) error {
 func (m *Manager) applyUpdateFiles(extractDir string) error {
 	pulseDir := "/opt/pulse"
 	
-	// Find the extracted pulse directory
-	entries, err := os.ReadDir(extractDir)
-	if err != nil {
-		return err
+	// Check if the pulse binary exists in the extracted directory
+	pulseBinary := filepath.Join(extractDir, "pulse")
+	if _, err := os.Stat(pulseBinary); err != nil {
+		return fmt.Errorf("pulse binary not found in extract: %w", err)
 	}
-
-	var sourceDir string
-	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), "pulse-") {
-			sourceDir = filepath.Join(extractDir, entry.Name())
-			break
-		}
-	}
-
-	if sourceDir == "" {
-		return fmt.Errorf("no pulse directory found in extract")
-	}
-
-	// Copy files, preserving structure
-	cmd := exec.Command("cp", "-r", sourceDir+"/.", pulseDir)
+	
+	// Copy the pulse binary
+	cmd := exec.Command("cp", pulseBinary, filepath.Join(pulseDir, "pulse"))
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to copy update files: %w", err)
+		return fmt.Errorf("failed to copy pulse binary: %w", err)
+	}
+	
+	// Copy frontend directory if it exists
+	frontendSrc := filepath.Join(extractDir, "frontend-modern")
+	if _, err := os.Stat(frontendSrc); err == nil {
+		frontendDst := filepath.Join(pulseDir, "frontend-modern")
+		cmd = exec.Command("cp", "-r", frontendSrc, frontendDst+".new")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to copy frontend: %w", err)
+		}
+		// Remove old and rename new
+		os.RemoveAll(frontendDst)
+		os.Rename(frontendDst+".new", frontendDst)
+	}
+	
+	// Copy VERSION file if it exists
+	versionSrc := filepath.Join(extractDir, "VERSION")
+	if _, err := os.Stat(versionSrc); err == nil {
+		cmd = exec.Command("cp", versionSrc, filepath.Join(pulseDir, "VERSION"))
+		if err := cmd.Run(); err != nil {
+			log.Warn().Err(err).Msg("Failed to copy VERSION file")
+		}
 	}
 
 	// Set permissions
