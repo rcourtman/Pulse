@@ -6,11 +6,14 @@ By default, configuration export/import is blocked for security. You have two op
 
 ### Option 1: Set API Token (Recommended)
 ```bash
-# Systemd
+# Using systemd (secure)
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
 Environment="API_TOKEN=your-secure-token-here"
+
+# Then restart:
+sudo systemctl restart pulse-backend
 
 # Docker
 docker run -e API_TOKEN=your-token rcourtman/pulse:latest
@@ -18,7 +21,7 @@ docker run -e API_TOKEN=your-token rcourtman/pulse:latest
 
 ### Option 2: Allow Unprotected Export (Homelab)
 ```bash
-# Systemd
+# Using systemd
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
@@ -27,6 +30,8 @@ Environment="ALLOW_UNPROTECTED_EXPORT=true"
 # Docker
 docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 ```
+
+**Note:** Never put API tokens or passwords in .env files! Use systemd environment variables or Docker secrets for sensitive data.
 
 ## Security Features
 
