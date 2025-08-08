@@ -1195,11 +1195,15 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	// Get current values from running config
 	settings := config.SystemSettings{
-		PollingInterval:   int(h.config.PollingInterval.Seconds()),
-		BackendPort:       h.config.BackendPort,
-		FrontendPort:      h.config.FrontendPort,
-		AllowedOrigins:    h.config.AllowedOrigins,
-		ConnectionTimeout: int(h.config.ConnectionTimeout.Seconds()),
+		PollingInterval:         int(h.config.PollingInterval.Seconds()),
+		BackendPort:             h.config.BackendPort,
+		FrontendPort:            h.config.FrontendPort,
+		AllowedOrigins:          h.config.AllowedOrigins,
+		ConnectionTimeout:       int(h.config.ConnectionTimeout.Seconds()),
+		UpdateChannel:           h.config.UpdateChannel,
+		AutoUpdateEnabled:       h.config.AutoUpdateEnabled,
+		AutoUpdateCheckInterval: int(h.config.AutoUpdateCheckInterval.Hours()),
+		AutoUpdateTime:          h.config.AutoUpdateTime,
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
@@ -1237,6 +1241,24 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 			}
 			h.wsHub.SetAllowedOrigins(origins)
 		}
+	}
+	
+	// Update update-related settings
+	if settings.UpdateChannel != "" {
+		h.config.UpdateChannel = settings.UpdateChannel
+	}
+	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
+	if settings.AutoUpdateCheckInterval > 0 {
+		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
+	}
+	if settings.AutoUpdateTime != "" {
+		h.config.AutoUpdateTime = settings.AutoUpdateTime
+	}
+	
+	// Save settings to persistence
+	if err := h.persistence.SaveSystemSettings(settings); err != nil {
+		log.Error().Err(err).Msg("Failed to persist system settings")
+		// Continue anyway - settings are applied in memory
 	}
 	
 	log.Info().

@@ -178,7 +178,26 @@ func Load() (*Config, error) {
 			if systemSettings.PollingInterval > 0 {
 				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
-			log.Info().Dur("interval", cfg.PollingInterval).Msg("Loaded system configuration")
+			if systemSettings.UpdateChannel != "" {
+				cfg.UpdateChannel = systemSettings.UpdateChannel
+			}
+			cfg.AutoUpdateEnabled = systemSettings.AutoUpdateEnabled
+			if systemSettings.AutoUpdateCheckInterval > 0 {
+				cfg.AutoUpdateCheckInterval = time.Duration(systemSettings.AutoUpdateCheckInterval) * time.Hour
+			}
+			if systemSettings.AutoUpdateTime != "" {
+				cfg.AutoUpdateTime = systemSettings.AutoUpdateTime
+			}
+			if systemSettings.AllowedOrigins != "" {
+				cfg.AllowedOrigins = systemSettings.AllowedOrigins
+			}
+			if systemSettings.ConnectionTimeout > 0 {
+				cfg.ConnectionTimeout = time.Duration(systemSettings.ConnectionTimeout) * time.Second
+			}
+			log.Info().
+				Dur("interval", cfg.PollingInterval).
+				Str("updateChannel", cfg.UpdateChannel).
+				Msg("Loaded system configuration")
 		}
 	}
 	
@@ -200,6 +219,44 @@ func Load() (*Config, error) {
 	} else if updateChannel := os.Getenv("PULSE_UPDATE_CHANNEL"); updateChannel != "" {
 		cfg.UpdateChannel = updateChannel
 		log.Info().Str("channel", updateChannel).Msg("Overriding update channel from PULSE_ env var")
+	}
+	
+	// Auto-update settings from env vars
+	if autoUpdateEnabled := os.Getenv("AUTO_UPDATE_ENABLED"); autoUpdateEnabled != "" {
+		cfg.AutoUpdateEnabled = autoUpdateEnabled == "true" || autoUpdateEnabled == "1"
+		log.Info().Bool("enabled", cfg.AutoUpdateEnabled).Msg("Overriding auto-update enabled from env var")
+	}
+	if interval := os.Getenv("AUTO_UPDATE_CHECK_INTERVAL"); interval != "" {
+		if i, err := strconv.Atoi(interval); err == nil && i > 0 {
+			cfg.AutoUpdateCheckInterval = time.Duration(i) * time.Hour
+			log.Info().Int("hours", i).Msg("Overriding auto-update check interval from env var")
+		}
+	}
+	if updateTime := os.Getenv("AUTO_UPDATE_TIME"); updateTime != "" {
+		cfg.AutoUpdateTime = updateTime
+		log.Info().Str("time", updateTime).Msg("Overriding auto-update time from env var")
+	}
+	
+	// Other settings from env vars
+	if pollingInterval := os.Getenv("POLLING_INTERVAL"); pollingInterval != "" {
+		if i, err := strconv.Atoi(pollingInterval); err == nil && i > 0 {
+			cfg.PollingInterval = time.Duration(i) * time.Second
+			log.Info().Int("seconds", i).Msg("Overriding polling interval from env var")
+		}
+	}
+	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
+		if i, err := strconv.Atoi(connectionTimeout); err == nil && i > 0 {
+			cfg.ConnectionTimeout = time.Duration(i) * time.Second
+			log.Info().Int("seconds", i).Msg("Overriding connection timeout from env var")
+		}
+	}
+	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
+		cfg.AllowedOrigins = allowedOrigins
+		log.Info().Str("origins", allowedOrigins).Msg("Overriding allowed origins from env var")
+	}
+	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
+		cfg.LogLevel = logLevel
+		log.Info().Str("level", logLevel).Msg("Overriding log level from env var")
 	}
 	
 	// Set log level
@@ -235,7 +292,13 @@ func SaveConfig(cfg *Config) error {
 	
 	// Save system configuration
 	systemSettings := SystemSettings{
-		PollingInterval: int(cfg.PollingInterval.Seconds()),
+		PollingInterval:         int(cfg.PollingInterval.Seconds()),
+		UpdateChannel:           cfg.UpdateChannel,
+		AutoUpdateEnabled:       cfg.AutoUpdateEnabled,
+		AutoUpdateCheckInterval: int(cfg.AutoUpdateCheckInterval.Hours()),
+		AutoUpdateTime:          cfg.AutoUpdateTime,
+		AllowedOrigins:          cfg.AllowedOrigins,
+		ConnectionTimeout:       int(cfg.ConnectionTimeout.Seconds()),
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
 		return fmt.Errorf("failed to save system config: %w", err)
