@@ -420,13 +420,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       class="rounded border-gray-300 dark:border-gray-600"
                                     />
                                     <span class="text-gray-700 dark:text-gray-300">
-                                      Enable backup management permissions
+                                      Enable storage permissions for backup visibility
                                     </span>
                                   </label>
                                   <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">
                                     {formData().enableBackupManagement 
-                                      ? 'Allows Pulse to manage PVE backups (create, delete, etc.) and display them in the Storage tab'
-                                      : 'Pulse will have read-only access. PVE backups will not appear in the Storage tab'}
+                                      ? 'Required to read backup files and display them in the Backups tab (Proxmox API limitation)'
+                                      : 'Backups tab will not show PVE backups without these permissions'}
                                   </p>
                                 </div>
 
@@ -480,7 +480,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <ul class="text-gray-600 dark:text-gray-400 text-xs ml-4 list-disc">
                                   <li>Creates a monitoring user (pulse-monitor@pam)</li>
                                   <li>Generates an API token</li>
-                                  <li>Sets up monitoring permissions (read + backup management)</li>
+                                  <li>Sets up required permissions for monitoring</li>
                                   <li>Automatically registers the node with Pulse</li>
                                 </ul>
                                 <p class="text-green-600 dark:text-green-400 text-xs mt-2">
@@ -488,7 +488,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </p>
                                 <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
                                   <strong>Permissions granted:</strong> PVEAuditor (read-only) on root
-                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin (read/write for backups) on /storage'}
+                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin on /storage (needed to read backup files)'}
                                 </p>
                               </div>
                             </Show>
