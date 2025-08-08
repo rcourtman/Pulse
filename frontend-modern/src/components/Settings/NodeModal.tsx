@@ -11,6 +11,8 @@ interface NodeModalProps {
   nodeType: 'pve' | 'pbs';
   editingNode?: NodeConfig;
   onSave: (nodeData: Partial<NodeConfig>) => void;
+  showBackToDiscovery?: boolean;
+  onBackToDiscovery?: () => void;
 }
 
 export const NodeModal: Component<NodeModalProps> = (props) => {
@@ -21,6 +23,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     name: '',
     host: '',
     authType: 'token' as 'password' | 'token',
+    setupMode: 'auto' as 'auto' | 'manual',
     user: '',
     password: '',
     tokenName: '',
@@ -48,6 +51,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         name: node.name || '',
         host: node.host || '',
         authType: node.tokenName ? 'token' : 'password',
+        setupMode: 'auto',
         user: node.user || '',
         password: '', // Don't show existing password
         tokenName: node.tokenName || '',
@@ -70,6 +74,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         name: '',
         host: '',
         authType: 'password',
+        setupMode: 'auto',
         user: '',
         password: '',
         tokenName: '',
@@ -143,7 +148,35 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const handleTestConnection = async () => {
     const data = formData();
     
-    // Validate required fields
+    // If editing an existing node and no new credentials provided, use stored credentials
+    if (props.editingNode) {
+      const hasNewPassword = data.authType === 'password' && data.password;
+      const hasNewToken = data.authType === 'token' && data.tokenValue;
+      
+      if (!hasNewPassword && !hasNewToken) {
+        // Use the existing node test endpoint which uses stored credentials
+        setIsTesting(true);
+        setTestResult(null);
+        
+        try {
+          const result = await NodesAPI.testExistingNode(props.editingNode.id);
+          setTestResult({
+            status: 'success',
+            message: result.message || 'Connection successful'
+          });
+        } catch (error) {
+          setTestResult({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Connection failed'
+          });
+        } finally {
+          setIsTesting(false);
+        }
+        return;
+      }
+    }
+    
+    // Validate required fields for new nodes or when new credentials are provided
     if (!data.host) {
       setTestResult({ status: 'error', message: 'Host is required' });
       return;
@@ -346,27 +379,52 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           
                           <Show when={props.nodeType === 'pve'}>
                             <div class="space-y-3 text-xs">
-                              <p class="text-blue-800 dark:text-blue-200">Run these commands in your Proxmox VE shell:</p>
-                              
-                              <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-gray-800 dark:text-gray-200">
+                              {/* Tab buttons */}
+                              <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+                                <button
+                                  type="button"
+                                  onClick={() => updateField('setupMode', 'auto')}
+                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                    formData().setupMode === 'auto' 
+                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                  }`}
+                                >
+                                  Quick Setup
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateField('setupMode', 'manual')}
+                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                    formData().setupMode === 'manual' 
+                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                  }`}
+                                >
+                                  Manual Setup
+                                </button>
+                              </div>
+
+                              {/* Quick Setup Tab */}
+                              <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
+                                <p class="text-blue-800 dark:text-blue-200">Run this single command on your Proxmox VE server:</p>
+                                
+                                {/* One-liner command */}
+                                <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    const commands = `# Create user (skip if using root@pam)
-pveum user add pulse-monitor@pam --comment "Pulse monitoring"
-
-# Create API token
-pveum user token add pulse-monitor@pam pulse-token --privsep 0
-
-# Add permissions (required for monitoring and cluster detection)
-pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin`;
-                                    if (await copyToClipboard(commands)) {
-                                      showSuccess('Commands copied to clipboard!');
+                                    const hostValue = formData().host || '';
+                                    const encodedHost = encodeURIComponent(hostValue);
+                                    const pulseUrl = encodeURIComponent(window.location.origin);
+                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                    const command = `curl -sSL "${scriptUrl}" | bash`;
+                                    if (await copyToClipboard(command)) {
+                                      showSuccess('Command copied! Run it on your server.');
                                     }
                                   }}
                                   class="absolute top-2 right-2 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md transition-colors"
-                                  title="Copy all commands"
+                                  title="Copy command"
                                 >
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -374,71 +432,354 @@ pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin`;
                                   </svg>
                                 </button>
                                 
-                                <div class="mb-2"># 1. Create user (skip if using root@pam)</div>
-                                <div class="text-green-600 dark:text-green-400">pveum user add pulse-monitor@pam --comment "Pulse monitoring"</div>
-                                <div class="mt-3 mb-2"># 2. Create API token</div>
-                                <div class="text-green-600 dark:text-green-400">pveum user token add pulse-monitor@pam pulse-token --privsep 0</div>
-                                <div class="mt-3 mb-2"># 3. Add permissions (required for monitoring and cluster detection)</div>
-                                <div class="text-green-600 dark:text-green-400">pveum aclmod / -user pulse-monitor@pam -role PVEAuditor</div>
-                                <div class="text-green-600 dark:text-green-400">pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin</div>
+                                {/* Generate the one-liner command */}
+                                {(() => {
+                                  const hostValue = formData().host || '';
+                                  const encodedHost = encodeURIComponent(hostValue);
+                                  const pulseUrl = encodeURIComponent(window.location.origin);
+                                  const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                  const command = `curl -sSL "${scriptUrl}" | bash`;
+                                  return (
+                                    <>
+                                      <div class="text-green-400"># Quick setup - run this command on your server:</div>
+                                      <div class="text-white break-all">{command}</div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                               
-                              <div class="space-y-1">
+                              <div class="space-y-2">
                                 <p class="text-blue-700 dark:text-blue-200 text-xs">
-                                  <strong>Note:</strong> Copy the token value immediately after step 2 - it's only shown once!
+                                  <strong>What this does:</strong>
                                 </p>
-                                <p class="text-gray-600 dark:text-gray-400 text-xs">
-                                  <strong>Permissions explained:</strong>
-                                  <br />• PVEAuditor on / - Required for cluster detection and viewing VMs/containers
-                                  <br />• PVEDatastoreAdmin on /storage - Required for viewing backup information
-                                  <br />• Token uses --privsep 0 to inherit all user permissions
+                                <ul class="text-gray-600 dark:text-gray-400 text-xs ml-4 list-disc">
+                                  <li>Creates a monitoring user (pulse-monitor@pam)</li>
+                                  <li>Generates an API token</li>
+                                  <li>Sets up monitoring permissions (read + backup management)</li>
+                                  <li>Shows you the token to copy</li>
+                                </ul>
+                                <p class="text-amber-600 dark:text-amber-400 text-xs mt-2">
+                                  <strong>Important:</strong> Save the token value immediately - it's only shown once!
+                                </p>
+                                <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                                  <strong>Permissions granted:</strong> PVEAuditor (read-only) on root + PVEDatastoreAdmin (read/write for backups) on /storage
                                 </p>
                               </div>
+                            </Show>
+                            
+                            {/* Manual Setup Tab */}
+                            <Show when={formData().setupMode === 'manual'}>
+                              <p class="text-blue-800 dark:text-blue-200 mb-2">Run these commands one by one on your Proxmox VE server:</p>
+                              
+                              <div class="space-y-3">
+                                {/* Step 1: Create user */}
+                                <div>
+                                  <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">1. Create monitoring user:</p>
+                                  <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const cmd = 'pveum user add pulse-monitor@pam --comment "Pulse monitoring service"';
+                                        if (await copyToClipboard(cmd)) {
+                                          showSuccess('Command copied!');
+                                        }
+                                      }}
+                                      class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                      title="Copy command"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
+                                    <code class="text-gray-800 dark:text-gray-200">pveum user add pulse-monitor@pam --comment "Pulse monitoring service"</code>
+                                  </div>
+                                </div>
+                                
+                                {/* Step 2: Generate token */}
+                                <div>
+                                  <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">2. Generate API token (save the output!):</p>
+                                  <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const cmd = 'pveum user token add pulse-monitor@pam pulse-token --privsep 0';
+                                        if (await copyToClipboard(cmd)) {
+                                          showSuccess('Command copied!');
+                                        }
+                                      }}
+                                      class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                      title="Copy command"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
+                                    <code class="text-gray-800 dark:text-gray-200">pveum user token add pulse-monitor@pam pulse-token --privsep 0</code>
+                                  </div>
+                                  <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
+                                    ⚠️ Copy the token value immediately - it won't be shown again!
+                                  </p>
+                                </div>
+                                
+                                {/* Step 3: Set permissions */}
+                                <div>
+                                  <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up monitoring permissions:</p>
+                                  <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor';
+                                        if (await copyToClipboard(cmd)) {
+                                          showSuccess('Command copied!');
+                                        }
+                                      }}
+                                      class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                      title="Copy command"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
+                                    <code class="text-gray-800 dark:text-gray-200">pveum aclmod / -user pulse-monitor@pam -role PVEAuditor</code>
+                                  </div>
+                                  <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const cmd = 'pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin';
+                                        if (await copyToClipboard(cmd)) {
+                                          showSuccess('Command copied!');
+                                        }
+                                      }}
+                                      class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                      title="Copy command"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
+                                    <code class="text-gray-800 dark:text-gray-200">pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin</code>
+                                  </div>
+                                  <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                                    ℹ️ PVEAuditor gives read-only access. PVEDatastoreAdmin on /storage adds backup management capabilities.
+                                  </p>
+                                </div>
+                                
+                                {/* Step 4: Use in Pulse */}
+                                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-2">
+                                  <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">4. Add to Pulse with:</p>
+                                  <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
+                                    <li><strong>Token ID:</strong> pulse-monitor@pam!pulse-token</li>
+                                    <li><strong>Token Value:</strong> [The value from step 2]</li>
+                                    <li><strong>Host URL:</strong> {formData().host || 'https://your-server:8006'}</li>
+                                  </ul>
+                                </div>
+                              </div>
+                            </Show>
                             </div>
                           </Show>
                           
                           <Show when={props.nodeType === 'pbs'}>
                             <div class="space-y-3 text-xs">
-                              <p class="text-blue-800 dark:text-blue-200">Run these commands in your Proxmox Backup Server shell:</p>
-                              
-                              <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-gray-800 dark:text-gray-200">
+                              {/* Tab buttons for PBS */}
+                              <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const commands = `# Create user
-proxmox-backup-manager user create pulse-monitor@pbs
-
-# Create API token
-proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
-
-# Add permissions
-proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
-proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'`;
-                                    if (await copyToClipboard(commands)) {
-                                      showSuccess('Commands copied to clipboard!');
-                                    }
-                                  }}
-                                  class="absolute top-2 right-2 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md transition-colors"
-                                  title="Copy all commands"
+                                  onClick={() => updateField('setupMode', 'auto')}
+                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                    formData().setupMode === 'auto' || !formData().setupMode
+                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                  }`}
                                 >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                  </svg>
+                                  Quick Setup
                                 </button>
-                                
-                                <div class="mb-2"># 1. Create user</div>
-                                <div class="text-green-600 dark:text-green-400">proxmox-backup-manager user create pulse-monitor@pbs</div>
-                                <div class="mt-3 mb-2"># 2. Create API token</div>
-                                <div class="text-green-600 dark:text-green-400">proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token</div>
-                                <div class="mt-3 mb-2"># 3. Add permissions</div>
-                                <div class="text-green-600 dark:text-green-400">proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs</div>
-                                <div class="text-green-600 dark:text-green-400">proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'</div>
+                                <button
+                                  type="button"
+                                  onClick={() => updateField('setupMode', 'manual')}
+                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                    formData().setupMode === 'manual' 
+                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                  }`}
+                                >
+                                  Manual Setup
+                                </button>
                               </div>
+
+                              {/* Quick Setup Tab for PBS */}
+                              <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
+                                <p class="text-blue-800 dark:text-blue-200">Run this single command on your Proxmox Backup Server:</p>
+                                
+                                {/* One-liner command */}
+                                <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const hostValue = formData().host || '';
+                                      const encodedHost = encodeURIComponent(hostValue);
+                                      const pulseUrl = encodeURIComponent(window.location.origin);
+                                      const scriptUrl = `${window.location.origin}/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                      const command = `curl -sSL "${scriptUrl}" | bash`;
+                                      if (await copyToClipboard(command)) {
+                                        showSuccess('Command copied! Run it on your PBS server.');
+                                      }
+                                    }}
+                                    class="absolute top-2 right-2 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md transition-colors"
+                                    title="Copy command"
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                    </svg>
+                                  </button>
+                                  
+                                  {/* Generate the one-liner command */}
+                                  {(() => {
+                                    const hostValue = formData().host || '';
+                                    const encodedHost = encodeURIComponent(hostValue);
+                                    const pulseUrl = encodeURIComponent(window.location.origin);
+                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                    const command = `curl -sSL "${scriptUrl}" | bash`;
+                                    return (
+                                      <>
+                                        <div class="text-green-400"># Quick setup - run this command on your PBS server:</div>
+                                        <div class="text-white break-all">{command}</div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                                
+                                <div class="space-y-2">
+                                  <p class="text-blue-700 dark:text-blue-200 text-xs">
+                                    <strong>What this does:</strong>
+                                  </p>
+                                  <ul class="text-gray-600 dark:text-gray-400 text-xs ml-4 list-disc">
+                                    <li>Creates a monitoring user (pulse-monitor@pbs)</li>
+                                    <li>Generates an API token</li>
+                                    <li>Sets up Audit permissions for read-only access</li>
+                                    <li>Shows you the token to copy</li>
+                                  </ul>
+                                  <p class="text-amber-600 dark:text-amber-400 text-xs mt-2">
+                                    <strong>Important:</strong> Save the token value immediately - it's only shown once!
+                                  </p>
+                                </div>
+                              </Show>
                               
-                              <p class="text-blue-700 dark:text-blue-200 text-xs">
-                                <strong>Note:</strong> Copy the token value immediately after step 2 - it's only shown once!
-                              </p>
+                              {/* Manual Setup Tab for PBS */}
+                              <Show when={formData().setupMode === 'manual'}>
+                                <p class="text-blue-800 dark:text-blue-200 mb-2">Run these commands one by one on your Proxmox Backup Server:</p>
+                                
+                                <div class="space-y-3">
+                                  {/* Step 1: Create user */}
+                                  <div>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">1. Create monitoring user:</p>
+                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = 'proxmox-backup-manager user create pulse-monitor@pbs';
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied!');
+                                          }
+                                        }}
+                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                      <code class="text-gray-800 dark:text-gray-200">proxmox-backup-manager user create pulse-monitor@pbs</code>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Step 2: Generate token */}
+                                  <div>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">2. Generate API token (save the output!):</p>
+                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = 'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied!');
+                                          }
+                                        }}
+                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                      <code class="text-gray-800 dark:text-gray-200">proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token</code>
+                                    </div>
+                                    <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
+                                      ⚠️ Copy the token value immediately - it won't be shown again!
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Step 3: Set permissions */}
+                                  <div>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up read-only permissions:</p>
+                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = 'proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs';
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied!');
+                                          }
+                                        }}
+                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                      <code class="text-gray-800 dark:text-gray-200">proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs</code>
+                                    </div>
+                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = "proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'";
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied!');
+                                          }
+                                        }}
+                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                      <code class="text-gray-800 dark:text-gray-200">proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'</code>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Step 4: Use in Pulse */}
+                                  <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-2">
+                                    <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">4. Add to Pulse with:</p>
+                                    <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
+                                      <li><strong>Token ID:</strong> pulse-monitor@pbs!pulse-token</li>
+                                      <li><strong>Token Value:</strong> [The value from step 2]</li>
+                                      <li><strong>Host URL:</strong> {formData().host || 'https://your-server:8007'}</li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </Show>
                             </div>
                           </Show>
                         </div>
@@ -650,6 +991,22 @@ proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-tok
                   </button>
                   
                   <div class="flex items-center gap-3">
+                    <Show when={props.showBackToDiscovery && props.onBackToDiscovery}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          props.onBackToDiscovery!();
+                          props.onClose();
+                        }}
+                        class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="19" y1="12" x2="5" y2="12"></line>
+                          <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                        Back to Discovery
+                      </button>
+                    </Show>
                     <button
                       type="button"
                       onClick={props.onClose}

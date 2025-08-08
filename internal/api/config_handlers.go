@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -21,15 +24,17 @@ type ConfigHandlers struct {
 	persistence  *config.ConfigPersistence
 	monitor      *monitoring.Monitor
 	reloadFunc   func() error
+	wsHub        *websocket.Hub
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error) *ConfigHandlers {
+func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub) *ConfigHandlers {
 	return &ConfigHandlers{
 		config:       cfg,
 		persistence:  config.NewConfigPersistence(cfg.DataPath),
 		monitor:      monitor,
 		reloadFunc:   reloadFunc,
+		wsHub:        wsHub,
 	}
 }
 
@@ -80,6 +85,71 @@ type NodeResponse struct {
 	IsCluster          bool                  `json:"isCluster,omitempty"`
 	ClusterName        string                `json:"clusterName,omitempty"`
 	ClusterEndpoints   []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
+}
+
+// detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
+func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+	tempClient, err := proxmox.NewClient(clientConfig)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
+		return false, "", nil
+	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Get full cluster status to find the actual cluster name
+	clusterStatus, err := tempClient.GetClusterStatus(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get cluster status")
+		return false, "", nil
+	}
+	
+	// Find the cluster name and collect nodes
+	var clusterNodes []proxmox.ClusterStatus
+	for _, status := range clusterStatus {
+		if status.Type == "cluster" {
+			// This is the actual cluster name
+			clusterName = status.Name
+			log.Info().Str("cluster_name", clusterName).Msg("Found cluster name")
+		} else if status.Type == "node" {
+			clusterNodes = append(clusterNodes, status)
+		}
+	}
+	
+	log.Info().Int("cluster_nodes", len(clusterNodes)).Msg("Got cluster nodes")
+	
+	if len(clusterNodes) > 1 {
+		isCluster = true
+		log.Info().
+			Str("cluster", clusterName).
+			Str("node", nodeName).
+			Int("nodes", len(clusterNodes)).
+			Msg("Detected Proxmox cluster")
+		
+		for _, clusterNode := range clusterNodes {
+			endpoint := config.ClusterEndpoint{
+				NodeID:   clusterNode.ID,
+				NodeName: clusterNode.Name,
+				Host:     clusterNode.Name,
+				Online:   clusterNode.Online == 1,
+				LastSeen: time.Now(),
+			}
+			
+			if clusterNode.IP != "" {
+				endpoint.IP = clusterNode.IP
+			}
+			
+			clusterEndpoints = append(clusterEndpoints, endpoint)
+		}
+		
+		// Fallback if we couldn't get the cluster name
+		if clusterName == "" {
+			clusterName = "Unknown Cluster"
+		}
+	}
+	
+	return isCluster, clusterName, clusterEndpoints
 }
 
 // HandleGetNodes returns all configured nodes
@@ -208,7 +278,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			req.Name = nameHost
 		}
 		
-		// Create a temporary client to check if it's part of a cluster
+		// Check if node is part of a cluster
 		clientConfig := proxmox.ClientConfig{
 			Host:        host,
 			User:        req.User,
@@ -219,61 +289,13 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			Fingerprint: req.Fingerprint,
 		}
 		
-		tempClient, err := proxmox.NewClient(clientConfig)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
-			return
-		}
+		isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, req.Name)
 		
-		// Check if node is part of a cluster
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		
-		var clusterEndpoints []config.ClusterEndpoint
-		var isCluster bool
-		var clusterName string
-		
-		clusterNodes, err := tempClient.GetClusterNodes(ctx)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get cluster nodes")
-		} else {
-			log.Info().Int("cluster_nodes", len(clusterNodes)).Msg("Got cluster nodes")
-		}
-		
-		if err == nil && len(clusterNodes) > 1 {
-			// This is a cluster - auto-discover all nodes
-			isCluster = true
+		if isCluster {
 			log.Info().
-				Str("name", req.Name).
-				Int("nodes", len(clusterNodes)).
+				Str("cluster", clusterName).
+				Int("endpoints", len(clusterEndpoints)).
 				Msg("Detected Proxmox cluster, auto-discovering all nodes")
-			
-			for _, clusterNode := range clusterNodes {
-				// Get the cluster name from any online node
-				if clusterName == "" && clusterNode.Online == 1 {
-					clusterName = clusterNode.Name
-				}
-				
-				endpoint := config.ClusterEndpoint{
-					NodeID:   clusterNode.ID,
-					NodeName: clusterNode.Name,
-					Host:     clusterNode.Name, // Will be resolved to IP if needed
-					Online:   clusterNode.Online == 1,
-					LastSeen: time.Now(),
-				}
-				
-				// Try to get the IP address
-				if clusterNode.IP != "" {
-					endpoint.IP = clusterNode.IP
-				}
-				
-				clusterEndpoints = append(clusterEndpoints, endpoint)
-			}
-			
-			// Use the provided name as cluster name if we couldn't get one
-			if clusterName == "" {
-				clusterName = req.Name
-			}
 		}
 		
 		pve := config.PVEInstance{
@@ -314,19 +336,47 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		
 		// Auto-generate name if not provided
 		if req.Name == "" {
-			// Extract hostname from URL
-			nameHost := host
-			if strings.HasPrefix(nameHost, "http://") {
-				nameHost = strings.TrimPrefix(nameHost, "http://")
+			// Try to get the actual hostname from PBS
+			discovered := false
+			
+			// Create a temporary PBS client to discover the hostname
+			pbsConfig := pbs.ClientConfig{
+				Host:        host,
+				TokenName:   req.TokenName,
+				TokenValue:  req.TokenValue,
+				User:        req.User,
+				Password:    req.Password,
+				VerifySSL:   req.VerifySSL,
+				Fingerprint: req.Fingerprint,
+				Timeout:     5 * time.Second,
 			}
-			if strings.HasPrefix(nameHost, "https://") {
-				nameHost = strings.TrimPrefix(nameHost, "https://")
+			
+			if tempClient, err := pbs.NewClient(pbsConfig); err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				
+				if nodeName, err := tempClient.GetNodeName(ctx); err == nil && nodeName != "" {
+					req.Name = nodeName
+					discovered = true
+					log.Info().Str("discoveredName", nodeName).Msg("Auto-discovered PBS hostname")
+				}
 			}
-			// Remove port
-			if colonIndex := strings.Index(nameHost, ":"); colonIndex != -1 {
-				nameHost = nameHost[:colonIndex]
+			
+			// Fallback to extracting from URL if discovery failed
+			if !discovered {
+				nameHost := host
+				if strings.HasPrefix(nameHost, "http://") {
+					nameHost = strings.TrimPrefix(nameHost, "http://")
+				}
+				if strings.HasPrefix(nameHost, "https://") {
+					nameHost = strings.TrimPrefix(nameHost, "https://")
+				}
+				// Remove port
+				if colonIndex := strings.Index(nameHost, ":"); colonIndex != -1 {
+					nameHost = nameHost[:colonIndex]
+				}
+				req.Name = nameHost
 			}
-			req.Name = nameHost
 		}
 		
 		// Parse PBS authentication details
@@ -512,12 +562,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			return
 		}
 		
-		// Check if it's a cluster
-		isCluster := false
-		clusterNodes, err := tempClient.GetClusterNodes(ctx)
-		if err == nil && len(clusterNodes) > 1 {
-			isCluster = true
-		}
+		isCluster, _, clusterEndpoints := detectPVECluster(clientConfig, req.Name)
 		
 		response := map[string]interface{}{
 			"status": "success",
@@ -527,7 +572,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		}
 		
 		if isCluster {
-			response["clusterNodeCount"] = len(clusterNodes)
+			response["clusterNodeCount"] = len(clusterEndpoints)
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
@@ -1312,5 +1357,680 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "Configuration imported successfully",
+	})
+}
+
+// HandleDiscoverServers handles network discovery of Proxmox/PBS servers
+func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Request) {
+	// Support both GET (for cached results) and POST (for manual scan)
+	switch r.Method {
+	case http.MethodGet:
+		// Return cached results from background discovery service
+		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
+			result, updated := discoveryService.GetCachedResult()
+			
+			// Add metadata about the cache
+			response := map[string]interface{}{
+				"servers":   result.Servers,
+				"errors":    result.Errors,
+				"cached":    true,
+				"updated":   updated.Unix(),
+				"age":       time.Since(updated).Seconds(),
+			}
+			
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		
+		// No discovery service available, return empty result
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"servers": []interface{}{},
+			"errors":  []string{},
+			"cached":  false,
+		})
+		return
+		
+	case http.MethodPost:
+		// Parse request
+		var req struct {
+			Subnet string `json:"subnet"` // CIDR notation or "auto"
+			UseCache bool `json:"use_cache"` // Whether to return cached results
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// If use_cache is true and we have cached results, return them
+		if req.UseCache {
+			if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
+				result, updated := discoveryService.GetCachedResult()
+				
+				response := map[string]interface{}{
+					"servers":   result.Servers,
+					"errors":    result.Errors,
+					"cached":    true,
+					"updated":   updated.Unix(),
+					"age":       time.Since(updated).Seconds(),
+				}
+				
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
+
+		// Check if discovery service is available for triggering a refresh
+		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
+			// Update subnet if provided
+			if req.Subnet != "" {
+				discoveryService.SetSubnet(req.Subnet)
+			}
+			
+			// Trigger a refresh
+			discoveryService.ForceRefresh()
+			
+			// Wait a moment for scan to start, then return current cache
+			time.Sleep(100 * time.Millisecond)
+			
+			result, updated := discoveryService.GetCachedResult()
+			response := map[string]interface{}{
+				"servers":   result.Servers,
+				"errors":    result.Errors,
+				"cached":    true,
+				"scanning":  true,
+				"updated":   updated.Unix(),
+			}
+			
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Fallback to direct scan if no discovery service
+		log.Info().Str("subnet", req.Subnet).Msg("Starting network discovery (fallback)")
+
+		scanner := discovery.NewScanner()
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		result, err := scanner.DiscoverServers(ctx, req.Subnet)
+		if err != nil {
+			log.Error().Err(err).Msg("Discovery failed")
+			http.Error(w, fmt.Sprintf("Discovery failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+		
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// HandleSetupScript serves the setup script for Proxmox/PBS nodes
+func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get query parameters
+	query := r.URL.Query()
+	serverType := query.Get("type") // "pve" or "pbs"
+	serverHost := query.Get("host")
+	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
+	
+	// Default to PVE if not specified
+	if serverType == "" {
+		serverType = "pve"
+	}
+	
+	// If pulse URL not provided, try to construct from request
+	if pulseURL == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
+	}
+	
+	// Extract hostname/IP from the host URL if provided
+	serverName := "your-server"
+	if serverHost != "" {
+		// Extract hostname/IP from URL
+		if match := strings.Contains(serverHost, "://"); match {
+			parts := strings.Split(serverHost, "://")
+			if len(parts) > 1 {
+				hostPart := strings.Split(parts[1], ":")[0]
+				serverName = hostPart
+			}
+		} else {
+			// Just a hostname/IP
+			serverName = strings.Split(serverHost, ":")[0]
+		}
+	}
+	
+	var script string
+	
+	if serverType == "pve" {
+		script = fmt.Sprintf(`#!/bin/bash
+# Pulse Monitoring Setup Script for %s
+# Generated: %s
+
+echo "============================================"
+echo "  Pulse Monitoring Setup for Proxmox VE"
+echo "============================================"
+echo ""
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+   echo "Please run this script as root"
+   exit 1
+fi
+
+# Create monitoring user
+echo "Creating monitoring user..."
+pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || echo "User already exists"
+
+# Generate API token
+echo "Generating API token..."
+
+# Check if token already exists
+TOKEN_EXISTED=false
+if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "pulse-token"; then
+    TOKEN_EXISTED=true
+    echo ""
+    echo "================================================================"
+    echo "WARNING: Token 'pulse-token' already exists!"
+    echo "================================================================"
+    echo ""
+    echo "To create a new token, first remove the existing one:"
+    echo "  pveum user token remove pulse-monitor@pam pulse-token"
+    echo ""
+    echo "Or create a token with a different name:"
+    echo "  pveum user token add pulse-monitor@pam pulse-token-$(date +%%s) --privsep 0"
+    echo ""
+    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!pulse-token-1234567890)"
+    echo "================================================================"
+    echo ""
+else
+    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam pulse-token --privsep 0)
+    echo ""
+    echo "================================================================"
+    echo "IMPORTANT: Copy the token value below - it's only shown once!"
+    echo "================================================================"
+    echo "$TOKEN_OUTPUT"
+    echo "================================================================"
+    echo ""
+    
+    # Extract the token value from the output (last field on the value line)
+    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
+    
+    # If we successfully got a token, send it back to Pulse
+    if [ -n "$TOKEN_VALUE" ]; then
+        echo ""
+        echo "🔄 Auto-registering with Pulse..."
+        
+        # Get the server's hostname
+        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        
+        # Send registration to Pulse
+        PULSE_URL="%s"
+        # Use jq or manual escaping to properly construct JSON
+        REGISTER_JSON=$(cat <<EOF
+{
+  "type": "pve",
+  "host": "%s",
+  "tokenId": "pulse-monitor@pam!pulse-token",
+  "tokenValue": "$TOKEN_VALUE",
+  "serverName": "$SERVER_HOSTNAME"
+}
+EOF
+        )
+        # Remove newlines from JSON
+        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+        
+        # Debug output
+        echo "📤 Sending registration to Pulse..."
+        echo "   URL: $PULSE_URL/api/auto-register"
+        echo "   JSON: $REGISTER_JSON"
+        
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -d "$REGISTER_JSON" 2>&1)
+        
+        if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+            echo "✅ Automatically registered with Pulse!"
+            echo "   The node should now appear in your Pulse dashboard."
+            echo ""
+            echo "📌 Note: You may need to close the modal or refresh the page to see the new node."
+        else
+            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+            echo "   Response: $REGISTER_RESPONSE"
+        fi
+        echo ""
+    fi
+fi
+
+# Set up permissions
+echo "Setting up permissions..."
+pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
+pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
+
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "Add this server to Pulse with:"
+echo "  Token ID: pulse-monitor@pam!pulse-token"
+if [ "$TOKEN_EXISTED" = true ]; then
+    echo "  Token Value: [Use your existing token or create a new one as shown above]"
+else
+    echo "  Token Value: [Copy from above]"
+fi
+echo "  Host URL: %s"
+echo ""
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, serverHost)
+		
+	} else { // PBS
+		script = fmt.Sprintf(`#!/bin/bash
+# Pulse Monitoring Setup Script for PBS %s
+# Generated: %s
+
+echo "============================================"
+echo "  Pulse Monitoring Setup for PBS"
+echo "============================================"
+echo ""
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+   echo "Please run this script as root"
+   exit 1
+fi
+
+# Create monitoring user
+echo "Creating monitoring user..."
+proxmox-backup-manager user create pulse-monitor@pbs 2>/dev/null || echo "User already exists"
+
+# Generate API token
+echo "Generating API token..."
+
+# Check if token already exists (PBS tokens can be regenerated with same name)
+echo ""
+echo "================================================================"
+echo "IMPORTANT: Copy the token value below - it's only shown once!"
+echo "================================================================"
+TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token 2>&1)
+if echo "$TOKEN_OUTPUT" | grep -q "already exists"; then
+    echo "WARNING: Token 'pulse-token' already exists!"
+    echo ""
+    echo "You can either:"
+    echo "1. Delete the existing token first:"
+    echo "   proxmox-backup-manager user delete-token pulse-monitor@pbs pulse-token"
+    echo ""
+    echo "2. Or create a token with a different name:"
+    echo "   proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token-$(date +%%s)"
+    echo ""
+    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pbs!pulse-token-1234567890)"
+else
+    echo "$TOKEN_OUTPUT"
+    
+    # Extract the token value from PBS JSON output - look for the "value" field
+    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    
+    # If we successfully got a token, send it back to Pulse
+    if [ -n "$TOKEN_VALUE" ]; then
+        echo ""
+        echo "🔄 Auto-registering with Pulse..."
+        
+        # Get the server's hostname
+        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        
+        # Send registration to Pulse
+        PULSE_URL="%s"
+        # Use jq or manual escaping to properly construct JSON
+        REGISTER_JSON=$(cat <<EOF
+{
+  "type": "pbs",
+  "host": "%s",
+  "tokenId": "pulse-monitor@pbs!pulse-token",
+  "tokenValue": "$TOKEN_VALUE",
+  "serverName": "$SERVER_HOSTNAME"
+}
+EOF
+        )
+        # Remove newlines from JSON
+        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -d "$REGISTER_JSON" 2>&1)
+        
+        if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+            echo "✅ Automatically registered with Pulse!"
+            echo "   The node should now appear in your Pulse dashboard."
+            echo ""
+            echo "📌 Note: You may need to close the modal or refresh the page to see the new node."
+        else
+            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+            echo "   Response: $REGISTER_RESPONSE"
+        fi
+        echo ""
+    fi
+fi
+echo "================================================================"
+echo ""
+
+# Set up permissions
+echo "Setting up permissions..."
+proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
+proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'
+
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "Add this server to Pulse with:"
+echo "  Token ID: pulse-monitor@pbs!pulse-token"
+echo "  Token Value: [Check the output above for the token or instructions]"
+echo "  Host URL: %s"
+echo ""
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, serverHost)
+	}
+	
+	// Set headers for script download
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=pulse-setup-%s.sh", serverType))
+	w.Write([]byte(script))
+}
+
+// AutoRegisterRequest represents a request from the setup script to auto-register a node
+type AutoRegisterRequest struct {
+	Type       string `json:"type"`       // "pve" or "pbs"
+	Host       string `json:"host"`       // The host URL
+	TokenID    string `json:"tokenId"`    // Full token ID like pulse-monitor@pam!pulse-token
+	TokenValue string `json:"tokenValue"` // The actual token secret
+	ServerName string `json:"serverName"` // Hostname or IP
+}
+
+// HandleAutoRegister receives token details from the setup script and auto-configures the node
+func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read body first to debug
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read request body")
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+	
+	log.Info().Str("body", string(body)).Msg("Auto-register request received")
+	
+	var req AutoRegisterRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Error().Err(err).Str("body", string(body)).Msg("Failed to decode auto-register request")
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+	
+	log.Info().
+		Str("type", req.Type).
+		Str("host", req.Host).
+		Str("tokenId", req.TokenID).
+		Bool("hasTokenValue", req.TokenValue != "").
+		Str("serverName", req.ServerName).
+		Msg("Parsed auto-register request")
+
+	// Validate required fields
+	if req.Type == "" || req.Host == "" || req.TokenID == "" || req.TokenValue == "" {
+		log.Error().
+			Str("type", req.Type).
+			Str("host", req.Host).
+			Str("tokenId", req.TokenID).
+			Bool("hasToken", req.TokenValue != "").
+			Msg("Missing required fields")
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Normalize the host URL
+	host := req.Host
+	if req.Type == "pve" {
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add port if missing
+		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				if !strings.Contains(host[8:], ":") {
+					host += ":8006"
+				}
+			}
+		}
+	} else if req.Type == "pbs" {
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add PBS port if missing
+		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+			host += ":8007"
+		}
+	}
+	
+	// Create a node configuration
+	nodeConfig := NodeConfigRequest{
+		Type:              req.Type,
+		Name:              req.ServerName,
+		Host:              host, // Use normalized host
+		TokenName:         req.TokenID,
+		TokenValue:        req.TokenValue,
+		VerifySSL:         false, // Default to not verifying SSL for auto-registration
+		MonitorVMs:        true,
+		MonitorContainers: true,
+		MonitorStorage:    true,
+		MonitorBackups:    true,
+		MonitorDatastores: true,
+		MonitorSyncJobs:   true,
+		MonitorVerifyJobs: true,
+		MonitorPruneJobs:  true,
+		MonitorGarbageJobs: false,
+	}
+
+	// Check if a node with this host already exists
+	existingIndex := -1
+	if req.Type == "pve" {
+		for i, node := range h.config.PVEInstances {
+			if node.Host == host { // Use normalized host for comparison
+				existingIndex = i
+				break
+			}
+		}
+	} else {
+		for i, node := range h.config.PBSInstances {
+			if node.Host == host { // Use normalized host for comparison
+				existingIndex = i
+				break
+			}
+		}
+	}
+
+	// If node exists, update it; otherwise add new
+	if existingIndex >= 0 {
+		// Update existing node
+		if req.Type == "pve" {
+			instance := &h.config.PVEInstances[existingIndex]
+			// Clear password auth when switching to token auth
+			instance.User = ""
+			instance.Password = ""
+			instance.TokenName = nodeConfig.TokenName
+			instance.TokenValue = nodeConfig.TokenValue
+			
+			// Check for cluster if not already detected
+			if !instance.IsCluster {
+				clientConfig := proxmox.ClientConfig{
+					Host:        instance.Host,
+					TokenName:   nodeConfig.TokenName,
+					TokenValue:  nodeConfig.TokenValue,
+					VerifySSL:   instance.VerifySSL,
+				}
+				
+				isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name)
+				if isCluster {
+					instance.IsCluster = true
+					instance.ClusterName = clusterName
+					instance.ClusterEndpoints = clusterEndpoints
+					log.Info().
+						Str("cluster", clusterName).
+						Int("endpoints", len(clusterEndpoints)).
+						Msg("Detected Proxmox cluster during auto-registration update")
+				}
+			}
+			// Keep other settings as they were
+		} else {
+			instance := &h.config.PBSInstances[existingIndex]
+			// Clear password auth when switching to token auth
+			instance.User = ""
+			instance.Password = ""
+			instance.TokenName = nodeConfig.TokenName
+			instance.TokenValue = nodeConfig.TokenValue
+			// Keep other settings as they were
+		}
+		log.Info().
+			Str("host", req.Host).
+			Str("type", req.Type).
+			Str("tokenName", nodeConfig.TokenName).
+			Bool("hasTokenValue", nodeConfig.TokenValue != "").
+			Msg("Updated existing node with new token")
+	} else {
+		// Add new node
+		if req.Type == "pve" {
+			// Check for cluster detection using helper
+			clientConfig := proxmox.ClientConfig{
+				Host:        nodeConfig.Host,
+				TokenName:   nodeConfig.TokenName,
+				TokenValue:  nodeConfig.TokenValue,
+				VerifySSL:   nodeConfig.VerifySSL,
+			}
+			
+			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name)
+			
+			newInstance := config.PVEInstance{
+				Name:              nodeConfig.Name,
+				Host:              nodeConfig.Host,
+				TokenName:         nodeConfig.TokenName,
+				TokenValue:        nodeConfig.TokenValue,
+				VerifySSL:         nodeConfig.VerifySSL,
+				MonitorVMs:        nodeConfig.MonitorVMs,
+				MonitorContainers: nodeConfig.MonitorContainers,
+				MonitorStorage:    nodeConfig.MonitorStorage,
+				MonitorBackups:    nodeConfig.MonitorBackups,
+				IsCluster:         isCluster,
+				ClusterName:       clusterName,
+				ClusterEndpoints:  clusterEndpoints,
+			}
+			h.config.PVEInstances = append(h.config.PVEInstances, newInstance)
+			
+			if isCluster {
+				log.Info().
+					Str("cluster", clusterName).
+					Int("endpoints", len(clusterEndpoints)).
+					Msg("Added Proxmox cluster via auto-registration")
+			}
+		} else {
+			newInstance := config.PBSInstance{
+				Name:               nodeConfig.Name,
+				Host:               nodeConfig.Host,
+				TokenName:          nodeConfig.TokenName,
+				TokenValue:         nodeConfig.TokenValue,
+				VerifySSL:          nodeConfig.VerifySSL,
+				MonitorDatastores:  nodeConfig.MonitorDatastores,
+				MonitorSyncJobs:    nodeConfig.MonitorSyncJobs,
+				MonitorVerifyJobs:  nodeConfig.MonitorVerifyJobs,
+				MonitorPruneJobs:   nodeConfig.MonitorPruneJobs,
+				MonitorGarbageJobs: nodeConfig.MonitorGarbageJobs,
+			}
+			h.config.PBSInstances = append(h.config.PBSInstances, newInstance)
+		}
+		log.Info().Str("host", req.Host).Str("type", req.Type).Msg("Added new node via auto-registration")
+	}
+
+	// Log what we're about to save
+	if req.Type == "pve" && len(h.config.PVEInstances) > 0 {
+		lastNode := h.config.PVEInstances[len(h.config.PVEInstances)-1]
+		log.Info().
+			Str("name", lastNode.Name).
+			Str("host", lastNode.Host).
+			Str("tokenName", lastNode.TokenName).
+			Bool("hasTokenValue", lastNode.TokenValue != "").
+			Msg("About to save PVE node")
+	}
+	
+	// Save configuration
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save auto-registered node")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	
+	log.Info().Msg("Configuration saved successfully")
+
+	// Reload monitor to pick up new configuration
+	if h.reloadFunc != nil {
+		log.Info().Msg("Reloading monitor after auto-registration")
+		go func() {
+			// Run reload in background to avoid blocking the response
+			if err := h.reloadFunc(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+			} else {
+				log.Info().Msg("Monitor reloaded successfully after auto-registration")
+			}
+		}()
+	}
+
+	// Broadcast auto-registration success via WebSocket
+	fmt.Println("[AUTO-REGISTER] About to broadcast WebSocket message")
+	if h.wsHub != nil {
+		fmt.Println("[AUTO-REGISTER] WebSocket hub is available")
+		nodeInfo := map[string]interface{}{
+			"type":       req.Type,
+			"host":       req.Host,
+			"name":       req.ServerName,
+			"tokenId":    req.TokenID,
+			"hasToken":   true,
+			"verifySSL":  false,
+			"status":     "connected",
+		}
+		
+		// Broadcast the auto-registration success
+		fmt.Printf("[AUTO-REGISTER] Broadcasting message type: node_auto_registered for host: %s\n", req.Host)
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "node_auto_registered",
+			Data: nodeInfo,
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		fmt.Println("[AUTO-REGISTER] Broadcast complete")
+		
+		log.Info().
+			Str("host", req.Host).
+			Str("name", req.ServerName).
+			Str("type", "node_auto_registered").
+			Msg("Broadcasted auto-registration success via WebSocket")
+	} else {
+		fmt.Println("[AUTO-REGISTER] ERROR: WebSocket hub is nil!")
+		log.Warn().Msg("WebSocket hub is nil, cannot broadcast auto-registration")
+	}
+
+	// Send success response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": fmt.Sprintf("Node %s auto-registered successfully", req.Host),
+		"nodeId":  req.Host,
 	})
 }

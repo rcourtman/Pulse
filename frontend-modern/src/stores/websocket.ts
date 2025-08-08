@@ -3,6 +3,8 @@ import { createStore } from 'solid-js/store';
 import type { State, WSMessage, Alert, ResolvedAlert, PVEBackups } from '@/types/api';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
+import { notificationStore } from './notifications';
+import { eventBus } from './events';
 
 // Type-safe WebSocket store
 export function createWebSocketStore(url: string) {
@@ -164,6 +166,28 @@ export function createWebSocketStore(url: string) {
             // Update progress event
             setUpdateProgress(message.data);
             logger.info('Update progress:', message.data);
+          } else if (message.type === 'node_auto_registered') {
+            // Node was successfully auto-registered
+            console.log('[WebSocket] Received node_auto_registered message:', message);
+            const node = message.data;
+            const nodeName = node.name || node.host;
+            const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
+            
+            console.log('[WebSocket] Showing notification for node:', nodeName);
+            notificationStore.success(
+              `🎉 ${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
+              8000
+            );
+            logger.info('Node auto-registered:', node);
+            
+            // Emit event to trigger UI updates
+            eventBus.emit('node_auto_registered', node);
+            
+            // Trigger a refresh of nodes
+            eventBus.emit('refresh_nodes');
+          } else {
+            // Log any unhandled message types
+            console.log('[WebSocket] Unhandled message type:', (message as any).type);
           }
         } catch (err) {
           logger.error('Failed to parse WebSocket message', err);

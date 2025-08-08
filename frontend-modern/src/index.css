@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Notification animations */
+@keyframes slide-in-glass {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-slide-in-glass {
+  animation: slide-in-glass 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Support for backdrop blur in browsers */
+@supports (backdrop-filter: blur(0px)) {
+  .backdrop-blur-xl {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
 /* Custom styles */
 @layer base {
   body {

@@ -275,6 +275,36 @@ func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
 	return &result.Data, nil
 }
 
+// GetNodeName returns the PBS node's hostname
+func (c *Client) GetNodeName(ctx context.Context) (string, error) {
+	log.Debug().Msg("PBS GetNodeName: fetching node name")
+	
+	resp, err := c.get(ctx, "/nodes")
+	if err != nil {
+		return "", fmt.Errorf("failed to get nodes: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Node string `json:"node"`
+		} `json:"data"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode nodes response: %w", err)
+	}
+	
+	if len(result.Data) == 0 {
+		return "", fmt.Errorf("no nodes found")
+	}
+	
+	// Return the first (usually only) node name
+	nodeName := result.Data[0].Node
+	log.Debug().Str("nodeName", nodeName).Msg("PBS GetNodeName: found node name")
+	return nodeName, nil
+}
+
 // GetNodeStatus returns the status of the PBS node (CPU, memory, etc.)
 func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Msg("PBS GetNodeStatus: starting")

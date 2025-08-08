@@ -7,6 +7,7 @@ import Settings from './components/Settings/Settings';
 import { Alerts } from './pages/Alerts';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import NotificationContainer from './components/NotificationContainer';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
 import { UpdatesAPI } from './api/updates';
@@ -282,6 +283,7 @@ function App() {
         </div>
         </div>
         <ToastContainer />
+        <NotificationContainer />
       </WebSocketContext.Provider>
     </ErrorBoundary>
   );

@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -50,6 +51,7 @@ type Monitor struct {
 	alertManager   *alerts.Manager
 	notificationMgr *notifications.NotificationManager
 	configPersist  *config.ConfigPersistence
+	discoveryService *discovery.Service // Background discovery service
 	activePollCount int32 // Number of active polling operations
 	pollCounter    int64 // Counter for polling cycles
 	authFailures   map[string]int // Track consecutive auth failures per node
@@ -121,6 +123,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		alertManager:   alerts.NewManager(),
 		notificationMgr: notifications.NewNotificationManager(),
 		configPersist:  config.NewConfigPersistence(cfg.DataPath),
+		discoveryService: nil, // Will be initialized in Start()
 		authFailures:   make(map[string]int),
 		lastAuthAttempt: make(map[string]time.Time),
 	}
@@ -300,6 +303,15 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	log.Info().
 		Dur("pollingInterval", m.config.PollingInterval).
 		Msg("Starting monitoring loop")
+	
+	// Initialize and start discovery service
+	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, "auto")
+	if m.discoveryService != nil {
+		m.discoveryService.Start(ctx)
+		log.Info().Msg("Discovery service initialized and started")
+	} else {
+		log.Error().Msg("Failed to initialize discovery service")
+	}
 	
 	// Set up alert callbacks
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
@@ -1399,6 +1411,11 @@ func (m *Monitor) GetState() models.StateSnapshot {
 // GetStartTime returns the monitor start time
 func (m *Monitor) GetStartTime() time.Time {
 	return m.startTime
+}
+
+// GetDiscoveryService returns the discovery service
+func (m *Monitor) GetDiscoveryService() *discovery.Service {
+	return m.discoveryService
 }
 
 

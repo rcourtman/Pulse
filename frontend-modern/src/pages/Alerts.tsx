@@ -1412,10 +1412,10 @@ function DestinationsTab(props: DestinationsTabProps) {
         type: 'email'
         // No config - use saved backend config
       });
-      alert('Test email sent successfully! Check your inbox.');
+      showSuccess('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {
       console.error('Failed to send test email:', err);
-      alert(`Failed to send test email: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showError('Failed to send test email', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setTestingEmail(false);
     }
@@ -1425,9 +1425,9 @@ function DestinationsTab(props: DestinationsTabProps) {
     setTestingWebhook(webhookId);
     try {
       await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
-      alert('Test webhook sent successfully!');
+      showSuccess('Test webhook sent successfully!');
     } catch (err) {
-      alert(`Failed to send test webhook: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showError('Failed to send test webhook', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setTestingWebhook(null);
     }
@@ -2662,7 +2662,7 @@ function HistoryTab() {
                       console.log('Alert history cleared successfully');
                     } catch (err) {
                       console.error('Error clearing alert history:', err);
-                      alert('Error clearing alert history. Please check your connection and try again.');
+                      showError('Error clearing alert history', 'Please check your connection and try again.');
                     }
                   }
                 }}

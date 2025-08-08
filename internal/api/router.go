@@ -56,7 +56,7 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	alertHandlers := NewAlertHandlers(r.monitor)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
-	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc)
+	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
 	
 	// API routes
@@ -223,6 +223,39 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
+	
+	// Discovery route
+	r.mux.HandleFunc("/api/discover", configHandlers.HandleDiscoverServers)
+	
+	// Setup script route
+	r.mux.HandleFunc("/api/setup-script", configHandlers.HandleSetupScript)
+	
+	// Auto-register route for setup scripts
+	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
+	
+	// Test endpoint for WebSocket notifications
+	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		
+		// Send a test auto-registration notification
+		r.wsHub.BroadcastMessage(websocket.Message{
+			Type: "node_auto_registered",
+			Data: map[string]interface{}{
+				"type":     "pve",
+				"host":     "test-node.example.com",
+				"name":     "Test Node",
+				"tokenId":  "test-token",
+				"hasToken": true,
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
+	})
 	
 	// Alert routes
 	r.mux.HandleFunc("/api/alerts/", alertHandlers.HandleAlerts)
