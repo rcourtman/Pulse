@@ -47,7 +47,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setFormData({
         name: node.name || '',
         host: node.host || '',
-        authType: node.user ? 'password' : 'token',
+        authType: node.tokenName ? 'token' : 'password',
         user: node.user || '',
         password: '', // Don't show existing password
         tokenName: node.tokenName || '',
