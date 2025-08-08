@@ -274,7 +274,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 			TokenValue:  pbsInst.TokenValue,
 			Fingerprint: pbsInst.Fingerprint,
 			VerifySSL:   pbsInst.VerifySSL,
-			Timeout:     cfg.ConnectionTimeout,
+			Timeout:     60 * time.Second, // Very generous timeout for slow PBS servers
 		})
 		if err != nil {
 			monErr := errors.WrapConnectionError("create_pbs_client", pbsInst.Name, err)
@@ -374,6 +374,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("nodes", len(state.Nodes)).
 				Int("vms", len(state.VMs)).
 				Int("containers", len(state.Containers)).
+				Int("pbs", len(state.PBSInstances)).
 				Int("pbsBackups", len(state.PBSBackups)).
 				Msg("Broadcasting state update (ticker)")
 			wsHub.BroadcastState(state)
@@ -1204,10 +1205,15 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	for _, cfg := range m.config.PBSInstances {
 		if cfg.Name == instanceName {
 			instanceCfg = &cfg
+			log.Debug().
+				Str("instance", instanceName).
+				Bool("monitorDatastores", cfg.MonitorDatastores).
+				Msg("Found PBS instance config")
 			break
 		}
 	}
 	if instanceCfg == nil {
+		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
 		return
 	}
 
@@ -1228,6 +1234,12 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// Reset auth failures on successful connection
 	m.resetAuthFailures(instanceName, "pbs")
 	m.state.SetConnectionHealth("pbs-"+instanceName, true)
+	
+	log.Debug().
+		Str("instance", instanceName).
+		Str("version", version.Version).
+		Bool("monitorDatastores", instanceCfg.MonitorDatastores).
+		Msg("PBS version retrieved successfully")
 
 	pbsInst := models.PBSInstance{
 		ID:               "pbs-" + instanceName,
@@ -1238,21 +1250,78 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		ConnectionHealth: "healthy",
 		LastSeen:         time.Now(),
 	}
+	
+	// Get node status (CPU, memory, etc.)
+	// Note: This requires Sys.Audit permission on PBS which read-only tokens often don't have
+	nodeStatus, err := client.GetNodeStatus(ctx)
+	if err != nil {
+		// Log as debug instead of error since this is often a permission issue
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
+	} else {
+		pbsInst.CPU = nodeStatus.CPU
+		if nodeStatus.Memory.Total > 0 {
+			pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
+			pbsInst.MemoryUsed = nodeStatus.Memory.Used
+			pbsInst.MemoryTotal = nodeStatus.Memory.Total
+		}
+		pbsInst.Uptime = nodeStatus.Uptime
+		
+		log.Debug().
+			Str("instance", instanceName).
+			Float64("cpu", pbsInst.CPU).
+			Float64("memory", pbsInst.Memory).
+			Int64("uptime", pbsInst.Uptime).
+			Msg("PBS node status retrieved")
+	}
 
 	// Poll datastores if enabled
+	log.Debug().Bool("monitorDatastores", instanceCfg.MonitorDatastores).Str("instance", instanceName).Msg("Checking if datastore monitoring is enabled")
 	if instanceCfg.MonitorDatastores {
 		datastores, err := client.GetDatastores(ctx)
 		if err != nil {
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get datastores")
 		} else {
+			log.Info().
+				Str("instance", instanceName).
+				Int("count", len(datastores)).
+				Msg("Got PBS datastores")
+			
 			for _, ds := range datastores {
+				// Use whichever fields are populated
+				total := ds.Total
+				if total == 0 && ds.TotalSpace > 0 {
+					total = ds.TotalSpace
+				}
+				used := ds.Used
+				if used == 0 && ds.UsedSpace > 0 {
+					used = ds.UsedSpace
+				}
+				avail := ds.Avail
+				if avail == 0 && ds.AvailSpace > 0 {
+					avail = ds.AvailSpace
+				}
+				
+				// If still 0, try to calculate from each other
+				if total == 0 && used > 0 && avail > 0 {
+					total = used + avail
+				}
+				
+				log.Debug().
+					Str("store", ds.Store).
+					Int64("total", total).
+					Int64("used", used).
+					Int64("avail", avail).
+					Int64("orig_total", ds.Total).
+					Int64("orig_total_space", ds.TotalSpace).
+					Msg("PBS datastore details")
+				
 				modelDS := models.PBSDatastore{
 					Name:   ds.Store,
-					Total:  ds.Total,
-					Used:   ds.Used,
-					Free:   ds.Avail,
-					Usage:  safePercentage(float64(ds.Used), float64(ds.Total)),
+					Total:  total,
+					Used:   used,
+					Free:   avail,
+					Usage:  safePercentage(float64(used), float64(total)),
 					Status: "available",
 				}
 				
@@ -1300,8 +1369,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Update state
-	m.state.UpdatePBSInstances([]models.PBSInstance{pbsInst})
+	// Update state - merge with existing instances
+	m.state.UpdatePBSInstance(pbsInst)
+	log.Info().
+		Str("instance", instanceName).
+		Str("id", pbsInst.ID).
+		Int("datastores", len(pbsInst.Datastores)).
+		Msg("PBS instance updated in state")
 	
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
@@ -1387,10 +1461,10 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 			continue
 		}
 		
-		// For each storage that can contain backups
+		// For each storage that can contain backups or templates
 		for _, storage := range storages {
-			// Check if storage supports backup content
-			if !strings.Contains(storage.Content, "backup") {
+			// Check if storage supports backup or template content
+			if !strings.Contains(storage.Content, "backup") && !strings.Contains(storage.Content, "vztmpl") && !strings.Contains(storage.Content, "iso") {
 				continue
 			}
 			
@@ -1407,15 +1481,19 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 			
 			// Convert to models
 			for _, content := range contents {
-				// Skip if we've already seen this backup (shared storage duplicate)
+				// Skip if we've already seen this item (shared storage duplicate)
 				if seenVolids[content.Volid] {
 					continue
 				}
 				seenVolids[content.Volid] = true
 				
-				// Determine type from volid
+				// Determine type from content type and volid
 				backupType := "unknown"
-				if strings.Contains(content.Volid, "qemu") {
+				if content.Content == "vztmpl" {
+					backupType = "vztmpl"
+				} else if content.Content == "iso" {
+					backupType = "iso"
+				} else if strings.Contains(content.Volid, "qemu") {
 					backupType = "qemu"
 				} else if strings.Contains(content.Volid, "lxc") {
 					backupType = "lxc"

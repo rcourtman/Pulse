@@ -304,10 +304,17 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Parse PBS authentication details
 		pbsUser := req.User
-		pbsTokenName := req.TokenName
+		pbsTokenName := ""
 		
-		// Handle different token input formats
-		if req.TokenName != "" && req.TokenValue != "" {
+		// Only use token if both TokenName and TokenValue are provided
+		// If password is provided, clear any token fields to avoid confusion
+		if req.Password != "" {
+			// Using password authentication - ensure token fields are empty
+			pbsTokenName = ""
+			req.TokenValue = ""
+		} else if req.TokenName != "" && req.TokenValue != "" {
+			// Using token authentication
+			pbsTokenName = req.TokenName
 			// Check if token name contains the full format (user@realm!tokenname)
 			if strings.Contains(req.TokenName, "!") {
 				parts := strings.Split(req.TokenName, "!")

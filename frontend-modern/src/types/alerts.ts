@@ -57,6 +57,7 @@ export interface AlertConfig {
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;
+  timeThreshold?: number;
   notifications?: {
     email?: {
       server: string;

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -330,6 +331,37 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+	
+	// Fix for bug where TokenName was incorrectly set when using password auth
+	// If a PBS instance has both Password and TokenName, clear the TokenName
+	for i := range config.PBSInstances {
+		if config.PBSInstances[i].Password != "" && config.PBSInstances[i].TokenName != "" {
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Msg("Fixing PBS config: clearing TokenName since Password is set")
+			config.PBSInstances[i].TokenName = ""
+			config.PBSInstances[i].TokenValue = ""
+		}
+		
+		// Fix for missing port in PBS host
+		host := config.PBSInstances[i].Host
+		if host != "" && !strings.Contains(host, ":8007") {
+			// Add default PBS port if missing
+			if strings.HasPrefix(host, "https://") {
+				config.PBSInstances[i].Host = host + ":8007"
+			} else if strings.HasPrefix(host, "http://") {
+				config.PBSInstances[i].Host = host + ":8007"
+			} else if !strings.Contains(host, "://") {
+				// No protocol specified, add https and port
+				config.PBSInstances[i].Host = "https://" + host + ":8007"
+			}
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Str("oldHost", host).
+				Str("newHost", config.PBSInstances[i].Host).
+				Msg("Fixed PBS host by adding default port 8007")
+		}
 	}
 	
 	log.Info().Str("file", c.nodesFile).

@@ -170,6 +170,9 @@ export function Alerts() {
         if (config.storageDefault) {
           setStorageDefault(getTriggerValue(config.storageDefault) || 85);
         }
+        if (config.timeThreshold !== undefined) {
+          setTimeThreshold(config.timeThreshold);
+        }
         if (config.overrides) {
           // Convert overrides object to array format
           const overridesList: Override[] = [];
@@ -310,6 +313,7 @@ export function Alerts() {
   });
 
   const [storageDefault, setStorageDefault] = createSignal(85);
+  const [timeThreshold, setTimeThreshold] = createSignal(0);
   
   const tabs: { id: AlertTab; label: string; icon: string }[] = [
     { 
@@ -394,6 +398,7 @@ export function Alerts() {
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
                       hysteresisMargin: 5.0,
+                      timeThreshold: timeThreshold() || 0,
                       overrides: overrides().reduce((acc, o) => {
                         // Convert thresholds to hysteresis format
                         const hysteresisThresholds: AlertThresholds = {};
@@ -519,6 +524,8 @@ export function Alerts() {
               setNodeDefaults={setNodeDefaults}
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
+              timeThreshold={timeThreshold}
+              setTimeThreshold={setTimeThreshold}
               activeAlerts={activeAlerts}
               setHasUnsavedChanges={setHasUnsavedChanges}
             />
@@ -1076,10 +1083,12 @@ interface ThresholdsTabProps {
   guestDefaults: Record<string, number>;
   nodeDefaults: Record<string, number>;
   storageDefault: () => number;
+  timeThreshold: () => number;
   overrides: () => Override[];
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
+  setTimeThreshold: (value: number) => void;
   setOverrides: (value: Override[]) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
@@ -1088,6 +1097,35 @@ interface ThresholdsTabProps {
 function ThresholdsTab(props: ThresholdsTabProps) {
   return (
     <div class="space-y-8">
+      {/* Time Threshold */}
+      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Time Threshold</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Require thresholds to be exceeded for a minimum duration before triggering alerts (helps prevent false positives from brief spikes)
+        </p>
+        <div class="flex items-center gap-4">
+          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Time threshold (seconds):
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="300"
+            value={props.timeThreshold()}
+            onInput={(e) => {
+              props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
+              props.setHasUnsavedChanges(true);
+            }}
+            class="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                   bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200
+                   focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400"
+          />
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {props.timeThreshold() === 0 ? '(disabled)' : `Wait ${props.timeThreshold()}s before alerting`}
+          </span>
+        </div>
+      </div>
+      
       {/* Step 1: Global Default Thresholds */}
       <div>
         <div class="flex items-center justify-between mb-6">

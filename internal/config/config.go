@@ -194,7 +194,7 @@ func Load() (*Config, error) {
 	case "error":
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.SetGlobalLevel(zerolog.DebugLevel) // Temporarily set to debug to see PBS responses
 	}
 	
 	// Validate configuration

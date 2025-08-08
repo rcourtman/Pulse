@@ -40,7 +40,7 @@ RUN npm run build
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata su-exec
 
 WORKDIR /app
 
@@ -52,6 +52,10 @@ COPY --from=backend-builder /app/VERSION .
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend-modern/dist ./frontend-modern/dist
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Service files not needed in container
 
@@ -65,15 +69,16 @@ EXPOSE 7655
 # Only PULSE_DATA_DIR is used - all node config is done via web UI
 ENV PULSE_DATA_DIR=/data
 
-# Create non-root user
-RUN adduser -D -u 1000 pulse && \
+# Create default user (will be adjusted by entrypoint if PUID/PGID are set)
+RUN adduser -D -u 1000 -g 1000 pulse && \
     chown -R pulse:pulse /app /etc/pulse /data
-
-USER pulse
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:7655 || exit 1
+
+# Use entrypoint script to handle UID/GID
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Run the binary
 CMD ["./pulse"]

@@ -106,6 +106,11 @@ export interface PBSInstance {
   host: string;
   status: string;
   version: string;
+  cpu: number;
+  memory: number;
+  memoryUsed: number;
+  memoryTotal: number;
+  uptime: number;
   datastores: PBSDatastore[];
   backupJobs: PBSBackupJob[];
   syncJobs: PBSSyncJob[];
