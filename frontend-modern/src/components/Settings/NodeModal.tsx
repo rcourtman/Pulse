@@ -484,7 +484,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <li>Automatically registers the node with Pulse</li>
                                 </ul>
                                 <p class="text-green-600 dark:text-green-400 text-xs mt-2">
-                                  <strong>✨ New:</strong> The script now automatically configures Pulse - no manual token copying needed!
+                                  The script automatically configures Pulse - no manual token copying needed!
                                 </p>
                                 <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
                                   <strong>Permissions granted:</strong> PVEAuditor (read-only) on root
@@ -691,7 +691,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <li>Automatically registers the server with Pulse</li>
                                   </ul>
                                   <p class="text-green-600 dark:text-green-400 text-xs mt-2">
-                                    <strong>✨ New:</strong> The script now automatically configures Pulse - no manual token copying needed!
+                                    The script automatically configures Pulse - no manual token copying needed!
                                   </p>
                                 </div>
                               </Show>
