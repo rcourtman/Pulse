@@ -162,23 +162,6 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Auto-generate name if not provided
-	if req.Name == "" {
-		// Extract hostname from URL
-		host := req.Host
-		if strings.HasPrefix(host, "http://") {
-			host = strings.TrimPrefix(host, "http://")
-		}
-		if strings.HasPrefix(host, "https://") {
-			host = strings.TrimPrefix(host, "https://")
-		}
-		// Remove port
-		if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
-			host = host[:colonIndex]
-		}
-		req.Name = host
-	}
-
 	if req.Type != "pve" && req.Type != "pbs" {
 		http.Error(w, "Invalid node type", http.StatusBadRequest)
 		return
@@ -206,6 +189,23 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 					host += ":8006"
 				}
 			}
+		}
+		
+		// Auto-generate name if not provided
+		if req.Name == "" {
+			// Extract hostname from URL
+			nameHost := host
+			if strings.HasPrefix(nameHost, "http://") {
+				nameHost = strings.TrimPrefix(nameHost, "http://")
+			}
+			if strings.HasPrefix(nameHost, "https://") {
+				nameHost = strings.TrimPrefix(nameHost, "https://")
+			}
+			// Remove port
+			if colonIndex := strings.Index(nameHost, ":"); colonIndex != -1 {
+				nameHost = nameHost[:colonIndex]
+			}
+			req.Name = nameHost
 		}
 		
 		// Create a temporary client to check if it's part of a cluster
@@ -302,6 +302,33 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				Msg("Added Proxmox cluster with auto-discovered endpoints")
 		}
 	} else {
+		// PBS node - ensure host has protocol and port
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		// Add default PBS port if missing
+		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+			host = host + ":8007"
+		}
+		
+		// Auto-generate name if not provided
+		if req.Name == "" {
+			// Extract hostname from URL
+			nameHost := host
+			if strings.HasPrefix(nameHost, "http://") {
+				nameHost = strings.TrimPrefix(nameHost, "http://")
+			}
+			if strings.HasPrefix(nameHost, "https://") {
+				nameHost = strings.TrimPrefix(nameHost, "https://")
+			}
+			// Remove port
+			if colonIndex := strings.Index(nameHost, ":"); colonIndex != -1 {
+				nameHost = nameHost[:colonIndex]
+			}
+			req.Name = nameHost
+		}
+		
 		// Parse PBS authentication details
 		var pbsUser string
 		var pbsPassword string
@@ -327,7 +354,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		
 		pbs := config.PBSInstance{
 			Name:              req.Name,
-			Host:              req.Host,
+			Host:              host,
 			User:              pbsUser,
 			Password:          pbsPassword,
 			TokenName:         pbsTokenName,
@@ -639,7 +666,16 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name
-		pbs.Host = req.Host
+		
+		// Ensure PBS host has protocol and port
+		host := req.Host
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+			host = host + ":8007"
+		}
+		pbs.Host = host
 		
 		// Determine authentication method and clear the unused fields
 		if req.TokenName != "" && req.TokenValue != "" {
