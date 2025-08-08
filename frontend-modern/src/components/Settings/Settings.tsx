@@ -1,12 +1,14 @@
-import { Component, createSignal, onMount, For, Show, createEffect } from 'solid-js';
+import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
+import { DiscoveryModal } from './DiscoveryModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
+import { eventBus } from '@/stores/events';
 
 type SettingsTab = 'pve' | 'pbs' | 'system' | 'security' | 'diagnostics';
 
@@ -23,7 +25,9 @@ const Settings: Component = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
+  const [showDiscoveryModal, setShowDiscoveryModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
+  const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
@@ -95,8 +99,69 @@ const Settings: Component = () => {
     }
   });
   
+  // Function to load nodes
+  const loadNodes = async () => {
+    try {
+      const nodesList = await NodesAPI.getNodes();
+      // Add status and other UI fields
+      const nodesWithStatus = nodesList.map(node => ({
+        ...node,
+        // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+        hasPassword: node.hasPassword ?? !!node.password,
+        hasToken: node.hasToken ?? !!node.tokenValue,
+        status: node.status || 'disconnected' as const
+      }));
+      setNodes(nodesWithStatus);
+    } catch (error) {
+      console.error('Failed to load nodes:', error);
+    }
+  };
+
   // Load nodes and system settings on mount
   onMount(async () => {
+    // Subscribe to events
+    const unsubscribeAutoRegister = eventBus.on('node_auto_registered', () => {
+      console.log('[Settings] Node auto-registered, closing modal and refreshing nodes');
+      // Close any open modals
+      setShowNodeModal(false);
+      setShowDiscoveryModal(false);
+      setEditingNode(null);
+      // Reload nodes
+      loadNodes();
+    });
+    
+    const unsubscribeRefresh = eventBus.on('refresh_nodes', () => {
+      console.log('[Settings] Refreshing nodes');
+      loadNodes();
+    });
+    
+    // Poll for node updates when modal is open
+    let pollInterval: ReturnType<typeof setInterval> | undefined;
+    createEffect(() => {
+      if (showNodeModal() || showDiscoveryModal()) {
+        // Start polling every 3 seconds when modal is open
+        pollInterval = setInterval(() => {
+          console.log('[Settings] Polling for node updates...');
+          loadNodes();
+        }, 3000);
+      } else {
+        // Stop polling when modal is closed
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = undefined;
+        }
+      }
+    });
+    
+    // Clean up on unmount
+    onCleanup(() => {
+      unsubscribeAutoRegister();
+      unsubscribeRefresh();
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    });
+    
     try {
       // Load security status
       try {
@@ -110,16 +175,7 @@ const Settings: Component = () => {
       }
       
       // Load nodes
-      const nodesList = await NodesAPI.getNodes();
-      // Add status and other UI fields
-      const nodesWithStatus = nodesList.map(node => ({
-        ...node,
-        // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-        hasPassword: node.hasPassword ?? !!node.password,
-        hasToken: node.hasToken ?? !!node.tokenValue,
-        status: node.status || 'disconnected' as const
-      }));
-      setNodes(nodesWithStatus);
+      await loadNodes();
       
       // Load system settings
       try {
@@ -425,19 +481,35 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
-                <button 
-                  onClick={() => {
-                    setEditingNode(null);
-                    setShowNodeModal(true);
-                  }}
-                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  Add PVE Node
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrentNodeType('pve');
+                      setShowDiscoveryModal(true);
+                    }}
+                    class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    Discover
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingNode(null);
+                      setCurrentNodeType('pve');
+                      setShowNodeModal(true);
+                    }}
+                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add PVE Node
+                  </button>
+                </div>
               </div>
               
               <div class="grid gap-4">
@@ -446,7 +518,8 @@ const Settings: Component = () => {
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
                       <div class="flex items-start justify-between">
                         <div class="flex items-start gap-3">
-                          <div class={`w-3 h-3 rounded-full mt-1.5 ${
+                          <div class="relative">
+                            <div class={`w-3 h-3 rounded-full mt-1.5 ${
                             (() => {
                               // Find the corresponding node in the WebSocket state
                               const stateNode = state.nodes.find(n => n.instance === node.name);
@@ -462,7 +535,8 @@ const Settings: Component = () => {
                               return 'bg-gray-400';
                             })()
                           }`}></div>
-                          <div>
+                          </div>
+                          <div class="flex-1">
                             <h4 class="font-medium text-gray-900 dark:text-gray-100">{node.name}</h4>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{node.host}</p>
                             <div class="flex flex-wrap gap-2 mt-2">
@@ -473,21 +547,61 @@ const Settings: Component = () => {
                               {node.type === 'pve' && 'monitorContainers' in node && node.monitorContainers && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Containers</span>}
                               {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Storage</span>}
                               {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Backups</span>}
+                              <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <circle cx="4" cy="12" r="2"/>
+                                    <circle cx="20" cy="12" r="2"/>
+                                    <line x1="7" y1="12" x2="9" y2="12"/>
+                                    <line x1="15" y1="12" x2="17" y2="12"/>
+                                  </svg>
+                                  Cluster
+                                </span>
+                              </Show>
+                              <Show when={node.type === 'pve' && (!('isCluster' in node) || !node.isCluster)}>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-medium rounded">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                                  </svg>
+                                  Standalone
+                                </span>
+                              </Show>
                             </div>
                             <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                              <div class="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                                <div class="font-medium mb-1">Cluster: {'clusterName' in node ? node.clusterName : 'Unknown'}</div>
-                                <div class="flex flex-wrap gap-1">
+                              <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center gap-2 mb-2">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="text-gray-600 dark:text-gray-400">
+                                    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <line x1="7" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2"/>
+                                    <line x1="15" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="2"/>
+                                  </svg>
+                                  <span class="font-semibold text-gray-700 dark:text-gray-300">
+                                    {'clusterName' in node ? node.clusterName : 'Unknown'} Cluster
+                                  </span>
+                                  <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full ml-auto">
+                                    {'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints.length : 0} nodes
+                                  </span>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <For each={'clusterEndpoints' in node ? node.clusterEndpoints : []}>
                                     {(endpoint) => (
-                                      <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                                        {endpoint.NodeName} ({endpoint.IP})
-                                      </span>
+                                      <div class="flex items-center gap-2 text-xs bg-white dark:bg-gray-900 px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700">
+                                        <div class={`w-2 h-2 rounded-full flex-shrink-0 ${endpoint.Online ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">{endpoint.NodeName}</span>
+                                        <span class="text-gray-500 dark:text-gray-500 ml-auto">{endpoint.IP}</span>
+                                      </div>
                                     )}
                                   </For>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-500 italic">
-                                  Pulse will automatically failover between cluster nodes
+                                <p class="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                  </svg>
+                                  Automatic failover enabled between cluster nodes
                                 </p>
                               </div>
                             </Show>
@@ -545,19 +659,35 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
-                <button 
-                  onClick={() => {
-                    setEditingNode(null);
-                    setShowNodeModal(true);
-                  }}
-                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  Add PBS Node
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrentNodeType('pbs');
+                      setShowDiscoveryModal(true);
+                    }}
+                    class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    Discover
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingNode(null);
+                      setCurrentNodeType('pbs');
+                      setShowNodeModal(true);
+                    }}
+                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add PBS Node
+                  </button>
+                </div>
               </div>
               
               <div class="grid gap-4">
@@ -1329,8 +1459,15 @@ docker run -d \
           setShowNodeModal(false);
           setEditingNode(null);
         }}
-        nodeType={activeTab() === 'pve' ? 'pve' : 'pbs'}
+        nodeType={currentNodeType()}
         editingNode={editingNode() ?? undefined}
+        showBackToDiscovery={!showDiscoveryModal() && editingNode()?.id === ''}
+        onBackToDiscovery={() => {
+          setShowNodeModal(false);
+          setEditingNode(null);
+          // Small delay to ensure modal transitions properly
+          setTimeout(() => setShowDiscoveryModal(true), 100);
+        }}
         onSave={async (nodeData) => {
           try {
             if (editingNode()) {
@@ -1371,6 +1508,35 @@ docker run -d \
             setEditingNode(null);
           } catch (error) {
             showError(error instanceof Error ? error.message : 'Operation failed');
+          }
+        }}
+      />
+      
+      {/* Discovery Modal */}
+      <DiscoveryModal
+        isOpen={showDiscoveryModal()}
+        onClose={() => setShowDiscoveryModal(false)}
+        onAddServers={(servers) => {
+          // Single server selected from discovery
+          if (servers.length > 0) {
+            const server = servers[0];
+            const nodeData: Partial<NodeConfig> = {
+              type: server.type,
+              name: server.hostname || server.ip,
+              host: `https://${server.ip}:${server.port}`,
+              verifySSL: false
+            };
+            
+            setEditingNode(null);
+            setCurrentNodeType(server.type);
+            setEditingNode({
+              ...nodeData,
+              id: '',
+              status: 'disconnected'
+            } as NodeConfigWithStatus);
+            setShowNodeModal(true);
+            // Close discovery modal when server is selected
+            setShowDiscoveryModal(false);
           }
         }}
       />
