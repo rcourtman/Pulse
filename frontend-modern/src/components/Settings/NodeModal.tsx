@@ -425,7 +425,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </label>
                                   <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">
                                     {formData().enableBackupManagement 
-                                      ? 'Required to read backup files and display them in the Backups tab (Proxmox API limitation)'
+                                      ? 'Required to read PVE backup files and display them in the Backups tab (Proxmox API limitation)'
                                       : 'Backups tab will not show PVE backups without these permissions'}
                                   </p>
                                 </div>
@@ -488,7 +488,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </p>
                                 <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
                                   <strong>Permissions granted:</strong> PVEAuditor (read-only) on root
-                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin on /storage (needed to read backup files)'}
+                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin on /storage (needed to read PVE backup files)'}
                                 </p>
                               </div>
                             </Show>
