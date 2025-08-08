@@ -303,43 +303,35 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Parse PBS authentication details
-		pbsUser := req.User
-		pbsTokenName := ""
+		var pbsUser string
+		var pbsPassword string
+		var pbsTokenName string
+		var pbsTokenValue string
 		
-		// Only use token if both TokenName and TokenValue are provided
-		// If password is provided, clear any token fields to avoid confusion
-		if req.Password != "" {
-			// Using password authentication - ensure token fields are empty
-			pbsTokenName = ""
-			req.TokenValue = ""
-		} else if req.TokenName != "" && req.TokenValue != "" {
-			// Using token authentication
+		// Determine authentication method
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Using token authentication - don't store user/password
 			pbsTokenName = req.TokenName
-			// Check if token name contains the full format (user@realm!tokenname)
-			if strings.Contains(req.TokenName, "!") {
-				parts := strings.Split(req.TokenName, "!")
-				if len(parts) == 2 {
-					// Extract user from token ID if not already provided
-					if pbsUser == "" {
-						pbsUser = parts[0]
-					}
-					pbsTokenName = parts[1]
-				}
+			pbsTokenValue = req.TokenValue
+			// Token name might contain the full format (user@realm!tokenname)
+			// The backend PBS client will parse this
+		} else if req.Password != "" {
+			// Using password authentication - don't store token fields
+			pbsUser = req.User
+			pbsPassword = req.Password
+			// Ensure user has realm for PBS
+			if pbsUser != "" && !strings.Contains(pbsUser, "@") {
+				pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 			}
-		}
-		
-		// Ensure user has realm for PBS (if using user/password or token with user)
-		if pbsUser != "" && !strings.Contains(pbsUser, "@") {
-			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
 		
 		pbs := config.PBSInstance{
 			Name:              req.Name,
 			Host:              req.Host,
 			User:              pbsUser,
-			Password:          req.Password,
+			Password:          pbsPassword,
 			TokenName:         pbsTokenName,
-			TokenValue:        req.TokenValue,
+			TokenValue:        pbsTokenValue,
 			Fingerprint:       req.Fingerprint,
 			VerifySSL:         req.VerifySSL,
 			MonitorDatastores:  req.MonitorDatastores,
@@ -648,7 +640,34 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name
 		pbs.Host = req.Host
-		if req.User != "" {
+		
+		// Determine authentication method and clear the unused fields
+		if req.TokenName != "" && req.TokenValue != "" {
+			// Using token authentication - clear user/password
+			pbs.User = ""
+			pbs.Password = ""
+			pbs.TokenName = req.TokenName
+			pbs.TokenValue = req.TokenValue
+		} else if req.TokenName != "" {
+			// Token name provided without new value - keep existing token value
+			pbs.User = ""
+			pbs.Password = ""
+			pbs.TokenName = req.TokenName
+		} else if req.Password != "" {
+			// Using password authentication - clear token fields
+			pbs.TokenName = ""
+			pbs.TokenValue = ""
+			pbs.Password = req.Password
+			// Ensure user has realm for PBS
+			pbsUser := req.User
+			if req.User != "" && !strings.Contains(req.User, "@") {
+				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
+			}
+			pbs.User = pbsUser
+		} else if req.User != "" {
+			// User provided without password - keep existing password if any
+			pbs.TokenName = ""
+			pbs.TokenValue = ""
 			// Ensure user has realm for PBS
 			pbsUser := req.User
 			if !strings.Contains(req.User, "@") {
@@ -656,15 +675,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			}
 			pbs.User = pbsUser
 		}
-		if req.Password != "" {
-			pbs.Password = req.Password
-		}
-		if req.TokenName != "" {
-			pbs.TokenName = req.TokenName
-		}
-		if req.TokenValue != "" {
-			pbs.TokenValue = req.TokenValue
-		}
+		
 		pbs.Fingerprint = req.Fingerprint
 		pbs.VerifySSL = req.VerifySSL
 		pbs.MonitorDatastores = req.MonitorDatastores
