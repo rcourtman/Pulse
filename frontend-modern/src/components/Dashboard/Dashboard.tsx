@@ -1,5 +1,5 @@
 import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
-import type { VM, Container, Node } from '@/types/api';
+import type { VM, Container, Node, PBSInstance } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
 import { useWebSocket } from '@/App';
@@ -13,6 +13,7 @@ interface DashboardProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
+  pbs?: PBSInstance[];
 }
 
 type ViewMode = 'all' | 'vm' | 'lxc';

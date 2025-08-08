@@ -166,6 +166,7 @@ type AlertConfig struct {
 	MinimumDelta      float64                     `json:"minimumDelta"`      // Minimum % change to trigger new alert
 	SuppressionWindow int                         `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
 	HysteresisMargin  float64                     `json:"hysteresisMargin"`  // Default margin for legacy thresholds
+	TimeThreshold     int                         `json:"timeThreshold"`     // Seconds that threshold must be exceeded before triggering
 }
 
 // Manager handles alert monitoring and state
@@ -185,6 +186,8 @@ type Manager struct {
 	// Recently resolved alerts (kept for 5 minutes)
 	recentlyResolved map[string]*ResolvedAlert
 	resolvedMutex    sync.RWMutex
+	// Time threshold tracking
+	pendingAlerts    map[string]time.Time  // Track when thresholds were first exceeded
 }
 
 // NewManager creates a new alert manager
@@ -198,6 +201,7 @@ func NewManager() *Manager {
 		recentAlerts:   make(map[string]*Alert),
 		suppressedUntil: make(map[string]time.Time),
 		recentlyResolved: make(map[string]*ResolvedAlert),
+		pendingAlerts:  make(map[string]time.Time),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -499,6 +503,39 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	if value >= threshold.Trigger {
 		// Threshold exceeded
 		if !exists {
+			// Check if we have a time threshold configured
+			if m.config.TimeThreshold > 0 {
+				// Check if this threshold was already pending
+				if pendingTime, isPending := m.pendingAlerts[alertID]; isPending {
+					// Check if enough time has passed
+					if time.Since(pendingTime) >= time.Duration(m.config.TimeThreshold)*time.Second {
+						// Time threshold met, proceed with alert
+						delete(m.pendingAlerts, alertID)
+						log.Debug().
+							Str("alertID", alertID).
+							Int("timeThreshold", m.config.TimeThreshold).
+							Dur("elapsed", time.Since(pendingTime)).
+							Msg("Time threshold met, triggering alert")
+					} else {
+						// Still waiting for time threshold
+						log.Debug().
+							Str("alertID", alertID).
+							Int("timeThreshold", m.config.TimeThreshold).
+							Dur("elapsed", time.Since(pendingTime)).
+							Msg("Threshold exceeded but waiting for time threshold")
+						return
+					}
+				} else {
+					// First time exceeding threshold, start tracking
+					m.pendingAlerts[alertID] = time.Now()
+					log.Debug().
+						Str("alertID", alertID).
+						Int("timeThreshold", m.config.TimeThreshold).
+						Msg("Threshold exceeded, starting time threshold tracking")
+					return
+				}
+			}
+			
 			// Check for recent similar alert to prevent spam
 			if recent, hasRecent := m.recentAlerts[alertID]; hasRecent {
 				// Check minimum delta
@@ -601,58 +638,69 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				existingAlert.Level = AlertLevelWarning
 			}
 		}
-	} else if exists {
-		// Use hysteresis for resolution - only resolve if below clear threshold
-		clearThreshold := threshold.Clear
-		if clearThreshold <= 0 {
-			clearThreshold = threshold.Trigger // Fallback to trigger if clear not set
+	} else {
+		// Value is below trigger threshold
+		// Clear any pending alert for this metric
+		if _, isPending := m.pendingAlerts[alertID]; isPending {
+			delete(m.pendingAlerts, alertID)
+			log.Debug().
+				Str("alertID", alertID).
+				Msg("Value dropped below threshold, clearing pending alert")
 		}
 		
-		if value <= clearThreshold {
-			// Threshold cleared with hysteresis - auto resolve
-			resolvedAlert := &ResolvedAlert{
-				Alert:        existingAlert,
-				ResolvedTime: time.Now(),
+		if exists {
+			// Use hysteresis for resolution - only resolve if below clear threshold
+			clearThreshold := threshold.Clear
+			if clearThreshold <= 0 {
+				clearThreshold = threshold.Trigger // Fallback to trigger if clear not set
 			}
 			
-			// Remove from active alerts
-			delete(m.activeAlerts, alertID)
-			
-			// Save active alerts after resolution
-			go func() {
-				if err := m.SaveActiveAlerts(); err != nil {
-					log.Error().Err(err).Msg("Failed to save active alerts after resolution")
+			if value <= clearThreshold {
+				// Threshold cleared with hysteresis - auto resolve
+				resolvedAlert := &ResolvedAlert{
+					Alert:        existingAlert,
+					ResolvedTime: time.Now(),
 				}
-			}()
-			
-			// Add to recently resolved
-			m.resolvedMutex.Lock()
-			m.recentlyResolved[alertID] = resolvedAlert
-			m.resolvedMutex.Unlock()
-			
-			log.Info().
-				Str("alertID", alertID).
-				Int("totalRecentlyResolved", len(m.recentlyResolved)).
-				Msg("Added alert to recently resolved")
-			
-			// Schedule cleanup after 5 minutes
-			go func() {
-				time.Sleep(5 * time.Minute)
+				
+				// Remove from active alerts
+				delete(m.activeAlerts, alertID)
+				
+				// Save active alerts after resolution
+				go func() {
+					if err := m.SaveActiveAlerts(); err != nil {
+						log.Error().Err(err).Msg("Failed to save active alerts after resolution")
+					}
+				}()
+				
+				// Add to recently resolved
 				m.resolvedMutex.Lock()
-				delete(m.recentlyResolved, alertID)
+				m.recentlyResolved[alertID] = resolvedAlert
 				m.resolvedMutex.Unlock()
-			}()
-			
-			log.Info().
-				Str("resource", resourceName).
-				Str("metric", metricType).
-				Float64("value", value).
-				Float64("clearThreshold", clearThreshold).
-				Bool("wasAcknowledged", existingAlert.Acknowledged).
-				Msg("Alert resolved with hysteresis")
+				
+				log.Info().
+					Str("alertID", alertID).
+					Int("totalRecentlyResolved", len(m.recentlyResolved)).
+					Msg("Added alert to recently resolved")
+				
+				// Schedule cleanup after 5 minutes
+				go func() {
+					time.Sleep(5 * time.Minute)
+					m.resolvedMutex.Lock()
+					delete(m.recentlyResolved, alertID)
+					m.resolvedMutex.Unlock()
+				}()
+				
+				log.Info().
+					Str("resource", resourceName).
+					Str("metric", metricType).
+					Float64("value", value).
+					Float64("clearThreshold", clearThreshold).
+					Bool("wasAcknowledged", existingAlert.Acknowledged).
+					Msg("Alert resolved with hysteresis")
 
-			if m.onResolved != nil {
-				go m.onResolved(alertID)
+				if m.onResolved != nil {
+					go m.onResolved(alertID)
+				}
 			}
 		}
 	}

@@ -190,8 +190,10 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	// Set authentication
 	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
 		// API token authentication
-		req.Header.Set("Authorization", fmt.Sprintf("PBSAPIToken=%s@%s!%s:%s",
-			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue))
+		authHeader := fmt.Sprintf("PBSAPIToken=%s@%s!%s:%s",
+			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
+		req.Header.Set("Authorization", authHeader)
+		log.Debug().Str("authHeader", authHeader).Str("url", req.URL.String()).Msg("Setting PBS API token authentication")
 	} else if c.auth.ticket != "" {
 		// Ticket authentication
 		req.Header.Set("Cookie", "PBSAuthCookie="+c.auth.ticket)
@@ -239,20 +241,28 @@ type Version struct {
 // Datastore represents a PBS datastore
 type Datastore struct {
 	Store     string `json:"store"`
-	Total     int64  `json:"total"`
-	Used      int64  `json:"used"`
-	Avail     int64  `json:"avail"`
+	Total     int64  `json:"total,omitempty"`
+	Used      int64  `json:"used,omitempty"`
+	Avail     int64  `json:"avail,omitempty"`
+	// Alternative field names PBS might use
+	TotalSpace int64  `json:"total-space,omitempty"`
+	UsedSpace  int64  `json:"used-space,omitempty"`
+	AvailSpace int64  `json:"avail-space,omitempty"`
+	// Status fields
 	GCStatus  string `json:"gc-status,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
 // GetVersion returns PBS version information
 func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
+	log.Debug().Msg("PBS GetVersion: starting request")
 	resp, err := c.get(ctx, "/version")
 	if err != nil {
+		log.Debug().Err(err).Msg("PBS GetVersion: request failed")
 		return nil, err
 	}
 	defer resp.Body.Close()
+	log.Debug().Msg("PBS GetVersion: request succeeded")
 
 	var result struct {
 		Data Version `json:"data"`
@@ -265,15 +275,70 @@ func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
 	return &result.Data, nil
 }
 
-// GetDatastores returns all datastores
+// GetNodeStatus returns the status of the PBS node (CPU, memory, etc.)
+func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
+	log.Debug().Msg("PBS GetNodeStatus: starting")
+	
+	// PBS typically runs on a single node, often called "localhost" 
+	// We need to first get the node name
+	nodesResp, err := c.get(ctx, "/nodes")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+	defer nodesResp.Body.Close()
+
+	var nodesResult struct {
+		Data []struct {
+			Node string `json:"node"`
+		} `json:"data"`
+	}
+	
+	if err := json.NewDecoder(nodesResp.Body).Decode(&nodesResult); err != nil {
+		return nil, fmt.Errorf("failed to decode nodes response: %w", err)
+	}
+	
+	if len(nodesResult.Data) == 0 {
+		return nil, fmt.Errorf("no nodes found")
+	}
+	
+	// Get status for the first (usually only) node
+	nodeName := nodesResult.Data[0].Node
+	log.Debug().Str("node", nodeName).Msg("PBS GetNodeStatus: fetching status for node")
+	
+	statusResp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/status", nodeName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node status: %w", err)
+	}
+	defer statusResp.Body.Close()
+
+	// Read the response body to log it
+	body, err := io.ReadAll(statusResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read status response: %w", err)
+	}
+	
+	log.Debug().Str("response", string(body)).Msg("PBS node status response")
+	
+	var statusResult struct {
+		Data NodeStatus `json:"data"`
+	}
+	
+	if err := json.Unmarshal(body, &statusResult); err != nil {
+		return nil, fmt.Errorf("failed to decode status response: %w", err)
+	}
+	
+	return &statusResult.Data, nil
+}
+
+// GetDatastores returns all datastores with their status
 func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
+	// First get the list of datastores
 	resp, err := c.get(ctx, "/admin/datastore")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Read the body to check for HTML error pages
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
@@ -281,19 +346,120 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 
 	// Check if response is HTML (error page) instead of JSON
 	if len(body) > 0 && body[0] == '<' {
-		// Try to extract error message from HTML if possible
 		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
 	}
 
-	var result struct {
-		Data []Datastore `json:"data"`
+	var datastoreList struct {
+		Data []struct {
+			Store   string `json:"store"`
+			Comment string `json:"comment,omitempty"`
+		} `json:"data"`
 	}
 
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
+	if err := json.Unmarshal(body, &datastoreList); err != nil {
+		log.Error().
+			Str("response", string(body)).
+			Err(err).
+			Msg("Failed to parse PBS datastore list response")
+		return nil, fmt.Errorf("failed to parse datastore list: %w", err)
 	}
 
-	return result.Data, nil
+	// Now get status for each datastore
+	var datastores []Datastore
+	for _, ds := range datastoreList.Data {
+		// Get individual datastore status
+		statusResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/status", ds.Store))
+		if err != nil {
+			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to get datastore status")
+			// Create entry with no size info if status fails
+			datastores = append(datastores, Datastore{
+				Store: ds.Store,
+				Error: fmt.Sprintf("Failed to get status: %v", err),
+			})
+			continue
+		}
+		defer statusResp.Body.Close()
+
+		statusBody, err := io.ReadAll(statusResp.Body)
+		if err != nil {
+			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to read datastore status response")
+			datastores = append(datastores, Datastore{
+				Store: ds.Store,
+				Error: fmt.Sprintf("Failed to read status: %v", err),
+			})
+			continue
+		}
+
+		var statusResult struct {
+			Data struct {
+				Total int64 `json:"total"`
+				Used  int64 `json:"used"`
+				Avail int64 `json:"avail"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
+			log.Error().
+				Str("store", ds.Store).
+				Str("response", string(statusBody)).
+				Err(err).
+				Msg("Failed to parse datastore status")
+			datastores = append(datastores, Datastore{
+				Store: ds.Store,
+				Error: fmt.Sprintf("Failed to parse status: %v", err),
+			})
+			continue
+		}
+
+		// Create datastore with status info
+		datastore := Datastore{
+			Store: ds.Store,
+			Total: statusResult.Data.Total,
+			Used:  statusResult.Data.Used,
+			Avail: statusResult.Data.Avail,
+		}
+
+		log.Debug().
+			Str("store", datastore.Store).
+			Int64("total", datastore.Total).
+			Int64("used", datastore.Used).
+			Int64("avail", datastore.Avail).
+			Msg("PBS datastore status retrieved")
+
+		datastores = append(datastores, datastore)
+	}
+
+	return datastores, nil
+}
+
+// NodeStatus represents PBS node status information
+type NodeStatus struct {
+	CPU         float64 `json:"cpu"`         // CPU usage percentage
+	Memory      Memory  `json:"memory"`      // Memory information
+	Uptime      int64   `json:"uptime"`      // Uptime in seconds
+	LoadAverage []float64 `json:"loadavg"`   // Load average [1min, 5min, 15min]
+	KSM         KSMInfo `json:"ksm"`        // Kernel Same-page Merging info
+	Swap        Memory  `json:"swap"`       // Swap information
+	RootFS      FSInfo  `json:"root"`       // Root filesystem info
+}
+
+// Memory represents memory information
+type Memory struct {
+	Total int64 `json:"total"` // Total memory in bytes
+	Used  int64 `json:"used"`  // Used memory in bytes
+	Free  int64 `json:"free"`  // Free memory in bytes
+}
+
+// KSMInfo represents Kernel Same-page Merging information
+type KSMInfo struct {
+	Shared int64 `json:"shared"` // Shared memory in bytes
+}
+
+// FSInfo represents filesystem information
+type FSInfo struct {
+	Total int64 `json:"total"` // Total space in bytes
+	Used  int64 `json:"used"`  // Used space in bytes
+	Free  int64 `json:"free"`  // Free space in bytes
 }
 
 // Namespace represents a PBS namespace

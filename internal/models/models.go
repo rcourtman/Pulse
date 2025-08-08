@@ -142,6 +142,11 @@ type PBSInstance struct {
 	Host             string            `json:"host"`
 	Status           string            `json:"status"`
 	Version          string            `json:"version"`
+	CPU              float64           `json:"cpu"`              // CPU usage percentage
+	Memory           float64           `json:"memory"`           // Memory usage percentage
+	MemoryUsed       int64             `json:"memoryUsed"`       // Memory used in bytes
+	MemoryTotal      int64             `json:"memoryTotal"`      // Total memory in bytes
+	Uptime           int64             `json:"uptime"`           // Uptime in seconds
 	Datastores       []PBSDatastore    `json:"datastores"`
 	BackupJobs       []PBSBackupJob    `json:"backupJobs"`
 	SyncJobs         []PBSSyncJob      `json:"syncJobs"`
@@ -558,6 +563,28 @@ func (s *State) UpdatePBSInstances(instances []PBSInstance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.PBSInstances = instances
+	s.LastUpdate = time.Now()
+}
+
+// UpdatePBSInstance updates a single PBS instance in the state, merging with existing instances
+func (s *State) UpdatePBSInstance(instance PBSInstance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find and update existing instance or append new one
+	found := false
+	for i, existing := range s.PBSInstances {
+		if existing.ID == instance.ID {
+			s.PBSInstances[i] = instance
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		s.PBSInstances = append(s.PBSInstances, instance)
+	}
+	
 	s.LastUpdate = time.Now()
 }
 

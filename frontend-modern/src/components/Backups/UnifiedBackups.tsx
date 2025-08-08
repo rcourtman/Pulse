@@ -3,7 +3,7 @@ import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
-type GuestType = 'VM' | 'LXC';
+type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
 
 interface UnifiedBackup {
   backupType: BackupType;
@@ -164,11 +164,25 @@ const UnifiedBackups: Component = () => {
         }
       }
       
+      // Determine the display type based on backup.type
+      let displayType: GuestType;
+      if (backup.type === 'qemu') {
+        displayType = 'VM';
+      } else if (backup.type === 'lxc') {
+        displayType = 'LXC';
+      } else if (backup.type === 'vztmpl') {
+        displayType = 'Template';
+      } else if (backup.type === 'iso') {
+        displayType = 'ISO';
+      } else {
+        displayType = 'VM'; // Default fallback
+      }
+      
       unified.push({
         backupType: backupType,
         vmid: backup.vmid || 0,
-        name: backup.notes || '',
-        type: backup.type === 'qemu' ? 'VM' : 'LXC',
+        name: backup.notes || backup.volid?.split('/').pop() || '',
+        type: displayType,
         node: backup.node || '',
         backupTime: backup.ctime || 0,
         backupName: backup.volid?.split('/').pop() || '',
@@ -539,18 +553,32 @@ const UnifiedBackups: Component = () => {
   // Calculate backup frequency data for chart
   const chartData = createMemo(() => {
     const days = chartTimeRange();
-    const now = Date.now();
-    const startTime = now - (days * 24 * 60 * 60 * 1000);
+    const now = new Date();
     
     // Initialize data structure for each day
     const dailyData: { [key: string]: { snapshots: number; pve: number; pbs: number; total: number } } = {};
     
-    // Create entries for each day in the range
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startTime + (i * 24 * 60 * 60 * 1000));
-      const dateKey = date.toISOString().split('T')[0];
+    // Create entries for each day in the range, including today
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      // Use local date string format (YYYY-MM-DD) instead of ISO to avoid timezone issues
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${day}`;
       dailyData[dateKey] = { snapshots: 0, pve: 0, pbs: 0, total: 0 };
     }
+    
+    // Calculate the actual start and end times for filtering
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - (days - 1));
+    startDate.setHours(0, 0, 0, 0);
+    const startTime = startDate.getTime();
+    
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999);
+    const endTime = endDate.getTime();
     
     // Use filtered data but WITHOUT date range filter for the chart
     // The chart should show the time range, and filters should affect what's counted
@@ -593,9 +621,13 @@ const UnifiedBackups: Component = () => {
     // Count backups per day within the chart time range
     dataForChart.forEach(backup => {
       const backupTime = backup.backupTime * 1000;
-      if (backupTime >= startTime && backupTime <= now) {
+      if (backupTime >= startTime && backupTime <= endTime) {
         const date = new Date(backupTime);
-        const dateKey = date.toISOString().split('T')[0];
+        // Use local date string format (YYYY-MM-DD) to match the keys we created
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateKey = `${year}-${month}-${day}`;
         
         if (dailyData[dateKey]) {
           dailyData[dateKey].total++;

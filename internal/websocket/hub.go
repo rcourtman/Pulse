@@ -120,12 +120,17 @@ func (h *Hub) Run() {
 						Data: map[string]string{"message": "Connected to Pulse WebSocket"},
 					}
 					if data, err := json.Marshal(welcomeMsg); err == nil {
-						log.Info().Str("client", client.id).Msg("Sending welcome message")
-						select {
-						case client.send <- data:
-							log.Info().Str("client", client.id).Msg("Welcome message sent")
-						default:
-							log.Warn().Str("client", client.id).Msg("Failed to send welcome message")
+						// Check if client is still registered before sending
+						if _, ok := h.clients[client]; ok {
+							log.Info().Str("client", client.id).Msg("Sending welcome message")
+							select {
+							case client.send <- data:
+								log.Info().Str("client", client.id).Msg("Welcome message sent")
+							default:
+								log.Warn().Str("client", client.id).Msg("Failed to send welcome message - buffer full")
+							}
+						} else {
+							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
 						}
 					}
 					
@@ -137,13 +142,18 @@ func (h *Hub) Run() {
 						Data: sanitizeData(h.getState()),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
-						log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
-						
-						select {
-						case client.send <- data:
-							log.Info().Str("client", client.id).Msg("Initial state sent successfully")
-						default:
-							log.Warn().Str("client", client.id).Msg("Client send buffer full, skipping initial state")
+						// Check if client is still registered before sending
+						if _, ok := h.clients[client]; ok {
+							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
+							
+							select {
+							case client.send <- data:
+								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
+							default:
+								log.Warn().Str("client", client.id).Msg("Client send buffer full, skipping initial state")
+							}
+						} else {
+							log.Debug().Str("client", client.id).Msg("Client disconnected before initial state")
 						}
 					} else {
 						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal initial state")

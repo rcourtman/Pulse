@@ -8,6 +8,8 @@ services:
       - pulse_data:/data
     environment:
       - TZ=UTC  # Set your timezone
+      # - PUID=1000  # Optional: Set user ID (uncomment and adjust as needed)
+      # - PGID=1000  # Optional: Set group ID (uncomment and adjust as needed)
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7655"]
