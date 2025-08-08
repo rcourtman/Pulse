@@ -30,8 +30,6 @@ const Settings: Component = () => {
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
-  const [backendPort, setBackendPort] = createSignal(3000);
-  const [frontendPort, setFrontendPort] = createSignal(7655);
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
   const [connectionTimeout, setConnectionTimeout] = createSignal(10);
   
@@ -247,8 +245,6 @@ const Settings: Component = () => {
         if (systemResponse.ok) {
           const systemSettings = await systemResponse.json();
           setPollingInterval(systemSettings.pollingInterval || 5);
-          setBackendPort(systemSettings.backendPort || 3000);
-          setFrontendPort(systemSettings.frontendPort || 7655);
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
           setConnectionTimeout(systemSettings.connectionTimeout || 10);
         } else {
@@ -282,8 +278,6 @@ const Settings: Component = () => {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
           pollingInterval: pollingInterval(),
-          backendPort: backendPort(),
-          frontendPort: frontendPort(),
           allowedOrigins: allowedOrigins(),
           connectionTimeout: connectionTimeout(),
           updateChannel: updateChannel(),
@@ -393,12 +387,25 @@ const Settings: Component = () => {
       return;
     }
     
+    if (exportPassphrase().length < 12) {
+      showError('Passphrase must be at least 12 characters long');
+      return;
+    }
+    
     try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add API token if configured
+      const apiToken = localStorage.getItem('apiToken');
+      if (apiToken) {
+        headers['X-API-Token'] = apiToken;
+      }
+      
       const response = await fetch('/api/config/export', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ passphrase: exportPassphrase() }),
       });
       
@@ -434,6 +441,11 @@ const Settings: Component = () => {
       return;
     }
     
+    if (importPassphrase().length < 12) {
+      showError('Passphrase must be at least 12 characters long');
+      return;
+    }
+    
     if (!importFile()) {
       showError('Please select a file to import');
       return;
@@ -443,11 +455,19 @@ const Settings: Component = () => {
       const fileContent = await importFile()!.text();
       const exportData = JSON.parse(fileContent);
       
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add API token if configured
+      const apiToken = localStorage.getItem('apiToken');
+      if (apiToken) {
+        headers['X-API-Token'] = apiToken;
+      }
+      
       const response = await fetch('/api/config/import', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           passphrase: importPassphrase(),
           data: exportData.data,
@@ -970,41 +990,7 @@ const Settings: Component = () => {
                       Network Settings
                     </h4>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Backend Port</label>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">API server port</p>
-                        <input
-                          type="number"
-                          value={backendPort()}
-                          onChange={(e) => {
-                            setBackendPort(parseInt(e.currentTarget.value));
-                            setHasUnsavedChanges(true);
-                          }}
-                          min="1"
-                          max="65535"
-                          class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Frontend Port</label>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Web UI port</p>
-                        <input
-                          type="number"
-                          value={frontendPort()}
-                          onChange={(e) => {
-                            setFrontendPort(parseInt(e.currentTarget.value));
-                            setHasUnsavedChanges(true);
-                          }}
-                          min="1"
-                          max="65535"
-                          class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div class="mt-4">
+                    <div>
                       <label class="text-sm font-medium text-gray-900 dark:text-gray-100">CORS Allowed Origins</label>
                       <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all)</p>
                       <input
@@ -1020,8 +1006,12 @@ const Settings: Component = () => {
                     </div>
                     
                     <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                      <p class="text-xs text-amber-800 dark:text-amber-200">
-                        <strong>Note:</strong> Port changes require a service restart
+                      <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
+                        <strong>Port Configuration:</strong> Edit <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">/etc/pulse/.env</code>
+                      </p>
+                      <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
+                        FRONTEND_PORT=8080<br/>
+                        <span class="text-xs text-amber-600 dark:text-amber-400">Then restart: sudo systemctl restart pulse-backend</span>
                       </p>
                     </div>
                   </div>
@@ -1485,11 +1475,7 @@ docker run -d \
                         </span>
                       </div>
                       <div class="flex justify-between">
-                        <span class="text-gray-600 dark:text-gray-400">Backend Port:</span>
-                        <span class="font-medium">{window.location.hostname === 'localhost' ? '3000' : '3000'}</span>
-                      </div>
-                      <div class="flex justify-between">
-                        <span class="text-gray-600 dark:text-gray-400">Frontend Port:</span>
+                        <span class="text-gray-600 dark:text-gray-400">Server Port:</span>
                         <span class="font-medium">{window.location.port || (window.location.protocol === 'https:' ? '443' : '80')}</span>
                       </div>
                     </div>
@@ -1647,8 +1633,13 @@ docker run -d \
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  This passphrase will be required to import the configuration later
+                  Passphrase must be at least 12 characters. Required to import the configuration later.
                 </p>
+                <Show when={exportPassphrase() && exportPassphrase().length < 12}>
+                  <p class="text-xs text-red-500 dark:text-red-400 mt-1">
+                    Passphrase too short: {exportPassphrase().length}/12 characters
+                  </p>
+                </Show>
               </div>
               
               <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
@@ -1669,7 +1660,7 @@ docker run -d \
                 </button>
                 <button
                   onClick={handleExport}
-                  disabled={!exportPassphrase()}
+                  disabled={!exportPassphrase() || exportPassphrase().length < 12}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Export
@@ -1713,6 +1704,14 @@ docker run -d \
                   placeholder="Enter the passphrase used during export"
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Passphrase must be at least 12 characters
+                </p>
+                <Show when={importPassphrase() && importPassphrase().length < 12}>
+                  <p class="text-xs text-red-500 dark:text-red-400 mt-1">
+                    Passphrase too short: {importPassphrase().length}/12 characters
+                  </p>
+                </Show>
               </div>
               
               <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
@@ -1734,7 +1733,7 @@ docker run -d \
                 </button>
                 <button
                   onClick={handleImport}
-                  disabled={!importPassphrase() || !importFile()}
+                  disabled={!importPassphrase() || importPassphrase().length < 12 || !importFile()}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Import

@@ -14,7 +14,11 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 ## Configuration
 
 ### How do I add a node?
-Settings → Nodes → Add Node → Enter credentials → Save
+**Auto-discovery (Easiest)**: Settings → Nodes → Click "Setup Script" on discovered node → Run on Proxmox
+**Manual**: Settings → Nodes → Add Node → Enter credentials → Save
+
+### How do I change the port?
+Edit `/etc/pulse/.env`, add `FRONTEND_PORT=8080`, then restart
 
 ### What permissions needed?
 - PVE: `PVEAuditor` minimum
@@ -22,6 +26,15 @@ Settings → Nodes → Add Node → Enter credentials → Save
 
 ### API tokens vs passwords?
 API tokens are more secure. Create in Proxmox: Datacenter → Permissions → API Tokens
+
+### Where are settings stored?
+See [Configuration Guide](CONFIGURATION.md) for details
+
+### How do I backup my configuration?
+Settings → Security → Export Configuration (requires API token or ALLOW_UNPROTECTED_EXPORT=true)
+
+### Can Pulse detect Proxmox clusters?
+Yes! When you add one cluster node, Pulse automatically discovers and monitors all nodes
 
 ## Troubleshooting
 

@@ -3,10 +3,12 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -117,6 +119,21 @@ func Load() (*Config, error) {
 	dataDir := "/etc/pulse"
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		dataDir = dir
+	}
+	
+	// Load .env file if it exists (from config directory)
+	envFile := filepath.Join(dataDir, ".env")
+	if _, err := os.Stat(envFile); err == nil {
+		if err := godotenv.Load(envFile); err != nil {
+			log.Warn().Err(err).Str("file", envFile).Msg("Failed to load .env file")
+		} else {
+			log.Info().Str("file", envFile).Msg("Loaded configuration from .env file")
+		}
+	}
+	
+	// Also try loading from current directory for development
+	if err := godotenv.Load(); err == nil {
+		log.Info().Msg("Loaded configuration from .env in current directory")
 	}
 	
 	// Initialize config with defaults

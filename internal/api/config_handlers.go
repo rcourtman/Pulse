@@ -1226,6 +1226,19 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
 	}
 	
+	// Update allowed origins if provided
+	if settings.AllowedOrigins != "" {
+		h.config.AllowedOrigins = settings.AllowedOrigins
+		// Update WebSocket hub with new origins
+		if h.wsHub != nil {
+			origins := strings.Split(settings.AllowedOrigins, ",")
+			for i := range origins {
+				origins[i] = strings.TrimSpace(origins[i])
+			}
+			h.wsHub.SetAllowedOrigins(origins)
+		}
+	}
+	
 	log.Info().
 		Int("pollingInterval", settings.PollingInterval).
 		Int("backendPort", settings.BackendPort).

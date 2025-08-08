@@ -8,10 +8,13 @@ Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.
 
 ## Features
 
+- **Auto-Discovery**: Automatically finds and configures Proxmox nodes
+- **Cluster Support**: Detects and monitors entire Proxmox clusters
 - Live monitoring of VMs, containers, nodes, storage
 - Alerts with email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
 - Unified view of PBS backups, PVE backups, and snapshots
 - PBS push mode for firewalled servers
+- **Secure Config Export/Import**: Encrypted backup and restore
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
@@ -34,10 +37,16 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | s
 
 ### Configure
 
+**Option 1: Auto-Registration (NEW)**
 1. Open `http://<your-server>:7655`
-2. Settings → Nodes → Add Node
-3. Enter Proxmox credentials
-4. Save
+2. Settings → Nodes → Shows discovered nodes automatically
+3. Click "Setup Script" to copy one-liner
+4. Run script on Proxmox node - auto-configures everything
+
+**Option 2: Manual**
+1. Settings → Nodes → Add Node
+2. Enter credentials manually
+3. Save
 
 ## Docker
 
@@ -74,14 +83,19 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
 
 ## Configuration
 
-All configuration through web UI:
+Quick start - most settings are in the web UI:
 - **Settings → Nodes**: Add/remove Proxmox instances
-- **Settings → General**: Ports, intervals, themes
+- **Settings → System**: Polling intervals, CORS settings
 - **Alerts**: Thresholds and notifications
 
-Data locations:
-- **Docker**: `/data` volume
-- **Manual**: `/etc/pulse`
+For port changes and system settings, edit `/etc/pulse/.env`:
+```bash
+sudo nano /etc/pulse/.env
+# Add: FRONTEND_PORT=8080
+sudo systemctl restart pulse-backend
+```
+
+📖 **[Full Configuration Guide →](docs/CONFIGURATION.md)**
 
 ### Backup/Restore
 
