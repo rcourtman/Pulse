@@ -30,12 +30,25 @@ sudo systemctl restart pulse-backend
 ```
 
 **Available .env settings:**
+
+Server Configuration:
 - `FRONTEND_PORT` - Web UI port (default: 7655)
+- `BACKEND_PORT` - Backend API port (default: 3000)
+
+Monitoring:
+- `POLLING_INTERVAL` - How often to check nodes in seconds (default: 5)
+- `CONNECTION_TIMEOUT` - Connection timeout in seconds (default: 10)
+
+Updates:
+- `UPDATE_CHANNEL` - Update channel: stable or rc (default: stable)
+- `AUTO_UPDATE_ENABLED` - Enable automatic updates: true/false (default: false)
+- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between update checks (default: 24)
+- `AUTO_UPDATE_TIME` - Time to apply updates in HH:MM format (default: 03:00)
+
+Other:
 - `ALLOWED_ORIGINS` - CORS settings for reverse proxies
-- `POLLING_INTERVAL` - How often to check nodes (seconds)
-- `LOG_LEVEL` - Logging verbosity (debug/info/warn/error)
-- `UPDATE_CHANNEL` - stable/beta/dev
-- `METRICS_RETENTION_DAYS` - How long to keep metrics
+- `LOG_LEVEL` - Logging verbosity: debug/info/warn/error (default: info)
+- `METRICS_RETENTION_DAYS` - How long to keep metrics (default: 7)
 
 ### 3. Secure Environment Variables
 For sensitive data like API tokens and passwords:

@@ -254,11 +254,15 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	PollingInterval   int    `json:"pollingInterval"`
-	BackendPort       int    `json:"backendPort,omitempty"`
-	FrontendPort      int    `json:"frontendPort,omitempty"`
-	AllowedOrigins    string `json:"allowedOrigins,omitempty"`
-	ConnectionTimeout int    `json:"connectionTimeout,omitempty"`
+	PollingInterval         int    `json:"pollingInterval"`
+	BackendPort             int    `json:"backendPort,omitempty"`
+	FrontendPort            int    `json:"frontendPort,omitempty"`
+	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
+	ConnectionTimeout       int    `json:"connectionTimeout,omitempty"`
+	UpdateChannel           string `json:"updateChannel,omitempty"`
+	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled,omitempty"`
+	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
+	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
 }
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)
