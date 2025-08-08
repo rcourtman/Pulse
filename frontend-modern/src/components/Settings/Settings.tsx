@@ -2,7 +2,6 @@ import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } 
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
-import { DiscoveryModal } from './DiscoveryModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -24,8 +23,8 @@ const Settings: Component = () => {
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
+  const [discoveredNodes, setDiscoveredNodes] = createSignal<any[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
-  const [showDiscoveryModal, setShowDiscoveryModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   
@@ -116,6 +115,61 @@ const Settings: Component = () => {
       console.error('Failed to load nodes:', error);
     }
   };
+  
+  // Function to load discovered nodes
+  const loadDiscoveredNodes = async () => {
+    try {
+      const response = await fetch('/api/discover');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.servers && Array.isArray(data.servers)) {
+          // Get all configured hosts and cluster member IPs
+          const configuredHosts = new Set<string>();
+          const clusterMemberIPs = new Set<string>();
+          
+          nodes().forEach(n => {
+            // Add the main host
+            const host = n.host.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+            configuredHosts.add(host.toLowerCase());
+            
+            // If it's a cluster, add all member IPs
+            if (n.type === 'pve' && 'isCluster' in n && n.isCluster && 'clusterEndpoints' in n && n.clusterEndpoints) {
+              n.clusterEndpoints.forEach((endpoint: any) => {
+                if (endpoint.IP) {
+                  clusterMemberIPs.add(endpoint.IP.toLowerCase());
+                }
+                if (endpoint.Host) {
+                  clusterMemberIPs.add(endpoint.Host.toLowerCase());
+                }
+              });
+            }
+          });
+          
+          // Filter out nodes that are already configured or part of a cluster
+          const filtered = data.servers.filter((server: any) => {
+            const serverIP = server.ip?.toLowerCase();
+            const serverHostname = server.hostname?.toLowerCase();
+            
+            // Check if this server is already configured directly
+            if (configuredHosts.has(serverIP) || configuredHosts.has(serverHostname)) {
+              return false;
+            }
+            
+            // Check if this server is part of a configured cluster
+            if (clusterMemberIPs.has(serverIP) || clusterMemberIPs.has(serverHostname)) {
+              return false;
+            }
+            
+            return true;
+          });
+          
+          setDiscoveredNodes(filtered);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load discovered nodes:', error);
+    }
+  };
 
   // Load nodes and system settings on mount
   onMount(async () => {
@@ -124,10 +178,10 @@ const Settings: Component = () => {
       console.log('[Settings] Node auto-registered, closing modal and refreshing nodes');
       // Close any open modals
       setShowNodeModal(false);
-      setShowDiscoveryModal(false);
       setEditingNode(null);
       // Reload nodes
       loadNodes();
+      loadDiscoveredNodes();
     });
     
     const unsubscribeRefresh = eventBus.on('refresh_nodes', () => {
@@ -138,11 +192,12 @@ const Settings: Component = () => {
     // Poll for node updates when modal is open
     let pollInterval: ReturnType<typeof setInterval> | undefined;
     createEffect(() => {
-      if (showNodeModal() || showDiscoveryModal()) {
+      if (showNodeModal()) {
         // Start polling every 3 seconds when modal is open
         pollInterval = setInterval(() => {
           console.log('[Settings] Polling for node updates...');
           loadNodes();
+          loadDiscoveredNodes();
         }, 3000);
       } else {
         // Stop polling when modal is closed
@@ -153,6 +208,11 @@ const Settings: Component = () => {
       }
     });
     
+    // Poll for discovered nodes every 30 seconds
+    const discoveryInterval = setInterval(() => {
+      loadDiscoveredNodes();
+    }, 30000);
+    
     // Clean up on unmount
     onCleanup(() => {
       unsubscribeAutoRegister();
@@ -160,6 +220,7 @@ const Settings: Component = () => {
       if (pollInterval) {
         clearInterval(pollInterval);
       }
+      clearInterval(discoveryInterval);
     });
     
     try {
@@ -176,6 +237,9 @@ const Settings: Component = () => {
       
       // Load nodes
       await loadNodes();
+      
+      // Load discovered nodes
+      await loadDiscoveredNodes();
       
       // Load system settings
       try {
@@ -481,35 +545,20 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
-                <div class="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setCurrentNodeType('pve');
-                      setShowDiscoveryModal(true);
-                    }}
-                    class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    Discover
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setEditingNode(null);
-                      setCurrentNodeType('pve');
-                      setShowNodeModal(true);
-                    }}
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="12" y1="5" x2="12" y2="19"></line>
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Add PVE Node
-                  </button>
-                </div>
+                <button 
+                  onClick={() => {
+                    setEditingNode(null);
+                    setCurrentNodeType('pve');
+                    setShowNodeModal(true);
+                  }}
+                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Add PVE Node
+                </button>
               </div>
               
               <div class="grid gap-4">
@@ -644,12 +693,67 @@ const Settings: Component = () => {
                   )}
                 </For>
                 
-                {nodes().filter(n => n.type === 'pve').length === 0 && (
+                {nodes().filter(n => n.type === 'pve').length === 0 && discoveredNodes().filter(n => n.type === 'pve').length === 0 && (
                   <div class="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p>No PVE nodes configured</p>
                     <p class="text-sm mt-1">Add a node to start monitoring</p>
                   </div>
                 )}
+                
+                {/* Discovered PVE nodes */}
+                <For each={discoveredNodes().filter(n => n.type === 'pve')}>
+                  {(server) => (
+                    <div 
+                      class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                      onClick={() => {
+                        // Pre-fill the modal with discovered server info
+                        setEditingNode({
+                          id: '',
+                          type: 'pve',
+                          name: server.hostname || `pve-${server.ip}`,
+                          host: `https://${server.ip}:${server.port}`,
+                          tokenName: '',
+                          tokenValue: '',
+                          verifySSL: false,
+                          monitorVMs: true,
+                          monitorContainers: true,
+                          monitorStorage: true,
+                          monitorBackups: true,
+                          status: 'disconnected'
+                        } as NodeConfigWithStatus);
+                        setCurrentNodeType('pve');
+                        setShowNodeModal(true);
+                      }}
+                    >
+                      <div class="flex items-start justify-between">
+                        <div class="flex items-start gap-3">
+                          <div class="relative">
+                            <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
+                          </div>
+                          <div class="flex-1">
+                            <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                              {server.hostname || `Proxmox VE at ${server.ip}`}
+                            </h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                              {server.ip}:{server.port}
+                            </p>
+                            <div class="flex items-center gap-2 mt-2">
+                              <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                Discovered
+                              </span>
+                              <span class="text-xs text-gray-500 dark:text-gray-400">
+                                Click to configure
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                          <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </div>
           </Show>
@@ -659,35 +763,20 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
-                <div class="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setCurrentNodeType('pbs');
-                      setShowDiscoveryModal(true);
-                    }}
-                    class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    Discover
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setEditingNode(null);
-                      setCurrentNodeType('pbs');
-                      setShowNodeModal(true);
-                    }}
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="12" y1="5" x2="12" y2="19"></line>
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Add PBS Node
-                  </button>
-                </div>
+                <button 
+                  onClick={() => {
+                    setEditingNode(null);
+                    setCurrentNodeType('pbs');
+                    setShowNodeModal(true);
+                  }}
+                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Add PBS Node
+                </button>
               </div>
               
               <div class="grid gap-4">
@@ -763,12 +852,67 @@ const Settings: Component = () => {
                   )}
                 </For>
                 
-                {nodes().filter(n => n.type === 'pbs').length === 0 && (
+                {nodes().filter(n => n.type === 'pbs').length === 0 && discoveredNodes().filter(n => n.type === 'pbs').length === 0 && (
                   <div class="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p>No PBS nodes configured</p>
                     <p class="text-sm mt-1">Add a node to start monitoring</p>
                   </div>
                 )}
+                
+                {/* Discovered PBS nodes */}
+                <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
+                  {(server) => (
+                    <div 
+                      class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                      onClick={() => {
+                        // Pre-fill the modal with discovered server info
+                        setEditingNode({
+                          id: '',
+                          type: 'pbs',
+                          name: server.hostname || `pbs-${server.ip}`,
+                          host: `https://${server.ip}:${server.port}`,
+                          tokenName: '',
+                          tokenValue: '',
+                          verifySSL: false,
+                          monitorDatastores: true,
+                          monitorSyncJobs: true,
+                          monitorVerifyJobs: true,
+                          monitorPruneJobs: true,
+                          status: 'disconnected'
+                        } as NodeConfigWithStatus);
+                        setCurrentNodeType('pbs');
+                        setShowNodeModal(true);
+                      }}
+                    >
+                      <div class="flex items-start justify-between">
+                        <div class="flex items-start gap-3">
+                          <div class="relative">
+                            <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
+                          </div>
+                          <div class="flex-1">
+                            <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                              {server.hostname || `Backup Server at ${server.ip}`}
+                            </h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                              {server.ip}:{server.port}
+                            </p>
+                            <div class="flex items-center gap-2 mt-2">
+                              <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                Discovered
+                              </span>
+                              <span class="text-xs text-gray-500 dark:text-gray-400">
+                                Click to configure
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                          <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </div>
           </Show>
@@ -1461,13 +1605,6 @@ docker run -d \
         }}
         nodeType={currentNodeType()}
         editingNode={editingNode() ?? undefined}
-        showBackToDiscovery={!showDiscoveryModal() && editingNode()?.id === ''}
-        onBackToDiscovery={() => {
-          setShowNodeModal(false);
-          setEditingNode(null);
-          // Small delay to ensure modal transitions properly
-          setTimeout(() => setShowDiscoveryModal(true), 100);
-        }}
         onSave={async (nodeData) => {
           try {
             if (editingNode()) {
@@ -1508,35 +1645,6 @@ docker run -d \
             setEditingNode(null);
           } catch (error) {
             showError(error instanceof Error ? error.message : 'Operation failed');
-          }
-        }}
-      />
-      
-      {/* Discovery Modal */}
-      <DiscoveryModal
-        isOpen={showDiscoveryModal()}
-        onClose={() => setShowDiscoveryModal(false)}
-        onAddServers={(servers) => {
-          // Single server selected from discovery
-          if (servers.length > 0) {
-            const server = servers[0];
-            const nodeData: Partial<NodeConfig> = {
-              type: server.type,
-              name: server.hostname || server.ip,
-              host: `https://${server.ip}:${server.port}`,
-              verifySSL: false
-            };
-            
-            setEditingNode(null);
-            setCurrentNodeType(server.type);
-            setEditingNode({
-              ...nodeData,
-              id: '',
-              status: 'disconnected'
-            } as NodeConfigWithStatus);
-            setShowNodeModal(true);
-            // Close discovery modal when server is selected
-            setShowDiscoveryModal(false);
           }
         }}
       />
