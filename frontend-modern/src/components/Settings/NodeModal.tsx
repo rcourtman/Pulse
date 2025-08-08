@@ -35,6 +35,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     monitorContainers: true,
     monitorStorage: true,
     monitorBackups: true,
+    enableBackupManagement: true, // New field for backup write permissions
     // PBS specific
     monitorDatastores: true,
     monitorSyncJobs: true,
@@ -62,6 +63,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorContainers: (node.type === 'pve' && 'monitorContainers' in node ? node.monitorContainers : true) ?? true,
         monitorStorage: (node.type === 'pve' && 'monitorStorage' in node ? node.monitorStorage : true) ?? true,
         monitorBackups: (node.type === 'pve' && 'monitorBackups' in node ? node.monitorBackups : true) ?? true,
+        enableBackupManagement: true, // Default to true for existing nodes
         monitorDatastores: (node.type === 'pbs' && 'monitorDatastores' in node ? node.monitorDatastores : true) ?? true,
         monitorSyncJobs: (node.type === 'pbs' && 'monitorSyncJobs' in node ? node.monitorSyncJobs : true) ?? true,
         monitorVerifyJobs: (node.type === 'pbs' && 'monitorVerifyJobs' in node ? node.monitorVerifyJobs : true) ?? true,
@@ -85,6 +87,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorContainers: true,
         monitorStorage: true,
         monitorBackups: true,
+        enableBackupManagement: true,
         monitorDatastores: true,
         monitorSyncJobs: true,
         monitorVerifyJobs: true,
@@ -407,6 +410,26 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                               {/* Quick Setup Tab */}
                               <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
+                                {/* Backup Management Checkbox */}
+                                <div class="mb-3">
+                                  <label class="flex items-center gap-2 text-sm">
+                                    <input
+                                      type="checkbox"
+                                      checked={formData().enableBackupManagement}
+                                      onChange={(e) => setFormData({ ...formData(), enableBackupManagement: e.currentTarget.checked })}
+                                      class="rounded border-gray-300 dark:border-gray-600"
+                                    />
+                                    <span class="text-gray-700 dark:text-gray-300">
+                                      Enable backup management permissions
+                                    </span>
+                                  </label>
+                                  <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">
+                                    {formData().enableBackupManagement 
+                                      ? 'Allows Pulse to manage PVE backups (create, delete, etc.) and display them in the Storage tab'
+                                      : 'Pulse will have read-only access. PVE backups will not appear in the Storage tab'}
+                                  </p>
+                                </div>
+
                                 <p class="text-blue-800 dark:text-blue-200">Run this single command on your Proxmox VE server:</p>
                                 
                                 {/* One-liner command */}
@@ -417,7 +440,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     const hostValue = formData().host || '';
                                     const encodedHost = encodeURIComponent(hostValue);
                                     const pulseUrl = encodeURIComponent(window.location.origin);
-                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                    const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
+                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
                                     const command = `curl -sSL "${scriptUrl}" | bash`;
                                     if (await copyToClipboard(command)) {
                                       showSuccess('Command copied! Run it on your server.');
@@ -437,7 +461,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   const hostValue = formData().host || '';
                                   const encodedHost = encodeURIComponent(hostValue);
                                   const pulseUrl = encodeURIComponent(window.location.origin);
-                                  const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                  const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
+                                  const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
                                   const command = `curl -sSL "${scriptUrl}" | bash`;
                                   return (
                                     <>
@@ -462,7 +487,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <strong>✨ New:</strong> The script now automatically configures Pulse - no manual token copying needed!
                                 </p>
                                 <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                  <strong>Permissions granted:</strong> PVEAuditor (read-only) on root + PVEDatastoreAdmin (read/write for backups) on /storage
+                                  <strong>Permissions granted:</strong> PVEAuditor (read-only) on root
+                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin (read/write for backups) on /storage'}
                                 </p>
                               </div>
                             </Show>

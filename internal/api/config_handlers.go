@@ -1484,6 +1484,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	serverType := query.Get("type") // "pve" or "pbs"
 	serverHost := query.Get("host")
 	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
+	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
 	
 	// Default to PVE if not specified
 	if serverType == "" {
@@ -1518,6 +1519,12 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	var script string
 	
 	if serverType == "pve" {
+		// Build storage permissions command if needed
+		storagePerms := ""
+		if backupPerms {
+			storagePerms = "\npveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
+		}
+		
 		script = fmt.Sprintf(`#!/bin/bash
 # Pulse Monitoring Setup Script for %s
 # Generated: %s
@@ -1619,8 +1626,7 @@ fi
 
 # Set up permissions
 echo "Setting up permissions..."
-pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin
+pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
 echo ""
 echo "✅ Setup complete!"
@@ -1634,7 +1640,7 @@ else
 fi
 echo "  Host URL: %s"
 echo ""
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, serverHost)
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, storagePerms, serverHost)
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
