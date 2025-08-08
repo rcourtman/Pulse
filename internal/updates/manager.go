@@ -362,14 +362,23 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
-	// Find latest release (including prereleases)
-	// GitHub API returns releases sorted by created_at desc, so first is latest
-	for _, release := range releases {
-		// For RC channel, accept any release (including prereleases)
-		return &release, nil
+	// Find latest release based on channel
+	if channel == "rc" {
+		// For RC channel, return the first release (newest by creation date)
+		// GitHub API returns releases sorted by created_at desc
+		if len(releases) > 0 {
+			return &releases[0], nil
+		}
+	} else {
+		// For stable channel, find the first non-prerelease
+		for i := range releases {
+			if !releases[i].Prerelease {
+				return &releases[i], nil
+			}
+		}
 	}
 
-	return nil, fmt.Errorf("no releases found")
+	return nil, fmt.Errorf("no releases found for channel %s", channel)
 }
 
 // downloadFile downloads a file from URL to dest
