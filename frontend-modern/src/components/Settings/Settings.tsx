@@ -596,27 +596,6 @@ const Settings: Component = () => {
                               {node.type === 'pve' && 'monitorContainers' in node && node.monitorContainers && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Containers</span>}
                               {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Storage</span>}
                               {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Backups</span>}
-                              <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-medium rounded">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="3"/>
-                                    <circle cx="4" cy="12" r="2"/>
-                                    <circle cx="20" cy="12" r="2"/>
-                                    <line x1="7" y1="12" x2="9" y2="12"/>
-                                    <line x1="15" y1="12" x2="17" y2="12"/>
-                                  </svg>
-                                  Cluster
-                                </span>
-                              </Show>
-                              <Show when={node.type === 'pve' && (!('isCluster' in node) || !node.isCluster)}>
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-medium rounded">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
-                                  </svg>
-                                  Standalone
-                                </span>
-                              </Show>
                             </div>
                             <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
                               <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
