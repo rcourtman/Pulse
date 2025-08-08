@@ -456,10 +456,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <li>Creates a monitoring user (pulse-monitor@pam)</li>
                                   <li>Generates an API token</li>
                                   <li>Sets up monitoring permissions (read + backup management)</li>
-                                  <li>Shows you the token to copy</li>
+                                  <li>Automatically registers the node with Pulse</li>
                                 </ul>
-                                <p class="text-amber-600 dark:text-amber-400 text-xs mt-2">
-                                  <strong>Important:</strong> Save the token value immediately - it's only shown once!
+                                <p class="text-green-600 dark:text-green-400 text-xs mt-2">
+                                  <strong>✨ New:</strong> The script now automatically configures Pulse - no manual token copying needed!
                                 </p>
                                 <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
                                   <strong>Permissions granted:</strong> PVEAuditor (read-only) on root + PVEDatastoreAdmin (read/write for backups) on /storage
@@ -662,10 +662,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <li>Creates a monitoring user (pulse-monitor@pbs)</li>
                                     <li>Generates an API token</li>
                                     <li>Sets up Audit permissions for read-only access</li>
-                                    <li>Shows you the token to copy</li>
+                                    <li>Automatically registers the server with Pulse</li>
                                   </ul>
-                                  <p class="text-amber-600 dark:text-amber-400 text-xs mt-2">
-                                    <strong>Important:</strong> Save the token value immediately - it's only shown once!
+                                  <p class="text-green-600 dark:text-green-400 text-xs mt-2">
+                                    <strong>✨ New:</strong> The script now automatically configures Pulse - no manual token copying needed!
                                   </p>
                                 </div>
                               </Show>
