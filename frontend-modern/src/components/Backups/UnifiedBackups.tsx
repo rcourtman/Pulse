@@ -133,7 +133,7 @@ const UnifiedBackups: Component = () => {
         backupType: 'remote',
         vmid: parseInt(backup.vmid) || 0,
         name: backup.comment || '',
-        type: backup.backupType === 'vm' ? 'VM' : 'LXC',
+        type: (backup.backupType === 'vm' || backup.backupType === 'VM') ? 'VM' : 'LXC',
         node: backup.instance || 'PBS',
         backupTime: backupTimeSeconds,
         backupName: backupName,

@@ -118,7 +118,7 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
 // ClearAlert manually clears an alert
@@ -134,7 +134,7 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	h.monitor.GetAlertManager().ClearAlert(alertID)
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
 // HandleAlerts routes alert requests to appropriate handlers
