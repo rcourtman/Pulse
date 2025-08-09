@@ -8,6 +8,18 @@ interface TooltipProps {
   visible: boolean;
 }
 
+// Sanitize tooltip content to prevent XSS
+function sanitizeContent(content: string): string {
+  // Remove any HTML tags and encode special characters
+  return content
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&/g, '&amp;')  // Encode ampersands
+    .replace(/</g, '&lt;')   // Encode less than
+    .replace(/>/g, '&gt;')   // Encode greater than
+    .replace(/"/g, '&quot;') // Encode quotes
+    .replace(/'/g, '&#x27;'); // Encode apostrophes
+}
+
 const Tooltip: Component<TooltipProps> = (props) => {
   let tooltipRef: HTMLDivElement | undefined;
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
@@ -59,7 +71,7 @@ const Tooltip: Component<TooltipProps> = (props) => {
             opacity: props.visible ? '1' : '0',
             transition: 'opacity 200ms ease-out'
           }}
-          innerHTML={props.content}
+          textContent={sanitizeContent(props.content)}
         />
       </Portal>
     </Show>
