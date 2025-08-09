@@ -209,12 +209,12 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <textarea
           value={props.config.to.join('\n')}
           onInput={(e) => {
-            // Parse recipients but keep the raw value for better UX
+            // Parse recipients - split by newlines and keep all non-empty lines
             const rawValue = e.currentTarget.value;
             const recipients = rawValue
               .split('\n')
               .map(r => r.trim())
-              .filter(r => r.length > 0 && r.includes('@')); // Only keep valid email-like strings
+              .filter(r => r.length > 0); // Keep all non-empty lines, validation happens on save
             props.onChange({ ...props.config, to: recipients });
           }}
           onKeyDown={(e) => {

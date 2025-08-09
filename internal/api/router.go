@@ -790,9 +790,9 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 	// Return public configuration
 	config := map[string]interface{}{
 		"pollingInterval":   r.config.PollingInterval.Seconds(),
-		"csrfProtection":    false, // r.config.CSRFProtection - field not available
-		"autoUpdateEnabled": false, // r.config.AutoUpdateEnabled - field not available
-		"updateChannel":     "stable", // r.config.UpdateChannel - field not available
+		"csrfProtection":    false, // Not implemented yet
+		"autoUpdateEnabled": r.config.AutoUpdateEnabled,
+		"updateChannel":     r.config.UpdateChannel,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
