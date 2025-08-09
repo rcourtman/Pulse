@@ -2,10 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -378,12 +376,11 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	return &config, nil
 }
 
-// SaveSystemSettings saves system settings to both system.json and .env file
+// SaveSystemSettings saves system settings to file
 func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
-	// Save to system.json for backwards compatibility
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -395,13 +392,6 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	
 	if err := os.WriteFile(c.systemFile, data, 0644); err != nil {
 		return err
-	}
-	
-	// Also update .env file if it exists
-	envFile := filepath.Join(c.configDir, ".env")
-	if err := c.updateEnvFile(envFile, settings); err != nil {
-		log.Warn().Err(err).Msg("Failed to update .env file")
-		// Don't fail the operation if .env update fails
 	}
 	
 	log.Info().Str("file", c.systemFile).Msg("System settings saved")
@@ -431,104 +421,6 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	
 	log.Info().Str("file", c.systemFile).Msg("System settings loaded")
 	return &settings, nil
-}
-
-// updateEnvFile updates or creates .env file with system settings
-func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSettings) error {
-	// Read existing .env file if it exists
-	envVars := make(map[string]string)
-	if data, err := os.ReadFile(envFile); err == nil {
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				envVars[key] = value
-			}
-		}
-	}
-	
-	// Update with new values from settings
-	if settings.PollingInterval > 0 {
-		envVars["POLLING_INTERVAL"] = strconv.Itoa(settings.PollingInterval)
-	}
-	if settings.ConnectionTimeout > 0 {
-		envVars["CONNECTION_TIMEOUT"] = strconv.Itoa(settings.ConnectionTimeout)
-	}
-	if settings.UpdateChannel != "" {
-		envVars["UPDATE_CHANNEL"] = settings.UpdateChannel
-	}
-	envVars["AUTO_UPDATE_ENABLED"] = strconv.FormatBool(settings.AutoUpdateEnabled)
-	if settings.AutoUpdateCheckInterval > 0 {
-		envVars["AUTO_UPDATE_CHECK_INTERVAL"] = strconv.Itoa(settings.AutoUpdateCheckInterval)
-	}
-	if settings.AutoUpdateTime != "" {
-		envVars["AUTO_UPDATE_TIME"] = settings.AutoUpdateTime
-	}
-	if settings.AllowedOrigins != "" {
-		envVars["ALLOWED_ORIGINS"] = settings.AllowedOrigins
-	}
-	
-	// Build the new .env content
-	var content strings.Builder
-	content.WriteString("# Pulse Configuration File - Automatically updated by UI\n")
-	content.WriteString("# Changes made in the UI will be reflected here\n\n")
-	
-	// Write server settings
-	if port, ok := envVars["FRONTEND_PORT"]; ok {
-		content.WriteString(fmt.Sprintf("FRONTEND_PORT=%s\n", port))
-	}
-	if port, ok := envVars["BACKEND_PORT"]; ok {
-		content.WriteString(fmt.Sprintf("BACKEND_PORT=%s\n", port))
-	}
-	content.WriteString("\n")
-	
-	// Write monitoring settings
-	content.WriteString("# Monitoring\n")
-	if interval, ok := envVars["POLLING_INTERVAL"]; ok {
-		content.WriteString(fmt.Sprintf("POLLING_INTERVAL=%s\n", interval))
-	}
-	if timeout, ok := envVars["CONNECTION_TIMEOUT"]; ok {
-		content.WriteString(fmt.Sprintf("CONNECTION_TIMEOUT=%s\n", timeout))
-	}
-	content.WriteString("\n")
-	
-	// Write update settings
-	content.WriteString("# Updates\n")
-	if channel, ok := envVars["UPDATE_CHANNEL"]; ok {
-		content.WriteString(fmt.Sprintf("UPDATE_CHANNEL=%s\n", channel))
-	}
-	if enabled, ok := envVars["AUTO_UPDATE_ENABLED"]; ok {
-		content.WriteString(fmt.Sprintf("AUTO_UPDATE_ENABLED=%s\n", enabled))
-	}
-	if interval, ok := envVars["AUTO_UPDATE_CHECK_INTERVAL"]; ok {
-		content.WriteString(fmt.Sprintf("AUTO_UPDATE_CHECK_INTERVAL=%s\n", interval))
-	}
-	if time, ok := envVars["AUTO_UPDATE_TIME"]; ok {
-		content.WriteString(fmt.Sprintf("AUTO_UPDATE_TIME=%s\n", time))
-	}
-	content.WriteString("\n")
-	
-	// Write CORS settings
-	if origins, ok := envVars["ALLOWED_ORIGINS"]; ok && origins != "" {
-		content.WriteString("# CORS\n")
-		content.WriteString(fmt.Sprintf("ALLOWED_ORIGINS=%s\n", origins))
-		content.WriteString("\n")
-	}
-	
-	// Write logging settings if present
-	if level, ok := envVars["LOG_LEVEL"]; ok {
-		content.WriteString("# Logging\n")
-		content.WriteString(fmt.Sprintf("LOG_LEVEL=%s\n", level))
-	}
-	
-	// Write the file
-	return os.WriteFile(envFile, []byte(content.String()), 0644)
 }
 
 // Helper function
