@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -394,6 +396,13 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 		return err
 	}
 	
+	// Also update the .env file if it exists
+	envFile := filepath.Join(c.configDir, ".env")
+	if err := c.updateEnvFile(envFile, settings); err != nil {
+		log.Warn().Err(err).Msg("Failed to update .env file")
+		// Don't fail the operation if .env update fails
+	}
+	
 	log.Info().Str("file", c.systemFile).Msg("System settings saved")
 	return nil
 }
@@ -421,6 +430,69 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	
 	log.Info().Str("file", c.systemFile).Msg("System settings loaded")
 	return &settings, nil
+}
+
+// updateEnvFile updates the .env file with new system settings
+func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSettings) error {
+	// Check if .env file exists
+	if _, err := os.Stat(envFile); os.IsNotExist(err) {
+		// File doesn't exist, nothing to update
+		return nil
+	}
+	
+	// Read the existing .env file
+	file, err := os.Open(envFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	updatedPolling := false
+	
+	for scanner.Scan() {
+		line := scanner.Text()
+		
+		// Update POLLING_INTERVAL if found
+		if strings.HasPrefix(line, "POLLING_INTERVAL=") && settings.PollingInterval > 0 {
+			lines = append(lines, fmt.Sprintf("POLLING_INTERVAL=%d", settings.PollingInterval))
+			updatedPolling = true
+		} else if strings.HasPrefix(line, "UPDATE_CHANNEL=") && settings.UpdateChannel != "" {
+			lines = append(lines, fmt.Sprintf("UPDATE_CHANNEL=%s", settings.UpdateChannel))
+		} else if strings.HasPrefix(line, "AUTO_UPDATE_ENABLED=") {
+			// Always update AUTO_UPDATE_ENABLED when the line exists
+			lines = append(lines, fmt.Sprintf("AUTO_UPDATE_ENABLED=%t", settings.AutoUpdateEnabled))
+		} else if strings.HasPrefix(line, "AUTO_UPDATE_CHECK_INTERVAL=") && settings.AutoUpdateCheckInterval > 0 {
+			lines = append(lines, fmt.Sprintf("AUTO_UPDATE_CHECK_INTERVAL=%d", settings.AutoUpdateCheckInterval))
+		} else {
+			lines = append(lines, line)
+		}
+	}
+	
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	
+	// If POLLING_INTERVAL wasn't found and we have a value, add it
+	if !updatedPolling && settings.PollingInterval > 0 {
+		lines = append(lines, fmt.Sprintf("POLLING_INTERVAL=%d", settings.PollingInterval))
+	}
+	
+	// Write the updated content back atomically
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	
+	// Write to temp file first
+	tempFile := envFile + ".tmp"
+	if err := os.WriteFile(tempFile, []byte(content), 0644); err != nil {
+		return err
+	}
+	
+	// Atomic rename
+	return os.Rename(tempFile, envFile)
 }
 
 // Helper function

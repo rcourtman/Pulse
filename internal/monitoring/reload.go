@@ -18,6 +18,7 @@ type ReloadableMonitor struct {
 	wsHub       *websocket.Hub
 	ctx         context.Context
 	cancel      context.CancelFunc
+	parentCtx   context.Context
 	reloadChan  chan struct{}
 }
 
@@ -41,6 +42,7 @@ func NewReloadableMonitor(cfg *config.Config, wsHub *websocket.Hub) (*Reloadable
 // Start starts the monitor with reload capability
 func (rm *ReloadableMonitor) Start(ctx context.Context) {
 	rm.mu.Lock()
+	rm.parentCtx = ctx
 	rm.ctx, rm.cancel = context.WithCancel(ctx)
 	rm.mu.Unlock()
 
@@ -90,19 +92,47 @@ func (rm *ReloadableMonitor) doReload() error {
 		return err
 	}
 
+	// Check if only polling interval changed (common case)
+	if rm.config != nil && onlyPollingIntervalChanged(rm.config, cfg) {
+		// For polling interval changes, just update the config and restart monitoring
+		// without recreating everything
+		log.Info().
+			Dur("oldInterval", rm.config.PollingInterval).
+			Dur("newInterval", cfg.PollingInterval).
+			Msg("Updating polling interval without full reload")
+		
+		// Update config
+		rm.config.PollingInterval = cfg.PollingInterval
+		rm.monitor.config.PollingInterval = cfg.PollingInterval
+		
+		// Cancel and restart the monitoring loop
+		if rm.cancel != nil {
+			rm.cancel()
+		}
+		
+		// Start new monitoring loop with updated interval
+		rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
+		go rm.monitor.Start(rm.ctx, rm.wsHub)
+		
+		return nil
+	}
+
+	// For other changes, do a full reload
+	log.Info().Msg("Performing full monitor reload")
+	
 	// Cancel current monitor
 	if rm.cancel != nil {
 		rm.cancel()
 	}
 
 	// Wait a moment for cleanup
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	// Create new monitor
 	newMonitor, err := New(cfg)
 	if err != nil {
 		// Restart old monitor if new one fails
-		rm.ctx, rm.cancel = context.WithCancel(context.Background())
+		rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
 		go rm.monitor.Start(rm.ctx, rm.wsHub)
 		return err
 	}
@@ -112,10 +142,25 @@ func (rm *ReloadableMonitor) doReload() error {
 	rm.config = cfg
 
 	// Start new monitor
-	rm.ctx, rm.cancel = context.WithCancel(context.Background())
+	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
 	go rm.monitor.Start(rm.ctx, rm.wsHub)
 
 	return nil
+}
+
+// onlyPollingIntervalChanged checks if only the polling interval changed
+func onlyPollingIntervalChanged(old, new *config.Config) bool {
+	if old == nil || new == nil {
+		return false
+	}
+	
+	// Check if only polling interval is different
+	return old.PollingInterval != new.PollingInterval &&
+		old.BackendHost == new.BackendHost &&
+		old.BackendPort == new.BackendPort &&
+		old.FrontendPort == new.FrontendPort &&
+		len(old.PVEInstances) == len(new.PVEInstances) &&
+		len(old.PBSInstances) == len(new.PBSInstances)
 }
 
 // GetMonitor returns the current monitor instance

@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -26,6 +27,7 @@ type Router struct {
 	reloadFunc    func() error
 	updateManager *updates.Manager
 	exportLimiter *RateLimiter
+	tokenManager  *tokens.TokenManager
 }
 
 
@@ -39,6 +41,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		reloadFunc:    reloadFunc,
 		updateManager: updates.NewManager(cfg),
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
+		tokenManager:  tokens.NewTokenManager(cfg.DataPath),
 	}
 
 	r.setupRoutes()
@@ -56,7 +59,7 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	alertHandlers := NewAlertHandlers(r.monitor)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
-	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub)
+	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, r.tokenManager)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
 	
 	// API routes
@@ -139,6 +142,11 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
+	// Registration token routes
+	r.mux.HandleFunc("/api/tokens/generate", RequireAuth(r.config, r.handleGenerateToken))
+	r.mux.HandleFunc("/api/tokens/list", RequireAuth(r.config, r.handleListTokens))
+	r.mux.HandleFunc("/api/tokens/revoke", RequireAuth(r.config, r.handleRevokeToken))
+	
 	// Security status route
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
@@ -148,6 +156,7 @@ func (r *Router) setupRoutes() {
 				"requiresAuth": r.config.APIToken != "",
 				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
+				"registrationTokensEnabled": os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true",
 			}
 			json.NewEncoder(w).Encode(status)
 		} else {
