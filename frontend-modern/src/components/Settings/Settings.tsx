@@ -2,6 +2,7 @@ import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } 
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
+import RegistrationTokens from './RegistrationTokens';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -1370,6 +1371,14 @@ docker run -d \
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Registration Tokens</h3>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  Generate secure, time-limited tokens to allow nodes to register with Pulse.
+                </p>
+                <RegistrationTokens />
               </div>
             </div>
           </Show>

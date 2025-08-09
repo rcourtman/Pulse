@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/tokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -25,16 +27,18 @@ type ConfigHandlers struct {
 	monitor      *monitoring.Monitor
 	reloadFunc   func() error
 	wsHub        *websocket.Hub
+	tokenManager *tokens.TokenManager
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub) *ConfigHandlers {
+func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, tokenManager *tokens.TokenManager) *ConfigHandlers {
 	return &ConfigHandlers{
 		config:       cfg,
 		persistence:  config.NewConfigPersistence(cfg.DataPath),
 		monitor:      monitor,
 		reloadFunc:   reloadFunc,
 		wsHub:        wsHub,
+		tokenManager: tokenManager,
 	}
 }
 
@@ -1228,6 +1232,15 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 		
 		// Update the running config
 		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
+		
+		// Trigger a monitor reload to apply the new polling interval
+		if h.reloadFunc != nil {
+			log.Info().Int("interval", settings.PollingInterval).Msg("Triggering monitor reload for new polling interval")
+			if err := h.reloadFunc(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor with new polling interval")
+				// Don't fail the request, the setting was saved
+			}
+		}
 	}
 	
 	// Update allowed origins if provided
@@ -1643,13 +1656,29 @@ EOF
         # Remove newlines from JSON
         REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
         
-        # Send registration
-        echo "📤 Sending registration to Pulse..."
-        echo "   URL: $PULSE_URL/api/auto-register"
+        # Check if registration token is required
+        if [[ "$PULSE_URL" =~ ^https:// ]]; then
+            echo "📤 Sending registration to Pulse..."
+            echo "   URL: $PULSE_URL/api/auto-register"
+            echo ""
+            echo "NOTE: If registration fails, you may need a registration token."
+            echo "     Generate one in Pulse Settings → Security → Registration Tokens"
+            echo ""
+        fi
         
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
+        # Send registration (add X-Registration-Token header if token provided)
+        REG_TOKEN="${PULSE_REG_TOKEN:-}"
+        if [ -n "$REG_TOKEN" ]; then
+            echo "🔑 Using registration token: $REG_TOKEN"
+            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -H "X-Registration-Token: $REG_TOKEN" \
+                -d "$REGISTER_JSON" 2>&1)
+        else
+            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -d "$REGISTER_JSON" 2>&1)
+        fi
         
         if echo "$REGISTER_RESPONSE" | grep -q "success"; then
             echo "✅ Automatically registered with Pulse!"
@@ -1679,6 +1708,10 @@ else
     echo "  Token Value: [Copy from above]"
 fi
 echo "  Host URL: %s"
+echo ""
+echo "If auto-registration is enabled but requires a token:"
+echo "  1. Generate a registration token in Pulse Settings → Security"
+echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
 echo ""
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, storagePerms, serverHost)
 		
@@ -1757,9 +1790,30 @@ EOF
         )
         # Remove newlines from JSON
         REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
+        
+        # Check if registration token is required
+        if [[ "$PULSE_URL" =~ ^https:// ]]; then
+            echo "📤 Sending registration to Pulse..."
+            echo "   URL: $PULSE_URL/api/auto-register"
+            echo ""
+            echo "NOTE: If registration fails, you may need a registration token."
+            echo "     Generate one in Pulse Settings → Security → Registration Tokens"
+            echo ""
+        fi
+        
+        # Send registration (add X-Registration-Token header if token provided)
+        REG_TOKEN="${PULSE_REG_TOKEN:-}"
+        if [ -n "$REG_TOKEN" ]; then
+            echo "🔑 Using registration token: $REG_TOKEN"
+            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -H "X-Registration-Token: $REG_TOKEN" \
+                -d "$REGISTER_JSON" 2>&1)
+        else
+            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+                -H "Content-Type: application/json" \
+                -d "$REGISTER_JSON" 2>&1)
+        fi
         
         if echo "$REGISTER_RESPONSE" | grep -q "success"; then
             echo "✅ Automatically registered with Pulse!"
@@ -1789,6 +1843,10 @@ echo "  Token ID: pulse-monitor@pbs!pulse-token"
 echo "  Token Value: [Check the output above for the token or instructions]"
 echo "  Host URL: %s"
 echo ""
+echo "If auto-registration is enabled but requires a token:"
+echo "  1. Generate a registration token in Pulse Settings → Security"
+echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
+echo ""
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, serverHost)
 	}
 	
@@ -1814,14 +1872,32 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	// Check if auto-registration requires authentication
-	// Environment variable REQUIRE_AUTH_FOR_AUTO_REGISTER can be set to require API token
-	if os.Getenv("REQUIRE_AUTH_FOR_AUTO_REGISTER") == "true" {
+	// Check registration token if required
+	if os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true" || h.config.APIToken != "" {
+		regToken := r.Header.Get("X-Registration-Token")
 		apiToken := r.Header.Get("X-API-Token")
-		if apiToken == "" || (h.config.APIToken != "" && apiToken != h.config.APIToken) {
-			log.Warn().Msg("Unauthorized auto-register attempt")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		
+		// If registration token is provided, validate it
+		if regToken != "" {
+			// Registration token takes precedence
+			// We'll validate it later after parsing the request to get node type
+		} else if h.config.APIToken != "" {
+			// Fall back to API token if configured
+			if apiToken == "" || apiToken != h.config.APIToken {
+				log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - missing or invalid API token")
+				http.Error(w, "Registration requires valid registration token or API token", http.StatusUnauthorized)
+				return
+			}
+		} else if os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true" {
+			// Registration token explicitly required but not provided
+			log.Warn().Str("ip", r.RemoteAddr).Msg("Registration token required but not provided")
+			http.Error(w, "Registration token required", http.StatusUnauthorized)
 			return
+		}
+		
+		// Store regToken for later validation (only if not empty)
+		if regToken != "" {
+			r = r.WithContext(context.WithValue(r.Context(), "regToken", regToken))
 		}
 	}
 	
@@ -1847,6 +1923,25 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		log.Error().Err(err).Msg("Failed to decode auto-register request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+	
+	// Validate registration token if provided
+	if regToken := r.Context().Value("regToken"); regToken != nil {
+		if tokenStr, ok := regToken.(string); ok && tokenStr != "" {
+			if err := h.tokenManager.ValidateToken(tokenStr, req.Type); err != nil {
+				log.Warn().
+					Str("ip", clientIP).
+					Str("token", tokenStr).
+					Err(err).
+					Msg("Invalid registration token")
+				http.Error(w, fmt.Sprintf("Invalid registration token: %v", err), http.StatusUnauthorized)
+				return
+			}
+			log.Info().
+				Str("ip", clientIP).
+				Str("token", tokenStr).
+				Msg("Registration token validated successfully")
+		}
 	}
 	
 	log.Info().
