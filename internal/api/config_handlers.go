@@ -1623,6 +1623,12 @@ else
         
         # Send registration to Pulse
         PULSE_URL="%s"
+        
+        # Ensure we're using HTTPS for security (warn if not)
+        if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
+            echo "⚠️  WARNING: Not using HTTPS - token will be sent unencrypted!"
+            echo "   Consider accessing Pulse via HTTPS for security."
+        fi
         # Use jq or manual escaping to properly construct JSON
         REGISTER_JSON=$(cat <<EOF
 {
@@ -1637,10 +1643,9 @@ EOF
         # Remove newlines from JSON
         REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
         
-        # Debug output
+        # Send registration
         echo "📤 Sending registration to Pulse..."
         echo "   URL: $PULSE_URL/api/auto-register"
-        echo "   JSON: $REGISTER_JSON"
         
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
@@ -1733,6 +1738,12 @@ else
         
         # Send registration to Pulse
         PULSE_URL="%s"
+        
+        # Ensure we're using HTTPS for security (warn if not)
+        if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
+            echo "⚠️  WARNING: Not using HTTPS - token will be sent unencrypted!"
+            echo "   Consider accessing Pulse via HTTPS for security."
+        fi
         # Use jq or manual escaping to properly construct JSON
         REGISTER_JSON=$(cat <<EOF
 {
@@ -1802,6 +1813,24 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	
+	// Check if auto-registration requires authentication
+	// Environment variable REQUIRE_AUTH_FOR_AUTO_REGISTER can be set to require API token
+	if os.Getenv("REQUIRE_AUTH_FOR_AUTO_REGISTER") == "true" {
+		apiToken := r.Header.Get("X-API-Token")
+		if apiToken == "" || (h.config.APIToken != "" && apiToken != h.config.APIToken) {
+			log.Warn().Msg("Unauthorized auto-register attempt")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+	
+	// Log source IP for security auditing
+	clientIP := r.RemoteAddr
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		clientIP = forwarded
+	}
+	log.Info().Str("clientIP", clientIP).Msg("Auto-register request from")
 
 	// Read body first to debug
 	body, err := io.ReadAll(r.Body)
@@ -1811,12 +1840,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	log.Info().Str("body", string(body)).Msg("Auto-register request received")
+	log.Info().Msg("Auto-register request received")
 	
 	var req AutoRegisterRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Error().Err(err).Str("body", string(body)).Msg("Failed to decode auto-register request")
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to decode auto-register request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	
@@ -1826,7 +1855,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		Str("tokenId", req.TokenID).
 		Bool("hasTokenValue", req.TokenValue != "").
 		Str("serverName", req.ServerName).
-		Msg("Parsed auto-register request")
+		Msg("Processing auto-register request")
 
 	// Validate required fields
 	if req.Type == "" || req.Host == "" || req.TokenID == "" || req.TokenValue == "" {
