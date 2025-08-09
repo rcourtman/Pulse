@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/smtp"
 	"strings"
 	"sync"
 	"text/template"
@@ -279,8 +278,6 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 
 // sendHTMLEmail sends an HTML email with multipart content
 func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, config EmailConfig) {
-	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
-	
 	// Use From address as recipient if To is empty
 	recipients := config.To
 	if len(recipients) == 0 && config.From != "" {
@@ -290,53 +287,41 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 			Msg("Using From address as recipient since To is empty")
 	}
 	
-	// Compose multipart message
-	msg := fmt.Sprintf("From: %s\r\n", config.From)
-	msg += fmt.Sprintf("To: %s\r\n", strings.Join(recipients, ", "))
-	msg += fmt.Sprintf("Subject: %s\r\n", subject)
-	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	msg += "MIME-Version: 1.0\r\n"
-	msg += fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary)
-	msg += "\r\n"
-	
-	// Text part
-	msg += fmt.Sprintf("--%s\r\n", boundary)
-	msg += "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
-	msg += "Content-Transfer-Encoding: 7bit\r\n"
-	msg += "\r\n"
-	msg += textBody + "\r\n"
-	
-	// HTML part
-	msg += fmt.Sprintf("--%s\r\n", boundary)
-	msg += "Content-Type: text/html; charset=\"UTF-8\"\r\n"
-	msg += "Content-Transfer-Encoding: 7bit\r\n"
-	msg += "\r\n"
-	msg += htmlBody + "\r\n"
-	
-	// End boundary
-	msg += fmt.Sprintf("--%s--\r\n", boundary)
-	
-	// Send email
-	var auth smtp.Auth
-	if config.Username != "" && config.Password != "" {
-		auth = smtp.PlainAuth("", config.Username, config.Password, config.SMTPHost)
+	// Create enhanced email configuration with proper STARTTLS support
+	enhancedConfig := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			From:     config.From,
+			To:       recipients,
+			SMTPHost: config.SMTPHost,
+			SMTPPort: config.SMTPPort,
+			Username: config.Username,
+			Password: config.Password,
+		},
+		StartTLS:      config.SMTPPort == 587 || config.SMTPPort == 25, // Use STARTTLS for common ports
+		MaxRetries:    2,
+		RetryDelay:    3,
+		RateLimit:     60,
+		SkipTLSVerify: false,
+		AuthRequired:  config.Username != "" && config.Password != "",
 	}
 	
-	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
+	// Use enhanced email manager for better compatibility
+	enhancedManager := NewEnhancedEmailManager(enhancedConfig)
 	
 	log.Info().
-		Str("smtp", addr).
+		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
 		Strs("to", recipients).
-		Bool("hasAuth", auth != nil).
-		Msg("Attempting to send email via SMTP")
+		Bool("hasAuth", config.Username != "" && config.Password != "").
+		Bool("startTLS", enhancedConfig.StartTLS).
+		Msg("Attempting to send email via SMTP with enhanced support")
 	
-	err := smtp.SendMail(addr, auth, config.From, recipients, []byte(msg))
+	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
 	
 	if err != nil {
 		log.Error().
 			Err(err).
-			Str("smtp", addr).
+			Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 			Strs("recipients", recipients).
 			Msg("Failed to send email notification")
 	} else {

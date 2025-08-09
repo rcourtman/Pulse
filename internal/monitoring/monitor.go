@@ -1223,38 +1223,64 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		return
 	}
 
-	// Get version/status
-	version, err := client.GetVersion(ctx)
-	if err != nil {
-		monErr := errors.WrapConnectionError("get_pbs_version", instanceName, err)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get PBS version")
-		m.state.SetConnectionHealth("pbs-"+instanceName, false)
-
-		// Track auth failure if it's an authentication error
-		if errors.IsAuthError(err) {
-			m.recordAuthFailure(instanceName, "pbs")
-		}
-		return
-	}
-
-	// Reset auth failures on successful connection
-	m.resetAuthFailures(instanceName, "pbs")
-	m.state.SetConnectionHealth("pbs-"+instanceName, true)
-
-	log.Debug().
-		Str("instance", instanceName).
-		Str("version", version.Version).
-		Bool("monitorDatastores", instanceCfg.MonitorDatastores).
-		Msg("PBS version retrieved successfully")
-
+	// Initialize PBS instance with default values
 	pbsInst := models.PBSInstance{
 		ID:               "pbs-" + instanceName,
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
-		Status:           "online",
-		Version:          version.Version,
-		ConnectionHealth: "healthy",
+		Status:           "offline",
+		Version:          "unknown",
+		ConnectionHealth: "unhealthy",
 		LastSeen:         time.Now(),
+	}
+
+	// Try to get version first
+	version, versionErr := client.GetVersion(ctx)
+	if versionErr == nil {
+		// Version succeeded - PBS is online
+		pbsInst.Status = "online"
+		pbsInst.Version = version.Version
+		pbsInst.ConnectionHealth = "healthy"
+		m.resetAuthFailures(instanceName, "pbs")
+		m.state.SetConnectionHealth("pbs-"+instanceName, true)
+		
+		log.Debug().
+			Str("instance", instanceName).
+			Str("version", version.Version).
+			Bool("monitorDatastores", instanceCfg.MonitorDatastores).
+			Msg("PBS version retrieved successfully")
+	} else {
+		log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
+		
+		// Version failed, try datastores as fallback (like test connection does)
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel2()
+		
+		_, datastoreErr := client.GetDatastores(ctx2)
+		if datastoreErr == nil {
+			// Datastores succeeded - PBS is online but version unavailable
+			pbsInst.Status = "online"
+			pbsInst.Version = "connected"
+			pbsInst.ConnectionHealth = "healthy"
+			m.resetAuthFailures(instanceName, "pbs")
+			m.state.SetConnectionHealth("pbs-"+instanceName, true)
+			
+			log.Info().
+				Str("instance", instanceName).
+				Msg("PBS connected (version unavailable but datastores accessible)")
+		} else {
+			// Both failed - PBS is offline
+			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
+			m.state.SetConnectionHealth("pbs-"+instanceName, false)
+			
+			// Track auth failure if it's an authentication error
+			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
+				m.recordAuthFailure(instanceName, "pbs")
+				// Don't continue if auth failed
+				return
+			}
+		}
 	}
 
 	// Get node status (CPU, memory, etc.)
