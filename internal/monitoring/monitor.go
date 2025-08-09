@@ -1503,10 +1503,16 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 					backupType = "vztmpl"
 				} else if content.Content == "iso" {
 					backupType = "iso"
-				} else if strings.Contains(content.Volid, "qemu") || strings.Contains(content.Volid, "/vm/") {
+				} else if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
 					backupType = "qemu"
-				} else if strings.Contains(content.Volid, "lxc") || strings.Contains(content.Volid, "/ct/") {
+				} else if strings.Contains(content.Volid, "/ct/") || strings.Contains(content.Volid, "lxc") {
 					backupType = "lxc"
+				} else if strings.Contains(content.Format, "pbs-ct") {
+					// PBS format check as fallback
+					backupType = "lxc"
+				} else if strings.Contains(content.Format, "pbs-vm") {
+					// PBS format check as fallback
+					backupType = "qemu"
 				}
 
 				// For shared storage (like PBS), use the storage name as node
