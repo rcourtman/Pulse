@@ -265,11 +265,17 @@ func (r Result[T]) IsErr() bool {
 }
 
 // Unwrap returns the value or panics if there's an error
+// Note: Use UnwrapOr for safer error handling
 func (r Result[T]) Unwrap() T {
 	if r.err != nil {
 		panic(r.err)
 	}
 	return r.value
+}
+
+// UnwrapSafe returns the value and error without panicking
+func (r Result[T]) UnwrapSafe() (T, error) {
+	return r.value, r.err
 }
 
 // UnwrapOr returns the value or a default if there's an error

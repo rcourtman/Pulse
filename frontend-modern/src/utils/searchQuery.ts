@@ -46,11 +46,19 @@ export function parseFilter(term: string): ParsedFilter {
   const metricMatch = term.match(/^(cpu|memory|disk|diskRead|diskWrite|networkIn|networkOut)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i);
   if (metricMatch) {
     const [, field, operator, value] = metricMatch;
+    const parsedValue = parseFloat(value);
+    if (isNaN(parsedValue)) {
+      return {
+        type: 'raw',
+        rawText: term
+      };
+    }
+    
     return {
       type: 'metric',
       field: field.toLowerCase(),
       operator: operator as ComparisonOperator,
-      value: parseFloat(value)
+      value: parsedValue
     };
   }
 
@@ -114,7 +122,10 @@ function parseCondition(conditionStr: string): Condition | null {
     return {
       field: field.toLowerCase() as MetricCondition['field'],
       operator: operator as ComparisonOperator,
-      value: parseFloat(value)
+      value: (() => {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+      })()
     } as MetricCondition;
   }
 

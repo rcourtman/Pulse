@@ -397,8 +397,8 @@ const Settings: Component = () => {
         'Content-Type': 'application/json',
       };
       
-      // Add API token if configured
-      const apiToken = localStorage.getItem('apiToken');
+      // Add API token if configured (use sessionStorage for better security)
+      const apiToken = sessionStorage.getItem('apiToken') || localStorage.getItem('apiToken');
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }
@@ -453,14 +453,21 @@ const Settings: Component = () => {
     
     try {
       const fileContent = await importFile()!.text();
-      const exportData = JSON.parse(fileContent);
+      let exportData;
+      try {
+        exportData = JSON.parse(fileContent);
+      } catch (parseError) {
+        showError('Invalid JSON file format');
+        console.error('JSON parse error:', parseError);
+        return;
+      }
       
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
       
-      // Add API token if configured
-      const apiToken = localStorage.getItem('apiToken');
+      // Add API token if configured (use sessionStorage for better security)
+      const apiToken = sessionStorage.getItem('apiToken') || localStorage.getItem('apiToken');
       if (apiToken) {
         headers['X-API-Token'] = apiToken;
       }

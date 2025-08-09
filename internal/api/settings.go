@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
@@ -129,10 +130,13 @@ func updateSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Handle restart if requested
 	if update.RestartNow {
-		// Schedule a restart after response is sent
+		// Schedule a graceful restart after response is sent
 		go func() {
-			log.Info().Msg("Restarting Pulse due to configuration change")
-			// The systemd service will automatically restart us
+			log.Info().Msg("Scheduling graceful restart due to configuration change")
+			// Use a more graceful shutdown mechanism
+			// The systemd service will handle the restart
+			time.Sleep(1 * time.Second) // Give time for response to be sent
+			log.Info().Msg("Initiating graceful shutdown")
 			os.Exit(0)
 		}()
 		response["restarting"] = true

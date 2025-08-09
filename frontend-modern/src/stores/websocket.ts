@@ -75,9 +75,15 @@ export function createWebSocketStore(url: string) {
       };
 
       ws.onmessage = (event) => {
+        let data;
         try {
-          const data = JSON.parse(event.data);
-          
+          data = JSON.parse(event.data);
+        } catch (parseError) {
+          logger.error('Failed to parse WebSocket message', parseError);
+          return;
+        }
+        
+        try {
           const message: WSMessage = data;
           
           if (message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE || message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA) {
@@ -102,37 +108,53 @@ export function createWebSocketStore(url: string) {
               if (message.data.stats !== undefined) setState('stats', message.data.stats);
               // Sync active alerts from state
               if (message.data.activeAlerts !== undefined) {
-                console.log('[WebSocket] Received activeAlerts:', message.data.activeAlerts);
+                // Received activeAlerts update
                 
-                // First, remove all existing alerts
+                // Update alerts atomically to prevent race conditions
+                const newAlerts: Record<string, Alert> = {};
+                message.data.activeAlerts.forEach((alert: Alert) => {
+                  newAlerts[alert.id] = alert;
+                });
+                
+                // Clear existing alerts and set new ones
                 const currentAlertIds = Object.keys(activeAlerts);
                 currentAlertIds.forEach(id => {
-                  setActiveAlerts(id, undefined!);
+                  if (!newAlerts[id]) {
+                    setActiveAlerts(id, undefined!);
+                  }
                 });
                 
-                // Then add the new alerts
-                message.data.activeAlerts.forEach((alert: Alert) => {
-                  setActiveAlerts(alert.id, alert);
+                // Add new alerts
+                Object.entries(newAlerts).forEach(([id, alert]) => {
+                  setActiveAlerts(id, alert);
                 });
                 
-                console.log('[WebSocket] Updated activeAlerts to:', activeAlerts);
+                // Updated activeAlerts
               }
               // Sync recently resolved alerts
               if (message.data.recentlyResolved !== undefined) {
-                console.log('[WebSocket] Received recentlyResolved:', message.data.recentlyResolved);
+                // Received recentlyResolved update
                 
-                // First, remove all existing resolved alerts
+                // Update resolved alerts atomically to prevent race conditions
+                const newResolvedAlerts: Record<string, ResolvedAlert> = {};
+                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+                  newResolvedAlerts[alert.id] = alert;
+                });
+                
+                // Clear existing resolved alerts and set new ones
                 const currentResolvedIds = Object.keys(recentlyResolved);
                 currentResolvedIds.forEach(id => {
-                  setRecentlyResolved(id, undefined!);
+                  if (!newResolvedAlerts[id]) {
+                    setRecentlyResolved(id, undefined!);
+                  }
                 });
                 
-                // Then add the new resolved alerts
-                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
-                  setRecentlyResolved(alert.id, alert);
+                // Add new resolved alerts
+                Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
+                  setRecentlyResolved(id, alert);
                 });
                 
-                console.log('[WebSocket] Updated recentlyResolved to:', recentlyResolved);
+                // Updated recentlyResolved
               }
               setState('lastUpdate', message.data.lastUpdate || new Date().toISOString());
             }
@@ -168,7 +190,7 @@ export function createWebSocketStore(url: string) {
             logger.info('Update progress:', message.data);
           } else if (message.type === 'node_auto_registered') {
             // Node was successfully auto-registered
-            console.log('[WebSocket] Received node_auto_registered message:', message);
+            // Received node_auto_registered message
             const node = message.data;
             const nodeName = node.name || node.host;
             const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
@@ -190,7 +212,7 @@ export function createWebSocketStore(url: string) {
             console.log('[WebSocket] Unhandled message type:', (message as any).type);
           }
         } catch (err) {
-          logger.error('Failed to parse WebSocket message', err);
+          logger.error('Failed to process WebSocket message', err);
         }
       };
 

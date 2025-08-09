@@ -452,11 +452,8 @@ export function Alerts() {
                     await AlertsAPI.updateConfig(alertConfig);
                     
                     // Save email config if it exists (regardless of active tab)
-                    console.log('Active tab:', activeTab());
-                    console.log('Has emailConfig:', !!destinationsRef.emailConfig);
                     if (destinationsRef.emailConfig) {
                       const emailData = destinationsRef.emailConfig();
-                      console.log('Saving email config:', emailData);
                       await NotificationsAPI.updateEmailConfig(emailData);
                     }
                     
@@ -2659,7 +2656,7 @@ function HistoryTab() {
                     try {
                       await AlertsAPI.clearHistory();
                       setAlertHistory([]);
-                      console.log('Alert history cleared successfully');
+                      // Alert history cleared successfully
                     } catch (err) {
                       console.error('Error clearing alert history:', err);
                       showError('Error clearing alert history', 'Please check your connection and try again.');
