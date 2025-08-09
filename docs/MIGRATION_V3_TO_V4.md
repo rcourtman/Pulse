@@ -112,7 +112,7 @@ This means you're trying to run v4 with v3 startup scripts. Solution:
 v4 uses port 7655 by default. Update your firewall rules and bookmarks.
 
 ### Can't Find .env File
-v4 doesn't use .env files. Configuration is done through the web UI and stored encrypted.
+v4 stores configuration through the web UI. Environment variables can be used for deployment overrides but are not required.
 
 ### Credentials Not Working
 v4 has its own authentication system. Default credentials on fresh install:
