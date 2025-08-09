@@ -179,7 +179,7 @@ const UnifiedBackups: Component = () => {
       } else if (backup.type === 'lxc') {
         displayType = 'LXC';
       } else {
-        displayType = 'VM'; // Default fallback
+        displayType = 'LXC'; // Default fallback (most people have more containers than VMs)
       }
       
       unified.push({
