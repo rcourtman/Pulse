@@ -160,6 +160,7 @@ func Load() (*Config, error) {
 	
 	// Initialize persistence
 	persistence := NewConfigPersistence(dataDir)
+	hasSystemConfig := false
 	if persistence != nil {
 		// Store global persistence for saving
 		globalPersistence = persistence
@@ -175,6 +176,7 @@ func Load() (*Config, error) {
 		
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+			hasSystemConfig = true
 			if systemSettings.PollingInterval > 0 {
 				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
@@ -237,11 +239,16 @@ func Load() (*Config, error) {
 		log.Info().Str("time", updateTime).Msg("Overriding auto-update time from env var")
 	}
 	
-	// Other settings from env vars
+	// Other settings from env vars - only use if not already set from system.json
 	if pollingInterval := os.Getenv("POLLING_INTERVAL"); pollingInterval != "" {
-		if i, err := strconv.Atoi(pollingInterval); err == nil && i > 0 {
-			cfg.PollingInterval = time.Duration(i) * time.Second
-			log.Info().Int("seconds", i).Msg("Overriding polling interval from env var")
+		// Only use env var if system.json doesn't exist (for backwards compatibility)
+		if !hasSystemConfig {
+			if i, err := strconv.Atoi(pollingInterval); err == nil && i > 0 {
+				cfg.PollingInterval = time.Duration(i) * time.Second
+				log.Info().Int("seconds", i).Msg("Using polling interval from env var (no system.json exists)")
+			}
+		} else {
+			log.Debug().Str("env_value", pollingInterval).Msg("Ignoring POLLING_INTERVAL env var - using system.json value")
 		}
 	}
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
