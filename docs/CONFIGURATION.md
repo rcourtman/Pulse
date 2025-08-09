@@ -15,40 +15,48 @@ Most settings are configured through the web interface:
 - **Updates**: Configure update channels and auto-update
 - **Security**: Export/import encrypted configurations
 
-### 2. Environment File (.env)
-For non-sensitive system settings that require a restart:
+### 2. Environment Variables (Deployment Overrides)
+Environment variables override UI settings. Use them for Docker/systemd deployments:
 
+**Docker Example:**
 ```bash
-# Copy the example file
-sudo cp /opt/pulse/.env.example /etc/pulse/.env
+docker run -d \
+  -e UPDATE_CHANNEL=rc \
+  -e POLLING_INTERVAL=10 \
+  -e API_TOKEN=your-secure-token \
+  rcourtman/pulse:latest
+```
 
-# Edit settings
+**Systemd Example:**
+```bash
+# Edit service
+sudo systemctl edit pulse-backend
+
+# Add overrides:
+[Service]
+Environment="UPDATE_CHANNEL=rc"
+Environment="POLLING_INTERVAL=10"
+```
+
+**.env File (Optional):**
+You can use a .env file for convenience, but UI settings take precedence:
+```bash
+# Create .env for deployment overrides
 sudo nano /etc/pulse/.env
-
-# Restart to apply changes
+# Add: UPDATE_CHANNEL=rc
 sudo systemctl restart pulse-backend
 ```
 
-**Available .env settings:**
-
-Server Configuration:
-- `FRONTEND_PORT` - Web UI port (default: 7655)
-- `BACKEND_PORT` - Backend API port (default: 3000)
-
-Monitoring:
-- `POLLING_INTERVAL` - How often to check nodes in seconds (default: 5)
-- `CONNECTION_TIMEOUT` - Connection timeout in seconds (default: 10)
-
-Updates:
-- `UPDATE_CHANNEL` - Update channel: stable or rc (default: stable)
-- `AUTO_UPDATE_ENABLED` - Enable automatic updates: true/false (default: false)
-- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between update checks (default: 24)
-- `AUTO_UPDATE_TIME` - Time to apply updates in HH:MM format (default: 03:00)
-
-Other:
-- `ALLOWED_ORIGINS` - CORS settings for reverse proxies
-- `LOG_LEVEL` - Logging verbosity: debug/info/warn/error (default: info)
-- `METRICS_RETENTION_DAYS` - How long to keep metrics (default: 7)
+**Available variables:**
+- `FRONTEND_PORT` - Web UI port
+- `POLLING_INTERVAL` - Node check interval (seconds)
+- `CONNECTION_TIMEOUT` - Connection timeout (seconds)
+- `UPDATE_CHANNEL` - stable or rc
+- `AUTO_UPDATE_ENABLED` - true/false
+- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks
+- `AUTO_UPDATE_TIME` - Update time (HH:MM)
+- `ALLOWED_ORIGINS` - CORS origins
+- `LOG_LEVEL` - debug/info/warn/error
 
 ### 3. Secure Environment Variables
 For sensitive data like API tokens and passwords:

@@ -121,13 +121,13 @@ func Load() (*Config, error) {
 		dataDir = dir
 	}
 	
-	// Load .env file if it exists (from config directory)
+	// Load .env file if it exists (for deployment overrides)
 	envFile := filepath.Join(dataDir, ".env")
 	if _, err := os.Stat(envFile); err == nil {
 		if err := godotenv.Load(envFile); err != nil {
 			log.Warn().Err(err).Str("file", envFile).Msg("Failed to load .env file")
 		} else {
-			log.Info().Str("file", envFile).Msg("Loaded configuration from .env file")
+			log.Info().Str("file", envFile).Msg("Loaded .env file for deployment overrides")
 		}
 	}
 	
