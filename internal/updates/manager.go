@@ -270,7 +270,87 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 
 	m.updateStatus("applying", 80, "Applying update...")
 
-	// Apply update
+	// Extract version from download URL or use timestamp
+	version := "unknown"
+	if parts := strings.Split(downloadURL, "/"); len(parts) > 0 {
+		for _, part := range parts {
+			if strings.HasPrefix(part, "v") {
+				version = strings.TrimPrefix(part, "v")
+				version = strings.TrimSuffix(version, ".tar.gz")
+				break
+			}
+		}
+	}
+
+	// Check if we're running as root (container/direct install)
+	isRoot := os.Geteuid() == 0
+	
+	if isRoot {
+		// Running as root - can directly update
+		log.Info().Msg("Running as root, performing direct update")
+		
+		// Apply the update files immediately
+		if err := m.applyUpdateFiles(extractDir); err != nil {
+			m.updateStatus("error", 80, "Failed to apply update")
+			// Attempt to restore backup
+			if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
+				log.Error().Err(restoreErr).Msg("Failed to restore backup")
+			}
+			return fmt.Errorf("failed to apply update: %w", err)
+		}
+		
+		m.updateStatus("restarting", 95, "Restarting service...")
+		
+		// Schedule a clean exit after a short delay - systemd will restart us
+		go func() {
+			time.Sleep(2 * time.Second)
+			log.Info().Msg("Exiting for restart after update")
+			os.Exit(0)
+		}()
+		
+		m.updateStatus("completed", 100, "Update completed, restarting...")
+		return nil
+	}
+	
+	// Not root - try to use updater script with sudo
+	updaterPath := "/opt/pulse/scripts/pulse-updater"
+	if stat, err := os.Stat(updaterPath); err == nil {
+		log.Info().Str("path", updaterPath).Int64("size", stat.Size()).Msg("Found updater script, using sudo")
+		
+		// Write update info to file for the updater to process
+		jobFile := "/tmp/pulse-update-job.json"
+		jobData := map[string]string{
+			"version": version,
+			"url": downloadURL,
+			"extractDir": extractDir,
+		}
+		
+		jobJSON, _ := json.Marshal(jobData)
+		if err := os.WriteFile(jobFile, jobJSON, 0644); err != nil {
+			m.updateStatus("error", 80, "Failed to write update job")
+			return fmt.Errorf("failed to write update job: %w", err)
+		}
+		
+		// Try to use sudo to run the updater script
+		cmd := exec.Command("sudo", updaterPath, version, downloadURL)
+		
+		// Start the command but don't wait for it to complete
+		if err := cmd.Start(); err != nil {
+			m.updateStatus("error", 80, "Failed to start updater")
+			log.Error().Err(err).Msg("Failed to start updater script with sudo")
+			return fmt.Errorf("failed to start updater: %w", err)
+		}
+		
+		log.Info().Msg("Update script started with sudo")
+		m.updateStatus("completed", 100, "Update started, service will restart in a few seconds...")
+		
+		// The updater script will continue running after we exit
+		return nil
+	} else {
+		log.Warn().Err(err).Str("path", updaterPath).Msg("Updater script not found, using fallback")
+	}
+
+	// Fallback to direct application (for backward compatibility)
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		m.updateStatus("error", 80, "Failed to apply update")
 		// Attempt to restore backup
@@ -551,10 +631,25 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		binaryPath = "/usr/local/bin/pulse"
 	}
 	
-	// Copy the pulse binary to the detected location
-	cmd := exec.Command("cp", pulseBinary, binaryPath)
+	// Copy the pulse binary to a temporary location first, then move atomically
+	tempBinary := binaryPath + ".new"
+	cmd := exec.Command("cp", pulseBinary, tempBinary)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy pulse binary: %w", err)
+	}
+	
+	// Make it executable
+	if err := os.Chmod(tempBinary, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+	
+	// Atomically replace the old binary with the new one
+	if err := os.Rename(tempBinary, binaryPath); err != nil {
+		// If rename fails (cross-device), try mv command
+		cmd = exec.Command("mv", "-f", tempBinary, binaryPath)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to replace pulse binary: %w", err)
+		}
 	}
 	
 	// Copy frontend directory if it exists 
@@ -585,10 +680,6 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 			log.Warn().Err(err).Msg("Failed to copy VERSION file")
 		}
 	}
-
-	// Set permissions on binary
-	cmd = exec.Command("chmod", "+x", binaryPath)
-	cmd.Run()
 	
 	// Set ownership if /opt/pulse exists
 	if _, err := os.Stat("/opt/pulse"); err == nil {
@@ -601,33 +692,6 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 	return nil
 }
 
-// restartService attempts to restart the Pulse service
-func (m *Manager) restartService() error {
-	// Try different service names (pulse-backend for dev, pulse for prod)
-	serviceNames := []string{"pulse", "pulse-backend"}
-	
-	for _, service := range serviceNames {
-		// Try systemctl first
-		cmd := exec.Command("systemctl", "restart", service)
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
-
-		// Try with sudo
-		cmd = exec.Command("sudo", "systemctl", "restart", service)
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
-
-		// Try pkexec (polkit)
-		cmd = exec.Command("pkexec", "systemctl", "restart", service)
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("failed to restart service")
-}
 
 // updateStatus updates the current status
 func (m *Manager) updateStatus(status string, progress int, message string) {
