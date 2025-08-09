@@ -150,6 +150,11 @@ const UnifiedBackups: Component = () => {
 
     // Normalize local backups (including PBS through PVE storage)
     state.pveBackups?.storageBackups?.forEach((backup) => {
+      // Skip templates and ISOs - they're not backups
+      if (backup.type === 'vztmpl' || backup.type === 'iso') {
+        return;
+      }
+      
       // Determine if this is actually a PBS backup based on storage
       const backupType = backup.isPBS ? 'remote' : 'local';
       
@@ -173,10 +178,6 @@ const UnifiedBackups: Component = () => {
         displayType = 'VM';
       } else if (backup.type === 'lxc') {
         displayType = 'LXC';
-      } else if (backup.type === 'vztmpl') {
-        displayType = 'Template';
-      } else if (backup.type === 'iso') {
-        displayType = 'ISO';
       } else {
         displayType = 'VM'; // Default fallback
       }
