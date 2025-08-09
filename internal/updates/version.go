@@ -91,6 +91,12 @@ func (v *Version) Compare(other *Version) int {
 		return -1 // v is prerelease, other is release
 	}
 	if v.Prerelease != other.Prerelease {
+		// Try to parse RC numbers for comparison
+		vRC := extractRCNumber(v.Prerelease)
+		otherRC := extractRCNumber(other.Prerelease)
+		if vRC >= 0 && otherRC >= 0 {
+			return compareInts(vRC, otherRC)
+		}
 		return strings.Compare(v.Prerelease, other.Prerelease)
 	}
 	
@@ -199,4 +205,17 @@ func compareInts(a, b int) int {
 		return 1
 	}
 	return 0
+}
+
+// extractRCNumber extracts the RC number from a prerelease string like "rc.9" or "rc9"
+func extractRCNumber(prerelease string) int {
+	re := regexp.MustCompile(`rc\.?(\d+)`)
+	matches := re.FindStringSubmatch(strings.ToLower(prerelease))
+	if len(matches) > 1 {
+		num, err := strconv.Atoi(matches[1])
+		if err == nil {
+			return num
+		}
+	}
+	return -1
 }

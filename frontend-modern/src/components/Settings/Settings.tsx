@@ -155,6 +155,13 @@ const Settings: Component = () => {
     const progress = updateProgress();
     if (progress) {
       setUpdateStatus(progress);
+      
+      // Show appropriate messages based on status
+      if (progress.status === 'completed') {
+        showSuccess('Update completed! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new version.');
+      } else if (progress.status === 'restarting') {
+        showSuccess('Service is restarting. Please wait a moment then refresh the page.');
+      }
     }
   });
   
@@ -444,8 +451,7 @@ const Settings: Component = () => {
             if (status.status === 'error') {
               showError(status.error || 'Update failed');
             } else if (status.status === 'completed') {
-              showSuccess('Update completed successfully! Refreshing page...');
-              setTimeout(() => window.location.reload(), 2000);
+              showSuccess('Update completed! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new version.');
             }
           }
         } catch (error) {
@@ -466,14 +472,11 @@ const Settings: Component = () => {
                 setUpdateStatus({
                   status: 'completed',
                   progress: 100,
-                  message: `Update successful! Now running version ${newVersion.version}`,
+                  message: `Update successful! Now running version ${newVersion.version}. Please refresh the page.`,
                   updatedAt: new Date().toISOString()
                 });
                 setVersionInfo(newVersion);
-                showSuccess(`Successfully updated to ${newVersion.version}. Refreshing page...`);
-                
-                // Refresh the page after a short delay
-                setTimeout(() => window.location.reload(), 3000);
+                showSuccess(`Successfully updated to ${newVersion.version}! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new interface.`);
               }
             } catch (e) {
               // Service still down, keep trying
