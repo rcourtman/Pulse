@@ -1,0 +1,18 @@
+[Unit]
+Description=Pulse Update Task
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/tmp
+ExecStart=/opt/pulse/scripts/pulse-updater %i
+StandardOutput=journal
+StandardError=journal
+
+# Allow writing to system directories
+ProtectSystem=false
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

@@ -423,6 +423,11 @@ const Settings: Component = () => {
       return;
     }
     
+    const previousVersion = versionInfo()?.version;
+    let connectionLostCount = 0;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 30; // 30 seconds max
+    
     try {
       await UpdatesAPI.applyUpdate(info.downloadUrl);
       showSuccess('Update started. Pulse will restart automatically.');
@@ -432,16 +437,60 @@ const Settings: Component = () => {
         try {
           const status = await UpdatesAPI.getUpdateStatus();
           setUpdateStatus(status);
+          connectionLostCount = 0; // Reset on successful connection
           
           if (status.status === 'completed' || status.status === 'error') {
             clearInterval(pollStatus);
             if (status.status === 'error') {
               showError(status.error || 'Update failed');
+            } else if (status.status === 'completed') {
+              showSuccess('Update completed successfully! Refreshing page...');
+              setTimeout(() => window.location.reload(), 2000);
             }
           }
         } catch (error) {
           // Service might be restarting
           console.log('Status check failed, service may be restarting');
+          connectionLostCount++;
+          
+          // If we've lost connection for a few polls, assume service is restarting
+          // Wait longer before trying to reconnect (service needs time to restart)
+          if (connectionLostCount >= 5 && reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            
+            // Try to check if the service is back with new version
+            try {
+              const newVersion = await UpdatesAPI.getVersion();
+              if (newVersion.version !== previousVersion) {
+                clearInterval(pollStatus);
+                setUpdateStatus({
+                  status: 'completed',
+                  progress: 100,
+                  message: `Update successful! Now running version ${newVersion.version}`,
+                  updatedAt: new Date().toISOString()
+                });
+                setVersionInfo(newVersion);
+                showSuccess(`Successfully updated to ${newVersion.version}. Refreshing page...`);
+                
+                // Refresh the page after a short delay
+                setTimeout(() => window.location.reload(), 3000);
+              }
+            } catch (e) {
+              // Service still down, keep trying
+            }
+          }
+          
+          // Give up after too many attempts
+          if (reconnectAttempts >= maxReconnectAttempts) {
+            clearInterval(pollStatus);
+            setUpdateStatus({
+              status: 'error',
+              progress: 0,
+              message: 'Update status unknown. Please refresh the page.',
+              updatedAt: new Date().toISOString()
+            });
+            showError('Could not verify update status. Please refresh the page.');
+          }
         }
       }, 1000);
     } catch (error) {

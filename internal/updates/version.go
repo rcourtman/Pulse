@@ -143,7 +143,7 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	
 	// Final fallback
 	return &VersionInfo{
-		Version:       "4.0.7",
+		Version:       "4.1.0-rc.6",
 		Build:         "release",
 		Runtime:       "go",
 		IsDevelopment: false,

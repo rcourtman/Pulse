@@ -1,0 +1,163 @@
+#!/bin/bash
+# Pulse Update Script - Run with sudo by pulse user  
+# Usage: pulse-updater <version> <download_url>
+
+# If not running as root from systemd, schedule via systemd
+if [ "$PULSE_UPDATER_SYSTEMD" != "yes" ] && [ "$EUID" -eq 0 ]; then
+    VERSION="$1"
+    DOWNLOAD_URL="$2"
+    
+    # Create a systemd oneshot service that will run after we exit
+    cat > /etc/systemd/system/pulse-updater-oneshot.service <<EOF
+[Unit]
+Description=Pulse Update Task
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+Environment="PULSE_UPDATER_SYSTEMD=yes"
+ExecStartPre=/bin/sleep 5
+ExecStart=/opt/pulse/scripts/pulse-updater $VERSION $DOWNLOAD_URL
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Reload systemd and start the oneshot service
+    systemctl daemon-reload
+    systemctl start pulse-updater-oneshot.service &
+    
+    exit 0
+fi
+
+set -e
+
+VERSION="$1"
+DOWNLOAD_URL="$2"
+PULSE_DIR="/opt/pulse"
+BINARY_PATH="/usr/local/bin/pulse"
+TEMP_DIR="/tmp/pulse-update-$$"
+BACKUP_DIR="/opt/pulse/backups"
+LOG_FILE="/tmp/pulse-updater.log"
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# Cleanup function
+cleanup() {
+    rm -rf "$TEMP_DIR"
+}
+trap cleanup EXIT
+
+# Validate arguments
+if [ -z "$VERSION" ] || [ -z "$DOWNLOAD_URL" ]; then
+    log "ERROR: Usage: pulse-updater <version> <download_url>"
+    exit 1
+fi
+
+log "Starting update to version $VERSION"
+
+# Create temp directory
+mkdir -p "$TEMP_DIR"
+cd "$TEMP_DIR"
+
+# Download update
+log "Downloading from $DOWNLOAD_URL"
+if ! wget -q --timeout=60 "$DOWNLOAD_URL" -O update.tar.gz; then
+    log "ERROR: Failed to download update"
+    exit 1
+fi
+
+# Extract update
+log "Extracting update package"
+if ! tar -xzf update.tar.gz; then
+    log "ERROR: Failed to extract update"
+    exit 1
+fi
+
+# Find the binary (handle both single binary and full package)
+PULSE_BINARY=""
+if [ -f "pulse" ]; then
+    PULSE_BINARY="pulse"
+elif [ -f "pulse-linux-amd64" ]; then
+    PULSE_BINARY="pulse-linux-amd64"
+else
+    log "ERROR: No pulse binary found in update package"
+    exit 1
+fi
+
+# Verify the binary is executable
+if ! file "$PULSE_BINARY" | grep -q "executable"; then
+    log "ERROR: Downloaded file is not a valid executable"
+    exit 1
+fi
+
+# Create backup
+log "Creating backup of current version"
+mkdir -p "$BACKUP_DIR"
+if [ -f "$BINARY_PATH" ]; then
+    CURRENT_VERSION=$(cat "$PULSE_DIR/VERSION" 2>/dev/null || echo "unknown")
+    cp "$BINARY_PATH" "$BACKUP_DIR/pulse-backup-${CURRENT_VERSION}-$(date +%Y%m%d-%H%M%S)"
+    
+    # Keep only last 5 backups
+    ls -t "$BACKUP_DIR"/pulse-backup-* 2>/dev/null | tail -n +6 | xargs -r rm
+fi
+
+# Stop the service
+log "Stopping pulse service"
+systemctl stop pulse || true
+
+# Install new binary
+log "Installing new binary"
+cp "$PULSE_BINARY" "$BINARY_PATH"
+chmod 755 "$BINARY_PATH"
+chown root:root "$BINARY_PATH"
+
+# Update frontend if included
+if [ -d "frontend-modern" ]; then
+    log "Updating frontend files"
+    rm -rf "$PULSE_DIR/frontend-modern.old"
+    [ -d "$PULSE_DIR/frontend-modern" ] && mv "$PULSE_DIR/frontend-modern" "$PULSE_DIR/frontend-modern.old"
+    cp -r frontend-modern "$PULSE_DIR/"
+    chown -R pulse:pulse "$PULSE_DIR/frontend-modern"
+fi
+
+# Update VERSION file
+echo "$VERSION" > "$PULSE_DIR/VERSION"
+chown pulse:pulse "$PULSE_DIR/VERSION"
+
+# Start the service
+log "Starting pulse service"
+if ! systemctl start pulse; then
+    log "ERROR: Failed to start service, attempting rollback"
+    
+    # Rollback
+    LAST_BACKUP=$(ls -t "$BACKUP_DIR"/pulse-backup-* 2>/dev/null | head -1)
+    if [ -n "$LAST_BACKUP" ]; then
+        cp "$LAST_BACKUP" "$BINARY_PATH"
+        chmod 755 "$BINARY_PATH"
+        systemctl start pulse || true
+        log "Rolled back to previous version"
+    fi
+    exit 1
+fi
+
+# Verify service is running
+sleep 2
+if systemctl is-active --quiet pulse; then
+    log "Update completed successfully to version $VERSION"
+    
+    # Clean up old frontend backup after successful update
+    rm -rf "$PULSE_DIR/frontend-modern.old"
+else
+    log "ERROR: Service failed to start after update"
+    exit 1
+fi
+
+exit 0
