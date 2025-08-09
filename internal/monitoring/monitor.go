@@ -1076,12 +1076,15 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 
 			// Use appropriate node name
 			nodeID := node.Node
+			storageID := fmt.Sprintf("%s-%s-%s", instanceName, nodeID, storage.Storage)
 			if shared {
 				nodeID = "shared"
+				// Use a consistent ID for shared storage across all instances
+				storageID = fmt.Sprintf("shared-%s", storage.Storage)
 			}
 
 			modelStorage := models.Storage{
-				ID:       fmt.Sprintf("%s-%s-%s", instanceName, nodeID, storage.Storage),
+				ID:       storageID,
 				Name:     storage.Storage,
 				Node:     nodeID,
 				Instance: instanceName,
@@ -1500,9 +1503,9 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 					backupType = "vztmpl"
 				} else if content.Content == "iso" {
 					backupType = "iso"
-				} else if strings.Contains(content.Volid, "qemu") {
+				} else if strings.Contains(content.Volid, "qemu") || strings.Contains(content.Volid, "/vm/") {
 					backupType = "qemu"
-				} else if strings.Contains(content.Volid, "lxc") {
+				} else if strings.Contains(content.Volid, "lxc") || strings.Contains(content.Volid, "/ct/") {
 					backupType = "lxc"
 				}
 

@@ -2,11 +2,8 @@ package notifications
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -85,6 +82,8 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 }
 
 // prepareWebhookData prepares data for template rendering
+// NOTE: This function is now defined in notifications.go to be shared
+/*
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
 	
@@ -106,8 +105,11 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		AlertCount:   1,
 	}
 }
+*/
 
 // generatePayloadFromTemplate renders the payload using Go templates
+// NOTE: This function is now defined in notifications.go to be shared
+/*
 func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
 	// Create template with helper functions
 	funcMap := template.FuncMap{
@@ -135,6 +137,7 @@ func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, da
 
 	return buf.Bytes(), nil
 }
+*/
 
 // shouldSendWebhook checks if alert matches webhook filter rules
 func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, alert *alerts.Alert) bool {
@@ -300,6 +303,8 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 }
 
 // formatWebhookDuration formats a duration in a human-readable way
+// NOTE: This function is now defined in notifications.go to be shared
+/*
 func formatWebhookDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
@@ -313,6 +318,7 @@ func formatWebhookDuration(d time.Duration) string {
 		return fmt.Sprintf("%dd %dh", days, hours)
 	}
 }
+*/
 
 // TestEnhancedWebhook tests a webhook with a specific payload
 func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig) (int, string, error) {

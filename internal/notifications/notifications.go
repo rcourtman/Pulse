@@ -8,6 +8,7 @@ import (
 	"net/smtp"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -69,6 +70,7 @@ type WebhookConfig struct {
 	Method  string            `json:"method"`
 	Headers map[string]string `json:"headers"`
 	Enabled bool              `json:"enabled"`
+	Service string            `json:"service"` // discord, slack, teams, etc.
 }
 
 // NewNotificationManager creates a new notification manager
@@ -353,23 +355,65 @@ func (n *NotificationManager) sendEmailWithContent(subject, body string, config 
 
 // sendGroupedWebhook sends a grouped webhook notification
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) {
-	// Create webhook payload
-	payload := map[string]interface{}{
-		"alerts": alertList,
-		"count": len(alertList),
-		"timestamp": time.Now().Unix(),
-		"source": "pulse-monitoring",
-		"grouped": true,
-	}
+	var jsonData []byte
+	var err error
 	
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Int("alertCount", len(alertList)).
-			Msg("Failed to marshal grouped webhook payload")
-		return
+	// For Discord, send individual embeds for each alert
+	if webhook.Service == "discord" && len(alertList) > 0 {
+		// For simplicity, send the first alert with a note about others
+		// Discord webhooks work better with single embeds
+		alert := alertList[0]
+		
+		// Convert to enhanced webhook to use template
+		enhanced := EnhancedWebhookConfig{
+			WebhookConfig: webhook,
+			Service:       "discord",
+		}
+		
+		// Get Discord template
+		templates := GetWebhookTemplates()
+		for _, tmpl := range templates {
+			if tmpl.Service == "discord" {
+				enhanced.PayloadTemplate = tmpl.PayloadTemplate
+				break
+			}
+		}
+		
+		// Modify message if multiple alerts
+		if len(alertList) > 1 {
+			alert.Message = fmt.Sprintf("%s (and %d more alerts)", alert.Message, len(alertList)-1)
+		}
+		
+		// Prepare data and generate payload
+		data := n.prepareWebhookData(alert, nil)
+		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Int("alertCount", len(alertList)).
+				Msg("Failed to generate Discord payload for grouped alerts")
+			return
+		}
+	} else {
+		// Use generic payload for other services
+		payload := map[string]interface{}{
+			"alerts": alertList,
+			"count": len(alertList),
+			"timestamp": time.Now().Unix(),
+			"source": "pulse-monitoring",
+			"grouped": true,
+		}
+		
+		jsonData, err = json.Marshal(payload)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Int("alertCount", len(alertList)).
+				Msg("Failed to marshal grouped webhook payload")
+			return
+		}
 	}
 	
 	// Send using same request logic
@@ -434,25 +478,119 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 
 // sendWebhook sends a webhook notification
 func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.Alert) {
-	// Create webhook payload
-	payload := map[string]interface{}{
-		"alert": alert,
-		"timestamp": time.Now().Unix(),
-		"source": "pulse-monitoring",
-	}
+	var jsonData []byte
+	var err error
 	
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Str("alertID", alert.ID).
-			Msg("Failed to marshal webhook payload")
-		return
+	// Check if this is a Discord webhook and use the proper template
+	if webhook.Service == "discord" {
+		// Convert to enhanced webhook to use template
+		enhanced := EnhancedWebhookConfig{
+			WebhookConfig: webhook,
+			Service:       "discord",
+		}
+		
+		// Get Discord template
+		templates := GetWebhookTemplates()
+		for _, tmpl := range templates {
+			if tmpl.Service == "discord" {
+				enhanced.PayloadTemplate = tmpl.PayloadTemplate
+				break
+			}
+		}
+		
+		// Prepare data and generate payload
+		data := n.prepareWebhookData(alert, nil)
+		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Str("alertID", alert.ID).
+				Msg("Failed to generate Discord payload")
+			return
+		}
+	} else {
+		// Use generic payload for other services
+		payload := map[string]interface{}{
+			"alert": alert,
+			"timestamp": time.Now().Unix(),
+			"source": "pulse-monitoring",
+		}
+		
+		jsonData, err = json.Marshal(payload)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Str("alertID", alert.ID).
+				Msg("Failed to marshal webhook payload")
+			return
+		}
 	}
 	
 	// Send using common request logic
 	n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID))
+}
+
+// prepareWebhookData prepares data for template rendering
+func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
+	duration := time.Since(alert.StartTime)
+	
+	return WebhookPayloadData{
+		ID:           alert.ID,
+		Level:        string(alert.Level),
+		Type:         alert.Type,
+		ResourceName: alert.ResourceName,
+		ResourceID:   alert.ResourceID,
+		Node:         alert.Node,
+		Instance:     alert.Instance,
+		Message:      alert.Message,
+		Value:        alert.Value,
+		Threshold:    alert.Threshold,
+		StartTime:    alert.StartTime.Format(time.RFC3339),
+		Duration:     formatWebhookDuration(duration),
+		Timestamp:    time.Now().Format(time.RFC3339),
+		CustomFields: customFields,
+		AlertCount:   1,
+	}
+}
+
+// generatePayloadFromTemplate renders the payload using Go templates
+func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
+	// Create template with helper functions
+	funcMap := template.FuncMap{
+		"title": strings.Title,
+		"upper": strings.ToUpper,
+		"lower": strings.ToLower,
+		"printf": fmt.Sprintf,
+	}
+	
+	tmpl, err := template.New("webhook").Funcs(funcMap).Parse(templateStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("template execution failed: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// formatWebhookDuration formats a duration in a human-readable way
+func formatWebhookDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	} else if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	} else if d < 24*time.Hour {
+		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+	} else {
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		return fmt.Sprintf("%dd %dh", days, hours)
+	}
 }
 
 // groupAlerts groups alerts based on configuration
