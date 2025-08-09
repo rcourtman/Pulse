@@ -123,6 +123,8 @@ docker rm pulse
 ### Manual Install
 Settings → System → Check for Updates
 
+After updates complete, refresh your browser (Ctrl+F5 or Cmd+Shift+R) to load the new version.
+
 ## API
 
 ```bash

@@ -1,7 +1,0 @@
-# Pulse update permissions
-# This file should be copied to /etc/sudoers.d/pulse
-# 
-# Allows the pulse user to run the pulse-updater script as root without password
-# This enables auto-updates from the web interface
-
-pulse ALL=(root) NOPASSWD: /opt/pulse/scripts/pulse-updater
