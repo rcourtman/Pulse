@@ -1,5 +1,7 @@
 import type { Alert } from '@/types/api';
 import type { AlertConfig } from '@/types/alerts';
+// Error handling utilities available for future use
+// import { handleError, createErrorBoundary } from '@/utils/errorHandler';
 
 export class AlertsAPI {
   private static baseUrl = '/api/alerts';

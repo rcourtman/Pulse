@@ -18,8 +18,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -40,22 +40,22 @@ type PVEClientInterface interface {
 
 // Monitor handles all monitoring operations
 type Monitor struct {
-	config         *config.Config
-	state          *models.State
-	pveClients     map[string]PVEClientInterface
-	pbsClients     map[string]*pbs.Client
-	mu             sync.RWMutex
-	startTime      time.Time
-	rateTracker    *RateTracker
-	metricsHistory *MetricsHistory
-	alertManager   *alerts.Manager
-	notificationMgr *notifications.NotificationManager
-	configPersist  *config.ConfigPersistence
-	discoveryService *discovery.Service // Background discovery service
-	activePollCount int32 // Number of active polling operations
-	pollCounter    int64 // Counter for polling cycles
-	authFailures   map[string]int // Track consecutive auth failures per node
-	lastAuthAttempt map[string]time.Time // Track last auth attempt time
+	config           *config.Config
+	state            *models.State
+	pveClients       map[string]PVEClientInterface
+	pbsClients       map[string]*pbs.Client
+	mu               sync.RWMutex
+	startTime        time.Time
+	rateTracker      *RateTracker
+	metricsHistory   *MetricsHistory
+	alertManager     *alerts.Manager
+	notificationMgr  *notifications.NotificationManager
+	configPersist    *config.ConfigPersistence
+	discoveryService *discovery.Service   // Background discovery service
+	activePollCount  int32                // Number of active polling operations
+	pollCounter      int64                // Counter for polling cycles
+	authFailures     map[string]int       // Track consecutive auth failures per node
+	lastAuthAttempt  map[string]time.Time // Track last auth attempt time
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -92,42 +92,42 @@ func sortContent(content string) string {
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	statuses := make(map[string]bool)
-	
+
 	// Check PVE clients
 	for name, client := range m.pveClients {
 		// Simple check - if we have a client, consider it connected
 		// In reality, you'd want to check if recent API calls succeeded
 		statuses["pve-"+name] = client != nil
 	}
-	
+
 	// Check PBS clients
 	for name, client := range m.pbsClients {
 		statuses["pbs-"+name] = client != nil
 	}
-	
+
 	return statuses
 }
 
 // New creates a new Monitor instance
 func New(cfg *config.Config) (*Monitor, error) {
 	m := &Monitor{
-		config:         cfg,
-		state:          models.NewState(),
-		pveClients:     make(map[string]PVEClientInterface),
-		pbsClients:     make(map[string]*pbs.Client),
-		startTime:      time.Now(),
-		rateTracker:    NewRateTracker(),
-		metricsHistory: NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
-		alertManager:   alerts.NewManager(),
-		notificationMgr: notifications.NewNotificationManager(),
-		configPersist:  config.NewConfigPersistence(cfg.DataPath),
+		config:           cfg,
+		state:            models.NewState(),
+		pveClients:       make(map[string]PVEClientInterface),
+		pbsClients:       make(map[string]*pbs.Client),
+		startTime:        time.Now(),
+		rateTracker:      NewRateTracker(),
+		metricsHistory:   NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
+		alertManager:     alerts.NewManager(),
+		notificationMgr:  notifications.NewNotificationManager(),
+		configPersist:    config.NewConfigPersistence(cfg.DataPath),
 		discoveryService: nil, // Will be initialized in Start()
-		authFailures:   make(map[string]int),
-		lastAuthAttempt: make(map[string]time.Time),
+		authFailures:     make(map[string]int),
+		lastAuthAttempt:  make(map[string]time.Time),
 	}
-	
+
 	// Load saved configurations
 	if alertConfig, err := m.configPersist.LoadAlertConfig(); err == nil {
 		m.alertManager.UpdateConfig(*alertConfig)
@@ -147,13 +147,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 	} else {
 		log.Warn().Err(err).Msg("Failed to load alert configuration")
 	}
-	
+
 	if emailConfig, err := m.configPersist.LoadEmailConfig(); err == nil {
 		m.notificationMgr.SetEmailConfig(*emailConfig)
 	} else {
 		log.Warn().Err(err).Msg("Failed to load email configuration")
 	}
-	
+
 	if webhooks, err := m.configPersist.LoadWebhooks(); err == nil {
 		for _, webhook := range webhooks {
 			m.notificationMgr.AddWebhook(webhook)
@@ -171,7 +171,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 			Str("user", pve.User).
 			Bool("hasToken", pve.TokenName != "").
 			Msg("Configuring PVE instance")
-		
+
 		// Check if this is a cluster
 		if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
 			// Create cluster client
@@ -182,7 +182,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				if host == "" {
 					host = ep.Host
 				}
-				
+
 				// Skip if no host information
 				if host == "" {
 					log.Warn().
@@ -190,7 +190,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 						Msg("Skipping cluster endpoint with no host/IP")
 					continue
 				}
-				
+
 				// Ensure we have the full URL
 				if !strings.HasPrefix(host, "http") {
 					if pve.VerifySSL {
@@ -201,7 +201,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 				}
 				endpoints = append(endpoints, host)
 			}
-			
+
 			// If no valid endpoints, fall back to single node mode
 			if len(endpoints) == 0 {
 				log.Warn().
@@ -212,12 +212,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 					endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
 				}
 			}
-			
+
 			log.Info().
 				Str("cluster", pve.ClusterName).
 				Strs("endpoints", endpoints).
 				Msg("Creating cluster-aware client")
-			
+
 			clusterClient := proxmox.NewClusterClient(
 				pve.Name,
 				proxmox.ClientConfig{
@@ -268,7 +268,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 			Str("user", pbsInst.User).
 			Bool("hasToken", pbsInst.TokenName != "").
 			Msg("Configuring PBS instance")
-			
+
 		client, err := pbs.NewClient(pbs.ClientConfig{
 			Host:        pbsInst.Host,
 			User:        pbsInst.User,
@@ -297,13 +297,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 	return m, nil
 }
 
-
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	log.Info().
 		Dur("pollingInterval", m.config.PollingInterval).
 		Msg("Starting monitoring loop")
-	
+
 	// Initialize and start discovery service
 	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, "auto")
 	if m.discoveryService != nil {
@@ -312,7 +311,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	} else {
 		log.Error().Msg("Failed to initialize discovery service")
 	}
-	
+
 	// Set up alert callbacks
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
 		wsHub.BroadcastAlert(alert)
@@ -330,15 +329,15 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			Str("alertID", alert.ID).
 			Int("level", level).
 			Msg("Alert escalated - sending notifications")
-		
+
 		// Get escalation config
 		config := m.alertManager.GetConfig()
 		if level <= 0 || level > len(config.Schedule.Escalation.Levels) {
 			return
 		}
-		
+
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
-		
+
 		// Send notifications based on escalation level
 		switch escalationLevel.Notify {
 		case "email":
@@ -358,27 +357,27 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			// Send all notifications
 			m.notificationMgr.SendAlert(alert)
 		}
-		
+
 		// Update WebSocket with escalation
 		wsHub.BroadcastAlert(alert)
 	})
-	
+
 	// Create separate tickers for polling and broadcasting
 	pollTicker := time.NewTicker(m.config.PollingInterval)
 	defer pollTicker.Stop()
-	
+
 	broadcastTicker := time.NewTicker(m.config.PollingInterval)
 	defer broadcastTicker.Stop()
-	
+
 	// Do an immediate poll on start
 	go m.poll(ctx, wsHub)
-	
+
 	for {
 		select {
 		case <-pollTicker.C:
 			// Start polling in a goroutine so it doesn't block the ticker
 			go m.poll(ctx, wsHub)
-			
+
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
 			state := m.state.GetSnapshot()
@@ -390,7 +389,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.PBSBackups)).
 				Msg("Broadcasting state update (ticker)")
 			wsHub.BroadcastState(state)
-			
+
 		case <-ctx.Done():
 			log.Info().Msg("Monitoring loop stopped")
 			return
@@ -408,23 +407,23 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 		return
 	}
 	defer atomic.AddInt32(&m.activePollCount, -1)
-	
+
 	log.Debug().Msg("Starting polling cycle")
 	startTime := time.Now()
-	
+
 	if m.config.ConcurrentPolling {
 		// Use concurrent polling
 		m.pollConcurrent(ctx)
 	} else {
 		m.pollSequential(ctx)
 	}
-	
+
 	// Update performance metrics
 	m.state.Performance.LastPollDuration = time.Since(startTime).Seconds()
 	m.state.Stats.PollingCycles++
 	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
 	m.state.Stats.WebSocketClients = wsHub.GetClientCount()
-	
+
 	// Sync active alerts to state
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
@@ -445,21 +444,21 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 		})
 	}
 	m.state.UpdateActiveAlerts(modelAlerts)
-	
+
 	// Sync recently resolved alerts
 	recentlyResolved := m.alertManager.GetRecentlyResolved()
 	if len(recentlyResolved) > 0 {
 		log.Info().Int("count", len(recentlyResolved)).Msg("Syncing recently resolved alerts")
 	}
 	m.state.UpdateRecentlyResolved(recentlyResolved)
-	
+
 	// Increment poll counter
 	m.mu.Lock()
 	m.pollCounter++
 	m.mu.Unlock()
-	
+
 	log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
-	
+
 	// Broadcasting is now handled by the timer in Start()
 }
 
@@ -477,7 +476,7 @@ func (m *Monitor) pollConcurrent(ctx context.Context) {
 			return
 		default:
 		}
-		
+
 		wg.Add(1)
 		go func(instanceName string, c PVEClientInterface) {
 			defer wg.Done()
@@ -494,7 +493,7 @@ func (m *Monitor) pollConcurrent(ctx context.Context) {
 			return
 		default:
 		}
-		
+
 		wg.Add(1)
 		go func(instanceName string, c *pbs.Client) {
 			defer wg.Done()
@@ -509,7 +508,7 @@ func (m *Monitor) pollConcurrent(ctx context.Context) {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		// All goroutines completed normally
@@ -555,7 +554,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		return
 	default:
 	}
-	
+
 	log.Debug().Str("instance", instanceName).Msg("Polling PVE instance")
 
 	// Get instance config
@@ -576,7 +575,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
 		m.state.SetConnectionHealth(instanceName, false)
-		
+
 		// Track auth failure if it's an authentication error
 		if errors.IsAuthError(err) {
 			m.recordAuthFailure(instanceName, "pve")
@@ -592,19 +591,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	var modelNodes []models.Node
 	for _, node := range nodes {
 		modelNode := models.Node{
-			ID:               instanceName + "-" + node.Node,
-			Name:             node.Node,
-			Instance:         instanceName,
-			Status:           node.Status,
-			Type:             "node",
-			CPU:              safeFloat(node.CPU), // Already in percentage
-			Memory:           models.Memory{
+			ID:       instanceName + "-" + node.Node,
+			Name:     node.Node,
+			Instance: instanceName,
+			Status:   node.Status,
+			Type:     "node",
+			CPU:      safeFloat(node.CPU), // Already in percentage
+			Memory: models.Memory{
 				Total: int64(node.MaxMem),
 				Used:  int64(node.Mem),
 				Free:  int64(node.MaxMem - node.Mem),
 				Usage: safePercentage(float64(node.Mem), float64(node.MaxMem)),
 			},
-			Disk:             models.Disk{
+			Disk: models.Disk{
 				Total: int64(node.MaxDisk),
 				Used:  int64(node.Disk),
 				Free:  int64(node.MaxDisk - node.Disk),
@@ -615,7 +614,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			LastSeen:         time.Now(),
 			ConnectionHealth: "healthy",
 		}
-		
+
 		// Debug logging for disk metrics - note that these values can fluctuate
 		// due to thin provisioning and dynamic allocation
 		log.Debug().
@@ -642,7 +641,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			modelNode.LoadAverage = loadAvg
 			modelNode.KernelVersion = nodeInfo.KernelVersion
 			modelNode.PVEVersion = nodeInfo.PVEVersion
-			
+
 			// Use rootfs data if available for more stable disk metrics
 			if nodeInfo.RootFS != nil && nodeInfo.RootFS.Total > 0 {
 				modelNode.Disk = models.Disk{
@@ -658,7 +657,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Float64("rootfsUsage", modelNode.Disk.Usage).
 					Msg("Using rootfs for disk metrics")
 			}
-			
+
 			if nodeInfo.CPUInfo != nil {
 				// Use MaxCPU from node data for logical CPU count (includes hyperthreading)
 				// If MaxCPU is not available or 0, fall back to physical cores
@@ -666,7 +665,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				if logicalCores == 0 {
 					logicalCores = nodeInfo.CPUInfo.Cores
 				}
-				
+
 				log.Debug().
 					Str("node", node.Node).
 					Str("model", nodeInfo.CPUInfo.Model).
@@ -677,7 +676,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Msg("Node CPU info from Proxmox")
 				modelNode.CPUInfo = models.CPUInfo{
 					Model:   nodeInfo.CPUInfo.Model,
-					Cores:   logicalCores,  // Use logical cores for display
+					Cores:   logicalCores, // Use logical cores for display
 					Sockets: nodeInfo.CPUInfo.Sockets,
 					MHz:     nodeInfo.CPUInfo.MHz,
 				}
@@ -688,10 +687,10 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 		modelNodes = append(modelNodes, modelNode)
 	}
-	
+
 	// Update state first so we have nodes available
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
-	
+
 	// Now get storage data to use as fallback for disk metrics if needed
 	storageByNode := make(map[string]models.Disk)
 	if instanceCfg.MonitorStorage {
@@ -724,7 +723,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}
 	}
-	
+
 	// Update nodes with storage fallback if rootfs was not available
 	for i := range modelNodes {
 		if modelNodes[i].Disk.Total == 0 {
@@ -736,17 +735,17 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Msg("Applied storage fallback for disk metrics")
 			}
 		}
-		
+
 		// Record node metrics history
 		now := time.Now()
 		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
 		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
 		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
-		
+
 		// Check thresholds for alerts
 		m.alertManager.CheckNode(modelNodes[i])
 	}
-	
+
 	// Update state again with corrected disk metrics
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
 
@@ -798,16 +797,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				// Create a separate context with longer timeout for backup operations
 				backupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
-				
+
 				// Poll backup tasks
 				m.pollBackupTasks(backupCtx, instanceName, client)
-				
+
 				// Poll storage backups
 				m.pollStorageBackups(backupCtx, instanceName, client)
-				
+
 				// Poll guest snapshots
 				m.pollGuestSnapshots(backupCtx, instanceName, client)
-				
+
 				log.Info().Str("instance", instanceName).Msg("Completed background backup/snapshot polling")
 			}()
 		}
@@ -861,7 +860,7 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 			// For running VMs, try to get detailed status with balloon info
 			memUsed := vm.Mem
 			memTotal := vm.MaxMem
-			
+
 			if vm.Status == "running" {
 				// Try to get detailed VM status for more accurate memory reporting
 				if vmStatus, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil {
@@ -913,7 +912,7 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 				LastSeen:   time.Now(),
 			}
 			allVMs = append(allVMs, modelVM)
-			
+
 			// Record metrics history
 			now := time.Now()
 			m.metricsHistory.AddGuestMetric(modelVM.ID, "cpu", modelVM.CPU*100, now)
@@ -923,7 +922,7 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 			m.metricsHistory.AddGuestMetric(modelVM.ID, "diskwrite", float64(modelVM.DiskWrite), now)
 			m.metricsHistory.AddGuestMetric(modelVM.ID, "netin", float64(modelVM.NetworkIn), now)
 			m.metricsHistory.AddGuestMetric(modelVM.ID, "netout", float64(modelVM.NetworkOut), now)
-			
+
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(modelVM, instanceName)
 		}
@@ -1011,7 +1010,7 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 				LastSeen:   time.Now(),
 			}
 			allContainers = append(allContainers, modelCT)
-			
+
 			// Record metrics history
 			now := time.Now()
 			m.metricsHistory.AddGuestMetric(modelCT.ID, "cpu", modelCT.CPU*100, now)
@@ -1021,7 +1020,7 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 			m.metricsHistory.AddGuestMetric(modelCT.ID, "diskwrite", float64(modelCT.DiskWrite), now)
 			m.metricsHistory.AddGuestMetric(modelCT.ID, "netin", float64(modelCT.NetworkIn), now)
 			m.metricsHistory.AddGuestMetric(modelCT.ID, "netout", float64(modelCT.NetworkOut), now)
-			
+
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(modelCT, instanceName)
 		}
@@ -1048,7 +1047,7 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 		monErr := errors.WrapAPIError("get_cluster_storage", instanceName, err, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get cluster storage")
 	}
-	
+
 	// Create a map for quick lookup of cluster storage config
 	clusterStorageMap := make(map[string]proxmox.Storage)
 	for _, cs := range clusterStorages {
@@ -1057,7 +1056,7 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 
 	var allStorage []models.Storage
 	seenStorage := make(map[string]bool)
-	
+
 	// Get storage from each node (this includes capacity info)
 	for _, node := range nodes {
 		nodeStorage, err := client.GetStorage(ctx, node.Node)
@@ -1066,14 +1065,14 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 			log.Error().Err(monErr).Str("node", node.Node).Msg("Failed to get node storage")
 			continue
 		}
-		
+
 		for _, storage := range nodeStorage {
 			// Get cluster config for this storage
 			clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
-			
+
 			// Determine if shared
 			shared := hasClusterConfig && clusterConfig.Shared == 1
-			
+
 			// For shared storage, only include it once
 			storageKey := storage.Storage
 			if shared {
@@ -1082,13 +1081,13 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 				}
 				seenStorage[storageKey] = true
 			}
-			
+
 			// Use appropriate node name
 			nodeID := node.Node
 			if shared {
 				nodeID = "shared"
 			}
-			
+
 			modelStorage := models.Storage{
 				ID:       fmt.Sprintf("%s-%s-%s", instanceName, nodeID, storage.Storage),
 				Name:     storage.Storage,
@@ -1105,7 +1104,7 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 				Enabled:  true,
 				Active:   true,
 			}
-			
+
 			// Override with cluster config if available
 			if hasClusterConfig {
 				// Sort content values for consistent display
@@ -1119,12 +1118,12 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 				modelStorage.Enabled = clusterConfig.Enabled == 1
 				modelStorage.Active = clusterConfig.Active == 1
 			}
-			
+
 			// Calculate usage percentage
 			if modelStorage.Total > 0 {
 				modelStorage.Usage = safePercentage(float64(modelStorage.Used), float64(modelStorage.Total))
 			}
-			
+
 			// Determine status based on active/enabled flags
 			if storage.Active == 1 || modelStorage.Active {
 				modelStorage.Status = "available"
@@ -1133,16 +1132,16 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 			} else {
 				modelStorage.Status = "disabled"
 			}
-			
+
 			allStorage = append(allStorage, modelStorage)
-			
+
 			// Record storage metrics history
 			now := time.Now()
 			m.metricsHistory.AddStorageMetric(modelStorage.ID, "usage", modelStorage.Usage, now)
 			m.metricsHistory.AddStorageMetric(modelStorage.ID, "used", float64(modelStorage.Used), now)
 			m.metricsHistory.AddStorageMetric(modelStorage.ID, "total", float64(modelStorage.Total), now)
 			m.metricsHistory.AddStorageMetric(modelStorage.ID, "avail", float64(modelStorage.Free), now)
-			
+
 			// Check thresholds for alerts
 			m.alertManager.CheckStorage(modelStorage)
 		}
@@ -1179,7 +1178,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 
 		taskID := fmt.Sprintf("%s-%s", instanceName, task.UPID)
-		
+
 		backupTask := models.BackupTask{
 			ID:        taskID,
 			Node:      task.Node,
@@ -1209,7 +1208,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		return
 	default:
 	}
-	
+
 	log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
 
 	// Get instance config
@@ -1235,7 +1234,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		monErr := errors.WrapConnectionError("get_pbs_version", instanceName, err)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get PBS version")
 		m.state.SetConnectionHealth("pbs-"+instanceName, false)
-		
+
 		// Track auth failure if it's an authentication error
 		if errors.IsAuthError(err) {
 			m.recordAuthFailure(instanceName, "pbs")
@@ -1246,7 +1245,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// Reset auth failures on successful connection
 	m.resetAuthFailures(instanceName, "pbs")
 	m.state.SetConnectionHealth("pbs-"+instanceName, true)
-	
+
 	log.Debug().
 		Str("instance", instanceName).
 		Str("version", version.Version).
@@ -1262,7 +1261,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		ConnectionHealth: "healthy",
 		LastSeen:         time.Now(),
 	}
-	
+
 	// Get node status (CPU, memory, etc.)
 	// Note: This requires Sys.Audit permission on PBS which read-only tokens often don't have
 	nodeStatus, err := client.GetNodeStatus(ctx)
@@ -1277,7 +1276,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.MemoryTotal = nodeStatus.Memory.Total
 		}
 		pbsInst.Uptime = nodeStatus.Uptime
-		
+
 		log.Debug().
 			Str("instance", instanceName).
 			Float64("cpu", pbsInst.CPU).
@@ -1298,7 +1297,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Int("count", len(datastores)).
 				Msg("Got PBS datastores")
-			
+
 			for _, ds := range datastores {
 				// Use whichever fields are populated
 				total := ds.Total
@@ -1313,12 +1312,12 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				if avail == 0 && ds.AvailSpace > 0 {
 					avail = ds.AvailSpace
 				}
-				
+
 				// If still 0, try to calculate from each other
 				if total == 0 && used > 0 && avail > 0 {
 					total = used + avail
 				}
-				
+
 				log.Debug().
 					Str("store", ds.Store).
 					Int64("total", total).
@@ -1327,7 +1326,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					Int64("orig_total", ds.Total).
 					Int64("orig_total_space", ds.TotalSpace).
 					Msg("PBS datastore details")
-				
+
 				modelDS := models.PBSDatastore{
 					Name:   ds.Store,
 					Total:  total,
@@ -1336,7 +1335,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					Usage:  safePercentage(float64(used), float64(total)),
 					Status: "available",
 				}
-				
+
 				// Discover namespaces for this datastore
 				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
 				if err != nil {
@@ -1354,7 +1353,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 						if nsPath == "" {
 							nsPath = ns.Name
 						}
-						
+
 						modelNS := models.PBSNamespace{
 							Path:   nsPath,
 							Parent: ns.Parent,
@@ -1362,7 +1361,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 						}
 						modelDS.Namespaces = append(modelDS.Namespaces, modelNS)
 					}
-					
+
 					// Always include root namespace
 					hasRoot := false
 					for _, ns := range modelDS.Namespaces {
@@ -1375,7 +1374,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 						modelDS.Namespaces = append([]models.PBSNamespace{{Path: "", Depth: 0}}, modelDS.Namespaces...)
 					}
 				}
-				
+
 				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
 			}
 		}
@@ -1388,7 +1387,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		Str("id", pbsInst.ID).
 		Int("datastores", len(pbsInst.Datastores)).
 		Msg("PBS instance updated in state")
-	
+
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
 		log.Info().
@@ -1417,7 +1416,6 @@ func (m *Monitor) GetStartTime() time.Time {
 func (m *Monitor) GetDiscoveryService() *discovery.Service {
 	return m.discoveryService
 }
-
 
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
@@ -1452,7 +1450,7 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 // pollStorageBackups polls backup files from storage
 func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling storage backups")
-	
+
 	// Get all nodes
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
@@ -1460,16 +1458,16 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes for backup polling")
 		return
 	}
-	
+
 	var allBackups []models.StorageBackup
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	
+
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if node.Status != "online" {
 			continue
 		}
-		
+
 		// Get storage for this node
 		storages, err := client.GetStorage(ctx, node.Node)
 		if err != nil {
@@ -1477,14 +1475,14 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 			log.Error().Err(monErr).Str("node", node.Node).Msg("Failed to get storage")
 			continue
 		}
-		
+
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
 			// Check if storage supports backup or template content
 			if !strings.Contains(storage.Content, "backup") && !strings.Contains(storage.Content, "vztmpl") && !strings.Contains(storage.Content, "iso") {
 				continue
 			}
-			
+
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
 			if err != nil {
@@ -1495,7 +1493,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 					Msg("Failed to get storage content")
 				continue
 			}
-			
+
 			// Convert to models
 			for _, content := range contents {
 				// Skip if we've already seen this item (shared storage duplicate)
@@ -1503,7 +1501,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 					continue
 				}
 				seenVolids[content.Volid] = true
-				
+
 				// Determine type from content type and volid
 				backupType := "unknown"
 				if content.Content == "vztmpl" {
@@ -1515,7 +1513,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 				} else if strings.Contains(content.Volid, "lxc") {
 					backupType = "lxc"
 				}
-				
+
 				// For shared storage (like PBS), use the storage name as node
 				// to avoid confusion about which node the backup is on
 				backupNode := node.Node
@@ -1523,7 +1521,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 				if isPBSStorage || storage.Shared == 1 {
 					backupNode = storage.Storage // Use storage name for shared storage
 				}
-				
+
 				// Check verification status for PBS backups
 				verified := false
 				verificationInfo := ""
@@ -1540,7 +1538,7 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 						}
 					}
 				}
-				
+
 				backup := models.StorageBackup{
 					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
 					Storage:      storage.Storage,
@@ -1558,15 +1556,15 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 					Verified:     verified,
 					Verification: verificationInfo,
 				}
-				
+
 				allBackups = append(allBackups, backup)
 			}
 		}
 	}
-	
+
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
-	
+
 	log.Debug().
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
@@ -1576,27 +1574,27 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
-	
+
 	// Create a separate context with a longer timeout for snapshot queries
 	// Snapshot queries can be slow, especially with many VMs/containers
 	snapshotCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	
+
 	// Get current VMs and containers from state
 	m.mu.RLock()
 	vms := append([]models.VM{}, m.state.VMs...)
 	containers := append([]models.Container{}, m.state.Containers...)
 	m.mu.RUnlock()
-	
+
 	var allSnapshots []models.GuestSnapshot
-	
+
 	// Poll VM snapshots
 	for _, vm := range vms {
 		// Skip templates
 		if vm.Template {
 			continue
 		}
-		
+
 		snapshots, err := client.GetVMSnapshots(snapshotCtx, vm.Node, vm.VMID)
 		if err != nil {
 			// This is common for VMs without snapshots, so use debug level
@@ -1608,7 +1606,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				Msg("Failed to get VM snapshots")
 			continue
 		}
-		
+
 		for _, snap := range snapshots {
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, vm.Node, vm.VMID, snap.Name),
@@ -1619,20 +1617,20 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				Time:        time.Unix(snap.SnapTime, 0),
 				Description: snap.Description,
 				Parent:      snap.Parent,
-				VMState:     false, // TODO: Add VM state support if needed
+				VMState:     true, // VM state support enabled
 			}
-			
+
 			allSnapshots = append(allSnapshots, snapshot)
 		}
 	}
-	
+
 	// Poll container snapshots
 	for _, ct := range containers {
 		// Skip templates
 		if ct.Template {
 			continue
 		}
-		
+
 		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
 		if err != nil {
 			// This is common for containers without snapshots, so use debug level
@@ -1644,7 +1642,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				Msg("Failed to get container snapshots")
 			continue
 		}
-		
+
 		for _, snap := range snapshots {
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("%s-%s-%d-%s", instanceName, ct.Node, ct.VMID, snap.Name),
@@ -1657,14 +1655,14 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				Parent:      snap.Parent,
 				VMState:     false,
 			}
-			
+
 			allSnapshots = append(allSnapshots, snapshot)
 		}
 	}
-	
+
 	// Update state with guest snapshots for this instance
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
-	
+
 	log.Debug().
 		Str("instance", instanceName).
 		Int("count", len(allSnapshots)).
@@ -1674,17 +1672,17 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 // Stop gracefully stops the monitor
 func (m *Monitor) Stop() {
 	log.Info().Msg("Stopping monitor")
-	
+
 	// Stop the alert manager to save history
 	if m.alertManager != nil {
 		m.alertManager.Stop()
 	}
-	
+
 	// Stop notification manager
 	if m.notificationMgr != nil {
 		m.notificationMgr.Stop()
 	}
-	
+
 	log.Info().Msg("Monitor stopped")
 }
 
@@ -1692,21 +1690,21 @@ func (m *Monitor) Stop() {
 func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	nodeID := instanceName
 	if nodeType != "" {
 		nodeID = nodeType + "-" + instanceName
 	}
-	
+
 	// Increment failure count
 	m.authFailures[nodeID]++
 	m.lastAuthAttempt[nodeID] = time.Now()
-	
+
 	log.Warn().
 		Str("node", nodeID).
 		Int("failures", m.authFailures[nodeID]).
 		Msg("Authentication failure recorded")
-	
+
 	// If we've exceeded the threshold, remove the node
 	const maxAuthFailures = 5
 	if m.authFailures[nodeID] >= maxAuthFailures {
@@ -1714,14 +1712,14 @@ func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
 			Str("node", nodeID).
 			Int("failures", m.authFailures[nodeID]).
 			Msg("Maximum authentication failures reached, removing node from state")
-		
+
 		// Remove from state based on type
 		if nodeType == "pve" {
 			m.removeFailedPVENode(instanceName)
 		} else if nodeType == "pbs" {
 			m.removeFailedPBSNode(instanceName)
 		}
-		
+
 		// Reset the counter since we've removed the node
 		delete(m.authFailures, nodeID)
 		delete(m.lastAuthAttempt, nodeID)
@@ -1732,18 +1730,18 @@ func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
 func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	nodeID := instanceName
 	if nodeType != "" {
 		nodeID = nodeType + "-" + instanceName
 	}
-	
+
 	if count, exists := m.authFailures[nodeID]; exists && count > 0 {
 		log.Info().
 			Str("node", nodeID).
 			Int("previousFailures", count).
 			Msg("Authentication succeeded, resetting failure count")
-		
+
 		delete(m.authFailures, nodeID)
 		delete(m.lastAuthAttempt, nodeID)
 	}
@@ -1761,14 +1759,14 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 		ConnectionHealth: "error",
 		LastSeen:         time.Now(),
 		// Set other fields to zero values to indicate no data
-		CPU: 0,
+		CPU:    0,
 		Memory: models.Memory{},
-		Disk: models.Disk{},
+		Disk:   models.Disk{},
 	}
-	
+
 	// Update with just the failed node
 	m.state.UpdateNodesForInstance(instanceName, []models.Node{failedNode})
-	
+
 	// Remove all other resources associated with this instance
 	m.state.UpdateVMsForInstance(instanceName, []models.VM{})
 	m.state.UpdateContainersForInstance(instanceName, []models.Container{})
@@ -1776,7 +1774,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 	m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
 	m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
-	
+
 	// Set connection health to false
 	m.state.SetConnectionHealth(instanceName, false)
 }
@@ -1792,21 +1790,20 @@ func (m *Monitor) removeFailedPBSNode(instanceName string) {
 		}
 	}
 	m.state.UpdatePBSInstances(updatedInstances)
-	
+
 	// Remove PBS backups
 	m.state.UpdatePBSBackups(instanceName, []models.PBSBackup{})
-	
+
 	// Set connection health to false
 	m.state.SetConnectionHealth("pbs-"+instanceName, false)
 }
 
-
 // pollPBSBackups fetches all backups from PBS datastores
 func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
 	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
-	
+
 	var allBackups []models.PBSBackup
-	
+
 	// Process each datastore
 	for _, ds := range datastores {
 		// Get namespace paths
@@ -1814,14 +1811,14 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		for _, ns := range ds.Namespaces {
 			namespacePaths = append(namespacePaths, ns.Path)
 		}
-		
+
 		log.Info().
 			Str("instance", instanceName).
 			Str("datastore", ds.Name).
 			Int("namespaces", len(namespacePaths)).
 			Strs("namespace_paths", namespacePaths).
 			Msg("Processing datastore namespaces")
-		
+
 		// Fetch backups from all namespaces concurrently
 		backupsMap, err := client.ListAllBackups(ctx, ds.Name, namespacePaths)
 		if err != nil {
@@ -1831,18 +1828,18 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				Msg("Failed to fetch PBS backups")
 			continue
 		}
-		
+
 		// Convert PBS backups to model backups
 		for namespace, snapshots := range backupsMap {
 			for _, snapshot := range snapshots {
 				backupTime := time.Unix(snapshot.BackupTime, 0)
-				
+
 				// Generate unique ID
-				id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d", 
-					instanceName, ds.Name, namespace, 
-					snapshot.BackupType, snapshot.BackupID, 
+				id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
+					instanceName, ds.Name, namespace,
+					snapshot.BackupType, snapshot.BackupID,
 					snapshot.BackupTime)
-				
+
 				// Extract file names from files (which can be strings or objects)
 				var fileNames []string
 				for _, file := range snapshot.Files {
@@ -1855,7 +1852,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 						}
 					}
 				}
-				
+
 				// Extract verification status
 				verified := false
 				if snapshot.Verification != nil {
@@ -1867,7 +1864,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 							verified = state == "ok"
 						}
 					}
-					
+
 					// Debug log verification data
 					log.Debug().
 						Str("vmid", snapshot.BackupID).
@@ -1876,7 +1873,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 						Bool("verified", verified).
 						Msg("PBS backup verification status")
 				}
-				
+
 				backup := models.PBSBackup{
 					ID:         id,
 					Instance:   instanceName,
@@ -1891,17 +1888,17 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					Comment:    snapshot.Comment,
 					Files:      fileNames,
 				}
-				
+
 				allBackups = append(allBackups, backup)
 			}
 		}
 	}
-	
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
 		Msg("PBS backups fetched")
-	
+
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
 }

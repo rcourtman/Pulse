@@ -190,6 +190,12 @@ const Settings: Component = () => {
     // Poll for node updates when modal is open
     let pollInterval: ReturnType<typeof setInterval> | undefined;
     createEffect(() => {
+      // Clear any existing interval first
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = undefined;
+      }
+      
       if (showNodeModal()) {
         // Start polling every 3 seconds when modal is open
         pollInterval = setInterval(() => {
@@ -197,12 +203,6 @@ const Settings: Component = () => {
           loadNodes();
           loadDiscoveredNodes();
         }, 3000);
-      } else {
-        // Stop polling when modal is closed
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = undefined;
-        }
       }
     });
     

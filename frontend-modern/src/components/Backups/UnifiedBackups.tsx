@@ -747,7 +747,10 @@ const UnifiedBackups: Component = () => {
                     const height = 128 - margin.top - margin.bottom;
                 
                 el.setAttribute('viewBox', `0 0 ${rect.width} 128`);
-                el.innerHTML = '';
+                // Clear existing content safely
+                while (el.firstChild) {
+                  el.removeChild(el.firstChild);
+                }
                 
                 // Create main group
                 const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');

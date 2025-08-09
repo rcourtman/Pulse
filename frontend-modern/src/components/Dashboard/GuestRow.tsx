@@ -78,9 +78,9 @@ export function GuestRow(props: GuestRowProps) {
           {/* Alert indicators */}
           <Show when={props.alertStyles?.hasAlert}>
             <div class="flex items-center gap-1">
-              <AlertIndicator severity={props.alertStyles!.severity} alerts={guestAlerts()} />
-              <Show when={props.alertStyles!.alertCount > 1}>
-                <AlertCountBadge count={props.alertStyles!.alertCount} severity={props.alertStyles!.severity!} alerts={guestAlerts()} />
+              <AlertIndicator severity={props.alertStyles?.severity || null} alerts={guestAlerts()} />
+              <Show when={props.alertStyles?.alertCount && props.alertStyles.alertCount > 1}>
+                <AlertCountBadge count={props.alertStyles!.alertCount} severity={props.alertStyles!.severity || 'warning'} alerts={guestAlerts()} />
               </Show>
             </div>
           </Show>
@@ -125,7 +125,7 @@ export function GuestRow(props: GuestRowProps) {
         <MetricBar 
           value={cpuPercent()} 
           label={`${cpuPercent().toFixed(0)}%`}
-          sublabel={props.guest.cpus ? `${(props.guest.cpu * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores` : undefined}
+          sublabel={props.guest.cpu && props.guest.cpus ? `${(props.guest.cpu * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores` : undefined}
           type="cpu"
         />
       </td>

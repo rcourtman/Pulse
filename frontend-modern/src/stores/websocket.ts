@@ -204,6 +204,12 @@ export function createWebSocketStore(url: string) {
           return;
         }
         
+        // Clear any existing timeout to prevent multiple reconnections
+        if (reconnectTimeout) {
+          window.clearTimeout(reconnectTimeout);
+          reconnectTimeout = 0;
+        }
+        
         isReconnecting = true;
         setReconnecting(true);
         
