@@ -191,12 +191,12 @@ const UnifiedBackups: Component = () => {
         backupTime: backup.ctime || 0,
         backupName: backup.volid?.split('/').pop() || '',
         description: backup.notes || '', // Use notes field for PBS backup descriptions
-        status: 'ok', // PVE storage doesn't provide verification status
+        status: backup.verified ? 'verified' : 'unverified',
         size: backup.size || null,
         storage: backup.storage || null,
         datastore: backup.isPBS ? backup.storage : null,
         namespace: backup.isPBS ? 'root' : null,
-        verified: null, // PVE storage doesn't provide verification status
+        verified: backup.verified || false,
         protected: backup.protected || false
       });
     });
