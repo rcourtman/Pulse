@@ -362,12 +362,11 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 
 	m.updateStatus("restarting", 95, "Restarting service...")
 
-	// Schedule service restart
+	// Schedule a clean exit after a short delay - systemd will restart us
 	go func() {
 		time.Sleep(2 * time.Second)
-		if err := m.restartService(); err != nil {
-			log.Error().Err(err).Msg("Failed to restart service")
-		}
+		log.Info().Msg("Exiting for restart after update")
+		os.Exit(0)
 	}()
 
 	m.updateStatus("completed", 100, "Update completed, restarting...")
