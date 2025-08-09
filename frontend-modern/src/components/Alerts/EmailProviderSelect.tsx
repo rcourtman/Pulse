@@ -209,11 +209,19 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <textarea
           value={props.config.to.join('\n')}
           onInput={(e) => {
-            const recipients = e.currentTarget.value
+            // Parse recipients but keep the raw value for better UX
+            const rawValue = e.currentTarget.value;
+            const recipients = rawValue
               .split('\n')
               .map(r => r.trim())
-              .filter(r => r.length > 0);
+              .filter(r => r.length > 0 && r.includes('@')); // Only keep valid email-like strings
             props.onChange({ ...props.config, to: recipients });
+          }}
+          onKeyDown={(e) => {
+            // Allow Enter key in textarea without triggering form submission
+            if (e.key === 'Enter') {
+              e.stopPropagation();
+            }
           }}
           placeholder={`Leave empty to use ${props.config.from || 'From address'}\nOr add additional recipients:\nadmin@company.com\nops-team@company.com`}
           rows="3"

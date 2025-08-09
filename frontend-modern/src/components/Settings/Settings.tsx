@@ -309,6 +309,13 @@ const Settings: Component = () => {
           setPollingInterval(systemSettings.pollingInterval || 5);
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
           setConnectionTimeout(systemSettings.connectionTimeout || 10);
+          // Load auto-update settings
+          setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
+          setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
+          setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
+          if (systemSettings.updateChannel) {
+            setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
+          }
         } else {
           // Fallback to old endpoint
           const response = await SettingsAPI.getSettings();

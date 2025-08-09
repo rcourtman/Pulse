@@ -859,6 +859,12 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 				}
 			}
 
+			// Set CPU to 0 for stopped VMs to avoid false alerts
+			cpuUsage := safeFloat(vm.CPU)
+			if vm.Status == "stopped" {
+				cpuUsage = 0
+			}
+
 			modelVM := models.VM{
 				ID:       guestID,
 				VMID:     vm.VMID,
@@ -867,7 +873,7 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 				Instance: instanceName,
 				Status:   vm.Status,
 				Type:     "qemu",
-				CPU:      safeFloat(vm.CPU), // Already in percentage
+				CPU:      cpuUsage, // Already in percentage
 				CPUs:     vm.CPUs,
 				Memory: models.Memory{
 					Total: int64(memTotal),
@@ -955,6 +961,12 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
+			// Set CPU to 0 for stopped containers to avoid false alerts
+			cpuUsage := safeFloat(ct.CPU)
+			if ct.Status == "stopped" {
+				cpuUsage = 0
+			}
+
 			// Convert -1 to nil for I/O metrics when VM is not running
 			// We'll use -1 to indicate "no data" which will be converted to null for the frontend
 			modelCT := models.Container{
@@ -965,7 +977,7 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 				Instance: instanceName,
 				Status:   ct.Status,
 				Type:     "lxc",
-				CPU:      safeFloat(ct.CPU), // Already in percentage
+				CPU:      cpuUsage, // Already in percentage
 				CPUs:     int(ct.CPUs),
 				Memory: models.Memory{
 					Total: int64(ct.MaxMem),

@@ -262,7 +262,7 @@ type SystemSettings struct {
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
 	ConnectionTimeout       int    `json:"connectionTimeout,omitempty"`
 	UpdateChannel           string `json:"updateChannel,omitempty"`
-	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled,omitempty"`
+	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
 	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
 	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
 }

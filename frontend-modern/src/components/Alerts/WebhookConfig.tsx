@@ -1,15 +1,5 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
-import { NotificationsAPI } from '@/api/notifications';
-
-interface Webhook {
-  id?: string;
-  name: string;
-  url: string;
-  method: string;
-  service: string;
-  headers: Record<string, string>;
-  enabled: boolean;
-}
+import { NotificationsAPI, Webhook } from '@/api/notifications';
 
 interface WebhookTemplate {
   service: string;
@@ -23,7 +13,7 @@ interface WebhookTemplate {
 
 interface WebhookConfigProps {
   webhooks: Webhook[];
-  onAdd: (webhook: Webhook) => void;
+  onAdd: (webhook: Omit<Webhook, 'id'>) => void;
   onUpdate: (webhook: Webhook) => void;
   onDelete: (id: string) => void;
   onTest: (id: string) => void;
@@ -33,7 +23,7 @@ interface WebhookConfigProps {
 export function WebhookConfig(props: WebhookConfigProps) {
   const [adding, setAdding] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [formData, setFormData] = createSignal<Webhook>({
+  const [formData, setFormData] = createSignal<Omit<Webhook, 'id'> & { service: string }>({
     name: '',
     url: '',
     method: 'POST',
@@ -59,11 +49,20 @@ export function WebhookConfig(props: WebhookConfigProps) {
     if (!data.name || !data.url) return;
     
     if (editingId()) {
-      props.onUpdate({ ...data, id: editingId()! });
+      props.onUpdate({ ...data, id: editingId()!, service: data.service });
       setEditingId(null);
       setAdding(false);
     } else {
-      props.onAdd(data);
+      // onAdd expects a webhook without id, but with service
+      const newWebhook: Omit<Webhook, 'id'> = {
+        name: data.name,
+        url: data.url,
+        method: data.method,
+        headers: data.headers,
+        enabled: data.enabled,
+        service: data.service
+      };
+      props.onAdd(newWebhook);
       // Reset form but keep adding state true
       setFormData({
         name: '',
@@ -91,7 +90,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
   
   const editWebhook = (webhook: Webhook) => {
     setEditingId(webhook.id!);
-    setFormData(webhook);
+    setFormData({
+      ...webhook,
+      service: webhook.service || 'generic'
+    });
     setAdding(true);
   };
   
@@ -137,7 +139,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                         {webhook.name}
                       </span>
                       <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
-                        {serviceName(webhook.service)}
+                        {serviceName(webhook.service || 'generic')}
                       </span>
                       <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
                         {webhook.method}

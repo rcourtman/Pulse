@@ -52,6 +52,7 @@ export interface Webhook {
   headers: Record<string, string>;
   template?: string;
   enabled: boolean;
+  service?: string; // Added to support Discord, Slack, etc.
 }
 
 export interface NotificationTestRequest {
