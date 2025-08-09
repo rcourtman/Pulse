@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/tokens"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -385,8 +386,7 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		"uptime":    time.Since(r.monitor.GetStartTime()).Seconds(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(health)
+	utils.WriteJSONResponse(w, health)
 }
 
 // handleState handles state requests
@@ -412,8 +412,7 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 
 	state := r.monitor.GetState()
 	
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(state); err != nil {
+	if err := utils.WriteJSONResponse(w, state); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
 			"Failed to encode state data", nil)

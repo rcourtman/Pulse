@@ -2,13 +2,13 @@ package websocket
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -221,7 +221,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := generateClientID()
+	clientID := utils.GenerateID("client")
 	client := &Client{
 		hub:      h,
 		conn:     conn,
@@ -430,10 +430,6 @@ func (c *Client) writePump() {
 	}
 }
 
-// generateClientID generates a unique client ID
-func generateClientID() string {
-	return fmt.Sprintf("client-%d", time.Now().UnixNano())
-}
 
 // sanitizeData recursively sanitizes data to replace NaN/Inf values with nil
 func sanitizeData(data interface{}) interface{} {

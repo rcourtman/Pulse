@@ -283,15 +283,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		// Check if node is part of a cluster
-		clientConfig := proxmox.ClientConfig{
-			Host:        host,
-			User:        req.User,
-			Password:    req.Password,
-			TokenName:   req.TokenName,
-			TokenValue:  req.TokenValue,
-			VerifySSL:   req.VerifySSL,
-			Fingerprint: req.Fingerprint,
-		}
+		clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, req.VerifySSL)
 		
 		isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, req.Name)
 		

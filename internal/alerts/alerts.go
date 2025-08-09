@@ -829,10 +829,6 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	}
 }
 
-// Helper function
-func ptrFloat64(v float64) *float64 {
-	return &v
-}
 
 // convertLegacyThreshold converts a legacy float64 threshold to HysteresisThreshold
 func (m *Manager) convertLegacyThreshold(legacy *float64) *HysteresisThreshold {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -27,8 +28,7 @@ func NewAlertHandlers(monitor *monitoring.Monitor) *AlertHandlers {
 func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.monitor.GetAlertManager().GetConfig()
 	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	utils.WriteJSONResponse(w, config)
 }
 
 // UpdateAlertConfig updates the alert configuration
