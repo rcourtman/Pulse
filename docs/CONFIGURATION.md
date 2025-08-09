@@ -91,11 +91,11 @@ The encryption key is auto-generated and stored at `/etc/pulse/.encryption.key` 
 
 ### File Locations
 - **Configuration**: `/etc/pulse/` (or `./data` if not writable)
-  - `.env` - Non-sensitive settings
+  - `system.json` - UI-managed settings
   - `.encryption.key` - Auto-generated encryption key (do not share!)
   - `nodes.enc` - Encrypted node credentials
   - `email.enc` - Encrypted email settings
-  - `system.json` - General settings
+  - `.env` - Optional deployment overrides (if created)
 - **Metrics**: `/etc/pulse/metrics/`
 - **Logs**: `/etc/pulse/pulse.log`
 
