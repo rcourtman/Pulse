@@ -88,11 +88,12 @@ Quick start - most settings are in the web UI:
 - **Settings → System**: Polling intervals, CORS settings
 - **Alerts**: Thresholds and notifications
 
-For port changes and system settings, edit `/etc/pulse/.env`:
+For deployment overrides (ports, etc), use environment variables:
 ```bash
-sudo nano /etc/pulse/.env
-# Add: FRONTEND_PORT=8080
-sudo systemctl restart pulse-backend
+# Systemd: sudo systemctl edit pulse-backend
+Environment="FRONTEND_PORT=8080"
+
+# Docker: -e FRONTEND_PORT=8080
 ```
 
 📖 **[Full Configuration Guide →](docs/CONFIGURATION.md)**

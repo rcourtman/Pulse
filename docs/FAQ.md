@@ -18,7 +18,8 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 **Manual**: Settings → Nodes → Add Node → Enter credentials → Save
 
 ### How do I change the port?
-Edit `/etc/pulse/.env`, add `FRONTEND_PORT=8080`, then restart
+Systemd: `sudo systemctl edit pulse-backend`, add `Environment="FRONTEND_PORT=8080"`, restart
+Docker: Use `-e FRONTEND_PORT=8080` in your run command
 
 ### What permissions needed?
 - PVE: `PVEAuditor` minimum
