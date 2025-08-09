@@ -373,7 +373,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	}
 	m.mu.RUnlock()
 
-	var guestID, name, node, guestType string
+	var guestID, name, node, guestType, status string
 	var cpu, memUsage, diskUsage float64
 	var diskRead, diskWrite, netIn, netOut int64
 
@@ -383,6 +383,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		guestID = g.ID
 		name = g.Name
 		node = g.Node
+		status = g.Status
 		guestType = "VM"
 		cpu = g.CPU * 100 // Convert to percentage
 		memUsage = g.Memory.Usage
@@ -395,6 +396,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		guestID = g.ID
 		name = g.Name
 		node = g.Node
+		status = g.Status
 		guestType = "Container"
 		cpu = g.CPU * 100 // Convert to percentage
 		memUsage = g.Memory.Usage
@@ -404,6 +406,23 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
 	default:
+		return
+	}
+
+	// Clear any alerts for stopped guests and skip threshold checks
+	if status == "stopped" {
+		// Clear all alerts for this guest if it's stopped
+		m.mu.Lock()
+		for alertID, alert := range m.activeAlerts {
+			if alert.ResourceID == guestID {
+				delete(m.activeAlerts, alertID)
+				log.Info().
+					Str("alertID", alertID).
+					Str("guest", name).
+					Msg("Cleared alert for stopped guest")
+			}
+		}
+		m.mu.Unlock()
 		return
 	}
 

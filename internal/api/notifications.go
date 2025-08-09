@@ -55,11 +55,18 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 	
+	// If password is empty, preserve the existing password
+	if config.Password == "" {
+		existingConfig := h.monitor.GetNotificationManager().GetEmailConfig()
+		config.Password = existingConfig.Password
+	}
+	
 	log.Info().
 		Bool("enabled", config.Enabled).
 		Str("smtp", config.SMTPHost).
 		Str("from", config.From).
 		Int("toCount", len(config.To)).
+		Bool("hasPassword", config.Password != "").
 		Msg("Parsed email config")
 	
 	h.monitor.GetNotificationManager().SetEmailConfig(config)
@@ -129,8 +136,15 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	webhookID := parts[len(parts)-1]
 	
+	// Read the raw body to preserve all fields
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	
 	var webhook notifications.WebhookConfig
-	if err := json.NewDecoder(r.Body).Decode(&webhook); err != nil {
+	if err := json.Unmarshal(bodyBytes, &webhook); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -147,8 +161,13 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		log.Error().Err(err).Msg("Failed to save webhooks")
 	}
 	
+	// Return the full webhook data including any extra fields like 'service'
+	var responseData map[string]interface{}
+	json.Unmarshal(bodyBytes, &responseData)
+	responseData["id"] = webhookID
+	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(webhook)
+	json.NewEncoder(w).Encode(responseData)
 }
 
 // DeleteWebhook deletes a webhook

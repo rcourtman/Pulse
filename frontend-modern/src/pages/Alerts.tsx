@@ -6,23 +6,12 @@ import { CustomRulesTab } from '@/components/Alerts/CustomRulesTab';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { AlertsAPI } from '@/api/alerts';
-import { NotificationsAPI } from '@/api/notifications';
+import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold, AlertThresholds } from '@/types/alerts';
 import type { Alert, State } from '@/types/api';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
-
-// Webhook interface matching WebhookConfig component
-interface Webhook {
-  id?: string;
-  name: string;
-  url: string;
-  method: string;
-  service: string;
-  headers: Record<string, string>;
-  enabled: boolean;
-}
 
 // Store reference interfaces
 interface DestinationsRef {
@@ -1391,10 +1380,10 @@ function DestinationsTab(props: DestinationsTabProps) {
   onMount(async () => {
     try {
       const hooks = await NotificationsAPI.getWebhooks();
-      // Map to local Webhook type
+      // Map to local Webhook type - preserve the service type from backend
       setWebhooks(hooks.map(h => ({
         ...h,
-        service: 'custom' // Default service type
+        service: h.service || 'generic' // Preserve service type or default to generic
       })));
     } catch (err) {
       console.error('Failed to load webhooks:', err);
@@ -1481,22 +1470,43 @@ function DestinationsTab(props: DestinationsTabProps) {
         
         <WebhookConfig
           webhooks={webhooks()}
-          onAdd={(webhook) => {
-            setWebhooks([...webhooks(), {
-              ...webhook,
-              id: Date.now().toString()
-            }]);
-            props.setHasUnsavedChanges(true);
+          onAdd={async (webhook) => {
+            try {
+              // Save to backend immediately (including service field)
+              const created = await NotificationsAPI.createWebhook(webhook);
+              // Update local state with the created webhook
+              setWebhooks([...webhooks(), created]);
+              showSuccess('Webhook added successfully');
+            } catch (err) {
+              console.error('Failed to add webhook:', err);
+              showError(err instanceof Error ? err.message : 'Failed to add webhook');
+            }
           }}
-          onUpdate={(webhook) => {
-            setWebhooks(webhooks().map(w => 
-              w.id === webhook.id ? webhook : w
-            ));
-            props.setHasUnsavedChanges(true);
+          onUpdate={async (webhook) => {
+            try {
+              // Update on backend immediately (including service field)
+              const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
+              // Update local state
+              setWebhooks(webhooks().map(w => 
+                w.id === webhook.id ? updated : w
+              ));
+              showSuccess('Webhook updated successfully');
+            } catch (err) {
+              console.error('Failed to update webhook:', err);
+              showError(err instanceof Error ? err.message : 'Failed to update webhook');
+            }
           }}
-          onDelete={(id) => {
-            setWebhooks(webhooks().filter(w => w.id !== id));
-            props.setHasUnsavedChanges(true);
+          onDelete={async (id) => {
+            try {
+              // Delete from backend immediately
+              await NotificationsAPI.deleteWebhook(id);
+              // Update local state
+              setWebhooks(webhooks().filter(w => w.id !== id));
+              showSuccess('Webhook deleted successfully');
+            } catch (err) {
+              console.error('Failed to delete webhook:', err);
+              showError(err instanceof Error ? err.message : 'Failed to delete webhook');
+            }
           }}
           onTest={testWebhook}
           testing={testingWebhook()}
