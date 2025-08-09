@@ -495,7 +495,3 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	return os.Rename(tempFile, envFile)
 }
 
-// Helper function
-func ptrFloat64(v float64) *float64 {
-	return &v
-}

@@ -10,6 +10,67 @@ import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
 import { eventBus } from '@/stores/events';
 
+// Type definitions
+interface DiscoveredServer {
+  ip: string;
+  port: number;
+  type: 'pve' | 'pbs';
+  version: string;
+  hostname?: string;
+  release?: string;
+}
+
+interface ClusterEndpoint {
+  Host?: string;
+  IP?: string;
+}
+
+interface DiagnosticsNode {
+  id: string;
+  name: string;
+  host: string;
+  type: string;
+  authMethod: string;
+  connected: boolean;
+  error?: string;
+  details?: Record<string, unknown>;
+  lastPoll?: string;
+  clusterInfo?: Record<string, unknown>;
+}
+
+interface DiagnosticsPBS {
+  id: string;
+  name: string;
+  host: string;
+  connected: boolean;
+  error?: string;
+  details?: Record<string, unknown>;
+}
+
+interface SystemDiagnostic {
+  goroutines: number;
+  memory: {
+    alloc: number;
+    totalAlloc: number;
+    sys: number;
+    numGC: number;
+  };
+  cpu: {
+    count: number;
+    percent: number;
+  };
+}
+
+interface DiagnosticsData {
+  version: string;
+  runtime: string;
+  uptime: number;
+  nodes: DiagnosticsNode[];
+  pbs: DiagnosticsPBS[];
+  system: SystemDiagnostic;
+  errors: string[];
+}
+
 type SettingsTab = 'pve' | 'pbs' | 'system' | 'security' | 'diagnostics';
 
 // Node with UI-specific fields
@@ -24,7 +85,7 @@ const Settings: Component = () => {
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
-  const [discoveredNodes, setDiscoveredNodes] = createSignal<any[]>([]);
+  const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
@@ -45,7 +106,7 @@ const Settings: Component = () => {
   const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
   
   // Diagnostics
-  const [diagnosticsData, setDiagnosticsData] = createSignal<any>(null);
+  const [diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
   const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
   
   // Security
@@ -133,7 +194,7 @@ const Settings: Component = () => {
             
             // If it's a cluster, add all member IPs
             if (n.type === 'pve' && 'isCluster' in n && n.isCluster && 'clusterEndpoints' in n && n.clusterEndpoints) {
-              n.clusterEndpoints.forEach((endpoint: any) => {
+              n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
                 if (endpoint.IP) {
                   clusterMemberIPs.add(endpoint.IP.toLowerCase());
                 }
@@ -145,17 +206,17 @@ const Settings: Component = () => {
           });
           
           // Filter out nodes that are already configured or part of a cluster
-          const filtered = data.servers.filter((server: any) => {
+          const filtered = data.servers.filter((server: DiscoveredServer) => {
             const serverIP = server.ip?.toLowerCase();
             const serverHostname = server.hostname?.toLowerCase();
             
             // Check if this server is already configured directly
-            if (configuredHosts.has(serverIP) || configuredHosts.has(serverHostname)) {
+            if ((serverIP && configuredHosts.has(serverIP)) || (serverHostname && configuredHosts.has(serverHostname))) {
               return false;
             }
             
             // Check if this server is part of a configured cluster
-            if (clusterMemberIPs.has(serverIP) || clusterMemberIPs.has(serverHostname)) {
+            if ((serverIP && clusterMemberIPs.has(serverIP)) || (serverHostname && clusterMemberIPs.has(serverHostname))) {
               return false;
             }
             
@@ -1424,17 +1485,17 @@ docker run -d \
                           <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
                             <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
                             <div>Uptime: {Math.floor((diagnosticsData()?.uptime || 0) / 60)} minutes</div>
-                            <div>Runtime: {diagnosticsData()?.system?.goVersion || 'Unknown'}</div>
-                            <div>Memory: {diagnosticsData()?.system?.memoryMB || 0} MB</div>
+                            <div>Runtime: {diagnosticsData()?.runtime || 'Unknown'}</div>
+                            <div>Memory: {Math.round((diagnosticsData()?.system?.memory?.alloc || 0) / 1024 / 1024)} MB</div>
                           </div>
                         </div>
                         
                         {/* Nodes Status */}
-                        <Show when={diagnosticsData()?.nodes?.length > 0}>
+                        <Show when={diagnosticsData()?.nodes && diagnosticsData()!.nodes.length > 0}>
                           <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
                             <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PVE Nodes</h5>
                             <For each={diagnosticsData()?.nodes || []}>
-                              {(node: any) => (
+                              {(node) => (
                                 <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
                                   <div class="flex justify-between items-center mb-1">
                                     <span class="font-medium text-gray-700 dark:text-gray-300">{node.name}</span>
@@ -1458,11 +1519,11 @@ docker run -d \
                         </Show>
                         
                         {/* PBS Status */}
-                        <Show when={diagnosticsData()?.pbs?.length > 0}>
+                        <Show when={diagnosticsData()?.pbs && diagnosticsData()!.pbs.length > 0}>
                           <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
                             <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PBS Instances</h5>
                             <For each={diagnosticsData()?.pbs || []}>
-                              {(pbs: any) => (
+                              {(pbs) => (
                                 <div class="text-xs border-t dark:border-gray-700 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
                                   <div class="flex justify-between items-center mb-1">
                                     <span class="font-medium text-gray-700 dark:text-gray-300">{pbs.name}</span>

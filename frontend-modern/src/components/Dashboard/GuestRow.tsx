@@ -125,7 +125,7 @@ export function GuestRow(props: GuestRowProps) {
         <MetricBar 
           value={cpuPercent()} 
           label={`${cpuPercent().toFixed(0)}%`}
-          sublabel={props.guest.cpu && props.guest.cpus ? `${(props.guest.cpu * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores` : undefined}
+          sublabel={props.guest.cpus ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores` : undefined}
           type="cpu"
         />
       </td>

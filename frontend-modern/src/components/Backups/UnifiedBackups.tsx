@@ -1,6 +1,7 @@
 import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
@@ -23,6 +24,10 @@ interface UnifiedBackup {
   protected: boolean;
 }
 
+// Types for PBS backups - temporarily disabled to avoid unused warnings
+// type PBSBackup = any;
+// type PBSSnapshot = any;
+
 interface DateGroup {
   label: string;
   items: UnifiedBackup[];
@@ -38,15 +43,13 @@ const UnifiedBackups: Component = () => {
   const [selectedDateRange, setSelectedDateRange] = createSignal<{ start: number; end: number } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
   const [tooltip, setTooltip] = createSignal<{ text: string; x: number; y: number } | null>(null);
-  const [showFilters, setShowFilters] = createSignal(
-    localStorage.getItem('backupsShowFilters') !== null 
-      ? localStorage.getItem('backupsShowFilters') === 'true'
-      : false // Default to collapsed
+  const [showFilters, setShowFilters] = createLocalStorageBooleanSignal(
+    STORAGE_KEYS.BACKUPS_SHOW_FILTERS,
+    false // Default to collapsed
   );
-  const [useRelativeTime, setUseRelativeTime] = createSignal(
-    localStorage.getItem('backupsUseRelativeTime') !== null 
-      ? localStorage.getItem('backupsUseRelativeTime') === 'true'
-      : false // Default to absolute time
+  const [useRelativeTime, setUseRelativeTime] = createLocalStorageBooleanSignal(
+    STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
+    false // Default to absolute time
   );
 
   // Helper functions
@@ -207,7 +210,7 @@ const UnifiedBackups: Component = () => {
     state.pbs?.forEach((pbsInstance) => {
       // Check if backups are at the instance level
       if (pbsInstance.backups && Array.isArray(pbsInstance.backups)) {
-        pbsInstance.backups.forEach((backup: any) => {
+        pbsInstance.backups.forEach((backup: PBSBackup) => {
           unified.push({
             backupType: 'remote',
             vmid: backup.vmid || 0,
@@ -232,10 +235,10 @@ const UnifiedBackups: Component = () => {
       if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
         pbsInstance.datastores?.forEach((datastore) => {
           if (datastore.snapshots && Array.isArray(datastore.snapshots)) {
-            datastore.snapshots.forEach((backup: any) => {
+            datastore.snapshots.forEach((backup: PBSSnapshot) => {
               let totalSize = 0;
               if (backup.files && Array.isArray(backup.files)) {
-                totalSize = backup.files.reduce((sum: any, file: any) => sum + (file.size || 0), 0);
+                totalSize = backup.files.reduce((sum: number, file) => sum + (file.size || 0), 0);
               }
               
               unified.push({
@@ -468,15 +471,7 @@ const UnifiedBackups: Component = () => {
     setChartTimeRange(30);
   };
 
-  // Persist showFilters state
-  createEffect(() => {
-    localStorage.setItem('backupsShowFilters', showFilters().toString());
-  });
-  
-  // Persist useRelativeTime state
-  createEffect(() => {
-    localStorage.setItem('backupsUseRelativeTime', useRelativeTime().toString());
-  });
+  // localStorage persistence is now handled by createLocalStorageBooleanSignal
   
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;

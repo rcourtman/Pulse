@@ -218,17 +218,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 				Strs("endpoints", endpoints).
 				Msg("Creating cluster-aware client")
 
+			clientConfig := config.CreateProxmoxConfig(&pve)
+			clientConfig.Timeout = cfg.ConnectionTimeout
 			clusterClient := proxmox.NewClusterClient(
 				pve.Name,
-				proxmox.ClientConfig{
-					User:        pve.User,
-					Password:    pve.Password,
-					TokenName:   pve.TokenName,
-					TokenValue:  pve.TokenValue,
-					Fingerprint: pve.Fingerprint,
-					VerifySSL:   pve.VerifySSL,
-					Timeout:     cfg.ConnectionTimeout,
-				},
+				clientConfig,
 				endpoints,
 			)
 			m.pveClients[pve.Name] = clusterClient
@@ -239,16 +233,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 				Msg("Cluster client created successfully")
 		} else {
 			// Create regular client
-			client, err := proxmox.NewClient(proxmox.ClientConfig{
-				Host:        pve.Host,
-				User:        pve.User,
-				Password:    pve.Password,
-				TokenName:   pve.TokenName,
-				TokenValue:  pve.TokenValue,
-				Fingerprint: pve.Fingerprint,
-				VerifySSL:   pve.VerifySSL,
-				Timeout:     cfg.ConnectionTimeout,
-			})
+			clientConfig := config.CreateProxmoxConfig(&pve)
+			clientConfig.Timeout = cfg.ConnectionTimeout
+			client, err := proxmox.NewClient(clientConfig)
 			if err != nil {
 				monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
 				log.Error().Err(monErr).Str("instance", pve.Name).Msg("Failed to create PVE client")
@@ -269,16 +256,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 			Bool("hasToken", pbsInst.TokenName != "").
 			Msg("Configuring PBS instance")
 
-		client, err := pbs.NewClient(pbs.ClientConfig{
-			Host:        pbsInst.Host,
-			User:        pbsInst.User,
-			Password:    pbsInst.Password,
-			TokenName:   pbsInst.TokenName,
-			TokenValue:  pbsInst.TokenValue,
-			Fingerprint: pbsInst.Fingerprint,
-			VerifySSL:   pbsInst.VerifySSL,
-			Timeout:     60 * time.Second, // Very generous timeout for slow PBS servers
-		})
+		clientConfig := config.CreatePBSConfig(&pbsInst)
+		clientConfig.Timeout = 60 * time.Second // Very generous timeout for slow PBS servers
+		client, err := pbs.NewClient(clientConfig)
 		if err != nil {
 			monErr := errors.WrapConnectionError("create_pbs_client", pbsInst.Name, err)
 			log.Error().Err(monErr).Str("instance", pbsInst.Name).Msg("Failed to create PBS client")

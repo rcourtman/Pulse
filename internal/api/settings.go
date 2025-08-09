@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -68,8 +69,7 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	utils.WriteJSONResponse(w, response)
 }
 
 // updateSettings updates the configuration
@@ -106,8 +106,7 @@ func updateSettings(w http.ResponseWriter, r *http.Request) {
 
 	// If validate only, return success
 	if update.ValidateOnly {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		utils.WriteJSONResponse(w, map[string]interface{}{
 			"valid": true,
 			"message": "Configuration is valid",
 		})
@@ -142,8 +141,7 @@ func updateSettings(w http.ResponseWriter, r *http.Request) {
 		response["restarting"] = true
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	utils.WriteJSONResponse(w, response)
 }
 
 // saveSettings persists settings to the configuration file

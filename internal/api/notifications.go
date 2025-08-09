@@ -2,14 +2,13 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -100,7 +99,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	
 	// Generate ID if not provided
 	if webhook.ID == "" {
-		webhook.ID = generateWebhookID()
+		webhook.ID = utils.GenerateID("webhook")
 	}
 	
 	h.monitor.GetNotificationManager().AddWebhook(webhook)
@@ -370,7 +369,3 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 	}
 }
 
-// generateWebhookID generates a unique webhook ID
-func generateWebhookID() string {
-	return fmt.Sprintf("webhook-%d", time.Now().UnixNano())
-}
