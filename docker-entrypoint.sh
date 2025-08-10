@@ -9,6 +9,14 @@ PGID=${PGID:-1000}
 if [ "$(id -u)" = "0" ]; then
     echo "Starting with UID: $PUID, GID: $PGID"
     
+    # If PUID is 0 (root), don't create a new user, just run as root
+    if [ "$PUID" = "0" ]; then
+        echo "Running as root user"
+        # Fix ownership to root
+        chown -R root:root /data /app /etc/pulse
+        exec "$@"
+    fi
+    
     # Create group if it doesn't exist
     if ! getent group pulse >/dev/null 2>&1; then
         addgroup -g "$PGID" pulse

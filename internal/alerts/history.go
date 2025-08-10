@@ -143,6 +143,11 @@ func (hm *HistoryManager) loadHistory() error {
 				log.Debug().Msg("No alert history files found, starting fresh")
 				return nil
 			}
+			// Check if it's a permission error
+			if os.IsPermission(err) {
+				log.Warn().Err(err).Str("file", hm.backupFile).Msg("Permission denied reading backup history file - check file ownership")
+				return nil // Continue without history rather than failing
+			}
 			return fmt.Errorf("failed to load backup history: %w", err)
 		}
 		log.Info().Msg("Loaded alert history from backup file")
