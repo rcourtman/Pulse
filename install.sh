@@ -197,14 +197,21 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    # Create pulse bin directory
+    # Create pulse bin directory if not in tarball
     mkdir -p "$INSTALL_DIR/bin"
     
-    # Copy binary to /opt/pulse/bin (owned by pulse user)
-    if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
+    # Handle both old (flat) and new (bin/) tarball structures
+    if [[ -d "$TEMP_EXTRACT/bin" ]]; then
+        # New structure - files already in bin/
+        cp -r "$TEMP_EXTRACT/bin"/* "$INSTALL_DIR/bin/"
+    elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
+        # Old structure - files in root
         cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
-        chmod +x "$INSTALL_DIR/bin/pulse"
-        chown -R pulse:pulse "$INSTALL_DIR"
+        [[ -d "$TEMP_EXTRACT/frontend-modern" ]] && cp -r "$TEMP_EXTRACT/frontend-modern" "$INSTALL_DIR/bin/"
+    fi
+    
+    chmod +x "$INSTALL_DIR/bin/pulse"
+    chown -R pulse:pulse "$INSTALL_DIR"
         
         # Create symlink in /usr/local/bin for PATH convenience
         ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse

@@ -50,19 +50,16 @@ for build_name in "${!builds[@]}"; do
     # Create release archive
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
     
-    # Create staging directory
+    # Create staging directory with bin/ structure for v4
     staging_dir="$BUILD_DIR/pulse-staging"
     rm -rf "$staging_dir"
-    mkdir -p "$staging_dir"
+    mkdir -p "$staging_dir/bin/frontend-modern"
     
-    # Copy files
-    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/pulse"
-    mkdir -p "$staging_dir/frontend-modern"
-    cp -r frontend-modern/dist "$staging_dir/frontend-modern/"
+    # Copy files to correct v4 locations
+    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
+    cp -r frontend-modern/dist "$staging_dir/bin/frontend-modern/"
     cp README.md LICENSE install.sh "$staging_dir/"
-    # Copy v3 migration shim
-    mkdir -p "$staging_dir/server"
-    cp server/index.js "$staging_dir/server/" 2>/dev/null || true
+    echo "$VERSION" > "$staging_dir/VERSION"
     # Note: pulse.service might not exist in Go version
     
     # Create tarball
@@ -88,25 +85,21 @@ ls -lh $RELEASE_DIR/
 echo "Creating universal release tarball..."
 universal_staging="$BUILD_DIR/pulse-staging"
 rm -rf "$universal_staging"
-mkdir -p "$universal_staging"
+mkdir -p "$universal_staging/bin/frontend-modern"
 
-# Copy all architecture binaries
+# Copy all architecture binaries to bin/
 for build_name in "${!builds[@]}"; do
-    cp "$BUILD_DIR/pulse-$build_name" "$universal_staging/"
+    cp "$BUILD_DIR/pulse-$build_name" "$universal_staging/bin/pulse-$build_name"
 done
 
-# Copy common files
-mkdir -p "$universal_staging/frontend-modern"
-cp -r frontend-modern/dist "$universal_staging/frontend-modern/"
-cp README.md LICENSE install.sh pulse-wrapper.sh "$universal_staging/"
-echo "$VERSION" > "$universal_staging/VERSION"
-# Copy v3 migration shim
-mkdir -p "$universal_staging/server"
-cp server/index.js "$universal_staging/server/" 2>/dev/null || true
+# Use amd64 binary as default 'pulse' for seamless usage
+cp "$BUILD_DIR/pulse-linux-amd64" "$universal_staging/bin/pulse"
+chmod +x "$universal_staging/bin/pulse"
 
-# Rename wrapper to 'pulse' for seamless usage
-cp pulse-wrapper.sh "$universal_staging/pulse"
-chmod +x "$universal_staging/pulse"
+# Copy common files
+cp -r frontend-modern/dist "$universal_staging/bin/frontend-modern/"
+cp README.md LICENSE install.sh "$universal_staging/" 2>/dev/null || true
+echo "$VERSION" > "$universal_staging/VERSION"
 
 # Create first-run cleanup flag
 touch "$universal_staging/.first-run-cleanup"
