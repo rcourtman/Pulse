@@ -284,7 +284,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Msg("Starting monitoring loop")
 
 	// Initialize and start discovery service
-	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, "auto")
+	discoverySubnet := m.config.DiscoverySubnet
+	if discoverySubnet == "" {
+		discoverySubnet = "auto"
+	}
+	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
 		log.Info().Msg("Discovery service initialized and started")
