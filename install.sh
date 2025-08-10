@@ -207,6 +207,13 @@ download_pulse() {
         exit 1
     fi
     
+    # Copy frontend directory if it exists (required for v4.1.0+)
+    if [[ -d "$TEMP_EXTRACT/frontend-modern" ]]; then
+        rm -rf /usr/local/bin/frontend-modern
+        cp -r "$TEMP_EXTRACT/frontend-modern" /usr/local/bin/
+        print_success "Frontend files installed to /usr/local/bin/frontend-modern"
+    fi
+    
     # Copy VERSION file if present
     if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
         mkdir -p "$INSTALL_DIR"
