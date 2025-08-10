@@ -1394,6 +1394,43 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// Also reload alert and notification configs explicitly
+	// (the monitor reload only reloads nodes unless it's a full reload)
+	if h.monitor != nil {
+		// Reload alert configuration
+		if alertConfig, err := h.persistence.LoadAlertConfig(); err == nil {
+			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
+			log.Info().Msg("Reloaded alert configuration after import")
+		} else {
+			log.Warn().Err(err).Msg("Failed to reload alert configuration after import")
+		}
+
+		// Reload webhook configuration
+		if webhooks, err := h.persistence.LoadWebhooks(); err == nil {
+			// Clear existing webhooks and add new ones
+			notificationMgr := h.monitor.GetNotificationManager()
+			// Get current webhooks to clear them
+			for _, webhook := range notificationMgr.GetWebhooks() {
+				notificationMgr.DeleteWebhook(webhook.ID)
+			}
+			// Add imported webhooks
+			for _, webhook := range webhooks {
+				notificationMgr.AddWebhook(webhook)
+			}
+			log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
+		} else {
+			log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
+		}
+
+		// Reload email configuration
+		if emailConfig, err := h.persistence.LoadEmailConfig(); err == nil {
+			h.monitor.GetNotificationManager().SetEmailConfig(*emailConfig)
+			log.Info().Msg("Reloaded email configuration after import")
+		} else {
+			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
+		}
+	}
+
 	log.Info().Msg("Configuration imported successfully")
 
 	w.WriteHeader(http.StatusOK)
