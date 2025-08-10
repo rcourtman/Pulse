@@ -282,75 +282,10 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 		}
 	}
 
-	// Check if we're running as root (container/direct install)
-	isRoot := os.Geteuid() == 0
+	// Apply the update files
+	// With the new directory structure (/opt/pulse/bin/), the pulse user has write access
+	log.Info().Msg("Applying update files")
 	
-	if isRoot {
-		// Running as root - can directly update
-		log.Info().Msg("Running as root, performing direct update")
-		
-		// Apply the update files immediately
-		if err := m.applyUpdateFiles(extractDir); err != nil {
-			m.updateStatus("error", 80, "Failed to apply update")
-			// Attempt to restore backup
-			if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
-				log.Error().Err(restoreErr).Msg("Failed to restore backup")
-			}
-			return fmt.Errorf("failed to apply update: %w", err)
-		}
-		
-		m.updateStatus("restarting", 95, "Restarting service...")
-		
-		// Schedule a clean exit after a short delay - systemd will restart us
-		go func() {
-			time.Sleep(2 * time.Second)
-			log.Info().Msg("Exiting for restart after update")
-			os.Exit(0)
-		}()
-		
-		m.updateStatus("completed", 100, "Update completed, restarting...")
-		return nil
-	}
-	
-	// Not root - try to use updater script with sudo
-	updaterPath := "/opt/pulse/scripts/pulse-updater"
-	if stat, err := os.Stat(updaterPath); err == nil {
-		log.Info().Str("path", updaterPath).Int64("size", stat.Size()).Msg("Found updater script, using sudo")
-		
-		// Write update info to file for the updater to process
-		jobFile := "/tmp/pulse-update-job.json"
-		jobData := map[string]string{
-			"version": version,
-			"url": downloadURL,
-			"extractDir": extractDir,
-		}
-		
-		jobJSON, _ := json.Marshal(jobData)
-		if err := os.WriteFile(jobFile, jobJSON, 0644); err != nil {
-			m.updateStatus("error", 80, "Failed to write update job")
-			return fmt.Errorf("failed to write update job: %w", err)
-		}
-		
-		// Try to use sudo to run the updater script
-		cmd := exec.Command("sudo", updaterPath, version, downloadURL)
-		
-		// Start the command but don't wait for it to complete
-		if err := cmd.Start(); err != nil {
-			m.updateStatus("error", 80, "Failed to start updater")
-			log.Error().Err(err).Msg("Failed to start updater script with sudo")
-			return fmt.Errorf("failed to start updater: %w", err)
-		}
-		
-		log.Info().Msg("Update script started with sudo")
-		m.updateStatus("completed", 100, "Update started, service will restart in a few seconds...")
-		
-		// The updater script will continue running after we exit
-		return nil
-	} else {
-		log.Warn().Err(err).Str("path", updaterPath).Msg("Updater script not found, using fallback")
-	}
-
-	// Fallback to direct application (for backward compatibility)
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		m.updateStatus("error", 80, "Failed to apply update")
 		// Attempt to restore backup
@@ -655,8 +590,10 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 	// Note: Frontend is usually embedded in the binary for v4, but copy for compatibility
 	frontendSrc := filepath.Join(extractDir, "frontend-modern")
 	if _, err := os.Stat(frontendSrc); err == nil {
-		// Try /opt/pulse first
-		frontendDst := "/opt/pulse/frontend-modern"
+		// Determine frontend destination based on binary location
+		binaryDir := filepath.Dir(binaryPath)
+		frontendDst := filepath.Join(binaryDir, "frontend-modern")
+		
 		cmd = exec.Command("cp", "-r", frontendSrc, frontendDst+".new")
 		if err := cmd.Run(); err == nil {
 			// Remove old and rename new

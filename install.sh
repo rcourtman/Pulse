@@ -134,13 +134,6 @@ create_user() {
         print_info "Creating pulse user..."
         useradd --system --home-dir $INSTALL_DIR --shell /bin/false pulse
     fi
-    
-    # Set up sudo permissions for auto-updates
-    if [[ -d /etc/sudoers.d ]]; then
-        print_info "Configuring sudo permissions for auto-updates..."
-        echo "pulse ALL=(ALL) NOPASSWD: /opt/pulse/scripts/pulse-updater" > /etc/sudoers.d/pulse-update
-        chmod 440 /etc/sudoers.d/pulse-update
-    fi
 }
 
 backup_existing() {
@@ -204,11 +197,19 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    # Copy binary to /usr/local/bin
+    # Create pulse bin directory
+    mkdir -p "$INSTALL_DIR/bin"
+    
+    # Copy binary to /opt/pulse/bin (owned by pulse user)
     if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
-        cp "$TEMP_EXTRACT/pulse" /usr/local/bin/pulse
-        chmod +x /usr/local/bin/pulse
-        print_success "Pulse binary installed to /usr/local/bin/pulse"
+        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
+        chmod +x "$INSTALL_DIR/bin/pulse"
+        chown -R pulse:pulse "$INSTALL_DIR"
+        
+        # Create symlink in /usr/local/bin for PATH convenience
+        ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+        print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
+        print_success "Symlink created at /usr/local/bin/pulse"
     else
         print_error "Pulse binary not found in archive"
         exit 1
@@ -216,23 +217,16 @@ download_pulse() {
     
     # Copy frontend directory if it exists (required for v4.1.0+)
     if [[ -d "$TEMP_EXTRACT/frontend-modern" ]]; then
-        rm -rf /usr/local/bin/frontend-modern
-        cp -r "$TEMP_EXTRACT/frontend-modern" /usr/local/bin/
-        print_success "Frontend files installed to /usr/local/bin/frontend-modern"
+        rm -rf "$INSTALL_DIR/bin/frontend-modern"
+        cp -r "$TEMP_EXTRACT/frontend-modern" "$INSTALL_DIR/bin/"
+        chown -R pulse:pulse "$INSTALL_DIR/bin/frontend-modern"
+        print_success "Frontend files installed to $INSTALL_DIR/bin/frontend-modern"
     fi
     
     # Copy VERSION file if present
     if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
-        mkdir -p "$INSTALL_DIR"
         cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
-    fi
-    
-    # Copy scripts directory if it exists (for auto-updates)
-    if [[ -d "$TEMP_EXTRACT/scripts" ]]; then
-        mkdir -p /opt/pulse/scripts
-        cp -r "$TEMP_EXTRACT/scripts/"* /opt/pulse/scripts/ 2>/dev/null || true
-        chmod +x /opt/pulse/scripts/* 2>/dev/null || true
-        print_success "Update scripts installed"
+        chown pulse:pulse "$INSTALL_DIR/VERSION"
     fi
     
     # Cleanup
@@ -264,7 +258,7 @@ Type=simple
 User=pulse
 Group=pulse
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/local/bin/pulse
+ExecStart=$INSTALL_DIR/bin/pulse
 Restart=always
 RestartSec=3
 StandardOutput=journal
