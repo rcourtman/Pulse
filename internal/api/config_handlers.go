@@ -1559,6 +1559,30 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	
+	// Extract Pulse IP from the pulse URL to make token name unique
+	pulseIP := "pulse"
+	if pulseURL != "" {
+		// Extract IP/hostname from Pulse URL
+		if match := strings.Contains(pulseURL, "://"); match {
+			parts := strings.Split(pulseURL, "://")
+			if len(parts) > 1 {
+				hostPart := strings.Split(parts[1], ":")[0]
+				// Replace dots with dashes for token name compatibility
+				pulseIP = strings.ReplaceAll(hostPart, ".", "-")
+			}
+		}
+	}
+	
+	// Create unique token name based on Pulse IP
+	tokenName := fmt.Sprintf("pulse-%s", pulseIP)
+	
+	// Log the token name for debugging
+	log.Info().
+		Str("pulseURL", pulseURL).
+		Str("pulseIP", pulseIP).
+		Str("tokenName", tokenName).
+		Msg("Generated token name for setup script")
+	
 	var script string
 	
 	if serverType == "pve" {
@@ -1592,24 +1616,24 @@ echo "Generating API token..."
 
 # Check if token already exists
 TOKEN_EXISTED=false
-if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "pulse-token"; then
+if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "%s"; then
     TOKEN_EXISTED=true
     echo ""
     echo "================================================================"
-    echo "WARNING: Token 'pulse-token' already exists!"
+    echo "WARNING: Token '%s' already exists!"
     echo "================================================================"
     echo ""
     echo "To create a new token, first remove the existing one:"
-    echo "  pveum user token remove pulse-monitor@pam pulse-token"
+    echo "  pveum user token remove pulse-monitor@pam %s"
     echo ""
     echo "Or create a token with a different name:"
-    echo "  pveum user token add pulse-monitor@pam pulse-token-$(date +%%s) --privsep 0"
+    echo "  pveum user token add pulse-monitor@pam %s-$(date +%%s) --privsep 0"
     echo ""
-    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!pulse-token-1234567890)"
+    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pam!%s-1234567890)"
     echo "================================================================"
     echo ""
 else
-    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam pulse-token --privsep 0)
+    TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam %s --privsep 0)
     echo ""
     echo "================================================================"
     echo "IMPORTANT: Copy the token value below - it's only shown once!"
@@ -1642,7 +1666,7 @@ else
 {
   "type": "pve",
   "host": "%s",
-  "tokenId": "pulse-monitor@pam!pulse-token",
+  "tokenId": "pulse-monitor@pam!%s",
   "tokenValue": "$TOKEN_VALUE",
   "serverName": "$SERVER_HOSTNAME"
 }
@@ -1696,7 +1720,7 @@ echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "Add this server to Pulse with:"
-echo "  Token ID: pulse-monitor@pam!pulse-token"
+echo "  Token ID: pulse-monitor@pam!%s"
 if [ "$TOKEN_EXISTED" = true ]; then
     echo "  Token Value: [Use your existing token or create a new one as shown above]"
 else
@@ -1708,7 +1732,9 @@ echo "If auto-registration is enabled but requires a token:"
 echo "  1. Generate a registration token in Pulse Settings → Security"
 echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
 echo ""
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, storagePerms, serverHost)
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), 
+			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Token name placeholders
+			pulseURL, serverHost, tokenName, storagePerms, tokenName, serverHost)
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -1738,18 +1764,18 @@ echo ""
 echo "================================================================"
 echo "IMPORTANT: Copy the token value below - it's only shown once!"
 echo "================================================================"
-TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token 2>&1)
+TOKEN_OUTPUT=$(proxmox-backup-manager user generate-token pulse-monitor@pbs %s 2>&1)
 if echo "$TOKEN_OUTPUT" | grep -q "already exists"; then
-    echo "WARNING: Token 'pulse-token' already exists!"
+    echo "WARNING: Token '%s' already exists!"
     echo ""
     echo "You can either:"
     echo "1. Delete the existing token first:"
-    echo "   proxmox-backup-manager user delete-token pulse-monitor@pbs pulse-token"
+    echo "   proxmox-backup-manager user delete-token pulse-monitor@pbs %s"
     echo ""
     echo "2. Or create a token with a different name:"
-    echo "   proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token-$(date +%%s)"
+    echo "   proxmox-backup-manager user generate-token pulse-monitor@pbs %s-$(date +%%s)"
     echo ""
-    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pbs!pulse-token-1234567890)"
+    echo "Then use the new token ID in Pulse (e.g., pulse-monitor@pbs!%s-1234567890)"
 else
     echo "$TOKEN_OUTPUT"
     
@@ -1777,7 +1803,7 @@ else
 {
   "type": "pbs",
   "host": "%s",
-  "tokenId": "pulse-monitor@pbs!pulse-token",
+  "tokenId": "pulse-monitor@pbs!%s",
   "tokenValue": "$TOKEN_VALUE",
   "serverName": "$SERVER_HOSTNAME"
 }
@@ -1828,13 +1854,13 @@ echo ""
 # Set up permissions
 echo "Setting up permissions..."
 proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
-proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'
+proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!%s'
 
 echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "Add this server to Pulse with:"
-echo "  Token ID: pulse-monitor@pbs!pulse-token"
+echo "  Token ID: pulse-monitor@pbs!%s"
 echo "  Token Value: [Check the output above for the token or instructions]"
 echo "  Host URL: %s"
 echo ""
@@ -1842,7 +1868,10 @@ echo "If auto-registration is enabled but requires a token:"
 echo "  1. Generate a registration token in Pulse Settings → Security"
 echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
 echo ""
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseURL, serverHost, serverHost)
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), 
+			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1768-1774: 5 token placeholders
+			pulseURL, serverHost, tokenName, // Lines 1795,1805,1806: pulseURL, host, tokenId
+			tokenName, tokenName, serverHost) // Lines 1857,1863,1865: ACL, Token ID, host URL
 	}
 	
 	// Set headers for script download
