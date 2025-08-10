@@ -531,7 +531,12 @@ const Settings: Component = () => {
       });
       
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorText = await response.text();
+        // Parse specific error messages for better user feedback
+        if (errorText.includes('API_TOKEN') || errorText.includes('ALLOW_UNPROTECTED_EXPORT')) {
+          throw new Error('Export requires authentication. Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true in environment variables.');
+        }
+        throw new Error(errorText || 'Export failed');
       }
       
       const data = await response.json();
