@@ -60,6 +60,18 @@ docker run -d \
   rcourtman/pulse:latest
 ```
 
+### With Network Discovery
+```bash
+# Specify your LAN subnet for auto-discovery
+docker run -d \
+  --name pulse \
+  -p 7655:7655 \
+  -v pulse_data:/data \
+  -e DISCOVERY_SUBNET=192.168.1.0/24 \
+  --restart unless-stopped \
+  rcourtman/pulse:latest
+```
+
 ### Docker Compose
 ```yaml
 services:
@@ -70,6 +82,9 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
+    environment:
+      # Optional: specify your LAN subnet for auto-discovery
+      # - DISCOVERY_SUBNET=192.168.1.0/24
     restart: unless-stopped
 
 volumes:

@@ -57,6 +57,7 @@ sudo systemctl restart pulse-backend
 - `AUTO_UPDATE_TIME` - Update time (HH:MM)
 - `ALLOWED_ORIGINS` - CORS origins
 - `LOG_LEVEL` - debug/info/warn/error
+- `DISCOVERY_SUBNET` - Network subnet for auto-discovery (default: auto, e.g., 192.168.0.0/24)
 
 ### 3. Secure Environment Variables
 For sensitive data like API tokens and passwords:
@@ -126,6 +127,16 @@ echo "LOG_LEVEL=debug" >> /etc/pulse/.env
 sudo systemctl restart pulse-backend
 tail -f /etc/pulse/pulse.log
 ```
+
+### Configure Discovery Subnet (Docker)
+By default, Docker containers may only discover nodes on the Docker bridge network. To scan your actual network:
+```bash
+docker run -d \
+  -e DISCOVERY_SUBNET=192.168.1.0/24 \
+  -p 7655:7655 \
+  rcourtman/pulse:latest
+```
+Replace `192.168.1.0/24` with your actual network subnet.
 
 ## Security Notes
 
