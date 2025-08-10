@@ -1727,8 +1727,8 @@ docker run -d \
         editingNode={editingNode() ?? undefined}
         onSave={async (nodeData) => {
           try {
-            if (editingNode()) {
-              // Update existing node
+            if (editingNode() && editingNode()!.id) {
+              // Update existing node (only if it has a valid ID)
               await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
               
               // Update local state
