@@ -556,7 +556,8 @@ const Settings: Component = () => {
       setShowExportDialog(false);
       setExportPassphrase('');
     } catch (error) {
-      showError('Failed to export configuration');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export configuration';
+      showError(errorMessage);
       console.error('Export error:', error);
     }
   };
@@ -1474,7 +1475,6 @@ docker run -d \
                       </p>
                       <button
                         onClick={() => setShowExportDialog(true)}
-                        disabled={securityStatus() ? !securityStatus()!.exportProtected : false}
                         class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Export Configuration
@@ -1488,7 +1488,6 @@ docker run -d \
                       </p>
                       <button
                         onClick={() => setShowImportDialog(true)}
-                        disabled={securityStatus() ? !securityStatus()!.exportProtected : false}
                         class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Import Configuration
