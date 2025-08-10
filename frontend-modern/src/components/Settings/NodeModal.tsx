@@ -75,7 +75,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setFormData({
         name: '',
         host: '',
-        authType: 'password',
+        authType: 'token', // Default to token auth (more secure)
         setupMode: 'auto',
         user: '',
         password: '',
@@ -326,7 +326,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             onChange={() => updateField('authType', 'token')}
                             class="mr-2"
                           />
-                          <span class="text-sm text-gray-700 dark:text-gray-300">API Token</span>
+                          <span class="text-sm text-gray-700 dark:text-gray-300">API Token <span class="text-green-600 dark:text-green-400 text-xs ml-1">(Recommended)</span></span>
                         </label>
                       </div>
                     </div>
