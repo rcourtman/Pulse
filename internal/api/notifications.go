@@ -209,13 +209,20 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		Msg("Test notification request received")
 	
 	var req struct {
-		Method string                    `json:"method"` // "email" or "webhook"
-		Config *notifications.EmailConfig `json:"config,omitempty"` // Optional config for testing
+		Method    string                    `json:"method"` // "email" or "webhook"
+		Type      string                    `json:"type"`   // Alternative field name used by frontend
+		Config    *notifications.EmailConfig `json:"config,omitempty"` // Optional config for testing
+		WebhookID string                    `json:"webhookId,omitempty"` // For webhook testing
 	}
 	
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	
+	// Support both "method" and "type" field names
+	if req.Method == "" && req.Type != "" {
+		req.Method = req.Type
 	}
 	
 	// Get actual node info from monitor state
@@ -233,8 +240,34 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 	}
 	
-	// If config is provided, use it for testing (without saving)
-	if req.Method == "email" && req.Config != nil {
+	// Handle webhook testing
+	if req.Method == "webhook" && req.WebhookID != "" {
+		log.Info().
+			Str("webhookId", req.WebhookID).
+			Msg("Testing specific webhook")
+		
+		// Get the webhook by ID and test it
+		webhooks := h.monitor.GetNotificationManager().GetWebhooks()
+		var foundWebhook *notifications.WebhookConfig
+		for _, wh := range webhooks {
+			if wh.ID == req.WebhookID {
+				foundWebhook = &wh
+				break
+			}
+		}
+		
+		if foundWebhook == nil {
+			http.Error(w, "Webhook not found", http.StatusNotFound)
+			return
+		}
+		
+		// Send test webhook
+		if err := h.monitor.GetNotificationManager().SendTestWebhook(*foundWebhook); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if req.Method == "email" && req.Config != nil {
+		// If config is provided, use it for testing (without saving)
 		log.Info().
 			Bool("enabled", req.Config.Enabled).
 			Str("smtp", req.Config.SMTPHost).

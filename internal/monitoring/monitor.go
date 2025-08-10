@@ -838,25 +838,33 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
 			// For running VMs, try to get detailed status with balloon info
-			memUsed := vm.Mem
+			memUsed := uint64(0)
 			memTotal := vm.MaxMem
 
 			if vm.Status == "running" {
 				// Try to get detailed VM status for more accurate memory reporting
 				if vmStatus, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil {
-					// If balloon is enabled and different from max mem, use actual memory usage
+					// If balloon is enabled, use balloon as the total available memory
 					if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
-						// For balloon-enabled VMs, mem shows current balloon size
-						// Use the actual allocated memory (balloon) as total
 						memTotal = vmStatus.Balloon
-						// Use reported memory usage
-						memUsed = vmStatus.Mem
-						// If we have free memory info from guest agent, use it for more accuracy
-						if vmStatus.FreeMem > 0 && vmStatus.FreeMem < vmStatus.Balloon {
-							memUsed = vmStatus.Balloon - vmStatus.FreeMem
-						}
 					}
+					
+					// If we have free memory from guest agent, calculate actual usage
+					if vmStatus.FreeMem > 0 {
+						// Guest agent reports free memory, so calculate used
+						memUsed = memTotal - vmStatus.FreeMem
+					} else {
+						// No guest agent data - show 0% usage instead of incorrect 100%
+						// This indicates the guest agent is not installed/running
+						memUsed = 0
+					}
+				} else {
+					// Failed to get detailed status - show 0% usage
+					memUsed = 0
 				}
+			} else {
+				// VM is not running, show 0 usage
+				memUsed = 0
 			}
 
 			// Set CPU to 0 for stopped VMs to avoid false alerts
@@ -967,6 +975,16 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 				cpuUsage = 0
 			}
 
+			// For containers, memory reporting is more accurate than VMs
+			// ct.Mem shows actual usage for running containers
+			memUsed := uint64(0)
+			memTotal := ct.MaxMem
+			
+			if ct.Status == "running" {
+				// For running containers, ct.Mem is actual usage
+				memUsed = ct.Mem
+			}
+
 			// Convert -1 to nil for I/O metrics when VM is not running
 			// We'll use -1 to indicate "no data" which will be converted to null for the frontend
 			modelCT := models.Container{
@@ -980,10 +998,10 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 				CPU:      cpuUsage, // Already in percentage
 				CPUs:     int(ct.CPUs),
 				Memory: models.Memory{
-					Total: int64(ct.MaxMem),
-					Used:  int64(ct.Mem),
-					Free:  int64(ct.MaxMem - ct.Mem),
-					Usage: safePercentage(float64(ct.Mem), float64(ct.MaxMem)),
+					Total: int64(memTotal),
+					Used:  int64(memUsed),
+					Free:  int64(memTotal - memUsed),
+					Usage: safePercentage(float64(memUsed), float64(memTotal)),
 				},
 				Disk: models.Disk{
 					Total: int64(ct.MaxDisk),

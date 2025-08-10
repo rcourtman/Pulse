@@ -671,6 +671,34 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 	}
 }
 
+// SendTestWebhook sends a test notification to a specific webhook
+func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
+	// Create a test alert for webhook testing
+	testAlert := &alerts.Alert{
+		ID:           "test-webhook-" + webhook.ID,
+		Type:         "test",
+		Level:        "info",
+		ResourceID:   "webhook-test",
+		ResourceName: "Webhook Test",
+		Node:         "test-node",
+		Instance:     "pulse-server",
+		Message:      fmt.Sprintf("Testing webhook: %s", webhook.Name),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"webhookName": webhook.Name,
+			"webhookURL":  webhook.URL,
+			"testTime":    time.Now().Format(time.RFC3339),
+		},
+	}
+	
+	// Send the test webhook
+	n.sendWebhook(webhook, testAlert)
+	return nil
+}
+
 // SendTestNotificationWithConfig sends a test notification using provided config
 func (n *NotificationManager) SendTestNotificationWithConfig(method string, config *EmailConfig, nodeInfo *TestNodeInfo) error {
 	// Use actual node info if provided, otherwise use defaults
