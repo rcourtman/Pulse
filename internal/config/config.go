@@ -56,6 +56,9 @@ type Config struct {
 	AutoUpdateCheckInterval time.Duration `envconfig:"AUTO_UPDATE_CHECK_INTERVAL" default:"24h"`
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
 	
+	// Discovery settings
+	DiscoverySubnet string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
+	
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
 	Debug bool `envconfig:"DEBUG" default:"false"`
@@ -156,6 +159,7 @@ func Load() (*Config, error) {
 		AllowedOrigins:       "*",
 		IframeEmbeddingAllow: "SAMEORIGIN",
 		PollingInterval:      3 * time.Second,
+		DiscoverySubnet:      "auto",
 	}
 	
 	// Initialize persistence
@@ -264,6 +268,12 @@ func Load() (*Config, error) {
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		cfg.LogLevel = logLevel
 		log.Info().Str("level", logLevel).Msg("Overriding log level from env var")
+	}
+	
+	// Discovery settings from env vars
+	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
+		cfg.DiscoverySubnet = discoverySubnet
+		log.Info().Str("subnet", discoverySubnet).Msg("Overriding discovery subnet from env var")
 	}
 	
 	// Set log level
