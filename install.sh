@@ -208,19 +208,18 @@ download_pulse() {
         # Old structure - files in root
         cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
         [[ -d "$TEMP_EXTRACT/frontend-modern" ]] && cp -r "$TEMP_EXTRACT/frontend-modern" "$INSTALL_DIR/bin/"
-    fi
-    
-    chmod +x "$INSTALL_DIR/bin/pulse"
-    chown -R pulse:pulse "$INSTALL_DIR"
-        
-        # Create symlink in /usr/local/bin for PATH convenience
-        ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
-        print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
-        print_success "Symlink created at /usr/local/bin/pulse"
     else
         print_error "Pulse binary not found in archive"
         exit 1
     fi
+    
+    chmod +x "$INSTALL_DIR/bin/pulse"
+    chown -R pulse:pulse "$INSTALL_DIR"
+    
+    # Create symlink in /usr/local/bin for PATH convenience
+    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+    print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
+    print_success "Symlink created at /usr/local/bin/pulse"
     
     # Copy frontend directory if it exists (required for v4.1.0+)
     if [[ -d "$TEMP_EXTRACT/frontend-modern" ]]; then
