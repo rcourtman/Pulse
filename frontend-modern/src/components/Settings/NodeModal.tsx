@@ -291,10 +291,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           type="text"
                           value={formData().host}
                           onInput={(e) => updateField('host', e.currentTarget.value)}
-                          placeholder="https://proxmox.example.com:8006"
+                          placeholder={props.nodeType === 'pve' ? "https://proxmox.example.com:8006" : "https://backup.example.com:8007"}
                           required
                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
+                        <Show when={props.nodeType === 'pbs'}>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">PBS requires HTTPS (not HTTP). Default port is 8007</p>
+                        </Show>
                       </div>
                     </div>
                   </div>

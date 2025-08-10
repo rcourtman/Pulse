@@ -48,6 +48,19 @@ type auth struct {
 
 // NewClient creates a new PBS API client
 func NewClient(cfg ClientConfig) (*Client, error) {
+	// Normalize host URL - ensure it has a protocol
+	if !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://") {
+		// Default to HTTPS if no protocol specified
+		cfg.Host = "https://" + cfg.Host
+		// Log that we're defaulting to HTTPS
+		log.Debug().Str("host", cfg.Host).Msg("No protocol specified in PBS host, defaulting to HTTPS")
+	}
+	
+	// Warn if using HTTP
+	if strings.HasPrefix(cfg.Host, "http://") {
+		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PBS connection. PBS typically requires HTTPS. If connection fails, try using https:// instead")
+	}
+	
 	var user, realm string
 	
 	// For token auth, user might be empty or in a different format
@@ -376,6 +389,10 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 
 	// Check if response is HTML (error page) instead of JSON
 	if len(body) > 0 && body[0] == '<' {
+		// If using HTTP, suggest HTTPS
+		if strings.HasPrefix(c.config.Host, "http://") {
+			return nil, fmt.Errorf("PBS returned HTML instead of JSON. PBS typically requires HTTPS, not HTTP. Try changing your URL from %s to %s", c.config.Host, strings.Replace(c.config.Host, "http://", "https://", 1))
+		}
 		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
 	}
 
