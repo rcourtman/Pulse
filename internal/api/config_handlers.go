@@ -1573,15 +1573,18 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	
-	// Create unique token name based on Pulse IP
-	tokenName := fmt.Sprintf("pulse-%s", pulseIP)
+	// Create unique token name based on Pulse IP and timestamp
+	// Adding timestamp ensures truly unique tokens even when running from same Pulse server
+	timestamp := time.Now().Unix()
+	tokenName := fmt.Sprintf("pulse-%s-%d", pulseIP, timestamp)
 	
 	// Log the token name for debugging
 	log.Info().
 		Str("pulseURL", pulseURL).
 		Str("pulseIP", pulseIP).
 		Str("tokenName", tokenName).
-		Msg("Generated token name for setup script")
+		Int64("timestamp", timestamp).
+		Msg("Generated unique token name for setup script")
 	
 	var script string
 	
