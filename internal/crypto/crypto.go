@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -34,10 +35,7 @@ func NewCryptoManager() (*CryptoManager, error) {
 // getOrCreateKey gets the encryption key or creates one if it doesn't exist
 func getOrCreateKey() ([]byte, error) {
 	// Use data directory for key storage (for Docker persistence)
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
+	dataDir := utils.GetDataDir()
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 	oldKeyPath := "/etc/pulse/.encryption.key"
 	
@@ -50,19 +48,30 @@ func getOrCreateKey() ([]byte, error) {
 		}
 	}
 	
-	// Check for key in old location and migrate if found
-	if dataDir != "/etc/pulse" {
+	// Check for key in old location and migrate if found (only if paths differ)
+	if dataDir != "/etc/pulse" && keyPath != oldKeyPath {
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
 			key := make([]byte, 32)
 			n, err := base64.StdEncoding.Decode(key, data)
 			if err == nil && n == 32 {
 				// Migrate key to new location
-				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err == nil {
-					if err := os.WriteFile(keyPath, data, 0600); err == nil {
-						log.Info().Msg("Migrated encryption key to data directory")
-						// Try to remove old key (ignore errors)
-						os.Remove(oldKeyPath)
-					}
+				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+					// Migration failed, but we can still use the old key
+					log.Warn().Err(err).Msg("Failed to create directory for key migration, using old location")
+					return key, nil
+				}
+				if err := os.WriteFile(keyPath, data, 0600); err != nil {
+					// Migration failed, but we can still use the old key
+					log.Warn().Err(err).Msg("Failed to migrate encryption key, using old location")
+					return key, nil
+				}
+				log.Info().
+					Str("from", oldKeyPath).
+					Str("to", keyPath).
+					Msg("Successfully migrated encryption key to data directory")
+				// Try to remove old key (ignore errors as this is cleanup)
+				if err := os.Remove(oldKeyPath); err != nil {
+					log.Debug().Err(err).Msg("Could not remove old encryption key (may lack permissions)")
 				}
 				return key, nil
 			}
