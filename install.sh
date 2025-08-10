@@ -134,6 +134,13 @@ create_user() {
         print_info "Creating pulse user..."
         useradd --system --home-dir $INSTALL_DIR --shell /bin/false pulse
     fi
+    
+    # Set up sudo permissions for auto-updates
+    if [[ -d /etc/sudoers.d ]]; then
+        print_info "Configuring sudo permissions for auto-updates..."
+        echo "pulse ALL=(ALL) NOPASSWD: /opt/pulse/scripts/pulse-updater" > /etc/sudoers.d/pulse-update
+        chmod 440 /etc/sudoers.d/pulse-update
+    fi
 }
 
 backup_existing() {
@@ -218,6 +225,14 @@ download_pulse() {
     if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
         mkdir -p "$INSTALL_DIR"
         cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
+    fi
+    
+    # Copy scripts directory if it exists (for auto-updates)
+    if [[ -d "$TEMP_EXTRACT/scripts" ]]; then
+        mkdir -p /opt/pulse/scripts
+        cp -r "$TEMP_EXTRACT/scripts/"* /opt/pulse/scripts/ 2>/dev/null || true
+        chmod +x /opt/pulse/scripts/* 2>/dev/null || true
+        print_success "Update scripts installed"
     fi
     
     # Cleanup

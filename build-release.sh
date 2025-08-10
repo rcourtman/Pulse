@@ -63,6 +63,9 @@ for build_name in "${!builds[@]}"; do
     # Copy v3 migration shim
     mkdir -p "$staging_dir/server"
     cp server/index.js "$staging_dir/server/" 2>/dev/null || true
+    # Copy scripts for auto-updates
+    mkdir -p "$staging_dir/scripts"
+    cp scripts/pulse-updater "$staging_dir/scripts/" 2>/dev/null || true
     # Note: pulse.service might not exist in Go version
     
     # Create tarball
@@ -103,6 +106,9 @@ echo "$VERSION" > "$universal_staging/VERSION"
 # Copy v3 migration shim
 mkdir -p "$universal_staging/server"
 cp server/index.js "$universal_staging/server/" 2>/dev/null || true
+# Copy scripts for auto-updates
+mkdir -p "$universal_staging/scripts"
+cp scripts/pulse-updater "$universal_staging/scripts/" 2>/dev/null || true
 
 # Rename wrapper to 'pulse' for seamless usage
 cp pulse-wrapper.sh "$universal_staging/pulse"
