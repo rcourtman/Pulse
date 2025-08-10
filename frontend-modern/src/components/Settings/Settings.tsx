@@ -121,6 +121,9 @@ const Settings: Component = () => {
   const [importFile, setImportFile] = createSignal<File | null>(null);
   const [showExportDialog, setShowExportDialog] = createSignal(false);
   const [showImportDialog, setShowImportDialog] = createSignal(false);
+  const [showApiTokenModal, setShowApiTokenModal] = createSignal(false);
+  const [apiTokenInput, setApiTokenInput] = createSignal('');
+  const [apiTokenModalSource, setApiTokenModalSource] = createSignal<'export' | 'import' | null>(null);
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -513,6 +516,13 @@ const Settings: Component = () => {
       return;
     }
     
+    // Check if API token is required but not set
+    if (securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
+      setApiTokenModalSource('export');
+      setShowApiTokenModal(true);
+      return;
+    }
+    
     try {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -532,8 +542,17 @@ const Settings: Component = () => {
       
       if (!response.ok) {
         const errorText = await response.text();
-        // Parse specific error messages for better user feedback
-        if (errorText.includes('API_TOKEN') || errorText.includes('ALLOW_UNPROTECTED_EXPORT')) {
+        // Handle authentication errors by clearing invalid token and re-prompting
+        if (response.status === 401 || response.status === 403 || errorText.includes('API_TOKEN') || errorText.includes('Unauthorized')) {
+          // Clear invalid token if we had one
+          const hadToken = localStorage.getItem('apiToken');
+          if (hadToken) {
+            localStorage.removeItem('apiToken');
+            showError('Invalid or expired API token. Please re-enter.');
+            setApiTokenModalSource('export');
+            setShowApiTokenModal(true);
+            return;
+          }
           throw new Error('Export requires authentication. Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true in environment variables.');
         }
         throw new Error(errorText || 'Export failed');
@@ -578,6 +597,13 @@ const Settings: Component = () => {
       return;
     }
     
+    // Check if API token is required but not set
+    if (securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
+      setApiTokenModalSource('import');
+      setShowApiTokenModal(true);
+      return;
+    }
+    
     try {
       const fileContent = await importFile()!.text();
       let exportData;
@@ -609,7 +635,21 @@ const Settings: Component = () => {
       });
       
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorText = await response.text();
+        // Handle authentication errors by clearing invalid token and re-prompting
+        if (response.status === 401 || response.status === 403 || errorText.includes('API_TOKEN') || errorText.includes('Unauthorized')) {
+          // Clear invalid token if we had one
+          const hadToken = localStorage.getItem('apiToken');
+          if (hadToken) {
+            localStorage.removeItem('apiToken');
+            showError('Invalid or expired API token. Please re-enter.');
+            setApiTokenModalSource('import');
+            setShowApiTokenModal(true);
+            return;
+          }
+          throw new Error('Import requires authentication. Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true in environment variables.');
+        }
+        throw new Error(errorText || 'Import failed');
       }
       
       showSuccess('Configuration imported successfully. Reloading...');
@@ -1384,6 +1424,17 @@ const Settings: Component = () => {
                             <p class="text-xs text-green-700 dark:text-green-300 mt-1">
                               Your Pulse instance is protected with API token authentication.
                             </p>
+                            <Show when={localStorage.getItem('apiToken')}>
+                              <button
+                                onClick={() => {
+                                  localStorage.removeItem('apiToken');
+                                  showSuccess('API token cleared from browser storage');
+                                }}
+                                class="mt-2 text-xs text-green-700 dark:text-green-300 underline hover:no-underline"
+                              >
+                                Clear stored token
+                              </button>
+                            </Show>
                           </div>
                         </div>
                       </div>
@@ -1821,6 +1872,76 @@ docker run -d \
                   Export
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+      
+      {/* API Token Modal */}
+      <Show when={showApiTokenModal()}>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
+              API Token Required
+            </h3>
+            
+            <div class="space-y-4">
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                This Pulse instance requires an API token for export/import operations. Please enter the API token configured on the server.
+              </p>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  API Token
+                </label>
+                <input
+                  type="password"
+                  value={apiTokenInput()}
+                  onInput={(e) => setApiTokenInput(e.currentTarget.value)}
+                  placeholder="Enter API token"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200"
+                />
+              </div>
+              
+              <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
+                <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
+                <code class="block">API_TOKEN=your-secure-token</code>
+              </div>
+            </div>
+            
+            <div class="flex justify-end space-x-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowApiTokenModal(false);
+                  setApiTokenInput('');
+                }}
+                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (apiTokenInput()) {
+                    localStorage.setItem('apiToken', apiTokenInput());
+                    const source = apiTokenModalSource();
+                    setShowApiTokenModal(false);
+                    setApiTokenInput('');
+                    setApiTokenModalSource(null);
+                    // Retry the operation that triggered the modal
+                    if (source === 'export') {
+                      handleExport();
+                    } else if (source === 'import') {
+                      handleImport();
+                    }
+                  } else {
+                    showError('Please enter the API token');
+                  }
+                }}
+                disabled={!apiTokenInput()}
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Authenticate
+              </button>
             </div>
           </div>
         </div>
