@@ -234,11 +234,30 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 
 	m.updateStatus("downloading", 10, "Downloading update...")
 
-	// Create temp directory
-	tempDir, err := os.MkdirTemp("", "pulse-update-*")
+	// Create temp directory in a location we can write to
+	// Try multiple locations in order of preference
+	var tempDir string
+	var err error
+	
+	// Try data directory first
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/etc/pulse"
+	}
+	
+	// Try to create temp dir in data directory
+	tempDir, err = os.MkdirTemp(dataDir, "pulse-update-*")
 	if err != nil {
-		m.updateStatus("error", 10, "Failed to create temp directory")
-		return fmt.Errorf("failed to create temp directory: %w", err)
+		// Fallback to /tmp
+		tempDir, err = os.MkdirTemp("/tmp", "pulse-update-*")
+		if err != nil {
+			// Last resort: current directory
+			tempDir, err = os.MkdirTemp(".", "pulse-update-*")
+			if err != nil {
+				m.updateStatus("error", 10, "Failed to create temp directory")
+				return fmt.Errorf("failed to create temp directory in any location: %w", err)
+			}
+		}
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -485,11 +504,22 @@ func (m *Manager) extractTarball(src, dest string) error {
 // createBackup creates a backup of the current installation
 func (m *Manager) createBackup() (string, error) {
 	timestamp := time.Now().Format("20060102-150405")
-	backupDir := fmt.Sprintf("/tmp/pulse-backup-%s", timestamp)
+	
+	// Try to create backup in a writable location
+	dataDir := os.Getenv("PULSE_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/etc/pulse"
+	}
+	
+	backupDir := filepath.Join(dataDir, fmt.Sprintf("backup-%s", timestamp))
 	
 	// Create backup directory
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return "", err
+		// Fallback to /tmp if data dir fails
+		backupDir = fmt.Sprintf("/tmp/pulse-backup-%s", timestamp)
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create backup directory: %w", err)
+		}
 	}
 
 	// Backup important directories
@@ -552,10 +582,14 @@ func (m *Manager) restoreBackup(backupDir string) error {
 
 // applyUpdateFiles copies update files to the installation directory
 func (m *Manager) applyUpdateFiles(extractDir string) error {
-	// Check if the pulse binary exists in the extracted directory
+	// Check for pulse binary in both old (root) and new (bin/) locations
 	pulseBinary := filepath.Join(extractDir, "pulse")
 	if _, err := os.Stat(pulseBinary); err != nil {
-		return fmt.Errorf("pulse binary not found in extract: %w", err)
+		// Try new structure with bin/ directory
+		pulseBinary = filepath.Join(extractDir, "bin", "pulse")
+		if _, err := os.Stat(pulseBinary); err != nil {
+			return fmt.Errorf("pulse binary not found in extract (checked both / and /bin/): %w", err)
+		}
 	}
 	
 	// Detect where the current binary is running from
@@ -586,9 +620,13 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		}
 	}
 	
-	// Copy frontend directory if it exists 
+	// Copy frontend directory if it exists (check both old and new locations)
 	// Note: Frontend is usually embedded in the binary for v4, but copy for compatibility
 	frontendSrc := filepath.Join(extractDir, "frontend-modern")
+	if _, err := os.Stat(frontendSrc); err != nil {
+		// Try new structure with bin/ directory
+		frontendSrc = filepath.Join(extractDir, "bin", "frontend-modern")
+	}
 	if _, err := os.Stat(frontendSrc); err == nil {
 		// Determine frontend destination based on binary location
 		binaryDir := filepath.Dir(binaryPath)
