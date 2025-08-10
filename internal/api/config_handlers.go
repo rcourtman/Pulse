@@ -198,6 +198,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 			HasToken:          pbs.TokenValue != "",
 			Fingerprint:       pbs.Fingerprint,
 			VerifySSL:         pbs.VerifySSL,
+			MonitorBackups:     pbs.MonitorBackups,
 			MonitorDatastores:  pbs.MonitorDatastores,
 			MonitorSyncJobs:    pbs.MonitorSyncJobs,
 			MonitorVerifyJobs:  pbs.MonitorVerifyJobs,
@@ -407,6 +408,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			TokenValue:        pbsTokenValue,
 			Fingerprint:       req.Fingerprint,
 			VerifySSL:         req.VerifySSL,
+			MonitorBackups:     true, // Enable by default for PBS
 			MonitorDatastores:  req.MonitorDatastores,
 			MonitorSyncJobs:    req.MonitorSyncJobs,
 			MonitorVerifyJobs:  req.MonitorVerifyJobs,
@@ -755,6 +757,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		
 		pbs.Fingerprint = req.Fingerprint
 		pbs.VerifySSL = req.VerifySSL
+		pbs.MonitorBackups = true // Enable by default for PBS
 		pbs.MonitorDatastores = req.MonitorDatastores
 		pbs.MonitorSyncJobs = req.MonitorSyncJobs
 		pbs.MonitorVerifyJobs = req.MonitorVerifyJobs
@@ -2106,6 +2109,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				TokenName:          nodeConfig.TokenName,
 				TokenValue:         nodeConfig.TokenValue,
 				VerifySSL:          nodeConfig.VerifySSL,
+				MonitorBackups:     true, // Enable by default for PBS
 				MonitorDatastores:  nodeConfig.MonitorDatastores,
 				MonitorSyncJobs:    nodeConfig.MonitorSyncJobs,
 				MonitorVerifyJobs:  nodeConfig.MonitorVerifyJobs,
