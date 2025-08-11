@@ -344,44 +344,72 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	var jsonData []byte
 	var err error
 	
-	// For Discord, send individual embeds for each alert
-	if webhook.Service == "discord" && len(alertList) > 0 {
+	// For service-specific webhooks, use the first alert with a note about others
+	if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
 		// For simplicity, send the first alert with a note about others
-		// Discord webhooks work better with single embeds
+		// Most webhook services work better with single structured payloads
 		alert := alertList[0]
 		
 		// Convert to enhanced webhook to use template
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
-			Service:       "discord",
+			Service:       webhook.Service,
 		}
 		
-		// Get Discord template
+		// Get service template
 		templates := GetWebhookTemplates()
+		templateFound := false
 		for _, tmpl := range templates {
-			if tmpl.Service == "discord" {
+			if tmpl.Service == webhook.Service {
 				enhanced.PayloadTemplate = tmpl.PayloadTemplate
+				templateFound = true
 				break
 			}
 		}
 		
-		// Modify message if multiple alerts
-		if len(alertList) > 1 {
-			alert.Message = fmt.Sprintf("%s (and %d more alerts)", alert.Message, len(alertList)-1)
+		if templateFound {
+			// Modify message if multiple alerts
+			if len(alertList) > 1 {
+				alert.Message = fmt.Sprintf("%s (and %d more alerts)", alert.Message, len(alertList)-1)
+			}
+			
+			// Prepare data and generate payload
+			data := n.prepareWebhookData(alert, nil)
+			
+			// Handle service-specific requirements
+			if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+				if u, err := url.Parse(webhook.URL); err == nil {
+					chatID := u.Query().Get("chat_id")
+					if chatID != "" {
+						data.ChatID = chatID
+					}
+				}
+			} else if webhook.Service == "pagerduty" {
+				if data.CustomFields == nil {
+					data.CustomFields = make(map[string]interface{})
+				}
+				if routingKey, ok := webhook.Headers["routing_key"]; ok {
+					data.CustomFields["routing_key"] = routingKey
+				}
+			}
+			
+			jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("webhook", webhook.Name).
+					Int("alertCount", len(alertList)).
+					Msg("Failed to generate payload for grouped alerts")
+				return
+			}
+		} else {
+			// No template found, use generic payload
+			webhook.Service = "generic"
 		}
-		
-		// Prepare data and generate payload
-		data := n.prepareWebhookData(alert, nil)
-		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("webhook", webhook.Name).
-				Int("alertCount", len(alertList)).
-				Msg("Failed to generate Discord payload for grouped alerts")
-			return
-		}
-	} else {
+	}
+	
+	// Use generic payload if no service or template not found
+	if webhook.Service == "" || webhook.Service == "generic" || jsonData == nil {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
 			"alerts": alertList,
@@ -467,8 +495,8 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	var jsonData []byte
 	var err error
 	
-	// Check if this is a service-specific webhook and use the proper template
-	if webhook.Service == "discord" || webhook.Service == "telegram" {
+	// Check if this webhook has a service type and use the proper template
+	if webhook.Service != "" && webhook.Service != "generic" {
 		// Convert to enhanced webhook to use template
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
@@ -477,38 +505,60 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 		
 		// Get service template
 		templates := GetWebhookTemplates()
+		templateFound := false
 		for _, tmpl := range templates {
 			if tmpl.Service == webhook.Service {
 				enhanced.PayloadTemplate = tmpl.PayloadTemplate
+				templateFound = true
 				break
 			}
 		}
 		
-		// Prepare data and generate payload
-		data := n.prepareWebhookData(alert, nil)
-		
-		// For Telegram, extract chat_id from URL if present
-		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-			// Extract chat_id from URL query params
-			if u, err := url.Parse(webhook.URL); err == nil {
-				chatID := u.Query().Get("chat_id")
-				if chatID != "" {
-					data.ChatID = chatID
+		// Only use template if found, otherwise fall back to generic
+		if templateFound {
+			// Prepare data and generate payload
+			data := n.prepareWebhookData(alert, nil)
+			
+			// For Telegram, extract chat_id from URL if present
+			if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+				// Extract chat_id from URL query params
+				if u, err := url.Parse(webhook.URL); err == nil {
+					chatID := u.Query().Get("chat_id")
+					if chatID != "" {
+						data.ChatID = chatID
+					}
 				}
 			}
+			
+			// For PagerDuty, add routing key if present in URL or headers
+			if webhook.Service == "pagerduty" {
+				if data.CustomFields == nil {
+					data.CustomFields = make(map[string]interface{})
+				}
+				// Check if routing key is in headers
+				if routingKey, ok := webhook.Headers["routing_key"]; ok {
+					data.CustomFields["routing_key"] = routingKey
+				}
+			}
+			
+			jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("webhook", webhook.Name).
+					Str("service", webhook.Service).
+					Str("alertID", alert.ID).
+					Msg("Failed to generate webhook payload")
+				return
+			}
+		} else {
+			// No template found, use generic payload
+			webhook.Service = "generic"
 		}
-		
-		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("webhook", webhook.Name).
-				Str("service", webhook.Service).
-				Str("alertID", alert.ID).
-				Msg("Failed to generate webhook payload")
-			return
-		}
-	} else {
+	}
+	
+	// Use generic payload if no service or template not found
+	if webhook.Service == "" || webhook.Service == "generic" || jsonData == nil {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
 			"alert": alert,
