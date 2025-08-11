@@ -1526,8 +1526,8 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
-			// Check if storage supports backup or template content
-			if !strings.Contains(storage.Content, "backup") && !strings.Contains(storage.Content, "vztmpl") && !strings.Contains(storage.Content, "iso") {
+			// Check if storage supports backup content
+			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
 
@@ -1550,13 +1550,14 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 				}
 				seenVolids[content.Volid] = true
 
+				// Skip templates and ISOs - they're not backups
+				if content.Content == "vztmpl" || content.Content == "iso" {
+					continue
+				}
+
 				// Determine type from content type and volid
 				backupType := "unknown"
-				if content.Content == "vztmpl" {
-					backupType = "vztmpl"
-				} else if content.Content == "iso" {
-					backupType = "iso"
-				} else if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
+				if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
 					backupType = "qemu"
 				} else if strings.Contains(content.Volid, "/ct/") || strings.Contains(content.Volid, "lxc") {
 					backupType = "lxc"
