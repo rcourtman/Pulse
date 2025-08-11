@@ -211,8 +211,8 @@ func Load() (*Config, error) {
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
 	if port := os.Getenv("PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
-			cfg.BackendPort = p
-			log.Info().Int("port", p).Msg("Overriding backend port from PORT env var")
+			cfg.FrontendPort = p  // Fixed: PORT should set FrontendPort (the actual listening port)
+			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var")
 		}
 	}
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
@@ -285,7 +285,7 @@ func Load() (*Config, error) {
 	case "error":
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 	default:
-		zerolog.SetGlobalLevel(zerolog.DebugLevel) // Temporarily set to debug to see PBS responses
+		zerolog.SetGlobalLevel(zerolog.InfoLevel) // Default to info level
 	}
 	
 	// Validate configuration

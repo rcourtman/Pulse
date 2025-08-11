@@ -53,13 +53,15 @@ type Alert interface {
 // EmailConfig holds email notification settings
 type EmailConfig struct {
 	Enabled    bool     `json:"enabled"`
-	SMTPHost   string   `json:"smtpHost"`
-	SMTPPort   int      `json:"smtpPort"`
+	Provider   string   `json:"provider"`  // Email provider name (Gmail, SendGrid, etc.)
+	SMTPHost   string   `json:"server"`    // Changed from smtpHost to server for frontend consistency
+	SMTPPort   int      `json:"port"`      // Changed from smtpPort to port for frontend consistency
 	Username   string   `json:"username"`
 	Password   string   `json:"password"`
 	From       string   `json:"from"`
 	To         []string `json:"to"`
 	TLS        bool     `json:"tls"`
+	StartTLS   bool     `json:"startTLS"`  // STARTTLS support
 }
 
 // WebhookConfig holds webhook settings
@@ -298,7 +300,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 			Username: config.Username,
 			Password: config.Password,
 		},
-		StartTLS:      config.SMTPPort == 587 || config.SMTPPort == 25, // Use STARTTLS for common ports
+		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
 		MaxRetries:    2,
 		RetryDelay:    3,
 		RateLimit:     60,

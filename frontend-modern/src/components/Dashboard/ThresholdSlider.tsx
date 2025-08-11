@@ -102,10 +102,14 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Custom thumb with value */}
       <div
         ref={thumbRef}
-        class={`absolute top-1/2 -translate-y-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
+        class={`absolute top-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
         style={{ 
           left: `${thumbPosition()}%`,
-          transform: `translateY(-50%) translateX(${thumbPosition() === 0 ? '0%' : thumbPosition() === 100 ? '-100%' : '-50%'})`
+          transform: `translateY(-50%) translateX(${
+            thumbPosition() <= 1 ? '0%' :      // At 0-1%, keep at left edge
+            thumbPosition() >= 99 ? '-100%' :  // At 99-100%, keep at right edge
+            '-50%'                              // Otherwise center
+          })`
         }}
       >
         <div class="relative">

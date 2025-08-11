@@ -14,8 +14,8 @@ interface EmailProvider {
 interface EmailConfig {
   enabled: boolean;
   provider: string;
-  smtpHost: string;
-  smtpPort: number;
+  server: string;    // Fixed: use 'server' not 'smtpHost'
+  port: number;      // Fixed: use 'port' not 'smtpPort'
   from: string;
   username: string;
   password: string;
@@ -54,8 +54,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
     props.onChange({
       ...props.config,
       provider: provider.name,
-      smtpHost: provider.smtpHost,
-      smtpPort: provider.smtpPort,
+      server: provider.smtpHost,  // Fixed: use 'server' not 'smtpHost'
+      port: provider.smtpPort,    // Fixed: use 'port' not 'smtpPort'  
       tls: provider.tls,
       startTLS: provider.startTLS,
       username: provider.name === 'SendGrid' ? 'apikey' : props.config.username,
@@ -125,8 +125,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           </label>
           <input
             type="text"
-            value={props.config.smtpHost}
-            onInput={(e) => props.onChange({ ...props.config, smtpHost: e.currentTarget.value })}
+            value={props.config.server}
+            onInput={(e) => props.onChange({ ...props.config, server: e.currentTarget.value })}
             placeholder="smtp.example.com"
             class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
           />
@@ -138,8 +138,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           </label>
           <input
             type="number"
-            value={props.config.smtpPort}
-            onInput={(e) => props.onChange({ ...props.config, smtpPort: parseInt(e.currentTarget.value) || 587 })}
+            value={props.config.port}
+            onInput={(e) => props.onChange({ ...props.config, port: parseInt(e.currentTarget.value) || 587 })}
             placeholder="587"
             class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
           />
