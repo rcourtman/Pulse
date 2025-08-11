@@ -344,7 +344,7 @@ const Storage: Component = () => {
                               {groupName}
                             </a>
                           </td>
-                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400" colspan="7">
+                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400" colspan="8">
                             <span class="text-[10px]">
                               {getTotalByNode(storages).total > 0 && (
                                 <span>
