@@ -48,6 +48,11 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 - Check port 7655 is open
 - Verify Pulse is running: `systemctl status pulse`
 
+### PBS connection issues?
+- PBS requires HTTPS (not HTTP) - use `https://your-pbs:8007`
+- Default PBS port is 8007 (not 8006)
+- Check firewall allows port 8007
+
 ### Invalid credentials?
 - Check username includes realm (@pam, @pve)
 - Verify API token not expired

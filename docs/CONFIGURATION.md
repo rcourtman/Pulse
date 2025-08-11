@@ -88,17 +88,23 @@ All sensitive data is automatically encrypted at rest using AES-256-GCM:
 - Email server passwords  
 - PBS credentials
 
-The encryption key is auto-generated and stored at `/etc/pulse/.encryption.key` with restricted permissions.
+The encryption key is auto-generated and stored in the data directory with restricted permissions.
 
 ### File Locations
-- **Configuration**: `/etc/pulse/` (or `./data` if not writable)
+- **Configuration**: 
+  - Standard install: `/etc/pulse/`
+  - Docker: `/data` (mounted volume)
+  - Fallback: `./data` if not writable
+- **Files**:
   - `system.json` - UI-managed settings
   - `.encryption.key` - Auto-generated encryption key (do not share!)
   - `nodes.enc` - Encrypted node credentials
   - `email.enc` - Encrypted email settings
   - `.env` - Optional deployment overrides (if created)
-- **Metrics**: `/etc/pulse/metrics/`
-- **Logs**: `/etc/pulse/pulse.log`
+- **Metrics**: `<data-dir>/metrics/`
+- **Logs**: `<data-dir>/pulse.log`
+
+> **Docker Note**: All configuration is persisted in the `/data` volume to survive container restarts
 
 ## Common Configuration Tasks
 
