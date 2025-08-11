@@ -650,19 +650,20 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					logicalCores = nodeInfo.CPUInfo.Cores
 				}
 
+				mhzStr := nodeInfo.CPUInfo.GetMHzString()
 				log.Debug().
 					Str("node", node.Node).
 					Str("model", nodeInfo.CPUInfo.Model).
 					Int("cores", nodeInfo.CPUInfo.Cores).
 					Int("logicalCores", logicalCores).
 					Int("sockets", nodeInfo.CPUInfo.Sockets).
-					Str("mhz", nodeInfo.CPUInfo.MHz).
+					Str("mhz", mhzStr).
 					Msg("Node CPU info from Proxmox")
 				modelNode.CPUInfo = models.CPUInfo{
 					Model:   nodeInfo.CPUInfo.Model,
 					Cores:   logicalCores, // Use logical cores for display
 					Sockets: nodeInfo.CPUInfo.Sockets,
-					MHz:     nodeInfo.CPUInfo.MHz,
+					MHz:     mhzStr,
 				}
 			}
 		} else {
@@ -1688,7 +1689,13 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 		snapshots, err := client.GetContainerSnapshots(snapshotCtx, ct.Node, ct.VMID)
 		if err != nil {
-			// This is common for containers without snapshots, so use debug level
+			// API error 596 means snapshots not supported/available - this is expected for many containers
+			errStr := err.Error()
+			if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
+				// Silently skip containers without snapshot support
+				continue
+			}
+			// Log other errors at debug level
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_container_snapshots", instanceName, err).WithNode(ct.Node)
 			log.Debug().
 				Err(monErr).

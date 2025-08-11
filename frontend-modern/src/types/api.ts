@@ -339,6 +339,20 @@ export type WSMessage =
       hasToken: boolean;
       verifySSL?: boolean;
       status?: string;
+    }}
+  | { type: 'node_deleted'; data: { nodeType: string } }
+  | { type: 'nodes_changed'; data?: unknown }
+  | { type: 'discovery_update'; data: {
+      servers: Array<{
+        ip: string;
+        port: number;
+        type: string;
+        version: string;
+        hostname?: string;
+        release?: string;
+      }>;
+      errors?: string[];
+      timestamp?: number;
     }};
 
 // Utility types

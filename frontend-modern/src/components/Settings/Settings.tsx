@@ -9,6 +9,7 @@ import { UpdatesAPI } from '@/api/updates';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
 import { eventBus } from '@/stores/events';
+import { notificationStore } from '@/stores/notifications';
 
 // Type definitions
 interface DiscoveredServer {
@@ -259,6 +260,28 @@ const Settings: Component = () => {
       loadNodes();
     });
     
+    const unsubscribeDiscovery = eventBus.on('discovery_updated', (data) => {
+      console.log('[Settings] Discovery updated:', data);
+      // If this is an immediate update (from node deletion), merge with existing
+      if (data && data.immediate && data.servers) {
+        setDiscoveredNodes(prev => {
+          // Create a map of existing servers by IP:port
+          const existingMap = new Map(prev.map(s => [`${s.ip}:${s.port}`, s]));
+          
+          // Add/update the new servers
+          data.servers.forEach((server: any) => {
+            existingMap.set(`${server.ip}:${server.port}`, server);
+          });
+          
+          // Convert back to array
+          return Array.from(existingMap.values());
+        });
+      } else {
+        // Full discovery update - reload from API
+        loadDiscoveredNodes();
+      }
+    });
+    
     // Poll for node updates when modal is open
     let pollInterval: ReturnType<typeof setInterval> | undefined;
     createEffect(() => {
@@ -287,6 +310,7 @@ const Settings: Component = () => {
     onCleanup(() => {
       unsubscribeAutoRegister();
       unsubscribeRefresh();
+      unsubscribeDiscovery();
       if (pollInterval) {
         clearInterval(pollInterval);
       }
@@ -739,20 +763,37 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
-                <button 
-                  onClick={() => {
-                    setEditingNode(null);
-                    setCurrentNodeType('pve');
-                    setShowNodeModal(true);
-                  }}
-                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  Add PVE Node
-                </button>
+                <div class="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      loadDiscoveredNodes();
+                      notificationStore.info('Refreshing discovery...', 2000);
+                    }}
+                    class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                    title="Refresh discovered servers"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                    </svg>
+                    Refresh Discovery
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingNode(null);
+                      setCurrentNodeType('pve');
+                      setShowNodeModal(true);
+                    }}
+                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add PVE Node
+                  </button>
+                </div>
               </div>
               
               <div class="grid gap-4">
@@ -936,20 +977,37 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
-                <button 
-                  onClick={() => {
-                    setEditingNode(null);
-                    setCurrentNodeType('pbs');
-                    setShowNodeModal(true);
-                  }}
-                  class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  Add PBS Node
-                </button>
+                <div class="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      loadDiscoveredNodes();
+                      notificationStore.info('Refreshing discovery...', 2000);
+                    }}
+                    class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                    title="Refresh discovered servers"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                    </svg>
+                    Refresh Discovery
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingNode(null);
+                      setCurrentNodeType('pbs');
+                      setShowNodeModal(true);
+                    }}
+                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add PBS Node
+                  </button>
+                </div>
               </div>
               
               <div class="grid gap-4">

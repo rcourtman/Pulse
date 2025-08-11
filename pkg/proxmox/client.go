@@ -230,8 +230,11 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		authHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
 			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
+		// NEVER log the actual token value - only log that we're using token auth
+		maskedHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=***",
+			c.auth.user, c.auth.realm, c.auth.tokenName)
 		log.Debug().
-			Str("authHeader", authHeader).
+			Str("authHeader", maskedHeader).
 			Str("url", req.URL.String()).
 			Msg("Setting API token authentication")
 	} else if c.auth.ticket != "" {
@@ -309,10 +312,27 @@ type RootFS struct {
 
 // CPUInfo represents CPU information
 type CPUInfo struct {
-	Model   string `json:"model"`
-	Cores   int    `json:"cores"`
-	Sockets int    `json:"sockets"`
-	MHz     string `json:"mhz"`
+	Model   string      `json:"model"`
+	Cores   int         `json:"cores"`
+	Sockets int         `json:"sockets"`
+	MHz     interface{} `json:"mhz"` // Can be string or number
+}
+
+// GetMHzString returns MHz as a string
+func (c *CPUInfo) GetMHzString() string {
+	if c.MHz == nil {
+		return ""
+	}
+	switch v := c.MHz.(type) {
+	case string:
+		return v
+	case float64:
+		return fmt.Sprintf("%.0f", v)
+	case int:
+		return fmt.Sprintf("%d", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // GetNodes returns all nodes in the cluster

@@ -1,5 +1,12 @@
 # Pulse Security
 
+## Credential Security
+
+- **Storage**: Encrypted at rest using AES-256-GCM (`/etc/pulse/nodes.enc`)
+- **Logs**: Token values masked with `***` in all outputs
+- **API**: Frontend receives only `hasToken: true`, never actual values
+- **Export**: Requires API_TOKEN authentication to extract credentials
+
 ## Export/Import Protection
 
 By default, configuration export/import is blocked for security. You have two options:

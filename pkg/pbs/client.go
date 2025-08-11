@@ -209,10 +209,14 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
 		// NEVER log the actual token value - only log that we're using token auth
+		// Log the auth header format (without the secret)
+		maskedHeader := fmt.Sprintf("PBSAPIToken=%s@%s!%s:***",
+			c.auth.user, c.auth.realm, c.auth.tokenName)
 		log.Debug().
 			Str("user", c.auth.user).
 			Str("realm", c.auth.realm).
 			Str("tokenName", c.auth.tokenName).
+			Str("authHeaderFormat", maskedHeader).
 			Str("url", req.URL.String()).
 			Msg("Setting PBS API token authentication")
 	} else if c.auth.ticket != "" {

@@ -8,13 +8,14 @@ Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.
 
 ## Features
 
-- **Auto-Discovery**: Automatically finds and configures Proxmox nodes
-- **Cluster Support**: Detects and monitors entire Proxmox clusters
+- **Auto-Discovery**: Finds Proxmox nodes on your network, one-liner setup via generated scripts
+- **Cluster Support**: Configure one node, monitor entire cluster
+- **Security**: Credentials encrypted at rest, masked in logs, never sent to frontend
 - Live monitoring of VMs, containers, nodes, storage
 - Alerts with email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
 - Unified view of PBS backups, PVE backups, and snapshots
 - PBS push mode for firewalled servers
-- **Secure Config Export/Import**: Encrypted backup and restore
+- Config export/import with encryption and authentication
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
@@ -35,18 +36,16 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
-### Configure
+### Configure Nodes
 
-**Option 1: Auto-Registration (NEW)**
 1. Open `http://<your-server>:7655`
-2. Settings → Nodes → Shows discovered nodes automatically
-3. Click "Setup Script" to copy one-liner
-4. Run script on Proxmox node - auto-configures everything
+2. Go to Settings → Nodes
+3. Discovered nodes appear automatically
+4. Click "Setup Script" next to any node
+5. Run the generated one-liner on that node
+6. Node is configured and monitoring starts
 
-**Option 2: Manual**
-1. Settings → Nodes → Add Node
-2. Enter credentials manually
-3. Save
+The script handles user creation, permissions, token generation, and registration automatically.
 
 ## Docker
 
@@ -95,6 +94,15 @@ volumes:
 ## PBS Agent (Push Mode)
 
 For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
+
+## Security
+
+- Credentials encrypted at rest (AES-256-GCM)
+- Tokens masked in logs
+- Frontend never receives actual credentials
+- Export requires authentication
+
+See [Security Documentation](docs/SECURITY.md) for details.
 
 ## Configuration
 

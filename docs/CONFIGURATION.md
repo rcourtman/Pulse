@@ -6,13 +6,10 @@ Pulse uses different methods for different types of settings:
 
 ### 1. Web UI Configuration
 Most settings are configured through the web interface:
-- **Nodes**: 
-  - Auto-discovers nodes on your network
-  - One-click setup with generated scripts
-  - Automatic cluster detection
-  - Manual add/remove also available
-- **Alerts**: Set thresholds and notification rules  
-- **Updates**: Configure update channels and auto-update
+
+- **Nodes**: Auto-discovery, one-click setup scripts, cluster detection
+- **Alerts**: Thresholds and notification rules  
+- **Updates**: Update channels and auto-update settings
 - **Security**: Export/import encrypted configurations
 
 ### 2. Environment Variables (Deployment Overrides)
@@ -150,6 +147,39 @@ Replace `192.168.1.0/24` with your actual network subnet.
 - .env files are not encrypted
 - Use systemd environment variables for API_TOKEN
 - Node credentials are always stored encrypted
+
+## Node Setup Details
+
+### Auto-Registration Script
+The setup script generated for each discovered node:
+1. Creates monitoring user (`pulse-monitor@pam` or `pulse-monitor@pbs`)
+2. Sets minimal permissions (PVEAuditor or Datastore.Audit)
+3. Generates API token with timestamp
+4. Registers with Pulse automatically
+5. Optionally cleans up old tokens
+
+Example:
+```bash
+curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https%3A%2F%2F192.168.1.10%3A8006" | bash
+```
+
+### Manual Setup
+
+If auto-registration isn't suitable, you can still set up manually:
+
+**Proxmox VE:**
+```bash
+pveum user add pulse-monitor@pam
+pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
+pveum user token add pulse-monitor@pam pulse-token --privsep 0
+```
+
+**PBS:**
+```bash
+proxmox-backup-manager user create pulse-monitor@pbs
+proxmox-backup-manager acl update / Admin --auth-id pulse-monitor@pbs
+proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
+```
 
 ## Troubleshooting
 

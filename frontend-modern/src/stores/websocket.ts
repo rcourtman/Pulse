@@ -207,6 +207,14 @@ export function createWebSocketStore(url: string) {
             
             // Trigger a refresh of nodes
             eventBus.emit('refresh_nodes');
+          } else if (message.type === 'node_deleted' || message.type === 'nodes_changed') {
+            // Nodes configuration has changed, refresh the list
+            console.log('[WebSocket] Nodes configuration changed, refreshing...');
+            eventBus.emit('refresh_nodes');
+          } else if (message.type === 'discovery_update') {
+            // Discovery scan completed with new results
+            console.log('[WebSocket] Discovery update received:', message.data);
+            eventBus.emit('discovery_updated', message.data);
           } else {
             // Log any unhandled message types
             console.log('[WebSocket] Unhandled message type:', (message as any).type);
