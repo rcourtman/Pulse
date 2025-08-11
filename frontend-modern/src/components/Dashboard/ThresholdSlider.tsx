@@ -21,13 +21,13 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
     disk: 'text-amber-500'
   };
 
-  // Calculate visual position (8-92% range) while keeping actual value (0-100%)
+  // Calculate visual position - allow full range 0-100%
   const calculateVisualPosition = (value: number) => {
     const min = props.min || 0;
     const max = props.max || 100;
     const percent = ((value - min) / (max - min)) * 100;
-    // Map 0-100% to 8-92% to prevent edge clipping
-    return 8 + (percent * 0.84);
+    // Use full range, handle edge cases with CSS
+    return Math.max(0, Math.min(100, percent));
   };
 
   // Update thumb position when value changes
@@ -102,8 +102,11 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Custom thumb with value */}
       <div
         ref={thumbRef}
-        class={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
-        style={{ left: `${thumbPosition()}%` }}
+        class={`absolute top-1/2 -translate-y-1/2 pointer-events-none z-10 ${colorMap[props.type]}`}
+        style={{ 
+          left: `${thumbPosition()}%`,
+          transform: `translateY(-50%) translateX(${thumbPosition() === 0 ? '0%' : thumbPosition() === 100 ? '-100%' : '-50%'})`
+        }}
       >
         <div class="relative">
           <div class="w-9 h-4 bg-white dark:bg-gray-800 rounded-full shadow-md border-2 border-current flex items-center justify-center">

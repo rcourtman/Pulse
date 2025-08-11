@@ -179,13 +179,15 @@ export function Alerts() {
               });
             } else {
               // Find the guest by matching the full ID
-              const guest = [...(state.vms || []), ...(state.containers || [])].find((g) => g.id === key);
+              const vm = (state.vms || []).find((g) => g.id === key);
+              const container = (state.containers || []).find((g) => g.id === key);
+              const guest = vm || container;
               if (guest) {
                 overridesList.push({
                   id: key,
                   name: guest.name,
                   type: 'guest',
-                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+                  resourceType: vm ? 'VM' : 'CT',  // If found in vms array, it's a VM
                   vmid: guest.vmid,
                   node: guest.node,
                   instance: guest.instance,
@@ -254,7 +256,8 @@ export function Alerts() {
       id: g.id,
       name: g.name,
       vmid: g.vmid,
-      type: g.type === 'qemu' ? 'VM' : 'LXC',
+      type: g.type,  // Keep original type (qemu/lxc)
+      displayType: g.type === 'qemu' ? 'VM' : 'CT',  // Add display type
       node: g.node,
       instance: g.instance
     }));
@@ -803,7 +806,7 @@ function AddOverrideForm(props: {
         id: guest.id,
         name: guest.name,
         type: 'guest',
-        resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+        resourceType: guest.type === 'qemu' ? 'VM' : 'CT',  // Now this will work correctly
         vmid: guest.vmid,
         node: guest.node,
         instance: guest.instance,
@@ -1318,11 +1321,11 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                       props.setOverrides(props.overrides().map((o: Override) => 
                         o.id === override.id ? updatedOverride : o
                       ));
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     onRemove={() => {
                       props.setOverrides(props.overrides().filter((o) => o.id !== override.id));
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                   />
                 )}
@@ -1352,7 +1355,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
             existingOverrides={props.overrides()}
             onAdd={(override) => {
               props.setOverrides([...props.overrides(), override]);
-              // Changed
+              props.setHasUnsavedChanges(true);
             }}
           />
         </div>
@@ -1675,7 +1678,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={quietHours().enabled}
               onChange={(e) => {
                 setQuietHours({ ...quietHours(), enabled: e.currentTarget.checked });
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer"
             />
@@ -1693,7 +1696,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().start}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), start: e.currentTarget.value });
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1705,7 +1708,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().end}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), end: e.currentTarget.value });
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1716,7 +1719,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={quietHours().timezone}
                   onChange={(e) => {
                     setQuietHours({ ...quietHours(), timezone: e.currentTarget.value });
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -1739,7 +1742,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           ...quietHours(),
                           days: { ...currentDays, [day.id]: !currentDays[day.id] }
                         });
-                        // Changed
+                        props.setHasUnsavedChanges(true);
                       }}
                       title={day.fullLabel}
                       class={`px-2 py-2 text-xs rounded-lg transition-all duration-200 font-medium ${
@@ -1786,7 +1789,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={cooldown().enabled}
               onChange={(e) => {
                 setCooldown({ ...cooldown(), enabled: e.currentTarget.checked });
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer"
             />
@@ -1809,7 +1812,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     value={cooldown().minutes}
                     onChange={(e) => {
                       setCooldown({ ...cooldown(), minutes: parseInt(e.currentTarget.value) });
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -1832,7 +1835,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     value={cooldown().maxAlerts}
                     onChange={(e) => {
                       setCooldown({ ...cooldown(), maxAlerts: parseInt(e.currentTarget.value) });
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -1867,7 +1870,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={grouping().enabled}
               onChange={(e) => {
                 setGrouping({ ...grouping(), enabled: e.currentTarget.checked });
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer"
             />
@@ -1889,7 +1892,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   value={grouping().window}
                   onChange={(e) => {
                     setGrouping({ ...grouping(), window: parseInt(e.currentTarget.value) });
-                    // Changed
+                    props.setHasUnsavedChanges(true);
                   }}
                   class="flex-1"
                 />
@@ -1915,7 +1918,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     checked={grouping().byNode}
                     onChange={(e) => {
                       setGrouping({ ...grouping(), byNode: e.currentTarget.checked });
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     class="sr-only"
                   />
@@ -1944,7 +1947,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     checked={grouping().byGuest}
                     onChange={(e) => {
                       setGrouping({ ...grouping(), byGuest: e.currentTarget.checked });
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     class="sr-only"
                   />
@@ -1989,7 +1992,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               checked={escalation().enabled}
               onChange={(e) => {
                 setEscalation({ ...escalation(), enabled: e.currentTarget.checked });
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="sr-only peer"
             />
@@ -2015,7 +2018,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           const newLevels = [...escalation().levels];
                           newLevels[index()] = { ...level, after: parseInt(e.currentTarget.value) };
                           setEscalation({ ...escalation(), levels: newLevels });
-                          // Changed
+                          props.setHasUnsavedChanges(true);
                         }}
                         class="w-16 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
@@ -2029,7 +2032,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           const newLevels = [...escalation().levels];
                           newLevels[index()] = { ...level, notify: e.currentTarget.value };
                           setEscalation({ ...escalation(), levels: newLevels });
-                          // Changed
+                          props.setHasUnsavedChanges(true);
                         }}
                         class="flex-1 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
@@ -2043,7 +2046,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     onClick={() => {
                       const newLevels = escalation().levels.filter((_, i) => i !== index());
                       setEscalation({ ...escalation(), levels: newLevels });
-                      // Changed
+                      props.setHasUnsavedChanges(true);
                     }}
                     class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Remove escalation level"
@@ -2064,7 +2067,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   ...escalation(),
                   levels: [...escalation().levels, { after: newAfter, notify: 'all' }]
                 });
-                // Changed
+                props.setHasUnsavedChanges(true);
               }}
               class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center justify-center gap-2"
             >
