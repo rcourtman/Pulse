@@ -1,6 +1,6 @@
 # Reverse Proxy Configuration
 
-Pulse v4 uses WebSockets for real-time updates. Your reverse proxy **MUST** support WebSocket connections or Pulse will not work correctly.
+Pulse uses WebSockets for real-time updates. Your reverse proxy **MUST** support WebSocket connections or Pulse will not work correctly.
 
 ## Important Requirements
 
