@@ -203,10 +203,18 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	// Set authentication
 	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
 		// API token authentication
+		// Note: tokenName already contains just the token part (e.g., "pulse-token")
+		// after parsing in NewClient, so we reconstruct the full format
 		authHeader := fmt.Sprintf("PBSAPIToken=%s@%s!%s:%s",
 			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
-		log.Debug().Str("authHeader", authHeader).Str("url", req.URL.String()).Msg("Setting PBS API token authentication")
+		// NEVER log the actual token value - only log that we're using token auth
+		log.Debug().
+			Str("user", c.auth.user).
+			Str("realm", c.auth.realm).
+			Str("tokenName", c.auth.tokenName).
+			Str("url", req.URL.String()).
+			Msg("Setting PBS API token authentication")
 	} else if c.auth.ticket != "" {
 		// Ticket authentication
 		req.Header.Set("Cookie", "PBSAuthCookie="+c.auth.ticket)
