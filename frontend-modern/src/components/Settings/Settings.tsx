@@ -766,8 +766,8 @@ const Settings: Component = () => {
                             (() => {
                               // Find the corresponding node in the WebSocket state
                               const stateNode = state.nodes.find(n => n.instance === node.name);
-                              // Check if the node has an error status or is offline
-                              if (stateNode?.connectionHealth === 'error' || stateNode?.status === 'offline') {
+                              // Check if the node has an unhealthy connection or is offline
+                              if (stateNode?.connectionHealth === 'unhealthy' || stateNode?.status === 'offline') {
                                 return 'bg-red-500';
                               }
                               // Check if we have a healthy connection
@@ -962,8 +962,8 @@ const Settings: Component = () => {
                             (() => {
                               // Find the corresponding PBS instance in the WebSocket state
                               const statePBS = state.pbs.find(p => p.name === node.name);
-                              // Check if the PBS has an error status or is offline
-                              if (statePBS?.connectionHealth === 'error' || statePBS?.status === 'offline') {
+                              // Check if the PBS has an unhealthy connection or is offline
+                              if (statePBS?.connectionHealth === 'unhealthy' || statePBS?.status === 'offline') {
                                 return 'bg-red-500';
                               }
                               // Check if we have a healthy connection
