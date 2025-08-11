@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@solidjs/router": "^0.10.0",
-    "solid-js": "^1.8.0"
+    "solid-js": "^1.8.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
