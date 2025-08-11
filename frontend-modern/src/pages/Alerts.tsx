@@ -71,8 +71,8 @@ interface Override {
 interface UIEmailConfig {
   enabled: boolean;
   provider: string;
-  smtpHost: string;
-  smtpPort: number;
+  server: string;    // Fixed: use 'server' not 'smtpHost'
+  port: number;      // Fixed: use 'port' not 'smtpPort'
   username: string;
   password: string;
   from: string;
@@ -100,8 +100,8 @@ export function Alerts() {
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
     enabled: false,
     provider: '',
-    smtpHost: '',
-    smtpPort: 587,
+    server: '',       // Fixed: use 'server' not 'smtpHost'
+    port: 587,        // Fixed: use 'port' not 'smtpPort'
     username: '',
     password: '',
     from: '',
@@ -120,8 +120,8 @@ export function Alerts() {
     return {
       enabled: config.enabled,
       provider: config.provider,
-      server: config.smtpHost,
-      port: config.smtpPort,
+      server: config.server,    // Fixed: use correct property name
+      port: config.port,        // Fixed: use correct property name
       username: config.username,
       password: config.password,
       from: config.from,
@@ -187,7 +187,7 @@ export function Alerts() {
                   id: key,
                   name: guest.name,
                   type: 'guest',
-                  resourceType: vm ? 'VM' : 'CT',  // If found in vms array, it's a VM
+                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',  // Check type property to determine VM or CT
                   vmid: guest.vmid,
                   node: guest.node,
                   instance: guest.instance,
@@ -227,8 +227,8 @@ export function Alerts() {
           setEmailConfig({
             enabled: emailConfigData.enabled,
             provider: emailConfigData.provider,
-            smtpHost: emailConfigData.server,
-            smtpPort: emailConfigData.port,
+            server: emailConfigData.server,    // Fixed: now correctly maps
+            port: emailConfigData.port,        // Fixed: now correctly maps
             username: emailConfigData.username,
             password: emailConfigData.password || '',
             from: emailConfigData.from,

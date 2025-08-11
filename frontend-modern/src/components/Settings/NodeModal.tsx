@@ -44,9 +44,40 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     monitorGarbageJobs: false
   });
 
+  // Reset form when node type changes (prevents cross-contamination between PVE and PBS)
+  createEffect(() => {
+    // When adding a new node (no editingNode) or type mismatch, ensure clean form
+    if (!props.editingNode || (props.editingNode && props.editingNode.type !== props.nodeType)) {
+      setFormData({
+        name: '',
+        host: '',
+        authType: 'token',
+        setupMode: 'auto',
+        user: '',
+        password: '',
+        tokenName: '',
+        tokenValue: '',
+        fingerprint: '',
+        verifySSL: true,
+        monitorVMs: true,
+        monitorContainers: true,
+        monitorStorage: true,
+        monitorBackups: true,
+        enableBackupManagement: true,
+        monitorDatastores: true,
+        monitorSyncJobs: true,
+        monitorVerifyJobs: true,
+        monitorPruneJobs: true,
+        monitorGarbageJobs: false
+      });
+    }
+  });
+
   // Update form when editing node changes
   createEffect(() => {
-    if (props.editingNode) {
+    // Only populate form if we have an editing node AND it matches the current node type
+    // This prevents PVE data from being used when adding a PBS node
+    if (props.editingNode && props.editingNode.type === props.nodeType) {
       const node = props.editingNode;
       setFormData({
         name: node.name || '',
@@ -69,30 +100,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorVerifyJobs: (node.type === 'pbs' && 'monitorVerifyJobs' in node ? node.monitorVerifyJobs : true) ?? true,
         monitorPruneJobs: (node.type === 'pbs' && 'monitorPruneJobs' in node ? node.monitorPruneJobs : true) ?? true,
         monitorGarbageJobs: (node.type === 'pbs' && 'monitorGarbageJobs' in node ? node.monitorGarbageJobs : false) ?? false
-      });
-    } else {
-      // Reset form for new node
-      setFormData({
-        name: '',
-        host: '',
-        authType: 'token', // Default to token auth (more secure)
-        setupMode: 'auto',
-        user: '',
-        password: '',
-        tokenName: '',
-        tokenValue: '',
-        fingerprint: '',
-        verifySSL: true,
-        monitorVMs: true,
-        monitorContainers: true,
-        monitorStorage: true,
-        monitorBackups: true,
-        enableBackupManagement: true,
-        monitorDatastores: true,
-        monitorSyncJobs: true,
-        monitorVerifyJobs: true,
-        monitorPruneJobs: true,
-        monitorGarbageJobs: false
       });
     }
   });
