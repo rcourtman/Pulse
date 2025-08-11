@@ -3,14 +3,15 @@
 [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
 [![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?label=Sponsors&logo=GitHub%20Sponsors&style=for-the-badge)](https://github.com/sponsors/rcourtman)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
-Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.
-
-> **⚠️ Upgrading from v3?** See [Migration Guide](docs/MIGRATION_V3_TO_V4.md) - automatic upgrades will break.
+**Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.**
 
 ![Dashboard](docs/images/01-dashboard.png)
+
+## 💖 Support This Project
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## Features
 
