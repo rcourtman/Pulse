@@ -89,8 +89,30 @@ services:
     volumes:
       - pulse_data:/data
     environment:
-      # Optional: specify your LAN subnet for auto-discovery
-      # - DISCOVERY_SUBNET=192.168.1.0/24
+      # Network discovery
+      # - DISCOVERY_SUBNET=192.168.1.0/24  # Auto-discovery subnet (default: auto-detect)
+      
+      # Ports
+      # - PORT=7655                         # Backend port (default: 7655)
+      # - FRONTEND_PORT=7655                # Frontend port (default: 7655)
+      
+      # Security
+      # - API_TOKEN=your-secure-token       # API authentication token
+      # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
+      
+      # Polling & timeouts
+      # - POLLING_INTERVAL=5                # Seconds between node checks (default: 5)
+      # - CONNECTION_TIMEOUT=10             # Connection timeout in seconds (default: 10)
+      
+      # Updates
+      # - UPDATE_CHANNEL=stable             # Update channel: stable or rc (default: stable)
+      # - AUTO_UPDATE_ENABLED=true          # Enable auto-updates (default: true)
+      # - AUTO_UPDATE_CHECK_INTERVAL=24     # Hours between update checks (default: 24)
+      # - AUTO_UPDATE_TIME=03:00            # Time to install updates HH:MM (default: 03:00)
+      
+      # CORS & logging
+      # - ALLOWED_ORIGINS=*                 # CORS allowed origins (default: *)
+      # - LOG_LEVEL=info                    # Log level: debug/info/warn/error (default: info)
     restart: unless-stopped
 
 volumes:
