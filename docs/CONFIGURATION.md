@@ -183,7 +183,7 @@ proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
 
 ## Reverse Proxy Configuration
 
-Pulse v4 requires WebSocket support for real-time updates. If using a reverse proxy (nginx, Apache, Caddy, etc.), you **MUST** enable WebSocket proxying.
+Pulse requires WebSocket support for real-time updates. If using a reverse proxy (nginx, Apache, Caddy, etc.), you **MUST** enable WebSocket proxying.
 
 See the [Reverse Proxy Guide](REVERSE_PROXY.md) for detailed configurations.
 
