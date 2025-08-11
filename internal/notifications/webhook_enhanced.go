@@ -51,6 +51,7 @@ type WebhookPayloadData struct {
 	CustomFields map[string]interface{}
 	AlertCount   int
 	Alerts       []*alerts.Alert // For grouped alerts
+	ChatID       string           // For Telegram webhooks
 }
 
 // SendEnhancedWebhook sends a webhook with template support

@@ -46,6 +46,20 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In Discord, go to Server Settings > Integrations > Webhooks\n2. Create a new webhook and copy the URL\n3. Paste the URL here (format: https://discord.com/api/webhooks/...)",
 		},
 		{
+			Service:    "telegram",
+			Name:       "Telegram Bot",
+			URLPattern: "https://api.telegram.org/bot{bot_token}/sendMessage",
+			Method:     "POST",
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			PayloadTemplate: `{
+				"chat_id": "{{.ChatID}}",
+				"text": "🚨 *Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n📊 *Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{printf "%.1f" .Value}}%\n• Threshold: {{printf "%.0f" .Threshold}}%\n• Duration: {{.Duration}}\n\n🔗 [View in Pulse]({{.Instance}})",
+				"parse_mode": "Markdown",
+				"disable_web_page_preview": true
+			}`,
+			Instructions: "1. Create a bot with @BotFather on Telegram\n2. Get your bot token\n3. Get your chat ID by messaging the bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates\n4. URL format: https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+		},
+		{
 			Service:    "slack",
 			Name:       "Slack Incoming Webhook",
 			URLPattern: "https://hooks.slack.com/services/{webhook_path}",
