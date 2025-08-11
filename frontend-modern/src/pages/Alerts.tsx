@@ -95,6 +95,7 @@ export function Alerts() {
   let scheduleRef: ScheduleRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
+  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, any>>({});  // Store raw config
   
   // Email configuration state moved to parent to persist across tab changes
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
@@ -131,6 +132,47 @@ export function Alerts() {
     } as EmailConfig;
   };
   
+  // Process raw overrides config when state changes
+  createEffect(() => {
+    const rawConfig = rawOverridesConfig();
+    if (Object.keys(rawConfig).length > 0 && state.nodes && state.vms && state.containers) {
+      // Convert overrides object to array format
+      const overridesList: Override[] = [];
+      
+      Object.entries(rawConfig).forEach(([key, thresholds]) => {
+        // Check if it's a node override by looking for matching node
+        const node = (state.nodes || []).find((n) => n.id === key);
+        if (node) {
+          overridesList.push({
+            id: key,
+            name: node.name,
+            type: 'node',
+            resourceType: 'Node',
+            thresholds: extractTriggerValues(thresholds)
+          });
+        } else {
+          // Find the guest by matching the full ID
+          const vm = (state.vms || []).find((g) => g.id === key);
+          const container = (state.containers || []).find((g) => g.id === key);
+          const guest = vm || container;
+          if (guest) {
+            overridesList.push({
+              id: key,
+              name: guest.name,
+              type: 'guest',
+              resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+              vmid: guest.vmid,
+              node: guest.node,
+              instance: guest.instance,
+              thresholds: extractTriggerValues(thresholds)
+            });
+          }
+        }
+      });
+      setOverrides(overridesList);
+    }
+  });
+
   // Load existing alert configuration on mount (only once)
   onMount(async () => {
     try {
@@ -163,40 +205,8 @@ export function Alerts() {
           setTimeThreshold(config.timeThreshold);
         }
         if (config.overrides) {
-          // Convert overrides object to array format
-          const overridesList: Override[] = [];
-          
-          Object.entries(config.overrides).forEach(([key, thresholds]) => {
-            // Check if it's a node override by looking for matching node
-            const node = (state.nodes || []).find((n) => n.id === key);
-            if (node) {
-              overridesList.push({
-                id: key,
-                name: node.name,
-                type: 'node',
-                resourceType: 'Node',
-                thresholds: extractTriggerValues(thresholds)
-              });
-            } else {
-              // Find the guest by matching the full ID
-              const vm = (state.vms || []).find((g) => g.id === key);
-              const container = (state.containers || []).find((g) => g.id === key);
-              const guest = vm || container;
-              if (guest) {
-                overridesList.push({
-                  id: key,
-                  name: guest.name,
-                  type: 'guest',
-                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',  // Check type property to determine VM or CT
-                  vmid: guest.vmid,
-                  node: guest.node,
-                  instance: guest.instance,
-                  thresholds: extractTriggerValues(thresholds)
-                });
-              }
-            }
-          });
-          setOverrides(overridesList);
+          // Store raw config to be processed when state is available
+          setRawOverridesConfig(config.overrides);
         }
         // Pass schedule config to schedule tab if it exists
         if (config.schedule && scheduleRef.setScheduleConfig) {
@@ -505,6 +515,8 @@ export function Alerts() {
             <ThresholdsTab 
               overrides={overrides}
               setOverrides={setOverrides}
+              rawOverridesConfig={rawOverridesConfig}
+              setRawOverridesConfig={setRawOverridesConfig}
               allGuests={allGuests}
               state={state}
               guestDefaults={guestDefaults()}
@@ -1074,11 +1086,13 @@ interface ThresholdsTabProps {
   storageDefault: () => number;
   timeThreshold: () => number;
   overrides: () => Override[];
+  rawOverridesConfig: () => Record<string, any>;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
   setOverrides: (value: Override[]) => void;
+  setRawOverridesConfig: (value: Record<string, any>) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
 }
@@ -1321,10 +1335,22 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                       props.setOverrides(props.overrides().map((o: Override) => 
                         o.id === override.id ? updatedOverride : o
                       ));
+                      // Update raw config too
+                      const newRawConfig = { ...props.rawOverridesConfig() };
+                      const hysteresisThresholds: Record<string, any> = {};
+                      Object.entries(updatedOverride.thresholds).forEach(([metric, value]) => {
+                        hysteresisThresholds[metric] = { trigger: value, clear: Math.max(0, (value as number) - 5) };
+                      });
+                      newRawConfig[updatedOverride.id] = hysteresisThresholds;
+                      props.setRawOverridesConfig(newRawConfig);
                       props.setHasUnsavedChanges(true);
                     }}
                     onRemove={() => {
                       props.setOverrides(props.overrides().filter((o) => o.id !== override.id));
+                      // Update raw config too
+                      const newRawConfig = { ...props.rawOverridesConfig() };
+                      delete newRawConfig[override.id];
+                      props.setRawOverridesConfig(newRawConfig);
                       props.setHasUnsavedChanges(true);
                     }}
                   />
@@ -1355,6 +1381,14 @@ function ThresholdsTab(props: ThresholdsTabProps) {
             existingOverrides={props.overrides()}
             onAdd={(override) => {
               props.setOverrides([...props.overrides(), override]);
+              // Update raw config too
+              const newRawConfig = { ...props.rawOverridesConfig() };
+              const hysteresisThresholds: Record<string, any> = {};
+              Object.entries(override.thresholds).forEach(([metric, value]) => {
+                hysteresisThresholds[metric] = { trigger: value, clear: Math.max(0, (value as number) - 5) };
+              });
+              newRawConfig[override.id] = hysteresisThresholds;
+              props.setRawOverridesConfig(newRawConfig);
               props.setHasUnsavedChanges(true);
             }}
           />
