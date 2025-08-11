@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"text/template"
@@ -466,18 +467,18 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	var jsonData []byte
 	var err error
 	
-	// Check if this is a Discord webhook and use the proper template
-	if webhook.Service == "discord" {
+	// Check if this is a service-specific webhook and use the proper template
+	if webhook.Service == "discord" || webhook.Service == "telegram" {
 		// Convert to enhanced webhook to use template
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
-			Service:       "discord",
+			Service:       webhook.Service,
 		}
 		
-		// Get Discord template
+		// Get service template
 		templates := GetWebhookTemplates()
 		for _, tmpl := range templates {
-			if tmpl.Service == "discord" {
+			if tmpl.Service == webhook.Service {
 				enhanced.PayloadTemplate = tmpl.PayloadTemplate
 				break
 			}
@@ -485,13 +486,26 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 		
 		// Prepare data and generate payload
 		data := n.prepareWebhookData(alert, nil)
+		
+		// For Telegram, extract chat_id from URL if present
+		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+			// Extract chat_id from URL query params
+			if u, err := url.Parse(webhook.URL); err == nil {
+				chatID := u.Query().Get("chat_id")
+				if chatID != "" {
+					data.ChatID = chatID
+				}
+			}
+		}
+		
 		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
 		if err != nil {
 			log.Error().
 				Err(err).
 				Str("webhook", webhook.Name).
+				Str("service", webhook.Service).
 				Str("alertID", alert.ID).
-				Msg("Failed to generate Discord payload")
+				Msg("Failed to generate webhook payload")
 			return
 		}
 	} else {

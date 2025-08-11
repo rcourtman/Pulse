@@ -337,7 +337,16 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	}
 	if err := json.Unmarshal(bodyBytes, &serviceCheck); err == nil && serviceCheck.Service != "" {
 		webhook.Service = serviceCheck.Service
+		// Also set it in the basic webhook for consistency
+		basicWebhook.Service = serviceCheck.Service
+		webhook.WebhookConfig.Service = serviceCheck.Service
 	}
+	
+	log.Info().
+		Str("service", webhook.Service).
+		Str("url", webhook.URL).
+		Str("name", webhook.Name).
+		Msg("Testing webhook")
 	
 	// Get template for the service
 	templates := notifications.GetWebhookTemplates()
@@ -350,6 +359,7 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 			for k, v := range tmpl.Headers {
 				webhook.Headers[k] = v
 			}
+			log.Info().Str("service", webhook.Service).Msg("Found template for service")
 			break
 		}
 	}
