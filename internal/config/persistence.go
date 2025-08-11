@@ -70,6 +70,21 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
+	// Ensure critical defaults are set before saving
+	if config.StorageDefault.Trigger <= 0 {
+		config.StorageDefault.Trigger = 85
+		config.StorageDefault.Clear = 80
+	}
+	if config.MinimumDelta <= 0 {
+		config.MinimumDelta = 2.0
+	}
+	if config.SuppressionWindow <= 0 {
+		config.SuppressionWindow = 5
+	}
+	if config.HysteresisMargin <= 0 {
+		config.HysteresisMargin = 5.0
+	}
+	
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
@@ -121,6 +136,21 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	var config alerts.AlertConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+	
+	// Ensure critical defaults are set if missing
+	if config.StorageDefault.Trigger <= 0 {
+		config.StorageDefault.Trigger = 85
+		config.StorageDefault.Clear = 80
+	}
+	if config.MinimumDelta <= 0 {
+		config.MinimumDelta = 2.0
+	}
+	if config.SuppressionWindow <= 0 {
+		config.SuppressionWindow = 5
+	}
+	if config.HysteresisMargin <= 0 {
+		config.HysteresisMargin = 5.0
 	}
 	
 	log.Info().Str("file", c.alertFile).Msg("Alert configuration loaded")

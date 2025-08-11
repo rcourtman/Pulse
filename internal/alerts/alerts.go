@@ -299,6 +299,24 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	
+	// Preserve defaults for zero values
+	if config.StorageDefault.Trigger <= 0 {
+		config.StorageDefault.Trigger = 85
+		config.StorageDefault.Clear = 80
+	}
+	
+	// Ensure minimums for other important fields
+	if config.MinimumDelta <= 0 {
+		config.MinimumDelta = 2.0
+	}
+	if config.SuppressionWindow <= 0 {
+		config.SuppressionWindow = 5
+	}
+	if config.HysteresisMargin <= 0 {
+		config.HysteresisMargin = 5.0
+	}
+	
 	m.config = config
 	log.Info().Msg("Alert configuration updated")
 }

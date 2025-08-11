@@ -1,7 +1,7 @@
 // Event bus for cross-component communication
 
 // Event types
-export type EventType = 'node_auto_registered' | 'refresh_nodes';
+export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated';
 
 // Event handlers
 type EventHandler = (data?: any) => void;

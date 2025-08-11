@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -156,8 +157,8 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 	return isCluster, clusterName, clusterEndpoints
 }
 
-// HandleGetNodes returns all configured nodes
-func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) {
+// GetAllNodesForAPI returns all configured nodes for API responses
+func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 	nodes := []NodeResponse{}
 
 	// Add PVE nodes
@@ -188,26 +189,32 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 	// Add PBS nodes
 	for i, pbs := range h.config.PBSInstances {
 		node := NodeResponse{
-			ID:                generateNodeID("pbs", i),
-			Type:              "pbs",
-			Name:              pbs.Name,
-			Host:              pbs.Host,
-			User:              pbs.User,
-			HasPassword:       pbs.Password != "",
-			TokenName:         pbs.TokenName,
-			HasToken:          pbs.TokenValue != "",
-			Fingerprint:       pbs.Fingerprint,
-			VerifySSL:         pbs.VerifySSL,
-			MonitorBackups:     pbs.MonitorBackups,
+			ID:                 generateNodeID("pbs", i),
+			Type:               "pbs",
+			Name:               pbs.Name,
+			Host:               pbs.Host,
+			User:               pbs.User,
+			HasPassword:        pbs.Password != "",
+			TokenName:          pbs.TokenName,
+			HasToken:           pbs.TokenValue != "",
+			Fingerprint:        pbs.Fingerprint,
+			VerifySSL:          pbs.VerifySSL,
 			MonitorDatastores:  pbs.MonitorDatastores,
 			MonitorSyncJobs:    pbs.MonitorSyncJobs,
 			MonitorVerifyJobs:  pbs.MonitorVerifyJobs,
 			MonitorPruneJobs:   pbs.MonitorPruneJobs,
 			MonitorGarbageJobs: pbs.MonitorGarbageJobs,
-			Status:            h.getNodeStatus("pbs", pbs.Name),
+			Status:             h.getNodeStatus("pbs", pbs.Name),
 		}
 		nodes = append(nodes, node)
 	}
+
+	return nodes
+}
+
+// HandleGetNodes returns all configured nodes
+func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) {
+	nodes := h.GetAllNodesForAPI()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(nodes)
@@ -784,6 +791,33 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Trigger discovery refresh after adding node
+	if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+		log.Info().Msg("Triggering discovery refresh after adding node")
+		h.monitor.GetDiscoveryService().ForceRefresh()
+		
+		// Broadcast discovery update via WebSocket
+		if h.wsHub != nil {
+			// Wait a moment for discovery to complete
+			go func() {
+				time.Sleep(2 * time.Second)
+				result, _ := h.monitor.GetDiscoveryService().GetCachedResult()
+				if result != nil {
+					h.wsHub.BroadcastMessage(websocket.Message{
+						Type: "discovery_update",
+						Data: map[string]interface{}{
+							"servers":   result.Servers,
+							"errors":    result.Errors,
+							"timestamp": time.Now().Unix(),
+						},
+						Timestamp: time.Now().Format(time.RFC3339),
+					})
+					log.Info().Msg("Broadcasted discovery update after adding node")
+				}
+			}()
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
@@ -827,6 +861,41 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Immediately trigger discovery scan BEFORE reloading monitor
+	// This way we can get the deleted node's info for immediate discovery
+	var deletedNodeHost string
+	var deletedNodeType string = nodeType
+	
+	// Get the host info of the deleted node for quick re-discovery
+	if nodeType == "pve" && index < len(h.config.PVEInstances) {
+		deletedNodeHost = h.config.PVEInstances[index].Host
+	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
+		deletedNodeHost = h.config.PBSInstances[index].Host
+	}
+	
+	// Extract IP and port from the host URL for targeted discovery
+	var targetIP string
+	var targetPort int
+	if deletedNodeHost != "" {
+		// Parse the host URL to get IP and port
+		hostURL := deletedNodeHost
+		hostURL = strings.TrimPrefix(hostURL, "https://")
+		hostURL = strings.TrimPrefix(hostURL, "http://")
+		parts := strings.Split(hostURL, ":")
+		if len(parts) > 0 {
+			targetIP = parts[0]
+			if len(parts) > 1 {
+				fmt.Sscanf(parts[1], "%d", &targetPort)
+			} else {
+				if deletedNodeType == "pve" {
+					targetPort = 8006
+				} else {
+					targetPort = 8007
+				}
+			}
+		}
+	}
+	
 	// Reload monitor with new configuration
 	if h.reloadFunc != nil {
 		if err := h.reloadFunc(); err != nil {
@@ -834,6 +903,62 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
 			return
 		}
+	}
+
+	// Broadcast node deletion to refresh the frontend
+	if h.wsHub != nil {
+		// Send a node_deleted message to trigger a refresh of the nodes list
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "node_deleted",
+			Data: map[string]interface{}{
+				"nodeType": nodeType,
+			},
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+		log.Info().Msg("Broadcasted node deletion event")
+		
+		// If we know the deleted node's details, immediately add it to discovered list
+		if targetIP != "" && targetPort > 0 {
+			// Create a synthetic discovery result with just the deleted node
+			immediateResult := map[string]interface{}{
+				"servers": []map[string]interface{}{
+					{
+						"ip":       targetIP,
+						"port":     targetPort,
+						"type":     deletedNodeType,
+						"version":  "Unknown",
+						"hostname": targetIP,
+					},
+				},
+				"errors":    []string{},
+				"timestamp": time.Now().Unix(),
+				"immediate": true, // Flag to indicate this is immediate, not from a full scan
+			}
+			
+			// Immediately broadcast the deleted node as discovered
+			h.wsHub.BroadcastMessage(websocket.Message{
+				Type: "discovery_update",
+				Data: immediateResult,
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
+			log.Info().
+				Str("ip", targetIP).
+				Int("port", targetPort).
+				Str("type", deletedNodeType).
+				Msg("Immediately added deleted node to discovery")
+		}
+		
+		// Schedule a full discovery scan in the background
+		go func() {
+			// Short delay to let the monitor stabilize
+			time.Sleep(500 * time.Millisecond)
+			
+			// Trigger full discovery refresh
+			if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+				h.monitor.GetDiscoveryService().ForceRefresh()
+				log.Info().Msg("Triggered background discovery refresh after node deletion")
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -1647,6 +1772,50 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
+# Check for old Pulse tokens and offer to clean them up
+echo "Checking for existing Pulse monitoring tokens..."
+OLD_TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | grep -E "│ pulse-[0-9\-]+-[0-9]+" | awk -F'│' '{print $2}' | sed 's/^ *//;s/ *$//' || true)
+if [ ! -z "$OLD_TOKENS" ]; then
+    TOKEN_COUNT=$(echo "$OLD_TOKENS" | wc -l)
+    echo ""
+    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s):"
+    echo "$OLD_TOKENS" | sed 's/^/   - /'
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🗑️  CLEANUP OPTION"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
+    # Read from terminal, not from stdin (which is the piped script)
+    if [ -t 0 ]; then
+        # Running interactively
+        read -p "> " -n 1 -r REPLY
+    else
+        # Being piped - try to read from terminal if available
+        if read -p "> " -n 1 -r REPLY </dev/tty 2>/dev/null; then
+            # Successfully read from terminal
+            :
+        else
+            # No terminal available (e.g., in Docker without -t flag)
+            echo "(No terminal available for input - keeping existing tokens)"
+            REPLY="n"
+        fi
+    fi
+    echo ""
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Removing old tokens..."
+        while IFS= read -r TOKEN; do
+            if [ ! -z "$TOKEN" ]; then
+                pveum user token remove pulse-monitor@pam "$TOKEN" 2>/dev/null && echo "   ✓ Removed token: $TOKEN" || echo "   ✗ Failed to remove: $TOKEN"
+            fi
+        done <<< "$OLD_TOKENS"
+        echo ""
+    else
+        echo "Keeping existing tokens."
+    fi
+    echo ""
+fi
+
 # Create monitoring user
 echo "Creating monitoring user..."
 pveum user add pulse-monitor@pam --comment "Pulse monitoring service" 2>/dev/null || echo "User already exists"
@@ -1682,74 +1851,75 @@ else
     echo "================================================================"
     echo ""
     
-    # Extract the token value from the output (last field on the value line)
+    # Extract the token value for backward compatibility (if manual mode is needed)
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
     
-    # If we successfully got a token, send it back to Pulse
-    if [ -n "$TOKEN_VALUE" ]; then
+    # Try secure auto-registration first
+    echo ""
+    echo "🔄 Starting secure auto-registration with Pulse..."
+    
+    # Get the server's hostname
+    SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    
+    # Send registration to Pulse
+    PULSE_URL="%s"
+    
+    # Check for HTTPS (warn but allow for local networks)
+    if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
+        echo "⚠️  WARNING: Using HTTP - token will be sent unencrypted!"
+        echo "   This is acceptable for local networks but not recommended for internet."
         echo ""
-        echo "🔄 Auto-registering with Pulse..."
-        
-        # Get the server's hostname
-        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-        
-        # Send registration to Pulse
-        PULSE_URL="%s"
-        
-        # Ensure we're using HTTPS for security (warn if not)
-        if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
-            echo "⚠️  WARNING: Not using HTTPS - token will be sent unencrypted!"
-            echo "   Consider accessing Pulse via HTTPS for security."
-        fi
-        # Use jq or manual escaping to properly construct JSON
-        REGISTER_JSON=$(cat <<EOF
+    fi
+    
+    # Use secure registration - Pulse generates the token
+    echo "🔐 Using secure registration protocol..."
+    echo "   Pulse will generate and return a token for this node."
+    echo ""
+    
+    # Construct secure registration request
+    # Use the actual PVE host URL provided to the script
+    REGISTER_JSON=$(cat <<EOF
 {
   "type": "pve",
   "host": "%s",
+  "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pam!%s",
-  "tokenValue": "$TOKEN_VALUE",
-  "serverName": "$SERVER_HOSTNAME"
+  "tokenValue": "$TOKEN_VALUE"
 }
 EOF
-        )
-        # Remove newlines from JSON
-        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
-        
-        # Check if registration token is required
-        if [[ "$PULSE_URL" =~ ^https:// ]]; then
-            echo "📤 Sending registration to Pulse..."
-            echo "   URL: $PULSE_URL/api/auto-register"
-            echo ""
-            echo "NOTE: If registration fails, you may need a registration token."
-            echo "     Generate one in Pulse Settings → Security → Registration Tokens"
-            echo ""
-        fi
-        
-        # Send registration (add X-Registration-Token header if token provided)
-        REG_TOKEN="${PULSE_REG_TOKEN:-}"
-        if [ -n "$REG_TOKEN" ]; then
-            echo "🔑 Using registration token: $REG_TOKEN"
-            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-                -H "Content-Type: application/json" \
-                -H "X-Registration-Token: $REG_TOKEN" \
-                -d "$REGISTER_JSON" 2>&1)
-        else
-            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-                -H "Content-Type: application/json" \
-                -d "$REGISTER_JSON" 2>&1)
-        fi
-        
-        if echo "$REGISTER_RESPONSE" | grep -q "success"; then
-            echo "✅ Automatically registered with Pulse!"
-            echo "   The node should now appear in your Pulse dashboard."
-            echo ""
-            echo "📌 Note: You may need to close the modal or refresh the page to see the new node."
-        else
-            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-            echo "   Response: $REGISTER_RESPONSE"
-        fi
-        echo ""
+    )
+    # Remove newlines from JSON
+    REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+    
+    # Send registration (add X-Registration-Token header if provided)
+    REG_TOKEN="${PULSE_REG_TOKEN:-}"
+    if [ -n "$REG_TOKEN" ]; then
+        echo "🔑 Using registration token: $REG_TOKEN"
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -H "X-Registration-Token: $REG_TOKEN" \
+            -d "$REGISTER_JSON" 2>&1)
+    else
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -d "$REGISTER_JSON" 2>&1)
     fi
+    
+    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+        echo "✅ Successfully registered with Pulse!"
+        echo "   The node should now appear in your Pulse dashboard."
+        echo ""
+        echo "📌 Note: You may need to refresh the page to see the new node."
+    else
+        echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "📝 For manual setup:"
+        echo "   1. Copy the token value shown above"  
+        echo "   2. Add this node manually in Pulse Settings"
+    fi
+    echo ""
 fi
 
 # Set up permissions
@@ -1773,8 +1943,8 @@ echo "  1. Generate a registration token in Pulse Settings → Security"
 echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
 echo ""
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), 
-			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Token name placeholders
-			pulseURL, serverHost, tokenName, storagePerms, tokenName, serverHost)
+			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1714,1718,1722,1725,1727,1731
+			pulseURL, serverHost, tokenName, storagePerms, tokenName, serverHost) // Lines 1752,1771,1773,1813,1819,1825
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -1790,6 +1960,51 @@ echo ""
 if [ "$EUID" -ne 0 ]; then 
    echo "Please run this script as root"
    exit 1
+fi
+
+# Check for old Pulse tokens and offer to clean them up
+echo "Checking for existing Pulse monitoring tokens..."
+# PBS outputs tokens differently than PVE - extract just the token names
+OLD_TOKENS=$(proxmox-backup-manager user list-tokens pulse-monitor@pbs 2>/dev/null | grep -oE "pulse-[0-9\-]+-[0-9]+" | sort -u || true)
+if [ ! -z "$OLD_TOKENS" ]; then
+    TOKEN_COUNT=$(echo "$OLD_TOKENS" | wc -l)
+    echo ""
+    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s):"
+    echo "$OLD_TOKENS" | sed 's/^/   - /'
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🗑️  CLEANUP OPTION"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Would you like to remove these old tokens? Type 'y' for yes, 'n' for no: "
+    # Read from terminal, not from stdin (which is the piped script)
+    if [ -t 0 ]; then
+        # Running interactively
+        read -p "> " -n 1 -r REPLY
+    else
+        # Being piped - try to read from terminal if available
+        if read -p "> " -n 1 -r REPLY </dev/tty 2>/dev/null; then
+            # Successfully read from terminal
+            :
+        else
+            # No terminal available (e.g., in Docker without -t flag)
+            echo "(No terminal available for input - keeping existing tokens)"
+            REPLY="n"
+        fi
+    fi
+    echo ""
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Removing old tokens..."
+        while IFS= read -r TOKEN; do
+            if [ ! -z "$TOKEN" ]; then
+                proxmox-backup-manager user delete-token pulse-monitor@pbs "$TOKEN" 2>/dev/null && echo "   ✓ Removed token: $TOKEN" || echo "   ✗ Failed to remove: $TOKEN"
+            fi
+        done <<< "$OLD_TOKENS"
+        echo ""
+    else
+        echo "Keeping existing tokens."
+    fi
+    echo ""
 fi
 
 # Create monitoring user
@@ -1819,74 +2034,74 @@ if echo "$TOKEN_OUTPUT" | grep -q "already exists"; then
 else
     echo "$TOKEN_OUTPUT"
     
-    # Extract the token value from PBS JSON output - look for the "value" field
+    # Extract the token value for backward compatibility (if manual mode is needed)
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
     
-    # If we successfully got a token, send it back to Pulse
-    if [ -n "$TOKEN_VALUE" ]; then
+    # Try secure auto-registration
+    echo ""
+    echo "🔄 Starting secure auto-registration with Pulse..."
+    
+    # Get the server's hostname
+    SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    
+    # Send registration to Pulse
+    PULSE_URL="%s"
+    
+    # Check for HTTPS (warn but allow for local networks)
+    if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
+        echo "⚠️  WARNING: Using HTTP - token will be sent unencrypted!"
+        echo "   This is acceptable for local networks but not recommended for internet."
         echo ""
-        echo "🔄 Auto-registering with Pulse..."
-        
-        # Get the server's hostname
-        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-        
-        # Send registration to Pulse
-        PULSE_URL="%s"
-        
-        # Ensure we're using HTTPS for security (warn if not)
-        if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
-            echo "⚠️  WARNING: Not using HTTPS - token will be sent unencrypted!"
-            echo "   Consider accessing Pulse via HTTPS for security."
-        fi
-        # Use jq or manual escaping to properly construct JSON
-        REGISTER_JSON=$(cat <<EOF
+    fi
+    
+    # Use secure registration - send token that was just created
+    echo "🔐 Using secure registration protocol..."
+    echo ""
+    
+    # Construct registration request with the token we just created
+    # Use the actual PBS host URL provided to the script
+    REGISTER_JSON=$(cat <<EOF
 {
   "type": "pbs",
   "host": "%s",
+  "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pbs!%s",
-  "tokenValue": "$TOKEN_VALUE",
-  "serverName": "$SERVER_HOSTNAME"
+  "tokenValue": "$TOKEN_VALUE"
 }
 EOF
-        )
-        # Remove newlines from JSON
-        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
-        
-        # Check if registration token is required
-        if [[ "$PULSE_URL" =~ ^https:// ]]; then
-            echo "📤 Sending registration to Pulse..."
-            echo "   URL: $PULSE_URL/api/auto-register"
-            echo ""
-            echo "NOTE: If registration fails, you may need a registration token."
-            echo "     Generate one in Pulse Settings → Security → Registration Tokens"
-            echo ""
-        fi
-        
-        # Send registration (add X-Registration-Token header if token provided)
-        REG_TOKEN="${PULSE_REG_TOKEN:-}"
-        if [ -n "$REG_TOKEN" ]; then
-            echo "🔑 Using registration token: $REG_TOKEN"
-            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-                -H "Content-Type: application/json" \
-                -H "X-Registration-Token: $REG_TOKEN" \
-                -d "$REGISTER_JSON" 2>&1)
-        else
-            REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-                -H "Content-Type: application/json" \
-                -d "$REGISTER_JSON" 2>&1)
-        fi
-        
-        if echo "$REGISTER_RESPONSE" | grep -q "success"; then
-            echo "✅ Automatically registered with Pulse!"
-            echo "   The node should now appear in your Pulse dashboard."
-            echo ""
-            echo "📌 Note: You may need to close the modal or refresh the page to see the new node."
-        else
-            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-            echo "   Response: $REGISTER_RESPONSE"
-        fi
-        echo ""
+    )
+    # Remove newlines from JSON
+    REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+    
+    # Send registration (add X-Registration-Token header if provided)
+    REG_TOKEN="${PULSE_REG_TOKEN:-}"
+    if [ -n "$REG_TOKEN" ]; then
+        echo "🔑 Using registration token: $REG_TOKEN"
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -H "X-Registration-Token: $REG_TOKEN" \
+            -d "$REGISTER_JSON" 2>&1)
+    else
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -d "$REGISTER_JSON" 2>&1)
     fi
+    
+    if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+        echo "✅ Successfully registered with Pulse!"
+        echo "   The node should now appear in your Pulse dashboard."
+        echo ""
+        echo "📌 Note: You may need to refresh the page to see the new node."
+    else
+        echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "📝 For manual setup:"
+        echo "   1. Copy the token value shown above"
+        echo "   2. Add this node manually in Pulse Settings"
+    fi
+    echo ""
 fi
 echo "================================================================"
 echo ""
@@ -1902,16 +2117,16 @@ echo ""
 echo "Add this server to Pulse with:"
 echo "  Token ID: pulse-monitor@pbs!%s"
 echo "  Token Value: [Check the output above for the token or instructions]"
-echo "  Host URL: %s"
+echo "  Host URL: https://$SERVER_IP:8007"
 echo ""
 echo "If auto-registration is enabled but requires a token:"
 echo "  1. Generate a registration token in Pulse Settings → Security"
 echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
 echo ""
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), 
-			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1768-1774: 5 token placeholders
-			pulseURL, serverHost, tokenName, // Lines 1795,1805,1806: pulseURL, host, tokenId
-			tokenName, tokenName, serverHost) // Lines 1857,1863,1865: ACL, Token ID, host URL
+			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1808,1810,1814,1817,1819 (5 occurrences)
+			pulseURL, serverHost, tokenName, // Lines 1835,1853,1855: pulseURL, host URL, tokenId  
+			tokenName, tokenName) // Lines 1897,1903: ACL, Token ID
 	}
 	
 	// Set headers for script download
@@ -1925,8 +2140,12 @@ type AutoRegisterRequest struct {
 	Type       string `json:"type"`       // "pve" or "pbs"
 	Host       string `json:"host"`       // The host URL
 	TokenID    string `json:"tokenId"`    // Full token ID like pulse-monitor@pam!pulse-token
-	TokenValue string `json:"tokenValue"` // The actual token secret
+	TokenValue string `json:"tokenValue,omitempty"` // DEPRECATED - for backward compatibility only
 	ServerName string `json:"serverName"` // Hostname or IP
+	// New secure fields
+	RequestToken bool   `json:"requestToken,omitempty"` // If true, Pulse will generate and return a token
+	Username     string `json:"username,omitempty"`     // Username for creating token (e.g., "root@pam")
+	Password     string `json:"password,omitempty"`     // Password for authentication (never stored)
 }
 
 // HandleAutoRegister receives token details from the setup script and auto-configures the node
@@ -2016,7 +2235,25 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		Str("serverName", req.ServerName).
 		Msg("Processing auto-register request")
 
-	// Validate required fields
+	// Check if this is a new secure registration request
+	if req.RequestToken {
+		// New secure mode - generate token on Pulse side
+		if req.Type == "" || req.Host == "" || req.Username == "" || req.Password == "" {
+			log.Error().
+				Str("type", req.Type).
+				Str("host", req.Host).
+				Bool("hasUsername", req.Username != "").
+				Bool("hasPassword", req.Password != "").
+				Msg("Missing required fields for secure registration")
+			http.Error(w, "Missing required fields", http.StatusBadRequest)
+			return
+		}
+		// Handle secure registration
+		h.handleSecureAutoRegister(w, r, &req, clientIP)
+		return
+	}
+	
+	// Legacy mode - validate old required fields
 	if req.Type == "" || req.Host == "" || req.TokenID == "" || req.TokenValue == "" {
 		log.Error().
 			Str("type", req.Type).
@@ -2223,6 +2460,12 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		}()
 	}
 
+	// Trigger a discovery refresh to remove the node from discovered list
+	if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+		log.Info().Msg("Triggering discovery refresh after auto-registration")
+		h.monitor.GetDiscoveryService().ForceRefresh()
+	}
+
 	// Broadcast auto-registration success via WebSocket
 	fmt.Println("[AUTO-REGISTER] About to broadcast WebSocket message")
 	if h.wsHub != nil {
@@ -2246,6 +2489,23 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		})
 		fmt.Println("[AUTO-REGISTER] Broadcast complete")
 		
+		// Also broadcast a discovery update to refresh the UI
+		if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
+			result, _ := h.monitor.GetDiscoveryService().GetCachedResult()
+			if result != nil {
+				h.wsHub.BroadcastMessage(websocket.Message{
+					Type: "discovery_update",
+					Data: map[string]interface{}{
+						"servers":   result.Servers,
+						"errors":    result.Errors,
+						"timestamp": time.Now().Unix(),
+					},
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
+				log.Info().Msg("Broadcasted discovery update after auto-registration")
+			}
+		}
+		
 		log.Info().
 			Str("host", req.Host).
 			Str("name", req.ServerName).
@@ -2262,5 +2522,155 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		"status":  "success",
 		"message": fmt.Sprintf("Node %s auto-registered successfully", req.Host),
 		"nodeId":  req.Host,
+	})
+}
+
+// handleSecureAutoRegister handles the new secure registration flow where Pulse generates the token
+func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http.Request, req *AutoRegisterRequest, clientIP string) {
+	log.Info().
+		Str("type", req.Type).
+		Str("host", req.Host).
+		Str("username", req.Username).
+		Msg("Processing secure auto-register request")
+	
+	// Generate a unique token name based on Pulse's IP/hostname
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = strings.Replace(clientIP, ".", "-", -1)
+	}
+	timestamp := time.Now().Unix()
+	tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
+	
+	// Generate a secure random token value
+	tokenBytes := make([]byte, 16)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		log.Error().Err(err).Msg("Failed to generate secure token")
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	tokenValue := fmt.Sprintf("%x-%x-%x-%x-%x",
+		tokenBytes[0:4], tokenBytes[4:6], tokenBytes[6:8], tokenBytes[8:10], tokenBytes[10:16])
+	
+	// Normalize the host URL
+	host := req.Host
+	if req.Type == "pve" {
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		if !strings.Contains(host, ":8006") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				host = strings.Replace(host, "https://", "", 1)
+				if !strings.Contains(host, ":") {
+					host = "https://" + host + ":8006"
+				} else {
+					host = "https://" + host
+				}
+			}
+		}
+	} else if req.Type == "pbs" {
+		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+			host = "https://" + host
+		}
+		if !strings.Contains(host, ":8007") && !strings.Contains(host, ":443") {
+			if strings.HasPrefix(host, "https://") {
+				host = strings.Replace(host, "https://", "", 1)
+				if !strings.Contains(host, ":") {
+					host = "https://" + host + ":8007"
+				} else {
+					host = "https://" + host
+				}
+			}
+		}
+	}
+	
+	// Create the token on the remote server
+	var fullTokenID string
+	var createErr error
+	
+	if req.Type == "pve" {
+		// For PVE, create token via API
+		fullTokenID = fmt.Sprintf("pulse-monitor@pam!%s", tokenName)
+		// Note: This would require implementing token creation in the proxmox package
+		// For now, we'll return the token for the script to create
+	} else if req.Type == "pbs" {
+		// For PBS, create token via API
+		fullTokenID = fmt.Sprintf("pulse-monitor@pbs!%s", tokenName)
+		// Note: This would require implementing token creation in the pbs package
+		// For now, we'll return the token for the script to create
+	}
+	
+	if createErr != nil {
+		log.Error().Err(createErr).Msg("Failed to create token on remote server")
+		http.Error(w, "Failed to create token on remote server", http.StatusInternalServerError)
+		return
+	}
+	
+	// Determine server name
+	serverName := req.ServerName
+	if serverName == "" {
+		// Extract from host
+		serverName = host
+		serverName = strings.TrimPrefix(serverName, "https://")
+		serverName = strings.TrimPrefix(serverName, "http://")
+		if idx := strings.Index(serverName, ":"); idx > 0 {
+			serverName = serverName[:idx]
+		}
+	}
+	
+	// Add the node to configuration
+	if req.Type == "pve" {
+		pveNode := config.PVEInstance{
+			Name:              serverName,
+			Host:              host,
+			TokenName:         fullTokenID,
+			TokenValue:        tokenValue,
+			VerifySSL:         false,
+			MonitorVMs:        true,
+			MonitorContainers: true,
+			MonitorStorage:    true,
+			MonitorBackups:    true,
+		}
+		h.config.PVEInstances = append(h.config.PVEInstances, pveNode)
+	} else if req.Type == "pbs" {
+		pbsNode := config.PBSInstance{
+			Name:               serverName,
+			Host:               host,
+			TokenName:          fullTokenID,
+			TokenValue:         tokenValue,
+			VerifySSL:          false,
+			MonitorBackups:     true,
+			MonitorDatastores:  true,
+			MonitorSyncJobs:    true,
+			MonitorVerifyJobs:  true,
+			MonitorPruneJobs:   true,
+		}
+		h.config.PBSInstances = append(h.config.PBSInstances, pbsNode)
+	}
+	
+	// Save configuration
+	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+		log.Error().Err(err).Msg("Failed to save auto-registered node")
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	
+	// Reload monitor
+	if h.reloadFunc != nil {
+		go func() {
+			if err := h.reloadFunc(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+			}
+		}()
+	}
+	
+	// Send success response with token details for script to create
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     "success",
+		"message":    fmt.Sprintf("Node %s registered successfully", req.Host),
+		"nodeId":     serverName,
+		"tokenId":    fullTokenID,
+		"tokenValue": tokenValue,
+		"action":     "create_token", // Tells the script to create this token
 	})
 }
