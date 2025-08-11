@@ -161,6 +161,12 @@ curl http://localhost:7655/api/metrics
 curl -H "X-API-Token: your-token" http://localhost:7655/api/status
 ```
 
+## Reverse Proxy
+
+Using Pulse behind a reverse proxy? **WebSocket support is required for v4!**
+
+See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy, Apache, Traefik, HAProxy, and Cloudflare Tunnel configurations.
+
 ## Troubleshooting
 
 ### Connection Issues
