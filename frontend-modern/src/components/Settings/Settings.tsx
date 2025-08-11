@@ -883,6 +883,7 @@ const Settings: Component = () => {
                           <button
                             onClick={() => {
                               setEditingNode(node);
+                              setCurrentNodeType(node.type as 'pve' | 'pbs');
                               setShowNodeModal(true);
                             }}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
@@ -1059,6 +1060,7 @@ const Settings: Component = () => {
                           <button
                             onClick={() => {
                               setEditingNode(node);
+                              setCurrentNodeType(node.type as 'pve' | 'pbs');
                               setShowNodeModal(true);
                             }}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
