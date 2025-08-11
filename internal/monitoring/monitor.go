@@ -874,9 +874,10 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 				memUsed = 0
 			}
 
-			// Set CPU to 0 for stopped VMs to avoid false alerts
+			// Set CPU to 0 for non-running VMs to avoid false alerts
+			// VMs can have status: running, stopped, paused, suspended
 			cpuUsage := safeFloat(vm.CPU)
-			if vm.Status == "stopped" {
+			if vm.Status != "running" {
 				cpuUsage = 0
 			}
 
@@ -976,9 +977,10 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 			}
 			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
-			// Set CPU to 0 for stopped containers to avoid false alerts
+			// Set CPU to 0 for non-running containers to avoid false alerts
+			// Containers can have status: running, stopped, paused, suspended
 			cpuUsage := safeFloat(ct.CPU)
-			if ct.Status == "stopped" {
+			if ct.Status != "running" {
 				cpuUsage = 0
 			}
 
