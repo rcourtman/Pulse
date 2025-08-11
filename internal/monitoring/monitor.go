@@ -857,9 +857,12 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 					if vmStatus.FreeMem > 0 {
 						// Guest agent reports free memory, so calculate used
 						memUsed = memTotal - vmStatus.FreeMem
+					} else if vmStatus.Mem > 0 {
+						// No guest agent free memory data, but we have actual memory usage
+						// Use the reported memory usage from Proxmox
+						memUsed = vmStatus.Mem
 					} else {
-						// No guest agent data - show 0% usage instead of incorrect 100%
-						// This indicates the guest agent is not installed/running
+						// No memory data available at all - show 0% usage
 						memUsed = 0
 					}
 				} else {
