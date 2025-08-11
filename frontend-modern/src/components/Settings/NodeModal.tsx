@@ -44,10 +44,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     monitorGarbageJobs: false
   });
 
-  // Reset form when node type changes (prevents cross-contamination between PVE and PBS)
+  // Reset form when modal opens for adding new node (prevents contamination)
   createEffect(() => {
-    // When adding a new node (no editingNode) or type mismatch, ensure clean form
-    if (!props.editingNode || (props.editingNode && props.editingNode.type !== props.nodeType)) {
+    if (props.isOpen && !props.editingNode) {
+      // Clear form completely when opening modal for new node
       setFormData({
         name: '',
         host: '',
@@ -70,6 +70,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         monitorPruneJobs: true,
         monitorGarbageJobs: false
       });
+      setTestResult(null); // Also clear any test results
     }
   });
 
