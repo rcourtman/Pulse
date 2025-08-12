@@ -194,12 +194,26 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
+			
+			// Check for basic auth configuration
+			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || os.Getenv("REQUIRE_AUTH") == "true"
+			
+			// Check for audit logging
+			hasAuditLogging := os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true"
+			
+			// Credentials are always encrypted in current implementation
+			credentialsEncrypted := true
+			
 			status := map[string]interface{}{
 				"apiTokenConfigured": r.config.APIToken != "",
 				"requiresAuth": r.config.APIToken != "",
 				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
 				"registrationTokensEnabled": os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true",
+				"hasAuthentication": hasAuthentication,
+				"hasAuditLogging": hasAuditLogging,
+				"credentialsEncrypted": credentialsEncrypted,
+				"hasHTTPS": req.TLS != nil,
 			}
 			json.NewEncoder(w).Encode(status)
 		} else {

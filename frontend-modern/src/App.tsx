@@ -8,6 +8,7 @@ import { Alerts } from './pages/Alerts';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationContainer from './components/NotificationContainer';
+import { SecurityWarning } from './components/SecurityWarning';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
 import { UpdatesAPI } from './api/updates';
@@ -94,6 +95,7 @@ function App() {
   return (
     <ErrorBoundary>
       <WebSocketContext.Provider value={enhancedStore}>
+        <SecurityWarning />
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
         <div class="container w-[95%] max-w-screen-xl mx-auto">
           {/* Header */}
