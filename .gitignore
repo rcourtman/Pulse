@@ -71,3 +71,5 @@ package.json
 package-lock.json
 *.test.js
 *.test.md
+screenshots/
+.devdata/
