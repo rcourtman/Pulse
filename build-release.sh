@@ -99,8 +99,7 @@ done
 cp "$BUILD_DIR/pulse-linux-amd64" "$universal_staging/bin/pulse"
 chmod +x "$universal_staging/bin/pulse"
 
-# Copy common files
-cp -r frontend-modern/dist "$universal_staging/bin/frontend-modern/"
+# Copy common files (frontend is now embedded, no need to copy dist)
 cp README.md LICENSE install.sh "$universal_staging/" 2>/dev/null || true
 echo "$VERSION" > "$universal_staging/VERSION"
 
