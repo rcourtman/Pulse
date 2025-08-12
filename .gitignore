@@ -43,6 +43,9 @@ build/
 *.tar.gz
 pulse-fixes*.tar.gz
 
+# Frontend copy for embedding (generated during build)
+internal/api/frontend-modern/
+
 # Claude-specific files
 CLAUDE.md
 .claude*
