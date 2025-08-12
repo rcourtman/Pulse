@@ -118,10 +118,16 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	// Try to get version from git first (development)
 	gitVersion, err := getGitVersion()
 	if err == nil && gitVersion != "" {
+		// Determine channel from git version
+		channel := "stable"
+		if strings.Contains(strings.ToLower(gitVersion), "rc") {
+			channel = "rc"
+		}
 		return &VersionInfo{
 			Version:       gitVersion,
 			Build:         "development",
 			Runtime:       "go",
+			Channel:       channel,
 			IsDevelopment: true,
 			IsDocker:      isDockerEnvironment(),
 		}, nil
@@ -137,10 +143,17 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	for _, path := range versionPaths {
 		versionBytes, err := os.ReadFile(path)
 		if err == nil {
+			version := strings.TrimSpace(string(versionBytes))
+			// Determine channel from version string
+			channel := "stable"
+			if strings.Contains(strings.ToLower(version), "rc") {
+				channel = "rc"
+			}
 			return &VersionInfo{
-				Version:       strings.TrimSpace(string(versionBytes)),
+				Version:       version,
 				Build:         "release",
 				Runtime:       "go",
+				Channel:       channel,
 				IsDevelopment: false,
 				IsDocker:      isDockerEnvironment(),
 			}, nil
@@ -148,10 +161,16 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	}
 	
 	// Final fallback
+	version := "4.3.1-rc.1"
+	channel := "stable"
+	if strings.Contains(strings.ToLower(version), "rc") {
+		channel = "rc"
+	}
 	return &VersionInfo{
-		Version:       "4.3.1-rc.1",
+		Version:       version,
 		Build:         "release",
 		Runtime:       "go",
+		Channel:       channel,
 		IsDevelopment: false,
 		IsDocker:      isDockerEnvironment(),
 	}, nil
