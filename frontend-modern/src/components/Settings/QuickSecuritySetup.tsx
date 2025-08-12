@@ -239,10 +239,35 @@ Important:
           </div>
 
           <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-            <p class="text-xs text-blue-700 dark:text-blue-300">
-              <strong>Next steps:</strong> You'll need to restart Pulse with these environment variables set.
-              See the documentation for systemd or Docker configuration.
+            <p class="text-xs text-blue-700 dark:text-blue-300 font-semibold mb-2">
+              To activate these credentials:
             </p>
+            <div class="text-xs text-blue-700 dark:text-blue-300 space-y-3">
+              <div>
+                <p class="font-semibold">For systemd (most common):</p>
+                <pre class="bg-blue-100 dark:bg-blue-900 p-2 rounded mt-1 overflow-x-auto">
+sudo systemctl edit pulse-backend
+
+# Add these lines:
+[Service]
+Environment="PULSE_AUTH_USER={credentials()!.username}"
+Environment="PULSE_AUTH_PASS={credentials()!.password}"
+Environment="API_TOKEN={credentials()!.apiToken}"
+
+# Save and exit, then:
+sudo systemctl restart pulse-backend</pre>
+              </div>
+              
+              <div>
+                <p class="font-semibold">For Docker:</p>
+                <pre class="bg-blue-100 dark:bg-blue-900 p-2 rounded mt-1 overflow-x-auto">
+docker run -d \
+  -e PULSE_AUTH_USER={credentials()!.username} \
+  -e PULSE_AUTH_PASS={credentials()!.password} \
+  -e API_TOKEN={credentials()!.apiToken} \
+  rcourtman/pulse:latest</pre>
+              </div>
+            </div>
           </div>
         </div>
       </Show>
