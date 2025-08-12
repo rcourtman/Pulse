@@ -44,13 +44,13 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 	
+	// NEVER log the body as it contains passwords
 	log.Info().
-		Str("body", string(body)).
 		Msg("Received email config update")
 	
 	var config notifications.EmailConfig
 	if err := json.Unmarshal(body, &config); err != nil {
-		log.Error().Err(err).Str("body", string(body)).Msg("Failed to parse email config")
+		log.Error().Err(err).Msg("Failed to parse email config") // Don't log body with passwords
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -204,8 +204,8 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		return
 	}
 	
+	// NEVER log the body as it contains passwords
 	log.Info().
-		Str("body", string(body)).
 		Msg("Test notification request received")
 	
 	var req struct {
