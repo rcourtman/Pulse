@@ -114,7 +114,15 @@ const NodeCard: Component<NodeCardProps> = (props) => {
       {/* Header */}
       <div class="flex justify-between items-center">
         <h3 class="text-sm font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-2">
-          <span>{props.node.name}</span>
+          <a 
+            href={props.node.host || (props.node.name.includes(':') ? `https://${props.node.name}` : `https://${props.node.name}:8006`)} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+            title={`Open ${props.node.name} web interface`}
+          >
+            {props.node.name}
+          </a>
           <Show when={alertStyles.hasAlert}>
             <div class="flex items-center gap-1">
               <AlertIndicator severity={alertStyles.severity} alerts={nodeAlerts()} />
