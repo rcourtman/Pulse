@@ -306,15 +306,19 @@ echo "You will need to log in with your saved credentials."
 					log.Error().Err(err).Msg("Failed to write apply script")
 				}
 				
-				// Try to apply automatically (will only work if we have sudo permissions)
+				// Try to apply the override file
+				// First, try with sudo (will work if user has passwordless sudo)
 				if err := utils.RunCommand("sudo", "mkdir", "-p", "/etc/systemd/system/pulse-backend.service.d/"); err == nil {
 					if err := utils.RunCommand("sudo", "cp", configPath, "/etc/systemd/system/pulse-backend.service.d/override.conf"); err == nil {
+						// Reload systemd config
 						utils.RunCommand("sudo", "systemctl", "daemon-reload")
-						// Schedule restart
+						
+						// Use the same trick as updates - just exit and let systemd restart us
+						// The new environment variables will be loaded on restart
 						go func() {
 							time.Sleep(2 * time.Second)
-							log.Info().Msg("Restarting Pulse to apply security settings...")
-							utils.RunCommand("sudo", "systemctl", "restart", "pulse-backend")
+							log.Info().Msg("Exiting to apply security settings (systemd will restart with new config)")
+							os.Exit(0)
 						}()
 						
 						response := map[string]interface{}{
