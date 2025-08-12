@@ -69,12 +69,19 @@ export const QuickSecuritySetup: Component = () => {
       setCredentials(newCredentials);
       setShowCredentials(true);
       
-      if (result.method === 'systemd' && result.willRestart) {
+      // Store the command if manual action needed
+      if (result.command) {
+        (window as any).securityCommand = result.command;
+      }
+      
+      if (result.method === 'systemd' && result.automatic) {
         showSuccess('Security enabled! Pulse will restart automatically in 2 seconds...');
         // Show countdown
         setTimeout(() => {
           showSuccess('Restarting now... You will need to log in with your new credentials.');
         }, 2000);
+      } else if (result.method === 'systemd' && !result.automatic) {
+        showSuccess('Security configured! Run the command shown below to apply settings.');
       } else if (result.method === 'docker') {
         showSuccess('Security configured! Please restart your Docker container with the credentials shown.');
       } else {
@@ -251,12 +258,32 @@ Important:
           </div>
 
           <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-            <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
-              ✅ Security has been automatically enabled!
-            </p>
-            <p class="text-xs text-green-700 dark:text-green-300">
-              Pulse will restart automatically in a few seconds. You'll need to log in with these credentials.
-            </p>
+            <Show 
+              when={(window as any).securityCommand}
+              fallback={
+                <>
+                  <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
+                    ✅ Security configured successfully!
+                  </p>
+                  <p class="text-xs text-green-700 dark:text-green-300">
+                    Save your credentials above. Pulse will apply the security settings.
+                  </p>
+                </>
+              }
+            >
+              <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
+                ✅ One more step to enable security:
+              </p>
+              <p class="text-xs text-green-700 dark:text-green-300 mb-2">
+                Run this command in your terminal:
+              </p>
+              <div class="bg-gray-900 text-green-400 p-2 rounded font-mono text-xs overflow-x-auto">
+                {(window as any).securityCommand}
+              </div>
+              <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                This will apply the settings and restart Pulse with security enabled.
+              </p>
+            </Show>
           </div>
         </div>
       </Show>
