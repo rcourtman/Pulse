@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -313,68 +312,9 @@ func (r *Router) setupRoutes() {
 	// Simple stats page
 	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
 	
-	// Serve static files from frontend build
-	// Try multiple possible locations for frontend files
-	var staticDir string
-	possiblePaths := []string{}
-	
-	// If we can determine the executable path, check relative to it
-	if execPath, err := os.Executable(); err == nil {
-		execDir := filepath.Dir(execPath)
-		possiblePaths = append(possiblePaths,
-			filepath.Join(execDir, "frontend-modern", "dist"),           // Next to binary
-			filepath.Join(execDir, "..", "frontend-modern", "dist"),     // Binary in bin/ subdirectory
-			filepath.Join(execDir, "..", "..", "frontend-modern", "dist"), // Binary in deeper subdirectory
-		)
-	}
-	
-	// Add common installation paths
-	possiblePaths = append(possiblePaths,
-		"./frontend-modern/dist",                    // Current directory
-		"./bin/frontend-modern/dist",                // Extracted tarball structure
-		"/opt/pulse/frontend-modern/dist",           // Legacy location
-		"/opt/pulse/bin/frontend-modern/dist",       // Standard install location
-		"/usr/local/bin/frontend-modern/dist",       // Alternative install location
-	)
-	
-	// Find the first existing path
-	for _, path := range possiblePaths {
-		if _, err := os.Stat(path); err == nil {
-			staticDir = path
-			break
-		}
-	}
-	
-	// If still not found, use a default and log an error
-	if staticDir == "" {
-		staticDir = "./frontend-modern/dist"
-		log.Error().Msg("Frontend files not found in any expected location")
-	}
-	log.Info().Str("staticDir", staticDir).Msg("Serving frontend from")
-	fileServer := http.FileServer(http.Dir(staticDir))
-	r.mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Try to serve the file
-		path := req.URL.Path
-		if path == "/" {
-			path = "/index.html"
-		}
-		
-		// Check if file exists
-		if _, err := http.Dir(staticDir).Open(strings.TrimPrefix(path, "/")); err == nil {
-			fileServer.ServeHTTP(w, req)
-			return
-		}
-		
-		// For SPA routing, serve index.html for non-existent paths
-		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/ws") && !strings.HasPrefix(path, "/socket.io/") {
-			req.URL.Path = "/index.html"
-			fileServer.ServeHTTP(w, req)
-			return
-		}
-		
-		// Otherwise, return 404
-		http.NotFound(w, req)
-	}))
+	// Serve embedded frontend
+	log.Info().Msg("Serving embedded frontend")
+	r.mux.Handle("/", serveFrontendHandler())
 
 }
 
