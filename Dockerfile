@@ -1,3 +1,18 @@
+# Build stage for frontend (must be built first for embedding)
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend-modern
+
+# Copy package files
+COPY frontend-modern/package*.json ./
+RUN npm ci
+
+# Copy frontend source
+COPY frontend-modern/ ./
+
+# Build frontend
+RUN npm run build
+
 # Build stage for Go backend
 FROM golang:1.23-alpine AS backend-builder
 
@@ -16,26 +31,14 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY VERSION ./
 
-# Build the binary with optimizations
+# Copy built frontend from frontend-builder stage for embedding
+COPY --from=frontend-builder /app/frontend-modern ./internal/api/frontend-modern
+
+# Build the binary with embedded frontend
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -trimpath \
     -o pulse ./cmd/pulse
-
-# Build stage for frontend
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend-modern
-
-# Copy package files
-COPY frontend-modern/package*.json ./
-RUN npm ci
-
-# Copy frontend source
-COPY frontend-modern/ ./
-
-# Build frontend
-RUN npm run build
 
 # Final stage
 FROM alpine:latest
@@ -44,14 +47,11 @@ RUN apk --no-cache add ca-certificates tzdata su-exec
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary from builder (frontend is embedded)
 COPY --from=backend-builder /app/pulse .
 
 # Copy VERSION file
 COPY --from=backend-builder /app/VERSION .
-
-# Copy frontend build
-COPY --from=frontend-builder /app/frontend-modern/dist ./frontend-modern/dist
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
