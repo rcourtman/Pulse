@@ -61,3 +61,13 @@ scripts/backend-watch.sh
 temp/
 RELEASE_CHECKLIST.md
 DOCKER_PUSH_INSTRUCTIONS.md
+
+# Testing and temporary files
+testing-tools/
+manual-test*.md
+verify-*.md
+test-*.md
+package.json
+package-lock.json
+*.test.js
+*.test.md
