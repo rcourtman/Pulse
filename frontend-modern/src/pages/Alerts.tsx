@@ -263,22 +263,24 @@ export function Alerts() {
     if (activeTab() === 'destinations') {
       // Reload email config from server when switching to destinations tab
       NotificationsAPI.getEmailConfig().then(emailConfigData => {
+        console.log('Loading email config from API:', emailConfigData);
         setEmailConfig({
           enabled: emailConfigData.enabled,
-          provider: emailConfigData.provider,
-          server: emailConfigData.server,
-          port: emailConfigData.port,
-          username: emailConfigData.username,
+          provider: emailConfigData.provider || '',
+          server: emailConfigData.server || '',
+          port: emailConfigData.port || 587,
+          username: emailConfigData.username || '',
           password: emailConfigData.password || '',
-          from: emailConfigData.from,
-          to: emailConfigData.to,
-          tls: emailConfigData.tls,
-          startTLS: emailConfigData.startTLS,
+          from: emailConfigData.from || '',
+          to: emailConfigData.to || [],
+          tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
+          startTLS: emailConfigData.startTLS || false,
           replyTo: '',
           maxRetries: 3,
           retryDelay: 5,
           rateLimit: 60
         });
+        console.log('Email config after setting:', emailConfig());
       }).catch(err => {
         console.error('Failed to reload email configuration:', err);
       });
@@ -1439,6 +1441,11 @@ function DestinationsTab(props: DestinationsTabProps) {
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
+  
+  // Debug logging
+  createEffect(() => {
+    console.log('DestinationsTab emailConfig:', props.emailConfig());
+  });
   
   // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
