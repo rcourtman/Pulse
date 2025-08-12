@@ -88,6 +88,7 @@ func (r *Router) setupRoutes() {
 	notificationHandlers := NewNotificationHandlers(r.monitor)
 	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, r.tokenManager)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
+	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
@@ -104,6 +105,21 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups/pve", r.handleBackupsPVE)
 	r.mux.HandleFunc("/api/backups/pbs", r.handleBackupsPBS)
 	r.mux.HandleFunc("/api/snapshots", r.handleSnapshots)
+	
+	// Guest metadata routes
+	r.mux.HandleFunc("/api/guests/metadata", guestMetadataHandler.HandleGetMetadata)
+	r.mux.HandleFunc("/api/guests/metadata/", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			guestMetadataHandler.HandleGetMetadata(w, req)
+		case http.MethodPut, http.MethodPost:
+			guestMetadataHandler.HandleUpdateMetadata(w, req)
+		case http.MethodDelete:
+			guestMetadataHandler.HandleDeleteMetadata(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	
 	// Update routes
 	r.mux.HandleFunc("/api/updates/check", updateHandlers.HandleCheckUpdates)
