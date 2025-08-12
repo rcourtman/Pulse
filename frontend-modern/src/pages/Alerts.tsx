@@ -990,18 +990,27 @@ function AddOverrideForm(props: {
 // Override Item Component
 function OverrideItem(props: {
   override: Override;
+  isEditing: boolean;
+  onEditStart: () => void;
+  onEditEnd: () => void;
   onUpdate: (override: Override) => void;
   onRemove: () => void;
 }) {
-  const [editing, setEditing] = createSignal(false);
   const [editValues, setEditValues] = createSignal({ ...props.override.thresholds });
+
+  // Update edit values when override changes or editing starts
+  createEffect(() => {
+    if (props.isEditing) {
+      setEditValues({ ...props.override.thresholds });
+    }
+  });
 
   const handleSave = () => {
     props.onUpdate({
       ...props.override,
       thresholds: { ...editValues() }
     });
-    setEditing(false);
+    props.onEditEnd();
   };
 
   return (
@@ -1024,7 +1033,7 @@ function OverrideItem(props: {
             </span>
           </div>
 
-          <Show when={!editing()}>
+          <Show when={!props.isEditing}>
             <div class="flex gap-4">
               <For each={Object.entries(props.override.thresholds).filter(([_, v]) => v)}>
                 {([key, value]) => (
@@ -1037,7 +1046,7 @@ function OverrideItem(props: {
             </div>
           </Show>
 
-          <Show when={editing()}>
+          <Show when={props.isEditing}>
             <div class="space-y-3 mt-4">
               <For each={Object.entries(props.override.thresholds).filter(([_, v]) => v)}>
                 {([key]) => (
@@ -1064,11 +1073,10 @@ function OverrideItem(props: {
         </div>
 
         <div class="flex items-center gap-2 ml-4">
-          <Show when={!editing()}>
+          <Show when={!props.isEditing}>
             <button
               onClick={() => {
-                setEditValues({ ...props.override.thresholds });
-                setEditing(true);
+                props.onEditStart();
               }}
               class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
             >
@@ -1081,7 +1089,7 @@ function OverrideItem(props: {
               Remove
             </button>
           </Show>
-          <Show when={editing()}>
+          <Show when={props.isEditing}>
             <button
               onClick={handleSave}
               class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
@@ -1090,7 +1098,7 @@ function OverrideItem(props: {
             </button>
             <button
               onClick={() => {
-                setEditing(false);
+                props.onEditEnd();
                 setEditValues({ ...props.override.thresholds });
               }}
               class="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
@@ -1125,6 +1133,9 @@ interface ThresholdsTabProps {
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
+  // Track which override is currently being edited to preserve state across re-renders
+  const [editingOverrideId, setEditingOverrideId] = createSignal<string | null>(null);
+  
   return (
     <div class="space-y-8">
       {/* Time Threshold */}
@@ -1358,6 +1369,9 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                 {(override) => (
                   <OverrideItem
                     override={override}
+                    isEditing={editingOverrideId() === override.id}
+                    onEditStart={() => setEditingOverrideId(override.id)}
+                    onEditEnd={() => setEditingOverrideId(null)}
                     onUpdate={(updatedOverride) => {
                       props.setOverrides(props.overrides().map((o: Override) => 
                         o.id === override.id ? updatedOverride : o
