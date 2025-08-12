@@ -53,6 +53,7 @@ type Node struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`
 	Instance         string    `json:"instance"`
+	Host             string    `json:"host"`      // Full host URL from config
 	Status           string    `json:"status"`
 	Type             string    `json:"type"`
 	CPU              float64   `json:"cpu"`

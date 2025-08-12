@@ -21,6 +21,7 @@ export interface Node {
   id: string;
   name: string;
   instance: string;
+  host: string;
   status: string;
   type: string;
   cpu: number;

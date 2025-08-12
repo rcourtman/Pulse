@@ -578,6 +578,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			ID:       instanceName + "-" + node.Node,
 			Name:     node.Node,
 			Instance: instanceName,
+			Host:     instanceCfg.Host,  // Add the actual host URL
 			Status:   node.Status,
 			Type:     "node",
 			CPU:      safeFloat(node.CPU), // Already in percentage
@@ -1811,11 +1812,21 @@ func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 
 // removeFailedPVENode updates a PVE node to show failed authentication status
 func (m *Monitor) removeFailedPVENode(instanceName string) {
+	// Get instance config to get host URL
+	var hostURL string
+	for _, cfg := range m.config.PVEInstances {
+		if cfg.Name == instanceName {
+			hostURL = cfg.Host
+			break
+		}
+	}
+	
 	// Create a failed node entry to show in UI with error status
 	failedNode := models.Node{
 		ID:               instanceName + "-failed",
 		Name:             instanceName,
 		Instance:         instanceName,
+		Host:             hostURL,  // Include host URL even for failed nodes
 		Status:           "offline",
 		Type:             "node",
 		ConnectionHealth: "error",
