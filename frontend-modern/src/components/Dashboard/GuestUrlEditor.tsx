@@ -31,7 +31,7 @@ export const GuestUrlEditor: Component<GuestUrlEditorProps> = (props) => {
         customUrl: urlValue || undefined
       });
       props.onUpdate(urlValue || undefined);
-      props.onClose();
+      // onClose is handled by onUpdate in Dashboard
     } catch (err) {
       setError('Failed to save URL');
       console.error('Failed to save guest URL:', err);
@@ -49,7 +49,7 @@ export const GuestUrlEditor: Component<GuestUrlEditorProps> = (props) => {
         customUrl: undefined
       });
       props.onUpdate(undefined);
-      props.onClose();
+      // onClose is handled by onUpdate in Dashboard
     } catch (err) {
       setError('Failed to remove URL');
       console.error('Failed to remove guest URL:', err);
