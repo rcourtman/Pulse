@@ -337,6 +337,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		RetryEnabled:  false,     // Don't retry during testing
 	}
 	
+	// If the webhook has a custom template, use it
+	if basicWebhook.Template != "" {
+		webhook.PayloadTemplate = basicWebhook.Template
+	}
+	
 	// Try to extract service from body if present
 	var serviceCheck struct {
 		Service string `json:"service"`
@@ -354,23 +359,25 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		Str("name", webhook.Name).
 		Msg("Testing webhook")
 	
-	// Get template for the service
-	templates := notifications.GetWebhookTemplates()
-	for _, tmpl := range templates {
-		if tmpl.Service == webhook.Service {
-			webhook.PayloadTemplate = tmpl.PayloadTemplate
-			if webhook.Headers == nil {
-				webhook.Headers = make(map[string]string)
+	// Get template for the service (if not using custom template)
+	if webhook.PayloadTemplate == "" {
+		templates := notifications.GetWebhookTemplates()
+		for _, tmpl := range templates {
+			if tmpl.Service == webhook.Service {
+				webhook.PayloadTemplate = tmpl.PayloadTemplate
+				if webhook.Headers == nil {
+					webhook.Headers = make(map[string]string)
+				}
+				for k, v := range tmpl.Headers {
+					webhook.Headers[k] = v
+				}
+				log.Info().Str("service", webhook.Service).Msg("Found template for service")
+				break
 			}
-			for k, v := range tmpl.Headers {
-				webhook.Headers[k] = v
-			}
-			log.Info().Str("service", webhook.Service).Msg("Found template for service")
-			break
 		}
 	}
 	
-	// If no template found, use a simple generic template
+	// If still no template found, use a simple generic template
 	if webhook.PayloadTemplate == "" {
 		webhook.PayloadTemplate = `{
 			"alert": {
