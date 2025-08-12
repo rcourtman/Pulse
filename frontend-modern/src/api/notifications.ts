@@ -72,12 +72,12 @@ export class NotificationsAPI {
     }
     const backendConfig = await response.json();
     
-    // Convert backend field names to frontend field names
+    // Backend already returns fields with correct names (server, port)
     return {
       enabled: backendConfig.enabled || false,
       provider: backendConfig.provider || '',
-      server: backendConfig.smtpHost || '',
-      port: backendConfig.smtpPort || 587,
+      server: backendConfig.server || '',
+      port: backendConfig.port || 587,
       username: backendConfig.username || '',
       password: backendConfig.password || '',
       from: backendConfig.from || '',
@@ -88,17 +88,18 @@ export class NotificationsAPI {
   }
 
   static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
-    // Convert frontend field names to backend field names
+    // Backend expects fields with these names (server, port)
     const backendConfig = {
       enabled: config.enabled,
-      smtpHost: config.server,
-      smtpPort: config.port,
+      server: config.server,
+      port: config.port,
       username: config.username,
       password: config.password,
       from: config.from,
       to: config.to,
       tls: config.tls || false,
-      startTLS: config.startTLS || false
+      startTLS: config.startTLS || false,
+      provider: config.provider || ''
     };
     
     const response = await fetch(`${this.baseUrl}/email`, {

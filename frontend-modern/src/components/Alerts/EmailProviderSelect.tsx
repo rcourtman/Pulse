@@ -40,6 +40,16 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   const [showProviders, setShowProviders] = createSignal(false);
   const [showAdvanced, setShowAdvanced] = createSignal(false);
   
+  // Debug logging
+  createEffect(() => {
+    console.log('EmailProviderSelect received config:', {
+      server: props.config.server,
+      port: props.config.port,
+      from: props.config.from,
+      enabled: props.config.enabled
+    });
+  });
+  
   // Load email providers
   createEffect(async () => {
     try {
