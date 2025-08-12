@@ -48,6 +48,17 @@ export function Dashboard(props: DashboardProps) {
   // Create tooltip system
   const TooltipComponent = createTooltipSystem();
   
+  // Create a mapping from node name to host URL
+  const nodeHostMap = createMemo(() => {
+    const map: Record<string, string> = {};
+    props.nodes.forEach(node => {
+      if (node.host) {
+        map[node.name] = node.host;
+      }
+    });
+    return map;
+  });
+  
   // Persist filter states to localStorage
   createEffect(() => {
     localStorage.setItem('dashboardViewMode', viewMode());
@@ -642,7 +653,7 @@ export function Dashboard(props: DashboardProps) {
                       <tr class="node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
                         <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[200px]">
                           <a 
-                            href={`https://${node}:8006`} 
+                            href={nodeHostMap()[node] || (node.includes(':') ? `https://${node}` : `https://${node}:8006`)} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
