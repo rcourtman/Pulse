@@ -181,13 +181,13 @@ After updates complete, refresh your browser (Ctrl+F5 or Cmd+Shift+R) to load th
 
 ```bash
 # Status
-curl http://localhost:7655/api/status
+curl http://localhost:7655/api/health
 
-# Metrics
-curl http://localhost:7655/api/metrics
+# Metrics (default time range: 1h)
+curl http://localhost:7655/api/charts
 
 # With authentication (if configured)
-curl -H "X-API-Token: your-token" http://localhost:7655/api/status
+curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 ```
 
 ## Reverse Proxy
