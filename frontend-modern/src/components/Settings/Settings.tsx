@@ -1476,20 +1476,27 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
-              <Show when={securityStatus() && !securityStatus()!.hasAuthentication}>
+              {/* Show Quick Setup when no auth, otherwise show management tools */}
+              <Show 
+                when={securityStatus() && !securityStatus()!.hasAuthentication}
+                fallback={
+                  <>
+                    {/* Only show API token manager when auth is enabled */}
+                    <div>
+                      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Tokens</h3>
+                      <APITokenManager />
+                    </div>
+                  </>
+                }
+              >
                 <div>
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Quick Security Setup</h3>
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Security Setup</h3>
                   <QuickSecuritySetup />
                 </div>
               </Show>
-              
-              <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Security</h3>
-                <APITokenManager />
-              </div>
 
               <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export/Import Security</h3>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
                 
                 <Show when={securityStatus() && !securityStatus()!.exportProtected}>
                   <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
@@ -1511,43 +1518,36 @@ const Settings: Component = () => {
                 </Show>
                 
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div class="space-y-4">
-                    <div>
-                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Configuration Export</h4>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Export your entire configuration including all nodes and settings. Data is encrypted with your passphrase.
-                      </p>
-                      <button
-                        onClick={() => setShowExportDialog(true)}
-                        class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Export Configuration
-                      </button>
-                    </div>
-                    
-                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Configuration Import</h4>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Import a previously exported configuration. Requires the passphrase used during export.
-                      </p>
-                      <button
-                        onClick={() => setShowImportDialog(true)}
-                        class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Import Configuration
-                      </button>
-                    </div>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                    Export or import your entire Pulse configuration. Exports are encrypted with your passphrase.
+                  </p>
+                  <div class="flex gap-3">
+                    <button
+                      onClick={() => setShowExportDialog(true)}
+                      class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Export Configuration
+                    </button>
+                    <button
+                      onClick={() => setShowImportDialog(true)}
+                      class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
+                    >
+                      Import Configuration
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Registration Tokens</h3>
-                <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  Generate secure, time-limited tokens to allow nodes to register with Pulse.
-                </p>
-                <RegistrationTokens />
-              </div>
+              {/* Only show advanced features when auth is enabled */}
+              <Show when={securityStatus()?.hasAuthentication}>
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Node Registration</h3>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                    Control how new nodes can register with your Pulse instance.
+                  </p>
+                  <RegistrationTokens />
+                </div>
+              </Show>
             </div>
           </Show>
           
