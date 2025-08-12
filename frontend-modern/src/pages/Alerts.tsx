@@ -263,7 +263,6 @@ export function Alerts() {
     if (activeTab() === 'destinations') {
       // Reload email config from server when switching to destinations tab
       NotificationsAPI.getEmailConfig().then(emailConfigData => {
-        console.log('Loading email config from API:', emailConfigData);
         setEmailConfig({
           enabled: emailConfigData.enabled,
           provider: emailConfigData.provider || '',
@@ -280,7 +279,6 @@ export function Alerts() {
           retryDelay: 5,
           rateLimit: 60
         });
-        console.log('Email config after setting:', emailConfig());
       }).catch(err => {
         console.error('Failed to reload email configuration:', err);
       });
@@ -1442,10 +1440,6 @@ function DestinationsTab(props: DestinationsTabProps) {
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
   
-  // Debug logging
-  createEffect(() => {
-    console.log('DestinationsTab emailConfig:', props.emailConfig());
-  });
   
   // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
