@@ -1430,10 +1430,11 @@ function DestinationsTab(props: DestinationsTabProps) {
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
-      // Don't send config - let backend use saved config which has the actual password
+      // Send the current form config for testing (including unsaved changes)
+      const config = props.emailConfig();
       await NotificationsAPI.testNotification({ 
-        type: 'email'
-        // No config - use saved backend config
+        type: 'email',
+        config: config // Send current form data, not saved config
       });
       showSuccess('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {
