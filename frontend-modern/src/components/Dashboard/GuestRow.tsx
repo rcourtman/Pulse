@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, createSignal, onMount } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -6,6 +6,8 @@ import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { getResourceAlerts } from '@/utils/alerts';
 import { useWebSocket } from '@/App';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import { GuestUrlEditor } from './GuestUrlEditor';
 
 type Guest = VM | Container;
 
@@ -30,6 +32,25 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const { activeAlerts } = useWebSocket();
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(undefined);
+  const [showUrlEditor, setShowUrlEditor] = createSignal(false);
+  
+  // Create guest ID for metadata
+  const guestId = createMemo(() => {
+    return props.guest.id || `${props.guest.node}-${props.guest.vmid}`;
+  });
+  
+  // Load custom URL on mount
+  onMount(async () => {
+    try {
+      const metadata = await GuestMetadataAPI.getMetadata(guestId());
+      if (metadata?.customUrl) {
+        setCustomUrl(metadata.customUrl);
+      }
+    } catch (err) {
+      // Ignore errors - guest might not have metadata yet
+    }
+  });
   
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
   const memPercent = createMemo(() => {
@@ -70,10 +91,33 @@ export function GuestRow(props: GuestRowProps) {
             isRunning() ? 'bg-green-500' : 'bg-gray-400'
           }`} title={props.guest.status}></span>
           
-          {/* Name */}
-          <span class="font-medium text-gray-900 dark:text-gray-100 truncate" title={props.guest.name}>
-            {props.guest.name}
-          </span>
+          {/* Name - clickable if custom URL is set */}
+          <Show when={customUrl()} fallback={
+            <span class="font-medium text-gray-900 dark:text-gray-100 truncate" title={props.guest.name}>
+              {props.guest.name}
+            </span>
+          }>
+            <a 
+              href={customUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
+              title={`${props.guest.name} - Click to open custom URL`}
+            >
+              {props.guest.name}
+            </a>
+          </Show>
+          
+          {/* Edit URL button */}
+          <button
+            onClick={() => setShowUrlEditor(true)}
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            title="Edit custom URL"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </button>
           
           {/* Alert indicators */}
           <Show when={props.alertStyles?.hasAlert}>
@@ -85,6 +129,17 @@ export function GuestRow(props: GuestRowProps) {
             </div>
           </Show>
         </div>
+        
+        {/* URL Editor Modal */}
+        <Show when={showUrlEditor()}>
+          <GuestUrlEditor
+            guestId={guestId()}
+            guestName={props.guest.name}
+            currentUrl={customUrl()}
+            onUpdate={(url) => setCustomUrl(url)}
+            onClose={() => setShowUrlEditor(false)}
+          />
+        </Show>
       </td>
 
       {/* Type */}
