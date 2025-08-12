@@ -76,19 +76,13 @@ for build_name in "${!builds[@]}"; do
     echo "Created $RELEASE_DIR/$tar_name"
 done
 
-# Create checksums
-cd $RELEASE_DIR
-sha256sum *.tar.gz > checksums.txt
-cd ..
-
-echo "Release build complete! Files in $RELEASE_DIR/"
-ls -lh $RELEASE_DIR/
+echo "Architecture-specific releases built!"
 
 # Create universal release tarball with all architectures
 echo "Creating universal release tarball..."
 universal_staging="$BUILD_DIR/pulse-staging"
 rm -rf "$universal_staging"
-mkdir -p "$universal_staging/bin/frontend-modern"
+mkdir -p "$universal_staging/bin"
 
 # Copy all architecture binaries to bin/
 for build_name in "${!builds[@]}"; do
