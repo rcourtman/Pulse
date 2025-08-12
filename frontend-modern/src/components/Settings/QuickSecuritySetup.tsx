@@ -1,0 +1,251 @@
+import { Component, createSignal, Show } from 'solid-js';
+import { showSuccess, showError } from '@/utils/toast';
+
+interface SecurityCredentials {
+  username: string;
+  password: string;
+  apiToken?: string;
+}
+
+export const QuickSecuritySetup: Component = () => {
+  const [isSettingUp, setIsSettingUp] = createSignal(false);
+  const [credentials, setCredentials] = createSignal<SecurityCredentials | null>(null);
+  const [showCredentials, setShowCredentials] = createSignal(false);
+  const [copied, setCopied] = createSignal<'username' | 'password' | 'token' | null>(null);
+
+  const generatePassword = (length: number = 16): string => {
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < length; i++) {
+      password += charset[array[i] % charset.length];
+    }
+    return password;
+  };
+
+  const generateToken = (): string => {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  };
+
+  const copyToClipboard = async (text: string, type: 'username' | 'password' | 'token') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      showError('Failed to copy to clipboard');
+    }
+  };
+
+  const setupSecurity = async () => {
+    setIsSettingUp(true);
+    
+    try {
+      // Generate credentials
+      const newCredentials: SecurityCredentials = {
+        username: 'admin',
+        password: generatePassword(),
+        apiToken: generateToken()
+      };
+
+      // Call API to enable security
+      const response = await fetch('/api/security/quick-setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newCredentials)
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to setup security');
+      }
+
+      setCredentials(newCredentials);
+      setShowCredentials(true);
+      showSuccess('Security enabled successfully!');
+    } catch (error) {
+      showError(`Failed to setup security: ${error}`);
+    } finally {
+      setIsSettingUp(false);
+    }
+  };
+
+  const downloadCredentials = () => {
+    if (!credentials()) return;
+    
+    const content = `Pulse Security Credentials
+Generated: ${new Date().toISOString()}
+
+Basic Authentication:
+Username: ${credentials()!.username}
+Password: ${credentials()!.password}
+
+API Token: ${credentials()!.apiToken}
+
+Important:
+- Save these credentials securely
+- They will not be shown again
+- Use the API token for export/import operations
+- Basic auth is required to access the web interface
+`;
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pulse-credentials-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <Show when={!showCredentials()}>
+        <div class="space-y-4">
+          <div class="flex items-start space-x-3">
+            <div class="flex-shrink-0">
+              <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Quick Security Setup</h4>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                Enable authentication with one click. This will:
+              </p>
+              <ul class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                <li class="flex items-center">
+                  <span class="text-green-500 mr-2">✓</span>
+                  Generate secure random password
+                </li>
+                <li class="flex items-center">
+                  <span class="text-green-500 mr-2">✓</span>
+                  Enable basic authentication
+                </li>
+                <li class="flex items-center">
+                  <span class="text-green-500 mr-2">✓</span>
+                  Create API token for automation
+                </li>
+                <li class="flex items-center">
+                  <span class="text-green-500 mr-2">✓</span>
+                  Enable audit logging
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <div class="flex">
+              <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div class="text-xs text-yellow-700 dark:text-yellow-300">
+                <p class="font-semibold">Important:</p>
+                <p>Credentials will be shown only once. Save them immediately!</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={setupSecurity}
+            disabled={isSettingUp()}
+            class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSettingUp() ? (
+              <span class="flex items-center justify-center">
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Setting up security...
+              </span>
+            ) : (
+              'Enable Security Now'
+            )}
+          </button>
+        </div>
+      </Show>
+
+      <Show when={showCredentials() && credentials()}>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              🎉 Security Enabled Successfully!
+            </h4>
+            <button
+              onClick={downloadCredentials}
+              class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              Download Credentials
+            </button>
+          </div>
+
+          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+            <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
+              Save these credentials now - they won't be shown again!
+            </p>
+          </div>
+
+          <div class="space-y-3">
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+              <div class="flex items-center space-x-2">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
+                  {credentials()!.username}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(credentials()!.username, 'username')}
+                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  {copied() === 'username' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+              <div class="flex items-center space-x-2">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
+                  {credentials()!.password}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(credentials()!.password, 'password')}
+                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  {copied() === 'password' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Token</label>
+              <div class="flex items-center space-x-2">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
+                  {credentials()!.apiToken}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(credentials()!.apiToken!, 'token')}
+                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  {copied() === 'token' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <p class="text-xs text-blue-700 dark:text-blue-300">
+              <strong>Next steps:</strong> You'll need to restart Pulse with these environment variables set.
+              See the documentation for systemd or Docker configuration.
+            </p>
+          </div>
+        </div>
+      </Show>
+    </div>
+  );
+};
