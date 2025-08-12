@@ -57,7 +57,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
-			Instructions: "1. Create a bot with @BotFather on Telegram\n2. Get your bot token\n3. Get your chat ID by messaging the bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates\n4. URL format: https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+			Instructions: "1. Create a bot with @BotFather on Telegram\n2. Get your bot token\n3. Get your chat ID by messaging the bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates\n4. URL format: https://api.telegram.org/bot<BOT_TOKEN>/sendMessage\n5. IMPORTANT: Do NOT include chat_id in the URL. Pulse will handle it automatically.",
 		},
 		{
 			Service:    "slack",

@@ -1,0 +1,262 @@
+# Webhook Configuration Guide
+
+Pulse supports sending alert notifications to various webhook services including Discord, Slack, Microsoft Teams, Telegram, PagerDuty, and any custom webhook endpoint.
+
+## Quick Start
+
+1. Navigate to **Settings** → **Alerts** → **Webhooks**
+2. Click **Add Webhook**
+3. Select your service type or choose "Generic" for custom webhooks
+4. Enter the webhook URL and configure settings
+5. Test the webhook to ensure it's working
+6. Save your configuration
+
+## Supported Services
+
+### Discord
+```
+URL Format: https://discord.com/api/webhooks/{webhook_id}/{webhook_token}
+```
+1. In Discord, go to Server Settings → Integrations → Webhooks
+2. Create a new webhook and copy the URL
+3. Paste the URL in Pulse
+
+### Telegram
+```
+URL Format: https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}
+```
+1. Create a bot with @BotFather on Telegram
+2. Get your bot token
+3. Get your chat ID by messaging the bot and visiting: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+4. Use the URL format above (Pulse will handle chat_id correctly)
+
+### Slack
+```
+URL Format: https://hooks.slack.com/services/{webhook_path}
+```
+1. In Slack, go to Apps → Incoming Webhooks
+2. Add to Slack and choose a channel
+3. Copy the webhook URL
+
+### Microsoft Teams
+```
+URL Format: https://{tenant}.webhook.office.com/webhookb2/{webhook_path}
+```
+1. In Teams channel, click ... → Connectors
+2. Configure Incoming Webhook
+3. Copy the URL
+
+### PagerDuty
+```
+URL: https://events.pagerduty.com/v2/enqueue
+```
+1. In PagerDuty, go to Configuration → Services
+2. Add an integration → Events API V2
+3. Copy the Integration Key
+4. Add the key as a header: `routing_key: YOUR_KEY`
+
+## Custom Payload Templates
+
+For generic webhooks, you can define custom JSON payloads using Go template syntax.
+
+### Available Variables
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{.ID}}` | Alert ID | "alert-123" |
+| `{{.Level}}` | Alert level | "warning", "critical" |
+| `{{.Type}}` | Resource type | "cpu", "memory", "disk" |
+| `{{.ResourceName}}` | Name of the resource | "Web Server VM" |
+| `{{.ResourceID}}` | Resource identifier | "vm-100" |
+| `{{.Node}}` | Proxmox node name | "pve-node-01" |
+| `{{.Instance}}` | Proxmox instance URL | "https://192.168.1.100:8006" |
+| `{{.Message}}` | Alert message | "CPU usage exceeded 90%" |
+| `{{.Value}}` | Current metric value | 95.5 |
+| `{{.Threshold}}` | Alert threshold | 90.0 |
+| `{{.Duration}}` | How long alert has been active | "5m" |
+| `{{.Timestamp}}` | Current timestamp | "2024-01-15T10:30:00Z" |
+| `{{.StartTime}}` | When alert started | "2024-01-15T10:25:00Z" |
+
+### Template Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `{{.Level \| title}}` | Capitalize first letter | "Warning" |
+| `{{.Level \| upper}}` | Uppercase | "WARNING" |
+| `{{.Level \| lower}}` | Lowercase | "warning" |
+| `{{printf "%.1f" .Value}}` | Format numbers | "95.5" |
+
+### Example Templates
+
+#### Simple JSON
+```json
+{
+  "text": "Alert: {{.Level}} - {{.Message}}",
+  "resource": "{{.ResourceName}}",
+  "value": {{.Value}},
+  "threshold": {{.Threshold}}
+}
+```
+
+#### Formatted Alert
+```json
+{
+  "alert": {
+    "level": "{{.Level | upper}}",
+    "message": "{{.Message}}",
+    "details": {
+      "resource": "{{.ResourceName}}",
+      "node": "{{.Node}}",
+      "current_value": "{{printf "%.1f" .Value}}%",
+      "threshold": "{{printf "%.0f" .Threshold}}%",
+      "duration": "{{.Duration}}"
+    }
+  },
+  "timestamp": "{{.Timestamp}}"
+}
+```
+
+#### Slack-Compatible Custom Format
+```json
+{
+  "text": "Pulse Alert",
+  "attachments": [{
+    "color": "{{if eq .Level "critical"}}danger{{else}}warning{{end}}",
+    "title": "{{.Level | title}} Alert: {{.ResourceName}}",
+    "text": "{{.Message}}",
+    "fields": [
+      {"title": "Value", "value": "{{printf "%.1f" .Value}}%", "short": true},
+      {"title": "Threshold", "value": "{{printf "%.0f" .Threshold}}%", "short": true},
+      {"title": "Node", "value": "{{.Node}}", "short": true},
+      {"title": "Duration", "value": "{{.Duration}}", "short": true}
+    ],
+    "footer": "Pulse Monitoring",
+    "ts": {{.Timestamp}}
+  }]
+}
+```
+
+#### Home Assistant
+```json
+{
+  "title": "Pulse Alert: {{.Level | title}}",
+  "message": "{{.Message}}",
+  "data": {
+    "entity_id": "sensor.{{.Node | lower}}_{{.Type}}",
+    "state": {{.Value}},
+    "attributes": {
+      "resource": "{{.ResourceName}}",
+      "threshold": {{.Threshold}},
+      "duration": "{{.Duration}}"
+    }
+  }
+}
+```
+
+#### n8n / Node-RED
+```json
+{
+  "workflow": "pulse_alert",
+  "data": {
+    "alert_id": "{{.ID}}",
+    "level": "{{.Level}}",
+    "resource": "{{.ResourceName}}",
+    "node": "{{.Node}}",
+    "metric": {
+      "type": "{{.Type}}",
+      "value": {{.Value}},
+      "threshold": {{.Threshold}}
+    },
+    "message": "{{.Message}}",
+    "timestamp": "{{.Timestamp}}"
+  }
+}
+```
+
+## Testing Webhooks
+
+1. After configuring a webhook, click the **Test** button
+2. Pulse will send a test alert to verify the webhook is working
+3. Check the receiving service to confirm the message arrived
+4. If the test fails, verify:
+   - The URL is correct and accessible
+   - Any required authentication tokens are included
+   - The payload format matches what the service expects
+
+## Troubleshooting
+
+### Webhook Returns 400 Bad Request
+- Check if the payload format is correct for your service
+- For Telegram, ensure chat_id is in the URL (Pulse handles it automatically)
+- Verify all required fields are present in custom templates
+
+### Webhook Returns 401/403
+- Check authentication tokens/keys
+- Verify the webhook URL hasn't expired
+- Ensure IP restrictions allow Pulse server
+
+### No Notifications Received
+- Verify the webhook is enabled
+- Check alert thresholds are configured correctly
+- Ensure notification cooldown period has passed
+- Test the webhook manually using the Test button
+
+## API Reference
+
+### Create Webhook
+```bash
+POST /api/notifications/webhooks
+Content-Type: application/json
+
+{
+  "name": "My Webhook",
+  "url": "https://example.com/webhook",
+  "method": "POST",
+  "service": "generic",
+  "enabled": true,
+  "template": "{\"alert\": \"{{.Message}}\"}"
+}
+```
+
+### Test Webhook
+```bash
+POST /api/notifications/webhooks/test
+Content-Type: application/json
+
+{
+  "name": "Test",
+  "url": "https://example.com/webhook",
+  "service": "generic",
+  "template": "{\"test\": true}"
+}
+```
+
+### Update Webhook
+```bash
+PUT /api/notifications/webhooks/{id}
+Content-Type: application/json
+
+{
+  "name": "Updated Webhook",
+  "url": "https://example.com/new-webhook",
+  "enabled": false
+}
+```
+
+### Delete Webhook
+```bash
+DELETE /api/notifications/webhooks/{id}
+```
+
+### List Webhooks
+```bash
+GET /api/notifications/webhooks
+```
+
+## Security Considerations
+
+- **Never expose webhook URLs publicly** - they often contain authentication tokens
+- **Use HTTPS URLs** when possible to encrypt data in transit
+- **Rotate webhook URLs periodically** if they contain embedded tokens
+- **Test webhooks carefully** to avoid sending test data to production channels
+- **Limit webhook permissions** in the receiving service where possible

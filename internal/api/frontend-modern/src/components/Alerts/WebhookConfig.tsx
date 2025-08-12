@@ -23,13 +23,14 @@ interface WebhookConfigProps {
 export function WebhookConfig(props: WebhookConfigProps) {
   const [adding, setAdding] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [formData, setFormData] = createSignal<Omit<Webhook, 'id'> & { service: string }>({
+  const [formData, setFormData] = createSignal<Omit<Webhook, 'id'> & { service: string; payloadTemplate?: string }>({
     name: '',
     url: '',
     method: 'POST',
     service: 'generic',
     headers: { 'Content-Type': 'application/json' },
-    enabled: true
+    enabled: true,
+    payloadTemplate: ''
   });
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
@@ -60,7 +61,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
         method: data.method,
         headers: data.headers,
         enabled: data.enabled,
-        service: data.service
+        service: data.service,
+        template: data.payloadTemplate
       };
       props.onAdd(newWebhook);
       // Reset form but keep adding state true
@@ -70,7 +72,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
         method: 'POST',
         service: 'generic',
         headers: { 'Content-Type': 'application/json' },
-        enabled: true
+        enabled: true,
+        payloadTemplate: ''
       });
     }
   };
@@ -84,7 +87,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
       method: 'POST',
       service: 'generic',
       headers: { 'Content-Type': 'application/json' },
-      enabled: true
+      enabled: true,
+      payloadTemplate: ''
     });
   };
   
@@ -92,7 +96,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
     setEditingId(webhook.id!);
     setFormData({
       ...webhook,
-      service: webhook.service || 'generic'
+      service: webhook.service || 'generic',
+      payloadTemplate: webhook.template || ''
     });
     setAdding(true);
   };
@@ -283,6 +288,33 @@ export function WebhookConfig(props: WebhookConfigProps) {
               class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 font-mono"
             />
           </div>
+          
+          {/* Custom Payload Template - only show for generic service */}
+          <Show when={formData().service === 'generic'}>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Custom Payload Template (JSON)
+                <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  Optional - Leave empty to use default
+                </span>
+              </label>
+              <textarea
+                value={formData().payloadTemplate || ''}
+                onInput={(e) => setFormData({ ...formData(), payloadTemplate: e.currentTarget.value })}
+                placeholder={`{
+  "text": "Alert: {{.Level}} - {{.Message}}",
+  "resource": "{{.ResourceName}}",
+  "value": {{.Value}},
+  "threshold": {{.Threshold}}
+}`}
+                rows={8}
+                class="w-full px-3 py-2 text-xs font-mono border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Available variables: {"{{.ID}}, {{.Level}}, {{.Type}}, {{.ResourceName}}, {{.Node}}, {{.Message}}, {{.Value}}, {{.Threshold}}, {{.Duration}}, {{.Timestamp}}"}
+              </p>
+            </div>
+          </Show>
           
           <div>
             <label class="flex items-center gap-2">
