@@ -10,6 +10,9 @@ interface SecurityStatus {
   exportProtected: boolean;
   score: number;
   maxScore: number;
+  publicAccess?: boolean;
+  isPrivateNetwork?: boolean;
+  clientIP?: string;
 }
 
 export const SecurityWarning: Component = () => {
@@ -52,7 +55,10 @@ export const SecurityWarning: Component = () => {
           credentialsEncrypted: true, // Always true in current implementation
           exportProtected: data.exportProtected || false,
           score,
-          maxScore
+          maxScore,
+          publicAccess: data.publicAccess || false,
+          isPrivateNetwork: data.isPrivateNetwork,
+          clientIP: data.clientIP
         });
       }
     } catch (error) {
@@ -88,14 +94,31 @@ export const SecurityWarning: Component = () => {
     return '🚨';
   };
 
-  // Don't show if dismissed or if security is good
-  if (dismissed() || !status() || status()!.score >= 4) {
+  // Show more aggressively if public access detected
+  const shouldShow = () => {
+    if (dismissed()) return false;
+    if (!status()) return false;
+    
+    // Always show if public access without auth
+    if (status()!.publicAccess && !status()!.hasAuthentication) {
+      return true;
+    }
+    
+    // Show if score is low
+    return status()!.score < 4;
+  };
+  
+  if (!shouldShow()) {
     return null;
   }
 
   return (
     <Portal>
-      <div class="fixed top-0 left-0 right-0 z-50 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 shadow-sm">
+      <div class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
+        status()!.publicAccess && !status()!.hasAuthentication
+          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+      }`}>
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
@@ -116,7 +139,13 @@ export const SecurityWarning: Component = () => {
                 </div>
                 
                 <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                  Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.
+                  {status()!.publicAccess ? (
+                    <span class="font-semibold text-red-700 dark:text-red-300">
+                      ⚠️ PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to the internet!
+                    </span>
+                  ) : (
+                    'Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.'
+                  )}
                 </p>
 
                 <Show when={showDetails()}>

@@ -204,6 +204,21 @@ func (r *Router) setupRoutes() {
 			// Credentials are always encrypted in current implementation
 			credentialsEncrypted := true
 			
+			// Check network context
+			clientIP := utils.GetClientIP(
+				req.RemoteAddr,
+				req.Header.Get("X-Forwarded-For"),
+				req.Header.Get("X-Real-IP"),
+			)
+			isPrivateNetwork := utils.IsPrivateIP(clientIP)
+			
+			// Get trusted networks from environment
+			trustedNetworks := []string{}
+			if nets := os.Getenv("PULSE_TRUSTED_NETWORKS"); nets != "" {
+				trustedNetworks = strings.Split(nets, ",")
+			}
+			isTrustedNetwork := utils.IsTrustedNetwork(clientIP, trustedNetworks)
+			
 			status := map[string]interface{}{
 				"apiTokenConfigured": r.config.APIToken != "",
 				"requiresAuth": r.config.APIToken != "",
@@ -214,6 +229,10 @@ func (r *Router) setupRoutes() {
 				"hasAuditLogging": hasAuditLogging,
 				"credentialsEncrypted": credentialsEncrypted,
 				"hasHTTPS": req.TLS != nil,
+				"clientIP": clientIP,
+				"isPrivateNetwork": isPrivateNetwork,
+				"isTrustedNetwork": isTrustedNetwork,
+				"publicAccess": !isPrivateNetwork,
 			}
 			json.NewEncoder(w).Encode(status)
 		} else {
