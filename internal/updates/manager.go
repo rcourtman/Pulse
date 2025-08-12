@@ -620,25 +620,9 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 		}
 	}
 	
-	// Copy frontend directory if it exists (check both old and new locations)
-	// Note: Frontend is usually embedded in the binary for v4, but copy for compatibility
-	frontendSrc := filepath.Join(extractDir, "frontend-modern")
-	if _, err := os.Stat(frontendSrc); err != nil {
-		// Try new structure with bin/ directory
-		frontendSrc = filepath.Join(extractDir, "bin", "frontend-modern")
-	}
-	if _, err := os.Stat(frontendSrc); err == nil {
-		// Determine frontend destination based on binary location
-		binaryDir := filepath.Dir(binaryPath)
-		frontendDst := filepath.Join(binaryDir, "frontend-modern")
-		
-		cmd = exec.Command("cp", "-r", frontendSrc, frontendDst+".new")
-		if err := cmd.Run(); err == nil {
-			// Remove old and rename new
-			os.RemoveAll(frontendDst)
-			os.Rename(frontendDst+".new", frontendDst)
-		}
-	}
+	// Frontend is now embedded in the binary as of v4.2.2+
+	// No need to copy frontend files separately
+	// The new binary contains everything needed
 	
 	// Copy VERSION file if it exists (to both locations for compatibility)
 	versionSrc := filepath.Join(extractDir, "VERSION")
