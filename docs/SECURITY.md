@@ -1,5 +1,29 @@
 # Pulse Security
 
+## Security Warning System (v4.3.2+)
+
+Pulse now includes a non-intrusive security warning system that helps you understand your security posture:
+
+### Security Score
+Your instance receives a score from 0-5 based on:
+- ✅ Credentials encrypted at rest (always enabled)
+- ✅ Export/import protection
+- ⚠️ Authentication enabled
+- ⚠️ HTTPS connection
+- ⚠️ Audit logging
+
+### Dismissing Warnings
+If you're comfortable with your security setup, you can dismiss warnings:
+- **For 1 day** - Reminder tomorrow
+- **For 1 week** - Reminder next week  
+- **Forever** - Won't show again
+
+To permanently disable all security warnings:
+```bash
+# Environment variable
+PULSE_DISABLE_SECURITY_WARNINGS=true
+```
+
 ## Credential Security
 
 - **Storage**: Encrypted at rest using AES-256-GCM (`/etc/pulse/nodes.enc`)
