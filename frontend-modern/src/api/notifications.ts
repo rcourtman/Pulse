@@ -41,7 +41,7 @@ export interface EmailConfig {
   from: string;
   to: string[];
   tls: boolean;
-  starttls: boolean;
+  startTLS: boolean;
 }
 
 export interface Webhook {
@@ -83,7 +83,7 @@ export class NotificationsAPI {
       from: backendConfig.from || '',
       to: backendConfig.to || [],
       tls: backendConfig.tls || false,
-      starttls: backendConfig.tls || false // Backend only has TLS field
+      startTLS: backendConfig.startTLS || false
     };
   }
 
@@ -97,7 +97,8 @@ export class NotificationsAPI {
       password: config.password,
       from: config.from,
       to: config.to,
-      tls: config.tls || config.starttls // Backend only has TLS field
+      tls: config.tls || false,
+      startTLS: config.startTLS || false
     };
     
     const response = await fetch(`${this.baseUrl}/email`, {

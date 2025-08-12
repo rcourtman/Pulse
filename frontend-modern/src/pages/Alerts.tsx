@@ -128,7 +128,7 @@ export function Alerts() {
       from: config.from,
       to: config.to,
       tls: config.tls,
-      starttls: config.startTLS
+      startTLS: config.startTLS
     } as EmailConfig;
   };
   
@@ -244,7 +244,7 @@ export function Alerts() {
             from: emailConfigData.from,
             to: emailConfigData.to,
             tls: emailConfigData.tls,
-            startTLS: emailConfigData.starttls,
+            startTLS: emailConfigData.startTLS,
             replyTo: '',
             maxRetries: 3,
             retryDelay: 5,
@@ -255,6 +255,33 @@ export function Alerts() {
         }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
+    }
+  });
+
+  // Reload email config when switching to destinations tab
+  createEffect(() => {
+    if (activeTab() === 'destinations') {
+      // Reload email config from server when switching to destinations tab
+      NotificationsAPI.getEmailConfig().then(emailConfigData => {
+        setEmailConfig({
+          enabled: emailConfigData.enabled,
+          provider: emailConfigData.provider,
+          server: emailConfigData.server,
+          port: emailConfigData.port,
+          username: emailConfigData.username,
+          password: emailConfigData.password || '',
+          from: emailConfigData.from,
+          to: emailConfigData.to,
+          tls: emailConfigData.tls,
+          startTLS: emailConfigData.startTLS,
+          replyTo: '',
+          maxRetries: 3,
+          retryDelay: 5,
+          rateLimit: 60
+        });
+      }).catch(err => {
+        console.error('Failed to reload email configuration:', err);
+      });
     }
   });
 
