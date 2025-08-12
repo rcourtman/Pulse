@@ -1476,7 +1476,7 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
-              <Show when={!securityStatus()?.hasAuthentication}>
+              <Show when={securityStatus() && !securityStatus()!.hasAuthentication}>
                 <div>
                   <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Quick Security Setup</h3>
                   <QuickSecuritySetup />
