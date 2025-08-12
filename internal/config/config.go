@@ -176,6 +176,8 @@ func Load() (*Config, error) {
 				Int("pve", len(cfg.PVEInstances)).
 				Int("pbs", len(cfg.PBSInstances)).
 				Msg("Loaded nodes configuration")
+		} else if err != nil {
+			log.Warn().Err(err).Msg("Failed to load nodes configuration")
 		}
 		
 		// Load system configuration
