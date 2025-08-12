@@ -89,14 +89,28 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // This prevents PVE data from being used when adding a PBS node
     if (props.editingNode && props.editingNode.type === props.nodeType) {
       const node = props.editingNode;
+      // Handle auth fields
+      let username = ('user' in node ? node.user : '') || '';
+      let tokenName = node.tokenName || '';
+      
+      // For PBS with token auth, keep the full token format in tokenName field
+      // The user field is not shown in the UI for token auth anyway
+      if (props.nodeType === 'pbs' && tokenName && tokenName.includes('!') && !node.hasPassword) {
+        // Keep full token format for PBS token auth
+        // tokenName stays as-is (e.g., "pulse-monitor@pbs!pulse-192-168-0-123")
+        // Extract username for internal use only
+        const parts = tokenName.split('!');
+        username = parts[0];
+      }
+      
       setFormData({
         name: node.name || '',
         host: node.host || '',
-        authType: node.tokenName ? 'token' : 'token', // Default to token auth (more secure)
+        authType: node.hasPassword ? 'password' : 'token', // Check actual auth type
         setupMode: 'auto',
-        user: node.user || '',
+        user: username,
         password: '', // Don't show existing password
-        tokenName: node.tokenName || '',
+        tokenName: tokenName,
         tokenValue: '', // Don't show existing token
         fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
         verifySSL: node.verifySSL ?? true,
@@ -133,7 +147,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         nodeData.password = data.password;
       }
     } else {
-      // For token auth, tokenName contains the full token ID (user@realm!tokenname)
+      // For token auth, tokenName should already contain the full token ID
       nodeData.tokenName = data.tokenName;
       if (data.tokenValue) {
         nodeData.tokenValue = data.tokenValue;
