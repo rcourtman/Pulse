@@ -140,6 +140,30 @@ Quick start - most settings are in the web UI:
 - **Settings → System**: Polling intervals, CORS settings
 - **Alerts**: Thresholds and notifications
 
+### Email Alerts Configuration
+Configure email notifications in **Settings → Alerts → Email Destinations**
+
+#### Supported Providers
+- **Gmail/Google Workspace**: Requires app-specific password
+- **Outlook/Office 365**: Requires app-specific password  
+- **Custom SMTP**: Any SMTP server
+
+#### Recommended Settings
+- **Port 587 with STARTTLS** (recommended for most providers)
+- **Port 465** for SSL/TLS
+- **Port 25** for unencrypted (not recommended)
+
+#### Gmail Setup
+1. Enable 2-factor authentication
+2. Generate app-specific password at https://myaccount.google.com/apppasswords
+3. Use your email as username and app password as password
+4. Server: smtp.gmail.com, Port: 587, Enable STARTTLS
+
+#### Outlook Setup
+1. Generate app password at https://account.microsoft.com/security
+2. Use your email as username and app password as password
+3. Server: smtp-mail.outlook.com, Port: 587, Enable STARTTLS
+
 For deployment overrides (ports, etc), use environment variables:
 ```bash
 # Systemd: sudo systemctl edit pulse-backend
@@ -189,6 +213,8 @@ curl http://localhost:7655/api/charts
 # With authentication (if configured)
 curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 ```
+
+📖 **[Full API Documentation →](docs/API.md)** - Complete endpoint reference with examples
 
 ## Reverse Proxy
 
