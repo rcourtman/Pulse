@@ -198,7 +198,7 @@ download_pulse() {
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
     # Copy Pulse binary (frontend is now embedded)
-    # Handle both archive layouts (with and without bin directory)
+    # TODO: Simplify this in v5 - for now handle both structures for compatibility
     if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
         cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/pulse"
     elif [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
