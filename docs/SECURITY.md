@@ -57,7 +57,70 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 - Threshold settings
 - General configuration
 
+## Registration Tokens
+
+Secure your Pulse instance by requiring tokens for node auto-registration.
+
+### Token Management (v4.0+)
+Access via **Settings → Security → Registration Tokens**
+
+#### Features
+- Generate time-limited registration tokens
+- Set maximum usage count per token
+- Restrict tokens to specific node types (PVE/PBS)
+- Add descriptions for token identification
+- Revoke tokens immediately when needed
+
+#### Configuration Options
+```bash
+# Require tokens for all registrations (recommended for production)
+Environment="REQUIRE_REGISTRATION_TOKEN=true"
+
+# Allow registration without tokens (default - homelab friendly)
+Environment="ALLOW_UNPROTECTED_AUTO_REGISTER=true"
+
+# Default token validity (seconds)
+Environment="REGISTRATION_TOKEN_DEFAULT_VALIDITY=1800"
+
+# Default max uses per token
+Environment="REGISTRATION_TOKEN_DEFAULT_MAX_USES=1"
+```
+
+#### Usage Flow
+1. **Admin**: Generate token in Settings → Security → Registration Tokens
+2. **Admin**: Copy token (format: `PULSE-REG-xxxxxxxxxxxx`)
+3. **Node Setup**: Include token in setup script or auto-register request
+4. **System**: Validates token and decrements usage count
+5. **System**: Auto-expires token after validity period
+
+#### Setup Script Integration
+```bash
+# Include token when running setup script
+PULSE_REG_TOKEN=PULSE-REG-xxxxxxxxxxxx ./setup.sh
+
+# Or in auto-register API call
+curl -X POST "https://pulse-server:7655/api/auto-register" \
+  -H "X-Registration-Token: PULSE-REG-xxxxxxxxxxxx" \
+  -d "$NODE_DATA"
+```
+
+### Security Modes
+
+#### Homelab Mode (Default)
+- Registration tokens optional
+- Nodes can register without authentication
+- Suitable for trusted networks
+- Enable with: `ALLOW_UNPROTECTED_AUTO_REGISTER=true`
+
+#### Production Mode
+- All registrations require valid token
+- Tokens expire after set time
+- Usage limits enforced
+- Enable with: `REQUIRE_REGISTRATION_TOKEN=true`
+
 ## Troubleshooting
 
 **Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
+**Registration failing?** Check if REQUIRE_REGISTRATION_TOKEN is enabled
+**Token not working?** Verify it hasn't expired or exceeded usage limit
