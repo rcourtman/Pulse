@@ -314,21 +314,41 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
 	
 	// Serve static files from frontend build
-	// First try to find frontend relative to the executable
-	staticDir := "./frontend-modern/dist"
+	// Try multiple possible locations for frontend files
+	var staticDir string
+	possiblePaths := []string{}
+	
+	// If we can determine the executable path, check relative to it
 	if execPath, err := os.Executable(); err == nil {
 		execDir := filepath.Dir(execPath)
-		possibleDir := filepath.Join(execDir, "frontend-modern", "dist")
-		if _, err := os.Stat(possibleDir); err == nil {
-			staticDir = possibleDir
+		possiblePaths = append(possiblePaths,
+			filepath.Join(execDir, "frontend-modern", "dist"),           // Next to binary
+			filepath.Join(execDir, "..", "frontend-modern", "dist"),     // Binary in bin/ subdirectory
+			filepath.Join(execDir, "..", "..", "frontend-modern", "dist"), // Binary in deeper subdirectory
+		)
+	}
+	
+	// Add common installation paths
+	possiblePaths = append(possiblePaths,
+		"./frontend-modern/dist",                    // Current directory
+		"./bin/frontend-modern/dist",                // Extracted tarball structure
+		"/opt/pulse/frontend-modern/dist",           // Legacy location
+		"/opt/pulse/bin/frontend-modern/dist",       // Standard install location
+		"/usr/local/bin/frontend-modern/dist",       // Alternative install location
+	)
+	
+	// Find the first existing path
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			staticDir = path
+			break
 		}
 	}
-	// Fallback to working directory
-	if _, err := os.Stat(staticDir); err != nil {
-		// Try /opt/pulse as last resort
-		if _, err := os.Stat("/opt/pulse/frontend-modern/dist"); err == nil {
-			staticDir = "/opt/pulse/frontend-modern/dist"
-		}
+	
+	// If still not found, use a default and log an error
+	if staticDir == "" {
+		staticDir = "./frontend-modern/dist"
+		log.Error().Msg("Frontend files not found in any expected location")
 	}
 	log.Info().Str("staticDir", staticDir).Msg("Serving frontend from")
 	fileServer := http.FileServer(http.Dir(staticDir))
