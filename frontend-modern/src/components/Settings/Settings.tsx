@@ -4,6 +4,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import RegistrationTokens from './RegistrationTokens';
 import { APITokenManager } from './APITokenManager';
+import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -118,6 +119,10 @@ const Settings: Component = () => {
     requiresAuth: boolean;
     exportProtected: boolean;
     unprotectedExportAllowed: boolean;
+    hasAuthentication: boolean;
+    hasAuditLogging: boolean;
+    credentialsEncrypted: boolean;
+    hasHTTPS: boolean;
   } | null>(null);
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [importPassphrase, setImportPassphrase] = createSignal('');
@@ -1471,6 +1476,13 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
+              <Show when={!securityStatus()?.hasAuthentication}>
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Quick Security Setup</h3>
+                  <QuickSecuritySetup />
+                </div>
+              </Show>
+              
               <div>
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Security</h3>
                 <APITokenManager />
