@@ -66,13 +66,14 @@ type EmailConfig struct {
 
 // WebhookConfig holds webhook settings
 type WebhookConfig struct {
-	ID      string            `json:"id"`
-	Name    string            `json:"name"`
-	URL     string            `json:"url"`
-	Method  string            `json:"method"`
-	Headers map[string]string `json:"headers"`
-	Enabled bool              `json:"enabled"`
-	Service string            `json:"service"` // discord, slack, teams, etc.
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	URL      string            `json:"url"`
+	Method   string            `json:"method"`
+	Headers  map[string]string `json:"headers"`
+	Enabled  bool              `json:"enabled"`
+	Service  string            `json:"service"`  // discord, slack, teams, etc.
+	Template string            `json:"template"` // Custom payload template
 }
 
 // NewNotificationManager creates a new notification manager
@@ -404,8 +405,43 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	var jsonData []byte
 	var err error
 	
-	// For service-specific webhooks, use the first alert with a note about others
-	if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
+	// Check if webhook has a custom template first
+	if webhook.Template != "" && len(alertList) > 0 {
+		// Use custom template with the first alert (for simplicity)
+		alert := alertList[0]
+		if len(alertList) > 1 {
+			alert.Message = fmt.Sprintf("%s (and %d more alerts)", alert.Message, len(alertList)-1)
+		}
+		
+		enhanced := EnhancedWebhookConfig{
+			WebhookConfig:   webhook,
+			Service:         webhook.Service,
+			PayloadTemplate: webhook.Template,
+		}
+		
+		data := n.prepareWebhookData(alert, nil)
+		
+		// For Telegram, extract chat_id from URL if present
+		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+			if u, err := url.Parse(webhook.URL); err == nil {
+				chatID := u.Query().Get("chat_id")
+				if chatID != "" {
+					data.ChatID = chatID
+				}
+			}
+		}
+		
+		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Int("alertCount", len(alertList)).
+				Msg("Failed to generate grouped payload from custom template")
+			return
+		}
+	} else if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
+		// For service-specific webhooks, use the first alert with a note about others
 		// For simplicity, send the first alert with a note about others
 		// Most webhook services work better with single structured payloads
 		alert := alertList[0]
@@ -502,7 +538,23 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, webhook.URL, bytes.NewBuffer(jsonData))
+	// For Telegram webhooks, strip chat_id from URL if present
+	// The chat_id should only be in the JSON body, not the URL
+	webhookURL := webhook.URL
+	if webhook.Service == "telegram" && strings.Contains(webhookURL, "chat_id=") {
+		if u, err := url.Parse(webhookURL); err == nil {
+			q := u.Query()
+			q.Del("chat_id") // Remove chat_id from query params
+			u.RawQuery = q.Encode()
+			webhookURL = u.String()
+			log.Debug().
+				Str("original", webhook.URL).
+				Str("cleaned", webhookURL).
+				Msg("Stripped chat_id from Telegram webhook URL")
+		}
+	}
+
+	req, err := http.NewRequest(method, webhookURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -555,8 +607,39 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	var jsonData []byte
 	var err error
 	
-	// Check if this webhook has a service type and use the proper template
-	if webhook.Service != "" && webhook.Service != "generic" {
+	// Check if webhook has a custom template first
+	if webhook.Template != "" {
+		// Use custom template provided by user
+		enhanced := EnhancedWebhookConfig{
+			WebhookConfig:   webhook,
+			Service:         webhook.Service,
+			PayloadTemplate: webhook.Template,
+		}
+		
+		// Prepare data and generate payload
+		data := n.prepareWebhookData(alert, nil)
+		
+		// For Telegram, still extract chat_id from URL if present
+		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+			if u, err := url.Parse(webhook.URL); err == nil {
+				chatID := u.Query().Get("chat_id")
+				if chatID != "" {
+					data.ChatID = chatID
+				}
+			}
+		}
+		
+		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Str("alertID", alert.ID).
+				Msg("Failed to generate webhook payload from custom template")
+			return
+		}
+	} else if webhook.Service != "" && webhook.Service != "generic" {
+		// Check if this webhook has a service type and use the proper template
 		// Convert to enhanced webhook to use template
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,

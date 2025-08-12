@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -345,6 +347,16 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	// Prepare data
 	data := n.prepareWebhookData(testAlert, webhook.CustomFields)
 	
+	// For Telegram, extract chat_id from URL if present
+	if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
+		if u, err := url.Parse(webhook.URL); err == nil {
+			chatID := u.Query().Get("chat_id")
+			if chatID != "" {
+				data.ChatID = chatID
+			}
+		}
+	}
+	
 	// Generate payload
 	payload, err := n.generatePayloadFromTemplate(webhook.PayloadTemplate, data)
 	if err != nil {
@@ -357,7 +369,18 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, webhook.URL, bytes.NewBuffer(payload))
+	// For Telegram webhooks, strip chat_id from URL if present
+	webhookURL := webhook.URL
+	if webhook.Service == "telegram" && strings.Contains(webhookURL, "chat_id=") {
+		if u, err := url.Parse(webhookURL); err == nil {
+			q := u.Query()
+			q.Del("chat_id") // Remove chat_id from query params
+			u.RawQuery = q.Encode()
+			webhookURL = u.String()
+		}
+	}
+
+	req, err := http.NewRequest(method, webhookURL, bytes.NewBuffer(payload))
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to create request: %w", err)
 	}

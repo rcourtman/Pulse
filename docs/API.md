@@ -177,6 +177,59 @@ POST /api/notifications/email/test    # Send test email
 GET /api/notifications/email-providers # List email providers
 ```
 
+### Webhook Configuration
+Manage webhook notification endpoints.
+
+```bash
+GET /api/notifications/webhooks                    # List all webhooks
+POST /api/notifications/webhooks                   # Create new webhook
+PUT /api/notifications/webhooks/<id>               # Update webhook
+DELETE /api/notifications/webhooks/<id>            # Delete webhook
+POST /api/notifications/webhooks/test              # Test webhook
+GET /api/notifications/webhook-templates           # Get service templates
+```
+
+#### Create Webhook Example
+```bash
+curl -X POST http://localhost:7655/api/notifications/webhooks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: your-token" \
+  -d '{
+    "name": "Discord Alert",
+    "url": "https://discord.com/api/webhooks/xxx/yyy",
+    "method": "POST",
+    "service": "discord",
+    "enabled": true
+  }'
+```
+
+#### Custom Payload Template Example
+```bash
+curl -X POST http://localhost:7655/api/notifications/webhooks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: your-token" \
+  -d '{
+    "name": "Custom Webhook",
+    "url": "https://my-service.com/webhook",
+    "method": "POST",
+    "service": "generic",
+    "enabled": true,
+    "template": "{\"alert\": \"{{.Level}}: {{.Message}}\", \"value\": {{.Value}}}"
+  }'
+```
+
+#### Test Webhook
+```bash
+curl -X POST http://localhost:7655/api/notifications/webhooks/test \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: your-token" \
+  -d '{
+    "name": "Test",
+    "url": "https://example.com/webhook",
+    "service": "generic"
+  }'
+```
+
 ### Alert Thresholds
 Manage alert thresholds and overrides.
 

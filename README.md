@@ -243,6 +243,17 @@ docker logs pulse
 journalctl -u pulse -f
 ```
 
+## Documentation
+
+- [Configuration Guide](docs/CONFIGURATION.md) - Complete setup and configuration
+- [API Reference](docs/API.md) - REST API endpoints and examples
+- [Webhook Guide](docs/WEBHOOKS.md) - Setting up webhooks and custom payloads
+- [Reverse Proxy Setup](docs/REVERSE_PROXY.md) - nginx, Caddy, Apache, Traefik configs
+- [PBS Agent](docs/PBS-AGENT.md) - Monitoring isolated PBS servers
+- [Security](docs/SECURITY.md) - Security features and best practices
+- [FAQ](docs/FAQ.md) - Common questions and troubleshooting
+- [Migration Guide](docs/MIGRATION_V3_TO_V4.md) - Upgrading from v3 to v4
+
 ## Security
 
 - Credentials stored encrypted (AES-256-GCM)
