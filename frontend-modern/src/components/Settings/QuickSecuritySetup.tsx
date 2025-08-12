@@ -65,9 +65,21 @@ export const QuickSecuritySetup: Component = () => {
         throw new Error(error || 'Failed to setup security');
       }
 
+      const result = await response.json();
       setCredentials(newCredentials);
       setShowCredentials(true);
-      showSuccess('Security enabled successfully!');
+      
+      if (result.method === 'systemd' && result.willRestart) {
+        showSuccess('Security enabled! Pulse will restart automatically in 2 seconds...');
+        // Show countdown
+        setTimeout(() => {
+          showSuccess('Restarting now... You will need to log in with your new credentials.');
+        }, 2000);
+      } else if (result.method === 'docker') {
+        showSuccess('Security configured! Please restart your Docker container with the credentials shown.');
+      } else {
+        showSuccess('Security configured! Please restart Pulse to apply settings.');
+      }
     } catch (error) {
       showError(`Failed to setup security: ${error}`);
     } finally {
@@ -238,36 +250,13 @@ Important:
             </div>
           </div>
 
-          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-            <p class="text-xs text-blue-700 dark:text-blue-300 font-semibold mb-2">
-              To activate these credentials:
+          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+            <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
+              ✅ Security has been automatically enabled!
             </p>
-            <div class="text-xs text-blue-700 dark:text-blue-300 space-y-3">
-              <div>
-                <p class="font-semibold">For systemd (most common):</p>
-                <pre class="bg-blue-100 dark:bg-blue-900 p-2 rounded mt-1 overflow-x-auto">
-sudo systemctl edit pulse-backend
-
-# Add these lines:
-[Service]
-Environment="PULSE_AUTH_USER={credentials()!.username}"
-Environment="PULSE_AUTH_PASS={credentials()!.password}"
-Environment="API_TOKEN={credentials()!.apiToken}"
-
-# Save and exit, then:
-sudo systemctl restart pulse-backend</pre>
-              </div>
-              
-              <div>
-                <p class="font-semibold">For Docker:</p>
-                <pre class="bg-blue-100 dark:bg-blue-900 p-2 rounded mt-1 overflow-x-auto">
-docker run -d \
-  -e PULSE_AUTH_USER={credentials()!.username} \
-  -e PULSE_AUTH_PASS={credentials()!.password} \
-  -e API_TOKEN={credentials()!.apiToken} \
-  rcourtman/pulse:latest</pre>
-              </div>
-            </div>
+            <p class="text-xs text-green-700 dark:text-green-300">
+              Pulse will restart automatically in a few seconds. You'll need to log in with these credentials.
+            </p>
           </div>
         </div>
       </Show>
