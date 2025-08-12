@@ -295,6 +295,7 @@ type SystemSettings struct {
 	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
 	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
 	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
+	APIToken                string `json:"apiToken,omitempty"`
 }
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)

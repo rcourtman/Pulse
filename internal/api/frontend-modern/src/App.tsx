@@ -113,6 +113,9 @@ function App() {
                 <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26"/>
               </svg>
               <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+              <Show when={versionInfo()?.channel === 'rc'}>
+                <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">RC</span>
+              </Show>
             </div>
             <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
               <button 

@@ -3,6 +3,7 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import RegistrationTokens from './RegistrationTokens';
+import { APITokenManager } from './APITokenManager';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -1472,90 +1473,7 @@ const Settings: Component = () => {
             <div class="space-y-6">
               <div>
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Security</h3>
-                
-                <Show when={securityStatus()}>
-                  <Show
-                    when={!securityStatus()?.apiTokenConfigured}
-                    fallback={
-                      <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
-                        <div class="flex items-start">
-                          <svg class="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                          </svg>
-                          <div>
-                            <p class="text-sm font-medium text-green-800 dark:text-green-200">API Protection Enabled</p>
-                            <p class="text-xs text-green-700 dark:text-green-300 mt-1">
-                              Your Pulse instance is protected with API token authentication.
-                            </p>
-                            <Show when={localStorage.getItem('apiToken')}>
-                              <button
-                                onClick={() => {
-                                  localStorage.removeItem('apiToken');
-                                  showSuccess('API token cleared from browser storage');
-                                }}
-                                class="mt-2 text-xs text-green-700 dark:text-green-300 underline hover:no-underline"
-                              >
-                                Clear stored token
-                              </button>
-                            </Show>
-                          </div>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
-                      <div class="flex items-start">
-                        <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <div>
-                          <p class="text-sm font-medium text-yellow-800 dark:text-yellow-200">API Protection Not Configured</p>
-                          <p class="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                            Your Pulse instance is currently running without API authentication. 
-                            All configuration endpoints are accessible without credentials.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
-                </Show>
-
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Configure API Token</h4>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                    Setting an API token will require authentication for all configuration changes and exports.
-                  </p>
-                  
-                  <div class="space-y-3">
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded p-3">
-                      <p class="text-xs font-mono text-gray-700 dark:text-gray-300 mb-2">For systemd service:</p>
-                      <pre class="text-xs bg-black text-green-400 p-2 rounded overflow-x-auto">
-sudo systemctl edit pulse
-# Add these lines:
-[Service]
-Environment="API_TOKEN=your-secure-token-here"
-
-# Then restart:
-sudo systemctl restart pulse</pre>
-                    </div>
-                    
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded p-3">
-                      <p class="text-xs font-mono text-gray-700 dark:text-gray-300 mb-2">For Docker:</p>
-                      <pre class="text-xs bg-black text-green-400 p-2 rounded overflow-x-auto">
-docker run -d \
-  -e API_TOKEN=your-secure-token \
-  -p 7655:7655 \
-  -v pulse-data:/data \
-  rcourtman/pulse:latest</pre>
-                    </div>
-                  </div>
-                  
-                  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 mt-4">
-                    <p class="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Security Note:</strong> Choose a strong, random token. You can generate one with: <code class="font-mono">openssl rand -hex 32</code>
-                    </p>
-                  </div>
-                </div>
+                <APITokenManager />
               </div>
 
               <div>
