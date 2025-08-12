@@ -27,6 +27,11 @@ npm ci
 npm run build
 cd ..
 
+# Copy frontend to api directory for embedding
+echo "Copying frontend for embedding..."
+rm -rf internal/api/frontend-modern
+cp -r frontend-modern internal/api/
+
 # Build for different architectures
 declare -A builds=(
     ["linux-amd64"]="GOOS=linux GOARCH=amd64"
@@ -50,17 +55,15 @@ for build_name in "${!builds[@]}"; do
     # Create release archive
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
     
-    # Create staging directory with bin/ structure for v4
+    # Create staging directory - simplified structure with embedded frontend
     staging_dir="$BUILD_DIR/pulse-staging"
     rm -rf "$staging_dir"
-    mkdir -p "$staging_dir/bin/frontend-modern"
+    mkdir -p "$staging_dir"
     
-    # Copy files to correct v4 locations
-    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
-    cp -r frontend-modern/dist "$staging_dir/bin/frontend-modern/"
+    # Copy files - no frontend needed as it's embedded
+    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/pulse"
     cp README.md LICENSE install.sh "$staging_dir/"
     echo "$VERSION" > "$staging_dir/VERSION"
-    # Note: pulse.service might not exist in Go version
     
     # Create tarball
     cd "$staging_dir"
