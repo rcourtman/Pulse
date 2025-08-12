@@ -197,12 +197,12 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    # Copy Pulse binary (frontend is now embedded)
-    # TODO: Simplify this in v5 - for now handle both structures for compatibility
-    if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
-        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/pulse"
-    elif [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
+    # Copy Pulse binary from bin/ directory (standard structure as of v4.3.1)
+    if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
         cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/pulse"
+    elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
+        # Fallback for old archives (pre-v4.3.1)
+        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/pulse"
     else
         print_error "Pulse binary not found in archive"
         exit 1
