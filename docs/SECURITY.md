@@ -1,6 +1,31 @@
 # Pulse Security
 
-## Security Warning System (v4.3.2+)
+## Smart Security Context (v4.3.2+)
+
+### Public Access Detection
+Pulse automatically detects when it's being accessed from public networks:
+- **Private Networks**: Local/RFC1918 addresses (192.168.x.x, 10.x.x.x, etc.)
+- **Public Networks**: Any non-private IP address
+- **Stronger Warnings**: Red alerts when accessed from public IPs without authentication
+
+### Trusted Networks Configuration
+Define networks that don't require authentication:
+```bash
+# Environment variable (comma-separated CIDR blocks)
+PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24
+
+# Or in systemd
+sudo systemctl edit pulse-backend
+[Service]
+Environment="PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24"
+```
+
+When configured:
+- Access from trusted networks: No auth required
+- Access from outside: Authentication enforced
+- Useful for: Mixed home/remote access scenarios
+
+## Security Warning System
 
 Pulse now includes a non-intrusive security warning system that helps you understand your security posture:
 

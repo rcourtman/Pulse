@@ -39,13 +39,26 @@ func getOrCreateKey() ([]byte, error) {
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 	oldKeyPath := "/etc/pulse/.encryption.key"
 	
+	log.Debug().
+		Str("dataDir", dataDir).
+		Str("keyPath", keyPath).
+		Msg("Looking for encryption key")
+	
 	// Try to read existing key from new location
 	if data, err := os.ReadFile(keyPath); err == nil {
 		key := make([]byte, 32)
 		n, err := base64.StdEncoding.Decode(key, data)
 		if err == nil && n == 32 {
+			log.Debug().Msg("Found and loaded existing encryption key")
 			return key, nil
+		} else {
+			log.Warn().
+				Err(err).
+				Int("decodedBytes", n).
+				Msg("Failed to decode encryption key")
 		}
+	} else {
+		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
 	}
 	
 	// Check for key in old location and migrate if found (only if paths differ)
