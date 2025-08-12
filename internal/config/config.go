@@ -200,9 +200,13 @@ func Load() (*Config, error) {
 			if systemSettings.ConnectionTimeout > 0 {
 				cfg.ConnectionTimeout = time.Duration(systemSettings.ConnectionTimeout) * time.Second
 			}
+			if systemSettings.APIToken != "" {
+				cfg.APIToken = systemSettings.APIToken
+			}
 			log.Info().
 				Dur("interval", cfg.PollingInterval).
 				Str("updateChannel", cfg.UpdateChannel).
+				Bool("hasAPIToken", cfg.APIToken != "").
 				Msg("Loaded system configuration")
 		}
 	}
@@ -316,6 +320,7 @@ func SaveConfig(cfg *Config) error {
 		AutoUpdateTime:          cfg.AutoUpdateTime,
 		AllowedOrigins:          cfg.AllowedOrigins,
 		ConnectionTimeout:       int(cfg.ConnectionTimeout.Seconds()),
+		APIToken:                cfg.APIToken,
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
 		return fmt.Errorf("failed to save system config: %w", err)

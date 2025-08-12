@@ -28,6 +28,7 @@ type Router struct {
 	updateManager *updates.Manager
 	exportLimiter *RateLimiter
 	tokenManager  *tokens.TokenManager
+	persistence   *config.ConfigPersistence
 }
 
 
@@ -42,6 +43,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		updateManager: updates.NewManager(cfg),
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
 		tokenManager:  tokens.NewTokenManager(cfg.DataPath),
+		persistence:   config.NewConfigPersistence(cfg.DataPath),
 	}
 
 	r.setupRoutes()
@@ -302,6 +304,14 @@ func (r *Router) setupRoutes() {
 	// Settings routes
 	r.mux.HandleFunc("/api/settings", getSettings)
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
+	
+	// System settings and API token management
+	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence)
+	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
+	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
+	r.mux.HandleFunc("/api/system/api-token", systemSettingsHandler.HandleGetAPIToken)
+	r.mux.HandleFunc("/api/system/api-token/generate", systemSettingsHandler.HandleGenerateAPIToken)
+	r.mux.HandleFunc("/api/system/api-token/delete", systemSettingsHandler.HandleDeleteAPIToken)
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
