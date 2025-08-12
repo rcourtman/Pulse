@@ -7,6 +7,7 @@ import { NodesAPI } from '@/api/nodes';
 
 interface NodeModalProps {
   isOpen: boolean;
+  resetKey?: number;
   onClose: () => void;
   nodeType: 'pve' | 'pbs';
   editingNode?: NodeConfig;
@@ -19,7 +20,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [testResult, setTestResult] = createSignal<{ status: string; message: string; isCluster?: boolean } | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
   
-  const [formData, setFormData] = createSignal({
+  // Function to get clean form data
+  const getCleanFormData = () => ({
     name: '',
     host: '',
     authType: 'token' as 'password' | 'token',
@@ -43,34 +45,41 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     monitorPruneJobs: true,
     monitorGarbageJobs: false
   });
+  
+  const [formData, setFormData] = createSignal(getCleanFormData());
 
-  // Reset form when modal opens for adding new node (prevents contamination)
+  // Track previous state to detect changes
+  let previousResetKey: number | undefined = undefined;
+  let previousNodeType: string | undefined = undefined;
+  
+  // Reset form when conditions change
   createEffect(() => {
-    if (props.isOpen && !props.editingNode) {
-      // Clear form completely when opening modal for new node
-      setFormData({
-        name: '',
-        host: '',
-        authType: 'token',
-        setupMode: 'auto',
-        user: '',
-        password: '',
-        tokenName: '',
-        tokenValue: '',
-        fingerprint: '',
-        verifySSL: true,
-        monitorVMs: true,
-        monitorContainers: true,
-        monitorStorage: true,
-        monitorBackups: true,
-        enableBackupManagement: true,
-        monitorDatastores: true,
-        monitorSyncJobs: true,
-        monitorVerifyJobs: true,
-        monitorPruneJobs: true,
-        monitorGarbageJobs: false
-      });
-      setTestResult(null); // Also clear any test results
+    const key = props.resetKey;
+    const nodeType = props.nodeType;
+    const isOpen = props.isOpen;
+    const editingNode = props.editingNode;
+    
+    // Force reset if resetKey changed
+    if (key !== undefined && key !== previousResetKey) {
+      previousResetKey = key;
+      setFormData(() => getCleanFormData());
+      setTestResult(null);
+      return;
+    }
+    
+    // Force reset if node type changed
+    if (nodeType !== previousNodeType && previousNodeType !== undefined) {
+      previousNodeType = nodeType;
+      setFormData(() => getCleanFormData());
+      setTestResult(null);
+      return;
+    }
+    previousNodeType = nodeType;
+    
+    // Reset when opening for new node
+    if (isOpen && !editingNode) {
+      setFormData(() => getCleanFormData());
+      setTestResult(null);
     }
   });
 
