@@ -1,10 +1,6 @@
-# Pulse - Real-time monitoring for Proxmox
+# Pulse
 
-**Real-time monitoring dashboard for Proxmox VE and PBS with alerts and webhooks**
-
-[![Version](https://img.shields.io/docker/v/rcourtman/pulse?sort=semver)](https://github.com/rcourtman/Pulse/releases)
-[![Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
-[![GitHub](https://img.shields.io/github/license/rcourtman/Pulse)](https://github.com/rcourtman/Pulse)
+Real-time monitoring dashboard for Proxmox Virtual Environment and Proxmox Backup Server.
 
 ## Quick Start
 
@@ -17,18 +13,22 @@ docker run -d \
   rcourtman/pulse:latest
 ```
 
-Then open http://localhost:7655
+Access the dashboard at `http://localhost:7655`
 
-## Features
+## Overview
 
-- 📊 **Real-time Monitoring** - Live updates via WebSocket
-- 🔔 **Smart Alerts** - Email, Discord, Slack, Telegram, Teams, ntfy.sh, Gotify
-- 🎯 **Auto-Discovery** - Finds your Proxmox nodes automatically
-- 🔒 **Secure** - Encrypted credential storage, read-only access
-- 📱 **Mobile Friendly** - Responsive design works on any device
-- 🌙 **Dark Mode** - Easy on the eyes
-- 🚀 **Lightweight** - Single binary, minimal resource usage
-- 🔄 **Auto-Updates** - Built-in update notifications
+Pulse provides comprehensive monitoring for Proxmox environments with real-time updates, intelligent alerting, and automatic node discovery. Built with performance and security in mind, it requires minimal resources while delivering instant insights into your infrastructure.
+
+### Key Features
+
+- **Real-time Monitoring** - WebSocket-based live updates every 2 seconds
+- **Multi-node Support** - Monitor multiple Proxmox VE and PBS instances
+- **Intelligent Alerts** - Customizable thresholds with multiple notification channels
+- **Automatic Discovery** - Detects nodes on your network automatically
+- **Secure by Design** - Encrypted credential storage, read-only access
+- **Responsive Interface** - Full mobile support with dark mode
+- **Lightweight** - Single Go binary with embedded frontend
+- **Auto-updates** - Built-in update notifications and one-click updates
 
 ## What's Monitored
 
@@ -75,75 +75,84 @@ volumes:
   pulse_data:
 ```
 
-## Setup
+## Initial Setup
 
-1. **Open Pulse** at http://localhost:7655
-2. **Go to Settings → Nodes**
-3. **Click "Setup Script"** next to any discovered node
-4. **Run the script** on your Proxmox node - it handles everything automatically
+1. Access Pulse at `http://localhost:7655`
+2. Navigate to Settings → Nodes
+3. Click "Setup Script" next to any discovered node
+4. Execute the generated script on your Proxmox node
 
-No manual token creation needed! The setup script:
-- Creates a read-only monitoring user
-- Sets proper permissions
-- Generates API tokens
-- Registers with Pulse
+The setup script automatically:
+- Creates a dedicated monitoring user with minimal permissions
+- Configures API token authentication
+- Registers the node with Pulse
+- Applies security best practices
+
+No manual configuration required.
 
 ## Alert Configuration
 
-Configure alerts in **Settings → Alerts**:
+Pulse supports comprehensive alerting through multiple channels:
 
-- **Email** - Gmail, Outlook, or any SMTP server
-- **Discord** - Via webhooks
-- **Slack** - Via webhooks  
-- **Telegram** - Via bot API
-- **Teams** - Via webhooks
-- **ntfy.sh** - Self-hosted or cloud
-- **Gotify** - Self-hosted notifications
+- **Email** (SMTP with STARTTLS/TLS support)
+- **Discord** webhooks
+- **Slack** webhooks
+- **Telegram** bot API
+- **Microsoft Teams** webhooks
+- **ntfy.sh** (cloud or self-hosted)
+- **Gotify** (self-hosted)
 
-Set thresholds for CPU, RAM, and storage - get notified before issues occur.
+Configure thresholds for CPU, memory, and storage utilization to receive proactive notifications before issues impact your infrastructure.
 
 ## Security
 
-- **Encrypted Storage** - Credentials encrypted at rest (AES-256-GCM)
-- **Read-Only Access** - Monitor without modification rights
-- **API Authentication** - Optional token-based API security
-- **Registration Tokens** - Secure node auto-registration
+Pulse implements multiple security layers:
 
-## Supported Architectures
+- Encrypted credential storage using AES-256-GCM
+- Read-only access to Proxmox APIs
+- Optional API token authentication
+- Registration tokens for controlled node enrollment
+- No root access required
 
-Multi-architecture image supports:
-- `linux/amd64` - Standard x86-64
-- `linux/arm64` - ARM 64-bit (Raspberry Pi 4/5, Apple Silicon)
-- `linux/arm/v7` - ARM 32-bit (older Raspberry Pi)
+## Architecture Support
 
-## Updating
+This image supports multiple architectures:
+
+- `linux/amd64` - Intel/AMD 64-bit processors
+- `linux/arm64` - ARM 64-bit (Raspberry Pi 4/5, AWS Graviton)
+- `linux/arm/v7` - ARM 32-bit (Raspberry Pi 2/3)
+
+## Updates
+
+To update to the latest version:
 
 ```bash
 docker pull rcourtman/pulse:latest
 docker stop pulse
 docker rm pulse
-# Run the docker run command again
+# Re-run the docker run command
 ```
 
-Or enable auto-updates with Watchtower.
+Alternatively, use Watchtower for automatic updates.
 
-## Links
+## Documentation
 
-- 📖 [Documentation](https://github.com/rcourtman/Pulse)
-- 🐛 [Report Issues](https://github.com/rcourtman/Pulse/issues)
-- 💬 [Discussions](https://github.com/rcourtman/Pulse/discussions)
-- 📦 [GitHub Releases](https://github.com/rcourtman/Pulse/releases)
+- [GitHub Repository](https://github.com/rcourtman/Pulse)
+- [Release Notes](https://github.com/rcourtman/Pulse/releases)
+- [Issue Tracker](https://github.com/rcourtman/Pulse/issues)
+- [API Documentation](https://github.com/rcourtman/Pulse/blob/main/docs/API.md)
 
-## Requirements
+## System Requirements
 
 - Proxmox VE 7.0+ or PBS 2.0+
-- Docker or Podman
-- 1 CPU core, 256MB RAM minimum
+- 256MB RAM minimum
+- 1 CPU core
+- Docker 20.10+ or Podman
 
 ## License
 
-MIT License - See [LICENSE](https://github.com/rcourtman/Pulse/blob/main/LICENSE)
+MIT License
 
----
+## Support
 
-**Latest Version**: v4.2.1 | **Updated**: 2025-08-12
+For bugs and feature requests, please use the [GitHub issue tracker](https://github.com/rcourtman/Pulse/issues). For questions and discussions, visit the [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions) page.
