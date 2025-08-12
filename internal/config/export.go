@@ -25,6 +25,7 @@ type ExportData struct {
 	Email         notifications.EmailConfig        `json:"email"`
 	Webhooks      []notifications.WebhookConfig    `json:"webhooks"`
 	System        SystemSettings                   `json:"system"`
+	GuestMetadata map[string]*GuestMetadata        `json:"guestMetadata,omitempty"`
 }
 
 // ExportConfig exports all configuration with passphrase-based encryption
@@ -62,15 +63,22 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		return "", fmt.Errorf("failed to load system settings: %w", err)
 	}
 
+	// Load guest metadata (stored in data directory, not config directory)
+	// Default to /var/lib/pulse if not specified
+	dataPath := "/var/lib/pulse"
+	guestMetadataStore := NewGuestMetadataStore(dataPath)
+	guestMetadata := guestMetadataStore.GetAll()
+
 	// Create export data
 	exportData := ExportData{
-		Version:    "4.0",
-		ExportedAt: time.Now(),
-		Nodes:      *nodes,
-		Alerts:     *alertConfig,
-		Email:      *emailConfig,
-		Webhooks:   webhooks,
-		System:     *systemSettings,
+		Version:       "4.0",
+		ExportedAt:    time.Now(),
+		Nodes:         *nodes,
+		Alerts:        *alertConfig,
+		Email:         *emailConfig,
+		Webhooks:      webhooks,
+		System:        *systemSettings,
+		GuestMetadata: guestMetadata,
 	}
 
 	// Marshal to JSON
@@ -137,6 +145,22 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if err := c.SaveSystemSettings(exportData.System); err != nil {
 		return fmt.Errorf("failed to import system settings: %w", err)
+	}
+
+	// Import guest metadata if present
+	if exportData.GuestMetadata != nil && len(exportData.GuestMetadata) > 0 {
+		dataPath := "/var/lib/pulse"
+		guestMetadataStore := NewGuestMetadataStore(dataPath)
+		
+		// Import each guest metadata entry
+		for guestID, metadata := range exportData.GuestMetadata {
+			if metadata != nil {
+				if err := guestMetadataStore.Set(guestID, metadata); err != nil {
+					// Log warning but don't fail entire import
+					fmt.Printf("Warning: Failed to import guest metadata for %s: %v\n", guestID, err)
+				}
+			}
+		}
 	}
 
 	return nil
