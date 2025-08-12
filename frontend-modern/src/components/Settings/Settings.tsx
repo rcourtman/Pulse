@@ -90,6 +90,7 @@ const Settings: Component = () => {
   const [showNodeModal, setShowNodeModal] = createSignal(false);
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
+  const [modalResetKey, setModalResetKey] = createSignal(0);
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
@@ -783,6 +784,7 @@ const Settings: Component = () => {
                     onClick={() => {
                       setEditingNode(null);
                       setCurrentNodeType('pve');
+                      setModalResetKey(prev => prev + 1);
                       setShowNodeModal(true);
                     }}
                     class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -998,6 +1000,7 @@ const Settings: Component = () => {
                     onClick={() => {
                       setEditingNode(null);
                       setCurrentNodeType('pbs');
+                      setModalResetKey(prev => prev + 1);
                       setShowNodeModal(true);
                     }}
                     class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -1827,16 +1830,20 @@ docker run -d \
         </div>
       </div>
       
-      {/* Node Modal */}
-      <NodeModal
-        isOpen={showNodeModal()}
-        onClose={() => {
-          setShowNodeModal(false);
-          setEditingNode(null);
-        }}
-        nodeType={currentNodeType()}
-        editingNode={editingNode() ?? undefined}
-        onSave={async (nodeData) => {
+      {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
+      <Show when={showNodeModal() && currentNodeType() === 'pve'}>
+        <NodeModal
+          isOpen={true}
+          resetKey={modalResetKey()}
+          onClose={() => {
+            setShowNodeModal(false);
+            setEditingNode(null);
+            // Increment resetKey to force form reset on next open
+            setModalResetKey(prev => prev + 1);
+          }}
+          nodeType="pve"
+          editingNode={editingNode() ?? undefined}
+          onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
               // Update existing node (only if it has a valid ID)
@@ -1878,7 +1885,66 @@ docker run -d \
             showError(error instanceof Error ? error.message : 'Operation failed');
           }
         }}
-      />
+        />
+      </Show>
+      
+      {/* PBS Node Modal - Separate instance to prevent contamination */}
+      <Show when={showNodeModal() && currentNodeType() === 'pbs'}>
+        <NodeModal
+          isOpen={true}
+          resetKey={modalResetKey()}
+          onClose={() => {
+            setShowNodeModal(false);
+            setEditingNode(null);
+            // Increment resetKey to force form reset on next open
+            setModalResetKey(prev => prev + 1);
+          }}
+          nodeType="pbs"
+          editingNode={editingNode() ?? undefined}
+          onSave={async (nodeData) => {
+          try {
+            if (editingNode() && editingNode()!.id) {
+              // Update existing node (only if it has a valid ID)
+              await NodesAPI.updateNode(editingNode()!.id, nodeData as NodeConfig);
+              
+              // Update local state
+              setNodes(nodes().map(n => 
+                n.id === editingNode()!.id 
+                  ? { 
+                      ...n, 
+                      ...nodeData,
+                      hasPassword: nodeData.password ? true : n.hasPassword,
+                      hasToken: nodeData.tokenValue ? true : n.hasToken,
+                      status: n.status
+                    } 
+                  : n
+              ));
+              showSuccess('Node updated successfully');
+            } else {
+              // Add new node
+              await NodesAPI.addNode(nodeData as NodeConfig);
+              
+              // Reload the nodes list to get the latest state
+              const nodesList = await NodesAPI.getNodes();
+              const nodesWithStatus = nodesList.map(node => ({
+                ...node,
+                // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+                hasPassword: node.hasPassword ?? !!node.password,
+                hasToken: node.hasToken ?? !!node.tokenValue,
+                status: node.status || 'disconnected' as const
+              }));
+              setNodes(nodesWithStatus);
+              showSuccess('Node added successfully');
+            }
+            
+            setShowNodeModal(false);
+            setEditingNode(null);
+          } catch (error) {
+            showError(error instanceof Error ? error.message : 'Operation failed');
+          }
+        }}
+        />
+      </Show>
     </div>
       {/* Export Dialog */}
       <Show when={showExportDialog()}>
