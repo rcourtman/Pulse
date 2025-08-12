@@ -252,7 +252,8 @@ journalctl -u pulse -f
 - [PBS Agent](docs/PBS-AGENT.md) - Monitoring isolated PBS servers
 - [Security](docs/SECURITY.md) - Security features and best practices
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting
-- [Migration Guide](docs/MIGRATION_V3_TO_V4.md) - Upgrading from v3 to v4
+- [Migration Guide](docs/MIGRATION.md) - Backup and migration procedures
+- [v3 to v4 Upgrade](docs/MIGRATION_V3_TO_V4.md) - Upgrading from v3 to v4
 
 ## Security
 

@@ -6,6 +6,7 @@
 - **Logs**: Token values masked with `***` in all outputs
 - **API**: Frontend receives only `hasToken: true`, never actual values
 - **Export**: Requires API_TOKEN authentication to extract credentials
+- **Migration**: Use passphrase-protected export/import (see [Migration Guide](MIGRATION.md))
 
 ## Export/Import Protection
 
