@@ -176,7 +176,8 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 	} else if e.config.StartTLS {
 		return e.sendStartTLS(addr, auth, msg)
 	} else {
-		return smtp.SendMail(addr, auth, e.config.From, e.config.To, msg)
+		// Use sendPlain for non-TLS connections with timeout
+		return e.sendPlain(addr, auth, msg)
 	}
 }
 
@@ -187,11 +188,18 @@ func (e *EnhancedEmailManager) sendTLS(addr string, auth smtp.Auth, msg []byte) 
 		InsecureSkipVerify: e.config.SkipTLSVerify,
 	}
 	
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// Use DialWithDialer with timeout
+	dialer := &net.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("TLS dial failed: %w", err)
 	}
 	defer conn.Close()
+	
+	// Set overall connection timeout
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 	
 	client, err := smtp.NewClient(conn, e.config.SMTPHost)
 	if err != nil {
@@ -235,11 +243,15 @@ func (e *EnhancedEmailManager) sendTLS(addr string, auth smtp.Auth, msg []byte) 
 
 // sendStartTLS sends email using STARTTLS
 func (e *EnhancedEmailManager) sendStartTLS(addr string, auth smtp.Auth, msg []byte) error {
-	conn, err := net.Dial("tcp", addr)
+	// Use DialTimeout to prevent hanging on unreachable servers
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("TCP dial failed: %w", err)
 	}
 	defer conn.Close()
+	
+	// Set overall connection timeout
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 	
 	client, err := smtp.NewClient(conn, e.config.SMTPHost)
 	if err != nil {
@@ -337,6 +349,58 @@ func (e *EnhancedEmailManager) TestConnection() error {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
+	}
+	
+	return client.Quit()
+}
+
+// sendPlain sends email over plain SMTP connection with timeout
+func (e *EnhancedEmailManager) sendPlain(addr string, auth smtp.Auth, msg []byte) error {
+	// Use DialTimeout to prevent hanging on unreachable servers
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("TCP dial failed: %w", err)
+	}
+	defer conn.Close()
+	
+	// Set overall connection timeout
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	
+	client, err := smtp.NewClient(conn, e.config.SMTPHost)
+	if err != nil {
+		return fmt.Errorf("SMTP client creation failed: %w", err)
+	}
+	defer client.Close()
+	
+	if auth != nil {
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP auth failed: %w", err)
+		}
+	}
+	
+	if err = client.Mail(e.config.From); err != nil {
+		return fmt.Errorf("MAIL FROM failed: %w", err)
+	}
+	
+	for _, to := range e.config.To {
+		if err = client.Rcpt(to); err != nil {
+			return fmt.Errorf("RCPT TO failed for %s: %w", to, err)
+		}
+	}
+	
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("DATA command failed: %w", err)
+	}
+	
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("message write failed: %w", err)
+	}
+	
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("message close failed: %w", err)
 	}
 	
 	return client.Quit()

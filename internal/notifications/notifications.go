@@ -279,6 +279,64 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 	n.sendHTMLEmail(subject, htmlBody, textBody, config)
 }
 
+// sendHTMLEmailWithError sends an HTML email with multipart content and returns any error
+func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody string, config EmailConfig) error {
+	// Use From address as recipient if To is empty
+	recipients := config.To
+	if len(recipients) == 0 && config.From != "" {
+		recipients = []string{config.From}
+		log.Info().
+			Str("from", config.From).
+			Msg("Using From address as recipient since To is empty")
+	}
+	
+	// Create enhanced email configuration with proper STARTTLS support
+	enhancedConfig := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			From:     config.From,
+			To:       recipients,
+			SMTPHost: config.SMTPHost,
+			SMTPPort: config.SMTPPort,
+			Username: config.Username,
+			Password: config.Password,
+		},
+		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
+		MaxRetries:    2,
+		RetryDelay:    3,
+		RateLimit:     60,
+		SkipTLSVerify: false,
+		AuthRequired:  config.Username != "" && config.Password != "",
+	}
+	
+	// Use enhanced email manager for better compatibility
+	enhancedManager := NewEnhancedEmailManager(enhancedConfig)
+	
+	log.Info().
+		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
+		Str("from", config.From).
+		Strs("to", recipients).
+		Bool("hasAuth", config.Username != "" && config.Password != "").
+		Bool("startTLS", enhancedConfig.StartTLS).
+		Msg("Attempting to send email via SMTP with enhanced support")
+	
+	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
+	
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
+			Strs("recipients", recipients).
+			Msg("Failed to send email notification")
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+	
+	log.Info().
+		Strs("recipients", recipients).
+		Int("recipientCount", len(recipients)).
+		Msg("Email notification sent successfully")
+	return nil
+}
+
 // sendHTMLEmail sends an HTML email with multipart content
 func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, config EmailConfig) {
 	// Use From address as recipient if To is empty
@@ -809,6 +867,9 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			Int("port", config.SMTPPort).
 			Str("from", config.From).
 			Int("toCount", len(config.To)).
+			Strs("to", config.To).
+			Bool("smtpEmpty", config.SMTPHost == "").
+			Bool("fromEmpty", config.From == "").
 			Msg("Testing email notification with provided config")
 			
 		if !config.Enabled {
@@ -822,9 +883,8 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 		// Generate email using template
 		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{testAlert}, true)
 		
-		// Send using provided config
-		n.sendHTMLEmail(subject, htmlBody, textBody, *config)
-		return nil
+		// Send using provided config and return any error
+		return n.sendHTMLEmailWithError(subject, htmlBody, textBody, *config)
 		
 	default:
 		return fmt.Errorf("unsupported method for config-based testing: %s", method)
