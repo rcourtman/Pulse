@@ -268,6 +268,12 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 	} else if req.Method == "email" && req.Config != nil {
 		// If config is provided, use it for testing (without saving)
+		// If password is empty, use the saved password
+		if req.Config.Password == "" {
+			savedConfig := h.monitor.GetNotificationManager().GetEmailConfig()
+			req.Config.Password = savedConfig.Password
+		}
+		
 		log.Info().
 			Bool("enabled", req.Config.Enabled).
 			Str("smtp", req.Config.SMTPHost).
