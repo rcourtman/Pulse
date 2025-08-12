@@ -55,13 +55,13 @@ for build_name in "${!builds[@]}"; do
     # Create release archive
     tar_name="pulse-v${VERSION}-${build_name}.tar.gz"
     
-    # Create staging directory - simplified structure with embedded frontend
+    # Create staging directory with bin/ structure (matches what community script expects)
     staging_dir="$BUILD_DIR/pulse-staging"
     rm -rf "$staging_dir"
-    mkdir -p "$staging_dir"
+    mkdir -p "$staging_dir/bin"
     
-    # Copy files - no frontend needed as it's embedded
-    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/pulse"
+    # Copy files to match universal archive structure
+    cp "$BUILD_DIR/pulse-$build_name" "$staging_dir/bin/pulse"
     cp README.md LICENSE install.sh "$staging_dir/"
     echo "$VERSION" > "$staging_dir/VERSION"
     
