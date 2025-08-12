@@ -7,7 +7,6 @@ import { IOMetric } from './IOMetric';
 import { getResourceAlerts } from '@/utils/alerts';
 import { useWebSocket } from '@/App';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
-import { GuestUrlEditor } from './GuestUrlEditor';
 
 type Guest = VM | Container;
 
@@ -28,12 +27,12 @@ interface GuestRowProps {
     alertCount: number;
     severity: 'critical' | 'warning' | null;
   };
+  onEditUrl?: (guestId: string, guestName: string, currentUrl?: string) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
   const { activeAlerts } = useWebSocket();
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(undefined);
-  const [showUrlEditor, setShowUrlEditor] = createSignal(false);
   
   // Create guest ID for metadata
   const guestId = createMemo(() => {
@@ -109,15 +108,17 @@ export function GuestRow(props: GuestRowProps) {
           </Show>
           
           {/* Edit URL button */}
-          <button
-            onClick={() => setShowUrlEditor(true)}
-            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            title="Edit custom URL"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-          </button>
+          <Show when={props.onEditUrl}>
+            <button
+              onClick={() => props.onEditUrl?.(guestId(), props.guest.name, customUrl())}
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              title="Edit custom URL"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            </button>
+          </Show>
           
           {/* Alert indicators */}
           <Show when={props.alertStyles?.hasAlert}>
@@ -129,17 +130,6 @@ export function GuestRow(props: GuestRowProps) {
             </div>
           </Show>
         </div>
-        
-        {/* URL Editor Modal */}
-        <Show when={showUrlEditor()}>
-          <GuestUrlEditor
-            guestId={guestId()}
-            guestName={props.guest.name}
-            currentUrl={customUrl()}
-            onUpdate={(url) => setCustomUrl(url)}
-            onClose={() => setShowUrlEditor(false)}
-          />
-        </Show>
       </td>
 
       {/* Type */}

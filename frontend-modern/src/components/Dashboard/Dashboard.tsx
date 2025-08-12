@@ -3,6 +3,7 @@ import type { VM, Container, Node, PBSInstance } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
 import { useWebSocket } from '@/App';
+import { GuestUrlEditor } from './GuestUrlEditor';
 import { getAlertStyles } from '@/utils/alerts';
 import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
@@ -47,6 +48,23 @@ export function Dashboard(props: DashboardProps) {
   
   // Create tooltip system
   const TooltipComponent = createTooltipSystem();
+  
+  // URL Editor state
+  const [urlEditorState, setUrlEditorState] = createSignal<{
+    guestId: string;
+    guestName: string;
+    currentUrl?: string;
+  } | null>(null);
+  
+  // Function to open URL editor
+  const openUrlEditor = (guestId: string, guestName: string, currentUrl?: string) => {
+    setUrlEditorState({ guestId, guestName, currentUrl });
+  };
+  
+  // Function to close URL editor
+  const closeUrlEditor = () => {
+    setUrlEditorState(null);
+  };
   
   // Create a mapping from node name to host URL
   const nodeHostMap = createMemo(() => {
@@ -681,6 +699,7 @@ export function Dashboard(props: DashboardProps) {
                             guest={guest} 
                             showNode={false} 
                             alertStyles={getAlertStyles(guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`, activeAlerts)}
+                            onEditUrl={openUrlEditor}
                           />
                         </ComponentErrorBoundary>
                       )}
@@ -723,6 +742,20 @@ export function Dashboard(props: DashboardProps) {
       
       {/* Tooltip System */}
       <TooltipComponent />
+      
+      {/* URL Editor Modal */}
+      <Show when={urlEditorState()}>
+        <GuestUrlEditor
+          guestId={urlEditorState()!.guestId}
+          guestName={urlEditorState()!.guestName}
+          currentUrl={urlEditorState()!.currentUrl}
+          onUpdate={() => {
+            // Update will be handled by GuestRow when it reloads
+            closeUrlEditor();
+          }}
+          onClose={closeUrlEditor}
+        />
+      </Show>
       
     </div>
   );
