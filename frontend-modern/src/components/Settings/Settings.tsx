@@ -1842,7 +1842,7 @@ docker run -d \
             setModalResetKey(prev => prev + 1);
           }}
           nodeType="pve"
-          editingNode={editingNode() ?? undefined}
+          editingNode={editingNode()?.type === 'pve' ? editingNode() ?? undefined : undefined}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
@@ -1900,7 +1900,7 @@ docker run -d \
             setModalResetKey(prev => prev + 1);
           }}
           nodeType="pbs"
-          editingNode={editingNode() ?? undefined}
+          editingNode={editingNode()?.type === 'pbs' ? editingNode() ?? undefined : undefined}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
