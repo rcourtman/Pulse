@@ -197,17 +197,12 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    # Create pulse bin directory if not in tarball
+    # Create pulse bin directory
     mkdir -p "$INSTALL_DIR/bin"
     
-    # Handle both old (flat) and new (bin/) tarball structures
-    if [[ -d "$TEMP_EXTRACT/bin" ]]; then
-        # New structure - files already in bin/
-        cp -r "$TEMP_EXTRACT/bin"/* "$INSTALL_DIR/bin/"
-    elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
-        # Old structure - files in root
+    # Copy Pulse binary (frontend is now embedded)
+    if [[ -f "$TEMP_EXTRACT/pulse" ]]; then
         cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
-        [[ -d "$TEMP_EXTRACT/frontend-modern" ]] && cp -r "$TEMP_EXTRACT/frontend-modern" "$INSTALL_DIR/bin/"
     else
         print_error "Pulse binary not found in archive"
         exit 1
@@ -220,14 +215,6 @@ download_pulse() {
     ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
     print_success "Symlink created at /usr/local/bin/pulse"
-    
-    # Copy frontend directory if it exists (required for v4.1.0+)
-    if [[ -d "$TEMP_EXTRACT/frontend-modern" ]]; then
-        rm -rf "$INSTALL_DIR/bin/frontend-modern"
-        cp -r "$TEMP_EXTRACT/frontend-modern" "$INSTALL_DIR/bin/"
-        chown -R pulse:pulse "$INSTALL_DIR/bin/frontend-modern"
-        print_success "Frontend files installed to $INSTALL_DIR/bin/frontend-modern"
-    fi
     
     # Copy VERSION file if present
     if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
