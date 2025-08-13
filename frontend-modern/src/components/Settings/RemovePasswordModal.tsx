@@ -24,15 +24,29 @@ export const RemovePasswordModal: Component<RemovePasswordModalProps> = (props) 
     setLoading(true);
 
     try {
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('pulse_csrf='))
+        ?.split('=')[1];
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${btoa(`admin:${currentPassword()}`)}`,
+      };
+      
+      // Add CSRF token if available
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+
       const response = await fetch('/api/security/remove-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${btoa(`admin:${currentPassword()}`)}`,
-        },
+        headers,
         body: JSON.stringify({
           currentPassword: currentPassword(),
         }),
+        credentials: 'include', // Important for cookies
       });
 
       const data = await response.json();
