@@ -35,9 +35,11 @@ function App() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   
-  // Get singleton WebSocket store
-  const wsStore = getGlobalWebSocketStore();
-  const { state, connected, reconnecting } = wsStore;
+  // Don't initialize WebSocket until after auth check
+  const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
+  const state = () => wsStore()?.state || { vms: [], containers: [], nodes: [], pbs: [], lastUpdate: '' };
+  const connected = () => wsStore()?.connected() || false;
+  const reconnecting = () => wsStore()?.reconnecting() || false;
   
   // Data update indicator
   const [dataUpdated, setDataUpdated] = createSignal(false);
@@ -46,7 +48,7 @@ function App() {
   // Flash indicator when data updates
   createEffect(() => {
     // Watch for state changes
-    const updateTime = state.lastUpdate;
+    const updateTime = state().lastUpdate;
     if (updateTime && updateTime !== '') {
       setDataUpdated(true);
       window.clearTimeout(updateTimeout);
@@ -98,12 +100,16 @@ function App() {
           setNeedsAuth(true);
         } else {
           setNeedsAuth(false);
+          // Only initialize WebSocket after successful auth check
+          setWsStore(getGlobalWebSocketStore());
         }
         setIsLoading(false);
       })
       .catch(() => {
         // On error, assume no auth needed
         setNeedsAuth(false);
+        // Initialize WebSocket
+        setWsStore(getGlobalWebSocketStore());
         setIsLoading(false);
       });
     
@@ -117,8 +123,8 @@ function App() {
     window.location.reload();
   };
 
-  // Pass through the store directly
-  const enhancedStore: EnhancedStore = wsStore;
+  // Pass through the store directly (only when initialized)
+  const enhancedStore = () => wsStore();
 
   // Use Show for reactive rendering
   return (
@@ -135,7 +141,8 @@ function App() {
         fallback={<Login onLogin={handleLogin} />}
       >
         <ErrorBoundary>
-      <WebSocketContext.Provider value={enhancedStore}>
+      <Show when={enhancedStore()} fallback={<div>Initializing...</div>}>
+      <WebSocketContext.Provider value={enhancedStore()!}>
         <SecurityWarning />
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
         <div class="container w-[95%] max-w-screen-xl mx-auto">
@@ -287,10 +294,10 @@ function App() {
             <div class="p-3">
             <Show when={activeTab() === 'main'}>
               <Dashboard 
-                vms={state.vms} 
-                containers={state.containers}
-                nodes={state.nodes}
-                pbs={state.pbs}
+                vms={state().vms} 
+                containers={state().containers}
+                nodes={state().nodes}
+                pbs={state().pbs}
               />
             </Show>
             
@@ -331,6 +338,7 @@ function App() {
         <ToastContainer />
         <NotificationContainer />
       </WebSocketContext.Provider>
+      </Show>
     </ErrorBoundary>
       </Show>
     </Show>
