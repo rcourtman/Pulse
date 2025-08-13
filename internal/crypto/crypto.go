@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -183,8 +182,6 @@ func (c *CryptoManager) DecryptString(ciphertext string) (string, error) {
 	return string(decrypted), nil
 }
 
-// HashPassword creates a SHA256 hash of a password for comparison
-func HashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return base64.StdEncoding.EncodeToString(hash[:])
-}
+// Note: Password hashing has been moved to the auth package
+// which uses bcrypt for secure password hashing.
+// Never use SHA256 or other fast hashes for passwords!

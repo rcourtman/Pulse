@@ -164,7 +164,7 @@ func Load() (*Config, error) {
 		LogMaxSize:           100,
 		LogMaxAge:            30,
 		LogCompress:          true,
-		AllowedOrigins:       "*",
+		AllowedOrigins:       "", // Empty means no CORS headers (same-origin only)
 		IframeEmbeddingAllow: "SAMEORIGIN",
 		PollingInterval:      3 * time.Second,
 		DiscoverySubnet:      "auto",
@@ -291,6 +291,13 @@ func Load() (*Config, error) {
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
 		cfg.AllowedOrigins = allowedOrigins
 		log.Info().Str("origins", allowedOrigins).Msg("Overriding allowed origins from env var")
+	} else if cfg.AllowedOrigins == "" {
+		// If not configured and we're in development mode (different ports for frontend/backend)
+		// allow localhost for development convenience
+		if os.Getenv("NODE_ENV") == "development" || os.Getenv("PULSE_DEV") == "true" {
+			cfg.AllowedOrigins = "http://localhost:5173,http://localhost:7655"
+			log.Info().Msg("Development mode: allowing localhost origins")
+		}
 	}
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		cfg.LogLevel = logLevel
