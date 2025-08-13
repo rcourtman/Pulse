@@ -2,7 +2,7 @@ import { Component, Show, createSignal, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
 import { copyToClipboard } from '@/utils/clipboard';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { NodesAPI } from '@/api/nodes';
 
 interface NodeModalProps {
@@ -14,6 +14,7 @@ interface NodeModalProps {
   onSave: (nodeData: Partial<NodeConfig>) => void;
   showBackToDiscovery?: boolean;
   onBackToDiscovery?: () => void;
+  securityStatus?: any;
 }
 
 export const NodeModal: Component<NodeModalProps> = (props) => {
@@ -82,6 +83,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
       setTestResult(null);
     }
   });
+  
+  // Generate setup URL when Quick Setup tab is shown
+  // Skip auto-generation to avoid race conditions - generate on-demand when copy is clicked
 
   // Update form when editing node changes
   createEffect(() => {
@@ -464,65 +468,151 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </p>
                                 </div>
 
-                                <p class="text-blue-800 dark:text-blue-200">Run this single command on your Proxmox VE server:</p>
+                                <p class="text-blue-800 dark:text-blue-200">Just copy and run this one command on your Proxmox VE server:</p>
                                 
-                                {/* One-liner command */}
-                                <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const hostValue = formData().host || '';
-                                    const encodedHost = encodeURIComponent(hostValue);
-                                    const pulseUrl = encodeURIComponent(window.location.origin);
-                                    const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
-                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
-                                    const command = `curl -sSL "${scriptUrl}" | bash`;
-                                    if (await copyToClipboard(command)) {
-                                      showSuccess('Command copied! Run it on your server.');
-                                    }
-                                  }}
-                                  class="absolute top-2 right-2 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md transition-colors"
-                                  title="Copy command"
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                  </svg>
-                                </button>
-                                
-                                {/* Generate the one-liner command */}
-                                {(() => {
-                                  const hostValue = formData().host || '';
-                                  const encodedHost = encodeURIComponent(hostValue);
-                                  const pulseUrl = encodeURIComponent(window.location.origin);
-                                  const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
-                                  const scriptUrl = `${window.location.origin}/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
-                                  const command = `curl -sSL "${scriptUrl}" | bash`;
-                                  return (
-                                    <>
-                                      <div class="text-green-400"># Quick setup - run this command on your server:</div>
-                                      <div class="text-white break-all">{command}</div>
-                                    </>
-                                  );
-                                })()}
-                              </div>
+                                {/* One-line command */}
+                                <div class="space-y-3">
+                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                    <Show when={formData().host && formData().host.trim() !== ''}>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            // Check if host is populated
+                                            if (!formData().host || formData().host.trim() === '') {
+                                              showError('Please enter the Host URL first');
+                                              return;
+                                            }
+                                            
+                                            // Always regenerate URL when host changes
+                                            console.log('Generating setup URL with host:', formData().host);
+                                            const response = await fetch('/api/setup-script-url', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                type: 'pve',
+                                                host: formData().host,
+                                                backupPerms: formData().enableBackupManagement
+                                              })
+                                            });
+                                            
+                                            if (response.ok) {
+                                              const data = await response.json();
+                                              const cmd = `curl -sSL "${data.url}" | bash`;
+                                              if (await copyToClipboard(cmd)) {
+                                                showSuccess('Command copied to clipboard!');
+                                              }
+                                            } else {
+                                              showError('Failed to generate setup URL');
+                                            }
+                                          } catch (error) {
+                                            console.error('Failed to copy command:', error);
+                                            showError('Failed to copy command');
+                                          }
+                                        }}
+                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                    </Show>
+                                    <code class={formData().host ? "text-green-400" : "text-gray-500"}>
+                                      {formData().host 
+                                        ? 'curl -sSL "<click-copy-to-generate-secure-url>" | bash'
+                                        : '⚠️ Please enter the Host URL above first'}
+                                    </code>
+                                  </div>
+                                  
+                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                    <div class="flex items-start space-x-2">
+                                      <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                      </svg>
+                                      <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        <p class="font-semibold mb-1">If the command doesn't work:</p>
+                                        <p>Your Proxmox server may not be able to reach Pulse. Use the alternative method below.</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Alternative: Download script */}
+                                  <details class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                                    <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                                      Alternative: Download script manually
+                                    </summary>
+                                    <div class="mt-3 space-y-3">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            const hostValue = formData().host || '';
+                                            const encodedHost = encodeURIComponent(hostValue);
+                                            const pulseUrl = encodeURIComponent(window.location.origin);
+                                            const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
+                                            const scriptUrl = `/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
+                                            
+                                            // Fetch the script using the current session
+                                            const response = await fetch(scriptUrl);
+                                            if (!response.ok) {
+                                              throw new Error('Failed to fetch setup script');
+                                            }
+                                            const scriptContent = await response.text();
+                                            
+                                            // Create a blob and download
+                                            const blob = new Blob([scriptContent], { type: 'text/plain' });
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'pulse-setup.sh';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                            
+                                            showSuccess('Script downloaded! Upload it to your server and run: bash pulse-setup.sh');
+                                          } catch (error) {
+                                            console.error('Failed to download script:', error);
+                                            showSuccess('Failed to download script. Please check your connection.');
+                                          }
+                                        }}
+                                        class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+                                      >
+                                        Download pulse-setup.sh
+                                      </button>
+                                      <div class="text-xs text-gray-600 dark:text-gray-400">
+                                        1. Click to download the script<br/>
+                                        2. Upload to your server via SCP/SFTP<br/>
+                                        3. Run: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">bash pulse-setup.sh</code>
+                                      </div>
+                                    </div>
+                                  </details>
+                                </div>
                               
-                              <div class="space-y-2">
-                                <p class="text-blue-700 dark:text-blue-200 text-xs">
-                                  <strong>What this does:</strong>
-                                </p>
-                                <ul class="text-gray-600 dark:text-gray-400 text-xs ml-4 list-disc">
-                                  <li>Creates a monitoring user (pulse-monitor@pam)</li>
-                                  <li>Generates an API token</li>
-                                  <li>Sets up required permissions for monitoring</li>
-                                  <li>Automatically registers the node with Pulse</li>
+                              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">What this does:</p>
+                                <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                  <li class="flex items-start">
+                                    <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                    <span>Creates monitoring user <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">pulse-monitor@pam</code></span>
+                                  </li>
+                                  <li class="flex items-start">
+                                    <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                    <span>Generates secure API token</span>
+                                  </li>
+                                  <li class="flex items-start">
+                                    <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                    <span>Sets up monitoring permissions (PVEAuditor{formData().enableBackupManagement ? ' + backup access' : ''})</span>
+                                  </li>
+                                  <li class="flex items-start">
+                                    <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                    <span>Automatically registers node with Pulse</span>
+                                  </li>
                                 </ul>
-                                <p class="text-green-600 dark:text-green-400 text-xs mt-2">
-                                  The script automatically configures Pulse - no manual token copying needed!
-                                </p>
-                                <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                  <strong>Permissions granted:</strong> PVEAuditor (read-only) on root
-                                  {formData().enableBackupManagement && ' + PVEDatastoreAdmin on /storage (needed to read PVE backup files)'}
+                                <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
+                                  ✨ Fully automatic - no manual token copying needed!
                                 </p>
                               </div>
                             </Show>
@@ -673,59 +763,149 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                               {/* Quick Setup Tab for PBS */}
                               <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
-                                <p class="text-blue-800 dark:text-blue-200">Run this single command on your Proxmox Backup Server:</p>
+                                <p class="text-blue-800 dark:text-blue-200">Just copy and run this one command on your Proxmox Backup Server:</p>
                                 
-                                {/* One-liner command */}
-                                <div class="relative bg-white dark:bg-gray-800 rounded-md p-3 font-mono text-xs text-gray-800 dark:text-gray-200">
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const hostValue = formData().host || '';
-                                      const encodedHost = encodeURIComponent(hostValue);
-                                      const pulseUrl = encodeURIComponent(window.location.origin);
-                                      const scriptUrl = `${window.location.origin}/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
-                                      const command = `curl -sSL "${scriptUrl}" | bash`;
-                                      if (await copyToClipboard(command)) {
-                                        showSuccess('Command copied! Run it on your PBS server.');
-                                      }
-                                    }}
-                                    class="absolute top-2 right-2 p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md transition-colors"
-                                    title="Copy command"
-                                  >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                    </svg>
-                                  </button>
+                                {/* One-line command */}
+                                <div class="space-y-3">
+                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                    <Show when={formData().host && formData().host.trim() !== ''}>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            // Check if host is populated
+                                            if (!formData().host || formData().host.trim() === '') {
+                                              showError('Please enter the Host URL first');
+                                              return;
+                                            }
+                                            
+                                            // Always regenerate URL when host changes
+                                            const response = await fetch('/api/setup-script-url', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                type: 'pbs',
+                                                host: formData().host,
+                                                backupPerms: false
+                                              })
+                                            });
+                                            
+                                            if (response.ok) {
+                                              const data = await response.json();
+                                              const cmd = `curl -sSL "${data.url}" | bash`;
+                                              if (await copyToClipboard(cmd)) {
+                                                showSuccess('Command copied to clipboard!');
+                                              }
+                                            } else {
+                                              showError('Failed to generate setup URL');
+                                            }
+                                          } catch (error) {
+                                            console.error('Failed to copy command:', error);
+                                            showError('Failed to copy command');
+                                          }
+                                        }}
+                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                        title="Copy command"
+                                      >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                        </svg>
+                                      </button>
+                                    </Show>
+                                    <code class={formData().host ? "text-green-400" : "text-gray-500"}>
+                                      {formData().host 
+                                        ? 'curl -sSL "<click-copy-to-generate-secure-url>" | bash'
+                                        : '⚠️ Please enter the Host URL above first'}
+                                    </code>
+                                  </div>
                                   
-                                  {/* Generate the one-liner command */}
-                                  {(() => {
-                                    const hostValue = formData().host || '';
-                                    const encodedHost = encodeURIComponent(hostValue);
-                                    const pulseUrl = encodeURIComponent(window.location.origin);
-                                    const scriptUrl = `${window.location.origin}/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
-                                    const command = `curl -sSL "${scriptUrl}" | bash`;
-                                    return (
-                                      <>
-                                        <div class="text-green-400"># Quick setup - run this command on your PBS server:</div>
-                                        <div class="text-white break-all">{command}</div>
-                                      </>
-                                    );
-                                  })()}
+                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                    <div class="flex items-start space-x-2">
+                                      <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                      </svg>
+                                      <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        <p class="font-semibold mb-1">If the command doesn't work:</p>
+                                        <p>Your PBS server may not be able to reach Pulse. Use the alternative method below.</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Alternative: Download script */}
+                                  <details class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                                    <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                                      Alternative: Download script manually
+                                    </summary>
+                                    <div class="mt-3 space-y-3">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            const hostValue = formData().host || '';
+                                            const encodedHost = encodeURIComponent(hostValue);
+                                            const pulseUrl = encodeURIComponent(window.location.origin);
+                                            const scriptUrl = `/api/setup-script?type=pbs&host=${encodedHost}&pulse_url=${pulseUrl}`;
+                                            
+                                            // Fetch the script using the current session
+                                            const response = await fetch(scriptUrl);
+                                            if (!response.ok) {
+                                              throw new Error('Failed to fetch setup script');
+                                            }
+                                            const scriptContent = await response.text();
+                                          
+                                          // Create a blob and download
+                                          const blob = new Blob([scriptContent], { type: 'text/plain' });
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = 'pulse-pbs-setup.sh';
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          document.body.removeChild(a);
+                                          URL.revokeObjectURL(url);
+                                          
+                                          showSuccess('Script downloaded! Upload it to your PBS and run: bash pulse-pbs-setup.sh');
+                                        } catch (error) {
+                                          console.error('Failed to download script:', error);
+                                          showSuccess('Failed to download script. Please check your connection.');
+                                        }
+                                      }}
+                                      class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+                                    >
+                                      Download pulse-pbs-setup.sh
+                                    </button>
+                                    <div class="text-xs text-gray-600 dark:text-gray-400">
+                                      1. Click to download the script<br/>
+                                      2. Upload to your PBS via SCP/SFTP<br/>
+                                      3. Run: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">bash pulse-pbs-setup.sh</code>
+                                    </div>
+                                  </div>
+                                </details>
                                 </div>
                                 
-                                <div class="space-y-2">
-                                  <p class="text-blue-700 dark:text-blue-200 text-xs">
-                                    <strong>What this does:</strong>
-                                  </p>
-                                  <ul class="text-gray-600 dark:text-gray-400 text-xs ml-4 list-disc">
-                                    <li>Creates a monitoring user (pulse-monitor@pbs)</li>
-                                    <li>Generates an API token</li>
-                                    <li>Sets up Audit permissions for read-only access</li>
-                                    <li>Automatically registers the server with Pulse</li>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                  <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">What this does:</p>
+                                  <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                    <li class="flex items-start">
+                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span>Creates monitoring user <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">pulse-monitor@pbs</code></span>
+                                    </li>
+                                    <li class="flex items-start">
+                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span>Generates secure API token</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span>Sets up Audit permissions for read-only access</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                      <span class="text-green-500 mr-2 mt-0.5">✓</span>
+                                      <span>Automatically registers server with Pulse</span>
+                                    </li>
                                   </ul>
-                                  <p class="text-green-600 dark:text-green-400 text-xs mt-2">
-                                    The script automatically configures Pulse - no manual token copying needed!
+                                  <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
+                                    ✨ Fully automatic - no manual token copying needed!
                                   </p>
                                 </div>
                               </Show>

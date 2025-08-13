@@ -1,3 +1,4 @@
+import { apiFetchJSON } from '@/utils/apiClient';
 
 export interface EmailProvider {
   id?: string;
@@ -66,11 +67,7 @@ export class NotificationsAPI {
 
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
-    const response = await fetch(`${this.baseUrl}/email`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch email configuration');
-    }
-    const backendConfig = await response.json();
+    const backendConfig = await apiFetchJSON(`${this.baseUrl}/email`);
     
     // Backend already returns fields with correct names (server, port)
     return {
@@ -102,89 +99,44 @@ export class NotificationsAPI {
       provider: config.provider || ''
     };
     
-    const response = await fetch(`${this.baseUrl}/email`, {
+    return apiFetchJSON(`${this.baseUrl}/email`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(backendConfig),
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to update email configuration');
-    }
-    
-    return response.json();
   }
 
   // Webhook management
   static async getWebhooks(): Promise<Webhook[]> {
-    const response = await fetch(`${this.baseUrl}/webhooks`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch webhooks');
-    }
-    return response.json();
+    return apiFetchJSON(`${this.baseUrl}/webhooks`);
   }
 
   static async createWebhook(webhook: Omit<Webhook, 'id'>): Promise<Webhook> {
-    const response = await fetch(`${this.baseUrl}/webhooks`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(webhook),
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to create webhook');
-    }
-    
-    return response.json();
   }
 
   static async updateWebhook(id: string, webhook: Partial<Webhook>): Promise<Webhook> {
-    const response = await fetch(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(webhook),
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to update webhook');
-    }
-    
-    return response.json();
   }
 
   static async deleteWebhook(id: string): Promise<{ success: boolean }> {
-    const response = await fetch(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
       method: 'DELETE',
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to delete webhook');
-    }
-    
-    return response.json();
   }
 
   // Templates and providers
   static async getEmailProviders(): Promise<EmailProvider[]> {
-    const response = await fetch(`${this.baseUrl}/email-providers`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch email providers');
-    }
-    return response.json();
+    return apiFetchJSON(`${this.baseUrl}/email-providers`);
   }
 
   static async getWebhookTemplates(): Promise<WebhookTemplate[]> {
-    const response = await fetch(`${this.baseUrl}/webhook-templates`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch webhook templates');
-    }
-    return response.json();
+    return apiFetchJSON(`${this.baseUrl}/webhook-templates`);
   }
 
   // Testing
@@ -196,36 +148,16 @@ export class NotificationsAPI {
       body.config = request.config;
     }
     
-    const response = await fetch(`${this.baseUrl}/test`, {
+    return apiFetchJSON(`${this.baseUrl}/test`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || 'Failed to test notification');
-    }
-    
-    return response.json();
   }
 
   static async testWebhook(webhook: Webhook): Promise<{ success: boolean; message?: string }> {
-    const response = await fetch(`${this.baseUrl}/webhooks/test`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(webhook),
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || 'Failed to test webhook');
-    }
-    
-    return response.json();
   }
 }

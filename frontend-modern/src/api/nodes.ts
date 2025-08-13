@@ -1,63 +1,33 @@
 import { NodeConfig } from '../types/nodes';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 export class NodesAPI {
   private static readonly baseUrl = '/api/config/nodes';
 
   static async getNodes(): Promise<NodeConfig[]> {
-    const response = await fetch(this.baseUrl);
-    if (!response.ok) {
-      throw new Error('Failed to fetch nodes');
-    }
     // The API returns an array of nodes directly
-    const nodes: NodeConfig[] = await response.json();
+    const nodes: NodeConfig[] = await apiFetchJSON(this.baseUrl);
     return nodes;
   }
 
   static async addNode(node: NodeConfig): Promise<{ success: boolean; message?: string }> {
-    const response = await fetch(this.baseUrl, {
+    return apiFetchJSON(this.baseUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(node),
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to add node: ${error}`);
-    }
-    
-    return response.json();
   }
 
   static async updateNode(nodeId: string, node: NodeConfig): Promise<{ success: boolean; message?: string }> {
-    const response = await fetch(`${this.baseUrl}/${nodeId}`, {
+    return apiFetchJSON(`${this.baseUrl}/${nodeId}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(node),
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to update node: ${error}`);
-    }
-    
-    return response.json();
   }
 
   static async deleteNode(nodeId: string): Promise<{ success: boolean; message?: string }> {
-    const response = await fetch(`${this.baseUrl}/${nodeId}`, {
+    return apiFetchJSON(`${this.baseUrl}/${nodeId}`, {
       method: 'DELETE',
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to delete node: ${error}`);
-    }
-    
-    return response.json();
   }
 
   static async testConnection(node: NodeConfig): Promise<{ 
@@ -68,20 +38,10 @@ export class NodesAPI {
     clusterNodeCount?: number;
     datastoreCount?: number;
   }> {
-    const response = await fetch(`${this.baseUrl}/test-connection`, {
+    return apiFetchJSON(`${this.baseUrl}/test-connection`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(node),
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-    
-    return response.json();
   }
 
   static async testExistingNode(nodeId: string): Promise<{ 
@@ -89,15 +49,8 @@ export class NodesAPI {
     message?: string; 
     latency?: number;
   }> {
-    const response = await fetch(`${this.baseUrl}/${nodeId}/test`, {
+    return apiFetchJSON(`${this.baseUrl}/${nodeId}/test`, {
       method: 'POST',
     });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-    
-    return response.json();
   }
 }
