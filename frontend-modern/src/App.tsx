@@ -9,6 +9,7 @@ import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationContainer from './components/NotificationContainer';
 import { SecurityWarning } from './components/SecurityWarning';
+import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
 import { UpdatesAPI } from './api/updates';
@@ -30,6 +31,10 @@ export const useWebSocket = () => {
 };
 
 function App() {
+  // Simple auth state
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [needsAuth, setNeedsAuth] = createSignal(false);
+  
   // Get singleton WebSocket store
   const wsStore = getGlobalWebSocketStore();
   const { state, connected, reconnecting } = wsStore;
@@ -79,21 +84,57 @@ function App() {
     document.documentElement.classList.add('dark');
   }
   
-  // Load version info on mount
-  onMount(async () => {
-    try {
-      const version = await UpdatesAPI.getVersion();
-      setVersionInfo(version);
-    } catch (error) {
-      console.error('Failed to load version:', error);
-    }
+  // Check auth on mount
+  onMount(() => {
+    fetch('/api/state', {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      credentials: 'include'
+    })
+      .then(response => {
+        if (response.status === 401) {
+          setNeedsAuth(true);
+        } else {
+          setNeedsAuth(false);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        // On error, assume no auth needed
+        setNeedsAuth(false);
+        setIsLoading(false);
+      });
+    
+    // Load version info
+    UpdatesAPI.getVersion()
+      .then(version => setVersionInfo(version))
+      .catch(error => console.error('Failed to load version:', error));
   });
+  
+  const handleLogin = () => {
+    window.location.reload();
+  };
 
   // Pass through the store directly
   const enhancedStore: EnhancedStore = wsStore;
 
+  // Use Show for reactive rendering
   return (
-    <ErrorBoundary>
+    <Show 
+      when={!isLoading()} 
+      fallback={
+        <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div class="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      }
+    >
+      <Show 
+        when={!needsAuth()} 
+        fallback={<Login onLogin={handleLogin} />}
+      >
+        <ErrorBoundary>
       <WebSocketContext.Provider value={enhancedStore}>
         <SecurityWarning />
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -291,6 +332,8 @@ function App() {
         <NotificationContainer />
       </WebSocketContext.Provider>
     </ErrorBoundary>
+      </Show>
+    </Show>
   );
 }
 

@@ -2,9 +2,9 @@ import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } 
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
-import RegistrationTokens from './RegistrationTokens';
 import { APITokenManager } from './APITokenManager';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -93,6 +93,7 @@ const Settings: Component = () => {
   const [editingNode, setEditingNode] = createSignal<NodeConfigWithStatus | null>(null);
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
+  const [showPasswordModal, setShowPasswordModal] = createSignal(false);
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
@@ -1476,78 +1477,64 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
-              {/* Show Quick Setup when no auth, otherwise show management tools */}
-              <Show 
-                when={securityStatus() && !securityStatus()!.hasAuthentication}
-                fallback={
-                  <>
-                    {/* Only show API token manager when auth is enabled */}
-                    <div>
-                      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Tokens</h3>
-                      <APITokenManager />
-                    </div>
-                  </>
-                }
-              >
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Security Setup</h3>
-                  <QuickSecuritySetup />
+              {/* Authentication Status */}
+              <Show when={securityStatus()?.hasAuthentication}>
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Authentication</h3>
+                    <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-md">
+                      Enabled
+                    </span>
+                  </div>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Login required to access Pulse
+                  </p>
+                  <button
+                    onClick={() => setShowPasswordModal(true)}
+                    class="mt-4 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                  >
+                    Change Password
+                  </button>
                 </div>
               </Show>
 
-              <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
-                
-                <Show when={securityStatus() && !securityStatus()!.exportProtected}>
-                  <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-                    <div class="flex items-start">
-                      <svg class="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <div>
-                        <p class="text-sm font-medium text-red-800 dark:text-red-200">Export/Import Blocked</p>
-                        <p class="text-xs text-red-700 dark:text-red-300 mt-1">
-                          Configuration export/import requires API token protection.
-                        </p>
-                        <p class="text-xs text-red-700 dark:text-red-300 mt-1">
-                          For homelab use, set <code class="font-mono bg-red-100 dark:bg-red-800 px-1 rounded">ALLOW_UNPROTECTED_EXPORT=true</code>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </Show>
-                
+              {/* Show setup when no auth */}
+              <Show when={!securityStatus()?.hasAuthentication}>
+                <QuickSecuritySetup />
+              </Show>
+
+              {/* API Tokens */}
+              <Show when={securityStatus()?.hasAuthentication}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                    Export or import your entire Pulse configuration. Exports are encrypted with your passphrase.
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Tokens</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Secure API access for automation and exports
                   </p>
-                  <div class="flex gap-3">
-                    <button
-                      onClick={() => setShowExportDialog(true)}
-                      class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      Export Configuration
-                    </button>
-                    <button
-                      onClick={() => setShowImportDialog(true)}
-                      class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
-                    >
-                      Import Configuration
-                    </button>
-                  </div>
+                  <APITokenManager />
+                </div>
+              </Show>
+
+              {/* Backup & Restore */}
+              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
+                <div class="flex gap-3">
+                  <button
+                    onClick={() => setShowExportDialog(true)}
+                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Export
+                  </button>
+                  <button
+                    onClick={() => setShowImportDialog(true)}
+                    class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
+                  >
+                    Import
+                  </button>
                 </div>
               </div>
 
-              {/* Only show advanced features when auth is enabled */}
-              <Show when={securityStatus()?.hasAuthentication}>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Node Registration</h3>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                    Control how new nodes can register with your Pulse instance.
-                  </p>
-                  <RegistrationTokens />
-                </div>
-              </Show>
+              {/* Advanced - Only show if auth is enabled */}
+              {/* Advanced Options section removed - was only used for Registration Tokens */}
             </div>
           </Show>
           
@@ -1773,6 +1760,7 @@ const Settings: Component = () => {
           }}
           nodeType="pve"
           editingNode={editingNode()?.type === 'pve' ? editingNode() ?? undefined : undefined}
+          securityStatus={securityStatus()}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
@@ -1831,6 +1819,7 @@ const Settings: Component = () => {
           }}
           nodeType="pbs"
           editingNode={editingNode()?.type === 'pbs' ? editingNode() ?? undefined : undefined}
+          securityStatus={securityStatus()}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
@@ -2075,6 +2064,11 @@ const Settings: Component = () => {
           </div>
         </div>
       </Show>
+      
+      <ChangePasswordModal
+        isOpen={showPasswordModal()}
+        onClose={() => setShowPasswordModal(false)}
+      />
     </>
   );
 };

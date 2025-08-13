@@ -64,8 +64,7 @@ export function APITokenManager() {
   };
 
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">API Token Management</h4>
+    <div>
       
       <Show when={error()}>
         <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -77,8 +76,8 @@ export function APITokenManager() {
         when={tokenStatus()?.hasToken}
         fallback={
           <div class="space-y-4">
-            <p class="text-xs text-gray-600 dark:text-gray-400">
-              No API token is currently configured. Generate one to secure your Pulse instance.
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              No token configured
             </p>
             
             <button
@@ -86,30 +85,22 @@ export function APITokenManager() {
               disabled={loading()}
               class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading() ? 'Generating...' : 'Generate API Token'}
+              {loading() ? 'Generating...' : 'Generate Token'}
             </button>
-            
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <p class="text-xs text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> Once generated, the API token will be required for all configuration changes, 
-                exports, and imports. Make sure to save it securely!
-              </p>
-            </div>
           </div>
         }
       >
         <div class="space-y-4">
           <div class="flex items-center justify-between">
             <p class="text-sm text-gray-600 dark:text-gray-400">
-              API token is configured and active
+              Token active
             </p>
-            <div class="flex items-center gap-2">
-              <Show when={localStorage.getItem('apiToken')}>
-                <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
-                  Token stored locally
-                </span>
-              </Show>
-            </div>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              class="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+            >
+              Delete
+            </button>
           </div>
 
           <Show when={generatedToken() && showToken()}>
