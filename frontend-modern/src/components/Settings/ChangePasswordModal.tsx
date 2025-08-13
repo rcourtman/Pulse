@@ -37,16 +37,30 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
     setLoading(true);
 
     try {
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('pulse_csrf='))
+        ?.split('=')[1];
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${btoa(`admin:${currentPassword()}`)}`,
+      };
+      
+      // Add CSRF token if available
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+
       const response = await fetch('/api/security/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${btoa(`admin:${currentPassword()}`)}`,
-        },
+        headers,
         body: JSON.stringify({
           currentPassword: currentPassword(),
           newPassword: newPassword(),
         }),
+        credentials: 'include',
       });
 
       if (!response.ok) {
