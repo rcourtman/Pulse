@@ -473,7 +473,19 @@ func (m *Manager) extractTarball(src, dest string) error {
 			return err
 		}
 
-		target := filepath.Join(dest, header.Name)
+		// Sanitize the path to prevent directory traversal attacks
+		cleanName := filepath.Clean(header.Name)
+		
+		// Check for path traversal attempts
+		if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
+			return fmt.Errorf("unsafe path in archive: %s", header.Name)
+		}
+		
+		// Ensure the target path is within the destination directory
+		target := filepath.Join(dest, cleanName)
+		if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) && target != filepath.Clean(dest) {
+			return fmt.Errorf("path escapes destination directory: %s", header.Name)
+		}
 		
 		switch header.Typeflag {
 		case tar.TypeDir:

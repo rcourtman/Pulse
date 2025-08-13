@@ -67,6 +67,25 @@ func (h *ConfigHandlers) cleanupExpiredTokens() {
 	}
 }
 
+// sanitizeErrorMessage returns a safe error message for external responses
+// It logs the detailed error internally while returning a generic message
+func sanitizeErrorMessage(err error, operation string) string {
+	// Log the detailed error internally
+	log.Error().Err(err).Str("operation", operation).Msg("Operation failed")
+	
+	// Return generic messages based on operation type
+	switch operation {
+	case "create_client":
+		return "Failed to initialize connection"
+	case "connection":
+		return "Connection failed. Please check your credentials and network settings"
+	case "validation":
+		return "Invalid configuration"
+	default:
+		return "Operation failed"
+	}
+}
+
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
 	Type              string `json:"type"` // "pve" or "pbs"
@@ -577,7 +596,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		
 		tempClient, err := proxmox.NewClient(clientConfig)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
 		
@@ -587,7 +606,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		
 		nodes, err := tempClient.GetNodes(ctx)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
 		
@@ -661,7 +680,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		
 		tempClient, err := pbs.NewClient(clientConfig)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
 		
@@ -671,7 +690,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		
 		datastores, err := tempClient.GetDatastores(ctx)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
 		
@@ -1053,7 +1072,7 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 		
 		tempClient, err := proxmox.NewClient(clientConfig)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
 		
@@ -1062,7 +1081,7 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 		
 		nodes, err := tempClient.GetNodes(ctx)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
 		
@@ -1088,7 +1107,7 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 		
 		tempClient, err := pbs.NewClient(clientConfig)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create client: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
 		
@@ -1097,7 +1116,7 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 		
 		datastores, err := tempClient.GetDatastores(ctx)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Connection failed: %v", err), http.StatusBadRequest)
+			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
 		
@@ -1137,7 +1156,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			testResult = map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("Failed to create client: %v", err),
+				"message": sanitizeErrorMessage(err, "create_client"),
 			}
 		} else {
 			// Test connection by getting nodes list
@@ -1148,7 +1167,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			if nodes, err := client.GetNodes(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
-					"message": fmt.Sprintf("Connection failed: %v", err),
+					"message": sanitizeErrorMessage(err, "connection"),
 				}
 			} else {
 				latency := time.Since(startTime).Milliseconds()
@@ -1174,7 +1193,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			testResult = map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("Failed to create client: %v", err),
+				"message": sanitizeErrorMessage(err, "create_client"),
 			}
 		} else {
 			// Test connection by getting datastores
@@ -1185,7 +1204,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			if _, err := client.GetDatastores(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
-					"message": fmt.Sprintf("Connection failed: %v", err),
+					"message": sanitizeErrorMessage(err, "connection"),
 				}
 			} else {
 				latency := time.Since(startTime).Milliseconds()
@@ -1250,7 +1269,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			testResult = map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("Failed to create client: %v", err),
+				"message": sanitizeErrorMessage(err, "create_client"),
 			}
 		} else {
 			// Test connection by getting nodes list
@@ -1261,7 +1280,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 			if nodes, err := client.GetNodes(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
-					"message": fmt.Sprintf("Connection failed: %v", err),
+					"message": sanitizeErrorMessage(err, "connection"),
 				}
 			} else {
 				latency := time.Since(startTime).Milliseconds()
@@ -1289,7 +1308,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			testResult = map[string]interface{}{
 				"status":  "error",
-				"message": fmt.Sprintf("Failed to create client: %v", err),
+				"message": sanitizeErrorMessage(err, "create_client"),
 			}
 		} else {
 			// Test connection by getting datastores
@@ -1300,7 +1319,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 			if _, err := client.GetDatastores(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
-					"message": fmt.Sprintf("Connection failed: %v", err),
+					"message": sanitizeErrorMessage(err, "connection"),
 				}
 			} else {
 				latency := time.Since(startTime).Milliseconds()
