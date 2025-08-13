@@ -125,13 +125,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		}
 	}
 	
-	log.Info().
+	log.Debug().
 		Str("user", user).
 		Str("realm", realm).
-		Str("tokenName", tokenName).
-		Str("originalTokenName", cfg.TokenName).
-		Bool("hasTokenValue", cfg.TokenValue != "").
-		Msg("Parsed authentication details")
+		Bool("hasToken", cfg.TokenValue != "").
+		Msg("Proxmox client configured")
 
 	client := &Client{
 		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",

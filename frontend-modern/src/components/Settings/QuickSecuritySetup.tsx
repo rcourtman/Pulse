@@ -50,35 +50,21 @@ export const QuickSecuritySetup: Component = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        credentials: 'include'  // Include cookies for CSRF token
       });
 
       if (!response.ok) {
         throw new Error('Failed to restart Pulse');
       }
 
-      showSuccess('Restarting Pulse... The page will reload when ready.');
+      showSuccess('Restarting Pulse... You will be redirected to login.');
       
-      // Wait a bit then start checking if Pulse is back
+      // Wait for restart then redirect to login
       setTimeout(() => {
-        const checkInterval = setInterval(async () => {
-          try {
-            // Try to fetch with the new credentials
-            const checkResponse = await fetch('/api/health', {
-              headers: {
-                'Authorization': `Basic ${btoa(`${credentials()!.username}:${credentials()!.password}`)}`
-              }
-            });
-            if (checkResponse.ok) {
-              clearInterval(checkInterval);
-              // Reload the page to prompt for login
-              window.location.reload();
-            }
-          } catch (e) {
-            // Server not ready yet, keep checking
-          }
-        }, 2000);
-      }, 3000);
+        // Just reload - the auth check in App.tsx will show the login page
+        window.location.reload();
+      }, 5000);
     } catch (error) {
       showError(`Failed to restart: ${error}`);
       setIsRestarting(false);
@@ -102,7 +88,8 @@ export const QuickSecuritySetup: Component = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(newCredentials)
+        body: JSON.stringify(newCredentials),
+        credentials: 'include'  // Include cookies for CSRF
       });
 
       if (!response.ok) {
