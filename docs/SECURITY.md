@@ -192,9 +192,36 @@ curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 - Protects auto-registration endpoint
 - Enable by setting API_TOKEN environment variable
 
+## CORS (Cross-Origin Resource Sharing)
+
+By default, Pulse only allows same-origin requests (no CORS headers). This is the most secure configuration.
+
+### Configuring CORS for External Access
+
+If you need to access Pulse API from a different domain:
+
+```bash
+# Docker
+docker run -e ALLOWED_ORIGINS="https://app.example.com" rcourtman/pulse:latest
+
+# systemd
+sudo systemctl edit pulse-backend
+[Service]
+Environment="ALLOWED_ORIGINS=https://app.example.com"
+
+# Multiple origins (comma-separated)
+ALLOWED_ORIGINS="https://app.example.com,https://dashboard.example.com"
+
+# Development mode (allows localhost)
+PULSE_DEV=true
+```
+
+**Security Note**: Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
+
 ## Troubleshooting
 
 **Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
 **Can't login?** Check PULSE_PASSWORD environment variable
 **API access denied?** Verify API_TOKEN is correct
+**CORS errors?** Configure ALLOWED_ORIGINS for your domain

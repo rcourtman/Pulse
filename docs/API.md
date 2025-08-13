@@ -207,6 +207,16 @@ GET /api/config/system   # Get system config
 POST /api/config/system  # Update system config
 ```
 
+### API Token Management
+Manage API tokens for programmatic access.
+
+```bash
+GET /api/system/api-token           # Get token status
+GET /api/system/api-token?reveal=true  # Get actual token (auth required)
+POST /api/system/api-token/generate # Generate new token
+DELETE /api/system/api-token/delete # Remove token
+```
+
 ### Export/Import Configuration
 Backup and restore Pulse configuration.
 
