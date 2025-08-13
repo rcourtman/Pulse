@@ -1,6 +1,7 @@
 package api
 
 import (
+	base64Pkg "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -189,6 +190,7 @@ func (r *Router) setupRoutes() {
 	
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
+	r.mux.HandleFunc("/api/security/remove-password", r.handleRemovePassword)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -900,6 +902,116 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		exec.Command("systemctl", "daemon-reload").Run()
 		exec.Command("systemctl", "restart", "pulse-backend").Run()
 	}()
+}
+
+// handleRemovePassword handles password removal requests
+func (r *Router) handleRemovePassword(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only POST method is allowed", nil)
+		return
+	}
+
+	// Parse request
+	var removeReq struct {
+		CurrentPassword string `json:"currentPassword"`
+	}
+	
+	if err := json.NewDecoder(req.Body).Decode(&removeReq); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+			"Invalid request body", nil)
+		return
+	}
+
+	// Verify current password matches
+	auth := req.Header.Get("Authorization")
+	if auth == "" {
+		// Try the provided password
+		if removeReq.CurrentPassword == "" {
+			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+				"Current password required", nil)
+			return
+		}
+		// Create basic auth header from provided password
+		credentials := base64Pkg.StdEncoding.EncodeToString([]byte(r.config.AuthUser + ":" + removeReq.CurrentPassword))
+		req.Header.Set("Authorization", "Basic "+credentials)
+	}
+
+	// Verify authentication
+	if !CheckAuth(r.config, nil, req) {
+		writeErrorResponse(w, http.StatusUnauthorized, "invalid_password", 
+			"Current password is incorrect", nil)
+		return
+	}
+
+	// For systemd installations, we need to remove the override file
+	// Check if we're running under systemd
+	overridePath := "/etc/systemd/system/pulse-backend.service.d/override.conf"
+	if _, err := os.Stat(overridePath); err == nil {
+		// Read the override file
+		content, err := os.ReadFile(overridePath)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to read override file")
+			writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+				"Failed to read configuration", nil)
+			return
+		}
+
+		// Remove the password lines
+		lines := strings.Split(string(content), "\n")
+		newLines := []string{}
+		for _, line := range lines {
+			if !strings.HasPrefix(line, "Environment=\"PULSE_AUTH_USER=") && 
+			   !strings.HasPrefix(line, "Environment=\"PULSE_AUTH_PASS=") &&
+			   !strings.HasPrefix(line, "Environment=\"PULSE_PASSWORD=") {
+				newLines = append(newLines, line)
+			}
+		}
+
+		// Write back the file
+		newContent := strings.Join(newLines, "\n")
+		if err := os.WriteFile(overridePath, []byte(newContent), 0600); err != nil {
+			log.Error().Err(err).Msg("Failed to write override file")
+			writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+				"Failed to save configuration", nil)
+			return
+		}
+		
+		// Also check /etc/pulse/security-override.conf
+		securityOverridePath := "/etc/pulse/security-override.conf"
+		if content, err := os.ReadFile(securityOverridePath); err == nil {
+			lines := strings.Split(string(content), "\n")
+			newLines := []string{}
+			for _, line := range lines {
+				if !strings.HasPrefix(line, "Environment=\"PULSE_AUTH_USER=") && 
+				   !strings.HasPrefix(line, "Environment=\"PULSE_AUTH_PASS=") &&
+				   !strings.HasPrefix(line, "Environment=\"PULSE_PASSWORD=") {
+					newLines = append(newLines, line)
+				}
+			}
+			newContent := strings.Join(newLines, "\n")
+			os.WriteFile(securityOverridePath, []byte(newContent), 0600)
+		}
+	}
+	
+	// Clear password from running config
+	r.config.AuthUser = ""
+	r.config.AuthPass = ""
+	
+	log.Info().Msg("Password authentication removed successfully")
+	
+	// Invalidate all sessions (forces logout)
+	InvalidateUserSessions(r.config.AuthUser)
+	
+	// Audit log password removal
+	LogAuditEvent("password_removed", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password authentication disabled")
+	
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Password authentication removed successfully",
+	})
 }
 
 // handleState handles state requests
