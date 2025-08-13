@@ -92,10 +92,30 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 
 ## Security Features
 
-- **Encryption**: Exports are always encrypted (AES-256-GCM)
-- **Rate Limiting**: 5 attempts per minute on export/import
-- **Minimum Passphrase**: 12 characters required
+### Core Protection
+- **Encryption**: All credentials encrypted at rest (AES-256-GCM)
+- **Export Protection**: Exports always encrypted with passphrase
+- **Minimum Passphrase**: 12 characters required for exports
 - **Security Tab**: Check status in Settings → Security
+
+### Enterprise Security (When Authentication Enabled)
+- **CSRF Protection**: All state-changing operations require CSRF tokens
+- **Rate Limiting**: 
+  - General API: 500 requests/minute
+  - Authentication: 10 attempts/minute
+  - Export/Import: 5 attempts/minute
+- **Account Lockout**: Locks after 5 failed login attempts (15 minute cooldown)
+- **Session Management**: 
+  - Secure HttpOnly cookies
+  - 24-hour session expiry
+  - Session invalidation on password change
+- **Password Security**: bcrypt hashing with cost 12
+- **Security Headers**: 
+  - Content-Security-Policy
+  - X-Frame-Options: DENY
+  - X-Content-Type-Options: nosniff
+  - X-XSS-Protection
+- **Audit Logging**: All authentication events logged
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)
@@ -107,70 +127,74 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 - Threshold settings
 - General configuration
 
-## Registration Tokens
+## Authentication
 
-Secure your Pulse instance by requiring tokens for node auto-registration.
+Pulse supports multiple authentication methods that can be used independently or together:
 
-### Token Management (v4.0+)
-Access via **Settings → Security → Registration Tokens**
+### Password Authentication
+Protect your Pulse instance with a password. Passwords are automatically hashed with bcrypt for security.
+
+```bash
+# Using systemd
+sudo systemctl edit pulse-backend
+# Add:
+[Service]
+Environment="PULSE_PASSWORD=your-secure-password"
+
+# Docker
+docker run -e PULSE_PASSWORD=your-password rcourtman/pulse:latest
+```
 
 #### Features
-- Generate time-limited registration tokens
-- Set maximum usage count per token
-- Restrict tokens to specific node types (PVE/PBS)
-- Add descriptions for token identification
-- Revoke tokens immediately when needed
+- Web UI login required when password is set
+- Change password from Settings → Security  
+- Passwords hashed with bcrypt (cost 12)
+- Session-based authentication with secure HttpOnly cookies
+- 24-hour session expiry
+- CSRF protection for all state-changing operations
+- Session invalidation on password change
 
-#### Configuration Options
+### API Token Authentication  
+For programmatic access and automation. Tokens can be generated and managed via the web UI.
+
 ```bash
-# Require tokens for all registrations (recommended for production)
-Environment="REQUIRE_REGISTRATION_TOKEN=true"
+# Using systemd
+sudo systemctl edit pulse-backend
+# Add:
+[Service]
+Environment="API_TOKEN=your-secure-token"
 
-# Allow registration without tokens (default - homelab friendly)
-Environment="ALLOW_UNPROTECTED_AUTO_REGISTER=true"
-
-# Default token validity (seconds)
-Environment="REGISTRATION_TOKEN_DEFAULT_VALIDITY=1800"
-
-# Default max uses per token
-Environment="REGISTRATION_TOKEN_DEFAULT_MAX_USES=1"
+# Docker
+docker run -e API_TOKEN=your-token rcourtman/pulse:latest
 ```
 
-#### Usage Flow
-1. **Admin**: Generate token in Settings → Security → Registration Tokens
-2. **Admin**: Copy token (format: `PULSE-REG-xxxxxxxxxxxx`)
-3. **Node Setup**: Include token in setup script or auto-register request
-4. **System**: Validates token and decrements usage count
-5. **System**: Auto-expires token after validity period
+#### Token Management (Settings → Security → API Token)
+- Generate new tokens via web UI when authenticated
+- View existing token anytime (authenticated users only)
+- Regenerate tokens without disrupting service
+- Delete tokens to disable API access
 
-#### Setup Script Integration
+#### Usage
 ```bash
-# Include token when running setup script
-PULSE_REG_TOKEN=PULSE-REG-xxxxxxxxxxxx ./setup.sh
-
-# Or in auto-register API call
-curl -X POST "https://pulse-server:7655/api/auto-register" \
-  -H "X-Registration-Token: PULSE-REG-xxxxxxxxxxxx" \
-  -d "$NODE_DATA"
+# Include token in X-API-Token header
+curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 ```
 
-### Security Modes
+### Auto-Registration Security
 
-#### Homelab Mode (Default)
-- Registration tokens optional
-- Nodes can register without authentication
+#### Default Mode (Homelab Friendly)
+- Nodes can auto-register without authentication
 - Suitable for trusted networks
-- Enable with: `ALLOW_UNPROTECTED_AUTO_REGISTER=true`
+- Setup scripts work without additional configuration
 
-#### Production Mode
-- All registrations require valid token
-- Tokens expire after set time
-- Usage limits enforced
-- Enable with: `REQUIRE_REGISTRATION_TOKEN=true`
+#### Secure Mode
+- Require API token for all operations
+- Protects auto-registration endpoint
+- Enable by setting API_TOKEN environment variable
 
 ## Troubleshooting
 
 **Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
-**Registration failing?** Check if REQUIRE_REGISTRATION_TOKEN is enabled
-**Token not working?** Verify it hasn't expired or exceeded usage limit
+**Can't login?** Check PULSE_PASSWORD environment variable
+**API access denied?** Verify API_TOKEN is correct

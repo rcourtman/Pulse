@@ -632,12 +632,14 @@ ENABLE_AUDIT_LOG=true
 
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Add CORS headers if configured
-	if r.config.AllowedOrigins != "" {
-		w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token")
-	}
+	// Apply security headers first
+	SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Add CORS headers if configured
+		if r.config.AllowedOrigins != "" {
+			w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token")
+		}
 
 	// Handle preflight requests
 	if req.Method == "OPTIONS" {
@@ -729,32 +731,50 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Add security headers for API endpoints
-	if strings.HasPrefix(req.URL.Path, "/api/") || strings.HasPrefix(req.URL.Path, "/ws") {
-		r.addSecurityHeaders(w)
-	}
+		// Check CSRF for state-changing requests
+		// CSRF is only needed when using session-based auth
+		if strings.HasPrefix(req.URL.Path, "/api/") && !CheckCSRF(w, req) {
+			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
+			LogAuditEvent("csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
+			return
+		}
+		
+		// Apply rate limiting for API endpoints
+		if strings.HasPrefix(req.URL.Path, "/api/") {
+			// Skip rate limiting for certain high-frequency endpoints
+			skipRateLimit := false
+			for _, path := range []string{
+				"/api/state",           // WebSocket updates
+				"/api/guests/metadata", // Guest metadata (many requests)
+				"/api/health",          // Health checks
+				"/ws",                  // WebSocket
+			} {
+				if strings.Contains(req.URL.Path, path) {
+					skipRateLimit = true
+					break
+				}
+			}
+			
+			if !skipRateLimit {
+				clientIP := GetClientIP(req)
+				if !apiLimiter.Allow(clientIP) {
+					http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+					return
+				}
+			}
+		}
 
-	// Log request
-	start := time.Now()
-	r.mux.ServeHTTP(w, req)
-	log.Debug().
-		Str("method", req.Method).
-		Str("path", req.URL.Path).
-		Dur("duration", time.Since(start)).
-		Msg("Request handled")
+		// Log request
+		start := time.Now()
+		r.mux.ServeHTTP(w, req)
+		log.Debug().
+			Str("method", req.Method).
+			Str("path", req.URL.Path).
+			Dur("duration", time.Since(start)).
+			Msg("Request handled")
+	})).ServeHTTP(w, req)
 }
 
-// addSecurityHeaders adds security headers to the response
-func (r *Router) addSecurityHeaders(w http.ResponseWriter) {
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", r.config.IframeEmbeddingAllow)
-	w.Header().Set("X-XSS-Protection", "1; mode=block")
-	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	
-	// CSP header
-	csp := "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.socket.io; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' ws: wss: http: https:; font-src 'self' https://cdn.jsdelivr.net;"
-	w.Header().Set("Content-Security-Policy", csp)
-}
 
 // handleHealth handles health check requests
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -859,6 +879,12 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	log.Info().Msg("Password changed successfully")
+	
+	// Invalidate all sessions for this user (forces re-login with new password)
+	InvalidateUserSessions(r.config.AuthUser)
+	
+	// Audit log password change
+	LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed")
 	
 	// Return success
 	w.Header().Set("Content-Type", "application/json")

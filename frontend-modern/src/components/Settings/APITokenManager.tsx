@@ -5,16 +5,29 @@ export function APITokenManager() {
   const [tokenStatus, setTokenStatus] = createSignal<APITokenStatus | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [showToken, setShowToken] = createSignal(false);
-  const [generatedToken, setGeneratedToken] = createSignal<string | null>(null);
+  const [currentToken, setCurrentToken] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
 
-  // Load initial status
+  // Load initial status and fetch the actual token if it exists
   onMount(async () => {
     try {
       const status = await SystemAPI.getAPITokenStatus();
       setTokenStatus(status);
+      
+      // If there's a token, fetch it immediately
+      if (status.hasToken) {
+        try {
+          const tokenData = await SystemAPI.getAPIToken(true);
+          if (tokenData.token) {
+            setCurrentToken(tokenData.token);
+            setShowToken(true);
+          }
+        } catch (err) {
+          console.error('Failed to fetch existing API token:', err);
+        }
+      }
     } catch (err) {
       console.error('Failed to load API token status:', err);
     }
@@ -26,7 +39,7 @@ export function APITokenManager() {
     try {
       const result = await SystemAPI.generateAPIToken();
       setTokenStatus(result);
-      setGeneratedToken(result.token || null);
+      setCurrentToken(result.token || null);
       setShowToken(true);
     } catch (err: any) {
       setError(err.message || 'Failed to generate token');
@@ -41,7 +54,7 @@ export function APITokenManager() {
     try {
       await SystemAPI.deleteAPIToken();
       setTokenStatus({ hasToken: false });
-      setGeneratedToken(null);
+      setCurrentToken(null);
       setShowToken(false);
       setShowDeleteConfirm(false);
     } catch (err: any) {
@@ -52,13 +65,36 @@ export function APITokenManager() {
   };
 
   const copyToClipboard = async () => {
-    if (generatedToken()) {
+    if (currentToken()) {
       try {
-        await navigator.clipboard.writeText(generatedToken()!);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        // Check if clipboard API is available (requires HTTPS in most browsers)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(currentToken()!);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } else {
+          // Fallback for HTTP or unsupported browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = currentToken()!;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            document.execCommand('copy');
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          } catch (err) {
+            console.error('Failed to copy:', err);
+            setError('Failed to copy - please select and copy manually');
+          } finally {
+            document.body.removeChild(textArea);
+          }
+        }
       } catch (err) {
         console.error('Failed to copy:', err);
+        setError('Failed to copy - please select and copy manually');
       }
     }
   };
@@ -103,15 +139,15 @@ export function APITokenManager() {
             </button>
           </div>
 
-          <Show when={generatedToken() && showToken()}>
-            <div class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
-                New API Token Generated - Save This Now!
+          <Show when={currentToken() && showToken()}>
+            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                API Token
               </p>
               <div class="relative">
                 <input
                   type="text"
-                  value={generatedToken()!}
+                  value={currentToken()!}
                   readonly
                   class="w-full px-3 py-2 pr-20 text-xs font-mono bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
                   onClick={(e) => e.currentTarget.select()}
@@ -123,8 +159,8 @@ export function APITokenManager() {
                   {copied() ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
-                This token will not be shown again. Copy it now and store it securely.
+              <p class="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                Use this token for API authentication. Keep it secure!
               </p>
             </div>
           </Show>

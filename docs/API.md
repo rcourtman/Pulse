@@ -6,9 +6,26 @@ Pulse provides a REST API for monitoring and managing Proxmox VE and PBS instanc
 
 ## Authentication
 
-API authentication is optional but recommended for production use.
+Pulse supports multiple authentication methods that can be used independently or together:
 
-### Setting up API Authentication
+### Password Authentication
+Set a password for web UI access. Passwords are hashed with bcrypt (cost 12) for security.
+
+```bash
+# Systemd
+sudo systemctl edit pulse-backend
+# Add:
+[Service]
+Environment="PULSE_PASSWORD=your-secure-password"
+
+# Docker
+docker run -e PULSE_PASSWORD=your-password rcourtman/pulse:latest
+```
+
+Once set, users must login via the web UI. The password can be changed from Settings → Security.
+
+### API Token Authentication
+For programmatic API access and automation. Tokens can be generated and managed via the web UI (Settings → Security → API Token).
 
 ```bash
 # Systemd
@@ -21,12 +38,47 @@ Environment="API_TOKEN=your-secure-token-here"
 docker run -e API_TOKEN=your-secure-token rcourtman/pulse:latest
 ```
 
-### Using API Authentication
-
-Include the token in the `X-API-Token` header:
+### Using Authentication
 
 ```bash
+# With API Token (header)
 curl -H "X-API-Token: your-secure-token" http://localhost:7655/api/health
+
+# With API Token (query parameter, for export/import)
+curl "http://localhost:7655/api/export?token=your-secure-token"
+
+# With session cookie (after login)
+curl -b cookies.txt http://localhost:7655/api/health
+```
+
+### Security Features
+
+When authentication is enabled, Pulse provides enterprise-grade security:
+
+- **CSRF Protection**: All state-changing requests require a CSRF token
+- **Rate Limiting**: 500 req/min general, 10 attempts/min for authentication
+- **Account Lockout**: Locks after 5 failed attempts (15 minute cooldown)
+- **Secure Sessions**: HttpOnly cookies, 24-hour expiry
+- **Security Headers**: CSP, X-Frame-Options, X-Content-Type-Options, etc.
+- **Audit Logging**: All security events are logged
+
+### CSRF Token Usage
+
+When using session authentication, include the CSRF token for state-changing requests:
+
+```javascript
+// Get CSRF token from cookie
+const csrfToken = getCookie('pulse_csrf');
+
+// Include in request header
+fetch('/api/nodes', {
+  method: 'POST',
+  headers: {
+    'X-CSRF-Token': csrfToken,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(data)
+});
 ```
 
 ## Core Endpoints
@@ -272,10 +324,8 @@ Register a node automatically (used by setup scripts).
 POST /api/auto-register
 ```
 
-With registration token (if required):
 ```bash
 curl -X POST http://localhost:7655/api/auto-register \
-  -H "X-Registration-Token: PULSE-REG-xxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "pve",
@@ -287,28 +337,6 @@ curl -X POST http://localhost:7655/api/auto-register \
   }'
 ```
 
-## Registration Tokens
-
-Manage registration tokens for secure node registration.
-
-```bash
-POST /api/tokens/generate  # Generate new token
-GET /api/tokens/list       # List active tokens
-DELETE /api/tokens/revoke  # Revoke a token
-```
-
-### Generate Token Example
-```bash
-curl -X POST http://localhost:7655/api/tokens/generate \
-  -H "X-API-Token: your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "validityMinutes": 30,
-    "maxUses": 5,
-    "allowedTypes": ["pve", "pbs"],
-    "description": "Production cluster setup"
-  }'
-```
 
 ## Updates
 

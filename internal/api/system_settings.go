@@ -48,9 +48,8 @@ func (h *SystemSettingsHandler) HandleGetAPIToken(w http.ResponseWriter, r *http
 	
 	// Only return the token if it's requested with proper auth
 	if hasToken && r.URL.Query().Get("reveal") == "true" {
-		// Verify the request is authenticated
-		providedToken := r.Header.Get("X-API-Token")
-		if providedToken == h.config.APIToken {
+		// Verify the request is authenticated (session, password, or API token)
+		if CheckAuth(h.config, w, r) {
 			response.Token = h.config.APIToken
 		} else {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -69,13 +68,11 @@ func (h *SystemSettingsHandler) HandleGenerateAPIToken(w http.ResponseWriter, r 
 		return
 	}
 
-	// If a token already exists, require authentication
-	if h.config.APIToken != "" {
-		providedToken := r.Header.Get("X-API-Token")
-		if providedToken != h.config.APIToken {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+	// Use standard auth check if any authentication is configured
+	// This allows generation via web UI when logged in with password
+	if !CheckAuth(h.config, w, r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
 	}
 
 	// Generate a new secure token
@@ -129,13 +126,11 @@ func (h *SystemSettingsHandler) HandleDeleteAPIToken(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Require authentication if token exists
-	if h.config.APIToken != "" {
-		providedToken := r.Header.Get("X-API-Token")
-		if providedToken != h.config.APIToken {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+	// Use standard auth check (allows session, password, or API token)
+	// This allows deletion via web UI when logged in with password
+	if !CheckAuth(h.config, w, r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
 	}
 
 	// Save to system settings
@@ -201,13 +196,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	// Require authentication if token exists
-	if h.config.APIToken != "" {
-		providedToken := r.Header.Get("X-API-Token")
-		if providedToken != h.config.APIToken {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+	// Use standard auth check (allows session, password, or API token)
+	if !CheckAuth(h.config, w, r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
 	}
 
 	var settings config.SystemSettings

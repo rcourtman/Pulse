@@ -1,7 +1,7 @@
 package api
 
 import (
-	"crypto/rand"
+	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"net/http"
@@ -20,15 +20,19 @@ var (
 	sessionMu sync.RWMutex
 )
 
-// generateSessionToken creates a simple random session token
+// generateSessionToken creates a cryptographically secure session token
 func generateSessionToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := cryptorand.Read(b); err != nil {
+		log.Error().Err(err).Msg("Failed to generate secure session token")
+		// Fallback - should never happen
+		return ""
+	}
 	return hex.EncodeToString(b)
 }
 
-// validateSession checks if a session token is valid
-func validateSession(token string) bool {
+// ValidateSession checks if a session token is valid
+func ValidateSession(token string) bool {
 	sessionMu.RLock()
 	defer sessionMu.RUnlock()
 	
@@ -80,7 +84,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	
 	// Check session cookie (for WebSocket and UI)
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
-		if validateSession(cookie.Value) {
+		if ValidateSession(cookie.Value) {
 			return true
 		}
 	}
@@ -96,6 +100,26 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				if err == nil {
 					parts := strings.SplitN(string(decoded), ":", 2)
 					if len(parts) == 2 {
+						// Check rate limiting for auth attempts
+						clientIP := GetClientIP(r)
+						if !authLimiter.Allow(clientIP) {
+							log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for auth")
+							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Rate limited")
+							if w != nil {
+								http.Error(w, "Too many authentication attempts", http.StatusTooManyRequests)
+							}
+							return false
+						}
+						
+						// Check if account is locked out
+						if IsLockedOut(parts[0]) || IsLockedOut(clientIP) {
+							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
+							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Account locked")
+							if w != nil {
+								http.Error(w, "Account temporarily locked due to failed attempts", http.StatusForbidden)
+							}
+							return false
+						}
 						// Check username
 						userMatch := parts[0] == cfg.AuthUser
 						
@@ -121,27 +145,58 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							Msg("Auth check")
 						
 						if userMatch && passMatch {
+							// Clear failed login attempts
+							ClearFailedLogins(parts[0])
+							ClearFailedLogins(GetClientIP(r))
+							
 							// Valid credentials - create session
 							if w != nil {
 								token := generateSessionToken()
+								if token == "" {
+									return false
+								}
 								
 								// Store session
 								sessionMu.Lock()
 								sessions[token] = time.Now().Add(24 * time.Hour)
 								sessionMu.Unlock()
 								
-								// Set cookie
+								// Track session for user
+								TrackUserSession(parts[0], token)
+								
+								// Generate CSRF token
+								csrfToken := generateCSRFToken(token)
+								
+								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_session",
 									Value:    token,
 									Path:     "/",
 									HttpOnly: true,
 									Secure:   r.TLS != nil,
-									SameSite: http.SameSiteLaxMode, // Lax for cross-origin navigation
+									SameSite: http.SameSiteLaxMode,
 									MaxAge:   86400, // 24 hours
 								})
+								
+								// Set CSRF cookie (not HttpOnly so JS can read it)
+								http.SetCookie(w, &http.Cookie{
+									Name:     "pulse_csrf",
+									Value:    csrfToken,
+									Path:     "/",
+									Secure:   r.TLS != nil,
+									SameSite: http.SameSiteStrictMode,
+									MaxAge:   86400, // 24 hours
+								})
+								
+								// Audit log successful login
+								LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
 							return true
+						} else {
+							// Failed login
+							RecordFailedLogin(parts[0])
+							RecordFailedLogin(GetClientIP(r))
+							LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, false, "Invalid credentials")
 						}
 					}
 				}

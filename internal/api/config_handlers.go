@@ -1760,7 +1760,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			h.tokenMutex.RUnlock()
 			
 			log.Debug().
-				Str("token", tempToken).
+				Str("token", "***REDACTED***").
 				Bool("exists", exists).
 				Time("expiry", expiry).
 				Int("total_tokens", len(h.setupTokens)).
@@ -1769,19 +1769,19 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			if exists {
 				if time.Now().Before(expiry) {
 					// Token is valid, allow access
-					log.Info().Str("token", tempToken).Msg("Valid setup token - allowing access")
+					log.Info().Msg("Valid setup token - allowing access")
 					// Don't delete - let it expire naturally so the command can be reused
 				} else {
 					// Token expired
 					h.tokenMutex.Lock()
 					delete(h.setupTokens, tempToken)
 					h.tokenMutex.Unlock()
-					log.Warn().Str("token", tempToken).Msg("Setup token expired")
+					log.Warn().Msg("Setup token expired")
 					http.Error(w, "Token expired", http.StatusUnauthorized)
 					return
 				}
 			} else {
-				log.Warn().Str("token", tempToken).Msg("Invalid setup token, falling back to regular auth")
+				log.Warn().Msg("Invalid setup token, falling back to regular auth")
 				// Invalid token, fall back to regular auth check
 				if !CheckAuth(h.config, w, r) {
 					http.Error(w, "Authentication required", http.StatusUnauthorized)

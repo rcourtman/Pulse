@@ -9,10 +9,25 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
 class ApiClient {
   private authHeader: string | null = null;
   private apiToken: string | null = null;
+  private csrfToken: string | null = null;
 
   constructor() {
     // Check session storage for existing auth on page load
     this.loadStoredAuth();
+    // Load CSRF token from cookie
+    this.loadCSRFToken();
+  }
+
+  private loadCSRFToken() {
+    // Read CSRF token from cookie
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'pulse_csrf') {
+        this.csrfToken = decodeURIComponent(value);
+        break;
+      }
+    }
   }
 
   private loadStoredAuth() {
@@ -92,6 +107,12 @@ class ApiClient {
       }
     }
 
+    // Add CSRF token for state-changing requests
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    if (this.csrfToken && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      finalHeaders['X-CSRF-Token'] = this.csrfToken;
+    }
+
     // Always include credentials for cookies (WebSocket session support)
     const finalOptions: RequestInit = {
       ...fetchOptions,
@@ -106,6 +127,29 @@ class ApiClient {
       // Could trigger a re-login flow here
       console.warn('Authentication failed - credentials may be incorrect');
       // Don't clear auth automatically - let the user retry
+    }
+
+    // Handle CSRF token failures
+    if (response.status === 403) {
+      const text = await response.clone().text();
+      if (text.includes('CSRF')) {
+        // Try to reload CSRF token from cookie and retry
+        this.loadCSRFToken();
+        if (this.csrfToken) {
+          finalHeaders['X-CSRF-Token'] = this.csrfToken;
+          const retryResponse = await fetch(url, {
+            ...fetchOptions,
+            headers: finalHeaders,
+            credentials: 'include'
+          });
+          return retryResponse;
+        }
+      }
+    }
+
+    // Handle rate limiting
+    if (response.status === 429) {
+      console.error('Rate limit exceeded - please wait before retrying');
     }
 
     return response;
