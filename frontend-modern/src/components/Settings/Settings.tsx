@@ -5,6 +5,7 @@ import { NodeModal } from './NodeModal';
 import { APITokenManager } from './APITokenManager';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { RemovePasswordModal } from './RemovePasswordModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -94,6 +95,7 @@ const Settings: Component = () => {
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+  const [showRemovePasswordModal, setShowRemovePasswordModal] = createSignal(false);
   
   // System settings
   const [pollingInterval, setPollingInterval] = createSignal(5);
@@ -1489,12 +1491,20 @@ const Settings: Component = () => {
                   <p class="text-sm text-gray-600 dark:text-gray-400">
                     Login required to access Pulse
                   </p>
-                  <button
-                    onClick={() => setShowPasswordModal(true)}
-                    class="mt-4 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                  >
-                    Change Password
-                  </button>
+                  <div class="mt-4 flex gap-2">
+                    <button
+                      onClick={() => setShowPasswordModal(true)}
+                      class="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                    >
+                      Change Password
+                    </button>
+                    <button
+                      onClick={() => setShowRemovePasswordModal(true)}
+                      class="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    >
+                      Remove Password
+                    </button>
+                  </div>
                 </div>
               </Show>
 
@@ -2068,6 +2078,11 @@ const Settings: Component = () => {
       <ChangePasswordModal
         isOpen={showPasswordModal()}
         onClose={() => setShowPasswordModal(false)}
+      />
+      
+      <RemovePasswordModal
+        isOpen={showRemovePasswordModal()}
+        onClose={() => setShowRemovePasswordModal(false)}
       />
     </>
   );
