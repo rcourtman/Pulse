@@ -45,16 +45,20 @@ sudo systemctl restart pulse-backend
 ```
 
 **Available variables:**
-- `FRONTEND_PORT` - Web UI port
-- `POLLING_INTERVAL` - Node check interval (seconds)
-- `CONNECTION_TIMEOUT` - Connection timeout (seconds)
-- `UPDATE_CHANNEL` - stable or rc
-- `AUTO_UPDATE_ENABLED` - true/false
-- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks
-- `AUTO_UPDATE_TIME` - Update time (HH:MM)
-- `ALLOWED_ORIGINS` - CORS origins
-- `LOG_LEVEL` - debug/info/warn/error
-- `DISCOVERY_SUBNET` - Network subnet for auto-discovery (default: auto, e.g., 192.168.0.0/24)
+- `FRONTEND_PORT` - Web UI port (default: 7655)
+- `POLLING_INTERVAL` - Node check interval in seconds (default: 3)
+- `CONNECTION_TIMEOUT` - Connection timeout in seconds (default: 10)
+- `UPDATE_CHANNEL` - stable or rc (default: stable)
+- `AUTO_UPDATE_ENABLED` - true/false (default: true)
+- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks (default: 24)
+- `AUTO_UPDATE_TIME` - Update time HH:MM (default: 03:00)
+- `ALLOWED_ORIGINS` - CORS origins (default: none, same-origin only)
+- `LOG_LEVEL` - debug/info/warn/error (default: info)
+- `DISCOVERY_SUBNET` - Network subnet for auto-discovery (default: auto-detect)
+- `PULSE_PASSWORD` - Password for web UI authentication (optional)
+- `API_TOKEN` - Token for API authentication (optional)
+- `ALLOW_UNPROTECTED_EXPORT` - Allow export without auth (default: false)
+- `PULSE_DEV` - Enable development mode features (default: false)
 
 ### 3. Secure Environment Variables
 For sensitive data like API tokens and passwords:

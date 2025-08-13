@@ -120,7 +120,7 @@ services:
       # - AUTO_UPDATE_TIME=03:00            # Time to install updates HH:MM (default: 03:00)
       
       # CORS & logging
-      # - ALLOWED_ORIGINS=*                 # CORS allowed origins (default: *)
+      # - ALLOWED_ORIGINS=https://app.example.com  # CORS origins (default: none, same-origin only)
       # - LOG_LEVEL=info                    # Log level: debug/info/warn/error (default: info)
     restart: unless-stopped
 
