@@ -55,16 +55,17 @@ export const RemovePasswordModal: Component<RemovePasswordModalProps> = (props) 
         throw new Error(data.message || 'Failed to remove password');
       }
 
-      showSuccess('Password authentication removed. Pulse is now running without authentication.');
+      // Show success message
+      showSuccess(data.message || 'Password authentication removed. Pulse is now running without authentication.');
       
       // Clear form
       setCurrentPassword('');
       props.onClose();
       
-      // Reload the page to reflect the changes
+      // Reload the page to reflect the changes (password is removed from current session)
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to remove password');
     } finally {

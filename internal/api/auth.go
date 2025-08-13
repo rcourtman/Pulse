@@ -73,12 +73,33 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	// Check API token first (for backward compatibility)
 	if cfg.APIToken != "" {
 		// Check header
-		if token := r.Header.Get("X-API-Token"); token == cfg.APIToken {
-			return true
+		if token := r.Header.Get("X-API-Token"); token != "" {
+			// Check if stored token is hashed or plain text
+			if internalauth.IsAPITokenHashed(cfg.APIToken) {
+				// Compare against hash
+				if internalauth.CompareAPIToken(token, cfg.APIToken) {
+					return true
+				}
+			} else {
+				// Legacy plain text comparison (should migrate)
+				if token == cfg.APIToken {
+					log.Warn().Msg("Using plain text API token - please regenerate for security")
+					return true
+				}
+			}
 		}
 		// Check query parameter (for export/import)
-		if token := r.URL.Query().Get("token"); token == cfg.APIToken {
-			return true
+		if token := r.URL.Query().Get("token"); token != "" {
+			if internalauth.IsAPITokenHashed(cfg.APIToken) {
+				if internalauth.CompareAPIToken(token, cfg.APIToken) {
+					return true
+				}
+			} else {
+				if token == cfg.APIToken {
+					log.Warn().Msg("Using plain text API token - please regenerate for security")
+					return true
+				}
+			}
 		}
 	}
 	
@@ -100,15 +121,20 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				if err == nil {
 					parts := strings.SplitN(string(decoded), ":", 2)
 					if len(parts) == 2 {
-						// Check rate limiting for auth attempts
 						clientIP := GetClientIP(r)
-						if !authLimiter.Allow(clientIP) {
-							log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for auth")
-							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Rate limited")
-							if w != nil {
-								http.Error(w, "Too many authentication attempts", http.StatusTooManyRequests)
+						
+						// Only apply rate limiting for actual login attempts, not regular auth checks
+						// Login attempts come to /api/login endpoint
+						if r.URL.Path == "/api/login" {
+							// Check rate limiting for auth attempts
+							if !authLimiter.Allow(clientIP) {
+								log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for auth")
+								LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Rate limited")
+								if w != nil {
+									http.Error(w, "Too many authentication attempts", http.StatusTooManyRequests)
+								}
+								return false
 							}
-							return false
 						}
 						
 						// Check if account is locked out
@@ -222,15 +248,15 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			Str("method", r.Method).
 			Msg("Unauthorized access attempt")
 		
-		// Only send WWW-Authenticate header for non-API/non-AJAX requests
-		// This prevents the browser popup for API calls from the frontend
-		isAPIRequest := strings.HasPrefix(r.URL.Path, "/api/") ||
-			r.Header.Get("X-Requested-With") == "XMLHttpRequest" ||
-			strings.Contains(r.Header.Get("Accept"), "application/json")
-		
-		if cfg.AuthUser != "" && cfg.AuthPass != "" && !isAPIRequest {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Pulse"`)
+		// Never send WWW-Authenticate header - we want to use our custom login page
+		// The frontend will detect 401 responses and show the login component
+		// Return JSON error for API requests, plain text for others
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"Authentication required"}`))
+		} else {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		}
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 }
