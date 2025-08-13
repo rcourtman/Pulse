@@ -58,6 +58,18 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 - Verify API token not expired
 - Confirm user has required permissions
 
+### CORS errors in browser?
+- By default, Pulse only allows same-origin requests
+- Set `ALLOWED_ORIGINS` environment variable for cross-origin access
+- Example: `ALLOWED_ORIGINS=https://app.example.com`
+- Never use `*` in production
+
+### Authentication issues?
+- Password auth: Check `PULSE_PASSWORD` environment variable
+- API token: Verify `API_TOKEN` is set correctly
+- Session expired: Log in again via web UI
+- Account locked: Wait 15 minutes after 5 failed attempts
+
 ### High memory usage?
 Reduce `metricsRetentionDays` in settings and restart
 
