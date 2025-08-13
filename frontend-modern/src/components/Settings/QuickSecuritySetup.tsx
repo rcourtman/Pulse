@@ -12,9 +12,12 @@ export const QuickSecuritySetup: Component = () => {
   const [credentials, setCredentials] = createSignal<SecurityCredentials | null>(null);
   const [showCredentials, setShowCredentials] = createSignal(false);
   const [copied, setCopied] = createSignal<'username' | 'password' | 'token' | null>(null);
+  const [readyToRestart, setReadyToRestart] = createSignal(false);
+  const [isRestarting, setIsRestarting] = createSignal(false);
 
   const generatePassword = (length: number = 16): string => {
-    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    // Avoid special chars that could cause issues with URLs or shell commands
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
     let password = '';
     const array = new Uint8Array(length);
     crypto.getRandomValues(array);
@@ -37,6 +40,48 @@ export const QuickSecuritySetup: Component = () => {
       setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       showError('Failed to copy to clipboard');
+    }
+  };
+
+  const restartPulse = async () => {
+    setIsRestarting(true);
+    try {
+      const response = await fetch('/api/security/apply-restart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to restart Pulse');
+      }
+
+      showSuccess('Restarting Pulse... The page will reload when ready.');
+      
+      // Wait a bit then start checking if Pulse is back
+      setTimeout(() => {
+        const checkInterval = setInterval(async () => {
+          try {
+            // Try to fetch with the new credentials
+            const checkResponse = await fetch('/api/health', {
+              headers: {
+                'Authorization': `Basic ${btoa(`${credentials()!.username}:${credentials()!.password}`)}`
+              }
+            });
+            if (checkResponse.ok) {
+              clearInterval(checkInterval);
+              // Reload the page to prompt for login
+              window.location.reload();
+            }
+          } catch (e) {
+            // Server not ready yet, keep checking
+          }
+        }, 2000);
+      }, 3000);
+    } catch (error) {
+      showError(`Failed to restart: ${error}`);
+      setIsRestarting(false);
     }
   };
 
@@ -74,12 +119,10 @@ export const QuickSecuritySetup: Component = () => {
         (window as any).securityCommand = result.command;
       }
       
-      if (result.method === 'systemd' && result.automatic) {
-        showSuccess('Security enabled! Pulse will restart automatically in 2 seconds...');
-        // Show countdown
-        setTimeout(() => {
-          showSuccess('Restarting now... You will need to log in with your new credentials.');
-        }, 2000);
+      // Check if we can auto-restart
+      if (result.readyToRestart) {
+        setReadyToRestart(true);
+        showSuccess('Security configured! Save your credentials, then click "Restart Pulse" to apply.');
       } else if (result.method === 'systemd' && !result.automatic) {
         showSuccess('Security configured! Run the command shown below to apply settings.');
       } else if (result.method === 'docker') {
@@ -259,30 +302,59 @@ Important:
 
           <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
             <Show 
-              when={(window as any).securityCommand}
+              when={readyToRestart()}
               fallback={
-                <>
+                <Show 
+                  when={(window as any).securityCommand}
+                  fallback={
+                    <>
+                      <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
+                        ✅ Security configured successfully!
+                      </p>
+                      <p class="text-xs text-green-700 dark:text-green-300">
+                        Save your credentials above. Pulse will apply the security settings.
+                      </p>
+                    </>
+                  }
+                >
                   <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
-                    ✅ Security configured successfully!
+                    ✅ One more step to enable security:
                   </p>
-                  <p class="text-xs text-green-700 dark:text-green-300">
-                    Save your credentials above. Pulse will apply the security settings.
+                  <p class="text-xs text-green-700 dark:text-green-300 mb-2">
+                    Run this command in your terminal:
                   </p>
-                </>
+                  <div class="bg-gray-900 text-green-400 p-2 rounded font-mono text-xs overflow-x-auto">
+                    {(window as any).securityCommand}
+                  </div>
+                  <p class="text-xs text-green-700 dark:text-green-300 mt-2">
+                    This will apply the settings and restart Pulse with security enabled.
+                  </p>
+                </Show>
               }
             >
               <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
-                ✅ One more step to enable security:
+                ✅ Security configured! Ready to apply.
               </p>
-              <p class="text-xs text-green-700 dark:text-green-300 mb-2">
-                Run this command in your terminal:
+              <p class="text-xs text-green-700 dark:text-green-300 mb-3">
+                Make sure you've saved your credentials above before restarting.
               </p>
-              <div class="bg-gray-900 text-green-400 p-2 rounded font-mono text-xs overflow-x-auto">
-                {(window as any).securityCommand}
-              </div>
-              <p class="text-xs text-green-700 dark:text-green-300 mt-2">
-                This will apply the settings and restart Pulse with security enabled.
-              </p>
+              <button
+                onClick={restartPulse}
+                disabled={isRestarting()}
+                class="w-full px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isRestarting() ? (
+                  <span class="flex items-center justify-center">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Restarting Pulse...
+                  </span>
+                ) : (
+                  'Restart Pulse to Apply Security'
+                )}
+              </button>
             </Show>
           </div>
         </div>

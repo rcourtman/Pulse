@@ -13,6 +13,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// IsPasswordHashed checks if a string looks like a bcrypt hash
+func IsPasswordHashed(password string) bool {
+	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
+	return strings.HasPrefix(password, "$2") && len(password) == 60
+}
+
 // Config holds all application configuration
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
@@ -47,6 +53,8 @@ type Config struct {
 
 	// Security settings
 	APIToken             string `envconfig:"API_TOKEN"`
+	AuthUser             string `envconfig:"PULSE_AUTH_USER"`
+	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 
@@ -224,6 +232,19 @@ func Load() (*Config, error) {
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
 		cfg.APIToken = apiToken
 		log.Info().Msg("Overriding API token from env var")
+	}
+	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
+		cfg.AuthUser = authUser
+		log.Info().Msg("Overriding auth user from env var")
+	}
+	if authPass := os.Getenv("PULSE_AUTH_PASS"); authPass != "" {
+		cfg.AuthPass = authPass
+		// Note: We don't auto-migrate env var passwords to hashes
+		// because we can't modify environment variables
+		if !IsPasswordHashed(authPass) {
+			log.Warn().Msg("Password is stored in plain text - run 'pulse hash-password' to generate a secure hash")
+		}
+		log.Info().Bool("is_hashed", IsPasswordHashed(authPass)).Msg("Loaded auth password from env var")
 	}
 	if updateChannel := os.Getenv("UPDATE_CHANNEL"); updateChannel != "" {
 		cfg.UpdateChannel = updateChannel

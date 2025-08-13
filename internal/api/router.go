@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -28,7 +29,6 @@ type Router struct {
 	reloadFunc    func() error
 	updateManager *updates.Manager
 	exportLimiter *RateLimiter
-	tokenManager  *tokens.TokenManager
 	persistence   *config.ConfigPersistence
 }
 
@@ -43,7 +43,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		reloadFunc:    reloadFunc,
 		updateManager: updates.NewManager(cfg),
 		exportLimiter: NewRateLimiter(5, 1*time.Minute), // 5 attempts per minute
-		tokenManager:  tokens.NewTokenManager(cfg.DataPath),
 		persistence:   config.NewConfigPersistence(cfg.DataPath),
 	}
 
@@ -87,7 +86,7 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	alertHandlers := NewAlertHandlers(r.monitor)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
-	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, r.tokenManager)
+	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	
@@ -186,12 +185,10 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
-	// Registration token routes
-	r.mux.HandleFunc("/api/tokens/generate", RequireAuth(r.config, r.handleGenerateToken))
-	r.mux.HandleFunc("/api/tokens/list", RequireAuth(r.config, r.handleListTokens))
-	r.mux.HandleFunc("/api/tokens/revoke", RequireAuth(r.config, r.handleRevokeToken))
+	// Registration token routes removed - feature deprecated
 	
-	// Security status route
+	// Security routes
+	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -225,7 +222,6 @@ func (r *Router) setupRoutes() {
 				"requiresAuth": r.config.APIToken != "",
 				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
-				"registrationTokensEnabled": os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true",
 				"hasAuthentication": hasAuthentication,
 				"hasAuditLogging": hasAuditLogging,
 				"credentialsEncrypted": credentialsEncrypted,
@@ -313,20 +309,13 @@ echo "You will need to log in with your saved credentials."
 						// Reload systemd config
 						utils.RunCommand("sudo", "systemctl", "daemon-reload")
 						
-						// Use the same trick as updates - just exit and let systemd restart us
-						// The new environment variables will be loaded on restart
-						go func() {
-							time.Sleep(2 * time.Second)
-							log.Info().Msg("Exiting to apply security settings (systemd will restart with new config)")
-							os.Exit(0)
-						}()
-						
+						// Don't auto-restart - let the user do it after saving credentials
 						response := map[string]interface{}{
 							"success": true,
 							"method": "systemd",
 							"automatic": true,
-							"willRestart": true,
-							"message": "Security enabled! Pulse will restart in 2 seconds to apply settings.",
+							"readyToRestart": true,
+							"message": "Security configured! Save your credentials, then restart Pulse to apply settings.",
 						}
 						w.Header().Set("Content-Type", "application/json")
 						json.NewEncoder(w).Encode(response)
@@ -386,6 +375,116 @@ ENABLE_AUDIT_LOG=true
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(response)
 			}
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	
+	// Apply security restart endpoint
+	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			// Only allow restart if we're running under systemd (safer)
+			isSystemd := os.Getenv("INVOCATION_ID") != ""
+			
+			if !isSystemd {
+				response := map[string]interface{}{
+					"success": false,
+					"message": "Automatic restart is only available when running under systemd. Please restart Pulse manually.",
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			
+			// Write a recovery flag file before restarting
+			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+			recoveryContent := fmt.Sprintf("Auth setup at %s\nIf locked out, delete this file and restart to disable auth temporarily\n", time.Now().Format(time.RFC3339))
+			os.WriteFile(recoveryFile, []byte(recoveryContent), 0600)
+			
+			// Schedule restart
+			go func() {
+				time.Sleep(2 * time.Second)
+				log.Info().Msg("Restarting to apply security settings (systemd will handle restart)")
+				// Exit cleanly - systemd will restart us
+				os.Exit(0)
+			}()
+			
+			response := map[string]interface{}{
+				"success": true,
+				"message": "Restarting Pulse to apply security settings...",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	
+	// Recovery endpoint - only accessible from localhost
+	r.mux.HandleFunc("/api/security/recovery", func(w http.ResponseWriter, req *http.Request) {
+		// Only allow from localhost
+		ip := strings.Split(req.RemoteAddr, ":")[0]
+		if ip != "127.0.0.1" && ip != "::1" && ip != "localhost" {
+			http.Error(w, "Recovery endpoint only accessible from localhost", http.StatusForbidden)
+			return
+		}
+		
+		if req.Method == http.MethodPost {
+			// Parse action
+			var recoveryRequest struct {
+				Action string `json:"action"`
+			}
+			
+			if err := json.NewDecoder(req.Body).Decode(&recoveryRequest); err != nil {
+				http.Error(w, "Invalid request", http.StatusBadRequest)
+				return
+			}
+			
+			response := map[string]interface{}{}
+			
+			switch recoveryRequest.Action {
+			case "disable_auth":
+				// Temporarily disable auth by creating recovery file
+				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\n", time.Now().Format(time.RFC3339))
+				if err := os.WriteFile(recoveryFile, []byte(content), 0600); err != nil {
+					response["success"] = false
+					response["message"] = fmt.Sprintf("Failed to enable recovery mode: %v", err)
+				} else {
+					response["success"] = true
+					response["message"] = "Recovery mode enabled. Auth disabled for localhost. Delete .auth_recovery file to re-enable."
+					log.Warn().Msg("AUTH RECOVERY: Authentication disabled for localhost via recovery endpoint")
+				}
+				
+			case "enable_auth":
+				// Re-enable auth by removing recovery file
+				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+				if err := os.Remove(recoveryFile); err != nil {
+					response["success"] = false
+					response["message"] = fmt.Sprintf("Failed to disable recovery mode: %v", err)
+				} else {
+					response["success"] = true
+					response["message"] = "Recovery mode disabled. Authentication re-enabled."
+					log.Info().Msg("AUTH RECOVERY: Authentication re-enabled via recovery endpoint")
+				}
+				
+			default:
+				response["success"] = false
+				response["message"] = "Invalid action. Use 'disable_auth' or 'enable_auth'"
+			}
+			
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+		} else if req.Method == http.MethodGet {
+			// Check recovery status
+			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+			_, err := os.Stat(recoveryFile)
+			response := map[string]interface{}{
+				"recovery_mode": err == nil,
+				"message": "Recovery endpoint accessible from localhost only",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -465,6 +564,9 @@ ENABLE_AUDIT_LOG=true
 	// Setup script route
 	r.mux.HandleFunc("/api/setup-script", configHandlers.HandleSetupScript)
 	
+	// Generate setup script URL with temporary token (for authenticated users)
+	r.mux.HandleFunc("/api/setup-script-url", configHandlers.HandleSetupScriptURL)
+	
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
 	
@@ -534,13 +636,97 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if r.config.AllowedOrigins != "" {
 		w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token")
 	}
 
 	// Handle preflight requests
 	if req.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
+	}
+
+	// Recovery mechanism: Check if recovery mode is enabled
+	recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+	if _, err := os.Stat(recoveryFile); err == nil {
+		// Recovery mode is enabled - allow local access only
+		ip := strings.Split(req.RemoteAddr, ":")[0]
+		log.Debug().
+			Str("recovery_file", recoveryFile).
+			Str("remote_ip", ip).
+			Str("path", req.URL.Path).
+			Bool("file_exists", err == nil).
+			Msg("Checking auth recovery mode")
+		if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+			log.Warn().
+				Str("recovery_file", recoveryFile).
+				Msg("AUTH RECOVERY MODE: Allowing local access without authentication")
+			// Allow access but add a warning header
+			w.Header().Set("X-Auth-Recovery", "true")
+			// Recovery mode bypasses auth for localhost
+		} else {
+			// Non-local access in recovery mode - still require auth
+			if !CheckAuth(r.config, w, req) {
+				// Only send WWW-Authenticate for non-API requests
+				isAPIRequest := strings.HasPrefix(req.URL.Path, "/api/") ||
+					req.Header.Get("X-Requested-With") == "XMLHttpRequest" ||
+					strings.Contains(req.Header.Get("Accept"), "application/json")
+				
+				if r.config.AuthUser != "" && r.config.AuthPass != "" && !isAPIRequest {
+					w.Header().Set("WWW-Authenticate", `Basic realm="Pulse"`)
+				}
+				http.Error(w, "Authentication required", http.StatusUnauthorized)
+				return
+			}
+		}
+	} else {
+		// Normal authentication check
+		// Skip auth for certain public endpoints and static assets
+		publicPaths := []string{
+			"/api/health",
+			"/api/security/status",
+			"/api/version",
+		}
+		
+		// Also allow static assets without auth (JS, CSS, etc)
+		isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") || 
+			req.URL.Path == "/" || 
+			req.URL.Path == "/index.html" ||
+			req.URL.Path == "/logo.svg" ||
+			strings.HasSuffix(req.URL.Path, ".js") ||
+			strings.HasSuffix(req.URL.Path, ".css") ||
+			strings.HasSuffix(req.URL.Path, ".ico")
+		
+		isPublic := isStaticAsset
+		for _, path := range publicPaths {
+			if req.URL.Path == path {
+				isPublic = true
+				break
+			}
+		}
+		
+		// Special case: setup-script with a token parameter should be allowed
+		if req.URL.Path == "/api/setup-script" && req.URL.Query().Get("token") != "" {
+			// Let the handler validate the token
+			isPublic = true
+		}
+		
+		// Check auth for protected routes
+		if !isPublic && !CheckAuth(r.config, w, req) {
+			// Only send WWW-Authenticate for non-API requests
+			isAPIRequest := strings.HasPrefix(req.URL.Path, "/api/") ||
+				req.Header.Get("X-Requested-With") == "XMLHttpRequest" ||
+				strings.Contains(req.Header.Get("Accept"), "application/json")
+			
+			if r.config.AuthUser != "" && r.config.AuthPass != "" && !isAPIRequest {
+				w.Header().Set("WWW-Authenticate", `Basic realm="Pulse"`)
+			}
+			http.Error(w, "Authentication required", http.StatusUnauthorized)
+			log.Warn().
+				Str("ip", req.RemoteAddr).
+				Str("path", req.URL.Path).
+				Msg("Unauthorized access attempt")
+			return
+		}
 	}
 
 	// Add security headers for API endpoints
@@ -586,6 +772,110 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	utils.WriteJSONResponse(w, health)
 }
 
+// handleChangePassword handles password change requests
+func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only POST method is allowed", nil)
+		return
+	}
+
+	// Parse request
+	var changeReq struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	
+	if err := json.NewDecoder(req.Body).Decode(&changeReq); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+			"Invalid request body", nil)
+		return
+	}
+
+	// Validate new password
+	if len(changeReq.NewPassword) < 8 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_password", 
+			"Password must be at least 8 characters", nil)
+		return
+	}
+
+	// Verify current password matches
+	auth := req.Header.Get("Authorization")
+	if auth == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Current password required", nil)
+		return
+	}
+
+	// Hash the new password
+	hashedPassword, err := internalauth.HashPassword(changeReq.NewPassword)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to hash new password")
+		writeErrorResponse(w, http.StatusInternalServerError, "hash_error", 
+			"Failed to process new password", nil)
+		return
+	}
+
+	// Update the systemd override file
+	overridePath := "/etc/systemd/system/pulse-backend.service.d/override.conf"
+	content, err := os.ReadFile(overridePath)
+	if err != nil {
+		log.Error().Err(err).Str("file", overridePath).Msg("Failed to read override file")
+		writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+			"Failed to update configuration", nil)
+		return
+	}
+
+	// Replace the password line
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "Environment=\"PULSE_AUTH_PASS=") {
+			lines[i] = fmt.Sprintf("Environment=\"PULSE_AUTH_PASS=%s\"", hashedPassword)
+			break
+		}
+	}
+
+	// Write back the file
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(overridePath, []byte(newContent), 0600); err != nil {
+		log.Error().Err(err).Str("file", overridePath).Msg("Failed to write override file")
+		writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+			"Failed to save new password", nil)
+		return
+	}
+
+	// Also update /etc/pulse/security-override.conf if it exists
+	securityOverridePath := "/etc/pulse/security-override.conf"
+	if content, err := os.ReadFile(securityOverridePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "Environment=\"PULSE_AUTH_PASS=") {
+				lines[i] = fmt.Sprintf("Environment=\"PULSE_AUTH_PASS=%s\"", hashedPassword)
+				break
+			}
+		}
+		newContent := strings.Join(lines, "\n")
+		os.WriteFile(securityOverridePath, []byte(newContent), 0600)
+	}
+
+	log.Info().Msg("Password changed successfully")
+	
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Password changed successfully. Service will restart.",
+	})
+
+	// Trigger service restart in background
+	go func() {
+		time.Sleep(1 * time.Second)
+		// Reload systemd and restart service
+		exec.Command("systemctl", "daemon-reload").Run()
+		exec.Command("systemctl", "restart", "pulse-backend").Run()
+	}()
+}
+
 // handleState handles state requests
 func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -594,17 +884,11 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Check API token if configured
-	if r.config.APIToken != "" {
-		token := req.Header.Get("Authorization")
-		if token == "" {
-			token = req.URL.Query().Get("token")
-		}
-		if token != r.config.APIToken && token != "Bearer "+r.config.APIToken {
-			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-				"Invalid or missing API token", nil)
-			return
-		}
+	// Use standard auth check (supports both basic auth and API tokens)
+	if !CheckAuth(r.config, w, req) {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Authentication required", nil)
+		return
 	}
 
 	state := r.monitor.GetState()

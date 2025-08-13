@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/tokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -28,18 +29,41 @@ type ConfigHandlers struct {
 	monitor      *monitoring.Monitor
 	reloadFunc   func() error
 	wsHub        *websocket.Hub
-	tokenManager *tokens.TokenManager
+	setupTokens  map[string]time.Time // Temporary tokens for setup script access
+	tokenMutex   sync.RWMutex         // Mutex for thread-safe token access
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, tokenManager *tokens.TokenManager) *ConfigHandlers {
-	return &ConfigHandlers{
+func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub) *ConfigHandlers {
+	h := &ConfigHandlers{
 		config:       cfg,
 		persistence:  config.NewConfigPersistence(cfg.DataPath),
 		monitor:      monitor,
 		reloadFunc:   reloadFunc,
 		wsHub:        wsHub,
-		tokenManager: tokenManager,
+		setupTokens:  make(map[string]time.Time),
+	}
+	
+	// Clean up expired tokens periodically
+	go h.cleanupExpiredTokens()
+	
+	return h
+}
+
+// cleanupExpiredTokens removes expired setup tokens
+func (h *ConfigHandlers) cleanupExpiredTokens() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		h.tokenMutex.Lock()
+		now := time.Now()
+		for token, expiry := range h.setupTokens {
+			if now.After(expiry) {
+				delete(h.setupTokens, token)
+			}
+		}
+		h.tokenMutex.Unlock()
 	}
 }
 
@@ -1690,6 +1714,88 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	serverHost := query.Get("host")
 	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
 	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
+	tempToken := query.Get("token") // Temporary token for authenticated access
+	apiToken := query.Get("api_token") // API token to pass to the script for auto-registration
+	
+	// Validate required parameters
+	if serverType == "" {
+		http.Error(w, "Missing required parameter: type (must be 'pve' or 'pbs')", http.StatusBadRequest)
+		return
+	}
+	
+	// If host is not provided, try to use a sensible default
+	if serverHost == "" {
+		if serverType == "pve" {
+			serverHost = "https://YOUR_PROXMOX_HOST:8006"
+		} else {
+			serverHost = "https://YOUR_PBS_HOST:8007"
+		}
+		log.Warn().
+			Str("type", serverType).
+			Msg("No host parameter provided, using placeholder. Auto-registration will fail.")
+	}
+	
+	// If pulseURL is not provided, use the current request host
+	if pulseURL == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
+	}
+	
+	log.Info().
+		Str("token", tempToken).
+		Str("type", serverType).
+		Str("host", serverHost).
+		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "").
+		Msg("HandleSetupScript called")
+	
+	// Check if authentication is required
+	if h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "" {
+		// Check temporary token first
+		if tempToken != "" {
+			h.tokenMutex.RLock()
+			expiry, exists := h.setupTokens[tempToken]
+			h.tokenMutex.RUnlock()
+			
+			log.Debug().
+				Str("token", tempToken).
+				Bool("exists", exists).
+				Time("expiry", expiry).
+				Int("total_tokens", len(h.setupTokens)).
+				Msg("Checking setup token")
+			
+			if exists {
+				if time.Now().Before(expiry) {
+					// Token is valid, allow access
+					log.Info().Str("token", tempToken).Msg("Valid setup token - allowing access")
+					// Don't delete - let it expire naturally so the command can be reused
+				} else {
+					// Token expired
+					h.tokenMutex.Lock()
+					delete(h.setupTokens, tempToken)
+					h.tokenMutex.Unlock()
+					log.Warn().Str("token", tempToken).Msg("Setup token expired")
+					http.Error(w, "Token expired", http.StatusUnauthorized)
+					return
+				}
+			} else {
+				log.Warn().Str("token", tempToken).Msg("Invalid setup token, falling back to regular auth")
+				// Invalid token, fall back to regular auth check
+				if !CheckAuth(h.config, w, r) {
+					http.Error(w, "Authentication required", http.StatusUnauthorized)
+					return
+				}
+			}
+		} else {
+			// No temp token, check regular auth
+			if !CheckAuth(h.config, w, r) {
+				http.Error(w, "Authentication required", http.StatusUnauthorized)
+				return
+			}
+		}
+	}
 	
 	// Default to PVE if not specified
 	if serverType == "" {
@@ -1772,13 +1878,16 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
-# Check for old Pulse tokens and offer to clean them up
-echo "Checking for existing Pulse monitoring tokens..."
-OLD_TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | grep -E "│ pulse-[0-9\-]+-[0-9]+" | awk -F'│' '{print $2}' | sed 's/^ *//;s/ *$//' || true)
+# Extract Pulse server IP from the URL for token matching
+PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
+
+# Check for old Pulse tokens from the same Pulse server and offer to clean them up
+echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
+OLD_TOKENS=$(pveum user token list pulse-monitor@pam 2>/dev/null | grep -E "│ pulse-${PULSE_IP_PATTERN}-[0-9]+" | awk -F'│' '{print $2}' | sed 's/^ *//;s/ *$//' || true)
 if [ ! -z "$OLD_TOKENS" ]; then
     TOKEN_COUNT=$(echo "$OLD_TOKENS" | wc -l)
     echo ""
-    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s):"
+    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s) from this Pulse server (${PULSE_IP_PATTERN}):"
     echo "$OLD_TOKENS" | sed 's/^/   - /'
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1842,21 +1951,32 @@ if pveum user token list pulse-monitor@pam 2>/dev/null | grep -q "%s"; then
     echo "================================================================"
     echo ""
 else
+    # Create token silently first
     TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pam %s --privsep 0)
-    echo ""
-    echo "================================================================"
-    echo "IMPORTANT: Copy the token value below - it's only shown once!"
-    echo "================================================================"
-    echo "$TOKEN_OUTPUT"
-    echo "================================================================"
-    echo ""
     
-    # Extract the token value for backward compatibility (if manual mode is needed)
+    # Extract the token value for auto-registration
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
     
-    # Try secure auto-registration first
-    echo ""
-    echo "🔄 Starting secure auto-registration with Pulse..."
+    if [ -z "$TOKEN_VALUE" ]; then
+        # If we can't extract the token, show it to the user
+        echo ""
+        echo "================================================================"
+        echo "IMPORTANT: Copy the token value below - it's only shown once!"
+        echo "================================================================"
+        echo "$TOKEN_OUTPUT"
+        echo "================================================================"
+        echo ""
+        echo "⚠️  Failed to extract token value from output."
+        echo "   Manual registration may be required."
+        echo ""
+    else
+        # Token created successfully, proceed with auto-registration
+        echo "✅ Token created for Pulse monitoring"
+        echo ""
+    fi
+    
+    # Try auto-registration
+    echo "🔄 Auto-registering with Pulse..."
     
     # Get the server's hostname
     SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
@@ -1865,24 +1985,32 @@ else
     # Send registration to Pulse
     PULSE_URL="%s"
     
-    # Check for HTTPS (warn but allow for local networks)
-    if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
-        echo "⚠️  WARNING: Using HTTP - token will be sent unencrypted!"
-        echo "   This is acceptable for local networks but not recommended for internet."
+    # Check if host URL was provided
+    HOST_URL="%s"
+    if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
         echo ""
+        echo "❌ ERROR: No Proxmox host URL provided!"
+        echo "   The setup script URL is missing the 'host' parameter."
+        echo ""
+        echo "   Please use the correct URL format:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "   Example:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "📝 For manual setup, use the token created above with:"
+        echo "   Token ID: pulse-monitor@pam!%s"
+        echo "   Token Value: [See above]"
+        echo ""
+        exit 1
     fi
     
-    # Use secure registration - Pulse generates the token
-    echo "🔐 Using secure registration protocol..."
-    echo "   Pulse will generate and return a token for this node."
-    echo ""
-    
-    # Construct secure registration request
+    # Construct registration request
     # Use the actual PVE host URL provided to the script
     REGISTER_JSON=$(cat <<EOF
 {
   "type": "pve",
-  "host": "%s",
+  "host": "$HOST_URL",
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pam!%s",
   "tokenValue": "$TOKEN_VALUE"
@@ -1892,25 +2020,34 @@ EOF
     # Remove newlines from JSON
     REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
     
-    # Send registration (add X-Registration-Token header if provided)
+    # Send registration with appropriate authentication
+    PULSE_API_TOKEN="%s"
     REG_TOKEN="${PULSE_REG_TOKEN:-}"
-    if [ -n "$REG_TOKEN" ]; then
+    
+    if [ -n "$PULSE_API_TOKEN" ]; then
+        # Use API token for authentication
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Token: $PULSE_API_TOKEN" \
+            -d "$REGISTER_JSON" 2>&1)
+    elif [ -n "$REG_TOKEN" ]; then
+        # Legacy: Use registration token if provided
         echo "🔑 Using registration token: $REG_TOKEN"
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
             -H "X-Registration-Token: $REG_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
+        # Try without authentication (for systems without auth)
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
             -d "$REGISTER_JSON" 2>&1)
     fi
     
+    AUTO_REG_SUCCESS=false
     if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+        AUTO_REG_SUCCESS=true
         echo "✅ Successfully registered with Pulse!"
-        echo "   The node should now appear in your Pulse dashboard."
-        echo ""
-        echo "📌 Note: You may need to refresh the page to see the new node."
     else
         echo "⚠️  Auto-registration failed. Manual configuration may be needed."
         echo "   Response: $REGISTER_RESPONSE"
@@ -1929,22 +2066,26 @@ pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 echo ""
 echo "✅ Setup complete!"
 echo ""
-echo "Add this server to Pulse with:"
-echo "  Token ID: pulse-monitor@pam!%s"
-if [ "$TOKEN_EXISTED" = true ]; then
-    echo "  Token Value: [Use your existing token or create a new one as shown above]"
-else
-    echo "  Token Value: [Copy from above]"
+
+# Only show manual setup instructions if auto-registration failed
+if [ "$AUTO_REG_SUCCESS" != true ]; then
+    echo "Add this server to Pulse with:"
+    echo "  Token ID: pulse-monitor@pam!%s"
+    if [ "$TOKEN_EXISTED" = true ]; then
+        echo "  Token Value: [Use your existing token or create a new one as shown above]"
+    else
+        echo "  Token Value: [Copy from above]"
+    fi
+    echo "  Host URL: %s"
+    echo ""
+    echo "If auto-registration is enabled but requires a token:"
+    echo "  1. Generate a registration token in Pulse Settings → Security"
+    echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
+    echo ""
 fi
-echo "  Host URL: %s"
-echo ""
-echo "If auto-registration is enabled but requires a token:"
-echo "  1. Generate a registration token in Pulse Settings → Security"
-echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
-echo ""
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), 
-			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1714,1718,1722,1725,1727,1731
-			pulseURL, serverHost, tokenName, storagePerms, tokenName, serverHost) // Lines 1752,1771,1773,1813,1819,1825
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
+			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1937,1941,1945,1948,1950,1954
+			pulseURL, serverHost, tokenName, tokenName, apiToken, storagePerms, tokenName, serverHost) // Lines 1984,1998,2011,2024,2033,2074,2080,2086
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -1962,14 +2103,17 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
-# Check for old Pulse tokens and offer to clean them up
-echo "Checking for existing Pulse monitoring tokens..."
-# PBS outputs tokens differently than PVE - extract just the token names
-OLD_TOKENS=$(proxmox-backup-manager user list-tokens pulse-monitor@pbs 2>/dev/null | grep -oE "pulse-[0-9\-]+-[0-9]+" | sort -u || true)
+# Extract Pulse server IP from the URL for token matching
+PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
+
+# Check for old Pulse tokens from the same Pulse server and offer to clean them up
+echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
+# PBS outputs tokens differently than PVE - extract just the token names matching this Pulse server
+OLD_TOKENS=$(proxmox-backup-manager user list-tokens pulse-monitor@pbs 2>/dev/null | grep -oE "pulse-${PULSE_IP_PATTERN}-[0-9]+" | sort -u || true)
 if [ ! -z "$OLD_TOKENS" ]; then
     TOKEN_COUNT=$(echo "$OLD_TOKENS" | wc -l)
     echo ""
-    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s):"
+    echo "⚠️  Found $TOKEN_COUNT old Pulse monitoring token(s) from this Pulse server (${PULSE_IP_PATTERN}):"
     echo "$OLD_TOKENS" | sed 's/^/   - /'
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -2034,12 +2178,20 @@ if echo "$TOKEN_OUTPUT" | grep -q "already exists"; then
 else
     echo "$TOKEN_OUTPUT"
     
-    # Extract the token value for backward compatibility (if manual mode is needed)
+    # Extract the token value for auto-registration
     TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep '"value"' | sed 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
     
-    # Try secure auto-registration
-    echo ""
-    echo "🔄 Starting secure auto-registration with Pulse..."
+    if [ -z "$TOKEN_VALUE" ]; then
+        echo "⚠️  Failed to extract token value from output."
+        echo "   Manual registration may be required."
+        echo ""
+    else
+        echo "✅ Token created for Pulse monitoring"
+        echo ""
+    fi
+    
+    # Try auto-registration
+    echo "🔄 Auto-registering with Pulse..."
     
     # Get the server's hostname
     SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
@@ -2048,23 +2200,32 @@ else
     # Send registration to Pulse
     PULSE_URL="%s"
     
-    # Check for HTTPS (warn but allow for local networks)
-    if [[ ! "$PULSE_URL" =~ ^https:// ]]; then
-        echo "⚠️  WARNING: Using HTTP - token will be sent unencrypted!"
-        echo "   This is acceptable for local networks but not recommended for internet."
+    # Check if host URL was provided
+    HOST_URL="%s"
+    if [ "$HOST_URL" = "https://YOUR_PBS_HOST:8007" ] || [ -z "$HOST_URL" ]; then
         echo ""
+        echo "❌ ERROR: No PBS host URL provided!"
+        echo "   The setup script URL is missing the 'host' parameter."
+        echo ""
+        echo "   Please use the correct URL format:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=YOUR_PBS_URL&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "   Example:"
+        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=https://192.168.0.8:8007&pulse_url=$PULSE_URL\" | bash"
+        echo ""
+        echo "📝 For manual setup, use the token created above with:"
+        echo "   Token ID: pulse-monitor@pbs!%s"
+        echo "   Token Value: [See above]"
+        echo ""
+        exit 1
     fi
-    
-    # Use secure registration - send token that was just created
-    echo "🔐 Using secure registration protocol..."
-    echo ""
     
     # Construct registration request with the token we just created
     # Use the actual PBS host URL provided to the script
     REGISTER_JSON=$(cat <<EOF
 {
   "type": "pbs",
-  "host": "%s",
+  "host": "$HOST_URL",
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pbs!%s",
   "tokenValue": "$TOKEN_VALUE"
@@ -2074,25 +2235,34 @@ EOF
     # Remove newlines from JSON
     REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
     
-    # Send registration (add X-Registration-Token header if provided)
+    # Send registration with appropriate authentication
+    PULSE_API_TOKEN="%s"
     REG_TOKEN="${PULSE_REG_TOKEN:-}"
-    if [ -n "$REG_TOKEN" ]; then
+    
+    if [ -n "$PULSE_API_TOKEN" ]; then
+        # Use API token for authentication
+        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Token: $PULSE_API_TOKEN" \
+            -d "$REGISTER_JSON" 2>&1)
+    elif [ -n "$REG_TOKEN" ]; then
+        # Legacy: Use registration token if provided
         echo "🔑 Using registration token: $REG_TOKEN"
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
             -H "X-Registration-Token: $REG_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
+        # Try without authentication (for systems without auth)
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
             -d "$REGISTER_JSON" 2>&1)
     fi
     
+    AUTO_REG_SUCCESS=false
     if echo "$REGISTER_RESPONSE" | grep -q "success"; then
+        AUTO_REG_SUCCESS=true
         echo "✅ Successfully registered with Pulse!"
-        echo "   The node should now appear in your Pulse dashboard."
-        echo ""
-        echo "📌 Note: You may need to refresh the page to see the new node."
     else
         echo "⚠️  Auto-registration failed. Manual configuration may be needed."
         echo "   Response: $REGISTER_RESPONSE"
@@ -2109,30 +2279,107 @@ echo ""
 # Set up permissions
 echo "Setting up permissions..."
 proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
-proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!%s'
 
 echo ""
 echo "✅ Setup complete!"
 echo ""
-echo "Add this server to Pulse with:"
-echo "  Token ID: pulse-monitor@pbs!%s"
-echo "  Token Value: [Check the output above for the token or instructions]"
-echo "  Host URL: https://$SERVER_IP:8007"
-echo ""
-echo "If auto-registration is enabled but requires a token:"
-echo "  1. Generate a registration token in Pulse Settings → Security"
-echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
-echo ""
-`, serverName, time.Now().Format("2006-01-02 15:04:05"), 
-			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1808,1810,1814,1817,1819 (5 occurrences)
-			pulseURL, serverHost, tokenName, // Lines 1835,1853,1855: pulseURL, host URL, tokenId  
-			tokenName, tokenName) // Lines 1897,1903: ACL, Token ID
+
+# Only show manual setup instructions if auto-registration failed
+if [ "$AUTO_REG_SUCCESS" != true ]; then
+    echo "Add this server to Pulse with:"
+    echo "  Token ID: pulse-monitor@pbs!%s"
+    echo "  Token Value: [Check the output above for the token or instructions]"
+    echo "  Host URL: https://$SERVER_IP:8007"
+    echo ""
+    echo "If auto-registration is enabled but requires a token:"
+    echo "  1. Generate a registration token in Pulse Settings → Security"
+    echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
+    echo ""
+fi
+`, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
+			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 2172,2174,2178,2181,2183
+			pulseURL, serverHost, tokenName, tokenName, apiToken, tokenName) // Lines 2208,2222,2235,2248,2257,2317
 	}
 	
 	// Set headers for script download
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=pulse-setup-%s.sh", serverType))
 	w.Write([]byte(script))
+}
+
+// generateSetupToken generates a random token for temporary setup script access
+func (h *ConfigHandlers) generateSetupToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
+// HandleSetupScriptURL generates a temporary URL for downloading the setup script
+func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// Parse request
+	var req struct {
+		Type        string `json:"type"`
+		Host        string `json:"host"`
+		BackupPerms bool   `json:"backupPerms"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	
+	// Generate temporary token valid for 5 minutes
+	token := h.generateSetupToken()
+	expiry := time.Now().Add(5 * time.Minute)
+	h.tokenMutex.Lock()
+	h.setupTokens[token] = expiry
+	h.tokenMutex.Unlock()
+	
+	log.Info().
+		Str("token", token).
+		Time("expiry", expiry).
+		Int("total_tokens", len(h.setupTokens)).
+		Msg("Generated setup token")
+	
+	// Build the URL with the temporary token
+	pulseURL := fmt.Sprintf("%s://%s", "http", r.Host)
+	if r.TLS != nil {
+		pulseURL = fmt.Sprintf("%s://%s", "https", r.Host)
+	}
+	
+	encodedHost := ""
+	if req.Host != "" {
+		encodedHost = "&host=" + url.QueryEscape(req.Host)
+	}
+	
+	backupPerms := ""
+	if req.BackupPerms {
+		backupPerms = "&backup_perms=true"
+	}
+	
+	// Add API token if configured
+	apiTokenParam := ""
+	if h.config.APIToken != "" {
+		apiTokenParam = "&api_token=" + url.QueryEscape(h.config.APIToken)
+	}
+	
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&token=%s%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token, apiTokenParam)
+	
+	// Return the URL and curl command
+	response := map[string]interface{}{
+		"url":     scriptURL,
+		"command": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"expires": time.Now().Add(5 * time.Minute).Unix(),
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // AutoRegisterRequest represents a request from the setup script to auto-register a node
@@ -2155,32 +2402,13 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	// Check registration token if required
-	if os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true" || h.config.APIToken != "" {
-		regToken := r.Header.Get("X-Registration-Token")
+	// Check API token if configured (registration tokens removed)
+	if h.config.APIToken != "" {
 		apiToken := r.Header.Get("X-API-Token")
-		
-		// If registration token is provided, validate it
-		if regToken != "" {
-			// Registration token takes precedence
-			// We'll validate it later after parsing the request to get node type
-		} else if h.config.APIToken != "" {
-			// Fall back to API token if configured
-			if apiToken == "" || apiToken != h.config.APIToken {
-				log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - missing or invalid API token")
-				http.Error(w, "Registration requires valid registration token or API token", http.StatusUnauthorized)
-				return
-			}
-		} else if os.Getenv("REQUIRE_REGISTRATION_TOKEN") == "true" {
-			// Registration token explicitly required but not provided
-			log.Warn().Str("ip", r.RemoteAddr).Msg("Registration token required but not provided")
-			http.Error(w, "Registration token required", http.StatusUnauthorized)
+		if apiToken == "" || apiToken != h.config.APIToken {
+			log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - missing or invalid API token")
+			http.Error(w, "Registration requires valid API token", http.StatusUnauthorized)
 			return
-		}
-		
-		// Store regToken for later validation (only if not empty)
-		if regToken != "" {
-			r = r.WithContext(context.WithValue(r.Context(), "regToken", regToken))
 		}
 	}
 	
@@ -2208,24 +2436,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	// Validate registration token if provided
-	if regToken := r.Context().Value("regToken"); regToken != nil {
-		if tokenStr, ok := regToken.(string); ok && tokenStr != "" {
-			if err := h.tokenManager.ValidateToken(tokenStr, req.Type); err != nil {
-				log.Warn().
-					Str("ip", clientIP).
-					Str("token", tokenStr).
-					Err(err).
-					Msg("Invalid registration token")
-				http.Error(w, fmt.Sprintf("Invalid registration token: %v", err), http.StatusUnauthorized)
-				return
-			}
-			log.Info().
-				Str("ip", clientIP).
-				Str("token", tokenStr).
-				Msg("Registration token validated successfully")
-		}
-	}
+	// Registration token validation removed - feature deprecated
 	
 	log.Info().
 		Str("type", req.Type).
