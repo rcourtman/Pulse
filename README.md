@@ -17,7 +17,15 @@
 
 - **Auto-Discovery**: Finds Proxmox nodes on your network, one-liner setup via generated scripts
 - **Cluster Support**: Configure one node, monitor entire cluster
-- **Security**: Credentials encrypted at rest, masked in logs, never sent to frontend
+- **Enterprise Security**: 
+  - Credentials encrypted at rest, masked in logs, never sent to frontend
+  - CSRF protection for all state-changing operations
+  - Rate limiting (500 req/min general, 10 attempts/min for auth)
+  - Account lockout after failed login attempts
+  - Secure session management with HttpOnly cookies
+  - bcrypt password hashing
+  - Security headers (CSP, X-Frame-Options, etc.)
+  - Comprehensive audit logging
 - Live monitoring of VMs, containers, nodes, storage
 - Alerts with email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
 - Unified view of PBS backups, PVE backups, and snapshots
@@ -96,8 +104,9 @@ services:
       # - PORT=7655                         # Backend port (default: 7655)
       # - FRONTEND_PORT=7655                # Frontend port (default: 7655)
       
-      # Security
-      # - API_TOKEN=your-secure-token       # API authentication token
+      # Security (all optional - runs open by default)
+      # - PULSE_PASSWORD=your-password      # Password for web UI login (optional, will be hashed)
+      # - API_TOKEN=your-secure-token       # API authentication token (optional)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
       # Polling & timeouts
@@ -126,10 +135,20 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
 
 ## Security
 
-- Credentials encrypted at rest (AES-256-GCM)
-- Tokens masked in logs
-- Frontend never receives actual credentials
-- Export requires authentication
+- **Authentication is optional** - Run open for homelab or secured for production
+- **Multiple auth methods**: Password authentication, API tokens, or both
+- **Enterprise-grade protection**:
+  - Credentials encrypted at rest (AES-256-GCM)
+  - CSRF tokens for state-changing operations
+  - Rate limiting and account lockout protection
+  - Secure session management with HttpOnly cookies
+  - bcrypt password hashing (cost 12)
+  - Security headers (CSP, X-Frame-Options, etc.)
+  - Comprehensive audit logging
+- **Security by design**:
+  - Frontend never receives node credentials
+  - API tokens visible only to authenticated users
+  - Export/import requires authentication when configured
 
 See [Security Documentation](docs/SECURITY.md) for details.
 
@@ -264,14 +283,34 @@ journalctl -u pulse -f
 
 ## Development
 
+### Quick Start - Hot Reload (Recommended)
 ```bash
-# Frontend
+# Best development experience with instant frontend updates
+./hot-dev.sh
+# Frontend: http://localhost:5173 (hot reload)
+# Backend: http://localhost:7655
+```
+
+### Production-like Development
+```bash
+# Watches files and rebuilds/embeds frontend into Go binary
+./dev.sh
+# Access at: http://localhost:7655
+```
+
+### Manual Development
+```bash
+# Frontend only
 cd frontend-modern
 npm install
 npm run dev
 
-# Backend
-go run cmd/pulse/*.go
+# Backend only
+go build -o pulse ./cmd/pulse
+./pulse
+
+# Or use make for full rebuild
+make dev
 ```
 
 ## Links

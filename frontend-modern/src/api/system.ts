@@ -21,6 +21,11 @@ export class SystemAPI {
     return apiFetchJSON('/api/system/api-token');
   }
   
+  static async getAPIToken(reveal: boolean = false): Promise<APITokenStatus> {
+    const url = reveal ? '/api/system/api-token?reveal=true' : '/api/system/api-token';
+    return apiFetchJSON(url);
+  }
+  
   static async generateAPIToken(): Promise<APITokenStatus> {
     const result = await apiFetchJSON('/api/system/api-token/generate', {
       method: 'POST',
