@@ -112,12 +112,12 @@ services:
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
       # Polling & timeouts
-      # - POLLING_INTERVAL=5                # Seconds between node checks (default: 5)
+      # - POLLING_INTERVAL=3                # Seconds between node checks (default: 3)
       # - CONNECTION_TIMEOUT=10             # Connection timeout in seconds (default: 10)
       
       # Updates
       # - UPDATE_CHANNEL=stable             # Update channel: stable or rc (default: stable)
-      # - AUTO_UPDATE_ENABLED=true          # Enable auto-updates (default: true)
+      # - AUTO_UPDATE_ENABLED=false         # Enable auto-updates (default: false)
       # - AUTO_UPDATE_CHECK_INTERVAL=24     # Hours between update checks (default: 24)
       # - AUTO_UPDATE_TIME=03:00            # Time to install updates HH:MM (default: 03:00)
       

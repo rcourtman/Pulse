@@ -1176,9 +1176,9 @@ const Settings: Component = () => {
                     </svg>
                     <div class="text-sm text-blue-800 dark:text-blue-200">
                       <p class="font-medium mb-1">Configuration Priority:</p>
-                      <p>• Environment variables override settings (for Docker/systemd)</p>
-                      <p>• Changes made here are saved and take effect immediately</p>
-                      <p>• Settings persist across restarts</p>
+                      <p>• Some env vars override settings (API_TOKEN, PORTS, AUTH)</p>
+                      <p>• Changes made here are saved to system.json immediately</p>
+                      <p>• Settings persist unless overridden by env vars</p>
                     </div>
                   </div>
                 </div>
@@ -1253,7 +1253,7 @@ const Settings: Component = () => {
                     
                     <div>
                       <label class="text-sm font-medium text-gray-900 dark:text-gray-100">CORS Allowed Origins</label>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all)</p>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all, empty = same-origin only)</p>
                       <input
                         type="text"
                         value={allowedOrigins()}
