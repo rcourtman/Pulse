@@ -107,7 +107,7 @@ services:
       
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
-      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hash (MUST use quotes! Use Quick Security Setup)
+      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hash - MUST be 60 chars in single quotes!
       # - API_TOKEN=<sha3-256-hash>         # SHA3-256 hashed API token (64 hex chars)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
@@ -250,6 +250,19 @@ Using Pulse behind a reverse proxy? **WebSocket support is required for real-tim
 See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy, Apache, Traefik, HAProxy, and Cloudflare Tunnel configurations.
 
 ## Troubleshooting
+
+### Authentication Issues
+
+#### Cannot login after setting up security
+- **Docker**: Ensure bcrypt hash is exactly 60 characters and wrapped in single quotes
+- **Example**: `PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'`
+- If hash is truncated, authentication will fail
+- Use Quick Security Setup in the UI to avoid manual configuration errors
+
+#### .env file not created (Docker)
+- Check container logs: `docker logs <container-name>`
+- Verify `/data` volume is mounted and writable
+- Manually create `/data/.env` with proper format if needed
 
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)
