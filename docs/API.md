@@ -232,7 +232,17 @@ POST /api/config/import  # Import encrypted config
 - Private network access (automatic for homelab users on 192.168.x.x, 10.x.x.x, 172.16.x.x)
 - ALLOW_UNPROTECTED_EXPORT=true (to explicitly allow on public networks)
 
-**Export includes**: All nodes, credentials (encrypted), alerts, webhooks, email config, system settings, and guest metadata (custom console URLs)
+**Export includes**: 
+- All nodes and their credentials (encrypted)
+- Alert configurations
+- Webhook configurations  
+- Email settings
+- System settings (polling intervals, UI preferences)
+- Guest metadata (custom console URLs)
+
+**NOT included** (for security):
+- Authentication settings (passwords, API tokens)
+- Each instance should have its own authentication
 
 ## Notifications
 
