@@ -561,9 +561,20 @@ const Settings: Component = () => {
     }
     
     try {
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('pulse_csrf='))
+        ?.split('=')[1];
+      
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
+      
+      // Add CSRF token if available
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
       
       // Add API token if configured
       const apiToken = localStorage.getItem('apiToken');
@@ -659,9 +670,20 @@ const Settings: Component = () => {
         return;
       }
       
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('pulse_csrf='))
+        ?.split('=')[1];
+      
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
+      
+      // Add CSRF token if available
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
       
       // Add API token if configured
       const apiToken = localStorage.getItem('apiToken');
