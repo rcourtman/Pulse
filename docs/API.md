@@ -228,8 +228,9 @@ POST /api/config/import  # Import encrypted config
 
 **Authentication**: Requires one of:
 - Active session (when logged in with password)
-- API token via X-API-Token header
-- ALLOW_UNPROTECTED_EXPORT=true (for unprotected instances)
+- API token via X-API-Token header  
+- Private network access (automatic for homelab users on 192.168.x.x, 10.x.x.x, 172.16.x.x)
+- ALLOW_UNPROTECTED_EXPORT=true (to explicitly allow on public networks)
 
 **Export includes**: All nodes, credentials (encrypted), alerts, webhooks, email config, system settings, and guest metadata (custom console URLs)
 

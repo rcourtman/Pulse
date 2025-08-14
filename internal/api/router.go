@@ -553,13 +553,30 @@ ENABLE_AUDIT_LOG=true
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
-			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
-				// No auth configured and unprotected export not explicitly allowed
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Msg("Export blocked - authentication required")
-				http.Error(w, "Export requires authentication (set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
-				return
+			} else {
+				// No auth configured - check if this is a homelab/private network
+				clientIP := utils.GetClientIP(req.RemoteAddr, 
+					req.Header.Get("X-Forwarded-For"), 
+					req.Header.Get("X-Real-IP"))
+				
+				isPrivate := utils.IsPrivateIP(clientIP)
+				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
+				
+				if !isPrivate && !allowUnprotected {
+					// Public network access without auth - definitely block
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Bool("private_network", isPrivate).
+						Msg("Export blocked - public network requires authentication")
+					http.Error(w, "Export requires authentication on public networks", http.StatusForbidden)
+					return
+				} else if isPrivate && !allowUnprotected {
+					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
+					log.Info().
+						Str("ip", req.RemoteAddr).
+						Msg("Export allowed - private network with no auth")
+					// Continue - allow export on private networks for homelab users
+				}
 			}
 			
 			// Log successful export attempt
@@ -609,13 +626,30 @@ ENABLE_AUDIT_LOG=true
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
-			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
-				// No auth configured and unprotected import not explicitly allowed
-				log.Warn().
-					Str("ip", req.RemoteAddr).
-					Msg("Import blocked - authentication required")
-				http.Error(w, "Import requires authentication (set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
-				return
+			} else {
+				// No auth configured - check if this is a homelab/private network
+				clientIP := utils.GetClientIP(req.RemoteAddr, 
+					req.Header.Get("X-Forwarded-For"), 
+					req.Header.Get("X-Real-IP"))
+				
+				isPrivate := utils.IsPrivateIP(clientIP)
+				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
+				
+				if !isPrivate && !allowUnprotected {
+					// Public network access without auth - definitely block
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Bool("private_network", isPrivate).
+						Msg("Import blocked - public network requires authentication")
+					http.Error(w, "Import requires authentication on public networks", http.StatusForbidden)
+					return
+				} else if isPrivate && !allowUnprotected {
+					// Private network but ALLOW_UNPROTECTED_EXPORT not set - show helpful message
+					log.Info().
+						Str("ip", req.RemoteAddr).
+						Msg("Import allowed - private network with no auth")
+					// Continue - allow import on private networks for homelab users
+				}
 			}
 			
 			// Log successful import attempt
