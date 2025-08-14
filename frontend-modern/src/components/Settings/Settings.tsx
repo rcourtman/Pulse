@@ -1481,29 +1481,63 @@ const Settings: Component = () => {
             <div class="space-y-6">
               {/* Authentication Status */}
               <Show when={securityStatus()?.hasAuthentication}>
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Authentication</h3>
-                    <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-md">
-                      Enabled
-                    </span>
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  {/* Header */}
+                  <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <div class="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                          <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Authentication</h3>
+                          <p class="text-xs text-gray-600 dark:text-gray-400">Password protection enabled</p>
+                        </div>
+                      </div>
+                      <span class="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-full flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        Active
+                      </span>
+                    </div>
                   </div>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Login required to access Pulse
-                  </p>
-                  <div class="mt-4 flex gap-2">
-                    <button
-                      onClick={() => setShowPasswordModal(true)}
-                      class="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                    >
-                      Change Password
-                    </button>
-                    <button
-                      onClick={() => setShowRemovePasswordModal(true)}
-                      class="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                    >
-                      Remove Password
-                    </button>
+                  
+                  {/* Content */}
+                  <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <button
+                        onClick={() => setShowPasswordModal(true)}
+                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
+                      >
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                          <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                          </svg>
+                        </div>
+                        <div class="text-left">
+                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Change Password</div>
+                          <div class="text-xs text-gray-500 dark:text-gray-400">Update your login credentials</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setShowRemovePasswordModal(true)}
+                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
+                      >
+                        <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
+                          <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <div class="text-left">
+                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Remove Password</div>
+                          <div class="text-xs text-gray-500 dark:text-gray-400">Disable authentication</div>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Show>
@@ -1515,12 +1549,26 @@ const Settings: Component = () => {
 
               {/* API Token - Show current token when auth is enabled */}
               <Show when={securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Token</h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Your API token for automation and integrations
-                  </p>
-                  <CurrentAPIToken />
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  {/* Header */}
+                  <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">API Token</h3>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">For automation and integrations</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div class="p-6">
+                    <CurrentAPIToken />
+                  </div>
                 </div>
               </Show>
 

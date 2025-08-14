@@ -1,5 +1,6 @@
 import { createSignal, Show, onMount } from 'solid-js';
 import { SystemAPI, APITokenStatus } from '@/api/system';
+import { copyToClipboard } from '@/utils/clipboard';
 
 export function APITokenManager() {
   const [tokenStatus, setTokenStatus] = createSignal<APITokenStatus | null>(null);
@@ -64,38 +65,15 @@ export function APITokenManager() {
     }
   };
 
-  const copyToClipboard = async () => {
-    if (currentToken()) {
-      try {
-        // Check if clipboard API is available (requires HTTPS in most browsers)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(currentToken()!);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        } else {
-          // Fallback for HTTP or unsupported browsers
-          const textArea = document.createElement('textarea');
-          textArea.value = currentToken()!;
-          textArea.style.position = 'fixed';
-          textArea.style.left = '-999999px';
-          textArea.style.top = '-999999px';
-          document.body.appendChild(textArea);
-          textArea.select();
-          try {
-            document.execCommand('copy');
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          } catch (err) {
-            console.error('Failed to copy:', err);
-            setError('Failed to copy - please select and copy manually');
-          } finally {
-            document.body.removeChild(textArea);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to copy:', err);
-        setError('Failed to copy - please select and copy manually');
-      }
+  const handleCopy = async () => {
+    if (!currentToken()) return;
+    
+    const success = await copyToClipboard(currentToken()!);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setError('Failed to copy - please select and copy manually');
     }
   };
 
@@ -153,15 +131,18 @@ export function APITokenManager() {
                   onClick={(e) => e.currentTarget.select()}
                 />
                 <button
-                  onClick={copyToClipboard}
+                  onClick={handleCopy}
                   class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
                   {copied() ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                Use this token for API authentication. Keep it secure!
-              </p>
+              <div class="text-xs text-gray-600 dark:text-gray-400 mt-2 space-y-2">
+                <p>Use this token for API authentication:</p>
+                <code class="block bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                  curl -H "X-API-Token: {currentToken()}" {window.location.origin}/api/health
+                </code>
+              </div>
             </div>
           </Show>
 

@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
+import { copyToClipboard } from '@/utils/clipboard';
 
 interface SecurityCredentials {
   username: string;
@@ -37,12 +38,12 @@ export const QuickSecuritySetup: Component = () => {
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
 
-  const copyToClipboard = async (text: string, type: 'username' | 'password' | 'token') => {
-    try {
-      await navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, type: 'username' | 'password' | 'token') => {
+    const success = await copyToClipboard(text);
+    if (success) {
       setCopied(type);
       setTimeout(() => setCopied(null), 2000);
-    } catch (err) {
+    } else {
       showError('Failed to copy to clipboard');
     }
   };
@@ -348,7 +349,7 @@ Important:
                   {credentials()!.username}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(credentials()!.username, 'username')}
+                  onClick={() => handleCopy(credentials()!.username, 'username')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
                   {copied() === 'username' ? 'Copied!' : 'Copy'}
@@ -363,7 +364,7 @@ Important:
                   {credentials()!.password}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(credentials()!.password, 'password')}
+                  onClick={() => handleCopy(credentials()!.password, 'password')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
                   {copied() === 'password' ? 'Copied!' : 'Copy'}
@@ -378,7 +379,7 @@ Important:
                   {credentials()!.apiToken}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(credentials()!.apiToken!, 'token')}
+                  onClick={() => handleCopy(credentials()!.apiToken!, 'token')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
                   {copied() === 'token' ? 'Copied!' : 'Copy'}
