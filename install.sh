@@ -197,26 +197,26 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
-    # Ensure install directory exists before copying
-    mkdir -p "$INSTALL_DIR"
+    # Ensure install directory and bin subdirectory exist
+    mkdir -p "$INSTALL_DIR/bin"
     
-    # Copy Pulse binary from bin/ directory (standard structure as of v4.3.1)
+    # Copy Pulse binary to the correct location (/opt/pulse/bin/pulse)
     if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
-        cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/pulse"
+        cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/bin/pulse"
     elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
         # Fallback for old archives (pre-v4.3.1)
-        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/pulse"
+        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
     else
         print_error "Pulse binary not found in archive"
         exit 1
     fi
     
-    chmod +x "$INSTALL_DIR/pulse"
+    chmod +x "$INSTALL_DIR/bin/pulse"
     chown -R pulse:pulse "$INSTALL_DIR"
     
     # Create symlink in /usr/local/bin for PATH convenience
-    ln -sf "$INSTALL_DIR/pulse" /usr/local/bin/pulse
-    print_success "Pulse binary installed to $INSTALL_DIR/pulse"
+    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+    print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
     print_success "Symlink created at /usr/local/bin/pulse"
     
     # Copy VERSION file if present
@@ -254,7 +254,7 @@ Type=simple
 User=pulse
 Group=pulse
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/pulse
+ExecStart=$INSTALL_DIR/bin/pulse
 Restart=always
 RestartSec=3
 StandardOutput=journal
