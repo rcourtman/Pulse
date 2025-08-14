@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showError } from '@/utils/toast';
+import { copyToClipboard } from '@/utils/clipboard';
 
 export const CurrentAPIToken: Component = () => {
   const [lastGeneratedToken, setLastGeneratedToken] = createSignal<string | null>(null);
@@ -15,14 +16,14 @@ export const CurrentAPIToken: Component = () => {
     setLastGeneratedToken(storedToken);
   }
 
-  const copyToClipboard = async () => {
+  const handleCopy = async () => {
     if (!lastGeneratedToken()) return;
     
-    try {
-      await navigator.clipboard.writeText(lastGeneratedToken()!);
+    const success = await copyToClipboard(lastGeneratedToken()!);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } else {
       showError('Failed to copy to clipboard');
     }
   };
@@ -70,7 +71,7 @@ export const CurrentAPIToken: Component = () => {
                   {lastGeneratedToken()}
                 </code>
                 <button
-                  onClick={copyToClipboard}
+                  onClick={handleCopy}
                   class="px-3 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   {copied() ? '✓ Copied' : 'Copy'}
@@ -80,7 +81,7 @@ export const CurrentAPIToken: Component = () => {
               <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                 <p>Use this token with the X-API-Token header:</p>
                 <code class="block bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs">
-                  curl -H "X-API-Token: {lastGeneratedToken()}" http://your-pulse-url/api/health
+                  curl -H "X-API-Token: {lastGeneratedToken()}" {window.location.origin}/api/health
                 </code>
               </div>
             </div>
