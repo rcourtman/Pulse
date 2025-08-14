@@ -6,8 +6,8 @@
 
 **Configuration location:** `/data` (volume mount)
 - All settings stored in the mounted volume
-- Environment variables passed with `-e` flag
-- No .env file support (use docker-compose.yml or -e flags)
+- Environment variables passed with `-e` flag or via `/data/.env` file
+- The security wizard creates `/data/.env` for auth credentials
 - Configuration persists in the volume across container restarts
 
 **Setting environment variables:**
@@ -124,9 +124,9 @@ The encryption key is auto-generated and stored in the data directory with restr
 - Base directory: `/data` (mounted volume)
 - Config files: `/data/*.json`, `/data/*.enc`
 - Encryption key: `/data/.encryption.key`
+- Auth config: `/data/.env` (created by security wizard)
 - Metrics: `/data/metrics/`
 - Logs: Container logs (`docker logs pulse`)
-- No .env file support
 
 **LXC/Native Install:**
 - Base directory: `/etc/pulse`
