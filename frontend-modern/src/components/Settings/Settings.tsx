@@ -1513,8 +1513,9 @@ const Settings: Component = () => {
                 <QuickSecuritySetup />
               </Show>
 
-              {/* API Tokens */}
-              <Show when={securityStatus()?.hasAuthentication}>
+              {/* API Tokens - Only show if NOT using Quick Security Setup */}
+              {/* Quick Security Setup manages its own API token via systemd */}
+              <Show when={false}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Tokens</h3>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
