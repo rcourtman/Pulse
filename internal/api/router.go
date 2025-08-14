@@ -191,6 +191,7 @@ func (r *Router) setupRoutes() {
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/security/remove-password", r.handleRemovePassword)
+	r.mux.HandleFunc("/api/logout", r.handleLogout)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -1116,6 +1117,59 @@ func (r *Router) handleRemovePassword(w http.ResponseWriter, req *http.Request) 
 		"success": true,
 		"message": message,
 		"requiresManualStep": requiresManualStep,
+	})
+}
+
+// handleLogout handles logout requests
+func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only POST method is allowed", nil)
+		return
+	}
+
+	// Get session token from cookie
+	var sessionToken string
+	if cookie, err := req.Cookie("pulse_session"); err == nil {
+		sessionToken = cookie.Value
+	}
+	
+	// Delete the session if it exists
+	if sessionToken != "" {
+		sessionMu.Lock()
+		delete(sessions, sessionToken)
+		sessionMu.Unlock()
+		
+		// Also delete CSRF token if exists
+		csrfMu.Lock()
+		delete(csrfTokens, sessionToken)
+		csrfMu.Unlock()
+	}
+	
+	// Clear the session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteStrictMode,
+	})
+	
+	// Audit log logout (use admin as username since we have single user for now)
+	LogAuditEvent("logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
+	
+	log.Info().
+		Str("user", "admin").
+		Str("ip", GetClientIP(req)).
+		Msg("User logged out")
+	
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Successfully logged out",
 	})
 }
 
