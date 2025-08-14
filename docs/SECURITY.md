@@ -82,7 +82,7 @@ Environment="ALLOW_UNPROTECTED_EXPORT=true"
 docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 ```
 
-**Note:** Never put API tokens or passwords in .env files! Use systemd environment variables or Docker secrets for sensitive data.
+**Note:** For production deployments, consider using Docker secrets or systemd environment variables instead of .env files for sensitive data.
 
 ## Security Features
 
@@ -147,7 +147,7 @@ This automatically:
 - Hashes it with bcrypt (cost factor 12)
 - Creates secure API token (SHA3-256 hashed)
 - For systemd: Configures systemd with hashed credentials
-- For Docker: Saves to `/data/.env` with hashed credentials
+- For Docker: Saves to `/data/.env` with hashed credentials (properly quoted to prevent shell expansion)
 - Restarts service/container with authentication enabled
 
 #### Manual Setup (Advanced)
@@ -160,6 +160,7 @@ Environment="PULSE_AUTH_USER=admin"
 Environment="PULSE_AUTH_PASS=$2a$12$..."  # Use bcrypt hash, not plain text!
 
 # Docker (credentials persist in volume via .env file)
+# IMPORTANT: Always quote bcrypt hashes to prevent shell expansion!
 docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pulse:latest
 # Or use Quick Security Setup and restart container
 ```
