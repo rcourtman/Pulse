@@ -734,6 +734,35 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	// Update state again with corrected disk metrics
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
+	
+	// Update cluster endpoint online status if this is a cluster
+	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
+		// Create a map of online nodes from our polling results
+		onlineNodes := make(map[string]bool)
+		for _, node := range modelNodes {
+			// Node is online if we successfully got its data
+			onlineNodes[node.Name] = node.Status == "online"
+		}
+		
+		// Update the online status for each cluster endpoint
+		for i := range instanceCfg.ClusterEndpoints {
+			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
+				instanceCfg.ClusterEndpoints[i].Online = online
+				if online {
+					instanceCfg.ClusterEndpoints[i].LastSeen = time.Now()
+				}
+			}
+		}
+		
+		// Update the config with the new online status
+		// This is needed so the UI can reflect the current status
+		for idx, cfg := range m.config.PVEInstances {
+			if cfg.Name == instanceName {
+				m.config.PVEInstances[idx].ClusterEndpoints = instanceCfg.ClusterEndpoints
+				break
+			}
+		}
+	}
 
 	// Poll VMs if enabled
 	if instanceCfg.MonitorVMs {
