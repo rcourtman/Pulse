@@ -363,8 +363,8 @@ main() {
         # Fresh installation
         install_dependencies
         create_user
-        download_pulse
         setup_directories
+        download_pulse
         install_systemd_service
         start_pulse
         print_completion
