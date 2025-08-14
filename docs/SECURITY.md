@@ -94,9 +94,11 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 
 ### Enterprise Security (When Authentication Enabled)
 - **Password Security**: 
-  - Bcrypt hashing with cost factor 12
+  - Bcrypt hashing with cost factor 12 (60-character hash)
   - Passwords NEVER stored in plain text
   - Automatic hashing on security setup
+  - **CRITICAL**: Bcrypt hashes MUST be exactly 60 characters
+  - **Docker Users**: Always wrap hash in single quotes to prevent shell expansion
 - **API Token Security**:
   - SHA3-256 hashing for all tokens
   - 64-character hex format when hashed
