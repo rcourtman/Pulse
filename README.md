@@ -107,7 +107,7 @@ services:
       
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
-      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hashed password (use Quick Security Setup)
+      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hash (MUST use quotes! Use Quick Security Setup)
       # - API_TOKEN=<sha3-256-hash>         # SHA3-256 hashed API token (64 hex chars)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
@@ -145,7 +145,7 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
   - Rate limiting and account lockout protection
   - Secure session management with HttpOnly cookies
   - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
-  - SHA3-256 API token hashing - tokens NEVER stored in plain text (cost 12)
+  - SHA3-256 API token hashing - tokens NEVER stored in plain text
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - **Security by design**:
