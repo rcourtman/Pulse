@@ -219,14 +219,19 @@ DELETE /api/system/api-token/delete # Remove token
 ```
 
 ### Export/Import Configuration
-Backup and restore Pulse configuration.
+Backup and restore Pulse configuration with encryption.
 
 ```bash
 POST /api/config/export  # Export encrypted config
 POST /api/config/import  # Import encrypted config
 ```
 
-**Note**: Requires API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
+**Authentication**: Requires one of:
+- Active session (when logged in with password)
+- API token via X-API-Token header
+- ALLOW_UNPROTECTED_EXPORT=true (for unprotected instances)
+
+**Export includes**: All nodes, credentials (encrypted), alerts, webhooks, email config, system settings, and guest metadata (custom console URLs)
 
 ## Notifications
 
