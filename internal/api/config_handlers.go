@@ -24,24 +24,26 @@ import (
 
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
-	config       *config.Config
-	persistence  *config.ConfigPersistence
-	monitor      *monitoring.Monitor
-	reloadFunc   func() error
-	wsHub        *websocket.Hub
-	setupTokens  map[string]time.Time // Temporary tokens for setup script access
-	tokenMutex   sync.RWMutex         // Mutex for thread-safe token access
+	config               *config.Config
+	persistence          *config.ConfigPersistence
+	monitor              *monitoring.Monitor
+	reloadFunc           func() error
+	wsHub                *websocket.Hub
+	guestMetadataHandler *GuestMetadataHandler
+	setupTokens          map[string]time.Time // Temporary tokens for setup script access
+	tokenMutex           sync.RWMutex         // Mutex for thread-safe token access
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub) *ConfigHandlers {
+func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler) *ConfigHandlers {
 	h := &ConfigHandlers{
-		config:       cfg,
-		persistence:  config.NewConfigPersistence(cfg.DataPath),
-		monitor:      monitor,
-		reloadFunc:   reloadFunc,
-		wsHub:        wsHub,
-		setupTokens:  make(map[string]time.Time),
+		config:               cfg,
+		persistence:          config.NewConfigPersistence(cfg.DataPath),
+		monitor:              monitor,
+		reloadFunc:           reloadFunc,
+		wsHub:                wsHub,
+		guestMetadataHandler: guestMetadataHandler,
+		setupTokens:          make(map[string]time.Time),
 	}
 	
 	// Clean up expired tokens periodically
@@ -1596,6 +1598,15 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 			log.Info().Msg("Reloaded email configuration after import")
 		} else {
 			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
+		}
+	}
+
+	// Reload guest metadata from disk
+	if h.guestMetadataHandler != nil {
+		if err := h.guestMetadataHandler.Reload(); err != nil {
+			log.Warn().Err(err).Msg("Failed to reload guest metadata after import")
+		} else {
+			log.Info().Msg("Reloaded guest metadata after import")
 		}
 	}
 
