@@ -117,6 +117,11 @@ export const QuickSecuritySetup: Component = () => {
       setCredentials(newCredentials);
       setShowCredentials(true);
       
+      // Store the API token in sessionStorage so it can be retrieved later in this session
+      if (newCredentials.apiToken) {
+        sessionStorage.setItem('pulse_last_api_token', newCredentials.apiToken);
+      }
+      
       // Store the command if manual action needed
       if (result.command) {
         (window as any).securityCommand = result.command;
