@@ -678,6 +678,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			isPublic = true
 		}
 		
+		// Special case: quick-setup should be accessible to check if already configured
+		// The handler itself will verify if setup should be skipped
+		if req.URL.Path == "/api/security/quick-setup" && req.Method == http.MethodPost {
+			isPublic = true
+		}
+		
 		// Check auth for protected routes
 		if !isPublic && !CheckAuth(r.config, w, req) {
 			// Never send WWW-Authenticate - use custom login page

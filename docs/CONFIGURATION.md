@@ -74,6 +74,15 @@ Pulse uses two different file types for configuration, each serving a specific p
 - **Contents**: Only auth-related variables (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN)
 - **Security**: Passwords and tokens are bcrypt-hashed, not plaintext
 
+**Example .env file:**
+```bash
+PULSE_AUTH_USER='admin'
+PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'
+API_TOKEN='e6e9fcfb4662d2b485000cc5faf2f7e5d8b75e0492b4877c36dadb085f12e57b'
+```
+
+**CRITICAL**: The bcrypt hash MUST be exactly 60 characters and enclosed in single quotes!
+
 ### .enc Files (Sensitive Configuration)
 - **Purpose**: Store sensitive configuration like Proxmox node credentials
 - **Format**: Encrypted JSON using AES-256-GCM
@@ -97,7 +106,7 @@ Variables that ALWAYS override UI settings:
 - `FRONTEND_PORT` or `PORT` - Web UI port (default: 7655)
 - `API_TOKEN` - Token for API authentication (overrides UI)
 - `PULSE_AUTH_USER` - Username for web UI authentication (overrides UI)
-- `PULSE_AUTH_PASS` - Password for web UI authentication (overrides UI)
+- `PULSE_AUTH_PASS` - Bcrypt password hash - MUST be 60 chars in single quotes! (overrides UI)
 - `UPDATE_CHANNEL` - stable or rc (overrides UI)
 - `AUTO_UPDATE_ENABLED` - true/false (overrides UI)
 - `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks (overrides UI)
