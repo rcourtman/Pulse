@@ -553,9 +553,9 @@ ENABLE_AUDIT_LOG=true
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
 				// Check if stored token is hashed or plain text
-				if internalauth.IsAPITokenHashed(r.config.APIToken) {
+				if auth.IsAPITokenHashed(r.config.APIToken) {
 					// Compare against hash
-					hasValidAPIToken = internalauth.CompareAPIToken(authHeader, r.config.APIToken)
+					hasValidAPIToken = auth.CompareAPIToken(authHeader, r.config.APIToken)
 				} else {
 					// Plain text comparison (legacy)
 					hasValidAPIToken = (authHeader == r.config.APIToken)
@@ -633,9 +633,9 @@ ENABLE_AUDIT_LOG=true
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
 				// Check if stored token is hashed or plain text
-				if internalauth.IsAPITokenHashed(r.config.APIToken) {
+				if auth.IsAPITokenHashed(r.config.APIToken) {
 					// Compare against hash
-					hasValidAPIToken = internalauth.CompareAPIToken(authHeader, r.config.APIToken)
+					hasValidAPIToken = auth.CompareAPIToken(authHeader, r.config.APIToken)
 				} else {
 					// Plain text comparison (legacy)
 					hasValidAPIToken = (authHeader == r.config.APIToken)
