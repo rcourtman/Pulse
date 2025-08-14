@@ -47,27 +47,24 @@ export const Login: Component<LoginProps> = (props) => {
   };
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
-        <div class="animate-fade-in">
-          <div class="flex justify-center mb-4">
-            <div class="relative group">
-              <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
-              <img 
-                src="/logo.svg" 
-                alt="Pulse Logo" 
-                class="relative w-24 h-24 transform transition duration-500 group-hover:scale-110"
-              />
-            </div>
+        <div>
+          <div class="flex justify-center mb-6">
+            <img 
+              src="/logo.svg" 
+              alt="Pulse Logo" 
+              class="w-20 h-20"
+            />
           </div>
-          <h2 class="mt-6 text-center text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-            Welcome to Pulse
+          <h2 class="text-center text-2xl font-bold text-gray-900 dark:text-white">
+            Sign in to Pulse
           </h2>
           <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Enter your credentials to continue
+            Enter your credentials to access the dashboard
           </p>
         </div>
-        <form class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up" onSubmit={handleSubmit}>
+        <form class="mt-8 space-y-6 bg-white dark:bg-gray-800 rounded-lg p-8 shadow-sm border border-gray-200 dark:border-gray-700" onSubmit={handleSubmit}>
           <input type="hidden" name="remember" value="true" />
           <div class="space-y-4">
             <div class="relative">
@@ -85,7 +82,7 @@ export const Login: Component<LoginProps> = (props) => {
                 type="text"
                 autocomplete="username"
                 required
-                class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                class="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                 placeholder="Username"
                 value={username()}
                 onInput={(e) => setUsername(e.currentTarget.value)}
@@ -106,7 +103,7 @@ export const Login: Component<LoginProps> = (props) => {
                 type="password"
                 autocomplete="current-password"
                 required
-                class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                class="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                 placeholder="Password"
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
@@ -133,7 +130,7 @@ export const Login: Component<LoginProps> = (props) => {
             <button
               type="submit"
               disabled={loading()}
-              class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
+              class="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Show when={loading()}>
                 <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -141,8 +138,8 @@ export const Login: Component<LoginProps> = (props) => {
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               </Show>
-              <Show when={loading()} fallback="Sign in to Pulse">
-                Authenticating...
+              <Show when={loading()} fallback="Sign in">
+                Signing in...
               </Show>
             </button>
           </div>
