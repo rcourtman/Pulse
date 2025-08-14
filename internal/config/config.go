@@ -223,10 +223,18 @@ func Load() (*Config, error) {
 	
 	// Limited environment variable support
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
-	if port := os.Getenv("PORT"); port != "" {
+	
+	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
+	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {
+		if p, err := strconv.Atoi(frontendPort); err == nil {
+			cfg.FrontendPort = p
+			log.Info().Int("port", p).Msg("Overriding frontend port from FRONTEND_PORT env var")
+		}
+	} else if port := os.Getenv("PORT"); port != "" {
+		// Fall back to PORT for backwards compatibility
 		if p, err := strconv.Atoi(port); err == nil {
-			cfg.FrontendPort = p  // Fixed: PORT should set FrontendPort (the actual listening port)
-			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var")
+			cfg.FrontendPort = p
+			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var (legacy)")
 		}
 	}
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
