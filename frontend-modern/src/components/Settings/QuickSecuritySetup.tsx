@@ -379,6 +379,9 @@ Important:
                   {copied() === 'token' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                This is your API token for automation. Use with X-API-Token header.
+              </p>
             </div>
           </div>
 
