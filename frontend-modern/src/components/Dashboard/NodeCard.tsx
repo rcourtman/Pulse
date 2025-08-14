@@ -105,12 +105,32 @@ const NodeCard: Component<NodeCardProps> = (props) => {
 
   const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
   const nodeAlerts = createMemo(() => getResourceAlerts(props.node.id || props.node.name, activeAlerts));
-  const borderClass = alertStyles.hasAlert 
-    ? (alertStyles.severity === 'critical' ? 'border-red-500 border-2' : 'border-orange-500 border-2')
-    : 'border-gray-200 dark:border-gray-700';
+  
+  // Determine border/ring style based on status and alerts
+  const getBorderClass = () => {
+    // Offline nodes get red ring
+    if (!isOnline()) {
+      return 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700';
+    }
+    // Alert nodes get colored ring based on severity
+    if (alertStyles.hasAlert) {
+      return alertStyles.severity === 'critical' 
+        ? 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700' 
+        : 'ring-2 ring-orange-500 border border-gray-200 dark:border-gray-700';
+    }
+    // Normal nodes get standard border
+    return 'border border-gray-200 dark:border-gray-700';
+  };
+  
+  // Get background class from alert styles but remove the border-l-4 part
+  const getBackgroundClass = () => {
+    if (!alertStyles.rowClass) return '';
+    // Remove border classes from rowClass to avoid conflicts
+    return alertStyles.rowClass.replace(/border-[^\s]+/g, '').trim();
+  };
   
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border flex flex-col gap-1 min-w-[250px] ${borderClass} ${alertStyles.rowClass}`}>
+    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 flex flex-col gap-1 min-w-[250px] ${getBorderClass()} ${getBackgroundClass()}`}>
       {/* Header */}
       <div class="flex justify-between items-center">
         <h3 class="text-sm font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-2">

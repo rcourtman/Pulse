@@ -19,6 +19,7 @@ type ClusterClient struct {
 	clients         map[string]*Client // Key is node name
 	endpoints       []string           // All available endpoints
 	nodeHealth      map[string]bool    // Track node health
+	lastHealthCheck map[string]time.Time // Track last health check time
 	lastUsedIndex   int                // For round-robin
 	config          ClientConfig       // Base config (auth info)
 }
@@ -26,19 +27,97 @@ type ClusterClient struct {
 // NewClusterClient creates a new cluster-aware client
 func NewClusterClient(name string, config ClientConfig, endpoints []string) *ClusterClient {
 	cc := &ClusterClient{
-		name:       name,
-		clients:    make(map[string]*Client),
-		endpoints:  endpoints,
-		nodeHealth: make(map[string]bool),
-		config:     config,
+		name:            name,
+		clients:         make(map[string]*Client),
+		endpoints:       endpoints,
+		nodeHealth:      make(map[string]bool),
+		lastHealthCheck: make(map[string]time.Time),
+		config:          config,
 	}
 	
-	// Initialize all endpoints as healthy
+	// Initialize all endpoints as unknown (will be tested on first use)
+	// Don't assume they're healthy until proven
 	for _, endpoint := range endpoints {
-		cc.nodeHealth[endpoint] = true
+		cc.nodeHealth[endpoint] = false  // Start pessimistic, will test immediately
 	}
+	
+	// Do a quick parallel health check on initialization (synchronous to avoid race)
+	cc.initialHealthCheck()
 	
 	return cc
+}
+
+// initialHealthCheck performs a quick parallel health check on all endpoints
+func (cc *ClusterClient) initialHealthCheck() {
+	var wg sync.WaitGroup
+	for _, endpoint := range cc.endpoints {
+		wg.Add(1)
+		go func(ep string) {
+			defer wg.Done()
+			
+			// Try a quick connection test
+			cfg := cc.config
+			cfg.Host = ep
+			cfg.Timeout = 2 * time.Second
+			
+			testClient, err := NewClient(cfg)
+			if err != nil {
+				cc.mu.Lock()
+				cc.nodeHealth[ep] = false
+				cc.lastHealthCheck[ep] = time.Now()
+				cc.mu.Unlock()
+				log.Info().
+					Str("cluster", cc.name).
+					Str("endpoint", ep).
+					Msg("Cluster endpoint marked unhealthy on initialization")
+				return
+			}
+			
+			// Quick test
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_, err = testClient.GetNodes(ctx)
+			cancel()
+			
+			cc.mu.Lock()
+			if err != nil {
+				cc.nodeHealth[ep] = false
+				log.Info().
+					Str("cluster", cc.name).
+					Str("endpoint", ep).
+					Msg("Cluster endpoint failed initial health check")
+			} else {
+				// Create a proper client with full timeout for actual use
+				fullCfg := cc.config
+				fullCfg.Host = ep
+				fullClient, clientErr := NewClient(fullCfg)
+				if clientErr != nil {
+					cc.nodeHealth[ep] = false
+					log.Warn().
+						Str("cluster", cc.name).
+						Str("endpoint", ep).
+						Err(clientErr).
+						Msg("Failed to create full client after successful health check")
+				} else {
+					cc.nodeHealth[ep] = true
+					cc.clients[ep] = fullClient  // Store the full client, not test client
+					log.Info().
+						Str("cluster", cc.name).
+						Str("endpoint", ep).
+						Msg("Cluster endpoint passed initial health check")
+				}
+			}
+			cc.lastHealthCheck[ep] = time.Now()
+			cc.mu.Unlock()
+		}(endpoint)
+	}
+	
+	// Wait for all checks to complete
+	wg.Wait()
+	
+	log.Info().
+		Str("cluster", cc.name).
+		Int("total", len(cc.endpoints)).
+		Msg("Initial cluster health check completed")
 }
 
 // getHealthyClient returns a healthy client using round-robin selection
@@ -53,6 +132,13 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			healthyEndpoints = append(healthyEndpoints, endpoint)
 		}
 	}
+	
+	log.Debug().
+		Str("cluster", cc.name).
+		Int("healthy", len(healthyEndpoints)).
+		Int("total", len(cc.nodeHealth)).
+		Interface("nodeHealth", cc.nodeHealth).
+		Msg("Checking for healthy endpoints")
 	
 	if len(healthyEndpoints) == 0 {
 		// Try to recover by testing all endpoints
@@ -78,19 +164,53 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 	// Get or create client for this endpoint
 	client, exists := cc.clients[selectedEndpoint]
 	if !exists {
-		// Create new client
+		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
 		
-		newClient, err := NewClient(cfg)
+		// First try with a short timeout to quickly detect offline nodes
+		testCfg := cfg
+		testCfg.Timeout = 3 * time.Second
+		
+		testClient, err := NewClient(testCfg)
 		if err != nil {
 			// Mark as unhealthy
 			cc.nodeHealth[selectedEndpoint] = false
-			log.Error().
+			log.Debug().
 				Str("cluster", cc.name).
 				Str("endpoint", selectedEndpoint).
 				Err(err).
 				Msg("Failed to create client for cluster endpoint")
+			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
+		}
+		
+		// Quick connectivity test
+		testCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		testNodes, testErr := testClient.GetNodes(testCtx)
+		cancel()
+		
+		if testErr != nil {
+			// Mark as unhealthy
+			cc.nodeHealth[selectedEndpoint] = false
+			log.Warn().
+				Str("cluster", cc.name).
+				Str("endpoint", selectedEndpoint).
+				Err(testErr).
+				Msg("Cluster endpoint failed connectivity test")
+			return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+		}
+		
+		log.Debug().
+			Str("cluster", cc.name).
+			Str("endpoint", selectedEndpoint).
+			Int("nodes", len(testNodes)).
+			Msg("Cluster endpoint passed connectivity test")
+		
+		// Create the actual client with full timeout
+		newClient, err := NewClient(cfg)
+		if err != nil {
+			// This shouldn't happen since we just tested it
+			cc.nodeHealth[selectedEndpoint] = false
 			return nil, fmt.Errorf("failed to create client for %s: %w", selectedEndpoint, err)
 		}
 		
@@ -119,37 +239,80 @@ func (cc *ClusterClient) markUnhealthy(endpoint string) {
 func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	cc.mu.RLock()
 	unhealthyEndpoints := make([]string, 0)
+	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if !healthy {
+			// Skip if we checked this endpoint recently (within 30 seconds)
+			if lastCheck, exists := cc.lastHealthCheck[endpoint]; exists {
+				if now.Sub(lastCheck) < 30*time.Second {
+					continue
+				}
+			}
 			unhealthyEndpoints = append(unhealthyEndpoints, endpoint)
 		}
 	}
 	cc.mu.RUnlock()
 	
+	if len(unhealthyEndpoints) == 0 {
+		return
+	}
+	
+	// Test all unhealthy endpoints concurrently with a short timeout
+	var wg sync.WaitGroup
+	recoveredEndpoints := make(chan string, len(unhealthyEndpoints))
+	
 	for _, endpoint := range unhealthyEndpoints {
-		// Try to create a client and test connection
-		cfg := cc.config
-		cfg.Host = endpoint
-		
-		testClient, err := NewClient(cfg)
-		if err == nil {
-			// Try a simple API call
-			testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			_, err = testClient.GetNodes(testCtx)
-			cancel()
+		wg.Add(1)
+		go func(ep string) {
+			defer wg.Done()
 			
+			// Update last check time
+			cc.mu.Lock()
+			cc.lastHealthCheck[ep] = now
+			cc.mu.Unlock()
+			
+			// Try to create a client and test connection with shorter timeout
+			cfg := cc.config
+			cfg.Host = ep
+			cfg.Timeout = 2 * time.Second // Use shorter timeout for recovery attempts
+			
+			testClient, err := NewClient(cfg)
 			if err == nil {
-				cc.mu.Lock()
-				cc.nodeHealth[endpoint] = true
-				cc.clients[endpoint] = testClient
-				cc.mu.Unlock()
+				// Try a simple API call with short timeout
+				testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_, err = testClient.GetNodes(testCtx)
+				cancel()
 				
-				log.Info().
-					Str("cluster", cc.name).
-					Str("endpoint", endpoint).
-					Msg("Recovered unhealthy cluster node")
+				if err == nil {
+					recoveredEndpoints <- ep
+					
+					// Store the client with original timeout
+					cfg.Timeout = cc.config.Timeout
+					fullClient, _ := NewClient(cfg)
+					
+					cc.mu.Lock()
+					cc.nodeHealth[ep] = true
+					cc.clients[ep] = fullClient
+					cc.mu.Unlock()
+					
+					log.Info().
+						Str("cluster", cc.name).
+						Str("endpoint", ep).
+						Msg("Recovered unhealthy cluster node")
+				}
 			}
-		}
+		}(endpoint)
+	}
+	
+	// Wait for all recovery attempts to complete
+	go func() {
+		wg.Wait()
+		close(recoveredEndpoints)
+	}()
+	
+	// Process recovered endpoints (just for logging, actual recovery happens above)
+	for range recoveredEndpoints {
+		// Endpoints are already marked healthy in the goroutine
 	}
 }
 
@@ -157,9 +320,19 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Client) error) error {
 	maxRetries := len(cc.endpoints)
 	
+	log.Debug().
+		Str("cluster", cc.name).
+		Int("maxRetries", maxRetries).
+		Msg("Starting executeWithFailover")
+	
 	for i := 0; i < maxRetries; i++ {
 		client, err := cc.getHealthyClient(ctx)
 		if err != nil {
+			log.Debug().
+				Str("cluster", cc.name).
+				Err(err).
+				Int("attempt", i+1).
+				Msg("Failed to get healthy client")
 			return err
 		}
 		
@@ -180,6 +353,25 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			return nil
 		}
 		
+		// Check error type and content
+		errStr := err.Error()
+		
+		// Check if it's a node-specific or transient failure that shouldn't mark endpoint unhealthy
+		// Error 595 in Proxmox means "no ticket" but in cluster context often means target node unreachable
+		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
+		if strings.Contains(errStr, "595") || 
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) {
+			// This is likely a node-specific failure, not an endpoint failure
+			// Return the error but don't mark the endpoint as unhealthy
+			log.Debug().
+				Str("cluster", cc.name).
+				Str("endpoint", clientEndpoint).
+				Err(err).
+				Msg("Node-specific or configuration error, not marking endpoint unhealthy")
+			return err
+		}
+		
 		// Check if it's an auth error - don't retry on auth errors
 		if IsAuthError(err) {
 			return err
@@ -188,10 +380,11 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Mark endpoint as unhealthy and try next
 		cc.markUnhealthy(clientEndpoint)
 		
-		log.Debug().
+		log.Warn().
 			Str("cluster", cc.name).
 			Str("endpoint", clientEndpoint).
 			Err(err).
+			Int("attempt", i+1).
 			Msg("Failed on cluster node, trying next")
 	}
 	
@@ -213,6 +406,10 @@ func (cc *ClusterClient) GetHealthStatus() map[string]bool {
 // Implement all the Client methods with failover
 
 func (cc *ClusterClient) GetNodes(ctx context.Context) ([]Node, error) {
+	log.Debug().
+		Str("cluster", cc.name).
+		Msg("ClusterClient.GetNodes called")
+	
 	var result []Node
 	err := cc.executeWithFailover(ctx, func(client *Client) error {
 		nodes, err := client.GetNodes(ctx)
@@ -222,6 +419,19 @@ func (cc *ClusterClient) GetNodes(ctx context.Context) ([]Node, error) {
 		result = nodes
 		return nil
 	})
+	
+	if err != nil {
+		log.Warn().
+			Str("cluster", cc.name).
+			Err(err).
+			Msg("ClusterClient.GetNodes failed")
+	} else {
+		log.Info().
+			Str("cluster", cc.name).
+			Int("count", len(result)).
+			Msg("ClusterClient.GetNodes succeeded")
+	}
+	
 	return result, err
 }
 
