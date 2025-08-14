@@ -21,6 +21,11 @@ func NewGuestMetadataHandler(dataPath string) *GuestMetadataHandler {
 	}
 }
 
+// Reload reloads the guest metadata from disk
+func (h *GuestMetadataHandler) Reload() error {
+	return h.store.Load()
+}
+
 // HandleGetMetadata retrieves metadata for a specific guest or all guests
 func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
