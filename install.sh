@@ -197,6 +197,9 @@ download_pulse() {
     mkdir -p "$TEMP_EXTRACT"
     tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
     
+    # Ensure install directory exists before copying
+    mkdir -p "$INSTALL_DIR"
+    
     # Copy Pulse binary from bin/ directory (standard structure as of v4.3.1)
     if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
         cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/pulse"
