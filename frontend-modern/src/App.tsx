@@ -145,26 +145,35 @@ function App() {
   
   const handleLogout = async () => {
     try {
-      // Clear any session data
-      await fetch('/api/logout', {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'include'
+      // Import the apiClient to get CSRF token support
+      const { apiFetch, clearAuth } = await import('./utils/apiClient');
+      
+      // Clear any session data - this will include CSRF token
+      const response = await apiFetch('/api/logout', {
+        method: 'POST'
       });
+      
+      if (!response.ok) {
+        console.error('Logout failed:', response.status);
+      }
+      
+      // Clear auth from apiClient
+      clearAuth();
     } catch (error) {
       console.error('Logout error:', error);
     }
     
+    // Clear all local storage
+    localStorage.clear();
+    sessionStorage.clear();
+    
     // Clear WebSocket connection
-    setWsStore(null);
+    if (wsStore()) {
+      setWsStore(null);
+    }
     
-    // Set auth required
-    setNeedsAuth(true);
-    
-    // Reload to clear any cached data
-    window.location.reload();
+    // Force reload to login page
+    window.location.href = '/';
   };
 
   // Pass through the store directly (only when initialized)
