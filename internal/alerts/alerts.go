@@ -487,10 +487,20 @@ func (m *Manager) CheckNode(node models.Node) {
 	thresholds := m.config.NodeDefaults
 	m.mu.RUnlock()
 
-	// Check each metric
-	m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU)
-	m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory)
-	m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk)
+	// CRITICAL: Check if node is offline first
+	if node.Status == "offline" || node.ConnectionHealth == "error" || node.ConnectionHealth == "failed" {
+		m.checkNodeOffline(node)
+	} else {
+		// Clear any existing offline alert if node is back online
+		m.clearNodeOfflineAlert(node)
+	}
+
+	// Check each metric (only if node is online)
+	if node.Status != "offline" {
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU)
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory)
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk)
+	}
 }
 
 // CheckStorage checks storage against thresholds
@@ -817,6 +827,92 @@ func (m *Manager) GetAlertHistory(limit int) []Alert {
 // ClearAlertHistory clears all alert history
 func (m *Manager) ClearAlertHistory() error {
 	return m.historyManager.ClearAllHistory()
+}
+
+// checkNodeOffline creates an alert for offline nodes
+func (m *Manager) checkNodeOffline(node models.Node) {
+	alertID := fmt.Sprintf("node-offline-%s", node.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		// Alert already exists, just update time
+		m.activeAlerts[alertID].StartTime = time.Now()
+		return
+	}
+	
+	// Create new offline alert
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "connectivity",
+		Level:        AlertLevelCritical, // Node offline is always critical
+		ResourceID:   node.ID,
+		ResourceName: node.Name,
+		Node:         node.Name,
+		Instance:     node.Instance,
+		Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
+		Value:        0, // Not applicable for offline status
+		Threshold:    0, // Not applicable for offline status
+		StartTime:    time.Now(),
+		Acknowledged: false,
+	}
+	
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	
+	// Add to history
+	m.historyManager.AddAlert(*alert)
+	
+	// Send notification immediately for offline nodes
+	if m.onAlert != nil {
+		m.onAlert(alert)
+	}
+	
+	// Log the critical event
+	log.Error().
+		Str("node", node.Name).
+		Str("instance", node.Instance).
+		Str("status", node.Status).
+		Str("connectionHealth", node.ConnectionHealth).
+		Msg("CRITICAL: Node is offline")
+}
+
+// clearNodeOfflineAlert removes offline alert when node comes back online
+func (m *Manager) clearNodeOfflineAlert(node models.Node) {
+	alertID := fmt.Sprintf("node-offline-%s", node.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Check if offline alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+	
+	// Remove from active alerts
+	delete(m.activeAlerts, alertID)
+	
+	// Add to recently resolved  
+	resolvedAlert := &ResolvedAlert{
+		ResolvedTime: time.Now(),
+	}
+	resolvedAlert.Alert = alert
+	m.recentlyResolved[alertID] = resolvedAlert
+	
+	// Send recovery notification
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+	
+	// Log recovery
+	log.Info().
+		Str("node", node.Name).
+		Str("instance", node.Instance).
+		Dur("downtime", time.Since(alert.StartTime)).
+		Msg("Node is back online")
 }
 
 
