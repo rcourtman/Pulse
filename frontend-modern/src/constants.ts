@@ -52,6 +52,7 @@ export const STORAGE_KEYS = {
   SORT_KEY: 'sortKey',
   SORT_DIRECTION: 'sortDirection',
   ALERT_THRESHOLDS: 'alertThresholds',
+  ACTIVE_TAB: 'activeTab',
 } as const;
 
 // File size units

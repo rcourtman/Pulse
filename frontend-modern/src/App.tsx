@@ -56,8 +56,17 @@ function App() {
     }
   });
   
-  // Tab management
-  const [activeTab, setActiveTab] = createSignal<TabType>('main');
+  // Tab management with localStorage persistence
+  const savedTab = localStorage.getItem(STORAGE_KEYS.ACTIVE_TAB) as TabType;
+  const [activeTab, setActiveTab] = createSignal<TabType>(
+    savedTab && ['main', 'storage', 'backups', 'alerts', 'settings'].includes(savedTab) ? savedTab : 'main'
+  );
+  
+  // Persist tab selection
+  const changeTab = (tab: TabType) => {
+    setActiveTab(tab);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, tab);
+  };
   
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
@@ -214,7 +223,7 @@ function App() {
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
               }`}
-              onClick={() => setActiveTab('main')}
+              onClick={() => changeTab('main')}
               role="tab"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -229,7 +238,7 @@ function App() {
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
               }`}
-              onClick={() => setActiveTab('storage')}
+              onClick={() => changeTab('storage')}
               role="tab"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -245,7 +254,7 @@ function App() {
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
               }`}
-              onClick={() => setActiveTab('backups')}
+              onClick={() => changeTab('backups')}
               role="tab"
               title="PVE backups, PBS backups, and VM/CT snapshots"
             >
@@ -262,7 +271,7 @@ function App() {
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
               }`}
-              onClick={() => setActiveTab('alerts')}
+              onClick={() => changeTab('alerts')}
               role="tab"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -278,7 +287,7 @@ function App() {
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
               }`}
-              onClick={() => setActiveTab('settings')}
+              onClick={() => changeTab('settings')}
               role="tab"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
