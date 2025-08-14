@@ -14,6 +14,10 @@ export const QuickSecuritySetup: Component = () => {
   const [copied, setCopied] = createSignal<'username' | 'password' | 'token' | null>(null);
   const [readyToRestart, setReadyToRestart] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
+  const [useCustomPassword, setUseCustomPassword] = createSignal(false);
+  const [customUsername, setCustomUsername] = createSignal('admin');
+  const [customPassword, setCustomPassword] = createSignal('');
+  const [confirmPassword, setConfirmPassword] = createSignal('');
 
   const generatePassword = (length: number = 16): string => {
     // Avoid special chars that could cause issues with URLs or shell commands
@@ -72,13 +76,25 @@ export const QuickSecuritySetup: Component = () => {
   };
 
   const setupSecurity = async () => {
+    // Validate custom password if using
+    if (useCustomPassword()) {
+      if (customPassword().length < 8) {
+        showError('Password must be at least 8 characters');
+        return;
+      }
+      if (customPassword() !== confirmPassword()) {
+        showError('Passwords do not match');
+        return;
+      }
+    }
+    
     setIsSettingUp(true);
     
     try {
-      // Generate credentials
+      // Generate or use custom credentials
       const newCredentials: SecurityCredentials = {
-        username: 'admin',
-        password: generatePassword(),
+        username: customUsername(),
+        password: useCustomPassword() ? customPassword() : generatePassword(),
         apiToken: generateToken()
       };
 
@@ -188,6 +204,83 @@ Important:
             </div>
           </div>
 
+          <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Password Setup
+              </label>
+              <div class="flex items-center space-x-2">
+                <button
+                  onClick={() => setUseCustomPassword(false)}
+                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                    !useCustomPassword() 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  Auto-Generate
+                </button>
+                <button
+                  onClick={() => setUseCustomPassword(true)}
+                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                    useCustomPassword() 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+
+            <Show when={useCustomPassword()}>
+              <div class="space-y-2">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={customUsername()}
+                    onInput={(e) => setCustomUsername(e.currentTarget.value)}
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="admin"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Password (min 8 characters)
+                  </label>
+                  <input
+                    type="password"
+                    value={customPassword()}
+                    onInput={(e) => setCustomPassword(e.currentTarget.value)}
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter password"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword()}
+                    onInput={(e) => setConfirmPassword(e.currentTarget.value)}
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Confirm password"
+                  />
+                </div>
+              </div>
+            </Show>
+
+            <Show when={!useCustomPassword()}>
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                A secure 16-character password will be generated for you
+              </p>
+            </Show>
+          </div>
+
           <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
             <div class="flex">
               <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -195,7 +288,9 @@ Important:
               </svg>
               <div class="text-xs text-yellow-700 dark:text-yellow-300">
                 <p class="font-semibold">Important:</p>
-                <p>Credentials will be shown only once. Save them immediately!</p>
+                <p>{useCustomPassword() 
+                  ? 'Your password will be hashed before storage' 
+                  : 'Credentials will be shown only once. Save them immediately!'}</p>
               </div>
             </div>
           </div>
