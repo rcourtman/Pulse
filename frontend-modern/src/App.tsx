@@ -34,6 +34,7 @@ function App() {
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
+  const [hasAuth, setHasAuth] = createSignal(false);
   
   // Don't initialize WebSocket until after auth check
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
@@ -97,6 +98,16 @@ function App() {
   
   // Check auth on mount
   onMount(() => {
+    // First check security status to see if auth is configured
+    fetch('/api/security/status')
+      .then(res => res.json())
+      .then(data => {
+        setHasAuth(data.hasAuthentication || false);
+      })
+      .catch(() => {
+        setHasAuth(false);
+      });
+    
     fetch('/api/state', {
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
@@ -129,6 +140,30 @@ function App() {
   });
   
   const handleLogin = () => {
+    window.location.reload();
+  };
+  
+  const handleLogout = async () => {
+    try {
+      // Clear any session data
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    
+    // Clear WebSocket connection
+    setWsStore(null);
+    
+    // Set auth required
+    setNeedsAuth(true);
+    
+    // Reload to clear any cached data
     window.location.reload();
   };
 
@@ -211,6 +246,18 @@ function App() {
                   </Show>
                   {connected() ? 'Connected' : reconnecting() ? 'Reconnecting...' : 'Disconnected'}
                 </div>
+                <Show when={hasAuth() && !needsAuth()}>
+                  <button
+                    onClick={handleLogout}
+                    class="text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+                    title="Logout"
+                  >
+                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Logout</span>
+                  </button>
+                </Show>
               </div>
             </div>
           </div>
