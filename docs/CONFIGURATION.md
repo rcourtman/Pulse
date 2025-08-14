@@ -29,11 +29,12 @@ docker run -d \
 - Settings stored in encrypted JSON files
 - Environment variables can be set via systemd or .env file
 - .env file at `/etc/pulse/.env` is auto-loaded if present
+- **Service name**: `pulse` (ProxmoxVE) or `pulse-backend` (manual install)
 
 **Setting environment variables - Option 1: Systemd override**
 ```bash
-# Edit service
-sudo systemctl edit pulse-backend
+# Edit service (check which exists: pulse or pulse-backend)
+sudo systemctl edit pulse  # or pulse-backend
 
 # Add overrides:
 [Service]
@@ -51,7 +52,7 @@ FRONTEND_PORT=8080
 UPDATE_CHANNEL=rc
 
 # Restart service
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
 
 ### Web UI Configuration (Both Deployments)
@@ -81,7 +82,11 @@ PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'
 API_TOKEN='e6e9fcfb4662d2b485000cc5faf2f7e5d8b75e0492b4877c36dadb085f12e57b'
 ```
 
-**CRITICAL**: The bcrypt hash MUST be exactly 60 characters and enclosed in single quotes!
+**⚠️ CRITICAL for Docker Compose users:**
+- In docker-compose.yml, you MUST escape `$` as `$$`
+- Example: `PULSE_AUTH_PASS='$$2a$$12$$YTZXOCEylj4TaevZ0DCeI....'`
+- Or use a separate .env file where no escaping is needed
+- The bcrypt hash MUST be exactly 60 characters and enclosed in single quotes!
 
 ### .enc Files (Sensitive Configuration)
 - **Purpose**: Store sensitive configuration like Proxmox node credentials
@@ -136,7 +141,7 @@ Environment="API_TOKEN=your-secure-token"
 Environment="ALLOW_UNPROTECTED_EXPORT=true"
 
 # Restart service
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
 
 **Docker users:**
@@ -198,14 +203,14 @@ docker run -d --name pulse \
 **LXC/Systemd:**
 ```bash
 echo "FRONTEND_PORT=8080" >> /etc/pulse/.env
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
 
 ### Enable API Authentication
 ```bash
 sudo systemctl edit pulse-backend
 # Add: Environment="API_TOKEN=your-secure-token"
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
 
 ### Configure for Reverse Proxy
@@ -222,13 +227,13 @@ docker run -d --name pulse \
 **LXC/Systemd:**
 ```bash
 echo "ALLOWED_ORIGINS=https://pulse.example.com" >> /etc/pulse/.env
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
 
 ### Enable Debug Logging
 ```bash
 echo "LOG_LEVEL=debug" >> /etc/pulse/.env
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 tail -f /etc/pulse/pulse.log
 ```
 
@@ -305,5 +310,5 @@ sudo chown -R pulse:pulse /etc/pulse
 ### Changes Not Taking Effect
 Always restart after configuration changes:
 ```bash
-sudo systemctl restart pulse-backend
+sudo systemctl restart pulse  # or pulse-backend
 ```
