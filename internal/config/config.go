@@ -16,7 +16,26 @@ import (
 // IsPasswordHashed checks if a string looks like a bcrypt hash
 func IsPasswordHashed(password string) bool {
 	// Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
-	return strings.HasPrefix(password, "$2") && len(password) == 60
+	// We check for >= 55 to catch truncated hashes and warn users
+	if !strings.HasPrefix(password, "$2") {
+		return false
+	}
+	
+	length := len(password)
+	if length == 60 {
+		return true // Perfect bcrypt hash
+	}
+	
+	// Warn about truncated or invalid hashes
+	if length >= 55 && length < 60 {
+		log.Error().
+			Int("length", length).
+			Str("hash_start", password[:20]+"...").
+			Msg("Bcrypt hash appears truncated! Should be 60 characters. Password will be treated as plaintext.")
+		return false // Treat as plaintext to force user to fix it
+	}
+	
+	return false
 }
 
 // Config holds all application configuration
