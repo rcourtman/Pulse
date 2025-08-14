@@ -551,8 +551,10 @@ const Settings: Component = () => {
       return;
     }
     
-    // Check if API token is required but not set
-    if (securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
+    // Only check for API token if user is not authenticated via password
+    // If user is logged in with password, session auth is sufficient
+    const hasPasswordAuth = securityStatus()?.hasAuthentication;
+    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
       setApiTokenModalSource('export');
       setShowApiTokenModal(true);
       return;
@@ -572,23 +574,33 @@ const Settings: Component = () => {
       const response = await fetch('/api/config/export', {
         method: 'POST',
         headers,
+        credentials: 'include', // Include cookies for session auth
         body: JSON.stringify({ passphrase: exportPassphrase() }),
       });
       
       if (!response.ok) {
         const errorText = await response.text();
-        // Handle authentication errors by clearing invalid token and re-prompting
-        if (response.status === 401 || response.status === 403 || errorText.includes('API_TOKEN') || errorText.includes('Unauthorized')) {
-          // Clear invalid token if we had one
-          const hadToken = localStorage.getItem('apiToken');
-          if (hadToken) {
-            localStorage.removeItem('apiToken');
-            showError('Invalid or expired API token. Please re-enter.');
-            setApiTokenModalSource('export');
-            setShowApiTokenModal(true);
-            return;
+        // Handle authentication errors
+        if (response.status === 401 || response.status === 403) {
+          // Check if we're using API token auth (not password auth)
+          const hasPasswordAuth = securityStatus()?.hasAuthentication;
+          if (!hasPasswordAuth) {
+            // Clear invalid token if we had one
+            const hadToken = localStorage.getItem('apiToken');
+            if (hadToken) {
+              localStorage.removeItem('apiToken');
+              showError('Invalid or expired API token. Please re-enter.');
+              setApiTokenModalSource('export');
+              setShowApiTokenModal(true);
+              return;
+            }
+            if (errorText.includes('API_TOKEN')) {
+              setApiTokenModalSource('export');
+              setShowApiTokenModal(true);
+              return;
+            }
           }
-          throw new Error('Export requires authentication. Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true in environment variables.');
+          throw new Error('Export requires authentication');
         }
         throw new Error(errorText || 'Export failed');
       }
@@ -627,8 +639,10 @@ const Settings: Component = () => {
       return;
     }
     
-    // Check if API token is required but not set
-    if (securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
+    // Only check for API token if user is not authenticated via password
+    // If user is logged in with password, session auth is sufficient
+    const hasPasswordAuth = securityStatus()?.hasAuthentication;
+    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !localStorage.getItem('apiToken')) {
       setApiTokenModalSource('import');
       setShowApiTokenModal(true);
       return;
@@ -658,6 +672,7 @@ const Settings: Component = () => {
       const response = await fetch('/api/config/import', {
         method: 'POST',
         headers,
+        credentials: 'include', // Include cookies for session auth
         body: JSON.stringify({
           passphrase: importPassphrase(),
           data: exportData.data,
@@ -666,18 +681,27 @@ const Settings: Component = () => {
       
       if (!response.ok) {
         const errorText = await response.text();
-        // Handle authentication errors by clearing invalid token and re-prompting
-        if (response.status === 401 || response.status === 403 || errorText.includes('API_TOKEN') || errorText.includes('Unauthorized')) {
-          // Clear invalid token if we had one
-          const hadToken = localStorage.getItem('apiToken');
-          if (hadToken) {
-            localStorage.removeItem('apiToken');
-            showError('Invalid or expired API token. Please re-enter.');
-            setApiTokenModalSource('import');
-            setShowApiTokenModal(true);
-            return;
+        // Handle authentication errors
+        if (response.status === 401 || response.status === 403) {
+          // Check if we're using API token auth (not password auth)
+          const hasPasswordAuth = securityStatus()?.hasAuthentication;
+          if (!hasPasswordAuth) {
+            // Clear invalid token if we had one
+            const hadToken = localStorage.getItem('apiToken');
+            if (hadToken) {
+              localStorage.removeItem('apiToken');
+              showError('Invalid or expired API token. Please re-enter.');
+              setApiTokenModalSource('import');
+              setShowApiTokenModal(true);
+              return;
+            }
+            if (errorText.includes('API_TOKEN')) {
+              setApiTokenModalSource('import');
+              setShowApiTokenModal(true);
+              return;
+            }
           }
-          throw new Error('Import requires authentication. Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true in environment variables.');
+          throw new Error('Import requires authentication');
         }
         throw new Error(errorText || 'Import failed');
       }

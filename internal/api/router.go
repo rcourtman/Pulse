@@ -518,33 +518,55 @@ ENABLE_AUDIT_LOG=true
 		}
 	})
 	
-	// Config export/import routes (requires API token for security)
+	// Config export/import routes (requires authentication)
 	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check for API token if configured
+			// Check authentication - accept either session auth or API token
+			hasValidSession := false
+			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+				hasValidSession = ValidateSession(cookie.Value)
+			}
+			
+			hasValidAPIToken := false
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
-				if authHeader != r.config.APIToken {
+				hasValidAPIToken = (authHeader == r.config.APIToken)
+			}
+			
+			// If password auth is configured, session auth is sufficient
+			if r.config.AuthUser != "" && r.config.AuthPass != "" {
+				if !hasValidSession && !hasValidAPIToken {
 					log.Warn().
 						Str("ip", req.RemoteAddr).
 						Str("path", req.URL.Path).
-						Msg("Unauthorized export attempt")
+						Msg("Unauthorized export attempt - no valid session or API token")
+					http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+					return
+				}
+			} else if r.config.APIToken != "" {
+				// API token configured but no password auth - require API token
+				if !hasValidAPIToken {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Msg("Unauthorized export attempt - invalid API token")
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
-				// If no API token and unprotected export not explicitly allowed
+				// No auth configured and unprotected export not explicitly allowed
 				log.Warn().
 					Str("ip", req.RemoteAddr).
-					Msg("Export blocked - API token required")
-				http.Error(w, "Export requires API_TOKEN to be set (or set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
+					Msg("Export blocked - authentication required")
+				http.Error(w, "Export requires authentication (set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
 				return
 			}
 			
 			// Log successful export attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
-				Bool("authenticated", r.config.APIToken != "").
+				Bool("session_auth", hasValidSession).
+				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration export initiated")
 			
 			configHandlers.HandleExportConfig(w, req)
@@ -555,30 +577,52 @@ ENABLE_AUDIT_LOG=true
 	
 	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check for API token if configured
+			// Check authentication - accept either session auth or API token
+			hasValidSession := false
+			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+				hasValidSession = ValidateSession(cookie.Value)
+			}
+			
+			hasValidAPIToken := false
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
-				if authHeader != r.config.APIToken {
+				hasValidAPIToken = (authHeader == r.config.APIToken)
+			}
+			
+			// If password auth is configured, session auth is sufficient
+			if r.config.AuthUser != "" && r.config.AuthPass != "" {
+				if !hasValidSession && !hasValidAPIToken {
 					log.Warn().
 						Str("ip", req.RemoteAddr).
 						Str("path", req.URL.Path).
-						Msg("Unauthorized import attempt")
+						Msg("Unauthorized import attempt - no valid session or API token")
+					http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+					return
+				}
+			} else if r.config.APIToken != "" {
+				// API token configured but no password auth - require API token
+				if !hasValidAPIToken {
+					log.Warn().
+						Str("ip", req.RemoteAddr).
+						Str("path", req.URL.Path).
+						Msg("Unauthorized import attempt - invalid API token")
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 			} else if os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true" {
-				// If no API token and unprotected import not explicitly allowed
+				// No auth configured and unprotected import not explicitly allowed
 				log.Warn().
 					Str("ip", req.RemoteAddr).
-					Msg("Import blocked - API token required")
-				http.Error(w, "Import requires API_TOKEN to be set (or set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
+					Msg("Import blocked - authentication required")
+				http.Error(w, "Import requires authentication (set ALLOW_UNPROTECTED_EXPORT=true for homelab use)", http.StatusForbidden)
 				return
 			}
 			
 			// Log successful import attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
-				Bool("authenticated", r.config.APIToken != "").
+				Bool("session_auth", hasValidSession).
+				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration import initiated")
 			
 			configHandlers.HandleImportConfig(w, req)
