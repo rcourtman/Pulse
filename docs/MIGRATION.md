@@ -39,7 +39,8 @@ Never copy `/etc/pulse` or `/var/lib/pulse` directories between systems:
 ❌ **Not Included:**
 - Historical metrics data
 - Alert history
-- API tokens (regenerate on new system)
+- Authentication settings (passwords, API tokens)
+- Each instance should configure its own authentication
 
 ## Common Scenarios
 
