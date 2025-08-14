@@ -179,7 +179,15 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	
+	log.Debug().
+		Str("alertID", alert.ID).
+		Bool("enabled", n.enabled).
+		Int("webhooks", len(n.webhooks)).
+		Bool("emailEnabled", n.emailConfig.Enabled).
+		Msg("SendAlert called")
+	
 	if !n.enabled {
+		log.Debug().Msg("Notifications disabled, skipping")
 		return
 	}
 	
@@ -189,6 +197,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 		log.Debug().
 			Str("alertID", alert.ID).
 			Dur("timeSince", time.Since(lastTime)).
+			Dur("cooldown", n.cooldown).
 			Msg("Alert notification in cooldown")
 		return
 	}
