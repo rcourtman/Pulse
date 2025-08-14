@@ -62,6 +62,33 @@ Most settings are configured through the web interface at `http://<server>:7655/
 - **Updates**: Update channels and auto-update settings
 - **Security**: Export/import encrypted configurations
 
+## Understanding .env vs .enc Files
+
+Pulse uses two different file types for configuration, each serving a specific purpose:
+
+### .env Files (Authentication Only)
+- **Purpose**: Store authentication credentials (username, password, API token)
+- **Format**: Plain text environment variables with hashed values
+- **Location**: `/data/.env` (Docker) or `/etc/pulse/.env` (native)
+- **When used**: Loaded at startup before encryption keys are available
+- **Contents**: Only auth-related variables (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN)
+- **Security**: Passwords and tokens are bcrypt-hashed, not plaintext
+
+### .enc Files (Sensitive Configuration)
+- **Purpose**: Store sensitive configuration like Proxmox node credentials
+- **Format**: Encrypted JSON using AES-256-GCM
+- **Location**: `/data/*.enc` (Docker) or `/etc/pulse/*.enc` (native)
+- **When used**: After authentication, requires encryption key
+- **Contents**: Node credentials (tokens, passwords), email settings, webhooks
+- **Security**: Fully encrypted at rest, decrypted only in memory
+
+### Why Both?
+This split architecture exists because:
+1. **Authentication must work before encryption** - You need to authenticate to access the encryption key
+2. **Docker persistence** - Containers need auth to persist across restarts
+3. **Security layers** - Node credentials (the highest risk) get maximum protection in .enc files
+4. **Simplicity** - Auth can be managed with standard environment variables
+
 ## Environment Variables
 
 **Available variables:**
