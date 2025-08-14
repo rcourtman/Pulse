@@ -128,6 +128,7 @@ const Settings: Component = () => {
     hasHTTPS: boolean;
   } | null>(null);
   const [exportPassphrase, setExportPassphrase] = createSignal('');
+  const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
   const [importPassphrase, setImportPassphrase] = createSignal('');
   const [importFile, setImportFile] = createSignal<File | null>(null);
   const [showExportDialog, setShowExportDialog] = createSignal(false);
@@ -541,12 +542,12 @@ const Settings: Component = () => {
 
   const handleExport = async () => {
     if (!exportPassphrase()) {
-      showError('Please enter a passphrase');
+      showError(useCustomPassphrase() ? 'Please enter a passphrase' : 'Please enter your password');
       return;
     }
     
-    if (exportPassphrase().length < 12) {
-      showError('Passphrase must be at least 12 characters long');
+    if (useCustomPassphrase() && exportPassphrase().length < 12) {
+      showError('Custom passphrase must be at least 12 characters long');
       return;
     }
     
@@ -617,12 +618,7 @@ const Settings: Component = () => {
   
   const handleImport = async () => {
     if (!importPassphrase()) {
-      showError('Please enter the passphrase');
-      return;
-    }
-    
-    if (importPassphrase().length < 12) {
-      showError('Passphrase must be at least 12 characters long');
+      showError('Please enter the password');
       return;
     }
     
@@ -1575,19 +1571,78 @@ const Settings: Component = () => {
               {/* Backup & Restore */}
               <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
-                <div class="flex gap-3">
-                  <button
-                    onClick={() => setShowExportDialog(true)}
-                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Export
-                  </button>
-                  <button
-                    onClick={() => setShowImportDialog(true)}
-                    class="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
-                  >
-                    Import
-                  </button>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Securely backup your node configurations and credentials or restore from a previous backup
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Export Section */}
+                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                      <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Export Configuration</h4>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                          Download an encrypted backup of all nodes and settings
+                        </p>
+                        <button
+                          onClick={() => setShowExportDialog(true)}
+                          class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Export Backup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Import Section */}
+                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                      <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Restore Configuration</h4>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                          Upload a backup file to restore nodes and settings
+                        </p>
+                        <button
+                          onClick={() => setShowImportDialog(true)}
+                          class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Restore Backup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div class="flex gap-2">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                      <p class="font-medium mb-1">Security Notice</p>
+                      <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
+                        <li>• Backups contain encrypted credentials and sensitive data</li>
+                        <li>• Use a strong passphrase (12+ characters recommended)</li>
+                        <li>• Store backup files securely and never share the passphrase</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1930,31 +1985,86 @@ const Settings: Component = () => {
             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export Configuration</h3>
             
             <div class="space-y-4">
+              {/* Password Choice Section */}
+              <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={!useCustomPassphrase()}
+                      onChange={() => {
+                        setUseCustomPassphrase(false);
+                        setExportPassphrase('');
+                      }}
+                      class="mt-1 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div class="flex-1">
+                      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Use your login password
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Use the same password you use to log into Pulse (recommended)
+                      </div>
+                    </div>
+                  </label>
+                  
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={useCustomPassphrase()}
+                      onChange={() => setUseCustomPassphrase(true)}
+                      class="mt-1 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div class="flex-1">
+                      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Use a custom passphrase
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Create a different passphrase for this backup
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Show password input based on selection */}
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Encryption Passphrase
+                  {useCustomPassphrase() ? 'Custom Passphrase' : 'Enter Your Login Password'}
                 </label>
                 <input
                   type="password"
                   value={exportPassphrase()}
                   onInput={(e) => setExportPassphrase(e.currentTarget.value)}
-                  placeholder="Enter a strong passphrase"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  placeholder={useCustomPassphrase() ? "Enter a strong passphrase" : "Enter your Pulse login password"}
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Passphrase must be at least 12 characters. Required to import the configuration later.
-                </p>
-                <Show when={exportPassphrase() && exportPassphrase().length < 12}>
-                  <p class="text-xs text-red-500 dark:text-red-400 mt-1">
-                    Passphrase too short: {exportPassphrase().length}/12 characters
+                <Show when={useCustomPassphrase()}>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Passphrase must be at least 12 characters. You'll need this to restore the backup.
+                  </p>
+                  <Show when={exportPassphrase() && exportPassphrase().length < 12}>
+                    <p class="text-xs text-red-500 dark:text-red-400 mt-1">
+                      Passphrase too short: {exportPassphrase().length}/12 characters
+                    </p>
+                  </Show>
+                </Show>
+                <Show when={!useCustomPassphrase()}>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    You'll use this same password when restoring the backup
                   </p>
                 </Show>
               </div>
               
-              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
-                <p class="text-xs text-blue-700 dark:text-blue-300">
-                  <strong>Security Note:</strong> The exported file will contain encrypted credentials. Keep it secure and remember your passphrase.
-                </p>
+              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div class="flex gap-2">
+                  <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div class="text-xs text-amber-700 dark:text-amber-300">
+                    <strong>Important:</strong> The backup file contains encrypted credentials. Store it securely and remember your {useCustomPassphrase() ? 'passphrase' : 'password'}.
+                  </div>
+                </div>
               </div>
               
               <div class="flex justify-end space-x-3">
@@ -1962,6 +2072,7 @@ const Settings: Component = () => {
                   onClick={() => {
                     setShowExportDialog(false);
                     setExportPassphrase('');
+                    setUseCustomPassphrase(false);
                   }}
                   class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
@@ -1969,7 +2080,7 @@ const Settings: Component = () => {
                 </button>
                 <button
                   onClick={handleExport}
-                  disabled={!exportPassphrase() || exportPassphrase().length < 12}
+                  disabled={!exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Export
@@ -2074,23 +2185,18 @@ const Settings: Component = () => {
               
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Decryption Passphrase
+                  Backup Password
                 </label>
                 <input
                   type="password"
                   value={importPassphrase()}
                   onInput={(e) => setImportPassphrase(e.currentTarget.value)}
-                  placeholder="Enter the passphrase used during export"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  placeholder="Enter the password used when creating this backup"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Passphrase must be at least 12 characters
+                  This is usually your Pulse login password, unless you used a custom passphrase
                 </p>
-                <Show when={importPassphrase() && importPassphrase().length < 12}>
-                  <p class="text-xs text-red-500 dark:text-red-400 mt-1">
-                    Passphrase too short: {importPassphrase().length}/12 characters
-                  </p>
-                </Show>
               </div>
               
               <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
@@ -2112,7 +2218,7 @@ const Settings: Component = () => {
                 </button>
                 <button
                   onClick={handleImport}
-                  disabled={!importPassphrase() || importPassphrase().length < 12 || !importFile()}
+                  disabled={!importPassphrase() || !importFile()}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Import
