@@ -68,6 +68,7 @@ EXPOSE 7655
 # Set environment variables
 # Only PULSE_DATA_DIR is used - all node config is done via web UI
 ENV PULSE_DATA_DIR=/data
+ENV PULSE_DOCKER=true
 
 # Create default user (will be adjusted by entrypoint if PUID/PGID are set)
 RUN adduser -D -u 1000 -g 1000 pulse && \
