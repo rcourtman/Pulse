@@ -87,9 +87,9 @@ func (r *Router) setupRoutes() {
 	// Create handlers
 	alertHandlers := NewAlertHandlers(r.monitor)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
-	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub)
-	updateHandlers := NewUpdateHandlers(r.updateManager)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
+	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
+	updateHandlers := NewUpdateHandlers(r.updateManager)
 	
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
