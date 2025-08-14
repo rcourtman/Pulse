@@ -610,7 +610,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			Msg("Node disk metrics (raw from Proxmox)")
 
 		// Get detailed node info if available
-		if nodeInfo, err := client.GetNodeStatus(ctx, node.Node); err == nil {
+		nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
+		if nodeErr != nil {
+			// If we can't get node status, it might be offline
+			log.Debug().
+				Str("instance", instanceName).
+				Str("node", node.Node).
+				Err(nodeErr).
+				Msg("Could not get node status - node may be offline")
+			// Continue with basic info we have
+		} else if nodeInfo != nil {
 			// Convert LoadAvg from interface{} to float64
 			loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
 			for _, val := range nodeInfo.LoadAvg {

@@ -85,6 +85,15 @@ type auth struct {
 func NewClient(cfg ClientConfig) (*Client, error) {
 	var user, realm string
 	
+	// Log what auth method we're using
+	log.Debug().
+		Str("host", cfg.Host).
+		Bool("hasToken", cfg.TokenName != "").
+		Bool("hasPassword", cfg.Password != "").
+		Str("tokenName", cfg.TokenName).
+		Str("user", cfg.User).
+		Msg("Creating Proxmox client")
+	
 	// For token authentication, we don't need user@realm format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
 		// Extract user and realm from token name (format: user@realm!tokenname)
@@ -256,8 +265,19 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		// Create base error
 		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		
+		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
+		if resp.StatusCode == 595 || resp.StatusCode == 401 || resp.StatusCode == 403 {
+			log.Warn().
+				Str("url", req.URL.String()).
+				Int("status", resp.StatusCode).
+				Bool("hasToken", c.config.TokenName != "").
+				Bool("hasPassword", c.config.Password != "").
+				Str("tokenName", c.config.TokenName).
+				Msg("Proxmox authentication error")
+		}
+		
 		// Wrap with appropriate error type
-		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
 			// Import errors package at top of file
 			return nil, fmt.Errorf("authentication error: %w", err)
 		}
