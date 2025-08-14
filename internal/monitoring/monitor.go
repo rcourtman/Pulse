@@ -300,6 +300,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.alertManager.SetAlertCallback(func(alert *alerts.Alert) {
 		wsHub.BroadcastAlert(alert)
 		// Send notifications
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("level", string(alert.Level)).
+			Msg("Alert raised, sending to notification manager")
 		go m.notificationMgr.SendAlert(alert)
 	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
