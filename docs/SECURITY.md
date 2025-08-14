@@ -140,14 +140,15 @@ The easiest way to enable authentication is through the web UI:
 1. Go to Settings → Security
 2. Click "Enable Security Now"
 3. Save the generated credentials
-4. Click "Restart Pulse"
+4. Click "Restart Pulse" (or restart Docker container)
 
 This automatically:
 - Generates a secure random password
 - Hashes it with bcrypt (cost factor 12)
 - Creates secure API token (SHA3-256 hashed)
-- Configures systemd with hashed credentials
-- Restarts service with authentication enabled
+- For systemd: Configures systemd with hashed credentials
+- For Docker: Saves to `/data/.env` with hashed credentials
+- Restarts service/container with authentication enabled
 
 #### Manual Setup (Advanced)
 ```bash
@@ -158,8 +159,9 @@ sudo systemctl edit pulse-backend
 Environment="PULSE_AUTH_USER=admin"
 Environment="PULSE_AUTH_PASS=$2a$12$..."  # Use bcrypt hash, not plain text!
 
-# Docker
+# Docker (credentials persist in volume via .env file)
 docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pulse:latest
+# Or use Quick Security Setup and restart container
 ```
 
 **Important**: Always use hashed passwords in configuration. Use the Quick Security Setup or generate bcrypt hashes manually.
