@@ -270,8 +270,14 @@ func Load() (*Config, error) {
 		// because we can't modify environment variables
 		if !IsPasswordHashed(authPass) {
 			log.Warn().Msg("Password is stored in plain text - run 'pulse hash-password' to generate a secure hash")
+		} else {
+			// Validate bcrypt hash is complete (60 characters)
+			if len(authPass) != 60 {
+				log.Error().Int("length", len(authPass)).Msg("Bcrypt hash appears truncated! Expected 60 characters. Authentication may fail.")
+				log.Error().Msg("Ensure the full hash is enclosed in single quotes in your .env file or Docker environment")
+			}
 		}
-		log.Info().Bool("is_hashed", IsPasswordHashed(authPass)).Msg("Loaded auth password from env var")
+		log.Info().Bool("is_hashed", IsPasswordHashed(authPass)).Int("length", len(authPass)).Msg("Loaded auth password from env var")
 	}
 	if updateChannel := os.Getenv("UPDATE_CHANNEL"); updateChannel != "" {
 		cfg.UpdateChannel = updateChannel

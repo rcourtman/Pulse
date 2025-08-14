@@ -76,3 +76,7 @@ package-lock.json
 *.test.md
 screenshots/
 .devdata/
+
+# Master plan documents (local only)
+PULSE_V4_ISSUES_MASTER_PLAN.md
+FIX_SUMMARY_*.md

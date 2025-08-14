@@ -241,8 +241,11 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
-	// Quick security setup route
-	r.mux.HandleFunc("/api/security/quick-setup", func(w http.ResponseWriter, req *http.Request) {
+	// Quick security setup route - using fixed version
+	r.mux.HandleFunc("/api/security/quick-setup", handleQuickSecuritySetupFixed(r))
+	
+	// Legacy handler for backwards compatibility (will be removed)
+	r.mux.HandleFunc("/api/security/quick-setup-legacy", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			// Parse request body
 			var setupRequest struct {
