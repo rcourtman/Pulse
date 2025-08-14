@@ -2,8 +2,8 @@ import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } 
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
-import { APITokenManager } from './APITokenManager';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
+import { CurrentAPIToken } from './CurrentAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { RemovePasswordModal } from './RemovePasswordModal';
 import { SettingsAPI } from '@/api/settings';
@@ -1513,15 +1513,14 @@ const Settings: Component = () => {
                 <QuickSecuritySetup />
               </Show>
 
-              {/* API Tokens - Only show if NOT using Quick Security Setup */}
-              {/* Quick Security Setup manages its own API token via systemd */}
-              <Show when={false}>
+              {/* API Token - Show current token when auth is enabled */}
+              <Show when={securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Tokens</h3>
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">API Token</h3>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Secure API access for automation and exports
+                    Your API token for automation and integrations
                   </p>
-                  <APITokenManager />
+                  <CurrentAPIToken />
                 </div>
               </Show>
 
