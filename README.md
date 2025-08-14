@@ -23,7 +23,8 @@
   - Rate limiting (500 req/min general, 10 attempts/min for auth)
   - Account lockout after failed login attempts
   - Secure session management with HttpOnly cookies
-  - bcrypt password hashing
+  - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
+  - SHA3-256 API token hashing - tokens NEVER stored in plain text
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - Live monitoring of VMs, containers, nodes, storage
@@ -105,8 +106,9 @@ services:
       # - FRONTEND_PORT=7655                # Frontend port (default: 7655)
       
       # Security (all optional - runs open by default)
-      # - PULSE_PASSWORD=your-password      # Password for web UI login (optional, will be hashed)
-      # - API_TOKEN=your-secure-token       # API authentication token (optional)
+      # - PULSE_AUTH_USER=admin             # Username for web UI login
+      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hashed password (use Quick Security Setup)
+      # - API_TOKEN=<sha3-256-hash>         # SHA3-256 hashed API token (64 hex chars)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
       # Polling & timeouts
@@ -142,7 +144,8 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
   - CSRF tokens for state-changing operations
   - Rate limiting and account lockout protection
   - Secure session management with HttpOnly cookies
-  - bcrypt password hashing (cost 12)
+  - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
+  - SHA3-256 API token hashing - tokens NEVER stored in plain text (cost 12)
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - **Security by design**:

@@ -99,23 +99,31 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 - **Security Tab**: Check status in Settings → Security
 
 ### Enterprise Security (When Authentication Enabled)
+- **Password Security**: 
+  - Bcrypt hashing with cost factor 12
+  - Passwords NEVER stored in plain text
+  - Automatic hashing on security setup
+- **API Token Security**:
+  - SHA3-256 hashing for all tokens
+  - 64-character hex format when hashed
+  - Tokens NEVER stored in plain text
 - **CSRF Protection**: All state-changing operations require CSRF tokens
 - **Rate Limiting**: 
-  - General API: 500 requests/minute
-  - Authentication: 10 attempts/minute
-  - Export/Import: 5 attempts/minute
-- **Account Lockout**: Locks after 5 failed login attempts (15 minute cooldown)
+  - Authentication endpoints: 10 attempts/minute per IP
+  - General API: 500 requests/minute per IP
+  - Real-time endpoints exempt for functionality
 - **Session Management**: 
   - Secure HttpOnly cookies
   - 24-hour session expiry
   - Session invalidation on password change
-- **Password Security**: bcrypt hashing with cost 12
 - **Security Headers**: 
-  - Content-Security-Policy
-  - X-Frame-Options: DENY
+  - Content-Security-Policy with strict directives
+  - X-Frame-Options: DENY (prevents clickjacking)
   - X-Content-Type-Options: nosniff
-  - X-XSS-Protection
-- **Audit Logging**: All authentication events logged
+  - X-XSS-Protection: 1; mode=block
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - Permissions-Policy restricting sensitive APIs
+- **Audit Logging**: All authentication events logged with IP addresses
 
 ### What's Encrypted in Exports
 - Node credentials (passwords, API tokens)
@@ -132,52 +140,82 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 Pulse supports multiple authentication methods that can be used independently or together:
 
 ### Password Authentication
-Protect your Pulse instance with a password. Passwords are automatically hashed with bcrypt for security.
 
+#### Quick Security Setup (Recommended)
+The easiest way to enable authentication is through the web UI:
+1. Go to Settings → Security
+2. Click "Enable Security Now"
+3. Save the generated credentials
+4. Click "Restart Pulse"
+
+This automatically:
+- Generates a secure random password
+- Hashes it with bcrypt (cost factor 12)
+- Creates secure API token (SHA3-256 hashed)
+- Configures systemd with hashed credentials
+- Restarts service with authentication enabled
+
+#### Manual Setup (Advanced)
 ```bash
-# Using systemd
+# Using systemd (password will be hashed automatically)
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="PULSE_PASSWORD=your-secure-password"
+Environment="PULSE_AUTH_USER=admin"
+Environment="PULSE_AUTH_PASS=$2a$12$..."  # Use bcrypt hash, not plain text!
 
 # Docker
-docker run -e PULSE_PASSWORD=your-password rcourtman/pulse:latest
+docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pulse:latest
 ```
 
+**Important**: Always use hashed passwords in configuration. Use the Quick Security Setup or generate bcrypt hashes manually.
+
 #### Features
-- Web UI login required when password is set
-- Change password from Settings → Security  
-- Passwords hashed with bcrypt (cost 12)
+- Web UI login required when authentication enabled
+- Change/remove password from Settings → Security  
+- Passwords ALWAYS hashed with bcrypt (cost 12)
 - Session-based authentication with secure HttpOnly cookies
 - 24-hour session expiry
 - CSRF protection for all state-changing operations
 - Session invalidation on password change
 
 ### API Token Authentication  
-For programmatic access and automation. Tokens can be generated and managed via the web UI.
+For programmatic access and automation. API tokens are SHA3-256 hashed for security.
 
+#### Token Setup via Quick Security
+The Quick Security Setup automatically:
+- Generates a cryptographically secure token
+- Hashes it with SHA3-256
+- Stores only the 64-character hash
+
+#### Manual Token Setup
 ```bash
-# Using systemd
+# Using systemd (use SHA3-256 hash, not plain text!)
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=your-secure-token"
+Environment="API_TOKEN=<64-char-sha3-256-hash>"
 
 # Docker
-docker run -e API_TOKEN=your-token rcourtman/pulse:latest
+docker run -e API_TOKEN=<64-char-sha3-256-hash> rcourtman/pulse:latest
 ```
+
+**Security Note**: API tokens are automatically hashed with SHA3-256. Never store plain text tokens in configuration.
 
 #### Token Management (Settings → Security → API Token)
 - Generate new tokens via web UI when authenticated
 - View existing token anytime (authenticated users only)
 - Regenerate tokens without disrupting service
 - Delete tokens to disable API access
+- All tokens stored as SHA3-256 hashes
 
 #### Usage
 ```bash
-# Include token in X-API-Token header
-curl -H "X-API-Token: your-token" http://localhost:7655/api/health
+# Include the ORIGINAL token (not hash) in X-API-Token header
+curl -H "X-API-Token: your-original-token" http://localhost:7655/api/health
+
+# Or in query parameter for export/import
+curl "http://localhost:7655/api/export?token=your-original-token"
 ```
 
 ### Auto-Registration Security
@@ -218,10 +256,41 @@ PULSE_DEV=true
 
 **Security Note**: Never use `ALLOWED_ORIGINS=*` in production as it allows any website to access your API.
 
+## Security Best Practices
+
+### Credential Storage
+- ✅ **DO**: Use Quick Security Setup for automatic hashing
+- ✅ **DO**: Store only bcrypt hashes for passwords
+- ✅ **DO**: Store only SHA3-256 hashes for API tokens
+- ❌ **DON'T**: Store plain text passwords in config files
+- ❌ **DON'T**: Store plain text API tokens in config files
+- ❌ **DON'T**: Log credentials or include them in backups
+
+### Authentication Setup
+- ✅ **DO**: Use strong, unique passwords (16+ characters)
+- ✅ **DO**: Rotate API tokens periodically
+- ✅ **DO**: Use HTTPS in production environments
+- ❌ **DON'T**: Share API tokens between users/services
+- ❌ **DON'T**: Embed credentials in client-side code
+
+### Verification
+Run the security verification script to ensure no plain text credentials:
+```bash
+/opt/pulse/testing-tools/security-verification.sh
+```
+
+This checks:
+- No hardcoded credentials in code
+- No credentials exposed in logs
+- All passwords/tokens properly hashed
+- Secure file permissions
+- No credential leaks in API responses
+
 ## Troubleshooting
 
 **Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
-**Can't login?** Check PULSE_PASSWORD environment variable
-**API access denied?** Verify API_TOKEN is correct
+**Can't login?** Check PULSE_AUTH_USER and PULSE_AUTH_PASS environment variables
+**API access denied?** Verify API_TOKEN is correct (use original token, not hash)
 **CORS errors?** Configure ALLOWED_ORIGINS for your domain
+**Forgot password?** Use Settings → Security → Remove Password (requires filesystem access)
