@@ -571,6 +571,15 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		req.Header.Set(key, value)
 	}
 
+	// Debug log the payload for Telegram webhooks
+	if webhook.Service == "telegram" {
+		log.Debug().
+			Str("webhook", webhook.Name).
+			Str("url", webhookURL).
+			Str("payload", string(jsonData)).
+			Msg("Sending Telegram webhook")
+	}
+
 	// Send request
 	client := &http.Client{
 		Timeout: 30 * time.Second,
@@ -663,13 +672,35 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			data := n.prepareWebhookData(alert, nil)
 			
 			// For Telegram, extract chat_id from URL if present
-			if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-				// Extract chat_id from URL query params
-				if u, err := url.Parse(webhook.URL); err == nil {
-					chatID := u.Query().Get("chat_id")
-					if chatID != "" {
-						data.ChatID = chatID
+			if webhook.Service == "telegram" {
+				if strings.Contains(webhook.URL, "chat_id=") {
+					// Extract chat_id from URL query params
+					if u, err := url.Parse(webhook.URL); err == nil {
+						chatID := u.Query().Get("chat_id")
+						if chatID != "" {
+							data.ChatID = chatID
+							log.Debug().
+								Str("webhook", webhook.Name).
+								Str("chatID", chatID).
+								Msg("Extracted Telegram chat_id from URL")
+						} else {
+							log.Warn().
+								Str("webhook", webhook.Name).
+								Str("url", webhook.URL).
+								Msg("chat_id parameter in URL is empty")
+						}
+					} else {
+						log.Error().
+							Err(err).
+							Str("webhook", webhook.Name).
+							Str("url", webhook.URL).
+							Msg("Failed to parse Telegram webhook URL")
 					}
+				} else {
+					log.Error().
+						Str("webhook", webhook.Name).
+						Str("url", webhook.URL).
+						Msg("Telegram webhook URL missing chat_id parameter - notifications will fail")
 				}
 			}
 			
