@@ -104,18 +104,37 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 5 {
+		log.Error().
+			Str("path", r.URL.Path).
+			Int("parts", len(parts)).
+			Msg("Invalid acknowledge URL format")
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
 	alertID := parts[3]
 	
+	// Log the acknowledge attempt
+	log.Debug().
+		Str("alertID", alertID).
+		Str("path", r.URL.Path).
+		Msg("Attempting to acknowledge alert")
+	
 	// In a real implementation, you'd get the user from authentication
 	user := "admin"
 	
 	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+		log.Error().
+			Err(err).
+			Str("alertID", alertID).
+			Msg("Failed to acknowledge alert")
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	
+	log.Info().
+		Str("alertID", alertID).
+		Str("user", user).
+		Msg("Alert acknowledged successfully")
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
