@@ -9,17 +9,18 @@ Pulse provides a REST API for monitoring and managing Proxmox VE and PBS instanc
 Pulse supports multiple authentication methods that can be used independently or together:
 
 ### Password Authentication
-Set a password for web UI access. Passwords are hashed with bcrypt (cost 12) for security.
+Set a username and password for web UI access. Passwords are hashed with bcrypt (cost 12) for security.
 
 ```bash
 # Systemd
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="PULSE_PASSWORD=your-secure-password"
+Environment="PULSE_AUTH_USER=admin"
+Environment="PULSE_AUTH_PASS=your-secure-password"
 
 # Docker
-docker run -e PULSE_PASSWORD=your-password rcourtman/pulse:latest
+docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS=your-password rcourtman/pulse:latest
 ```
 
 Once set, users must login via the web UI. The password can be changed from Settings → Security.

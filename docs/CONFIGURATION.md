@@ -1,62 +1,89 @@
 # Pulse Configuration Guide
 
-## Configuration Methods
+## Configuration Methods by Deployment Type
 
-Pulse uses different methods for different types of settings:
+### Docker Deployments
 
-### 1. Web UI Configuration
-Most settings are configured through the web interface:
+**Configuration location:** `/data` (volume mount)
+- All settings stored in the mounted volume
+- Environment variables passed with `-e` flag
+- No .env file support (use docker-compose.yml or -e flags)
+- Configuration persists in the volume across container restarts
 
-- **Nodes**: Auto-discovery, one-click setup scripts, cluster detection
-- **Alerts**: Thresholds and notification rules  
-- **Updates**: Update channels and auto-update settings
-- **Security**: Export/import encrypted configurations
-
-### 2. Environment Variables (Deployment Overrides)
-Environment variables override UI settings. Use them for Docker/systemd deployments:
-
-**Docker Example:**
+**Setting environment variables:**
 ```bash
+# Direct run
 docker run -d \
+  -e FRONTEND_PORT=8080 \
   -e UPDATE_CHANNEL=rc \
-  -e POLLING_INTERVAL=10 \
   -e API_TOKEN=your-secure-token \
+  -v pulse_data:/data \
   rcourtman/pulse:latest
+
+# Or use docker-compose.yml (see README)
 ```
 
-**Systemd Example:**
+### LXC/Systemd Deployments (Native Install)
+
+**Configuration location:** `/etc/pulse`
+- Settings stored in encrypted JSON files
+- Environment variables can be set via systemd or .env file
+- .env file at `/etc/pulse/.env` is auto-loaded if present
+
+**Setting environment variables - Option 1: Systemd override**
 ```bash
 # Edit service
 sudo systemctl edit pulse-backend
 
 # Add overrides:
 [Service]
+Environment="FRONTEND_PORT=8080"
 Environment="UPDATE_CHANNEL=rc"
-Environment="POLLING_INTERVAL=10"
 ```
 
-**.env File (Optional):**
-You can use a .env file for convenience, but UI settings take precedence:
+**Setting environment variables - Option 2: .env file**
 ```bash
-# Create .env for deployment overrides
+# Create/edit .env file
 sudo nano /etc/pulse/.env
-# Add: UPDATE_CHANNEL=rc
+
+# Add variables:
+FRONTEND_PORT=8080
+UPDATE_CHANNEL=rc
+
+# Restart service
 sudo systemctl restart pulse-backend
 ```
 
+### Web UI Configuration (Both Deployments)
+Most settings are configured through the web interface at `http://<server>:7655/settings`:
+
+- **Nodes**: Auto-discovery, one-click setup scripts, cluster detection
+- **Alerts**: Thresholds and notification rules  
+- **Updates**: Update channels and auto-update settings
+- **Security**: Export/import encrypted configurations
+
+## Environment Variables
+
 **Available variables:**
-- `FRONTEND_PORT` - Web UI port (default: 7655)
+
+Variables that ALWAYS override UI settings:
+- `FRONTEND_PORT` or `PORT` - Web UI port (default: 7655)
+- `API_TOKEN` - Token for API authentication (overrides UI)
+- `PULSE_AUTH_USER` - Username for web UI authentication (overrides UI)
+- `PULSE_AUTH_PASS` - Password for web UI authentication (overrides UI)
+- `UPDATE_CHANNEL` - stable or rc (overrides UI)
+- `AUTO_UPDATE_ENABLED` - true/false (overrides UI)
+- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks (overrides UI)
+- `AUTO_UPDATE_TIME` - Update time HH:MM (overrides UI)
+- `CONNECTION_TIMEOUT` - Connection timeout in seconds (overrides UI)
+- `ALLOWED_ORIGINS` - CORS origins (overrides UI, default: empty = same-origin only)
+- `LOG_LEVEL` - debug/info/warn/error (overrides UI)
+
+Variables that only work if no system.json exists:
 - `POLLING_INTERVAL` - Node check interval in seconds (default: 3)
-- `CONNECTION_TIMEOUT` - Connection timeout in seconds (default: 10)
-- `UPDATE_CHANNEL` - stable or rc (default: stable)
-- `AUTO_UPDATE_ENABLED` - true/false (default: true)
-- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks (default: 24)
-- `AUTO_UPDATE_TIME` - Update time HH:MM (default: 03:00)
-- `ALLOWED_ORIGINS` - CORS origins (default: none, same-origin only)
-- `LOG_LEVEL` - debug/info/warn/error (default: info)
+
+Other variables:
 - `DISCOVERY_SUBNET` - Network subnet for auto-discovery (default: auto-detect)
-- `PULSE_PASSWORD` - Password for web UI authentication (optional)
-- `API_TOKEN` - Token for API authentication (optional)
 - `ALLOW_UNPROTECTED_EXPORT` - Allow export without auth (default: false)
 - `PULSE_DEV` - Enable development mode features (default: false)
 
@@ -92,24 +119,47 @@ All sensitive data is automatically encrypted at rest using AES-256-GCM:
 The encryption key is auto-generated and stored in the data directory with restricted permissions.
 
 ### File Locations
-- **Configuration**: 
-  - Standard install: `/etc/pulse/`
-  - Docker: `/data` (mounted volume)
-  - Fallback: `./data` if not writable
-- **Files**:
-  - `system.json` - UI-managed settings
-  - `.encryption.key` - Auto-generated encryption key (do not share!)
-  - `nodes.enc` - Encrypted node credentials
-  - `email.enc` - Encrypted email settings
-  - `.env` - Optional deployment overrides (if created)
-- **Metrics**: `<data-dir>/metrics/`
-- **Logs**: `<data-dir>/pulse.log`
 
-> **Docker Note**: All configuration is persisted in the `/data` volume to survive container restarts
+**Docker Container:**
+- Base directory: `/data` (mounted volume)
+- Config files: `/data/*.json`, `/data/*.enc`
+- Encryption key: `/data/.encryption.key`
+- Metrics: `/data/metrics/`
+- Logs: Container logs (`docker logs pulse`)
+- No .env file support
+
+**LXC/Native Install:**
+- Base directory: `/etc/pulse`
+- Config files: `/etc/pulse/*.json`, `/etc/pulse/*.enc`
+- Encryption key: `/etc/pulse/.encryption.key`
+- Metrics: `/etc/pulse/metrics/`
+- Logs: `/etc/pulse/pulse.log` or journalctl
+- Optional: `/etc/pulse/.env` for env overrides
+
+**Files created (both deployments):**
+- `system.json` - UI-managed settings
+- `.encryption.key` - Auto-generated encryption key (do not share!)
+- `nodes.enc` - Encrypted node credentials
+- `email.enc` - Encrypted email settings
 
 ## Common Configuration Tasks
 
 ### Change the Web Port
+
+**Docker:**
+```bash
+# Stop existing container
+docker stop pulse
+
+# Run with new port
+docker run -d --name pulse \
+  -e FRONTEND_PORT=8080 \
+  -p 8080:8080 \
+  -v pulse_data:/data \
+  rcourtman/pulse:latest
+```
+
+**LXC/Systemd:**
 ```bash
 echo "FRONTEND_PORT=8080" >> /etc/pulse/.env
 sudo systemctl restart pulse-backend
@@ -123,6 +173,17 @@ sudo systemctl restart pulse-backend
 ```
 
 ### Configure for Reverse Proxy
+
+**Docker:**
+```bash
+docker run -d --name pulse \
+  -e ALLOWED_ORIGINS="https://pulse.example.com" \
+  -p 7655:7655 \
+  -v pulse_data:/data \
+  rcourtman/pulse:latest
+```
+
+**LXC/Systemd:**
 ```bash
 echo "ALLOWED_ORIGINS=https://pulse.example.com" >> /etc/pulse/.env
 sudo systemctl restart pulse-backend

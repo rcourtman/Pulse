@@ -43,12 +43,6 @@ If you're comfortable with your security setup, you can dismiss warnings:
 - **For 1 week** - Reminder next week  
 - **Forever** - Won't show again
 
-To permanently disable all security warnings:
-```bash
-# Environment variable
-PULSE_DISABLE_SECURITY_WARNINGS=true
-```
-
 ## Credential Security
 
 - **Storage**: Encrypted at rest using AES-256-GCM (`/etc/pulse/nodes.enc`)
