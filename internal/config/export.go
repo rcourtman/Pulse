@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -63,9 +64,12 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		return "", fmt.Errorf("failed to load system settings: %w", err)
 	}
 
-	// Load guest metadata (stored in data directory, not config directory)
-	// Default to /var/lib/pulse if not specified
-	dataPath := "/var/lib/pulse"
+	// Load guest metadata (stored in data directory)
+	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
+	dataPath := os.Getenv("PULSE_DATA_DIR")
+	if dataPath == "" {
+		dataPath = "/etc/pulse"
+	}
 	guestMetadataStore := NewGuestMetadataStore(dataPath)
 	guestMetadata := guestMetadataStore.GetAll()
 
@@ -149,7 +153,11 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	// Import guest metadata if present
 	if exportData.GuestMetadata != nil && len(exportData.GuestMetadata) > 0 {
-		dataPath := "/var/lib/pulse"
+		// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
+		dataPath := os.Getenv("PULSE_DATA_DIR")
+		if dataPath == "" {
+			dataPath = "/etc/pulse"
+		}
 		guestMetadataStore := NewGuestMetadataStore(dataPath)
 		
 		// Import each guest metadata entry
