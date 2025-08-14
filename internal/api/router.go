@@ -994,7 +994,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	cmd := exec.Command("sudo", scriptPath, hashedPassword)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Error().Err(err).Str("output", string(output)).Msg("Failed to change password via script")
+		log.Error().Err(err).Msg("Failed to change password via script")
 		writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
 			"Failed to save new password", nil)
 		return
@@ -1087,9 +1087,9 @@ func (r *Router) handleRemovePassword(w http.ResponseWriter, req *http.Request) 
 	if _, err := os.Stat(scriptPath); err == nil {
 		cmd := exec.Command("sudo", "-n", scriptPath)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			log.Warn().Err(err).Str("output", string(output)).Msg("Could not run remove-password script with sudo")
+			log.Warn().Err(err).Msg("Could not run remove-password script with sudo")
 		} else {
-			log.Info().Str("output", string(output)).Msg("Successfully removed password from systemd")
+			log.Info().Msg("Successfully removed password from systemd")
 		}
 	}
 	
