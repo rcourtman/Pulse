@@ -542,12 +542,17 @@ const Settings: Component = () => {
 
   const handleExport = async () => {
     if (!exportPassphrase()) {
-      showError(useCustomPassphrase() ? 'Please enter a passphrase' : 'Please enter your password');
+      const hasAuth = securityStatus()?.hasAuthentication;
+      showError(hasAuth 
+        ? (useCustomPassphrase() ? 'Please enter a passphrase' : 'Please enter your password')
+        : 'Please enter a passphrase');
       return;
     }
     
-    if (useCustomPassphrase() && exportPassphrase().length < 12) {
-      showError('Custom passphrase must be at least 12 characters long');
+    // Require 12 chars for custom passphrase or when no auth exists
+    const hasAuth = securityStatus()?.hasAuthentication;
+    if ((!hasAuth || useCustomPassphrase()) && exportPassphrase().length < 12) {
+      showError('Passphrase must be at least 12 characters long');
       return;
     }
     
@@ -1636,7 +1641,11 @@ const Settings: Component = () => {
                           Download an encrypted backup of all nodes and settings
                         </p>
                         <button
-                          onClick={() => setShowExportDialog(true)}
+                          onClick={() => {
+                            // Default to custom passphrase if no auth is configured
+                            setUseCustomPassphrase(!securityStatus()?.hasAuthentication);
+                            setShowExportDialog(true);
+                          }}
                           class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2031,61 +2040,69 @@ const Settings: Component = () => {
             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export Configuration</h3>
             
             <div class="space-y-4">
-              {/* Password Choice Section */}
-              <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div class="space-y-3">
-                  <label class="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={!useCustomPassphrase()}
-                      onChange={() => {
-                        setUseCustomPassphrase(false);
-                        setExportPassphrase('');
-                      }}
-                      class="mt-1 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div class="flex-1">
-                      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Use your login password
+              {/* Password Choice Section - Only show if auth is enabled */}
+              <Show when={securityStatus()?.hasAuthentication}>
+                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div class="space-y-3">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={!useCustomPassphrase()}
+                        onChange={() => {
+                          setUseCustomPassphrase(false);
+                          setExportPassphrase('');
+                        }}
+                        class="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Use your login password
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Use the same password you use to log into Pulse (recommended)
+                        </div>
                       </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Use the same password you use to log into Pulse (recommended)
+                    </label>
+                    
+                    <label class="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={useCustomPassphrase()}
+                        onChange={() => setUseCustomPassphrase(true)}
+                        class="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Use a custom passphrase
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Create a different passphrase for this backup
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                  
-                  <label class="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={useCustomPassphrase()}
-                      onChange={() => setUseCustomPassphrase(true)}
-                      class="mt-1 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div class="flex-1">
-                      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Use a custom passphrase
-                      </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Create a different passphrase for this backup
-                      </div>
-                    </div>
-                  </label>
+                    </label>
+                  </div>
                 </div>
-              </div>
+              </Show>
               
               {/* Show password input based on selection */}
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {useCustomPassphrase() ? 'Custom Passphrase' : 'Enter Your Login Password'}
+                  {securityStatus()?.hasAuthentication 
+                    ? (useCustomPassphrase() ? 'Custom Passphrase' : 'Enter Your Login Password')
+                    : 'Encryption Passphrase'}
                 </label>
                 <input
                   type="password"
                   value={exportPassphrase()}
                   onInput={(e) => setExportPassphrase(e.currentTarget.value)}
-                  placeholder={useCustomPassphrase() ? "Enter a strong passphrase" : "Enter your Pulse login password"}
+                  placeholder={
+                    securityStatus()?.hasAuthentication 
+                      ? (useCustomPassphrase() ? "Enter a strong passphrase" : "Enter your Pulse login password")
+                      : "Enter a strong passphrase for encryption"
+                  }
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <Show when={useCustomPassphrase()}>
+                <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Passphrase must be at least 12 characters. You'll need this to restore the backup.
                   </p>
@@ -2095,7 +2112,7 @@ const Settings: Component = () => {
                     </p>
                   </Show>
                 </Show>
-                <Show when={!useCustomPassphrase()}>
+                <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     You'll use this same password when restoring the backup
                   </p>
