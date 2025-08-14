@@ -107,9 +107,15 @@ services:
       
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
-      # - PULSE_AUTH_PASS='$2a$12$...'      # Bcrypt hash - MUST be 60 chars in single quotes!
+      # - PULSE_AUTH_PASS='$$2a$$12$$...'   # Bcrypt hash - ESCAPE $ as $$ in docker-compose!
       # - API_TOKEN=<sha3-256-hash>         # SHA3-256 hashed API token (64 hex chars)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
+      
+      # ⚠️ IMPORTANT: Docker Compose requires escaping $ characters!
+      # In docker-compose.yml, use $$ instead of $:
+      # WRONG: PULSE_AUTH_PASS='$2a$12$hash...'
+      # RIGHT: PULSE_AUTH_PASS='$$2a$$12$$hash...'
+      # Or use a .env file where no escaping is needed
       
       # Polling & timeouts
       # - POLLING_INTERVAL=3                # Seconds between node checks (default: 3)
@@ -255,14 +261,17 @@ See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy,
 
 #### Cannot login after setting up security
 - **Docker**: Ensure bcrypt hash is exactly 60 characters and wrapped in single quotes
-- **Example**: `PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'`
-- If hash is truncated, authentication will fail
+- **Docker Compose**: MUST escape $ characters as $$ (e.g., `$$2a$$12$$...`)
+- **Example (docker run)**: `PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'`
+- **Example (docker-compose.yml)**: `PULSE_AUTH_PASS='$$2a$$12$$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'`
+- If hash is truncated or mangled, authentication will fail
 - Use Quick Security Setup in the UI to avoid manual configuration errors
 
 #### .env file not created (Docker)
-- Check container logs: `docker logs <container-name>`
-- Verify `/data` volume is mounted and writable
-- Manually create `/data/.env` with proper format if needed
+- **Expected behavior**: When using environment variables, no .env file is created in /data
+- The .env file is only created when using Quick Security Setup or password changes
+- If you provide credentials via environment variables, they take precedence
+- To use Quick Security Setup: Start container WITHOUT auth environment variables
 
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)
@@ -285,7 +294,9 @@ journalctl -u pulse -f
 
 ## Documentation
 
+- [Docker Guide](docs/DOCKER.md) - Complete Docker deployment guide
 - [Configuration Guide](docs/CONFIGURATION.md) - Complete setup and configuration
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Reference](docs/API.md) - REST API endpoints and examples
 - [Webhook Guide](docs/WEBHOOKS.md) - Setting up webhooks and custom payloads
 - [Reverse Proxy Setup](docs/REVERSE_PROXY.md) - nginx, Caddy, Apache, Traefik configs
