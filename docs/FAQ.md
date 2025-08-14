@@ -32,7 +32,10 @@ API tokens are more secure. Create in Proxmox: Datacenter → Permissions → AP
 See [Configuration Guide](CONFIGURATION.md) for details
 
 ### How do I backup my configuration?
-Settings → Security → Export Configuration (requires API token or ALLOW_UNPROTECTED_EXPORT=true)
+Settings → Security → Backup & Restore → Export Backup
+- If logged in with password: Just enter your password or a custom passphrase
+- If using API token only: Provide the API token when prompted
+- Includes all settings, nodes, credentials (encrypted), and custom console URLs
 
 ### Can Pulse detect Proxmox clusters?
 Yes! When you add one cluster node, Pulse automatically discovers and monitors all nodes

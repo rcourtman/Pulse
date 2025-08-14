@@ -198,6 +198,13 @@ Environment="FRONTEND_PORT=8080"
 
 ### Backup/Restore
 
+**Via UI (recommended):**
+- Settings → Security → Backup & Restore
+- Export: Choose login password or custom passphrase for encryption
+- Import: Upload backup file with passphrase
+- Includes all settings, nodes, and custom console URLs
+
+**Via CLI:**
 ```bash
 # Export (v4.0.3+)
 pulse config export -o backup.enc
@@ -205,8 +212,6 @@ pulse config export -o backup.enc
 # Import
 pulse config import -i backup.enc
 ```
-
-Or use Settings → Security tab in UI.
 
 ## Updates
 

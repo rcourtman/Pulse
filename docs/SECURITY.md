@@ -282,7 +282,7 @@ This checks:
 
 ## Troubleshooting
 
-**Export blocked?** Set API_TOKEN or ALLOW_UNPROTECTED_EXPORT=true
+**Export blocked?** Login with password, set API_TOKEN, or set ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
 **Can't login?** Check PULSE_AUTH_USER and PULSE_AUTH_PASS environment variables
 **API access denied?** Verify API_TOKEN is correct (use original token, not hash)
