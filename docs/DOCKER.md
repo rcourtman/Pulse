@@ -105,7 +105,6 @@ volumes:
 | `CONNECTION_TIMEOUT` | Connection timeout in seconds | `10` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `UPDATE_CHANNEL` | Update channel (stable/rc) | `stable` |
-| `AUTO_UPDATE_ENABLED` | Enable auto-updates | `false` |
 
 ## Volume Management
 

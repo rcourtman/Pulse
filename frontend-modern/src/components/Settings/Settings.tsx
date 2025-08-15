@@ -10,7 +10,7 @@ import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
 import type { NodeConfig } from '@/types/nodes';
-import type { UpdateInfo, UpdateStatus, VersionInfo } from '@/api/updates';
+import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 
@@ -85,7 +85,7 @@ type NodeConfigWithStatus = NodeConfig & {
 };
 
 const Settings: Component = () => {
-  const { state, connected, updateProgress } = useWebSocket();
+  const { state, connected } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
@@ -105,7 +105,6 @@ const Settings: Component = () => {
   // Update settings
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
-  const [updateStatus, setUpdateStatus] = createSignal<UpdateStatus | null>(null);
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
   const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
@@ -123,6 +122,7 @@ const Settings: Component = () => {
     exportProtected: boolean;
     unprotectedExportAllowed: boolean;
     hasAuthentication: boolean;
+    configuredButPendingRestart?: boolean;
     hasAuditLogging: boolean;
     credentialsEncrypted: boolean;
     hasHTTPS: boolean;
@@ -165,21 +165,6 @@ const Settings: Component = () => {
     }
   ];
 
-  // Update status from WebSocket events
-  createEffect(() => {
-    const progress = updateProgress();
-    if (progress) {
-      setUpdateStatus(progress);
-      
-      // Show appropriate messages based on status
-      if (progress.status === 'completed') {
-        showSuccess('Update completed! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new version.');
-      } else if (progress.status === 'restarting') {
-        showSuccess('Service is restarting. Please wait a moment then refresh the page.');
-      }
-    }
-  });
-  
   // Function to load nodes
   const loadNodes = async () => {
     try {
@@ -461,85 +446,6 @@ const Settings: Component = () => {
     }
   };
   
-  const applyUpdate = async () => {
-    const info = updateInfo();
-    if (!info || !info.downloadUrl) {
-      showError('No update available');
-      return;
-    }
-    
-    const previousVersion = versionInfo()?.version;
-    let connectionLostCount = 0;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 30; // 30 seconds max
-    
-    try {
-      await UpdatesAPI.applyUpdate(info.downloadUrl);
-      showSuccess('Update started. Pulse will restart automatically.');
-      
-      // Start polling for update status
-      const pollStatus = setInterval(async () => {
-        try {
-          const status = await UpdatesAPI.getUpdateStatus();
-          setUpdateStatus(status);
-          connectionLostCount = 0; // Reset on successful connection
-          
-          if (status.status === 'completed' || status.status === 'error') {
-            clearInterval(pollStatus);
-            if (status.status === 'error') {
-              showError(status.error || 'Update failed');
-            } else if (status.status === 'completed') {
-              showSuccess('Update completed! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new version.');
-            }
-          }
-        } catch (error) {
-          // Service might be restarting
-          console.log('Status check failed, service may be restarting');
-          connectionLostCount++;
-          
-          // If we've lost connection for a few polls, assume service is restarting
-          // Wait longer before trying to reconnect (service needs time to restart)
-          if (connectionLostCount >= 5 && reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            
-            // Try to check if the service is back with new version
-            try {
-              const newVersion = await UpdatesAPI.getVersion();
-              if (newVersion.version !== previousVersion) {
-                clearInterval(pollStatus);
-                setUpdateStatus({
-                  status: 'completed',
-                  progress: 100,
-                  message: `Update successful! Now running version ${newVersion.version}. Please refresh the page.`,
-                  updatedAt: new Date().toISOString()
-                });
-                setVersionInfo(newVersion);
-                showSuccess(`Successfully updated to ${newVersion.version}! Please refresh the page (Ctrl+F5 or Cmd+Shift+R) to load the new interface.`);
-              }
-            } catch (e) {
-              // Service still down, keep trying
-            }
-          }
-          
-          // Give up after too many attempts
-          if (reconnectAttempts >= maxReconnectAttempts) {
-            clearInterval(pollStatus);
-            setUpdateStatus({
-              status: 'error',
-              progress: 0,
-              message: 'Update status unknown. Please refresh the page.',
-              updatedAt: new Date().toISOString()
-            });
-            showError('Could not verify update status. Please refresh the page.');
-          }
-        }
-      }, 1000);
-    } catch (error) {
-      showError('Failed to start update');
-      console.error('Update error:', error);
-    }
-  };
-
   const handleExport = async () => {
     if (!exportPassphrase()) {
       const hasAuth = securityStatus()?.hasAuthentication;
@@ -1367,7 +1273,7 @@ const Settings: Component = () => {
                       </div>
                       
                       {/* Docker Message */}
-                      <Show when={versionInfo()?.isDocker}>
+                      <Show when={versionInfo()?.isDocker && !updateInfo()?.available}>
                         <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                           <p class="text-xs text-blue-800 dark:text-blue-200">
                             <strong>Docker Installation:</strong> Updates are managed through Docker. Pull the latest image to update.
@@ -1376,26 +1282,49 @@ const Settings: Component = () => {
                       </Show>
                       
                       {/* Update Available */}
-                      <Show when={updateInfo()?.available && !versionInfo()?.isDocker}>
+                      <Show when={updateInfo()?.available}>
                         <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                          <div class="flex items-start justify-between mb-2">
-                            <div>
-                              <p class="text-sm font-medium text-green-800 dark:text-green-200">
-                                Update Available: {updateInfo()?.latestVersion}
+                          <div class="mb-2">
+                            <p class="text-sm font-medium text-green-800 dark:text-green-200">
+                              Update Available: {updateInfo()?.latestVersion}
+                            </p>
+                            <p class="text-xs text-green-700 dark:text-green-300 mt-1">
+                              Released: {updateInfo()?.releaseDate ? new Date(updateInfo()!.releaseDate).toLocaleDateString() : 'Unknown'}
+                            </p>
+                          </div>
+                          
+                          {/* Update Instructions based on deployment type */}
+                          <div class="mt-3 p-2 bg-green-100 dark:bg-green-900/40 rounded">
+                            <p class="text-xs font-medium text-green-800 dark:text-green-200 mb-1">How to update:</p>
+                            <Show when={versionInfo()?.deploymentType === 'proxmoxve'}>
+                              <p class="text-xs text-green-700 dark:text-green-300">
+                                Type <code class="px-1 py-0.5 bg-green-200 dark:bg-green-800 rounded">update</code> in the LXC console
                               </p>
-                              <p class="text-xs text-green-700 dark:text-green-300 mt-1">
-                                Released: {updateInfo()?.releaseDate ? new Date(updateInfo()!.releaseDate).toLocaleDateString() : 'Unknown'}
+                            </Show>
+                            <Show when={versionInfo()?.deploymentType === 'docker'}>
+                              <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
+                                <p>Run these commands:</p>
+                                <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
+                                  docker pull rcourtman/pulse:latest<br/>
+                                  docker restart pulse
+                                </code>
+                              </div>
+                            </Show>
+                            <Show when={versionInfo()?.deploymentType === 'systemd' || versionInfo()?.deploymentType === 'manual'}>
+                              <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
+                                <p>Run the install script:</p>
+                                <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
+                                  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+                                </code>
+                              </div>
+                            </Show>
+                            <Show when={versionInfo()?.deploymentType === 'development'}>
+                              <p class="text-xs text-green-700 dark:text-green-300">
+                                Pull latest changes and rebuild
                               </p>
-                            </div>
-                            <Show when={!updateStatus() || updateStatus()?.status === 'idle' || updateStatus()?.status === 'available'}>
-                              <button
-                                onClick={applyUpdate}
-                                class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                              >
-                                Apply Update
-                              </button>
                             </Show>
                           </div>
+                          
                           <Show when={updateInfo()?.releaseNotes}>
                             <details class="mt-2">
                               <summary class="text-xs text-green-700 dark:text-green-300 cursor-pointer">Release Notes</summary>
@@ -1407,24 +1336,6 @@ const Settings: Component = () => {
                         </div>
                       </Show>
                       
-                      {/* Update Progress */}
-                      <Show when={updateStatus() && updateStatus()?.status !== 'idle'}>
-                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                          <div class="mb-2">
-                            <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                              {updateStatus()?.message || 'Processing update...'}
-                            </p>
-                          </div>
-                          <Show when={updateStatus()?.progress}>
-                            <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                              <div
-                                class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={`width: ${updateStatus()?.progress}%`}
-                              ></div>
-                            </div>
-                          </Show>
-                        </div>
-                      </Show>
                       
                       {/* Update Settings */}
                       <div class="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
@@ -1589,9 +1500,44 @@ const Settings: Component = () => {
                 </div>
               </Show>
 
-              {/* Show setup when no auth */}
-              <Show when={!securityStatus()?.hasAuthentication}>
-                <QuickSecuritySetup />
+              {/* Show pending restart message if configured but not loaded */}
+              <Show when={securityStatus()?.configuredButPendingRestart}>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                      <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        Security Configured - Restart Required
+                      </h4>
+                      <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Security settings have been configured but the service needs to be restarted to activate them.
+                      </p>
+                      <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        After restarting, you'll need to log in with your saved credentials.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+              
+              {/* Show setup when no auth and not pending */}
+              <Show when={!securityStatus()?.hasAuthentication && !securityStatus()?.configuredButPendingRestart}>
+                <QuickSecuritySetup onConfigured={async () => {
+                  // Refresh security status after configuration
+                  try {
+                    const response = await fetch('/api/security/status');
+                    if (response.ok) {
+                      const status = await response.json();
+                      setSecurityStatus(status);
+                    }
+                  } catch (err) {
+                    console.error('Failed to refresh security status:', err);
+                  }
+                }} />
               </Show>
 
               {/* API Token - Show current token when auth is enabled */}

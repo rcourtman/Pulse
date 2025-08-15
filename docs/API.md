@@ -368,21 +368,30 @@ curl -X POST http://localhost:7655/api/auto-register \
 ## Updates
 
 ### Check for Updates
-Check if a new version is available.
+Check if a new version is available. Returns version info and deployment-specific update instructions.
 
 ```bash
 GET /api/updates/check
 ```
 
-### Apply Update
-Download and apply an available update.
+Response includes `deploymentType` field indicating how to update:
+- `proxmoxve`: Type `update` in LXC console
+- `docker`: Pull new image and recreate container  
+- `systemd`: Re-run install script
+- `manual`: Re-run install script
+
+### Apply Update (Deprecated)
+**⚠️ DEPRECATED**: This endpoint exists for backwards compatibility but is no longer used.
+Updates cannot be performed through the API due to security constraints (no sudo access, 
+containers can't restart themselves). Use deployment-specific update methods instead.
 
 ```bash
 POST /api/updates/apply
 ```
 
-### Update Status
-Get current update operation status.
+### Update Status (Deprecated)
+**⚠️ DEPRECATED**: Since updates are no longer performed through the API, this endpoint
+is not used by the UI.
 
 ```bash
 GET /api/updates/status

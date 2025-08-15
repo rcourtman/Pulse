@@ -60,7 +60,7 @@ Most settings are configured through the web interface at `http://<server>:7655/
 
 - **Nodes**: Auto-discovery, one-click setup scripts, cluster detection
 - **Alerts**: Thresholds and notification rules  
-- **Updates**: Update channels and auto-update settings
+- **Updates**: Update channels and deployment-specific update instructions
 - **Security**: Export/import encrypted configurations
 
 ## Understanding .env vs .enc Files
@@ -113,9 +113,6 @@ Variables that ALWAYS override UI settings:
 - `PULSE_AUTH_USER` - Username for web UI authentication (overrides UI)
 - `PULSE_AUTH_PASS` - Bcrypt password hash - MUST be 60 chars in single quotes! (overrides UI)
 - `UPDATE_CHANNEL` - stable or rc (overrides UI)
-- `AUTO_UPDATE_ENABLED` - true/false (overrides UI)
-- `AUTO_UPDATE_CHECK_INTERVAL` - Hours between checks (overrides UI)
-- `AUTO_UPDATE_TIME` - Update time HH:MM (overrides UI)
 - `CONNECTION_TIMEOUT` - Connection timeout in seconds (overrides UI)
 - `ALLOWED_ORIGINS` - CORS origins (overrides UI, default: empty = same-origin only)
 - `LOG_LEVEL` - debug/info/warn/error (overrides UI)
@@ -286,6 +283,33 @@ proxmox-backup-manager user create pulse-monitor@pbs
 proxmox-backup-manager acl update / Admin --auth-id pulse-monitor@pbs
 proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
 ```
+
+## Updates
+
+Pulse automatically detects your deployment type and shows appropriate update instructions when a new version is available:
+
+### ProxmoxVE LXC Containers
+- Type `update` in the LXC console
+- The community script handles everything automatically
+- No manual intervention required
+
+### Docker
+- Pull the latest image: `docker pull rcourtman/pulse:latest`
+- Recreate the container with your existing settings
+- Data persists in the volume
+
+### Manual/Systemd Installations
+- Re-run the installation script: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash`
+- The script detects existing installations and updates them
+- Configuration is preserved
+
+### Why No In-App Updates?
+Pulse cannot update itself from the UI due to security constraints:
+- **ProxmoxVE**: The pulse user has no sudo access (security best practice)
+- **Docker**: Containers cannot restart themselves
+- **Systemd**: Service cannot restart itself without privileges
+
+This design ensures better security by requiring administrative access for updates.
 
 ## Reverse Proxy Configuration
 
