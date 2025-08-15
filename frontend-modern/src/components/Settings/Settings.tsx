@@ -1559,7 +1559,35 @@ const Settings: Component = () => {
                   
                   {/* Content */}
                   <div class="p-6">
-                    {/* API token is only shown during initial setup for security */}
+                    <div class="space-y-4">
+                      <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                          API Token Active
+                        </h4>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">
+                          An API token is configured for this instance. Use it with the X-API-Token header for automation.
+                        </p>
+                      </div>
+                      
+                      <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                        <div class="flex items-start space-x-2">
+                          <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div class="text-xs text-blue-700 dark:text-blue-300">
+                            <p class="font-semibold">Security Notice</p>
+                            <p class="mt-1">API tokens are only visible during initial setup. If you've lost your token, you'll need to reconfigure security to generate a new one.</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        <p class="font-medium mb-1">Using the API Token:</p>
+                        <code class="block bg-gray-900 dark:bg-gray-950 text-gray-100 p-2 rounded text-xs">
+                          curl -H "X-API-Token: YOUR_TOKEN" http://pulse:7655/api/...
+                        </code>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Show>
