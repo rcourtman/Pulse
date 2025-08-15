@@ -1,18 +1,15 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
-// SystemSettingsHandler handles system settings including API token management
+// SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
 	config *config.Config
 	persistence *config.ConfigPersistence
@@ -26,147 +23,7 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	}
 }
 
-// APITokenResponse represents the API token response
-type APITokenResponse struct {
-	HasToken bool   `json:"hasToken"`
-	Token    string `json:"token,omitempty"`
-}
-
-// HandleGetAPIToken returns the current API token status
-func (h *SystemSettingsHandler) HandleGetAPIToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check if API token is set
-	hasToken := h.config.APIToken != ""
-	
-	response := APITokenResponse{
-		HasToken: hasToken,
-	}
-	
-	// Only return the token if it's requested with proper auth
-	if hasToken && r.URL.Query().Get("reveal") == "true" {
-		// Verify the request is authenticated (session, password, or API token)
-		if CheckAuth(h.config, w, r) {
-			response.Token = h.config.APIToken
-		} else {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// HandleGenerateAPIToken generates a new API token
-func (h *SystemSettingsHandler) HandleGenerateAPIToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Use standard auth check if any authentication is configured
-	// This allows generation via web UI when logged in with password
-	if !CheckAuth(h.config, w, r) {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Generate a new secure token
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		log.Error().Err(err).Msg("Failed to generate random token")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	
-	newToken := hex.EncodeToString(tokenBytes)
-	
-	// Save to system settings
-	settings, err := h.persistence.LoadSystemSettings()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load system settings")
-		settings = &config.SystemSettings{}
-	}
-	
-	settings.APIToken = newToken
-	
-	if err := h.persistence.SaveSystemSettings(*settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to save token", http.StatusInternalServerError)
-		return
-	}
-	
-	// Update the running config
-	h.config.APIToken = newToken
-	
-	// Don't override if env var is set
-	if os.Getenv("API_TOKEN") != "" {
-		log.Warn().Msg("API_TOKEN environment variable is set and will override UI-configured token on restart")
-	}
-	
-	log.Info().Msg("API token generated via UI")
-	
-	response := APITokenResponse{
-		HasToken: true,
-		Token:    newToken,
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// HandleDeleteAPIToken removes the API token
-func (h *SystemSettingsHandler) HandleDeleteAPIToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Use standard auth check (allows session, password, or API token)
-	// This allows deletion via web UI when logged in with password
-	if !CheckAuth(h.config, w, r) {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Save to system settings
-	settings, err := h.persistence.LoadSystemSettings()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load system settings")
-		settings = &config.SystemSettings{}
-	}
-	
-	settings.APIToken = ""
-	
-	if err := h.persistence.SaveSystemSettings(*settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to remove token", http.StatusInternalServerError)
-		return
-	}
-	
-	// Update the running config
-	h.config.APIToken = ""
-	
-	// Warn if env var is set
-	if os.Getenv("API_TOKEN") != "" {
-		log.Warn().Msg("API_TOKEN environment variable is set and will override this change on restart")
-	}
-	
-	log.Info().Msg("API token removed via UI")
-	
-	response := APITokenResponse{
-		HasToken: false,
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// HandleGetSystemSettings returns all system settings
+// HandleGetSystemSettings returns the current system settings
 func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -176,29 +33,24 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 	settings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load system settings")
-		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
-		return
+		settings = &config.SystemSettings{
+			PollingInterval: 5,
+		}
 	}
-	
-	// Don't expose the actual token in this endpoint
-	if settings.APIToken != "" {
-		settings.APIToken = "***HIDDEN***"
-	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
 }
 
-// HandleUpdateSystemSettings updates system settings
+// HandleUpdateSystemSettings updates the system settings
 func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Use standard auth check (allows session, password, or API token)
+	// Require authentication
 	if !CheckAuth(h.config, w, r) {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -207,26 +59,25 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	
-	// Don't allow updating API token through this endpoint
-	existingSettings, _ := h.persistence.LoadSystemSettings()
-	if existingSettings != nil {
-		settings.APIToken = existingSettings.APIToken
-	}
-	
-	if err := h.persistence.SaveSystemSettings(settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save system settings")
-		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
-		return
-	}
-	
-	// Update relevant config fields
+
+	// Load existing settings to preserve fields not in the request
+	// (removed - not needed without API token preservation)
+
+	// Update the config
 	if settings.PollingInterval > 0 {
 		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
+	}
+	if settings.AllowedOrigins != "" {
+		h.config.AllowedOrigins = settings.AllowedOrigins
+	}
+	if settings.ConnectionTimeout > 0 {
+		h.config.ConnectionTimeout = time.Duration(settings.ConnectionTimeout) * time.Second
 	}
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel
 	}
+	
+	// Update auto-update settings
 	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
 	if settings.AutoUpdateCheckInterval > 0 {
 		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
@@ -234,9 +85,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
-	
-	log.Info().Msg("System settings updated via UI")
-	
+
+	// Save to persistence
+	if err := h.persistence.SaveSystemSettings(settings); err != nil {
+		log.Error().Err(err).Msg("Failed to save system settings")
+		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Msg("System settings updated")
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
