@@ -601,9 +601,7 @@ func (r *Router) setupRoutes() {
 	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence)
 	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
-	r.mux.HandleFunc("/api/system/api-token", systemSettingsHandler.HandleGetAPIToken)
-	r.mux.HandleFunc("/api/system/api-token/generate", systemSettingsHandler.HandleGenerateAPIToken)
-	r.mux.HandleFunc("/api/system/api-token/delete", systemSettingsHandler.HandleDeleteAPIToken)
+	// Old API token endpoints removed - now using /api/security/regenerate-token
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
