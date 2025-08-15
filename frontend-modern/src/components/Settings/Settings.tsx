@@ -3,7 +3,6 @@ import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
-import { CurrentAPIToken } from './CurrentAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { RemovePasswordModal } from './RemovePasswordModal';
 import { SettingsAPI } from '@/api/settings';
@@ -1560,7 +1559,7 @@ const Settings: Component = () => {
                   
                   {/* Content */}
                   <div class="p-6">
-                    <CurrentAPIToken />
+                    {/* API token is only shown during initial setup for security */}
                   </div>
                 </div>
               </Show>
