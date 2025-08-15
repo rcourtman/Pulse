@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -284,4 +286,85 @@ ENABLE_AUDIT_LOG=true
 			json.NewEncoder(w).Encode(response)
 		}
 	}
+}
+
+// HandleRegenerateAPIToken generates a new API token and updates the .env file
+func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
+	// Require authentication
+	if !CheckAuth(r.config, w, rq) {
+		return
+	}
+	
+	if rq.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// Generate new token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		log.Error().Err(err).Msg("Failed to generate random token")
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	newToken := hex.EncodeToString(tokenBytes)
+	
+	// Determine env file path
+	envPath := filepath.Join(r.config.ConfigPath, ".env")
+	if r.config.ConfigPath == "" {
+		envPath = "/etc/pulse/.env"
+	}
+	
+	// Docker uses /data/.env
+	if _, err := os.Stat("/data/.env"); err == nil {
+		envPath = "/data/.env"
+	}
+	
+	// Read existing .env file
+	content, err := os.ReadFile(envPath)
+	if err != nil {
+		log.Error().Err(err).Str("path", envPath).Msg("Failed to read .env file")
+		http.Error(w, "Security configuration not found", http.StatusNotFound)
+		return
+	}
+	
+	// Update the API_TOKEN line
+	lines := strings.Split(string(content), "\n")
+	var updated bool
+	for i, line := range lines {
+		if strings.HasPrefix(line, "API_TOKEN=") {
+			lines[i] = fmt.Sprintf("API_TOKEN='%s'", newToken)
+			updated = true
+			break
+		}
+	}
+	
+	if !updated {
+		// API_TOKEN line not found, add it
+		lines = append(lines, fmt.Sprintf("API_TOKEN='%s'", newToken))
+	}
+	
+	// Write updated content back
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(envPath, []byte(newContent), 0600); err != nil {
+		log.Error().Err(err).Msg("Failed to update .env file")
+		http.Error(w, "Failed to save new token", http.StatusInternalServerError)
+		return
+	}
+	
+	log.Info().Msg("API token regenerated successfully")
+	
+	// Get deployment type for restart instructions
+	deploymentType := updates.GetDeploymentType()
+	
+	response := map[string]interface{}{
+		"success": true,
+		"token": newToken,
+		"deploymentType": deploymentType,
+		"requiresRestart": true,
+		"message": "New API token generated. Restart required to activate.",
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

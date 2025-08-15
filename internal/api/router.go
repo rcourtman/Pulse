@@ -260,6 +260,9 @@ func (r *Router) setupRoutes() {
 	// Quick security setup route - using fixed version
 	r.mux.HandleFunc("/api/security/quick-setup", handleQuickSecuritySetupFixed(r))
 	
+	// API token regeneration endpoint
+	r.mux.HandleFunc("/api/security/regenerate-token", r.HandleRegenerateAPIToken)
+	
 	// Apply security restart endpoint
 	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
