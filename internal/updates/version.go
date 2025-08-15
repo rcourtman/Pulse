@@ -21,12 +21,13 @@ type Version struct {
 
 // VersionInfo contains detailed version information
 type VersionInfo struct {
-	Version     string `json:"version"`
-	Build       string `json:"build"`
-	Runtime     string `json:"runtime"`
-	Channel     string `json:"channel,omitempty"`
-	IsDocker    bool   `json:"isDocker"`
-	IsDevelopment bool `json:"isDevelopment"`
+	Version       string `json:"version"`
+	Build         string `json:"build"`
+	Runtime       string `json:"runtime"`
+	Channel       string `json:"channel,omitempty"`
+	IsDocker      bool   `json:"isDocker"`
+	IsDevelopment bool   `json:"isDevelopment"`
+	DeploymentType string `json:"deploymentType"`
 }
 
 // ParseVersion parses a version string into a Version struct
@@ -124,12 +125,13 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			channel = "rc"
 		}
 		return &VersionInfo{
-			Version:       gitVersion,
-			Build:         "development",
-			Runtime:       "go",
-			Channel:       channel,
-			IsDevelopment: true,
-			IsDocker:      isDockerEnvironment(),
+			Version:        gitVersion,
+			Build:          "development",
+			Runtime:        "go",
+			Channel:        channel,
+			IsDevelopment:  true,
+			IsDocker:       isDockerEnvironment(),
+			DeploymentType: GetDeploymentType(),
 		}, nil
 	}
 	
@@ -150,12 +152,13 @@ func GetCurrentVersion() (*VersionInfo, error) {
 				channel = "rc"
 			}
 			return &VersionInfo{
-				Version:       version,
-				Build:         "release",
-				Runtime:       "go",
-				Channel:       channel,
-				IsDevelopment: false,
-				IsDocker:      isDockerEnvironment(),
+				Version:        version,
+				Build:          "release",
+				Runtime:        "go",
+				Channel:        channel,
+				IsDevelopment:  false,
+				IsDocker:       isDockerEnvironment(),
+				DeploymentType: GetDeploymentType(),
 			}, nil
 		}
 	}
@@ -167,12 +170,13 @@ func GetCurrentVersion() (*VersionInfo, error) {
 		channel = "rc"
 	}
 	return &VersionInfo{
-		Version:       version,
-		Build:         "release",
-		Runtime:       "go",
-		Channel:       channel,
-		IsDevelopment: false,
-		IsDocker:      isDockerEnvironment(),
+		Version:        version,
+		Build:          "release",
+		Runtime:        "go",
+		Channel:        channel,
+		IsDevelopment:  false,
+		IsDocker:       isDockerEnvironment(),
+		DeploymentType: GetDeploymentType(),
 	}, nil
 }
 
@@ -213,6 +217,46 @@ func isDockerEnvironment() bool {
 func fileExists(path string) bool {
 	cmd := exec.Command("test", "-f", path)
 	return cmd.Run() == nil
+}
+
+// GetDeploymentType determines how Pulse was deployed
+func GetDeploymentType() string {
+	// Check if running in Docker
+	if isDockerEnvironment() {
+		return "docker"
+	}
+	
+	// Check for ProxmoxVE LXC installation (has update command)
+	if fileExists("/bin/update") {
+		data, err := exec.Command("cat", "/bin/update").Output()
+		if err == nil && strings.Contains(string(data), "pulse.sh") {
+			return "proxmoxve"
+		}
+	}
+	
+	// Check for systemd service to determine installation type
+	if fileExists("/etc/systemd/system/pulse-backend.service") {
+		// Check if it's a ProxmoxVE installation (specific user setup)
+		data, err := exec.Command("cat", "/etc/systemd/system/pulse-backend.service").Output()
+		if err == nil {
+			content := string(data)
+			if strings.Contains(content, "User=pulse") && strings.Contains(content, "/opt/pulse/bin/pulse") {
+				return "proxmoxve"
+			}
+		}
+		return "systemd"
+	}
+	
+	if fileExists("/etc/systemd/system/pulse.service") {
+		return "systemd"
+	}
+	
+	// Development or manual run
+	if strings.Contains(os.Args[0], "go-build") || fileExists(".git") {
+		return "development"
+	}
+	
+	return "manual"
 }
 
 // compareInts compares two integers

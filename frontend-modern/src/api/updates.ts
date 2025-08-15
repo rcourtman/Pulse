@@ -26,6 +26,7 @@ export interface VersionInfo {
   channel?: string;
   isDocker: boolean;
   isDevelopment: boolean;
+  deploymentType?: string;
 }
 
 export class UpdatesAPI {

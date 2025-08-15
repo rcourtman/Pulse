@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
 
@@ -148,6 +149,7 @@ ENABLE_AUDIT_LOG=true
 			response := map[string]interface{}{
 				"success": true,
 				"method": "docker",
+				"deploymentType": "docker",
 				"requiresManualRestart": true,
 				"message": "Security configuration saved. Restart your Docker container to apply settings.",
 				"note": "Your credentials have been saved to /data/.env and will persist after restart.",
@@ -189,6 +191,7 @@ ENABLE_AUDIT_LOG=true
 				"method": "systemd-nonroot",
 				"serviceName": serviceName,
 				"envFile": envPath,
+				"deploymentType": updates.GetDeploymentType(),
 				"message": fmt.Sprintf("Security settings saved to %s. Restart the %s service to apply.", envPath, serviceName),
 				"command": fmt.Sprintf("sudo systemctl restart %s", serviceName),
 				"note": "You may need root privileges to restart the service.",
@@ -232,6 +235,7 @@ Environment="ENABLE_AUDIT_LOG=true"
 				"success": true,
 				"method": "systemd-root",
 				"serviceName": serviceName,
+				"deploymentType": updates.GetDeploymentType(),
 				"automatic": true,
 				"readyToRestart": true,
 				"message": fmt.Sprintf("Security configured! Restart %s service to apply settings.", serviceName),
@@ -264,10 +268,14 @@ ENABLE_AUDIT_LOG=true
 				// Still return success with manual instructions
 			}
 			
+			// Get deployment type for restart instructions
+			deploymentType := updates.GetDeploymentType()
+			
 			response := map[string]interface{}{
 				"success": true,
 				"method": "manual",
 				"envFile": envPath,
+				"deploymentType": deploymentType,
 				"message": "Security configuration saved. Restart Pulse to apply settings.",
 				"note": fmt.Sprintf("Configuration saved to %s", envPath),
 			}
