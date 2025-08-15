@@ -221,18 +221,25 @@ pulse config import -i backup.enc
 
 ## Updates
 
+Pulse shows when updates are available and provides deployment-specific instructions:
+
+### ProxmoxVE LXC Container
+Type `update` in the LXC console - the script handles everything automatically
+
 ### Docker
 ```bash
 docker pull rcourtman/pulse:latest
 docker stop pulse
 docker rm pulse
-# Run docker run command again
+# Run docker run command again with your settings
 ```
 
 ### Manual Install
-Settings → System → Check for Updates
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+```
 
-After updates complete, refresh your browser (Ctrl+F5 or Cmd+Shift+R) to load the new version.
+The UI will detect your deployment type and show the appropriate update method when a new version is available.
 
 ## API
 

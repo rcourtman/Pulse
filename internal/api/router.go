@@ -200,6 +200,21 @@ func (r *Router) setupRoutes() {
 			// Check for basic auth configuration
 			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || os.Getenv("REQUIRE_AUTH") == "true"
 			
+			// Check if .env file exists but hasn't been loaded yet (pending restart)
+			configuredButPendingRestart := false
+			envPath := filepath.Join(r.config.ConfigPath, ".env")
+			if envPath == "" || r.config.ConfigPath == "" {
+				envPath = "/etc/pulse/.env"
+			}
+			
+			// If no auth is currently active but .env exists, security is pending restart
+			if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
+				if _, err := os.Stat(envPath); err == nil {
+					// .env exists but auth not loaded - pending restart
+					configuredButPendingRestart = true
+				}
+			}
+			
 			// Check for audit logging
 			hasAuditLogging := os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true"
 			
@@ -227,6 +242,7 @@ func (r *Router) setupRoutes() {
 				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
 				"hasAuthentication": hasAuthentication,
+				"configuredButPendingRestart": configuredButPendingRestart,
 				"hasAuditLogging": hasAuditLogging,
 				"credentialsEncrypted": credentialsEncrypted,
 				"hasHTTPS": req.TLS != nil,
