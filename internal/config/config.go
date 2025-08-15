@@ -229,13 +229,10 @@ func Load() (*Config, error) {
 			if systemSettings.ConnectionTimeout > 0 {
 				cfg.ConnectionTimeout = time.Duration(systemSettings.ConnectionTimeout) * time.Second
 			}
-			if systemSettings.APIToken != "" {
-				cfg.APIToken = systemSettings.APIToken
-			}
+			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Dur("interval", cfg.PollingInterval).
 				Str("updateChannel", cfg.UpdateChannel).
-				Bool("hasAPIToken", cfg.APIToken != "").
 				Msg("Loaded system configuration")
 		}
 	}
