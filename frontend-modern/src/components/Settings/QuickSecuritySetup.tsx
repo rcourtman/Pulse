@@ -93,11 +93,6 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       setCredentials(newCredentials);
       setShowCredentials(true);
       
-      // Store the API token in sessionStorage so it can be retrieved later in this session
-      if (newCredentials.apiToken) {
-        sessionStorage.setItem('pulse_last_api_token', newCredentials.apiToken);
-      }
-      
       // Show success message
       showSuccess('Security configured! Settings will apply after restart.');
       
@@ -352,7 +347,10 @@ Important:
                 </button>
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                This is your API token for automation. Use with X-API-Token header.
+                Use this token with X-API-Token header for automation.
+              </p>
+              <p class="text-xs text-red-600 dark:text-red-400 mt-1 font-semibold">
+                ⚠️ This token will NEVER be shown again. Save it now!
               </p>
             </div>
           </div>
