@@ -49,8 +49,9 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
 
   const loadCachedResults = async () => {
     try {
+      const { apiFetch } = await import('@/utils/apiClient');
       // Fetch cached results with GET request
-      const response = await fetch('/api/discover', {
+      const response = await apiFetch('/api/discover', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -92,7 +93,8 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
     }, 30000);
 
     try {
-      const response = await fetch('/api/discover', {
+      const { apiFetch } = await import('@/utils/apiClient');
+      const response = await apiFetch('/api/discover', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
