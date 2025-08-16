@@ -1,4 +1,4 @@
-// Simple logger - just console.log with timestamps
+// Simple logger with environment-aware logging
 const isDev = import.meta.env.DEV;
 
 export const logger = {
@@ -7,7 +7,10 @@ export const logger = {
   },
   
   info: (message: string, data?: unknown) => {
-    console.log(`[INFO] ${message}`, data || '');
+    // Only show critical info messages in production
+    if (isDev || message.includes('established') || message.includes('error') || message.includes('failed')) {
+      console.log(`[INFO] ${message}`, data || '');
+    }
   },
   
   warn: (message: string, data?: unknown) => {

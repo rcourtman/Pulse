@@ -84,6 +84,11 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	
+	// Skip CSRF for Basic Auth (doesn't use sessions, not vulnerable to CSRF)
+	if r.Header.Get("Authorization") != "" {
+		return true
+	}
+	
 	// Get session from cookie
 	cookie, err := r.Cookie("pulse_session")
 	if err != nil {

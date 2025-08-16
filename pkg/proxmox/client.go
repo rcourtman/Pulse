@@ -312,13 +312,35 @@ type Node struct {
 	Level  string  `json:"level"`
 }
 
-// NodeStatus represents detailed node status
+// NodeStatus represents detailed node status from /nodes/{node}/status endpoint
+// This endpoint provides real-time metrics that update every second
 type NodeStatus struct {
-	LoadAvg       []interface{} `json:"loadavg"`  // Can be float64 or string
+	CPU           float64       `json:"cpu"`       // Real-time CPU usage (0-1)
+	Memory        *MemoryStatus `json:"memory"`    // Real-time memory stats
+	Swap          *SwapStatus   `json:"swap"`      // Swap usage
+	LoadAvg       []interface{} `json:"loadavg"`   // Can be float64 or string
 	KernelVersion string        `json:"kversion"`
 	PVEVersion    string        `json:"pveversion"`
 	CPUInfo       *CPUInfo      `json:"cpuinfo"`
 	RootFS        *RootFS       `json:"rootfs"`
+	Uptime        uint64        `json:"uptime"`    // Uptime in seconds
+	Wait          float64       `json:"wait"`      // IO wait
+	IODelay       float64       `json:"iodelay"`   // IO delay
+	Idle          float64       `json:"idle"`      // CPU idle time
+}
+
+// MemoryStatus represents real-time memory information
+type MemoryStatus struct {
+	Total uint64 `json:"total"`
+	Used  uint64 `json:"used"`
+	Free  uint64 `json:"free"`
+}
+
+// SwapStatus represents swap information
+type SwapStatus struct {
+	Total uint64 `json:"total"`
+	Used  uint64 `json:"used"`
+	Free  uint64 `json:"free"`
 }
 
 // RootFS represents root filesystem information
@@ -821,6 +843,72 @@ func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMSta
 	}
 
 	return &result.Data, nil
+}
+
+// GetContainerStatus returns detailed container status using real-time endpoint
+func (c *Client) GetContainerStatus(ctx context.Context, node string, vmid int) (*Container, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/status/current", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data Container `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// ClusterResource represents a resource from /cluster/resources
+type ClusterResource struct {
+	ID         string  `json:"id"`
+	Type       string  `json:"type"`
+	Node       string  `json:"node"`
+	Status     string  `json:"status"`
+	Name       string  `json:"name,omitempty"`
+	VMID       int     `json:"vmid,omitempty"`
+	CPU        float64 `json:"cpu,omitempty"`
+	MaxCPU     int     `json:"maxcpu,omitempty"`
+	Mem        uint64  `json:"mem,omitempty"`
+	MaxMem     uint64  `json:"maxmem,omitempty"`
+	Disk       uint64  `json:"disk,omitempty"`
+	MaxDisk    uint64  `json:"maxdisk,omitempty"`
+	NetIn      uint64  `json:"netin,omitempty"`
+	NetOut     uint64  `json:"netout,omitempty"`
+	DiskRead   uint64  `json:"diskread,omitempty"`
+	DiskWrite  uint64  `json:"diskwrite,omitempty"`
+	Uptime     uint64  `json:"uptime,omitempty"`
+	Template   int     `json:"template,omitempty"`
+	Tags       string  `json:"tags,omitempty"`
+}
+
+// GetClusterResources returns all resources (VMs, containers) across the cluster
+func (c *Client) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
+	path := "/cluster/resources"
+	if resourceType != "" {
+		path = fmt.Sprintf("%s?type=%s", path, resourceType)
+	}
+	
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []ClusterResource `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
 }
 
 // VMStatus represents detailed VM status

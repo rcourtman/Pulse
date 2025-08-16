@@ -11,14 +11,24 @@ type IOMetrics = types.IOMetrics
 
 // RateTracker tracks I/O metrics to calculate rates
 type RateTracker struct {
-	mu       sync.RWMutex
-	previous map[string]IOMetrics
+	mu        sync.RWMutex
+	previous  map[string]IOMetrics
+	lastRates map[string]RateCache
+}
+
+// RateCache stores the last calculated rates for a guest
+type RateCache struct {
+	DiskReadRate  float64
+	DiskWriteRate float64
+	NetInRate     float64
+	NetOutRate    float64
 }
 
 // NewRateTracker creates a new rate tracker
 func NewRateTracker() *RateTracker {
 	return &RateTracker{
-		previous: make(map[string]IOMetrics),
+		previous:  make(map[string]IOMetrics),
+		lastRates: make(map[string]RateCache),
 	}
 }
 
@@ -29,16 +39,37 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	defer rt.mu.Unlock()
 
 	prev, exists := rt.previous[guestID]
-	rt.previous[guestID] = current
-
+	
 	if !exists {
-		// No previous data, return -1 to indicate no data available
+		// No previous data, store it and return -1 to indicate no data available
+		rt.previous[guestID] = current
 		return -1, -1, -1, -1
 	}
+
+	// Check if the values have actually changed (detect stale data)
+	// If all cumulative values are the same, we're getting cached data from Proxmox
+	if current.DiskRead == prev.DiskRead && 
+	   current.DiskWrite == prev.DiskWrite && 
+	   current.NetworkIn == prev.NetworkIn && 
+	   current.NetworkOut == prev.NetworkOut {
+		// Data hasn't changed - return last known good rates
+		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
+			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.NetInRate, lastRate.NetOutRate
+		}
+		// No last rates available, return 0
+		return 0, 0, 0, 0
+	}
+	
+	// Data has changed, update our cache
+	rt.previous[guestID] = current
 
 	// Calculate time difference in seconds
 	timeDiff := current.Timestamp.Sub(prev.Timestamp).Seconds()
 	if timeDiff <= 0 {
+		// Return last known rates if time hasn't advanced
+		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
+			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.NetInRate, lastRate.NetOutRate
+		}
 		return 0, 0, 0, 0
 	}
 
@@ -56,6 +87,14 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 		netOutRate = float64(current.NetworkOut-prev.NetworkOut) / timeDiff
 	}
 
+	// Cache the calculated rates
+	rt.lastRates[guestID] = RateCache{
+		DiskReadRate:  diskReadRate,
+		DiskWriteRate: diskWriteRate,
+		NetInRate:     netInRate,
+		NetOutRate:    netOutRate,
+	}
+
 	return
 }
 
@@ -64,4 +103,5 @@ func (rt *RateTracker) Clear() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	rt.previous = make(map[string]IOMetrics)
+	rt.lastRates = make(map[string]RateCache)
 }

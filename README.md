@@ -165,8 +165,18 @@ See [Security Documentation](docs/SECURITY.md) for details.
 
 Quick start - most settings are in the web UI:
 - **Settings → Nodes**: Add/remove Proxmox instances
-- **Settings → System**: Polling intervals, CORS settings
+- **Settings → System**: Polling intervals, timeouts, update settings
+- **Settings → Security**: Authentication and API tokens
 - **Alerts**: Thresholds and notifications
+
+### Configuration Files
+
+Pulse uses three separate configuration files with clear separation of concerns:
+- `.env` - Authentication credentials only
+- `system.json` - Application settings
+- `nodes.enc` - Encrypted node credentials
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed documentation on configuration structure and management.
 
 ### Email Alerts Configuration
 Configure email notifications in **Settings → Alerts → Email Destinations**

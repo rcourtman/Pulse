@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
@@ -61,13 +62,14 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
-		// Check if auth is already configured (for ProxmoxVE script compatibility)
-		if r.config.APIToken != "" || r.config.AuthUser != "" {
-			log.Info().Msg("Security setup skipped - auth already configured")
+		// Check if password auth is already configured
+		// Allow adding password auth on top of API-only access
+		if r.config.AuthUser != "" && r.config.AuthPass != "" {
+			log.Info().Msg("Security setup skipped - password auth already configured")
 			response := map[string]interface{}{
 				"success": true,
 				"skipped": true,
-				"message": "Security is already configured. No changes made.",
+				"message": "Password authentication is already configured. Please remove existing security first if you want to reconfigure.",
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
@@ -76,9 +78,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 
 		// Parse request body
 		var setupRequest struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-			APIToken string `json:"apiToken"`
+			Username             string `json:"username"`
+			Password             string `json:"password"`
+			APIToken             string `json:"apiToken"`
+			PollingInterval      int    `json:"pollingInterval"`
+			EnableNotifications  bool   `json:"enableNotifications"`
+			DarkMode            bool   `json:"darkMode"`
 		}
 		
 		if err := json.NewDecoder(req.Body).Decode(&setupRequest); err != nil {
@@ -90,6 +95,11 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		if setupRequest.Username == "" || setupRequest.Password == "" || setupRequest.APIToken == "" {
 			http.Error(w, "Username, password, and API token are required", http.StatusBadRequest)
 			return
+		}
+		
+		// Set default polling interval if not provided
+		if setupRequest.PollingInterval == 0 {
+			setupRequest.PollingInterval = 5
 		}
 		
 		// Hash the password
@@ -107,8 +117,34 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 		
-		// Hash the API token
-		hashedToken := auth.HashAPIToken(setupRequest.APIToken)
+		// Don't hash the API token - store it as plain text
+		// (Hashing causes issues with token length detection)
+		// Always use the new token when setting up full security
+		// This ensures any API-only tokens are replaced with the new secure token
+		apiToken := setupRequest.APIToken
+		if r.config.APIToken != "" && r.config.AuthUser == "" && r.config.AuthPass == "" {
+			// We had API-only access before, now replacing with full security
+			log.Info().Msg("Replacing API-only token with new secure token")
+		}
+		
+		// Update runtime config immediately - no restart needed!
+		r.config.AuthUser = setupRequest.Username
+		r.config.AuthPass = hashedPassword
+		r.config.APIToken = apiToken
+		r.config.APITokenEnabled = true
+		r.config.PollingInterval = time.Duration(setupRequest.PollingInterval) * time.Second
+		log.Info().Msg("Runtime config updated with new security settings - active immediately")
+		
+		// Save system settings to system.json (polling interval, etc)
+		systemSettings := config.SystemSettings{
+			PollingInterval: setupRequest.PollingInterval,
+			ConnectionTimeout: 10, // Default
+			AutoUpdateEnabled: false, // Default  
+		}
+		if err := r.persistence.SaveSystemSettings(systemSettings); err != nil {
+			log.Error().Err(err).Msg("Failed to save system settings")
+			// Continue anyway - not critical for auth setup
+		}
 		
 		// Detect environment
 		isSystemd := os.Getenv("INVOCATION_ID") != ""
@@ -133,9 +169,9 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 # IMPORTANT: Do not remove the single quotes around the password hash!
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
+API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
 			
 			// Ensure directory exists
 			os.MkdirAll(r.config.ConfigPath, 0755)
@@ -152,9 +188,9 @@ ENABLE_AUDIT_LOG=true
 				"success": true,
 				"method": "docker",
 				"deploymentType": "docker",
-				"requiresManualRestart": true,
-				"message": "Security configuration saved. Restart your Docker container to apply settings.",
-				"note": "Your credentials have been saved to /data/.env and will persist after restart.",
+				"requiresManualRestart": false,
+				"message": "Security enabled immediately! Your settings are saved and active.",
+				"note": "Configuration saved to /data/.env for persistence across restarts.",
 			}
 			
 			w.Header().Set("Content-Type", "application/json")
@@ -169,9 +205,9 @@ ENABLE_AUDIT_LOG=true
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
+API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
 			
 			// Save to config directory (usually /etc/pulse)
 			os.MkdirAll(r.config.ConfigPath, 0755)
@@ -187,16 +223,16 @@ ENABLE_AUDIT_LOG=true
 				}
 			}
 			
-			// Create manual instructions for the user
+			// Create response - security is active immediately
 			response := map[string]interface{}{
 				"success": true,
 				"method": "systemd-nonroot",
 				"serviceName": serviceName,
 				"envFile": envPath,
 				"deploymentType": updates.GetDeploymentType(),
-				"message": fmt.Sprintf("Security settings saved to %s. Restart the %s service to apply.", envPath, serviceName),
-				"command": fmt.Sprintf("sudo systemctl restart %s", serviceName),
-				"note": "You may need root privileges to restart the service.",
+				"requiresManualRestart": false,
+				"message": "Security enabled immediately! Your settings are saved and active.",
+				"note": fmt.Sprintf("Configuration saved to %s for persistence across restarts.", envPath),
 			}
 			
 			w.Header().Set("Content-Type", "application/json")
@@ -222,7 +258,7 @@ Environment="PULSE_AUTH_USER=%s"
 Environment="PULSE_AUTH_PASS=%s"
 Environment="API_TOKEN=%s"
 Environment="ENABLE_AUDIT_LOG=true"
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
 			
 			if err := os.WriteFile(overridePath, []byte(overrideContent), 0644); err != nil {
 				log.Error().Err(err).Msg("Failed to write systemd override")
@@ -239,9 +275,9 @@ Environment="ENABLE_AUDIT_LOG=true"
 				"serviceName": serviceName,
 				"deploymentType": updates.GetDeploymentType(),
 				"automatic": true,
-				"readyToRestart": true,
-				"message": fmt.Sprintf("Security configured! Restart %s service to apply settings.", serviceName),
-				"command": fmt.Sprintf("systemctl restart %s", serviceName),
+				"requiresManualRestart": false,
+				"message": "Security enabled immediately! Your settings are saved and active.",
+				"note": "Systemd override created for persistence across restarts.",
 			}
 			
 			w.Header().Set("Content-Type", "application/json")
@@ -258,9 +294,9 @@ Environment="ENABLE_AUDIT_LOG=true"
 # Generated on %s
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
-API_TOKEN='%s'
+API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
 			
 			// Try to create directory if needed
 			os.MkdirAll(filepath.Dir(envPath), 0755)
@@ -278,8 +314,9 @@ ENABLE_AUDIT_LOG=true
 				"method": "manual",
 				"envFile": envPath,
 				"deploymentType": deploymentType,
-				"message": "Security configuration saved. Restart Pulse to apply settings.",
-				"note": fmt.Sprintf("Configuration saved to %s", envPath),
+				"requiresManualRestart": false,
+				"message": "Security enabled immediately! Your settings are saved and active.",
+				"note": fmt.Sprintf("Configuration saved to %s for persistence across restarts.", envPath),
 			}
 			
 			w.Header().Set("Content-Type", "application/json")
@@ -290,8 +327,9 @@ ENABLE_AUDIT_LOG=true
 
 // HandleRegenerateAPIToken generates a new API token and updates the .env file
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
-	// Require authentication
-	if !CheckAuth(r.config, w, rq) {
+	// Only require authentication if auth is already configured
+	// This allows users to set up API-only access without password auth
+	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
 		return
 	}
 	
@@ -300,14 +338,19 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 	
-	// Generate new token
-	tokenBytes := make([]byte, 32)
+	// Generate new token (24 bytes = 48 hex chars, not 64 to avoid hash detection issue)
+	tokenBytes := make([]byte, 24)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		log.Error().Err(err).Msg("Failed to generate random token")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 	newToken := hex.EncodeToString(tokenBytes)
+	
+	// Update runtime config immediately - no restart needed!
+	r.config.APIToken = newToken
+	r.config.APITokenEnabled = true
+	log.Info().Msg("Runtime config updated with new API token - active immediately")
 	
 	// Determine env file path
 	envPath := filepath.Join(r.config.ConfigPath, ".env")
@@ -333,7 +376,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	var updated bool
 	for i, line := range lines {
 		if strings.HasPrefix(line, "API_TOKEN=") {
-			lines[i] = fmt.Sprintf("API_TOKEN='%s'", newToken)
+			lines[i] = fmt.Sprintf("API_TOKEN=%s", newToken)
 			updated = true
 			break
 		}
@@ -341,7 +384,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	
 	if !updated {
 		// API_TOKEN line not found, add it
-		lines = append(lines, fmt.Sprintf("API_TOKEN='%s'", newToken))
+		lines = append(lines, fmt.Sprintf("API_TOKEN=%s", newToken))
 	}
 	
 	// Write updated content back
@@ -361,8 +404,8 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		"success": true,
 		"token": newToken,
 		"deploymentType": deploymentType,
-		"requiresRestart": true,
-		"message": "New API token generated. Restart required to activate.",
+		"requiresRestart": false,
+		"message": "New API token generated and active immediately!",
 	}
 	
 	w.Header().Set("Content-Type", "application/json")

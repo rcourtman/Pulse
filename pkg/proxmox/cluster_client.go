@@ -591,6 +591,34 @@ func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid i
 	return result, err
 }
 
+// GetClusterResources returns all resources (VMs, containers) across the cluster in a single call
+func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
+	var result []ClusterResource
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		resources, err := client.GetClusterResources(ctx, resourceType)
+		if err != nil {
+			return err
+		}
+		result = resources
+		return nil
+	})
+	return result, err
+}
+
+// GetContainerStatus returns the status of a specific container
+func (cc *ClusterClient) GetContainerStatus(ctx context.Context, node string, vmid int) (*Container, error) {
+	var result *Container
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		status, err := client.GetContainerStatus(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = status
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterHealthInfo returns detailed health information about the cluster
 func (cc *ClusterClient) GetClusterHealthInfo() models.ClusterHealth {
 	cc.mu.RLock()

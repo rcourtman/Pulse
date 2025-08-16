@@ -36,6 +36,8 @@ type PVEClientInterface interface {
 	GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
 	GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
 	GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error)
+	GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error)
+	GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error)
 }
 
 // Monitor handles all monitoring operations
@@ -68,6 +70,14 @@ func safePercentage(used, total float64) float64 {
 		return 0
 	}
 	return result
+}
+
+// maxInt64 returns the maximum of two int64 values
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // safeFloat ensures a float value is not NaN or Inf
@@ -280,7 +290,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	log.Info().
-		Dur("pollingInterval", m.config.PollingInterval).
+		Dur("pollingInterval", 10*time.Second).
 		Msg("Starting monitoring loop")
 
 	// Initialize and start discovery service
@@ -351,10 +361,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 
 	// Create separate tickers for polling and broadcasting
-	pollTicker := time.NewTicker(m.config.PollingInterval)
+	// Hardcoded to 10 seconds since Proxmox updates cluster/resources every 10 seconds
+	const pollingInterval = 10 * time.Second
+	pollTicker := time.NewTicker(pollingInterval)
 	defer pollTicker.Stop()
 
-	broadcastTicker := time.NewTicker(m.config.PollingInterval)
+	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
 	// Do an immediate poll on start
@@ -777,23 +789,22 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Poll VMs if enabled
-	if instanceCfg.MonitorVMs {
+	// Poll VMs and containers together using cluster/resources for efficiency
+	if instanceCfg.MonitorVMs || instanceCfg.MonitorContainers {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			m.pollVMs(ctx, instanceName, client)
-		}
-	}
-
-	// Poll containers if enabled
-	if instanceCfg.MonitorContainers {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			m.pollContainers(ctx, instanceName, client)
+			// Try to use efficient cluster/resources endpoint
+			if !m.pollVMsAndContainersEfficient(ctx, instanceName, client) {
+				// Fall back to old method if cluster/resources fails
+				if instanceCfg.MonitorVMs {
+					m.pollVMs(ctx, instanceName, client)
+				}
+				if instanceCfg.MonitorContainers {
+					m.pollContainers(ctx, instanceName, client)
+				}
+			}
 		}
 	}
 
@@ -839,6 +850,139 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}()
 		}
 	}
+}
+
+// pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
+func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
+	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using cluster/resources")
+	
+	// Get all resources in a single API call
+	resources, err := client.GetClusterResources(ctx, "vm")
+	if err != nil {
+		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
+		return false
+	}
+	
+	var allVMs []models.VM
+	var allContainers []models.Container
+	
+	for _, res := range resources {
+		guestID := fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
+		
+		// Calculate I/O rates
+		currentMetrics := IOMetrics{
+			DiskRead:   int64(res.DiskRead),
+			DiskWrite:  int64(res.DiskWrite),
+			NetworkIn:  int64(res.NetIn),
+			NetworkOut: int64(res.NetOut),
+			Timestamp:  time.Now(),
+		}
+		diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+		
+		
+		if res.Type == "qemu" {
+			// Skip templates if configured
+			if res.Template == 1 {
+				continue
+			}
+			
+			vm := models.VM{
+				ID:         guestID,
+				VMID:       res.VMID,
+				Name:       res.Name,
+				Node:       res.Node,
+				Instance:   instanceName,
+				Status:     res.Status,
+				CPU:        safeFloat(res.CPU),
+				CPUs:       res.MaxCPU,
+				Memory: models.Memory{
+					Total: int64(res.MaxMem),
+					Used:  int64(res.Mem),
+					Free:  int64(res.MaxMem - res.Mem),
+					Usage: safePercentage(float64(res.Mem), float64(res.MaxMem)),
+				},
+				Disk: models.Disk{
+					Total: int64(res.MaxDisk),
+					Used:  int64(res.Disk),
+					Free:  int64(res.MaxDisk - res.Disk),
+					Usage: safePercentage(float64(res.Disk), float64(res.MaxDisk)),
+				},
+				NetworkIn:  maxInt64(0, int64(netInRate)),
+				NetworkOut: maxInt64(0, int64(netOutRate)),
+				DiskRead:   maxInt64(0, int64(diskReadRate)),
+				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
+				Uptime:     int64(res.Uptime),
+				Template:   res.Template == 1,
+				LastSeen:   time.Now(),
+			}
+			
+			// Parse tags
+			if res.Tags != "" {
+				vm.Tags = strings.Split(res.Tags, ";")
+			}
+			
+			allVMs = append(allVMs, vm)
+			
+		} else if res.Type == "lxc" {
+			// Skip templates if configured
+			if res.Template == 1 {
+				continue
+			}
+			
+			container := models.Container{
+				ID:         guestID,
+				VMID:       res.VMID,
+				Name:       res.Name,
+				Node:       res.Node,
+				Instance:   instanceName,
+				Status:     res.Status,
+				CPU:        safeFloat(res.CPU),
+				CPUs:       int(res.MaxCPU),
+				Memory: models.Memory{
+					Total: int64(res.MaxMem),
+					Used:  int64(res.Mem),
+					Free:  int64(res.MaxMem - res.Mem),
+					Usage: safePercentage(float64(res.Mem), float64(res.MaxMem)),
+				},
+				Disk: models.Disk{
+					Total: int64(res.MaxDisk),
+					Used:  int64(res.Disk),
+					Free:  int64(res.MaxDisk - res.Disk),
+					Usage: safePercentage(float64(res.Disk), float64(res.MaxDisk)),
+				},
+				NetworkIn:  maxInt64(0, int64(netInRate)),
+				NetworkOut: maxInt64(0, int64(netOutRate)),
+				DiskRead:   maxInt64(0, int64(diskReadRate)),
+				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
+				Uptime:     int64(res.Uptime),
+				Template:   res.Template == 1,
+				LastSeen:   time.Now(),
+			}
+			
+			// Parse tags
+			if res.Tags != "" {
+				container.Tags = strings.Split(res.Tags, ";")
+			}
+			
+			allContainers = append(allContainers, container)
+		}
+	}
+	
+	// Update state
+	if len(allVMs) > 0 {
+		m.state.UpdateVMsForInstance(instanceName, allVMs)
+	}
+	if len(allContainers) > 0 {
+		m.state.UpdateContainersForInstance(instanceName, allContainers)
+	}
+	
+	log.Info().
+		Str("instance", instanceName).
+		Int("vms", len(allVMs)).
+		Int("containers", len(allContainers)).
+		Msg("VMs and containers polled efficiently with cluster/resources")
+	
+	return true
 }
 
 // pollVMs polls VMs from a PVE instance
@@ -947,10 +1091,10 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 					Free:  int64(vm.MaxDisk - vm.Disk),
 					Usage: safePercentage(float64(vm.Disk), float64(vm.MaxDisk)),
 				},
-				NetworkIn:  int64(netInRate),
-				NetworkOut: int64(netOutRate),
-				DiskRead:   int64(diskReadRate),
-				DiskWrite:  int64(diskWriteRate),
+				NetworkIn:  maxInt64(0, int64(netInRate)),
+				NetworkOut: maxInt64(0, int64(netOutRate)),
+				DiskRead:   maxInt64(0, int64(diskReadRate)),
+				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
 				Uptime:     int64(vm.Uptime),
 				Template:   vm.Template == 1,
 				Tags:       tags,
@@ -1062,10 +1206,10 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 					Free:  int64(ct.MaxDisk - ct.Disk),
 					Usage: safePercentage(float64(ct.Disk), float64(ct.MaxDisk)),
 				},
-				NetworkIn:  int64(netInRate),
-				NetworkOut: int64(netOutRate),
-				DiskRead:   int64(diskReadRate),
-				DiskWrite:  int64(diskWriteRate),
+				NetworkIn:  maxInt64(0, int64(netInRate)),
+				NetworkOut: maxInt64(0, int64(netOutRate)),
+				DiskRead:   maxInt64(0, int64(diskReadRate)),
+				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
 				Uptime:     int64(ct.Uptime),
 				Template:   ct.Template == 1,
 				Tags:       tags,
