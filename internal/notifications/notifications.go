@@ -21,6 +21,20 @@ type TestNodeInfo struct {
 	InstanceURL string
 }
 
+// WebhookDelivery tracks webhook delivery attempts for debugging
+type WebhookDelivery struct {
+	WebhookName   string    `json:"webhookName"`
+	WebhookURL    string    `json:"webhookUrl"`
+	Service       string    `json:"service"`
+	AlertID       string    `json:"alertId"`
+	Timestamp     time.Time `json:"timestamp"`
+	StatusCode    int       `json:"statusCode"`
+	Success       bool      `json:"success"`
+	ErrorMessage  string    `json:"errorMessage,omitempty"`
+	RetryAttempts int       `json:"retryAttempts"`
+	PayloadSize   int       `json:"payloadSize"`
+}
+
 // NotificationManager handles sending notifications
 type NotificationManager struct {
 	mu           sync.RWMutex
@@ -34,6 +48,7 @@ type NotificationManager struct {
 	groupTimer   *time.Timer
 	groupByNode  bool
 	groupByGuest bool
+	webhookHistory []WebhookDelivery // Keep last 100 webhook deliveries for debugging
 }
 
 // Alert represents an alert (interface to avoid circular dependency)
@@ -79,14 +94,15 @@ type WebhookConfig struct {
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager() *NotificationManager {
 	return &NotificationManager{
-		enabled:      true,
-		cooldown:     5 * time.Minute,
-		lastNotified: make(map[string]time.Time),
-		webhooks:     []WebhookConfig{},
-		groupWindow:  30 * time.Second,
-		pendingAlerts: make([]*alerts.Alert, 0),
-		groupByNode:  true,
-		groupByGuest: false,
+		enabled:        true,
+		cooldown:       5 * time.Minute,
+		lastNotified:   make(map[string]time.Time),
+		webhooks:       []WebhookConfig{},
+		groupWindow:    30 * time.Second,
+		pendingAlerts:  make([]*alerts.Alert, 0),
+		groupByNode:    true,
+		groupByGuest:   false,
+		webhookHistory: make([]WebhookDelivery, 0, 100), // Pre-allocate for 100 entries
 	}
 }
 
@@ -431,12 +447,15 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		data := n.prepareWebhookData(alert, nil)
 		
 		// For Telegram, extract chat_id from URL if present
-		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-			if u, err := url.Parse(webhook.URL); err == nil {
-				chatID := u.Query().Get("chat_id")
-				if chatID != "" {
-					data.ChatID = chatID
-				}
+		if webhook.Service == "telegram" {
+			if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
+				data.ChatID = chatID
+			} else if err != nil {
+				log.Error().
+					Err(err).
+					Str("webhook", webhook.Name).
+					Msg("Failed to extract Telegram chat_id for grouped notification")
+				return // Skip this webhook
 			}
 		}
 		
@@ -482,12 +501,15 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			data := n.prepareWebhookData(alert, nil)
 			
 			// Handle service-specific requirements
-			if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-				if u, err := url.Parse(webhook.URL); err == nil {
-					chatID := u.Query().Get("chat_id")
-					if chatID != "" {
-						data.ChatID = chatID
-					}
+			if webhook.Service == "telegram" {
+				if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
+					data.ChatID = chatID
+				} else if err != nil {
+					log.Error().
+						Err(err).
+						Str("webhook", webhook.Name).
+						Msg("Failed to extract Telegram chat_id for grouped notification")
+					return // Skip this webhook
 				}
 			} else if webhook.Service == "pagerduty" {
 				if data.CustomFields == nil {
@@ -605,17 +627,34 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	}
 	defer resp.Body.Close()
 
+	// Read response body for logging
+	var respBody bytes.Buffer
+	respBody.ReadFrom(resp.Body)
+	responseBody := respBody.String()
+
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		log.Info().
 			Str("webhook", webhook.Name).
+			Str("service", webhook.Service).
 			Str("type", alertType).
 			Int("status", resp.StatusCode).
-			Msg("Webhook notification sent")
+			Int("payloadSize", len(jsonData)).
+			Msg("Webhook notification sent successfully")
+		
+		// Log response body only in debug mode for successful requests
+		if len(responseBody) > 0 {
+			log.Debug().
+				Str("webhook", webhook.Name).
+				Str("response", responseBody).
+				Msg("Webhook response body")
+		}
 	} else {
 		log.Warn().
 			Str("webhook", webhook.Name).
+			Str("service", webhook.Service).
 			Str("type", alertType).
 			Int("status", resp.StatusCode).
+			Str("response", responseBody).
 			Msg("Webhook returned non-success status")
 	}
 }
@@ -638,12 +677,15 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 		data := n.prepareWebhookData(alert, nil)
 		
 		// For Telegram, still extract chat_id from URL if present
-		if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-			if u, err := url.Parse(webhook.URL); err == nil {
-				chatID := u.Query().Get("chat_id")
-				if chatID != "" {
-					data.ChatID = chatID
-				}
+		if webhook.Service == "telegram" {
+			if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
+				data.ChatID = chatID
+			} else if err != nil {
+				log.Error().
+					Err(err).
+					Str("webhook", webhook.Name).
+					Msg("Failed to extract Telegram chat_id - skipping webhook")
+				return // Skip this webhook
 			}
 		}
 		
@@ -682,34 +724,21 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			
 			// For Telegram, extract chat_id from URL if present
 			if webhook.Service == "telegram" {
-				if strings.Contains(webhook.URL, "chat_id=") {
-					// Extract chat_id from URL query params
-					if u, err := url.Parse(webhook.URL); err == nil {
-						chatID := u.Query().Get("chat_id")
-						if chatID != "" {
-							data.ChatID = chatID
-							log.Debug().
-								Str("webhook", webhook.Name).
-								Str("chatID", chatID).
-								Msg("Extracted Telegram chat_id from URL")
-						} else {
-							log.Warn().
-								Str("webhook", webhook.Name).
-								Str("url", webhook.URL).
-								Msg("chat_id parameter in URL is empty")
-						}
-					} else {
-						log.Error().
-							Err(err).
-							Str("webhook", webhook.Name).
-							Str("url", webhook.URL).
-							Msg("Failed to parse Telegram webhook URL")
-					}
-				} else {
+				chatID, err := extractTelegramChatID(webhook.URL)
+				if err != nil {
 					log.Error().
+						Err(err).
 						Str("webhook", webhook.Name).
 						Str("url", webhook.URL).
-						Msg("Telegram webhook URL missing chat_id parameter - notifications will fail")
+						Msg("Failed to extract Telegram chat_id - webhook will fail")
+					return // Skip this webhook rather than sending invalid payload
+				}
+				if chatID != "" {
+					data.ChatID = chatID
+					log.Debug().
+						Str("webhook", webhook.Name).
+						Str("chatID", chatID).
+						Msg("Extracted Telegram chat_id from URL")
 				}
 			}
 			
@@ -791,7 +820,13 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
 	// Create template with helper functions
 	funcMap := template.FuncMap{
-		"title": strings.Title,
+		"title": func(s string) string {
+			// Replace deprecated strings.Title with proper title casing
+			if s == "" {
+				return s
+			}
+			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+		},
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"printf": fmt.Sprintf,
@@ -805,6 +840,16 @@ func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, da
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("template execution failed: %w", err)
+	}
+
+	// Validate that the generated payload is valid JSON
+	var jsonCheck interface{}
+	if err := json.Unmarshal(buf.Bytes(), &jsonCheck); err != nil {
+		log.Error().
+			Err(err).
+			Str("payload", string(buf.Bytes())).
+			Msg("Generated webhook payload is invalid JSON")
+		return nil, fmt.Errorf("template produced invalid JSON: %w", err)
 	}
 
 	return buf.Bytes(), nil
@@ -823,6 +868,135 @@ func formatWebhookDuration(d time.Duration) string {
 		hours := int(d.Hours()) % 24
 		return fmt.Sprintf("%dd %dh", days, hours)
 	}
+}
+
+
+// extractTelegramChatID extracts and validates the chat_id from a Telegram webhook URL
+func extractTelegramChatID(webhookURL string) (string, error) {
+	if !strings.Contains(webhookURL, "chat_id=") {
+		return "", fmt.Errorf("Telegram webhook URL missing chat_id parameter")
+	}
+	
+	u, err := url.Parse(webhookURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL format: %w", err)
+	}
+	
+	chatID := u.Query().Get("chat_id")
+	if chatID == "" {
+		return "", fmt.Errorf("chat_id parameter is empty")
+	}
+	
+	// Validate that chat_id is numeric (Telegram chat IDs are always numeric)
+	// Handle negative IDs (group chats) and positive IDs (private chats)
+	if strings.HasPrefix(chatID, "-") {
+		if !isNumeric(chatID[1:]) {
+			return "", fmt.Errorf("chat_id must be numeric, got: %s", chatID)
+		}
+	} else if !isNumeric(chatID) {
+		return "", fmt.Errorf("chat_id must be numeric, got: %s", chatID)
+	}
+	
+	return chatID, nil
+}
+
+// isNumeric checks if a string contains only digits
+func isNumeric(s string) bool {
+	for _, char := range s {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// ValidateWebhookURL validates that a webhook URL is safe and properly formed
+func ValidateWebhookURL(webhookURL string) error {
+	if webhookURL == "" {
+		return fmt.Errorf("webhook URL cannot be empty")
+	}
+	
+	u, err := url.Parse(webhookURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+	
+	// Must be HTTP or HTTPS
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use http or https protocol")
+	}
+	
+	// Block localhost and private network ranges for security
+	// Allow them only if explicitly configured (for testing)
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		log.Warn().
+			Str("url", webhookURL).
+			Msg("Webhook URL points to localhost - this may be intentional for testing")
+	}
+	
+	// Check for private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+	if strings.HasPrefix(host, "10.") || 
+	   strings.HasPrefix(host, "192.168.") ||
+	   (strings.HasPrefix(host, "172.") && isPrivateRange172(host)) {
+		log.Warn().
+			Str("url", webhookURL).
+			Msg("Webhook URL points to private network - ensure this is intentional")
+	}
+	
+	return nil
+}
+
+// isPrivateRange172 checks if an IP is in the 172.16.0.0/12 range
+func isPrivateRange172(host string) bool {
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	if parts[0] != "172" {
+		return false
+	}
+	
+	// Check if second octet is between 16 and 31
+	if len(parts[1]) == 0 {
+		return false
+	}
+	
+	second := 0
+	for _, char := range parts[1] {
+		if char < '0' || char > '9' {
+			return false
+		}
+		second = second*10 + int(char-'0')
+	}
+	
+	return second >= 16 && second <= 31
+}
+
+// addWebhookDelivery adds a webhook delivery record to the history
+func (n *NotificationManager) addWebhookDelivery(delivery WebhookDelivery) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	// Add to history
+	n.webhookHistory = append(n.webhookHistory, delivery)
+	
+	// Keep only last 100 entries
+	if len(n.webhookHistory) > 100 {
+		// Remove oldest entry
+		n.webhookHistory = n.webhookHistory[1:]
+	}
+}
+
+// GetWebhookHistory returns recent webhook delivery history
+func (n *NotificationManager) GetWebhookHistory() []WebhookDelivery {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	// Return a copy to avoid concurrent access issues
+	history := make([]WebhookDelivery, len(n.webhookHistory))
+	copy(history, n.webhookHistory)
+	return history
 }
 
 // groupAlerts groups alerts based on configuration
