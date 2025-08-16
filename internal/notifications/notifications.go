@@ -770,7 +770,8 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	}
 	
 	// Use generic payload if no service or template not found
-	if webhook.Service == "" || webhook.Service == "generic" || jsonData == nil {
+	// But ONLY if jsonData hasn't been set yet (from custom template)
+	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
 			"alert": alert,
