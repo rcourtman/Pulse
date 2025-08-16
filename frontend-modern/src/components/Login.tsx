@@ -78,38 +78,49 @@ export const Login: Component<LoginProps> = (props) => {
   // Debug logging
   console.log('[Login] Render - loadingAuth:', loadingAuth(), 'authStatus:', authStatus());
   
-  // Show loading state while checking auth status
-  if (loadingAuth()) {
-    return (
-      <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
-        <div class="text-center">
-          <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p class="text-gray-600 dark:text-gray-400">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show FirstRunSetup if no authentication is configured
-  const status = authStatus();
-  
-  if (status && status.hasAuthentication === false) {
-    console.log('[Login] Showing FirstRunSetup because hasAuthentication is false');
-    return (
-      <Suspense fallback={
+  return (
+    <Show
+      when={!loadingAuth()}
+      fallback={
         <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
           <div class="text-center">
             <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+            <p class="text-gray-600 dark:text-gray-400">Checking authentication...</p>
           </div>
         </div>
-      }>
-        <FirstRunSetup />
-      </Suspense>
-    );
-  }
+      }
+    >
+      <Show
+        when={authStatus()?.hasAuthentication === false}
+        fallback={<LoginForm {...{ username, setUsername, password, setPassword, error, loading, handleSubmit }} />}
+      >
+        <Suspense fallback={
+          <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+            <div class="text-center">
+              <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+            </div>
+          </div>
+        }>
+          <FirstRunSetup />
+        </Suspense>
+      </Show>
+    </Show>
+  );
+};
 
-  // Show login form if authentication is configured
+// Extract login form to separate component for cleaner code
+const LoginForm: Component<{
+  username: () => string;
+  setUsername: (v: string) => void;
+  password: () => string;
+  setPassword: (v: string) => void;
+  error: () => string;
+  loading: () => boolean;
+  handleSubmit: (e: Event) => void;
+}> = (props) => {
+  const { username, setUsername, password, setPassword, error, loading, handleSubmit } = props;
+
   return (
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
