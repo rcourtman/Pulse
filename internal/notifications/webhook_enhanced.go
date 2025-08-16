@@ -112,35 +112,6 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 
 // generatePayloadFromTemplate renders the payload using Go templates
 // NOTE: This function is now defined in notifications.go to be shared
-/*
-func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
-	// Create template with helper functions
-	funcMap := template.FuncMap{
-		"title": strings.Title,
-		"upper": strings.ToUpper,
-		"lower": strings.ToLower,
-		"printf": fmt.Sprintf,
-	}
-	
-	tmpl, err := template.New("webhook").Funcs(funcMap).Parse(templateStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("template execution failed: %w", err)
-	}
-
-	// Validate JSON
-	var jsonCheck interface{}
-	if err := json.Unmarshal(buf.Bytes(), &jsonCheck); err != nil {
-		return nil, fmt.Errorf("template produced invalid JSON: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-*/
 
 // shouldSendWebhook checks if alert matches webhook filter rules
 func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, alert *alerts.Alert) bool {
@@ -209,7 +180,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 	return true
 }
 
-// sendWebhookWithRetry implements exponential backoff retry
+// sendWebhookWithRetry implements exponential backoff retry with enhanced error tracking
 func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig, payload []byte) error {
 	maxRetries := webhook.RetryCount
 	if maxRetries <= 0 {
@@ -218,12 +189,14 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 	
 	var lastErr error
 	backoff := time.Second
+	retryableErrors := 0
 	
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			log.Debug().
 				Str("webhook", webhook.Name).
 				Int("attempt", attempt).
+				Int("maxRetries", maxRetries).
 				Dur("backoff", backoff).
 				Msg("Retrying webhook after backoff")
 			time.Sleep(backoff)
@@ -239,20 +212,124 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				log.Info().
 					Str("webhook", webhook.Name).
 					Int("attempt", attempt).
+					Int("totalAttempts", attempt+1).
 					Msg("Webhook succeeded after retry")
 			}
+			// Log successful delivery
+			log.Debug().
+				Str("webhook", webhook.Name).
+				Str("service", webhook.Service).
+				Int("payloadSize", len(payload)).
+				Msg("Webhook delivered successfully")
+			
+			// Track successful delivery
+			delivery := WebhookDelivery{
+				WebhookName:   webhook.Name,
+				WebhookURL:    webhook.URL,
+				Service:       webhook.Service,
+				AlertID:       "enhanced", // This is for enhanced webhooks, alertID might not be available
+				Timestamp:     time.Now(),
+				StatusCode:    200, // Assume success
+				Success:       true,
+				RetryAttempts: attempt,
+				PayloadSize:   len(payload),
+			}
+			n.addWebhookDelivery(delivery)
+			
 			return nil
 		}
 		
 		lastErr = err
+		
+		// Determine if error is retryable
+		isRetryable := isRetryableWebhookError(err)
+		if isRetryable {
+			retryableErrors++
+		}
+		
 		log.Warn().
 			Err(err).
 			Str("webhook", webhook.Name).
-			Int("attempt", attempt).
+			Str("service", webhook.Service).
+			Int("attempt", attempt+1).
+			Int("maxRetries", maxRetries+1).
+			Bool("retryable", isRetryable).
 			Msg("Webhook attempt failed")
+		
+		// If error is not retryable, break early
+		if !isRetryable && attempt == 0 {
+			log.Error().
+				Err(err).
+				Str("webhook", webhook.Name).
+				Msg("Non-retryable webhook error - not attempting retry")
+			break
+		}
 	}
 	
+	// Final error logging with summary
+	log.Error().
+		Err(lastErr).
+		Str("webhook", webhook.Name).
+		Str("service", webhook.Service).
+		Int("totalAttempts", maxRetries+1).
+		Int("retryableErrors", retryableErrors).
+		Msg("Webhook delivery failed after all retry attempts")
+	
+	// Track failed delivery
+	delivery := WebhookDelivery{
+		WebhookName:   webhook.Name,
+		WebhookURL:    webhook.URL,
+		Service:       webhook.Service,
+		AlertID:       "enhanced", // This is for enhanced webhooks, alertID might not be available
+		Timestamp:     time.Now(),
+		StatusCode:    0, // Unknown status
+		Success:       false,
+		ErrorMessage:  lastErr.Error(),
+		RetryAttempts: maxRetries,
+		PayloadSize:   len(payload),
+	}
+	n.addWebhookDelivery(delivery)
+	
 	return fmt.Errorf("webhook failed after %d attempts: %w", maxRetries+1, lastErr)
+}
+
+// isRetryableWebhookError determines if a webhook error should trigger a retry
+func isRetryableWebhookError(err error) bool {
+	errStr := strings.ToLower(err.Error())
+	
+	// Network-related errors that should be retried
+	if strings.Contains(errStr, "timeout") ||
+	   strings.Contains(errStr, "connection refused") ||
+	   strings.Contains(errStr, "connection reset") ||
+	   strings.Contains(errStr, "no such host") ||
+	   strings.Contains(errStr, "network unreachable") {
+		return true
+	}
+	
+	// HTTP status codes that should be retried
+	if strings.Contains(errStr, "status 429") || // Rate limited
+	   strings.Contains(errStr, "status 502") || // Bad Gateway
+	   strings.Contains(errStr, "status 503") || // Service Unavailable
+	   strings.Contains(errStr, "status 504") {  // Gateway Timeout
+		return true
+	}
+	
+	// 5xx server errors are generally retryable
+	for i := 500; i <= 599; i++ {
+		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
+			return true
+		}
+	}
+	
+	// 4xx client errors are generally not retryable
+	for i := 400; i <= 499; i++ {
+		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
+			return false
+		}
+	}
+	
+	// Default to retryable for unknown errors
+	return true
 }
 
 // sendWebhookOnce sends a single webhook request
@@ -287,19 +364,22 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 	}
 	defer resp.Body.Close()
 
-	// Log response if enabled
-	if webhook.ResponseLogging {
-		var respBody bytes.Buffer
-		respBody.ReadFrom(resp.Body)
+	// Read response body for error handling and logging
+	var respBody bytes.Buffer
+	respBody.ReadFrom(resp.Body)
+	responseBody := respBody.String()
+
+	// Log response if enabled or if there's an error
+	if webhook.ResponseLogging || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Int("status", resp.StatusCode).
-			Str("response", respBody.String()).
+			Str("response", responseBody).
 			Msg("Webhook response")
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
+		return fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, responseBody)
 	}
 
 	return nil
@@ -348,13 +428,12 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	data := n.prepareWebhookData(testAlert, webhook.CustomFields)
 	
 	// For Telegram, extract chat_id from URL if present
-	if webhook.Service == "telegram" && strings.Contains(webhook.URL, "chat_id=") {
-		if u, err := url.Parse(webhook.URL); err == nil {
-			chatID := u.Query().Get("chat_id")
-			if chatID != "" {
-				data.ChatID = chatID
-			}
+	if webhook.Service == "telegram" {
+		if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
+			data.ChatID = chatID
 		}
+		// Note: For test webhooks, we don't fail if chat_id is missing
+		// as this may be intentional during testing
 	}
 	
 	// Generate payload

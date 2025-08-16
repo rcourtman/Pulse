@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -104,6 +105,12 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	
+	// Validate webhook URL
+	if err := notifications.ValidateWebhookURL(webhook.URL); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
+		return
+	}
+	
 	// Generate ID if not provided
 	if webhook.ID == "" {
 		webhook.ID = utils.GenerateID("webhook")
@@ -146,6 +153,12 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	var webhook notifications.WebhookConfig
 	if err := json.Unmarshal(bodyBytes, &webhook); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	
+	// Validate webhook URL
+	if err := notifications.ValidateWebhookURL(webhook.URL); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid webhook URL: %v", err), http.StatusBadRequest)
 		return
 	}
 	
@@ -307,6 +320,14 @@ func (h *NotificationHandlers) GetWebhookTemplates(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(templates)
 }
 
+// GetWebhookHistory returns recent webhook delivery history
+func (h *NotificationHandlers) GetWebhookHistory(w http.ResponseWriter, r *http.Request) {
+	history := h.monitor.GetNotificationManager().GetWebhookHistory()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
+}
+
 // GetEmailProviders returns available email providers
 func (h *NotificationHandlers) GetEmailProviders(w http.ResponseWriter, r *http.Request) {
 	providers := notifications.GetEmailProviders()
@@ -435,6 +456,8 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 		h.DeleteWebhook(w, r)
 	case path == "/webhook-templates" && r.Method == http.MethodGet:
 		h.GetWebhookTemplates(w, r)
+	case path == "/webhook-history" && r.Method == http.MethodGet:
+		h.GetWebhookHistory(w, r)
 	case path == "/email-providers" && r.Method == http.MethodGet:
 		h.GetEmailProviders(w, r)
 	case path == "/test" && r.Method == http.MethodPost:
