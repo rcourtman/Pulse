@@ -1094,19 +1094,19 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 
 // SendTestWebhook sends a test notification to a specific webhook
 func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
-	// Create a test alert for webhook testing
+	// Create a test alert for webhook testing with realistic values
 	testAlert := &alerts.Alert{
 		ID:           "test-webhook-" + webhook.ID,
-		Type:         "test",
-		Level:        "info",
+		Type:         "cpu",
+		Level:        "warning",
 		ResourceID:   "webhook-test",
-		ResourceName: "Webhook Test",
+		ResourceName: "Test Alert",
 		Node:         "test-node",
-		Instance:     "pulse-server",
-		Message:      fmt.Sprintf("Testing webhook: %s", webhook.Name),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
+		Instance:     "pulse-monitoring",
+		Message:      fmt.Sprintf("This is a test alert from Pulse to verify your %s webhook is working correctly", webhook.Name),
+		Value:        85.5,
+		Threshold:    80.0,
+		StartTime:    time.Now().Add(-5 * time.Minute), // Alert started 5 minutes ago
 		LastSeen:     time.Now(),
 		Metadata: map[string]interface{}{
 			"webhookName": webhook.Name,
