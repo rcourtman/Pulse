@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, onMount, lazy } from 'solid-js';
+import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import { setBasicAuth } from '@/utils/apiClient';
 
 // Force include FirstRunSetup with lazy loading
@@ -17,20 +17,25 @@ export const Login: Component<LoginProps> = (props) => {
   const [loadingAuth, setLoadingAuth] = createSignal(true);
   
   onMount(async () => {
+    console.log('[Login] Starting auth check...');
     try {
       const response = await fetch('/api/security/status');
+      console.log('[Login] Auth check response:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('[Login] Auth status data:', data);
         setAuthStatus(data);
       } else {
+        console.log('[Login] Auth check failed, assuming no auth');
         // On error, assume no auth configured
         setAuthStatus({ hasAuthentication: false });
       }
     } catch (err) {
-      console.error('Failed to check auth status:', err);
+      console.error('[Login] Failed to check auth status:', err);
       // On error, assume no auth configured
       setAuthStatus({ hasAuthentication: false });
     } finally {
+      console.log('[Login] Auth check complete, setting loading to false');
       setLoadingAuth(false);
     }
   });
@@ -70,6 +75,9 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
+  // Debug logging
+  console.log('[Login] Render - loadingAuth:', loadingAuth(), 'authStatus:', authStatus());
+  
   // Show loading state while checking auth status
   if (loadingAuth()) {
     return (
@@ -86,7 +94,19 @@ export const Login: Component<LoginProps> = (props) => {
   const status = authStatus();
   
   if (status && status.hasAuthentication === false) {
-    return <FirstRunSetup />;
+    console.log('[Login] Showing FirstRunSetup because hasAuthentication is false');
+    return (
+      <Suspense fallback={
+        <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+          <div class="text-center">
+            <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+          </div>
+        </div>
+      }>
+        <FirstRunSetup />
+      </Suspense>
+    );
   }
 
   // Show login form if authentication is configured
