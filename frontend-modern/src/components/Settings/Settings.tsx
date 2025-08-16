@@ -200,7 +200,8 @@ const Settings: Component = () => {
 
   const loadDiscoveredNodes = async () => {
     try {
-      const response = await fetch('/api/discover');
+      const { apiFetch } = await import('@/utils/apiClient');
+      const response = await apiFetch('/api/discover');
       if (response.ok) {
         const data = await response.json();
         if (data.servers && Array.isArray(data.servers)) {
