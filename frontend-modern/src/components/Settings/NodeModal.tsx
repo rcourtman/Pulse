@@ -485,7 +485,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           }
                                           
                                           // Always regenerate URL when host changes
-                                          const response = await fetch('/api/setup-script-url', {
+                                          const { apiFetch } = await import('@/utils/apiClient');
+                                          const response = await apiFetch('/api/setup-script-url', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -778,7 +779,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             }
                                             
                                             // Always regenerate URL when host changes
-                                            const response = await fetch('/api/setup-script-url', {
+                                            const { apiFetch } = await import('@/utils/apiClient');
+                                            const response = await apiFetch('/api/setup-script-url', {
                                               method: 'POST',
                                               headers: { 'Content-Type': 'application/json' },
                                               body: JSON.stringify({
