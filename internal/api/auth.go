@@ -4,7 +4,6 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -118,14 +117,11 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		return false
 	}
 	
-	log.Info().
+	log.Debug().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
 		Bool("has_token", cfg.APIToken != "").
-		Str("api_token_length", fmt.Sprintf("%d", len(cfg.APIToken))).
-		Str("api_token_first_chars", fmt.Sprintf("%.10s...", cfg.APIToken)).
 		Str("url", r.URL.Path).
-		Str("provided_token", r.Header.Get("X-API-Token")).
 		Msg("Checking authentication")
 	
 	// Check API token first (for backward compatibility)
@@ -134,9 +130,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if token := r.Header.Get("X-API-Token"); token != "" {
 			// Check if stored token is hashed or plain text
 			isHashed := internalauth.IsAPITokenHashed(cfg.APIToken)
-			log.Info().
+			log.Debug().
 				Bool("is_hashed", isHashed).
-				Bool("tokens_match", token == cfg.APIToken).
 				Msg("Comparing API tokens")
 			
 			if isHashed {

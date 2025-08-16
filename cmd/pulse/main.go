@@ -69,8 +69,31 @@ func runServer() {
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
 	// Set allowed origins from configuration
-	if cfg.AllowedOrigins != "" && cfg.AllowedOrigins != "*" {
-		wsHub.SetAllowedOrigins(strings.Split(cfg.AllowedOrigins, ","))
+	if cfg.AllowedOrigins != "" {
+		if cfg.AllowedOrigins == "*" {
+			// Explicit wildcard - allow all origins (less secure)
+			wsHub.SetAllowedOrigins([]string{"*"})
+		} else {
+			// Use configured origins
+			wsHub.SetAllowedOrigins(strings.Split(cfg.AllowedOrigins, ","))
+		}
+	} else {
+		// Default: allow same-origin only (more secure)
+		// This will be dynamically set based on the actual request host
+		allowedOrigins := []string{}
+		// Add localhost variants for development
+		allowedOrigins = append(allowedOrigins, 
+			"http://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
+			"http://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
+		)
+		// If HTTPS is likely being used, add those too
+		if cfg.FrontendPort == 443 || cfg.FrontendPort == 8443 {
+			allowedOrigins = append(allowedOrigins,
+				"https://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
+				"https://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
+			)
+		}
+		wsHub.SetAllowedOrigins(allowedOrigins)
 	}
 	go wsHub.Run()
 

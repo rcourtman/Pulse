@@ -99,6 +99,18 @@ function App() {
   // Check auth on mount
   onMount(async () => {
     console.log('[App] Starting auth check...');
+    
+    // Check if we just logged out - if so, always show login page
+    const justLoggedOut = localStorage.getItem('just_logged_out');
+    if (justLoggedOut) {
+      localStorage.removeItem('just_logged_out');
+      console.log('[App] Just logged out, showing login page');
+      setHasAuth(true); // Force showing login instead of setup
+      setNeedsAuth(true);
+      setIsLoading(false);
+      return;
+    }
+    
     // First check security status to see if auth is configured
     try {
       const securityRes = await fetch('/api/security/status');
@@ -170,9 +182,10 @@ function App() {
       console.error('Logout error:', error);
     }
     
-    // Clear all local storage
+    // Clear all local storage EXCEPT a flag indicating this is a logout
     localStorage.clear();
     sessionStorage.clear();
+    localStorage.setItem('just_logged_out', 'true');
     
     // Clear WebSocket connection
     if (wsStore()) {

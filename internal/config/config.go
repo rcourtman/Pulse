@@ -316,16 +316,16 @@ func Load() (*Config, error) {
 	}
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
 		cfg.APIToken = apiToken
-		log.Info().Msg("Loaded API token from env var")
+		log.Debug().Msg("Loaded API token from env var")
 	}
 	// Check if API token is enabled
 	if apiTokenEnabled := os.Getenv("API_TOKEN_ENABLED"); apiTokenEnabled != "" {
 		cfg.APITokenEnabled = apiTokenEnabled == "true" || apiTokenEnabled == "1"
-		log.Info().Bool("enabled", cfg.APITokenEnabled).Msg("API token enabled status from env var")
+		log.Debug().Bool("enabled", cfg.APITokenEnabled).Msg("API token enabled status from env var")
 	} else if cfg.APIToken != "" {
 		// If token exists but no explicit enabled flag, assume enabled for backwards compatibility
 		cfg.APITokenEnabled = true
-		log.Info().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
+		log.Debug().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser
@@ -344,7 +344,7 @@ func Load() (*Config, error) {
 				log.Error().Msg("Ensure the full hash is enclosed in single quotes in your .env file or Docker environment")
 			}
 		}
-		log.Info().Bool("is_hashed", IsPasswordHashed(authPass)).Int("length", len(authPass)).Msg("Loaded auth password from env var")
+		log.Debug().Bool("is_hashed", IsPasswordHashed(authPass)).Msg("Loaded auth password from env var")
 	}
 	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
 	// These settings now ONLY come from system.json to prevent confusion

@@ -17,7 +17,6 @@ export const FirstRunSetup: Component = () => {
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
   
   // Additional setup options
-  const [enableNotifications, setEnableNotifications] = createSignal(true);
   const [darkMode, setDarkMode] = createSignal(
     window.matchMedia('(prefers-color-scheme: dark)').matches
   );
@@ -82,7 +81,6 @@ export const FirstRunSetup: Component = () => {
           username: username(),
           password: finalPassword,
           apiToken: token,
-          enableNotifications: enableNotifications(),
           darkMode: darkMode()
         })
       });
@@ -107,7 +105,6 @@ export const FirstRunSetup: Component = () => {
       
       // Apply settings
       localStorage.setItem('dark-mode', String(darkMode()));
-      localStorage.setItem('notifications-enabled', String(enableNotifications()));
       
       // Show credentials
       setShowCredentials(true);
@@ -271,31 +268,6 @@ IMPORTANT: Keep these credentials secure!
                   <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Initial Configuration
                   </h3>
-                  
-                  {/* Enable Notifications */}
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <label class="text-sm text-gray-700 dark:text-gray-300">
-                        Enable Desktop Notifications
-                      </label>
-                      <p class="text-xs text-gray-500 dark:text-gray-500">
-                        Get notified about alerts and important events
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEnableNotifications(!enableNotifications())}
-                      class={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        enableNotifications() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
-                    >
-                      <span
-                        class={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          enableNotifications() ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
                   
                   {/* Dark Mode */}
                   <div class="flex items-center justify-between">

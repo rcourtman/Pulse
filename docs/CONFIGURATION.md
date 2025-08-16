@@ -27,7 +27,7 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 # User authentication
 PULSE_AUTH_USER='admin'              # Admin username
 PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
-API_TOKEN=abc123...                  # API authentication token
+API_TOKEN=abc123...                  # API token (plain text, not hashed)
 
 # Security settings
 ENABLE_AUDIT_LOG=true                # Enable security audit logging
@@ -35,9 +35,11 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 
 **Important Notes:**
 - Password hash MUST be in single quotes to prevent shell expansion
+- API tokens are stored in plain text (48 hex characters)
 - This file should have restricted permissions (600)
 - Never commit this file to version control
 - ProxmoxVE installations may pre-configure API_TOKEN
+- Changes to this file are applied immediately without restart (v4.3.9+)
 
 ---
 
@@ -50,7 +52,7 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 **Contents:**
 ```json
 {
-  "pollingInterval": 5,           // Seconds between node polls (2-60)
+  "pollingInterval": 10,          // Fixed at 10 seconds to match Proxmox update cycle
   "connectionTimeout": 10,        // Seconds before node connection timeout
   "autoUpdateEnabled": false,     // Enable automatic updates
   "updateChannel": "stable",      // Update channel: stable, rc, beta
@@ -66,6 +68,7 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 - Can be safely backed up without exposing secrets
 - Missing file results in defaults being used
 - Changes take effect immediately (no restart required)
+- API tokens are no longer managed in system.json (moved to .env in v4.3.9+)
 
 ---
 

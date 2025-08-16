@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"strings"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -9,6 +10,9 @@ const (
 	// BcryptCost is the cost factor for bcrypt hashing
 	// Higher values are more secure but slower
 	BcryptCost = 12
+	
+	// MinPasswordLength is the minimum required password length
+	MinPasswordLength = 8
 )
 
 // HashPassword generates a bcrypt hash from a plain text password
@@ -41,4 +45,15 @@ func MigratePassword(password string) (string, error) {
 	}
 	// Plain text password, hash it
 	return HashPassword(password)
+}
+
+// ValidatePasswordComplexity checks if a password meets complexity requirements
+func ValidatePasswordComplexity(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters long", MinPasswordLength)
+	}
+	
+	// That's it - let users choose their own passwords
+	// No annoying character type requirements
+	return nil
 }

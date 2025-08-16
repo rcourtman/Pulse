@@ -1796,7 +1796,6 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	}
 	
 	log.Info().
-		Str("token", tempToken).
 		Str("type", serverType).
 		Str("host", serverHost).
 		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "").
@@ -1811,7 +1810,6 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			h.tokenMutex.RUnlock()
 			
 			log.Debug().
-				Str("token", "***REDACTED***").
 				Bool("exists", exists).
 				Time("expiry", expiry).
 				Int("total_tokens", len(h.setupTokens)).
@@ -2392,7 +2390,6 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	h.tokenMutex.Unlock()
 	
 	log.Info().
-		Str("token", token).
 		Time("expiry", expiry).
 		Int("total_tokens", len(h.setupTokens)).
 		Msg("Generated setup token")

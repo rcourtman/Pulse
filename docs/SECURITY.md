@@ -1,6 +1,15 @@
 # Pulse Security
 
-## Smart Security Context (v4.3.2+)
+## Authentication Setup
+
+Pulse includes a Quick Security Setup wizard that helps you configure authentication when first accessing an unsecured instance. This protects your Proxmox API credentials from unauthorized access.
+
+### First-Run Security Setup
+- Interactive wizard for username, password, and API token generation  
+- Settings are applied immediately without restart
+- Protects access to your Proxmox infrastructure credentials
+
+## Smart Security Context
 
 ### Public Access Detection
 Pulse automatically detects when it's being accessed from public networks:
@@ -61,7 +70,7 @@ By default, configuration export/import is blocked for security. You have two op
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=your-secure-token-here"
+Environment="API_TOKEN=your-48-char-hex-token"
 
 # Then restart:
 sudo systemctl restart pulse-backend
@@ -98,6 +107,11 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
   - Passwords NEVER stored in plain text
   - Automatic hashing on security setup
   - **CRITICAL**: Bcrypt hashes MUST be exactly 60 characters
+- **API Token Security**:
+  - 48-character hex tokens (24 bytes of entropy)
+  - Stored in plain text with file permissions (600)
+  - Live reloading when .env file changes (v4.3.9+)
+  - API-only mode supported (no password auth required)
   - **Docker Users**: Always wrap hash in single quotes to prevent shell expansion
 - **API Token Security**:
   - SHA3-256 hashing for all tokens
