@@ -830,10 +830,10 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Validate new password
-	if len(changeReq.NewPassword) < 8 {
+	// Validate new password complexity
+	if err := auth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_password", 
-			"Password must be at least 8 characters", nil)
+			err.Error(), nil)
 		return
 	}
 

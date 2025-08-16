@@ -31,6 +31,16 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
 	
+	// Always allow same-origin requests
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	requestOrigin := scheme + "://" + r.Host
+	if origin == requestOrigin {
+		return true
+	}
+	
 	// Check if wildcard is allowed
 	for _, allowed := range allowedOrigins {
 		if allowed == "*" {
@@ -41,8 +51,14 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		}
 	}
 	
+	// If no origins configured, allow same-origin only
+	if len(allowedOrigins) == 0 {
+		return origin == requestOrigin
+	}
+	
 	log.Warn().
 		Str("origin", origin).
+		Str("requestOrigin", requestOrigin).
 		Strs("allowedOrigins", allowedOrigins).
 		Msg("WebSocket connection rejected due to CORS")
 	
@@ -91,7 +107,7 @@ func NewHub(getState func() interface{}) *Hub {
 		register:       make(chan *Client),
 		unregister:     make(chan *Client),
 		getState:       getState,
-		allowedOrigins: []string{"*"}, // Default to allow all
+		allowedOrigins: []string{}, // Default to empty (will be set based on actual host)
 	}
 }
 

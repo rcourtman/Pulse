@@ -62,7 +62,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
-	return os.MkdirAll(c.configDir, 0755)
+	return os.MkdirAll(c.configDir, 0700)
 }
 
 // SaveAlertConfig saves alert configuration to file
@@ -94,7 +94,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		return err
 	}
 	
-	if err := os.WriteFile(c.alertFile, data, 0644); err != nil {
+	if err := os.WriteFile(c.alertFile, data, 0600); err != nil {
 		return err
 	}
 	
@@ -247,7 +247,7 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 		return err
 	}
 	
-	if err := os.WriteFile(c.webhookFile, data, 0644); err != nil {
+	if err := os.WriteFile(c.webhookFile, data, 0600); err != nil {
 		return err
 	}
 	
@@ -427,7 +427,7 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 		return err
 	}
 	
-	if err := os.WriteFile(c.systemFile, data, 0644); err != nil {
+	if err := os.WriteFile(c.systemFile, data, 0600); err != nil {
 		return err
 	}
 	

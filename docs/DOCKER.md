@@ -48,7 +48,7 @@ services:
       # IMPORTANT: Use $$ instead of $ in docker-compose.yml!
       PULSE_AUTH_USER: 'admin'
       PULSE_AUTH_PASS: '$$2a$$12$$YourHashHere...'  # <-- Note the $$
-      API_TOKEN: 'your-sha3-256-token'
+      API_TOKEN: 'your-48-char-hex-token'
     restart: unless-stopped
 
 volumes:
@@ -61,7 +61,7 @@ Create `.env` file (no escaping needed):
 ```env
 PULSE_AUTH_USER=admin
 PULSE_AUTH_PASS=$2a$12$YourHashHere...
-API_TOKEN=your-sha3-256-token
+API_TOKEN=your-48-char-hex-token
 ```
 
 Docker-compose.yml:
@@ -88,7 +88,7 @@ volumes:
 |----------|-------------|---------|
 | `PULSE_AUTH_USER` | Username for web UI | `admin` |
 | `PULSE_AUTH_PASS` | Bcrypt password hash (60 chars) | `$2a$12$...` |
-| `API_TOKEN` | SHA3-256 hashed API token | 64 hex characters |
+| `API_TOKEN` | API token (plain text) | 48 hex characters |
 | `ALLOW_UNPROTECTED_EXPORT` | Allow export without auth | `false` |
 
 ### Network Configuration
@@ -134,9 +134,9 @@ docker run --rm \
 ### Method 1: Quick Security Setup (Recommended)
 1. Start container WITHOUT auth environment variables
 2. Access http://your-server:7655
-3. Follow the Quick Security Setup wizard
+3. Follow the mandatory Quick Security Setup wizard
 4. Credentials are saved to `/data/.env`
-5. Container restart not needed
+5. Security is active immediately (no restart needed)
 
 ### Method 2: Manual Configuration
 1. Generate password hash:
@@ -147,8 +147,8 @@ docker run --rm \
 
 2. Generate API token:
    ```bash
-   # Generate random token
-   openssl rand -hex 32
+   # Generate random token (24 bytes = 48 hex chars)
+   openssl rand -hex 24
    ```
 
 3. Add to docker-compose.yml (remember to escape $ as $$)

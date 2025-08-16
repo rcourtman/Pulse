@@ -62,6 +62,14 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
+		// Apply rate limiting to prevent brute force attacks
+		clientIP := GetClientIP(req)
+		if !authLimiter.Allow(clientIP) {
+			log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for security setup")
+			http.Error(w, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
+			return
+		}
+
 		// Check if password auth is already configured
 		// Allow adding password auth on top of API-only access
 		if r.config.AuthUser != "" && r.config.AuthPass != "" {
@@ -94,6 +102,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Validate inputs
 		if setupRequest.Username == "" || setupRequest.Password == "" || setupRequest.APIToken == "" {
 			http.Error(w, "Username, password, and API token are required", http.StatusBadRequest)
+			return
+		}
+		
+		// Validate password complexity
+		if err := auth.ValidatePasswordComplexity(setupRequest.Password); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		
@@ -335,6 +349,14 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	
 	if rq.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// Apply rate limiting to prevent abuse
+	clientIP := GetClientIP(rq)
+	if !authLimiter.Allow(clientIP) {
+		log.Warn().Str("ip", clientIP).Msg("Rate limit exceeded for API token generation")
+		http.Error(w, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
 		return
 	}
 	

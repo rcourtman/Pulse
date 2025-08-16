@@ -26,17 +26,19 @@ docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS=your-password rcourtman/p
 Once set, users must login via the web UI. The password can be changed from Settings → Security.
 
 ### API Token Authentication
-For programmatic API access and automation. Tokens can be generated and managed via the web UI (Settings → Security → API Token).
+For programmatic API access and automation. Tokens can be generated via the web UI (Settings → Security → Generate API Token).
+
+**API-Only Mode**: If only API_TOKEN is configured (no password auth), the UI remains accessible in read-only mode while API modifications require the token.
 
 ```bash
 # Systemd
 sudo systemctl edit pulse-backend
 # Add:
 [Service]
-Environment="API_TOKEN=your-secure-token-here"
+Environment="API_TOKEN=your-48-char-hex-token"
 
 # Docker
-docker run -e API_TOKEN=your-secure-token rcourtman/pulse:latest
+docker run -e API_TOKEN=your-48-char-hex-token rcourtman/pulse:latest
 ```
 
 ### Using Authentication
