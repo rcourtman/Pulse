@@ -98,15 +98,18 @@ function App() {
   
   // Check auth on mount
   onMount(async () => {
+    console.log('[App] Starting auth check...');
     // First check security status to see if auth is configured
     try {
       const securityRes = await fetch('/api/security/status');
       const securityData = await securityRes.json();
+      console.log('[App] Security status:', securityData);
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
       
       // If no auth is configured, show FirstRunSetup
       if (!authConfigured) {
+        console.log('[App] No auth configured, showing Login/FirstRunSetup');
         setNeedsAuth(true); // This will show the Login component which shows FirstRunSetup
         setIsLoading(false);
         return;
