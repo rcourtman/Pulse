@@ -1,5 +1,6 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, onMount } from 'solid-js';
 import { setBasicAuth } from '@/utils/apiClient';
+import { FirstRunSetup } from './FirstRunSetup';
 
 interface LoginProps {
   onLogin: () => void;
@@ -10,6 +11,20 @@ export const Login: Component<LoginProps> = (props) => {
   const [password, setPassword] = createSignal('');
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
+  const [hasAuth, setHasAuth] = createSignal<boolean | null>(null);
+
+  onMount(async () => {
+    try {
+      const response = await fetch('/api/security/status');
+      if (response.ok) {
+        const data = await response.json();
+        setHasAuth(data.hasAuthentication);
+      }
+    } catch (err) {
+      console.error('Failed to check auth status:', err);
+      setHasAuth(false);
+    }
+  });
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -46,6 +61,24 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
+  // Show loading state while checking auth status
+  if (hasAuth() === null) {
+    return (
+      <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+        <div class="text-center">
+          <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p class="text-gray-600 dark:text-gray-400">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show FirstRunSetup if no authentication is configured
+  if (hasAuth() === false) {
+    return <FirstRunSetup />;
+  }
+
+  // Show login form if authentication is configured
   return (
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">

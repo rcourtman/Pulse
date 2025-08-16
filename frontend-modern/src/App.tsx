@@ -97,41 +97,45 @@ function App() {
   }
   
   // Check auth on mount
-  onMount(() => {
+  onMount(async () => {
     // First check security status to see if auth is configured
-    fetch('/api/security/status')
-      .then(res => res.json())
-      .then(data => {
-        setHasAuth(data.hasAuthentication || false);
-      })
-      .catch(() => {
-        setHasAuth(false);
-      });
-    
-    fetch('/api/state', {
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
-      },
-      credentials: 'include'
-    })
-      .then(response => {
-        if (response.status === 401) {
-          setNeedsAuth(true);
-        } else {
-          setNeedsAuth(false);
-          // Only initialize WebSocket after successful auth check
-          setWsStore(getGlobalWebSocketStore());
-        }
+    try {
+      const securityRes = await fetch('/api/security/status');
+      const securityData = await securityRes.json();
+      const authConfigured = securityData.hasAuthentication || false;
+      setHasAuth(authConfigured);
+      
+      // If no auth is configured, show FirstRunSetup
+      if (!authConfigured) {
+        setNeedsAuth(true); // This will show the Login component which shows FirstRunSetup
         setIsLoading(false);
-      })
-      .catch(() => {
-        // On error, assume no auth needed
+        return;
+      }
+      
+      // If auth is configured, check if we're authenticated
+      const stateRes = await fetch('/api/state', {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (stateRes.status === 401) {
+        setNeedsAuth(true);
+      } else {
         setNeedsAuth(false);
-        // Initialize WebSocket
+        // Only initialize WebSocket after successful auth check
         setWsStore(getGlobalWebSocketStore());
-        setIsLoading(false);
-      });
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      // On error, try to proceed without auth
+      setNeedsAuth(false);
+      setWsStore(getGlobalWebSocketStore());
+    } finally {
+      setIsLoading(false);
+    }
     
     // Load version info
     UpdatesAPI.getVersion()
