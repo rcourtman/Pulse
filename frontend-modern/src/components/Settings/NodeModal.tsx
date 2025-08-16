@@ -474,54 +474,52 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 {/* One-line command */}
                                 <div class="space-y-3">
                                   <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
-                                    <Show when={formData().host && formData().host.trim() !== ''}>
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          try {
-                                            // Check if host is populated
-                                            if (!formData().host || formData().host.trim() === '') {
-                                              showError('Please enter the Host URL first');
-                                              return;
-                                            }
-                                            
-                                            // Always regenerate URL when host changes
-                                            const response = await fetch('/api/setup-script-url', {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({
-                                                type: 'pve',
-                                                host: formData().host,
-                                                backupPerms: formData().enableBackupManagement
-                                              })
-                                            });
-                                            
-                                            if (response.ok) {
-                                              const data = await response.json();
-                                              const cmd = `curl -sSL "${data.url}" | bash`;
-                                              if (await copyToClipboard(cmd)) {
-                                                showSuccess('Command copied to clipboard!');
-                                              }
-                                            } else {
-                                              showError('Failed to generate setup URL');
-                                            }
-                                          } catch (error) {
-                                            console.error('Failed to copy command:', error);
-                                            showError('Failed to copy command');
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          // Check if host is populated
+                                          if (!formData().host || formData().host.trim() === '') {
+                                            showError('Please enter the Host URL first');
+                                            return;
                                           }
-                                        }}
-                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
-                                        title="Copy command"
-                                      >
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                        </svg>
-                                      </button>
-                                    </Show>
+                                          
+                                          // Always regenerate URL when host changes
+                                          const response = await fetch('/api/setup-script-url', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              type: 'pve',
+                                              host: formData().host,
+                                              backupPerms: formData().enableBackupManagement
+                                            })
+                                          });
+                                          
+                                          if (response.ok) {
+                                            const data = await response.json();
+                                            const cmd = `curl -sSL "${data.url}" | bash`;
+                                            if (await copyToClipboard(cmd)) {
+                                              showSuccess('Command copied to clipboard!');
+                                            }
+                                          } else {
+                                            showError('Failed to generate setup URL');
+                                          }
+                                        } catch (error) {
+                                          console.error('Failed to copy command:', error);
+                                          showError('Failed to copy command');
+                                        }
+                                      }}
+                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                      title="Copy command"
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                      </svg>
+                                    </button>
                                     <code class={formData().host ? "text-green-400" : "text-gray-500"}>
                                       {formData().host 
-                                        ? 'curl -sSL "<click-copy-to-generate-secure-url>" | bash'
+                                        ? 'Click the copy button to generate the secure command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>

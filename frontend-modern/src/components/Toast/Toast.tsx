@@ -136,7 +136,7 @@ export const ToastContainer: Component = () => {
 
   return (
     <Portal>
-      <div class="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+      <div class="fixed top-4 right-4 z-[9999] space-y-2 max-w-sm">
         <For each={toasts()}>
           {(toast) => <Toast toast={toast} onRemove={removeToast} />}
         </For>
