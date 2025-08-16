@@ -125,6 +125,7 @@ const Settings: Component = () => {
     credentialsEncrypted: boolean;
     hasHTTPS: boolean;
   } | null>(null);
+  const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
   const [importPassphrase, setImportPassphrase] = createSignal('');
@@ -182,6 +183,21 @@ const Settings: Component = () => {
   };
   
   // Function to load discovered nodes
+  const loadSecurityStatus = async () => {
+    setSecurityStatusLoading(true);
+    try {
+      const response = await fetch('/api/security/status');
+      if (response.ok) {
+        const status = await response.json();
+        setSecurityStatus(status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch security status:', err);
+    } finally {
+      setSecurityStatusLoading(false);
+    }
+  };
+
   const loadDiscoveredNodes = async () => {
     try {
       const response = await fetch('/api/discover');
@@ -309,15 +325,7 @@ const Settings: Component = () => {
     
     try {
       // Load security status
-      try {
-        const response = await fetch('/api/security/status');
-        if (response.ok) {
-          const status = await response.json();
-          setSecurityStatus(status);
-        }
-      } catch (err) {
-        console.error('Failed to fetch security status:', err);
-      }
+      await loadSecurityStatus();
       
       // Load nodes
       await loadNodes();
@@ -1499,7 +1507,7 @@ const Settings: Component = () => {
               {/* Removed confusing API Token section when no auth exists - API is already open */}
 
               {/* API Token - Show current token when auth is enabled */}
-              <Show when={securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
+              <Show when={!securityStatusLoading() && securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   {/* Header */}
                   <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -2199,7 +2207,11 @@ const Settings: Component = () => {
       
       <ChangePasswordModal
         isOpen={showPasswordModal()}
-        onClose={() => setShowPasswordModal(false)}
+        onClose={() => {
+          setShowPasswordModal(false);
+          // Refresh security status after password change
+          loadSecurityStatus();
+        }}
       />
     </>
   );
