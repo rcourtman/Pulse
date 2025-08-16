@@ -2,20 +2,8 @@ import type {
   SettingsResponse, 
   SettingsUpdateRequest
 } from '@/types/settings';
+import type { SystemConfig } from '@/types/config';
 import { apiFetchJSON } from '@/utils/apiClient';
-
-// System settings type matching Go backend
-export interface SystemSettingsUpdate {
-  pollingInterval: number; // in seconds
-  backendPort?: number;
-  frontendPort?: number;
-  allowedOrigins?: string;
-  connectionTimeout?: number; // in seconds
-  updateChannel?: string;
-  autoUpdateEnabled?: boolean;
-  autoUpdateCheckInterval?: number; // in hours
-  autoUpdateTime?: string; // HH:MM format
-}
 
 // Response types
 export interface ApiResponse<T = unknown> {
@@ -40,12 +28,17 @@ export class SettingsAPI {
     }) as Promise<ApiResponse>;
   }
   
-  // System settings update (preferred)
-  static async updateSystemSettings(settings: SystemSettingsUpdate): Promise<ApiResponse> {
+  // System settings update (preferred) - uses SystemConfig type from config.ts
+  static async updateSystemSettings(settings: Partial<SystemConfig>): Promise<ApiResponse> {
     return apiFetchJSON(`${this.baseUrl}/config/system`, {
       method: 'PUT',
       body: JSON.stringify(settings),
     }) as Promise<ApiResponse>;
+  }
+  
+  // Get system settings - returns SystemConfig
+  static async getSystemSettings(): Promise<SystemConfig> {
+    return apiFetchJSON(`${this.baseUrl}/config/system`) as Promise<SystemConfig>;
   }
 
   static async validateSettings(settings: SettingsUpdateRequest): Promise<ApiResponse> {

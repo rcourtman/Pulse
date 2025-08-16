@@ -2,10 +2,8 @@ import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } 
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
-import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { GenerateAPIToken } from './GenerateAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { RemovePasswordModal } from './RemovePasswordModal';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -95,12 +93,11 @@ const Settings: Component = () => {
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
-  const [showRemovePasswordModal, setShowRemovePasswordModal] = createSignal(false);
   
   // System settings
-  const [pollingInterval, setPollingInterval] = createSignal(5);
+  // PBS polling interval removed - fixed at 10 seconds
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
-  const [connectionTimeout, setConnectionTimeout] = createSignal(10);
+  // Connection timeout removed - backend-only setting
   
   // Update settings
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
@@ -117,7 +114,8 @@ const Settings: Component = () => {
   
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<{
-    apiTokenConfigured: boolean; 
+    apiTokenConfigured: boolean;
+    apiTokenHint?: string;
     requiresAuth: boolean;
     exportProtected: boolean;
     unprotectedExportAllowed: boolean;
@@ -242,7 +240,6 @@ const Settings: Component = () => {
   onMount(async () => {
     // Subscribe to events
     const unsubscribeAutoRegister = eventBus.on('node_auto_registered', () => {
-      console.log('[Settings] Node auto-registered, closing modal and refreshing nodes');
       // Close any open modals
       setShowNodeModal(false);
       setEditingNode(null);
@@ -252,12 +249,10 @@ const Settings: Component = () => {
     });
     
     const unsubscribeRefresh = eventBus.on('refresh_nodes', () => {
-      console.log('[Settings] Refreshing nodes');
       loadNodes();
     });
     
     const unsubscribeDiscovery = eventBus.on('discovery_updated', (data) => {
-      console.log('[Settings] Discovery updated:', data);
       // If this is an immediate update (from node deletion), merge with existing
       if (data && data.immediate && data.servers) {
         setDiscoveredNodes(prev => {
@@ -290,7 +285,6 @@ const Settings: Component = () => {
       if (showNodeModal()) {
         // Start polling every 3 seconds when modal is open
         pollInterval = setInterval(() => {
-          console.log('[Settings] Polling for node updates...');
           loadNodes();
           loadDiscoveredNodes();
         }, 3000);
@@ -336,9 +330,9 @@ const Settings: Component = () => {
         const systemResponse = await fetch('/api/config/system');
         if (systemResponse.ok) {
           const systemSettings = await systemResponse.json();
-          setPollingInterval(systemSettings.pollingInterval || 5);
+          // PBS polling interval is now fixed at 10 seconds
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
-          setConnectionTimeout(systemSettings.connectionTimeout || 10);
+          // Connection timeout is backend-only
           // Load auto-update settings
           setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
           setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
@@ -348,9 +342,7 @@ const Settings: Component = () => {
           }
         } else {
           // Fallback to old endpoint
-          const response = await SettingsAPI.getSettings();
-          const settings = response.current;
-          setPollingInterval((settings.monitoring.pollingInterval || 5000) / 1000);
+          await SettingsAPI.getSettings();
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
@@ -376,9 +368,9 @@ const Settings: Component = () => {
       if (activeTab() === 'system') {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
-          pollingInterval: pollingInterval(),
+          // PBS polling interval is now fixed at 10 seconds
           allowedOrigins: allowedOrigins(),
-          connectionTimeout: connectionTimeout(),
+          // Connection timeout is backend-only
           updateChannel: updateChannel(),
           autoUpdateEnabled: autoUpdateEnabled(),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
@@ -1137,62 +1129,6 @@ const Settings: Component = () => {
                 </div>
                 
                 <div class="space-y-4">
-                  {/* Performance Settings */}
-                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
-                      </svg>
-                      Performance Settings
-                    </h4>
-                    
-                    <div class="space-y-4">
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Polling Interval</label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400">
-                            How often to fetch data from servers
-                          </p>
-                        </div>
-                        <select
-                          value={pollingInterval()}
-                          onChange={(e) => {
-                            setPollingInterval(parseInt(e.currentTarget.value));
-                            setHasUnsavedChanges(true);
-                          }}
-                          class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                        >
-                          <option value="3">3 seconds</option>
-                          <option value="5">5 seconds</option>
-                          <option value="10">10 seconds</option>
-                          <option value="30">30 seconds</option>
-                          <option value="60">1 minute</option>
-                        </select>
-                      </div>
-                      
-                      <div class="flex items-center justify-between">
-                        <div>
-                          <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Connection Timeout</label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400">
-                            Max wait time for node responses
-                          </p>
-                        </div>
-                        <select
-                          value={connectionTimeout()}
-                          onChange={(e) => {
-                            setConnectionTimeout(parseInt(e.currentTarget.value));
-                            setHasUnsavedChanges(true);
-                          }}
-                          class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                        >
-                          <option value="5">5 seconds</option>
-                          <option value="10">10 seconds</option>
-                          <option value="20">20 seconds</option>
-                          <option value="30">30 seconds</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
                   
                   {/* Network Settings */}
                   <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
@@ -1437,29 +1373,21 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
-              {/* Authentication Status */}
+              {/* Authentication */}
               <Show when={securityStatus()?.hasAuthentication}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   {/* Header */}
-                  <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-3">
-                        <div class="p-2 bg-green-100 dark:bg-green-900/50 rounded-lg">
-                          <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Authentication</h3>
-                          <p class="text-xs text-gray-600 dark:text-gray-400">Password protection enabled</p>
-                        </div>
-                      </div>
-                      <span class="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-full flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  <div class="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-900/20 dark:to-gray-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                      <div class="p-2 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
-                        Active
-                      </span>
+                      </div>
+                      <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Authentication</h3>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">Manage your login credentials</p>
+                      </div>
                     </div>
                   </div>
                   
@@ -1481,20 +1409,6 @@ const Settings: Component = () => {
                         </div>
                       </button>
                       
-                      <button
-                        onClick={() => setShowRemovePasswordModal(true)}
-                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
-                      >
-                        <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
-                          <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        </div>
-                        <div class="text-left">
-                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Remove Password</div>
-                          <div class="text-xs text-gray-500 dark:text-gray-400">Disable authentication</div>
-                        </div>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1519,26 +1433,70 @@ const Settings: Component = () => {
                       <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
                         After restarting, you'll need to log in with your saved credentials.
                       </p>
+                      
+                      <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                          How to restart Pulse:
+                        </p>
+                        
+                        <Show when={versionInfo()?.deploymentType === 'proxmoxve'}>
+                          <div class="space-y-2">
+                            <p class="text-xs text-gray-700 dark:text-gray-300">
+                              Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">update</code> in your ProxmoxVE console
+                            </p>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 italic">
+                              Or restart manually with: <code class="text-xs">systemctl restart pulse</code>
+                            </p>
+                          </div>
+                        </Show>
+                        
+                        <Show when={versionInfo()?.deploymentType === 'docker'}>
+                          <div class="space-y-1">
+                            <p class="text-xs text-gray-700 dark:text-gray-300">Restart your Docker container:</p>
+                            <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                              docker restart pulse
+                            </code>
+                          </div>
+                        </Show>
+                        
+                        <Show when={versionInfo()?.deploymentType === 'systemd' || versionInfo()?.deploymentType === 'manual'}>
+                          <div class="space-y-1">
+                            <p class="text-xs text-gray-700 dark:text-gray-300">Restart the service:</p>
+                            <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                              sudo systemctl restart pulse
+                            </code>
+                          </div>
+                        </Show>
+                        
+                        <Show when={versionInfo()?.deploymentType === 'development'}>
+                          <div class="space-y-1">
+                            <p class="text-xs text-gray-700 dark:text-gray-300">Restart the development server:</p>
+                            <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                              sudo systemctl restart pulse-backend
+                            </code>
+                          </div>
+                        </Show>
+                        
+                        <Show when={!versionInfo()?.deploymentType}>
+                          <div class="space-y-1">
+                            <p class="text-xs text-gray-700 dark:text-gray-300">Restart Pulse using your deployment method</p>
+                          </div>
+                        </Show>
+                      </div>
+                      
+                      <div class="mt-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                        <p class="text-xs text-green-700 dark:text-green-300">
+                          💡 <strong>Tip:</strong> Make sure you've saved your credentials before restarting!
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </Show>
               
-              {/* Show setup when no auth and not pending */}
-              <Show when={!securityStatus()?.hasAuthentication && !securityStatus()?.configuredButPendingRestart}>
-                <QuickSecuritySetup onConfigured={async () => {
-                  // Refresh security status after configuration
-                  try {
-                    const response = await fetch('/api/security/status');
-                    if (response.ok) {
-                      const status = await response.json();
-                      setSecurityStatus(status);
-                    }
-                  } catch (err) {
-                    console.error('Failed to refresh security status:', err);
-                  }
-                }} />
-              </Show>
+              {/* Security setup now handled by first-run wizard */}
+
+              {/* Removed confusing API Token section when no auth exists - API is already open */}
 
               {/* API Token - Show current token when auth is enabled */}
               <Show when={securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
@@ -1560,7 +1518,7 @@ const Settings: Component = () => {
                   
                   {/* Content */}
                   <div class="p-6">
-                    <GenerateAPIToken />
+                    <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
                   </div>
                 </div>
               </Show>
@@ -1835,7 +1793,6 @@ const Settings: Component = () => {
                             storageCount: state.storage?.length || 0
                           },
                           settings: {
-                            pollingInterval: pollingInterval()
                           }
                         };
                         
@@ -1874,7 +1831,7 @@ const Settings: Component = () => {
           }}
           nodeType="pve"
           editingNode={editingNode()?.type === 'pve' ? editingNode() ?? undefined : undefined}
-          securityStatus={securityStatus()}
+          securityStatus={securityStatus() ?? undefined}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
@@ -1933,7 +1890,7 @@ const Settings: Component = () => {
           }}
           nodeType="pbs"
           editingNode={editingNode()?.type === 'pbs' ? editingNode() ?? undefined : undefined}
-          securityStatus={securityStatus()}
+          securityStatus={securityStatus() ?? undefined}
           onSave={async (nodeData) => {
           try {
             if (editingNode() && editingNode()!.id) {
@@ -2243,11 +2200,6 @@ const Settings: Component = () => {
       <ChangePasswordModal
         isOpen={showPasswordModal()}
         onClose={() => setShowPasswordModal(false)}
-      />
-      
-      <RemovePasswordModal
-        isOpen={showRemovePasswordModal()}
-        onClose={() => setShowRemovePasswordModal(false)}
       />
     </>
   );

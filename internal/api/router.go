@@ -2,7 +2,6 @@ package api
 
 import (
 	"bufio"
-	base64Pkg "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -191,14 +190,17 @@ func (r *Router) setupRoutes() {
 	
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
-	r.mux.HandleFunc("/api/security/remove-password", r.handleRemovePassword)
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 			
 			// Check for basic auth configuration
-			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || os.Getenv("REQUIRE_AUTH") == "true"
+			// Check both environment variables and loaded config
+			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || 
+				os.Getenv("REQUIRE_AUTH") == "true" || 
+				r.config.AuthUser != "" || 
+				r.config.AuthPass != ""
 			
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false
@@ -236,8 +238,15 @@ func (r *Router) setupRoutes() {
 			}
 			isTrustedNetwork := utils.IsTrustedNetwork(clientIP, trustedNetworks)
 			
+			// Create token hint if token exists
+			var apiTokenHint string
+			if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
+				apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
+			}
+			
 			status := map[string]interface{}{
 				"apiTokenConfigured": r.config.APIToken != "",
+				"apiTokenHint": apiTokenHint,
 				"requiresAuth": r.config.APIToken != "",
 				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
 				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
@@ -983,94 +992,6 @@ PULSE_AUTH_PASS='%s'
 	}
 }
 
-// handleRemovePassword handles password removal requests
-func (r *Router) handleRemovePassword(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
-			"Only POST method is allowed", nil)
-		return
-	}
-
-	// Parse request
-	var removeReq struct {
-		CurrentPassword string `json:"currentPassword"`
-	}
-	
-	if err := json.NewDecoder(req.Body).Decode(&removeReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
-			"Invalid request body", nil)
-		return
-	}
-
-	// Verify current password matches
-	auth := req.Header.Get("Authorization")
-	if auth == "" {
-		// Try the provided password
-		if removeReq.CurrentPassword == "" {
-			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-				"Current password required", nil)
-			return
-		}
-		// Create basic auth header from provided password
-		credentials := base64Pkg.StdEncoding.EncodeToString([]byte(r.config.AuthUser + ":" + removeReq.CurrentPassword))
-		req.Header.Set("Authorization", "Basic "+credentials)
-	}
-
-	// Verify authentication
-	if !CheckAuth(r.config, nil, req) {
-		writeErrorResponse(w, http.StatusUnauthorized, "invalid_password", 
-			"Current password is incorrect", nil)
-		return
-	}
-
-	// Clear environment variables
-	os.Unsetenv("PULSE_AUTH_USER")
-	os.Unsetenv("PULSE_AUTH_PASS")
-	os.Unsetenv("PULSE_PASSWORD")
-	os.Unsetenv("API_TOKEN")
-	
-	// Clear all authentication from running config
-	r.config.AuthUser = ""
-	r.config.AuthPass = ""
-	r.config.APIToken = ""
-	
-	// Try to run the remove-password script with sudo
-	// This will remove the password from systemd configuration
-	scriptPath := "/opt/pulse/scripts/remove-password.sh"
-	if _, err := os.Stat(scriptPath); err == nil {
-		cmd := exec.Command("sudo", "-n", scriptPath)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Warn().Err(err).Msg("Could not run remove-password script with sudo")
-		} else {
-			log.Info().Msg("Successfully removed password from systemd")
-		}
-	}
-	
-	// Save the config without authentication
-	if err := config.SaveConfig(r.config); err != nil {
-		log.Error().Err(err).Msg("Failed to save config after removing password")
-	}
-	
-	log.Info().Msg("Password authentication removed successfully")
-	
-	// Invalidate all sessions (forces logout)
-	InvalidateUserSessions("admin")
-	
-	// Audit log password removal
-	LogAuditEvent("password_removed", "admin", GetClientIP(req), req.URL.Path, true, "Password authentication disabled")
-	
-	// Return success
-	message := "All authentication removed successfully. Pulse is now running without any authentication."
-	requiresManualStep := false
-	
-	// Return success
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": message,
-		"requiresManualStep": requiresManualStep,
-	})
-}
 
 // handleLogout handles logout requests
 func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {

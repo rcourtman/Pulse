@@ -1,25 +1,34 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, createEffect } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import { apiFetch } from '@/utils/apiClient';
 
-export const GenerateAPIToken: Component = () => {
+interface GenerateAPITokenProps {
+  currentTokenHint?: string;
+}
+
+export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [newToken, setNewToken] = createSignal<string | null>(null);
   const [showToken, setShowToken] = createSignal(false);
   const [copied, setCopied] = createSignal(false);
-  const [deploymentType, setDeploymentType] = createSignal<string>('');
+  const [currentHint, setCurrentHint] = createSignal(props.currentTokenHint || '');
+  const [showConfirm, setShowConfirm] = createSignal(false);
+  
+  // Update hint when props change
+  createEffect(() => {
+    if (props.currentTokenHint) {
+      setCurrentHint(props.currentTokenHint);
+    }
+  });
   
   const generateNewToken = async () => {
-    if (!confirm('Generate a new API token? The old token will stop working immediately.')) {
-      return;
-    }
-    
     setIsGenerating(true);
+    setShowConfirm(false);
     
     try {
-      const response = await fetch('/api/security/regenerate-token', {
-        method: 'POST',
-        credentials: 'include'
+      const response = await apiFetch('/api/security/regenerate-token', {
+        method: 'POST'
       });
       
       if (!response.ok) {
@@ -29,7 +38,10 @@ export const GenerateAPIToken: Component = () => {
       
       const data = await response.json();
       setNewToken(data.token);
-      setDeploymentType(data.deploymentType);
+      // Update the current hint with the new token
+      if (data.token && data.token.length >= 20) {
+        setCurrentHint(data.token.slice(0, 8) + '...' + data.token.slice(-4));
+      }
       setShowToken(true);
       showSuccess('New API token generated! Save it now - it won\'t be shown again.');
     } catch (error) {
@@ -51,19 +63,6 @@ export const GenerateAPIToken: Component = () => {
     }
   };
   
-  const getRestartInstructions = () => {
-    switch(deploymentType()) {
-      case 'docker':
-        return 'Restart your Docker container to activate the new token.';
-      case 'proxmoxve':
-        return 'Restart Pulse from the ProxmoxVE host to activate the new token.';
-      case 'systemd':
-        return 'Run: sudo systemctl restart pulse';
-      default:
-        return 'Restart the Pulse service to activate the new token.';
-    }
-  };
-  
   return (
     <div class="space-y-4">
       <Show when={!showToken()}>
@@ -71,24 +70,24 @@ export const GenerateAPIToken: Component = () => {
           <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
             API Token Active
           </h4>
+          <Show when={currentHint() && currentHint().length > 0}>
+            <div class="mb-3 px-3 py-2 bg-gray-800 dark:bg-gray-950 rounded">
+              <code class="text-xs text-gray-300 font-mono">
+                Current token: {currentHint()}
+              </code>
+            </div>
+          </Show>
           <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
             An API token is configured for this instance. Use it with the X-API-Token header for automation.
           </p>
           
           <button
-            onClick={generateNewToken}
+            onClick={() => setShowConfirm(true)}
             disabled={isGenerating()}
             class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isGenerating() ? 'Generating...' : 'Generate New Token'}
           </button>
-        </div>
-        
-        <div class="text-xs text-gray-500 dark:text-gray-400">
-          <p class="font-medium mb-1">Using the API Token:</p>
-          <code class="block bg-gray-900 dark:bg-gray-950 text-gray-100 p-2 rounded text-xs">
-            curl -H "X-API-Token: YOUR_TOKEN" http://pulse:7655/api/...
-          </code>
         </div>
       </Show>
       
@@ -118,15 +117,15 @@ export const GenerateAPIToken: Component = () => {
             </div>
           </div>
           
-          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
             <div class="flex items-start space-x-2">
-              <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <div class="text-xs text-amber-700 dark:text-amber-300">
-                <p class="font-semibold">Restart Required</p>
-                <p class="mt-1">{getRestartInstructions()}</p>
-                <p class="mt-1 text-amber-600 dark:text-amber-400">The old token has been invalidated and will no longer work.</p>
+              <div class="text-xs text-blue-700 dark:text-blue-300">
+                <p class="font-semibold">Token Active Immediately!</p>
+                <p class="mt-1">Your new API token is active and ready to use.</p>
+                <p class="mt-1 text-blue-600 dark:text-blue-400">The old token (if any) has been invalidated.</p>
               </div>
             </div>
           </div>
@@ -140,6 +139,34 @@ export const GenerateAPIToken: Component = () => {
           >
             Done
           </button>
+        </div>
+      </Show>
+      
+      <Show when={showConfirm()}>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Generate New API Token?
+            </h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              This will generate a new API token and <span class="font-semibold text-red-600 dark:text-red-400">immediately invalidate the current token</span>. 
+              Any scripts or integrations using the old token will stop working.
+            </p>
+            <div class="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowConfirm(false)}
+                class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={generateNewToken}
+                class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Generate New Token
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
     </div>

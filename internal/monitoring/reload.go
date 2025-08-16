@@ -188,3 +188,31 @@ func (rm *ReloadableMonitor) Stop() {
 		rm.monitor.Stop()
 	}
 }
+
+// UpdatePollingInterval updates just the polling interval without full reload
+func (rm *ReloadableMonitor) UpdatePollingInterval(interval time.Duration) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	
+	if rm.config.PollingInterval == interval {
+		return // No change
+	}
+	
+	log.Info().
+		Dur("oldInterval", rm.config.PollingInterval).
+		Dur("newInterval", interval).
+		Msg("Updating polling interval via SIGHUP")
+	
+	// Update config
+	rm.config.PollingInterval = interval
+	rm.monitor.config.PollingInterval = interval
+	
+	// Cancel and restart the monitoring loop
+	if rm.cancel != nil {
+		rm.cancel()
+	}
+	
+	// Start new monitoring loop with updated interval
+	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
+	go rm.monitor.Start(rm.ctx, rm.wsHub)
+}

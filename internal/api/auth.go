@@ -4,6 +4,7 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,11 +64,68 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		return true
 	}
 	
-	log.Debug().
+	// API-only mode: when only API token is configured (no password auth)
+	// Allow read-only endpoints for the UI to work
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken != "" {
+		// Check if an API token was provided
+		providedToken := r.Header.Get("X-API-Token")
+		if providedToken == "" {
+			providedToken = r.URL.Query().Get("token")
+		}
+		
+		// If a token was provided, validate it
+		if providedToken != "" {
+			if providedToken == cfg.APIToken {
+				return true
+			}
+			// Invalid token provided
+			if w != nil {
+				http.Error(w, "Invalid API token", http.StatusUnauthorized)
+			}
+			return false
+		}
+		
+		// No token provided - allow read-only endpoints for UI
+		if r.Method == "GET" || r.URL.Path == "/ws" {
+			// Allow these endpoints without auth for UI to function
+			allowedPaths := []string{
+				"/api/state",
+				"/api/config/nodes",
+				"/api/config/system",
+				"/api/settings",
+				"/api/discover",
+				"/api/security/status",
+				"/api/version",
+				"/api/health",
+				"/api/updates/check",
+				"/api/system/diagnostics",
+				"/api/guests/metadata",
+				"/ws", // WebSocket for real-time updates
+			}
+			for _, path := range allowedPaths {
+				if r.URL.Path == path || strings.HasPrefix(r.URL.Path, path+"/") {
+					log.Debug().Str("path", r.URL.Path).Msg("Allowing read-only access in API-only mode")
+					return true
+				}
+			}
+		}
+		
+		// Require token for everything else
+		if w != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="API Token Required"`)
+			http.Error(w, "API token required", http.StatusUnauthorized)
+		}
+		return false
+	}
+	
+	log.Info().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
 		Bool("has_token", cfg.APIToken != "").
+		Str("api_token_length", fmt.Sprintf("%d", len(cfg.APIToken))).
+		Str("api_token_first_chars", fmt.Sprintf("%.10s...", cfg.APIToken)).
 		Str("url", r.URL.Path).
+		Str("provided_token", r.Header.Get("X-API-Token")).
 		Msg("Checking authentication")
 	
 	// Check API token first (for backward compatibility)
@@ -75,7 +133,13 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		// Check header
 		if token := r.Header.Get("X-API-Token"); token != "" {
 			// Check if stored token is hashed or plain text
-			if internalauth.IsAPITokenHashed(cfg.APIToken) {
+			isHashed := internalauth.IsAPITokenHashed(cfg.APIToken)
+			log.Info().
+				Bool("is_hashed", isHashed).
+				Bool("tokens_match", token == cfg.APIToken).
+				Msg("Comparing API tokens")
+			
+			if isHashed {
 				// Compare against hash
 				if internalauth.CompareAPIToken(token, cfg.APIToken) {
 					return true

@@ -1,6 +1,7 @@
 import { Component, Show, createSignal, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NodeConfig } from '@/types/nodes';
+import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodesAPI } from '@/api/nodes';
@@ -14,7 +15,7 @@ interface NodeModalProps {
   onSave: (nodeData: Partial<NodeConfig>) => void;
   showBackToDiscovery?: boolean;
   onBackToDiscovery?: () => void;
-  securityStatus?: any;
+  securityStatus?: Partial<SecurityStatus>;
 }
 
 export const NodeModal: Component<NodeModalProps> = (props) => {
@@ -485,7 +486,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             }
                                             
                                             // Always regenerate URL when host changes
-                                            console.log('Generating setup URL with host:', formData().host);
                                             const response = await fetch('/api/setup-script-url', {
                                               method: 'POST',
                                               headers: { 'Content-Type': 'application/json' },
