@@ -77,12 +77,15 @@ docker run -d \
 
 ### With Network Discovery
 ```bash
-# Specify your LAN subnet for auto-discovery
+# Discovery runs automatically but may detect Docker's internal network
+# For proper discovery, configure subnet after first start:
+# 1. Access Pulse UI
+# 2. Edit /data/system.json and add: "discoverySubnet": "192.168.1.0/24"
+# 3. Restart container
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
-  -e DISCOVERY_SUBNET=192.168.1.0/24 \
   --restart unless-stopped \
   rcourtman/pulse:latest
 ```
@@ -98,8 +101,8 @@ services:
     volumes:
       - pulse_data:/data
     environment:
-      # Network discovery
-      # - DISCOVERY_SUBNET=192.168.1.0/24  # Auto-discovery subnet (default: auto-detect)
+      # Network discovery (configured via system.json after first start)
+      # Add to /data/system.json: "discoverySubnet": "192.168.1.0/24"
       
       # Ports
       # - PORT=7655                         # Backend port (default: 7655)

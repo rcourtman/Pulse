@@ -95,7 +95,6 @@ volumes:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` or `FRONTEND_PORT` | Web UI port | `7655` |
-| `DISCOVERY_SUBNET` | Auto-discovery subnet | auto-detect |
 | `ALLOWED_ORIGINS` | CORS allowed origins | none (same-origin) |
 
 ### System Configuration
@@ -197,8 +196,29 @@ docker rm pulse
 
 ## Networking
 
+### Network Discovery Configuration
+
+Docker containers use their internal network by default (e.g., 172.17.0.0/24), which prevents proper discovery of Proxmox nodes on your LAN. To fix this:
+
+1. After first start, edit the configuration:
+   ```bash
+   docker exec pulse sh -c 'cat > /data/system.json << EOF
+   {
+     "pollingInterval": 10,
+     "discoverySubnet": "192.168.1.0/24"  # Your LAN subnet
+   }
+   EOF'
+   ```
+
+2. Restart the container:
+   ```bash
+   docker restart pulse
+   ```
+
+Discovery will now scan your specified subnet every 5 minutes.
+
 ### Using Host Network
-For better auto-discovery:
+Alternatively, use host network mode for automatic LAN detection:
 ```bash
 docker run -d \
   --name pulse \
