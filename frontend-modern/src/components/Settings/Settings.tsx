@@ -186,7 +186,8 @@ const Settings: Component = () => {
   const loadSecurityStatus = async () => {
     setSecurityStatusLoading(true);
     try {
-      const response = await fetch('/api/security/status');
+      const { apiFetch } = await import('@/utils/apiClient');
+      const response = await apiFetch('/api/security/status');
       if (response.ok) {
         const status = await response.json();
         setSecurityStatus(status);

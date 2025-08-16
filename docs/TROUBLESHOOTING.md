@@ -104,7 +104,7 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 ### Performance Issues
 
 #### High CPU usage
-- Reduce polling interval in Settings → System
+- Polling interval is fixed at 10 seconds (matches Proxmox update cycle)
 - Check number of monitored nodes
 - Disable unused features (snapshots, backups monitoring)
 

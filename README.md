@@ -24,7 +24,7 @@
   - Account lockout after failed login attempts
   - Secure session management with HttpOnly cookies
   - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
-  - SHA3-256 API token hashing - tokens NEVER stored in plain text
+  - API tokens stored securely with restricted file permissions
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - Live monitoring of VMs, containers, nodes, storage
@@ -111,7 +111,7 @@ services:
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
       # - PULSE_AUTH_PASS='$$2a$$12$$...'   # Bcrypt hash - ESCAPE $ as $$ in docker-compose!
-      # - API_TOKEN=<sha3-256-hash>         # SHA3-256 hashed API token (64 hex chars)
+      # - API_TOKEN=<hex-token>            # API token (48 hex chars)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
       # ⚠️ IMPORTANT: Docker Compose requires escaping $ characters!
@@ -121,7 +121,7 @@ services:
       # Or use a .env file where no escaping is needed
       
       # Polling & timeouts
-      # - POLLING_INTERVAL=3                # Seconds between node checks (default: 3)
+      # - POLLING_INTERVAL=10               # Fixed at 10 seconds (matches Proxmox update cycle)
       # - CONNECTION_TIMEOUT=10             # Connection timeout in seconds (default: 10)
       
       # Updates
@@ -146,7 +146,8 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
 
 ## Security
 
-- **Authentication is optional** - Run open for homelab or secured for production
+- **Authentication required** - Protects your Proxmox infrastructure credentials
+- **Quick setup wizard** - Secure your installation in under a minute
 - **Multiple auth methods**: Password authentication, API tokens, or both
 - **Enterprise-grade protection**:
   - Credentials encrypted at rest (AES-256-GCM)
@@ -154,7 +155,7 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
   - Rate limiting and account lockout protection
   - Secure session management with HttpOnly cookies
   - bcrypt password hashing (cost 12) - passwords NEVER stored in plain text
-  - SHA3-256 API token hashing - tokens NEVER stored in plain text
+  - API tokens stored securely with restricted file permissions
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - **Security by design**:
