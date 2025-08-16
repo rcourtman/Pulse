@@ -41,6 +41,12 @@ func FingerprintVerifier(fingerprint string) *tls.Config {
 func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
+		// Performance optimizations for concurrent requests
+		MaxIdleConns:        100,  // Increase from default 2
+		MaxIdleConnsPerHost: 20,   // Increase from default 2
+		MaxConnsPerHost:     20,   // Limit concurrent connections per host
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  true,  // Disable compression for lower latency
 	}
 	
 	if !verifySSL && fingerprint == "" {

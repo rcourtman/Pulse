@@ -286,7 +286,9 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	PollingInterval         int    `json:"pollingInterval"`
+	PollingInterval         int    `json:"pollingInterval"`         // Legacy - kept for compatibility
+	PVEPollingInterval      int    `json:"pvePollingInterval"`      // Proxmox polling interval in seconds
+	PBSPollingInterval      int    `json:"pbsPollingInterval"`      // PBS polling interval in seconds
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
@@ -295,6 +297,8 @@ type SystemSettings struct {
 	AutoUpdateEnabled       bool   `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
 	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
 	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
+	LogLevel                string `json:"logLevel,omitempty"`
+	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
 	// APIToken removed - now handled via .env file only
 }
 
@@ -446,10 +450,8 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	data, err := os.ReadFile(c.systemFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return default settings if file doesn't exist
-			return &SystemSettings{
-				PollingInterval: 5,
-			}, nil
+			// Return nil if file doesn't exist - let env vars take precedence
+			return nil, nil
 		}
 		return nil, err
 	}

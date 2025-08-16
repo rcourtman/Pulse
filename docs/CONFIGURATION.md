@@ -1,338 +1,144 @@
 # Pulse Configuration Guide
 
-## Configuration Methods by Deployment Type
+## Configuration File Structure
 
-### Docker Deployments
-
-**Configuration location:** `/data` (volume mount)
-- All settings stored in the mounted volume
-- Environment variables passed with `-e` flag or via `/data/.env` file
-- The security wizard creates `/data/.env` for auth credentials
-- Configuration persists in the volume across container restarts
-
-**Setting environment variables:**
-```bash
-# Direct run
-docker run -d \
-  -e FRONTEND_PORT=8080 \
-  -e UPDATE_CHANNEL=rc \
-  -e API_TOKEN=your-secure-token \
-  -v pulse_data:/data \
-  rcourtman/pulse:latest
-
-# Or use docker-compose.yml (see README)
-```
-
-### LXC/Systemd Deployments (Native Install)
-
-**Configuration location:** `/etc/pulse`
-- Settings stored in encrypted JSON files
-- Environment variables can be set via systemd or .env file
-- .env file at `/etc/pulse/.env` is auto-loaded if present
-- **Service name**: `pulse` (ProxmoxVE) or `pulse-backend` (manual install)
-
-**Setting environment variables - Option 1: Systemd override**
-```bash
-# Edit service (check which exists: pulse or pulse-backend)
-sudo systemctl edit pulse  # or pulse-backend
-
-# Add overrides:
-[Service]
-Environment="FRONTEND_PORT=8080"
-Environment="UPDATE_CHANNEL=rc"
-```
-
-**Setting environment variables - Option 2: .env file**
-```bash
-# Create/edit .env file
-sudo nano /etc/pulse/.env
-
-# Add variables:
-FRONTEND_PORT=8080
-UPDATE_CHANNEL=rc
-
-# Restart service
-sudo systemctl restart pulse  # or pulse-backend
-```
-
-### Web UI Configuration (Both Deployments)
-Most settings are configured through the web interface at `http://<server>:7655/settings`:
-
-- **Nodes**: Auto-discovery, one-click setup scripts, cluster detection
-- **Alerts**: Thresholds and notification rules  
-- **Updates**: Update channels and deployment-specific update instructions
-- **Security**: Export/import encrypted configurations
-
-## Understanding .env vs .enc Files
-
-Pulse uses two different file types for configuration, each serving a specific purpose:
-
-### .env Files (Authentication Only)
-- **Purpose**: Store authentication credentials (username, password, API token)
-- **Format**: Plain text environment variables with hashed values
-- **Location**: `/data/.env` (Docker) or `/etc/pulse/.env` (native)
-- **When used**: Loaded at startup before encryption keys are available
-- **Contents**: Only auth-related variables (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN)
-- **Security**: Passwords and tokens are bcrypt-hashed, not plaintext
-
-**Example .env file:**
-```bash
-PULSE_AUTH_USER='admin'
-PULSE_AUTH_PASS='$2a$12$YTZXOCEylj4TaevZ0DCeI.notayQZ..b0OZ97lUZ.Q24fljLiMQHK'
-API_TOKEN='e6e9fcfb4662d2b485000cc5faf2f7e5d8b75e0492b4877c36dadb085f12e57b'
-```
-
-**⚠️ CRITICAL for Docker Compose users:**
-- In docker-compose.yml, you MUST escape `$` as `$$`
-- Example: `PULSE_AUTH_PASS='$$2a$$12$$YTZXOCEylj4TaevZ0DCeI....'`
-- Or use a separate .env file where no escaping is needed
-- The bcrypt hash MUST be exactly 60 characters and enclosed in single quotes!
-
-### .enc Files (Sensitive Configuration)
-- **Purpose**: Store sensitive configuration like Proxmox node credentials
-- **Format**: Encrypted JSON using AES-256-GCM
-- **Location**: `/data/*.enc` (Docker) or `/etc/pulse/*.enc` (native)
-- **When used**: After authentication, requires encryption key
-- **Contents**: Node credentials (tokens, passwords), email settings, webhooks
-- **Security**: Fully encrypted at rest, decrypted only in memory
-
-### Why Both?
-This split architecture exists because:
-1. **Authentication must work before encryption** - You need to authenticate to access the encryption key
-2. **Docker persistence** - Containers need auth to persist across restarts
-3. **Security layers** - Node credentials (the highest risk) get maximum protection in .enc files
-4. **Simplicity** - Auth can be managed with standard environment variables
-
-## Environment Variables
-
-**Available variables:**
-
-Variables that ALWAYS override UI settings:
-- `FRONTEND_PORT` or `PORT` - Web UI port (default: 7655)
-- `API_TOKEN` - Token for API authentication (overrides UI)
-- `PULSE_AUTH_USER` - Username for web UI authentication (overrides UI)
-- `PULSE_AUTH_PASS` - Bcrypt password hash - MUST be 60 chars in single quotes! (overrides UI)
-- `UPDATE_CHANNEL` - stable or rc (overrides UI)
-- `CONNECTION_TIMEOUT` - Connection timeout in seconds (overrides UI)
-- `ALLOWED_ORIGINS` - CORS origins (overrides UI, default: empty = same-origin only)
-- `LOG_LEVEL` - debug/info/warn/error (overrides UI)
-
-Variables that only work if no system.json exists:
-- `POLLING_INTERVAL` - Node check interval in seconds (default: 3)
-
-Other variables:
-- `DISCOVERY_SUBNET` - Network subnet for auto-discovery (default: auto-detect)
-- `ALLOW_UNPROTECTED_EXPORT` - Allow export without auth (default: false)
-- `PULSE_DEV` - Enable development mode features (default: false)
-
-### 3. Secure Environment Variables
-For sensitive data like API tokens and passwords:
-
-```bash
-# Edit systemd service
-sudo systemctl edit pulse-backend
-
-# Add secure environment variables:
-[Service]
-Environment="API_TOKEN=your-secure-token"
-Environment="ALLOW_UNPROTECTED_EXPORT=true"
-
-# Restart service
-sudo systemctl restart pulse  # or pulse-backend
-```
-
-**Docker users:**
-```bash
-docker run -e API_TOKEN=secure-token -p 7655:7655 rcourtman/pulse:latest
-```
-
-## Data Storage
-
-### Encrypted Storage
-All sensitive data is automatically encrypted at rest using AES-256-GCM:
-- Node passwords and API tokens
-- Email server passwords  
-- PBS credentials
-
-The encryption key is auto-generated and stored in the data directory with restricted permissions.
+Pulse uses three separate configuration files, each with a specific purpose. This separation ensures security, clarity, and proper access control.
 
 ### File Locations
+All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker containers).
 
-**Docker Container:**
-- Base directory: `/data` (mounted volume)
-- Config files: `/data/*.json`, `/data/*.enc`
-- Encryption key: `/data/.encryption.key`
-- Auth config: `/data/.env` (created by security wizard)
-- Metrics: `/data/metrics/`
-- Logs: Container logs (`docker logs pulse`)
-
-**LXC/Native Install:**
-- Base directory: `/etc/pulse`
-- Config files: `/etc/pulse/*.json`, `/etc/pulse/*.enc`
-- Encryption key: `/etc/pulse/.encryption.key`
-- Metrics: `/etc/pulse/metrics/`
-- Logs: `/etc/pulse/pulse.log` or journalctl
-- Optional: `/etc/pulse/.env` for env overrides
-
-**Files created (both deployments):**
-- `system.json` - UI-managed settings
-- `.encryption.key` - Auto-generated encryption key (do not share!)
-- `nodes.enc` - Encrypted node credentials
-- `email.enc` - Encrypted email settings
-
-## Common Configuration Tasks
-
-### Change the Web Port
-
-**Docker:**
-```bash
-# Stop existing container
-docker stop pulse
-
-# Run with new port
-docker run -d --name pulse \
-  -e FRONTEND_PORT=8080 \
-  -p 8080:8080 \
-  -v pulse_data:/data \
-  rcourtman/pulse:latest
+```
+/etc/pulse/
+├── .env          # Authentication credentials
+├── system.json   # Application settings
+└── nodes.enc     # Encrypted node credentials
 ```
 
-**LXC/Systemd:**
+---
+
+## 📁 `.env` - Authentication & Security
+
+**Purpose:** Contains authentication credentials and security settings ONLY.
+
+**Format:** Environment variables (KEY=VALUE)
+
+**Contents:**
 ```bash
-echo "FRONTEND_PORT=8080" >> /etc/pulse/.env
-sudo systemctl restart pulse  # or pulse-backend
+# User authentication
+PULSE_AUTH_USER='admin'              # Admin username
+PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
+API_TOKEN=abc123...                  # API authentication token
+
+# Security settings
+ENABLE_AUDIT_LOG=true                # Enable security audit logging
 ```
 
-### Enable API Authentication
-```bash
-sudo systemctl edit pulse-backend
-# Add: Environment="API_TOKEN=your-secure-token"
-sudo systemctl restart pulse  # or pulse-backend
+**Important Notes:**
+- Password hash MUST be in single quotes to prevent shell expansion
+- This file should have restricted permissions (600)
+- Never commit this file to version control
+- ProxmoxVE installations may pre-configure API_TOKEN
+
+---
+
+## 📁 `system.json` - Application Settings
+
+**Purpose:** Contains all application behavior settings and configuration.
+
+**Format:** JSON
+
+**Contents:**
+```json
+{
+  "pollingInterval": 5,           // Seconds between node polls (2-60)
+  "connectionTimeout": 10,        // Seconds before node connection timeout
+  "autoUpdateEnabled": false,     // Enable automatic updates
+  "updateChannel": "stable",      // Update channel: stable, rc, beta
+  "autoUpdateTime": "03:00",      // Time for automatic updates (24hr format)
+  "allowedOrigins": "",           // CORS allowed origins (empty = same-origin only)
+  "backendPort": 7655,            // Backend API port
+  "frontendPort": 7655            // Frontend UI port (same as backend in embedded mode)
+}
 ```
 
-### Configure for Reverse Proxy
+**Important Notes:**
+- User-editable via Settings UI
+- Can be safely backed up without exposing secrets
+- Missing file results in defaults being used
+- Changes take effect immediately (no restart required)
 
-**Docker:**
-```bash
-docker run -d --name pulse \
-  -e ALLOWED_ORIGINS="https://pulse.example.com" \
-  -p 7655:7655 \
-  -v pulse_data:/data \
-  rcourtman/pulse:latest
+---
+
+## 📁 `nodes.enc` - Encrypted Node Credentials
+
+**Purpose:** Stores encrypted credentials for Proxmox VE and PBS nodes.
+
+**Format:** Encrypted JSON (AES-256-GCM)
+
+**Structure (when decrypted):**
+```json
+{
+  "pveInstances": [
+    {
+      "name": "pve-node1",
+      "url": "https://192.168.1.10:8006",
+      "username": "root@pam",
+      "password": "encrypted_password_here",
+      "token": "optional_api_token"
+    }
+  ],
+  "pbsInstances": [
+    {
+      "name": "backup-server",
+      "url": "https://192.168.1.20:8007",
+      "username": "admin@pbs",
+      "password": "encrypted_password_here"
+    }
+  ]
+}
 ```
 
-**LXC/Systemd:**
-```bash
-echo "ALLOWED_ORIGINS=https://pulse.example.com" >> /etc/pulse/.env
-sudo systemctl restart pulse  # or pulse-backend
-```
+**Important Notes:**
+- Encrypted at rest using system-generated key
+- Credentials never exposed in UI (only "•••••" shown)
+- Export/import requires authentication
+- Automatic re-encryption on each save
 
-### Enable Debug Logging
-```bash
-echo "LOG_LEVEL=debug" >> /etc/pulse/.env
-sudo systemctl restart pulse  # or pulse-backend
-tail -f /etc/pulse/pulse.log
-```
+---
 
-### Configure Discovery Subnet (Docker)
-By default, Docker containers may only discover nodes on the Docker bridge network. To scan your actual network:
-```bash
-docker run -d \
-  -e DISCOVERY_SUBNET=192.168.1.0/24 \
-  -p 7655:7655 \
-  rcourtman/pulse:latest
-```
-Replace `192.168.1.0/24` with your actual network subnet.
+## Environment Variable Priority
 
-## Security Notes
+For backwards compatibility, some settings can be overridden via environment variables:
 
-⚠️ **Never put sensitive data in .env files!**
-- .env files are not encrypted
-- Use systemd environment variables for API_TOKEN
-- Node credentials are always stored encrypted
+1. **Authentication variables (from .env)** - Always highest priority
+   - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS`, `API_TOKEN`
 
-## Node Setup Details
+2. **System settings (from system.json)** - Normal priority
+   - If system.json exists, it takes precedence
+   - If missing, environment variables are checked
 
-### Auto-Registration Script
-The setup script generated for each discovered node:
-1. Creates monitoring user (`pulse-monitor@pam` or `pulse-monitor@pbs`)
-2. Sets minimal permissions (PVEAuditor or Datastore.Audit)
-3. Generates API token with timestamp
-4. Registers with Pulse automatically
-5. Optionally cleans up old tokens
+3. **Legacy environment variables** - Lowest priority (deprecated)
+   - `POLLING_INTERVAL` - Only used if system.json doesn't exist
+   - `CONNECTION_TIMEOUT` - Can override system.json value
+   - `ALLOWED_ORIGINS` - Can override system.json value
 
-Example:
-```bash
-curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https%3A%2F%2F192.168.1.10%3A8006" | bash
-```
+---
 
-### Manual Setup
+## Security Best Practices
 
-If auto-registration isn't suitable, you can still set up manually:
+1. **File Permissions**
+   ```bash
+   chmod 600 /etc/pulse/.env        # Only readable by owner
+   chmod 644 /etc/pulse/system.json # Readable by all, writable by owner
+   chmod 600 /etc/pulse/nodes.enc   # Only readable by owner
+   ```
 
-**Proxmox VE:**
-```bash
-pveum user add pulse-monitor@pam
-pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-pveum user token add pulse-monitor@pam pulse-token --privsep 0
-```
+2. **Backup Strategy**
+   - `.env` - Backup separately and securely (contains auth)
+   - `system.json` - Safe to include in regular backups
+   - `nodes.enc` - Backup with .env (contains encrypted credentials)
 
-**PBS:**
-```bash
-proxmox-backup-manager user create pulse-monitor@pbs
-proxmox-backup-manager acl update / Admin --auth-id pulse-monitor@pbs
-proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
-```
-
-## Updates
-
-Pulse automatically detects your deployment type and shows appropriate update instructions when a new version is available:
-
-### ProxmoxVE LXC Containers
-- Type `update` in the LXC console
-- The community script handles everything automatically
-- No manual intervention required
-
-### Docker
-- Pull the latest image: `docker pull rcourtman/pulse:latest`
-- Recreate the container with your existing settings
-- Data persists in the volume
-
-### Manual/Systemd Installations
-- Re-run the installation script: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash`
-- The script detects existing installations and updates them
-- Configuration is preserved
-
-### Why No In-App Updates?
-Pulse cannot update itself from the UI due to security constraints:
-- **ProxmoxVE**: The pulse user has no sudo access (security best practice)
-- **Docker**: Containers cannot restart themselves
-- **Systemd**: Service cannot restart itself without privileges
-
-This design ensures better security by requiring administrative access for updates.
-
-## Reverse Proxy Configuration
-
-Pulse requires WebSocket support for real-time updates. If using a reverse proxy (nginx, Apache, Caddy, etc.), you **MUST** enable WebSocket proxying.
-
-See the [Reverse Proxy Guide](REVERSE_PROXY.md) for detailed configurations.
-
-## Troubleshooting
-
-### Port Already in Use
-Check what's using the port:
-```bash
-sudo lsof -i :7655
-```
-
-### Permission Denied
-Ensure Pulse has write access:
-```bash
-sudo chown -R pulse:pulse /etc/pulse
-```
-
-### Changes Not Taking Effect
-Always restart after configuration changes:
-```bash
-sudo systemctl restart pulse  # or pulse-backend
-```
+3. **Version Control**
+   - **NEVER** commit `.env` or `nodes.enc`
+   - `system.json` can be committed if it doesn't contain sensitive data
+   - Use `.gitignore` to exclude sensitive files

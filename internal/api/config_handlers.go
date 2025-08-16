@@ -1365,6 +1365,8 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	// Get current values from running config
 	settings := config.SystemSettings{
 		PollingInterval:         int(h.config.PollingInterval.Seconds()),
+		PVEPollingInterval:      int(h.config.PVEPollingInterval.Seconds()),
+		PBSPollingInterval:      int(h.config.PBSPollingInterval.Seconds()),
 		BackendPort:             h.config.BackendPort,
 		FrontendPort:            h.config.FrontendPort,
 		AllowedOrigins:          h.config.AllowedOrigins,
@@ -1387,24 +1389,43 @@ func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *ht
 		return
 	}
 	
-	// Update polling interval using our persistence
+	// Update polling intervals
+	needsReload := false
+	
+	// Handle PVE polling interval
+	if settings.PVEPollingInterval > 0 {
+		h.config.PVEPollingInterval = time.Duration(settings.PVEPollingInterval) * time.Second
+		needsReload = true
+	} else if settings.PollingInterval > 0 {
+		// Fallback to legacy interval
+		h.config.PVEPollingInterval = time.Duration(settings.PollingInterval) * time.Second
+		needsReload = true
+	}
+	
+	// Handle PBS polling interval
+	if settings.PBSPollingInterval > 0 {
+		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
+		needsReload = true
+	} else if settings.PollingInterval > 0 {
+		// Fallback to legacy interval
+		h.config.PBSPollingInterval = time.Duration(settings.PollingInterval) * time.Second
+		needsReload = true
+	}
+	
+	// Keep legacy interval updated for compatibility
 	if settings.PollingInterval > 0 {
-		if err := config.UpdatePollingInterval(settings.PollingInterval); err != nil {
-			log.Error().Err(err).Msg("Failed to save polling interval")
-			http.Error(w, "Failed to save settings", http.StatusInternalServerError)
-			return
-		}
-		
-		// Update the running config
 		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
-		
-		// Trigger a monitor reload to apply the new polling interval
-		if h.reloadFunc != nil {
-			log.Info().Int("interval", settings.PollingInterval).Msg("Triggering monitor reload for new polling interval")
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor with new polling interval")
-				// Don't fail the request, the setting was saved
-			}
+	}
+	
+	// Trigger a monitor reload if intervals changed
+	if needsReload && h.reloadFunc != nil {
+		log.Info().
+			Int("pveInterval", settings.PVEPollingInterval).
+			Int("pbsInterval", settings.PBSPollingInterval).
+			Msg("Triggering monitor reload for new polling intervals")
+		if err := h.reloadFunc(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor with new polling intervals")
+			// Don't fail the request, the setting was saved
 		}
 	}
 	

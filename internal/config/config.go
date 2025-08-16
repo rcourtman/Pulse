@@ -1,3 +1,12 @@
+// Package config manages Pulse configuration from multiple sources.
+//
+// Configuration File Separation:
+//   - .env: Authentication credentials ONLY (PULSE_AUTH_USER, PULSE_AUTH_PASS, API_TOKEN)
+//   - system.json: Application settings (polling interval, timeouts, update settings, etc.)
+//   - nodes.enc: Encrypted node credentials (PVE/PBS passwords and tokens)
+//
+// This separation ensures security, clarity, and proper access control.
+// See docs/CONFIGURATION.md for detailed documentation.
 package config
 
 import (
@@ -56,7 +65,9 @@ type Config struct {
 	PBSInstances []PBSInstance
 
 	// Monitoring settings
-	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"` // Loaded from system.json
+	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"` // Deprecated - ignored, always 10s
+	PVEPollingInterval   time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // Deprecated - ignored, always 10s
+	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"10s"`
 	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
@@ -72,6 +83,7 @@ type Config struct {
 
 	// Security settings
 	APIToken             string `envconfig:"API_TOKEN"`
+	APITokenEnabled      bool   `envconfig:"API_TOKEN_ENABLED" default:"false"`
 	AuthUser             string `envconfig:"PULSE_AUTH_USER"`
 	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
@@ -185,13 +197,14 @@ func Load() (*Config, error) {
 		LogCompress:          true,
 		AllowedOrigins:       "", // Empty means no CORS headers (same-origin only)
 		IframeEmbeddingAllow: "SAMEORIGIN",
-		PollingInterval:      3 * time.Second,
+		PollingInterval:      10 * time.Second, // Deprecated - not used
+		PVEPollingInterval:   10 * time.Second, // Deprecated - not used
+		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
 		DiscoverySubnet:      "auto",
 	}
 	
 	// Initialize persistence
 	persistence := NewConfigPersistence(dataDir)
-	hasSystemConfig := false
 	if persistence != nil {
 		// Store global persistence for saving
 		globalPersistence = persistence
@@ -209,10 +222,26 @@ func Load() (*Config, error) {
 		
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-			hasSystemConfig = true
+			// Handle new separate intervals
+			if systemSettings.PVEPollingInterval > 0 {
+				cfg.PVEPollingInterval = time.Duration(systemSettings.PVEPollingInterval) * time.Second
+			} else if systemSettings.PollingInterval > 0 {
+				// Fallback to legacy interval for PVE
+				cfg.PVEPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
+			}
+			
+			if systemSettings.PBSPollingInterval > 0 {
+				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
+			} else if systemSettings.PollingInterval > 0 {
+				// Fallback to legacy interval for PBS
+				cfg.PBSPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
+			}
+			
+			// Keep legacy field for compatibility
 			if systemSettings.PollingInterval > 0 {
 				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
+			
 			if systemSettings.UpdateChannel != "" {
 				cfg.UpdateChannel = systemSettings.UpdateChannel
 			}
@@ -229,11 +258,43 @@ func Load() (*Config, error) {
 			if systemSettings.ConnectionTimeout > 0 {
 				cfg.ConnectionTimeout = time.Duration(systemSettings.ConnectionTimeout) * time.Second
 			}
+			if systemSettings.LogLevel != "" {
+				cfg.LogLevel = systemSettings.LogLevel
+			}
+			if systemSettings.DiscoverySubnet != "" {
+				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
+			}
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
 				Dur("interval", cfg.PollingInterval).
 				Str("updateChannel", cfg.UpdateChannel).
+				Str("logLevel", cfg.LogLevel).
 				Msg("Loaded system configuration")
+		} else {
+			// No system.json exists - create default one
+			log.Info().Msg("No system.json found, creating default")
+			defaultSettings := SystemSettings{
+				PollingInterval:   int(cfg.PollingInterval.Seconds()),
+				ConnectionTimeout: int(cfg.ConnectionTimeout.Seconds()),
+				AutoUpdateEnabled: false,
+			}
+			if err := persistence.SaveSystemSettings(defaultSettings); err != nil {
+				log.Warn().Err(err).Msg("Failed to create default system.json")
+			}
+		}
+	}
+	
+	// Ensure new polling intervals have defaults if not set
+	if cfg.PVEPollingInterval == 0 {
+		cfg.PVEPollingInterval = cfg.PollingInterval
+		if cfg.PVEPollingInterval == 0 {
+			cfg.PVEPollingInterval = 5 * time.Second
+		}
+	}
+	if cfg.PBSPollingInterval == 0 {
+		cfg.PBSPollingInterval = cfg.PollingInterval
+		if cfg.PBSPollingInterval == 0 {
+			cfg.PBSPollingInterval = 60 * time.Second
 		}
 	}
 	
@@ -255,7 +316,16 @@ func Load() (*Config, error) {
 	}
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
 		cfg.APIToken = apiToken
-		log.Info().Msg("Overriding API token from env var")
+		log.Info().Msg("Loaded API token from env var")
+	}
+	// Check if API token is enabled
+	if apiTokenEnabled := os.Getenv("API_TOKEN_ENABLED"); apiTokenEnabled != "" {
+		cfg.APITokenEnabled = apiTokenEnabled == "true" || apiTokenEnabled == "1"
+		log.Info().Bool("enabled", cfg.APITokenEnabled).Msg("API token enabled status from env var")
+	} else if cfg.APIToken != "" {
+		// If token exists but no explicit enabled flag, assume enabled for backwards compatibility
+		cfg.APITokenEnabled = true
+		log.Info().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser
@@ -276,52 +346,11 @@ func Load() (*Config, error) {
 		}
 		log.Info().Bool("is_hashed", IsPasswordHashed(authPass)).Int("length", len(authPass)).Msg("Loaded auth password from env var")
 	}
-	if updateChannel := os.Getenv("UPDATE_CHANNEL"); updateChannel != "" {
-		cfg.UpdateChannel = updateChannel
-		log.Info().Str("channel", updateChannel).Msg("Overriding update channel from env var")
-	} else if updateChannel := os.Getenv("PULSE_UPDATE_CHANNEL"); updateChannel != "" {
-		cfg.UpdateChannel = updateChannel
-		log.Info().Str("channel", updateChannel).Msg("Overriding update channel from PULSE_ env var")
-	}
+	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
+	// These settings now ONLY come from system.json to prevent confusion
+	// Only keeping essential deployment/infrastructure env vars
 	
-	// Auto-update settings from env vars
-	if autoUpdateEnabled := os.Getenv("AUTO_UPDATE_ENABLED"); autoUpdateEnabled != "" {
-		cfg.AutoUpdateEnabled = autoUpdateEnabled == "true" || autoUpdateEnabled == "1"
-		log.Info().Bool("enabled", cfg.AutoUpdateEnabled).Msg("Overriding auto-update enabled from env var")
-	}
-	if interval := os.Getenv("AUTO_UPDATE_CHECK_INTERVAL"); interval != "" {
-		if i, err := strconv.Atoi(interval); err == nil && i > 0 {
-			cfg.AutoUpdateCheckInterval = time.Duration(i) * time.Hour
-			log.Info().Int("hours", i).Msg("Overriding auto-update check interval from env var")
-		}
-	}
-	if updateTime := os.Getenv("AUTO_UPDATE_TIME"); updateTime != "" {
-		cfg.AutoUpdateTime = updateTime
-		log.Info().Str("time", updateTime).Msg("Overriding auto-update time from env var")
-	}
-	
-	// Other settings from env vars - only use if not already set from system.json
-	if pollingInterval := os.Getenv("POLLING_INTERVAL"); pollingInterval != "" {
-		// Only use env var if system.json doesn't exist (for backwards compatibility)
-		if !hasSystemConfig {
-			if i, err := strconv.Atoi(pollingInterval); err == nil && i > 0 {
-				cfg.PollingInterval = time.Duration(i) * time.Second
-				log.Info().Int("seconds", i).Msg("Using polling interval from env var (no system.json exists)")
-			}
-		} else {
-			log.Debug().Str("env_value", pollingInterval).Msg("Ignoring POLLING_INTERVAL env var - using system.json value")
-		}
-	}
-	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
-		if i, err := strconv.Atoi(connectionTimeout); err == nil && i > 0 {
-			cfg.ConnectionTimeout = time.Duration(i) * time.Second
-			log.Info().Int("seconds", i).Msg("Overriding connection timeout from env var")
-		}
-	}
-	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
-		cfg.AllowedOrigins = allowedOrigins
-		log.Info().Str("origins", allowedOrigins).Msg("Overriding allowed origins from env var")
-	} else if cfg.AllowedOrigins == "" {
+	if cfg.AllowedOrigins == "" {
 		// If not configured and we're in development mode (different ports for frontend/backend)
 		// allow localhost for development convenience
 		if os.Getenv("NODE_ENV") == "development" || os.Getenv("PULSE_DEV") == "true" {
@@ -329,16 +358,8 @@ func Load() (*Config, error) {
 			log.Info().Msg("Development mode: allowing localhost origins")
 		}
 	}
-	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
-		cfg.LogLevel = logLevel
-		log.Info().Str("level", logLevel).Msg("Overriding log level from env var")
-	}
-	
-	// Discovery settings from env vars
-	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
-		cfg.DiscoverySubnet = discoverySubnet
-		log.Info().Str("subnet", discoverySubnet).Msg("Overriding discovery subnet from env var")
-	}
+	// REMOVED: LOG_LEVEL and DISCOVERY_SUBNET env vars
+	// These settings now ONLY come from system.json to prevent confusion
 	
 	// Set log level
 	switch cfg.LogLevel {
@@ -380,7 +401,9 @@ func SaveConfig(cfg *Config) error {
 		AutoUpdateTime:          cfg.AutoUpdateTime,
 		AllowedOrigins:          cfg.AllowedOrigins,
 		ConnectionTimeout:       int(cfg.ConnectionTimeout.Seconds()),
-		APIToken:                cfg.APIToken,
+		LogLevel:                cfg.LogLevel,
+		DiscoverySubnet:         cfg.DiscoverySubnet,
+		// APIToken removed - now handled via .env only
 	}
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
 		return fmt.Errorf("failed to save system config: %w", err)

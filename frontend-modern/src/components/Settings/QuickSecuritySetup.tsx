@@ -35,7 +35,8 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   };
 
   const generateToken = (): string => {
-    const array = new Uint8Array(32);
+    // Generate 24 bytes (48 hex chars) to avoid hash detection issue with 64-char tokens
+    const array = new Uint8Array(24);
     crypto.getRandomValues(array);
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
@@ -89,17 +90,29 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
         throw new Error(error || 'Failed to setup security');
       }
 
-      // Response is successful, no need to parse result
+      // Parse response to check if setup was skipped
+      const result = await response.json();
+      
+      if (result.skipped) {
+        // Security was already configured, don't show credentials
+        showError('Security is already configured. Please remove existing security first if you want to reconfigure.');
+        if (props.onConfigured) {
+          props.onConfigured();
+        }
+        return;
+      }
+
+      // Response is successful and security was newly configured
       setCredentials(newCredentials);
       setShowCredentials(true);
       
       // Show success message
-      showSuccess('Security configured! Settings will apply after restart.');
+      showSuccess('Security configured! Save your credentials before continuing.');
       
-      // Notify parent component to refresh security status
-      if (props.onConfigured) {
-        props.onConfigured();
-      }
+      // DON'T notify parent yet - wait until user dismisses credentials
+      // if (props.onConfigured) {
+      //   props.onConfigured();
+      // }
     } catch (error) {
       showError(`Failed to setup security: ${error}`);
     } finally {
@@ -365,6 +378,23 @@ Important:
             <p class="text-xs text-green-600 dark:text-green-400 mt-2 italic">
               Save your credentials above - they won't be shown again.
             </p>
+          </div>
+          
+          <div class="flex justify-end">
+            <button
+              onClick={() => {
+                setShowCredentials(false);
+                // Now notify parent that configuration is complete
+                if (props.onConfigured) {
+                  props.onConfigured();
+                }
+                // Reload the page to trigger login screen
+                window.location.reload();
+              }}
+              class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Done - I've Saved My Credentials
+            </button>
           </div>
         </div>
       </Show>

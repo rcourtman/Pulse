@@ -1,4 +1,4 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo, createEffect } from 'solid-js';
 import type { Node } from '@/types/api';
 import { formatUptime, formatBytes } from '@/utils/format';
 import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
@@ -21,16 +21,28 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   }
   
   const isOnline = () => props.node.status === 'online' && props.node.uptime > 0 && props.node.connectionHealth !== 'error';
-  const cpuPercent = () => Math.round(props.node.cpu * 100);
-  const memPercent = () => {
+  
+  // Memoize CPU percent to avoid multiple calculations
+  const cpuPercent = createMemo(() => {
+    const percent = Math.round(props.node.cpu * 100);
+    return percent;
+  });
+  
+  // Track CPU updates (logging removed for cleaner output)
+  createEffect(() => {
+    cpuPercent(); // Just track the value changes
+  });
+  
+  const memPercent = createMemo(() => {
     if (!props.node.memory) return 0;
     // Use the pre-calculated usage percentage from the backend
     return Math.round(props.node.memory.usage || 0);
-  };
-  const diskPercent = () => {
+  });
+  
+  const diskPercent = createMemo(() => {
     if (!props.node.disk || props.node.disk.total === 0) return 0;
     return Math.round((props.node.disk.used / props.node.disk.total) * 100);
-  };
+  });
   
   // Calculate normalized load (load average / cpu count)
   const normalizedLoad = () => {

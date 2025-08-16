@@ -16,9 +16,10 @@ echo "Just edit frontend files and see changes instantly!"
 echo "Press Ctrl+C to stop"
 echo "========================================="
 
-# Kill any existing Pulse processes
+# Kill any existing Pulse processes (but NOT ttyd/tmux which run Claude Code!)
 sudo systemctl stop pulse-backend 2>/dev/null
-pkill -f "pulse" 2>/dev/null
+# Use exact match to only kill the "pulse" binary, not processes running FROM /opt/pulse
+pkill -x "pulse" 2>/dev/null
 
 # Start backend on port 7656 (one port up from normal)
 echo "Starting backend on port 7656..."

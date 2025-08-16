@@ -1,0 +1,486 @@
+import { Component, createSignal, Show, onMount } from 'solid-js';
+import { showSuccess, showError } from '@/utils/toast';
+import { copyToClipboard } from '@/utils/clipboard';
+
+export const FirstRunSetup: Component = () => {
+  const [username, setUsername] = createSignal('admin');
+  const [password, setPassword] = createSignal('');
+  const [confirmPassword, setConfirmPassword] = createSignal('');
+  const [useCustomPassword, setUseCustomPassword] = createSignal(false);
+  const [generatedPassword, setGeneratedPassword] = createSignal('');
+  const [, setApiToken] = createSignal('');
+  const [isSettingUp, setIsSettingUp] = createSignal(false);
+  const [showCredentials, setShowCredentials] = createSignal(false);
+  const [savedUsername, setSavedUsername] = createSignal('');
+  const [savedPassword, setSavedPassword] = createSignal('');
+  const [savedToken, setSavedToken] = createSignal('');
+  const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
+  
+  // Additional setup options
+  const [enableNotifications, setEnableNotifications] = createSignal(true);
+  const [darkMode, setDarkMode] = createSignal(
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  
+  onMount(() => {
+    // Apply dark mode immediately if selected
+    if (darkMode()) {
+      document.documentElement.classList.add('dark');
+    }
+  });
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let pass = '';
+    for (let i = 0; i < 16; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pass;
+  };
+
+  const generateToken = (): string => {
+    // Generate 24 bytes (48 hex chars) to avoid hash detection issue
+    const array = new Uint8Array(24);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleSetup = async () => {
+    // Validate custom password if used
+    if (useCustomPassword()) {
+      if (!password()) {
+        showError('Please enter a password');
+        return;
+      }
+      if (password() !== confirmPassword()) {
+        showError('Passwords do not match');
+        return;
+      }
+      if (password().length < 8) {
+        showError('Password must be at least 8 characters');
+        return;
+      }
+    }
+
+    setIsSettingUp(true);
+    
+    // Generate password if not custom
+    const finalPassword = useCustomPassword() ? password() : generatePassword();
+    if (!useCustomPassword()) {
+      setGeneratedPassword(finalPassword);
+    }
+    
+    // Generate API token
+    const token = generateToken();
+    setApiToken(token);
+    
+    try {
+      const response = await fetch('/api/security/quick-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username(),
+          password: finalPassword,
+          apiToken: token,
+          enableNotifications: enableNotifications(),
+          darkMode: darkMode()
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to setup security');
+      }
+      
+      const result = await response.json();
+      
+      if (result.skipped) {
+        // Shouldn't happen in first-run, but handle it
+        window.location.reload();
+        return;
+      }
+      
+      // Save credentials for display
+      setSavedUsername(username());
+      setSavedPassword(useCustomPassword() ? password() : generatedPassword());
+      setSavedToken(token);
+      
+      // Apply settings
+      localStorage.setItem('dark-mode', String(darkMode()));
+      localStorage.setItem('notifications-enabled', String(enableNotifications()));
+      
+      // Show credentials
+      setShowCredentials(true);
+      showSuccess('Security configured successfully!');
+      
+    } catch (error) {
+      showError(`Failed to setup security: ${error}`);
+    } finally {
+      setIsSettingUp(false);
+    }
+  };
+
+  const handleCopy = async (type: 'password' | 'token') => {
+    const value = type === 'password' ? savedPassword() : savedToken();
+    const success = await copyToClipboard(value);
+    if (success) {
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    }
+  };
+
+  const downloadCredentials = () => {
+    const credentials = `Pulse Security Credentials
+========================
+Generated: ${new Date().toISOString()}
+
+Web Interface Login:
+-------------------
+URL: ${window.location.origin}
+Username: ${savedUsername()}
+Password: ${savedPassword()}
+
+API Access:
+-----------
+API Token: ${savedToken()}
+
+Example API Usage:
+curl -H "X-API-Token: ${savedToken()}" ${window.location.origin}/api/state
+
+IMPORTANT: Keep these credentials secure!
+`;
+
+    const blob = new Blob([credentials], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pulse-credentials-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+      <div class="w-full max-w-2xl">
+        {/* Logo/Header */}
+        <div class="text-center mb-8">
+          <div class="flex items-center justify-center gap-2 mb-4">
+            <svg 
+              width="48" 
+              height="48" 
+              viewBox="0 0 256 256" 
+              xmlns="http://www.w3.org/2000/svg" 
+              class="pulse-logo"
+            >
+              <title>Pulse Logo</title>
+              <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122"/>
+              <circle class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]" cx="128" cy="128" r="84"/>
+              <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26"/>
+            </svg>
+            <span class="text-4xl font-bold text-gray-800 dark:text-gray-100">Pulse</span>
+          </div>
+          <p class="text-gray-600 dark:text-gray-400">
+            Let's set up your monitoring dashboard
+          </p>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
+          <Show when={!showCredentials()}>
+            <div class="p-8">
+              <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-6">
+                Initial Security Setup
+              </h2>
+              
+              <div class="space-y-6">
+                {/* Username */}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Admin Username
+                  </label>
+                  <input
+                    type="text"
+                    value={username()}
+                    onInput={(e) => setUsername(e.currentTarget.value)}
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="admin"
+                  />
+                </div>
+
+                {/* Password Setup */}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Admin Password
+                  </label>
+                  
+                  <div class="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setUseCustomPassword(false)}
+                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        !useCustomPassword() 
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Generate Secure Password
+                    </button>
+                    <button
+                      onClick={() => setUseCustomPassword(true)}
+                      class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        useCustomPassword() 
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Set Custom Password
+                    </button>
+                  </div>
+
+                  <Show when={useCustomPassword()}>
+                    <div class="space-y-3">
+                      <input
+                        type="password"
+                        value={password()}
+                        onInput={(e) => setPassword(e.currentTarget.value)}
+                        class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter password (min 8 characters)"
+                      />
+                      <input
+                        type="password"
+                        value={confirmPassword()}
+                        onInput={(e) => setConfirmPassword(e.currentTarget.value)}
+                        class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Confirm password"
+                      />
+                    </div>
+                  </Show>
+
+                  <Show when={!useCustomPassword()}>
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                      <p class="text-sm text-blue-700 dark:text-blue-300">
+                        A secure 16-character password will be generated for you. 
+                        Make sure to save it when shown!
+                      </p>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* Additional Settings */}
+                <div class="space-y-4">
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Initial Configuration
+                  </h3>
+                  
+                  {/* Enable Notifications */}
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="text-sm text-gray-700 dark:text-gray-300">
+                        Enable Desktop Notifications
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-500">
+                        Get notified about alerts and important events
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEnableNotifications(!enableNotifications())}
+                      class={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        enableNotifications() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}
+                    >
+                      <span
+                        class={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          enableNotifications() ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  
+                  {/* Dark Mode */}
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="text-sm text-gray-700 dark:text-gray-300">
+                        Dark Mode
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-500">
+                        Use dark theme for the dashboard
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDarkMode(!darkMode());
+                        if (!darkMode()) {
+                          document.documentElement.classList.remove('dark');
+                        } else {
+                          document.documentElement.classList.add('dark');
+                        }
+                      }}
+                      class={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        darkMode() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}
+                    >
+                      <span
+                        class={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          darkMode() ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Info Box */}
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
+                  <h3 class="font-medium text-gray-800 dark:text-gray-200">
+                    What happens next:
+                  </h3>
+                  <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li class="flex items-start">
+                      <span class="text-green-500 mr-2">✓</span>
+                      <span>Your admin account will be created</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-green-500 mr-2">✓</span>
+                      <span>An API token will be generated for automation</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-green-500 mr-2">✓</span>
+                      <span>All API endpoints will be protected</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-green-500 mr-2">✓</span>
+                      <span>You'll need to login to access the dashboard</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Setup Button */}
+                <button
+                  onClick={handleSetup}
+                  disabled={isSettingUp()}
+                  class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
+                >
+                  {isSettingUp() ? 'Setting up...' : 'Complete Setup'}
+                </button>
+              </div>
+            </div>
+          </Show>
+
+          <Show when={showCredentials()}>
+            <div class="p-8">
+              <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                  Setup Complete!
+                </h2>
+                <p class="text-gray-600 dark:text-gray-400">
+                  Save your credentials now - they won't be shown again
+                </p>
+              </div>
+
+              <div class="space-y-4">
+                {/* Username */}
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Username
+                  </label>
+                  <div class="font-mono text-lg text-gray-900 dark:text-gray-100">
+                    {savedUsername()}
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Password
+                  </label>
+                  <div class="flex items-center justify-between">
+                    <code class="font-mono text-lg text-gray-900 dark:text-gray-100 break-all">
+                      {savedPassword()}
+                    </code>
+                    <button
+                      onClick={() => handleCopy('password')}
+                      class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                      title="Copy password"
+                    >
+                      {copied() === 'password' ? (
+                        <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* API Token */}
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                  <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    API Token (for automation)
+                  </label>
+                  <div class="flex items-center justify-between">
+                    <code class="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">
+                      {savedToken()}
+                    </code>
+                    <button
+                      onClick={() => handleCopy('token')}
+                      class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                      title="Copy token"
+                    >
+                      {copied() === 'token' ? (
+                        <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Warning */}
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <p class="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                    ⚠️ Important
+                  </p>
+                  <p class="text-xs text-amber-700 dark:text-amber-300">
+                    These credentials will never be shown again. Save them in a password manager now!
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div class="flex gap-3">
+                  <button
+                    onClick={downloadCredentials}
+                    class="flex-1 py-3 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Credentials
+                  </button>
+                  <button
+                    onClick={() => window.location.reload()}
+                    class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Continue to Login
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+};

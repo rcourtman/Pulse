@@ -104,6 +104,17 @@ func runServer() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Start config watcher for .env file changes
+	configWatcher, err := config.NewConfigWatcher(cfg)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create config watcher, .env changes will require restart")
+	} else {
+		if err := configWatcher.Start(); err != nil {
+			log.Warn().Err(err).Msg("Failed to start config watcher")
+		}
+		defer configWatcher.Stop()
+	}
+	
 	// Start server
 	go func() {
 		log.Info().
@@ -115,12 +126,63 @@ func runServer() {
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Setup signal handlers
 	sigChan := make(chan os.Signal, 1)
+	reloadChan := make(chan os.Signal, 1)
+	
+	// SIGTERM and SIGINT for shutdown
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
-
-	log.Info().Msg("Shutting down server...")
+	// SIGHUP for config reload
+	signal.Notify(reloadChan, syscall.SIGHUP)
+	
+	// Handle signals
+	for {
+		select {
+		case <-reloadChan:
+			log.Info().Msg("Received SIGHUP, reloading configuration...")
+			
+			// Reload .env manually (watcher will also pick it up)
+			if configWatcher != nil {
+				configWatcher.ReloadConfig()
+			}
+			
+			// Reload system.json
+			persistence := config.NewConfigPersistence(cfg.DataPath)
+			if persistence != nil {
+				if sysConfig, err := persistence.LoadSystemSettings(); err == nil {
+					// Update polling interval if changed
+					if sysConfig.PollingInterval > 0 {
+						oldInterval := cfg.PollingInterval
+						cfg.PollingInterval = time.Duration(sysConfig.PollingInterval) * time.Second
+						if cfg.PollingInterval != oldInterval {
+							log.Info().
+								Dur("old", oldInterval).
+								Dur("new", cfg.PollingInterval).
+								Msg("Polling interval updated")
+							// Update monitor's polling interval
+							if reloadableMonitor != nil {
+								reloadableMonitor.UpdatePollingInterval(cfg.PollingInterval)
+							}
+						}
+					}
+					// Could reload other system.json settings here
+					log.Info().Msg("Reloaded system configuration")
+				} else {
+					log.Error().Err(err).Msg("Failed to reload system.json")
+				}
+			}
+			
+			// Could reload other configs here (alerts.json, webhooks.json, etc.)
+			
+			log.Info().Msg("Configuration reload complete")
+			
+		case <-sigChan:
+			log.Info().Msg("Shutting down server...")
+			goto shutdown
+		}
+	}
+	
+shutdown:
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -133,6 +195,11 @@ func runServer() {
 	// Stop monitoring
 	cancel()
 	reloadableMonitor.Stop()
+	
+	// Stop config watcher
+	if configWatcher != nil {
+		configWatcher.Stop()
+	}
 
 	log.Info().Msg("Server stopped")
 }
