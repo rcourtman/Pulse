@@ -798,11 +798,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Try to use efficient cluster/resources endpoint
 			if !m.pollVMsAndContainersEfficient(ctx, instanceName, client) {
 				// Fall back to old method if cluster/resources fails
+				// Use WithNodes versions to avoid duplicate GetNodes calls
 				if instanceCfg.MonitorVMs {
-					m.pollVMs(ctx, instanceName, client)
+					m.pollVMsWithNodes(ctx, instanceName, client, nodes)
 				}
 				if instanceCfg.MonitorContainers {
-					m.pollContainers(ctx, instanceName, client)
+					m.pollContainersWithNodes(ctx, instanceName, client, nodes)
 				}
 			}
 		}
@@ -814,7 +815,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		case <-ctx.Done():
 			return
 		default:
-			m.pollStorage(ctx, instanceName, client)
+			m.pollStorageWithNodes(ctx, instanceName, client, nodes)
 		}
 	}
 
@@ -840,8 +841,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				// Poll backup tasks
 				m.pollBackupTasks(backupCtx, instanceName, client)
 
-				// Poll storage backups
-				m.pollStorageBackups(backupCtx, instanceName, client)
+				// Poll storage backups - pass nodes to avoid duplicate API calls
+				m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes)
 
 				// Poll guest snapshots
 				m.pollGuestSnapshots(backupCtx, instanceName, client)
@@ -997,6 +998,11 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 		return
 	}
 
+	m.pollVMsWithNodes(ctx, instanceName, client, nodes)
+}
+
+// pollVMsWithNodes polls VMs using a provided nodes list to avoid duplicate GetNodes calls
+func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	var allVMs []models.VM
 	for _, node := range nodes {
 		vms, err := client.GetVMs(ctx, node.Node)
@@ -1133,6 +1139,12 @@ func (m *Monitor) pollContainers(ctx context.Context, instanceName string, clien
 		return
 	}
 
+	m.pollContainersWithNodes(ctx, instanceName, client, nodes)
+}
+
+// pollContainersWithNodes polls containers using a provided nodes list to avoid duplicate GetNodes calls
+func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
+
 	var allContainers []models.Container
 	for _, node := range nodes {
 		containers, err := client.GetContainers(ctx, node.Node)
@@ -1247,6 +1259,12 @@ func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client P
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes for storage polling")
 		return
 	}
+
+	m.pollStorageWithNodes(ctx, instanceName, client, nodes)
+}
+
+// pollStorageWithNodes polls storage using a provided nodes list to avoid duplicate GetNodes calls
+func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 
 	// Get cluster storage configuration for shared/enabled status
 	clusterStorages, err := client.GetAllStorage(ctx)
@@ -1694,6 +1712,12 @@ func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, c
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes for backup polling")
 		return
 	}
+
+	m.pollStorageBackupsWithNodes(ctx, instanceName, client, nodes)
+}
+
+// pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
+func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 
 	var allBackups []models.StorageBackup
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
