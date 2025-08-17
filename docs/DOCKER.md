@@ -11,11 +11,31 @@ docker run -d \
   rcourtman/pulse:latest
 ```
 
-Access at: `http://your-server:7655`
+1. Access at `http://your-server:7655`
+2. **Complete the mandatory security setup** on first access
+3. Save your credentials - they won't be shown again!
+
+## First-Time Setup
+
+When you first access Pulse, you'll see the security setup wizard:
+
+1. **Create Admin Account**
+   - Choose a username (default: admin)
+   - Set a password or use the generated one
+   - An API token is automatically generated
+
+2. **Save Your Credentials**
+   - Download or copy them immediately
+   - They won't be shown again after setup
+
+3. **Access Dashboard**
+   - Click "Continue to Login"
+   - Use your new credentials to sign in
 
 ## Docker Compose
 
-### Basic Configuration
+### Basic Setup (Recommended for First-Time Users)
+
 ```yaml
 services:
   pulse:
@@ -31,9 +51,14 @@ volumes:
   pulse_data:
 ```
 
-### With Authentication
+Then:
+1. Run: `docker compose up -d`
+2. Access: `http://your-server:7655`
+3. Complete the security setup wizard
 
-⚠️ **CRITICAL**: Docker Compose requires escaping `$` characters in bcrypt hashes!
+### Pre-Configured Authentication (Advanced)
+
+If you want to skip the setup wizard, you can pre-configure authentication:
 
 ```yaml
 services:
@@ -45,19 +70,25 @@ services:
     volumes:
       - pulse_data:/data
     environment:
-      # IMPORTANT: Use $$ instead of $ in docker-compose.yml!
       PULSE_AUTH_USER: 'admin'
-      PULSE_AUTH_PASS: '$$2a$$12$$YourHashHere...'  # <-- Note the $$
-      API_TOKEN: 'your-48-char-hex-token'
+      # Generate hash: docker run --rm -it rcourtman/pulse:latest pulse hash-password
+      PULSE_AUTH_PASS: '$$2a$$12$$...'  # IMPORTANT: Use $$ in docker-compose.yml!
+      API_TOKEN: 'your-48-char-hex-token'  # Generate: openssl rand -hex 24
     restart: unless-stopped
 
 volumes:
   pulse_data:
 ```
 
-### Alternative: Using .env File (Recommended)
+⚠️ **Critical for docker-compose.yml**: 
+- Bcrypt hashes contain `$` characters
+- Docker Compose treats `$` as variable expansion
+- **You MUST escape them as `$$`** in docker-compose.yml
+- Example: `$2a$12$abc...` becomes `$$2a$$12$$abc...`
 
-Create `.env` file (no escaping needed):
+### Using External .env File (Cleaner Approach)
+
+Create `.env` file (no escaping needed here):
 ```env
 PULSE_AUTH_USER=admin
 PULSE_AUTH_PASS=$2a$12$YourHashHere...
@@ -81,235 +112,159 @@ volumes:
   pulse_data:
 ```
 
-## Environment Variables
+## Generating Credentials
 
-### Security Configuration
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PULSE_AUTH_USER` | Username for web UI | `admin` |
-| `PULSE_AUTH_PASS` | Bcrypt password hash (60 chars) | `$2a$12$...` |
-| `API_TOKEN` | API token (plain text) | 48 hex characters |
-| `ALLOW_UNPROTECTED_EXPORT` | Allow export without auth | `false` |
+### Password Hash
+```bash
+# Interactive password prompt
+docker run --rm -it rcourtman/pulse:latest pulse hash-password
 
-### Network Configuration
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` or `FRONTEND_PORT` | Web UI port | `7655` |
-| `ALLOWED_ORIGINS` | CORS allowed origins | none (same-origin) |
+# Or with password as argument
+docker run --rm rcourtman/pulse:latest pulse hash-password YourPassword123
+```
 
-### System Configuration
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `POLLING_INTERVAL` | Seconds between node checks | `3` |
-| `CONNECTION_TIMEOUT` | Connection timeout in seconds | `10` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `UPDATE_CHANNEL` | Update channel (stable/rc) | `stable` |
+### API Token
+```bash
+# Generate 48-character hex token
+openssl rand -hex 24
+```
 
-## Volume Management
+## Data Persistence
 
-### Data Persistence
 All configuration and data is stored in `/data`:
-- `.env` - Authentication credentials (if using Quick Setup)
+- `.env` - Authentication credentials (if using setup wizard)
 - `*.enc` - Encrypted node credentials
 - `*.json` - Configuration files
-- `metrics/` - Historical metrics data
+- `.encryption.key` - Auto-generated encryption key
 
 ### Backup
 ```bash
-# Backup volume
-docker run --rm \
-  -v pulse_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/pulse-backup.tar.gz -C /data .
-
-# Restore volume
-docker run --rm \
-  -v pulse_data:/data \
-  -v $(pwd):/backup \
-  alpine tar xzf /backup/pulse-backup.tar.gz -C /data
+docker run --rm -v pulse_data:/data -v $(pwd):/backup alpine tar czf /backup/pulse-backup.tar.gz -C /data .
 ```
 
-## Security Setup (Mandatory)
-
-### First-Time Setup
-1. Start container and access http://your-server:7655
-2. You'll be automatically directed to the security setup wizard
-3. Create your admin username and password
-4. Save the generated API token for automation
-5. Credentials are saved to `/data/.env`
-6. Your existing nodes and settings (if any) are preserved
-
-### Alternative: Pre-configured Authentication
-1. Generate password hash:
-   ```bash
-   # Using online bcrypt generator or another tool
-   # Hash must be exactly 60 characters
-   ```
-
-2. Generate API token:
-   ```bash
-   # Generate random token (24 bytes = 48 hex chars)
-   openssl rand -hex 24
-   ```
-
-3. Add to docker-compose.yml (remember to escape $ as $$)
-
-### Using Existing .env
-If you have a `.env` file from another installation:
+### Restore
 ```bash
-docker cp .env pulse:/data/.env
-docker restart pulse
+docker run --rm -v pulse_data:/data -v $(pwd):/backup alpine tar xzf /backup/pulse-backup.tar.gz -C /data
+```
+
+## Network Discovery
+
+Discovery runs automatically but may detect Docker's internal network.
+
+To configure the correct subnet:
+1. Let Pulse start and complete setup
+2. Go to Settings → System
+3. Set Discovery Subnet (e.g., `192.168.1.0/24`)
+4. Save and restart container
+
+Or set via environment:
+```yaml
+environment:
+  PULSE_DISCOVERY_SUBNET: "192.168.1.0/24"
 ```
 
 ## Common Issues
 
-### Cannot Login
-1. **Check hash length**: Must be exactly 60 characters
-2. **Check escaping**: In docker-compose.yml, use `$$` instead of `$`
-3. **Check quotes**: Hash must be in single quotes
-4. **Check logs**: `docker logs pulse | grep -i auth`
+### Can't Access After Upgrade
+If upgrading from pre-v4.4.0:
+1. You'll see the security setup wizard
+2. Complete the setup - your nodes are preserved
+3. Use your new credentials to login
 
-### No .env File
-**This is normal** when using environment variables. The .env file is only created when:
-- Using Quick Security Setup
-- Changing password through UI
-- Manually creating it
-
-### Container Won't Start
+### Lost Credentials
+If you've lost your credentials:
 ```bash
-# Check logs
-docker logs pulse
-
-# Common issues:
-# - Port already in use
-# - Volume permission issues
-# - Invalid environment variables
-```
-
-### Password Change Fails
-For v4.3.7 and earlier, password changes fail with sudo error. Update to v4.3.8+:
-```bash
-docker pull rcourtman/pulse:latest
+# Stop container
 docker stop pulse
-docker rm pulse
-# Re-run docker run command
+
+# Remove auth configuration
+docker exec pulse rm /data/.env
+
+# Restart and go through setup again
+docker restart pulse
 ```
 
-## Networking
+### Setup Wizard Not Showing
+This happens if you have auth environment variables set:
+1. Remove environment variables from docker-compose.yml
+2. Recreate the container
+3. Access the UI to see the setup wizard
 
-### Network Discovery Configuration
+### Password Hash Issues
+Common problems:
+- **Hash truncated**: Must be exactly 60 characters
+- **Not escaped in docker-compose**: Use `$$` instead of `$`
+- **Wrong format**: Must start with `$2a$`, `$2b$`, or `$2y$`
 
-Docker containers use their internal network by default (e.g., 172.17.0.0/24), which prevents proper discovery of Proxmox nodes on your LAN. To fix this:
+## Security Best Practices
 
-1. After first start, edit the configuration:
-   ```bash
-   docker exec pulse sh -c 'cat > /data/system.json << EOF
-   {
-     "pollingInterval": 10,
-     "discoverySubnet": "192.168.1.0/24"  # Your LAN subnet
-   }
-   EOF'
-   ```
+1. **Always use HTTPS in production** - Use a reverse proxy (nginx, Traefik, Caddy)
+2. **Strong passwords** - Use the generated password or 16+ characters
+3. **Protect API tokens** - Treat them like passwords
+4. **Regular backups** - Backup the `/data` volume regularly
+5. **Network isolation** - Don't expose port 7655 directly to the internet
 
-2. Restart the container:
-   ```bash
-   docker restart pulse
-   ```
+## Environment Variables Reference
 
-Discovery will now scan your specified subnet every 5 minutes.
+### Authentication
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `PULSE_AUTH_USER` | Admin username | `admin` |
+| `PULSE_AUTH_PASS` | Bcrypt password hash | `$2a$12$...` (60 chars) |
+| `API_TOKEN` | API access token | 48 hex characters |
 
-### Using Host Network
-Alternatively, use host network mode for automatic LAN detection:
-```bash
-docker run -d \
-  --name pulse \
-  --network host \
-  -v pulse_data:/data \
-  --restart unless-stopped \
-  rcourtman/pulse:latest
+### Network
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Web UI port | `7655` |
+| `ALLOWED_ORIGINS` | CORS origins | Same-origin only |
+| `PULSE_DISCOVERY_SUBNET` | Network to scan | Auto-detect |
+
+### System
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `POLLING_INTERVAL` | Check interval (seconds) | `10` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+| `TZ` | Timezone | `UTC` |
+
+## Advanced Configuration
+
+### Custom Network
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    networks:
+      - monitoring
+    # ... rest of config
+
+networks:
+  monitoring:
+    driver: bridge
 ```
 
-### Behind a Reverse Proxy
-See [Reverse Proxy Guide](REVERSE_PROXY.md) for nginx, Traefik, Caddy configurations.
-
-## Updates
-
-### Manual Update
-```bash
-# Pull latest image
-docker pull rcourtman/pulse:latest
-
-# Stop and remove old container
-docker stop pulse
-docker rm pulse
-
-# Start new container with same settings
-docker run -d \
-  --name pulse \
-  -p 7655:7655 \
-  -v pulse_data:/data \
-  --restart unless-stopped \
-  rcourtman/pulse:latest
+### Resource Limits
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    # ... rest of config
 ```
 
-### Docker Compose Update
-```bash
-docker-compose pull
-docker-compose up -d
-```
-
-### Automatic Updates
-Use Watchtower or similar tools:
-```bash
-docker run -d \
-  --name watchtower \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --schedule "0 0 3 * * *" \
-  pulse
-```
-
-## Tips and Best Practices
-
-1. **Always use named volumes** for data persistence
-2. **Escape $ characters** in docker-compose.yml
-3. **Use .env files** for cleaner configuration
-4. **Set resource limits** for production:
-   ```yaml
-   deploy:
-     resources:
-       limits:
-         cpus: '2'
-         memory: 512M
-   ```
-5. **Enable auto-restart** with `--restart unless-stopped`
-6. **Regular backups** of the data volume
-7. **Monitor logs** with `docker logs -f pulse`
-
-## Debugging
-
-### Enable Debug Logging
-```bash
-docker run -d \
-  --name pulse \
-  -p 7655:7655 \
-  -v pulse_data:/data \
-  -e LOG_LEVEL=debug \
-  --restart unless-stopped \
-  rcourtman/pulse:latest
-```
-
-### Access Container Shell
-```bash
-docker exec -it pulse sh
-```
-
-### View Environment
-```bash
-docker exec pulse env | grep -E "PULSE|API"
-```
-
-### Check Version
-```bash
-curl http://localhost:7655/api/version
+### Health Check
+```yaml
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7655/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # ... rest of config
 ```
