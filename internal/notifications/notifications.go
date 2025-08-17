@@ -195,7 +195,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	
-	log.Debug().
+	log.Info().
 		Str("alertID", alert.ID).
 		Bool("enabled", n.enabled).
 		Int("webhooks", len(n.webhooks)).
@@ -210,7 +210,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	// Check cooldown
 	lastTime, exists := n.lastNotified[alert.ID]
 	if exists && time.Since(lastTime) < n.cooldown {
-		log.Debug().
+		log.Info().
 			Str("alertID", alert.ID).
 			Dur("timeSince", time.Since(lastTime)).
 			Dur("cooldown", n.cooldown).
@@ -445,7 +445,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				otherAlerts = append(otherAlerts, fmt.Sprintf("• ... and %d more", len(alertList)-4))
 			}
 			if len(otherAlerts) > 0 {
-				alert.Message = fmt.Sprintf("%s\n\n🔔 Other alerts:\n%s", summary, strings.Join(otherAlerts, "\n"))
+				alert.Message = fmt.Sprintf("%s\\n\\n🔔 Other alerts:\\n%s", summary, strings.Join(otherAlerts, "\\n"))
 			}
 		}
 		
