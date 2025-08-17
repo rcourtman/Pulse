@@ -324,7 +324,7 @@ main() {
         echo "2) Reinstall"
         echo "3) Remove"
         echo "4) Cancel"
-        read -p "Select option [1-4]: " choice
+        read -p "Select option [1-4]: " choice < /dev/tty
         
         case $choice in
             1)
