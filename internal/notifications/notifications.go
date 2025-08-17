@@ -446,17 +446,10 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		
 		data := n.prepareWebhookData(alert, nil)
 		
-		// For Telegram, extract chat_id from URL if present
-		if webhook.Service == "telegram" {
-			if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
-				data.ChatID = chatID
-			} else if err != nil {
-				log.Error().
-					Err(err).
-					Str("webhook", webhook.Name).
-					Msg("Failed to extract Telegram chat_id for grouped notification")
-				return // Skip this webhook
-			}
+		// For Telegram webhooks (check URL pattern since service might be empty)
+		if strings.Contains(webhook.URL, "api.telegram.org") {
+			// Don't need to extract chat_id from URL since it's in the template
+			// The template already has the chat_id embedded
 		}
 		
 		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
@@ -536,7 +529,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	}
 	
 	// Use generic payload if no service or template not found
-	if webhook.Service == "" || webhook.Service == "generic" || jsonData == nil {
+	// But ONLY if jsonData hasn't been set yet (from custom template)
+	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
 			"alerts": alertList,
