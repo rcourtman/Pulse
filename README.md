@@ -48,8 +48,12 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 # Option B: Docker
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
-# Option C: Manual (existing systems)
+# Option C: Manual install (latest stable)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+
+# Install specific version or release channel
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc     # Latest RC
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.4.0  # Specific version
 ```
 
 ### Initial Setup
@@ -170,6 +174,35 @@ For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
   - Export/import requires authentication when configured
 
 See [Security Documentation](docs/SECURITY.md) for details.
+
+## Updating
+
+### Automatic Updates
+Pulse checks for updates based on your configured channel (stable or RC). Updates are notified in the UI but must be installed manually for security.
+
+### Manual Update via Script
+```bash
+# Update to latest stable
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+
+# Update to latest RC/pre-release  
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc
+
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.4.0-rc.1
+```
+
+### Docker Updates
+```bash
+# Latest stable
+docker pull rcourtman/pulse:latest
+
+# Latest RC
+docker pull rcourtman/pulse:rc
+
+# Specific version
+docker pull rcourtman/pulse:v4.4.0-rc.1
+```
 
 ## Configuration
 
