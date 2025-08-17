@@ -177,10 +177,18 @@ See [Security Documentation](docs/SECURITY.md) for details.
 
 ## Updating
 
-### Automatic Updates
-Pulse checks for updates based on your configured channel (stable or RC). Updates are notified in the UI but must be installed manually for security.
+### Update Notifications
+Pulse checks for updates and displays notifications in the UI when new versions are available. For security reasons, updates must be installed manually using the appropriate method for your deployment.
 
-### Manual Update via Script
+### ProxmoxVE LXC Container
+If you installed Pulse using the ProxmoxVE Helper Script:
+```bash
+# Simply type 'update' in the LXC console
+update
+```
+The ProxmoxVE script handles everything automatically.
+
+### Manual Installation (systemd)
 ```bash
 # Update to latest stable
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
