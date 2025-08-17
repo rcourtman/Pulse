@@ -442,6 +442,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
 			}
 			if len(otherAlerts) > 0 {
+				// For custom templates, we need to escape newlines since they're likely
+				// used in shell commands or other contexts that need escaping
 				alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
 			}
 		}
@@ -493,7 +495,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		}
 		
 		if templateFound {
-			// Modify message if multiple alerts - show full list with escaped newlines
+			// Modify message if multiple alerts - but format differently for Discord
 			if len(alertList) > 1 {
 				summary := alert.Message
 				otherAlerts := []string{}
@@ -501,7 +503,15 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
 				}
 				if len(otherAlerts) > 0 {
-					alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
+					// For Discord, format as a single line list to avoid newline issues
+					// Discord embeds don't render \n in description anyway
+					if webhook.Service == "discord" {
+						// Use comma-separated list for Discord
+						alert.Message = fmt.Sprintf("%s | 🔔 %d alerts: %s", summary, len(alertList), strings.Join(otherAlerts, ", "))
+					} else {
+						// For other services, escape newlines properly
+						alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
+					}
 				}
 			}
 			
