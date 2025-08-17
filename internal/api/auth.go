@@ -252,14 +252,30 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								// Generate CSRF token
 								csrfToken := generateCSRFToken(token)
 								
+								// Detect if we're behind a proxy/tunnel (Cloudflare, reverse proxy, etc)
+								isProxied := r.Header.Get("X-Forwarded-For") != "" || 
+									r.Header.Get("X-Real-IP") != "" ||
+									r.Header.Get("CF-Ray") != "" || // Cloudflare
+									r.Header.Get("X-Forwarded-Proto") != ""
+								
+								// Determine SameSite policy based on proxy detection
+								sameSitePolicy := http.SameSiteLaxMode
+								if isProxied {
+									// For proxied connections, use None to allow cross-origin cookies
+									sameSitePolicy = http.SameSiteNoneMode
+								}
+								
+								// Determine if connection is secure (required for SameSite=None)
+								isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+								
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_session",
 									Value:    token,
 									Path:     "/",
 									HttpOnly: true,
-									Secure:   r.TLS != nil,
-									SameSite: http.SameSiteLaxMode,
+									Secure:   isSecure,
+									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
 								
@@ -268,8 +284,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									Name:     "pulse_csrf",
 									Value:    csrfToken,
 									Path:     "/",
-									Secure:   r.TLS != nil,
-									SameSite: http.SameSiteStrictMode,
+									Secure:   isSecure,
+									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
 								
