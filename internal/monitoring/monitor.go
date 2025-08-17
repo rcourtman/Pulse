@@ -924,6 +924,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			
 			allVMs = append(allVMs, vm)
 			
+			// Check thresholds for alerts
+			m.alertManager.CheckGuest(vm, instanceName)
+			
 		} else if res.Type == "lxc" {
 			// Skip templates if configured
 			if res.Template == 1 {
@@ -966,6 +969,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 			
 			allContainers = append(allContainers, container)
+			
+			// Check thresholds for alerts
+			m.alertManager.CheckGuest(container, instanceName)
 		}
 	}
 	
@@ -1241,6 +1247,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			m.metricsHistory.AddGuestMetric(modelCT.ID, "netout", float64(modelCT.NetworkOut), now)
 
 			// Check thresholds for alerts
+			log.Info().Str("container", modelCT.Name).Msg("Checking container alerts")
 			m.alertManager.CheckGuest(modelCT, instanceName)
 		}
 	}
