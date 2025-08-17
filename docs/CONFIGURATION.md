@@ -116,11 +116,16 @@ For backwards compatibility, some settings can be overridden via environment var
 1. **Authentication variables (from .env)** - Always highest priority
    - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS`, `API_TOKEN`
 
-2. **System settings (from system.json)** - Normal priority
+2. **Network binding variables** - For reverse proxy setups
+   - `BACKEND_HOST` - IP address to bind to (default: `0.0.0.0`)
+     - Set to `127.0.0.1` or `localhost` to only listen on localhost (for reverse proxy)
+   - `FRONTEND_PORT` - Port to listen on (default: `7655`)
+
+3. **System settings (from system.json)** - Normal priority
    - If system.json exists, it takes precedence
    - If missing, environment variables are checked
 
-3. **Legacy environment variables** - Lowest priority (deprecated)
+4. **Legacy environment variables** - Lowest priority (deprecated)
    - `POLLING_INTERVAL` - Only used if system.json doesn't exist
    - `CONNECTION_TIMEOUT` - Can override system.json value
    - `ALLOWED_ORIGINS` - Can override system.json value
