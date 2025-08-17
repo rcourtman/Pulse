@@ -612,7 +612,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				ResourceName: resourceName,
 				Node:         node,
 				Instance:     instance,
-				Message:      fmt.Sprintf("%s %s usage at %.1f%% (trigger: %.0f%%, clear: %.0f%%)", resourceType, metricType, value, threshold.Trigger, threshold.Clear),
+				Message: func() string {
+					if metricType == "usage" {
+						return fmt.Sprintf("%s at %.1f%%", resourceType, value)
+					}
+					return fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
+				}(),
 				Value:        value,
 				Threshold:    threshold.Trigger,
 				StartTime:    time.Now(),
