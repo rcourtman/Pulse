@@ -763,8 +763,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 			
-			// Apply stricter rate limiting for auth endpoints
-			if strings.Contains(req.URL.Path, "/api/security/") || req.URL.Path == "/api/login" {
+			// Apply stricter rate limiting for auth endpoints (but not status checks)
+			if (strings.Contains(req.URL.Path, "/api/security/") && req.URL.Path != "/api/security/status") || req.URL.Path == "/api/login" {
 				clientIP := GetClientIP(req)
 				// Use auth limiter for security endpoints (10 per minute)
 				if !authLimiter.Allow(clientIP) {
