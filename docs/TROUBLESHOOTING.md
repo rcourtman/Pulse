@@ -35,11 +35,12 @@ docker exec pulse sh -c "echo \"PULSE_AUTH_PASS='new-hash'\" >> /data/.env"
 docker restart pulse
 ```
 
-#### Quick Security Setup not accessible
-**Symptoms**: Can't access setup wizard, redirected to login
+#### Can't access Pulse - stuck at login
+**Symptoms**: Can't access Pulse after upgrade, no credentials work
 
 **Solution**: 
-- Start container WITHOUT auth environment variables
+- If upgrading from pre-v4.4.0, you need to complete security setup first
+- Clear browser cache and cookies
 - Access http://your-ip:7655 to see setup wizard
 - Complete setup, then restart container
 
