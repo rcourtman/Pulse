@@ -1516,6 +1516,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Msg("PBS connected (version unavailable but datastores accessible)")
 		} else {
 			// Both failed - PBS is offline
+			pbsInst.Status = "offline"
+			pbsInst.ConnectionHealth = "error"
 			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
 			m.state.SetConnectionHealth("pbs-"+instanceName, false)
