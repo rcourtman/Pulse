@@ -34,6 +34,10 @@ export const Login: Component<LoginProps> = (props) => {
         const data = await response.json();
         console.log('[Login] Auth status data:', data);
         setAuthStatus(data);
+      } else if (response.status === 429) {
+        // Rate limited - wait a bit and assume auth is configured
+        console.log('[Login] Rate limited, assuming auth is configured');
+        setAuthStatus({ hasAuthentication: true });
       } else {
         console.log('[Login] Auth check failed, assuming no auth');
         // On error, assume no auth configured
