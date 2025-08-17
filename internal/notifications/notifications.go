@@ -493,9 +493,16 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		}
 		
 		if templateFound {
-			// Modify message if multiple alerts
+			// Modify message if multiple alerts - show full list with escaped newlines
 			if len(alertList) > 1 {
-				alert.Message = fmt.Sprintf("%s (and %d more alerts)", alert.Message, len(alertList)-1)
+				summary := alert.Message
+				otherAlerts := []string{}
+				for i := 1; i < len(alertList); i++ {
+					otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
+				}
+				if len(otherAlerts) > 0 {
+					alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
+				}
 			}
 			
 			// Prepare data and generate payload
