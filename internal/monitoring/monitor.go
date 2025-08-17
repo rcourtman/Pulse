@@ -38,6 +38,7 @@ type PVEClientInterface interface {
 	GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error)
 	GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error)
 	GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error)
+	IsClusterMember(ctx context.Context) (bool, error)
 }
 
 // Monitor handles all monitoring operations
@@ -855,6 +856,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
+	// First check if this is actually a cluster member
+	// Non-clustered nodes will trigger certificate errors when trying to use cluster/resources
+	isCluster, err := client.IsClusterMember(ctx)
+	if err != nil {
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not determine cluster membership, falling back to traditional polling")
+		return false
+	}
+	
+	if !isCluster {
+		log.Debug().Str("instance", instanceName).Msg("Node is not in a cluster, using traditional polling")
+		return false
+	}
+	
 	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using cluster/resources")
 	
 	// Get all resources in a single API call
