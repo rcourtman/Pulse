@@ -619,6 +619,20 @@ func (cc *ClusterClient) GetContainerStatus(ctx context.Context, node string, vm
 	return result, err
 }
 
+// IsClusterMember checks if this node is part of a cluster
+func (cc *ClusterClient) IsClusterMember(ctx context.Context) (bool, error) {
+	var result bool
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		isMember, err := client.IsClusterMember(ctx)
+		if err != nil {
+			return err
+		}
+		result = isMember
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterHealthInfo returns detailed health information about the cluster
 func (cc *ClusterClient) GetClusterHealthInfo() models.ClusterHealth {
 	cc.mu.RLock()
