@@ -993,9 +993,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 }
 
 // pollVMs polls VMs from a PVE instance
+// Deprecated: This function should not be called directly as it causes duplicate GetNodes calls.
+// Use pollVMsWithNodes instead.
 func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling VMs")
-
+	log.Warn().Str("instance", instanceName).Msg("pollVMs called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
+	
 	// Get all nodes first
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
@@ -1134,9 +1136,11 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 }
 
 // pollContainers polls containers from a PVE instance
+// Deprecated: This function should not be called directly as it causes duplicate GetNodes calls.
+// Use pollContainersWithNodes instead.
 func (m *Monitor) pollContainers(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling containers")
-
+	log.Warn().Str("instance", instanceName).Msg("pollContainers called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
+	
 	// Get all nodes first
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
@@ -1256,8 +1260,10 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 }
 
 // pollStorage polls storage from a PVE instance
+// Deprecated: This function should not be called directly as it causes duplicate GetNodes calls.
+// Use pollStorageWithNodes instead.
 func (m *Monitor) pollStorage(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling storage")
+	log.Warn().Str("instance", instanceName).Msg("pollStorage called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
 
 	// Get all nodes first
 	nodes, err := client.GetNodes(ctx)
@@ -1709,8 +1715,10 @@ func (m *Monitor) GetConfigPersistence() *config.ConfigPersistence {
 }
 
 // pollStorageBackups polls backup files from storage
+// Deprecated: This function should not be called directly as it causes duplicate GetNodes calls.
+// Use pollStorageBackupsWithNodes instead.
 func (m *Monitor) pollStorageBackups(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling storage backups")
+	log.Warn().Str("instance", instanceName).Msg("pollStorageBackups called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
 
 	// Get all nodes
 	nodes, err := client.GetNodes(ctx)
