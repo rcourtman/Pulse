@@ -146,8 +146,29 @@ backup_existing() {
 download_pulse() {
     print_info "Downloading Pulse..."
     
-    # Get latest release
-    LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    # Check if user has RC channel configured
+    UPDATE_CHANNEL="stable"
+    
+    # Allow override via environment variable
+    if [[ "${PULSE_UPDATE_CHANNEL:-}" == "rc" ]]; then
+        UPDATE_CHANNEL="rc"
+        print_info "RC channel requested via environment variable"
+    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+        CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+        if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
+            UPDATE_CHANNEL="rc"
+            print_info "RC channel detected in configuration"
+        fi
+    fi
+    
+    # Get appropriate release based on channel
+    if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
+        # Get all releases and find the latest (including pre-releases)
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+        # Get latest stable release only
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
     
     if [[ -z "$LATEST_RELEASE" ]]; then
         print_error "Could not determine latest release"
