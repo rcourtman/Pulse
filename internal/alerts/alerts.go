@@ -403,7 +403,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		node = g.Node
 		status = g.Status
 		guestType = "VM"
-		cpu = g.CPU * 100 // Convert to percentage
+		cpu = g.CPU // Already in percentage
 		memUsage = g.Memory.Usage
 		diskUsage = g.Disk.Usage
 		diskRead = g.DiskRead
@@ -416,7 +416,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		node = g.Node
 		status = g.Status
 		guestType = "Container"
-		cpu = g.CPU * 100 // Convert to percentage
+		cpu = g.CPU // Already in percentage
 		memUsage = g.Memory.Usage
 		diskUsage = g.Disk.Usage
 		diskRead = g.DiskRead
@@ -450,7 +450,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	m.mu.RUnlock()
 
 	// Check each metric
-	log.Debug().
+	log.Info().
 		Str("guest", name).
 		Float64("cpu", cpu).
 		Float64("memory", memUsage).
