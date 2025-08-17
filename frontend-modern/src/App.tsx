@@ -183,13 +183,13 @@ function App() {
     }
     
     // Clear all local storage EXCEPT theme preference and logout flag
-    const currentTheme = localStorage.getItem('theme');
+    const currentTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
     // Preserve theme preference across logout
     if (currentTheme) {
-      localStorage.setItem('theme', currentTheme);
+      localStorage.setItem(STORAGE_KEYS.DARK_MODE, currentTheme);
     }
     
     // Clear WebSocket connection
