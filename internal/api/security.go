@@ -122,13 +122,27 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			// Valid session but mismatched CSRF - likely server restart
 			// Generate a new CSRF token for this session
 			newToken := generateCSRFToken(cookie.Value)
+			
+			// Detect if we're behind a proxy/tunnel
+			isProxied := r.Header.Get("X-Forwarded-For") != "" || 
+				r.Header.Get("X-Real-IP") != "" ||
+				r.Header.Get("CF-Ray") != "" ||
+				r.Header.Get("X-Forwarded-Proto") != ""
+			
+			sameSitePolicy := http.SameSiteStrictMode
+			if isProxied {
+				sameSitePolicy = http.SameSiteNoneMode
+			}
+			
+			isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+			
 			// Set the new CSRF token as a cookie
 			http.SetCookie(w, &http.Cookie{
 				Name:     "pulse_csrf",
 				Value:    newToken,
 				Path:     "/",
-				Secure:   r.TLS != nil,
-				SameSite: http.SameSiteStrictMode,
+				Secure:   isSecure,
+				SameSite: sameSitePolicy,
 				MaxAge:   86400, // 24 hours
 			})
 			// For this request, we'll be lenient and allow it through
