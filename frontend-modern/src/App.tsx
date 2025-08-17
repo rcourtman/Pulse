@@ -72,10 +72,12 @@ function App() {
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   
-  // Dark mode
+  // Dark mode - check localStorage first, only use system preference if never set
+  const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
   const [darkMode, setDarkMode] = createSignal(
-    localStorage.getItem(STORAGE_KEYS.DARK_MODE) === 'true' || 
-    window.matchMedia('(prefers-color-scheme: dark)').matches
+    savedDarkMode !== null 
+      ? savedDarkMode === 'true'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches
   );
   
   // Toggle dark mode
@@ -91,9 +93,11 @@ function App() {
     logger.info('Theme changed', { mode: newMode ? 'dark' : 'light' });
   };
   
-  // Initialize dark mode
+  // Initialize dark mode - ensure it matches the signal
   if (darkMode()) {
     document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
   }
   
   // Check auth on mount
