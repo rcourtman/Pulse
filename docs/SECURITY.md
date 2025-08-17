@@ -1,13 +1,15 @@
 # Pulse Security
 
-## Authentication Setup
+## Mandatory Authentication
 
-Pulse includes a Quick Security Setup wizard that helps you configure authentication when first accessing an unsecured instance. This protects your Proxmox API credentials from unauthorized access.
+**Starting with v4.4.0, authentication is required for all Pulse installations.** This protects your Proxmox API credentials from unauthorized access.
 
 ### First-Run Security Setup
-- Interactive wizard for username, password, and API token generation  
+When you first access Pulse, you'll be guided through a mandatory security setup:
+- Create your admin username and password
+- Automatic API token generation for automation
 - Settings are applied immediately without restart
-- Protects access to your Proxmox infrastructure credentials
+- **Your existing nodes and settings are preserved**
 
 ## Smart Security Context
 
@@ -17,8 +19,10 @@ Pulse automatically detects when it's being accessed from public networks:
 - **Public Networks**: Any non-private IP address
 - **Stronger Warnings**: Red alerts when accessed from public IPs without authentication
 
-### Trusted Networks Configuration
-Define networks that don't require authentication:
+### Trusted Networks Configuration (Deprecated)
+**Note: Authentication is now mandatory regardless of network location.**
+
+Legacy configuration (no longer applicable):
 ```bash
 # Environment variable (comma-separated CIDR blocks)
 PULSE_TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.0/24
@@ -233,9 +237,9 @@ curl "http://localhost:7655/api/export?token=your-original-token"
 
 ### Auto-Registration Security
 
-#### Default Mode (Homelab Friendly)
-- Nodes can auto-register without authentication
-- Suitable for trusted networks
+#### Default Mode
+- All access requires authentication
+- Nodes can auto-register with the API token
 - Setup scripts work without additional configuration
 
 #### Secure Mode
