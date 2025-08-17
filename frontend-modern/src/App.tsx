@@ -182,10 +182,15 @@ function App() {
       console.error('Logout error:', error);
     }
     
-    // Clear all local storage EXCEPT a flag indicating this is a logout
+    // Clear all local storage EXCEPT theme preference and logout flag
+    const currentTheme = localStorage.getItem('theme');
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
+    // Preserve theme preference across logout
+    if (currentTheme) {
+      localStorage.setItem('theme', currentTheme);
+    }
     
     // Clear WebSocket connection
     if (wsStore()) {
