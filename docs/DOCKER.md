@@ -129,16 +129,17 @@ docker run --rm \
   alpine tar xzf /backup/pulse-backup.tar.gz -C /data
 ```
 
-## Security Setup
+## Security Setup (Mandatory)
 
-### Method 1: Quick Security Setup (Recommended)
-1. Start container WITHOUT auth environment variables
-2. Access http://your-server:7655
-3. Follow the mandatory Quick Security Setup wizard
-4. Credentials are saved to `/data/.env`
-5. Security is active immediately (no restart needed)
+### First-Time Setup
+1. Start container and access http://your-server:7655
+2. You'll be automatically directed to the security setup wizard
+3. Create your admin username and password
+4. Save the generated API token for automation
+5. Credentials are saved to `/data/.env`
+6. Your existing nodes and settings (if any) are preserved
 
-### Method 2: Manual Configuration
+### Alternative: Pre-configured Authentication
 1. Generate password hash:
    ```bash
    # Using online bcrypt generator or another tool
@@ -153,7 +154,7 @@ docker run --rm \
 
 3. Add to docker-compose.yml (remember to escape $ as $$)
 
-### Method 3: Using Existing .env
+### Using Existing .env
 If you have a `.env` file from another installation:
 ```bash
 docker cp .env pulse:/data/.env

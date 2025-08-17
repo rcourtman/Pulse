@@ -52,14 +52,20 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
-### Configure Nodes
+### Initial Setup
 
 1. Open `http://<your-server>:7655`
-2. Go to Settings → Nodes
-3. Discovered nodes appear automatically
-4. Click "Setup Script" next to any node
-5. Run the generated one-liner on that node
-6. Node is configured and monitoring starts
+2. **Complete the mandatory security setup** (first-time only)
+3. Create your admin username and password
+4. Save the generated API token for automation
+
+### Configure Nodes
+
+1. After login, go to Settings → Nodes
+2. Discovered nodes appear automatically
+3. Click "Setup Script" next to any node
+4. Run the generated one-liner on that node
+5. Node is configured and monitoring starts
 
 The script handles user creation, permissions, token generation, and registration automatically.
 
@@ -325,13 +331,13 @@ journalctl -u pulse -f
 - [Security](docs/SECURITY.md) - Security features and best practices
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting
 - [Migration Guide](docs/MIGRATION.md) - Backup and migration procedures
-- [v3 to v4 Upgrade](docs/MIGRATION_V3_TO_V4.md) - Upgrading from v3 to v4
 
 ## Security
 
+- **Mandatory authentication** protects your infrastructure
 - Credentials stored encrypted (AES-256-GCM)
-- Optional API token authentication
-- Export/import requires passphrase
+- API token support for automation
+- Export/import requires authentication
 - [Security Details →](docs/SECURITY.md)
 
 ## Development
