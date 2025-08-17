@@ -435,17 +435,14 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		// Use custom template with enhanced message for grouped alerts
 		alert := alertList[0]
 		if len(alertList) > 1 {
-			// Build a summary of all alerts
+			// Build a full list of all alerts
 			summary := alert.Message
 			otherAlerts := []string{}
-			for i := 1; i < len(alertList) && i < 4; i++ { // Show up to 3 more alerts
+			for i := 1; i < len(alertList); i++ { // Show ALL alerts
 				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
 			}
-			if len(alertList) > 4 {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• ... and %d more", len(alertList)-4))
-			}
 			if len(otherAlerts) > 0 {
-				alert.Message = fmt.Sprintf("%s\\n\\n🔔 Other alerts:\\n%s", summary, strings.Join(otherAlerts, "\\n"))
+				alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
 			}
 		}
 		
