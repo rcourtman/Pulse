@@ -2,7 +2,7 @@
 
 ## Mandatory Authentication
 
-**Starting with v4.4.0, authentication is required for all Pulse installations.** This protects your Proxmox API credentials from unauthorized access.
+**Starting with v4.5.0, authentication setup is prompted for all new Pulse installations.** This protects your Proxmox API credentials from unauthorized access.
 
 ### First-Run Security Setup
 When you first access Pulse, you'll be guided through a mandatory security setup:

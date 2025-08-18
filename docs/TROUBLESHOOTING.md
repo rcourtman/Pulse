@@ -39,7 +39,7 @@ docker restart pulse
 **Symptoms**: Can't access Pulse after upgrade, no credentials work
 
 **Solution**: 
-- If upgrading from pre-v4.4.0, you need to complete security setup first
+- If upgrading from pre-v4.5.0, you need to complete security setup first
 - Clear browser cache and cookies
 - Access http://your-ip:7655 to see setup wizard
 - Complete setup, then restart container
