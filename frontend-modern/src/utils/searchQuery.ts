@@ -42,8 +42,8 @@ export interface FilterStack {
 export function parseFilter(term: string): ParsedFilter {
   term = term.trim();
   
-  // Try to parse metric condition (e.g., "cpu>80")
-  const metricMatch = term.match(/^(cpu|memory|disk|diskRead|diskWrite|networkIn|networkOut)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i);
+  // Try to parse metric condition (e.g., "cpu>80", "size>1000000000")
+  const metricMatch = term.match(/^(\w+)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i);
   if (metricMatch) {
     const [, field, operator, value] = metricMatch;
     const parsedValue = parseFloat(value);
@@ -62,8 +62,8 @@ export function parseFilter(term: string): ParsedFilter {
     };
   }
 
-  // Try to parse text condition (e.g., "name:prod")
-  const textMatch = term.match(/^(name|node|vmid)\s*:\s*(.+)$/i);
+  // Try to parse text condition (e.g., "name:prod", "storage:local", "type:VM")
+  const textMatch = term.match(/^(\w+)\s*:\s*(.+)$/i);
   if (textMatch) {
     const [, field, value] = textMatch;
     return {
@@ -129,8 +129,8 @@ function parseCondition(conditionStr: string): Condition | null {
     } as MetricCondition;
   }
 
-  // Try to parse text condition (e.g., "name:prod")
-  const textMatch = conditionStr.match(/^(name|node|vmid)\s*:\s*(.+)$/i);
+  // Try to parse text condition (e.g., "name:prod", "storage:local", etc.)
+  const textMatch = conditionStr.match(/^(\w+)\s*:\s*(.+)$/i);
   if (textMatch) {
     const [, field, value] = textMatch;
     return {
@@ -186,7 +186,7 @@ export function parseSearchQuery(query: string): ParsedQuery {
   };
 }
 
-function evaluateMetricCondition(guest: VM | Container, condition: MetricCondition): boolean {
+function evaluateMetricCondition(guest: VM | Container | any, condition: MetricCondition): boolean {
   let value: number;
   
   switch (condition.field) {
@@ -201,7 +201,12 @@ function evaluateMetricCondition(guest: VM | Container, condition: MetricConditi
       value = guest.disk ? guest.disk.usage : 0;
       break;
     default:
-      return false;
+      // For backup-specific numeric fields like 'size'
+      if (guest[condition.field] !== undefined) {
+        value = Number(guest[condition.field]) || 0;
+      } else {
+        return false;
+      }
   }
 
   switch (condition.operator) {
@@ -221,17 +226,28 @@ function evaluateMetricCondition(guest: VM | Container, condition: MetricConditi
   }
 }
 
-function evaluateTextCondition(guest: VM | Container, condition: TextCondition): boolean {
+function evaluateTextCondition(guest: VM | Container | any, condition: TextCondition): boolean {
   const searchValue = condition.value.toLowerCase();
   
   switch (condition.field) {
     case 'name':
-      return guest.name.toLowerCase().includes(searchValue);
+      return guest.name?.toLowerCase().includes(searchValue) || false;
     case 'node':
-      return guest.node.toLowerCase().includes(searchValue);
+      return guest.node?.toLowerCase().includes(searchValue) || false;
     case 'vmid':
-      return guest.vmid.toString().includes(searchValue);
+      return guest.vmid?.toString().includes(searchValue) || false;
     default:
+      // For backup-specific fields
+      if (guest[condition.field]) {
+        const fieldValue = guest[condition.field];
+        if (typeof fieldValue === 'string') {
+          return fieldValue.toLowerCase().includes(searchValue);
+        } else if (typeof fieldValue === 'number') {
+          return fieldValue.toString().includes(searchValue);
+        } else if (typeof fieldValue === 'boolean') {
+          return fieldValue.toString() === searchValue;
+        }
+      }
       return false;
   }
 }
@@ -270,8 +286,8 @@ export function evaluateSearchQuery(guest: VM | Container, query: ParsedQuery): 
   }
 }
 
-// Evaluate a filter stack against a guest
-export function evaluateFilterStack(guest: VM | Container, stack: FilterStack): boolean {
+// Evaluate a filter stack against a guest or backup item
+export function evaluateFilterStack(guest: VM | Container | any, stack: FilterStack): boolean {
   if (stack.filters.length === 0) {
     return true;
   }
