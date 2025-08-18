@@ -639,6 +639,12 @@ const UnifiedBackups: Component = () => {
       dataForChart = dataForChart.filter(item => item.backupType === backupType);
     }
     
+    // Apply PBS instance filter for chart
+    const pbsInstance = selectedPBSInstance();
+    if (pbsInstance) {
+      dataForChart = dataForChart.filter(item => item.node === pbsInstance);
+    }
+    
     // Count backups per day within the chart time range
     dataForChart.forEach(backup => {
       const backupTime = backup.backupTime * 1000;
