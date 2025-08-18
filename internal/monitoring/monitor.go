@@ -796,9 +796,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		case <-ctx.Done():
 			return
 		default:
-			// Try to use efficient cluster/resources endpoint
-			if !m.pollVMsAndContainersEfficient(ctx, instanceName, client) {
-				// Fall back to old method if cluster/resources fails
+			// Only try cluster endpoints if this is configured as a cluster
+			// This prevents syslog spam on non-clustered nodes from certificate checks
+			useClusterEndpoint := false
+			if instanceCfg.IsCluster {
+				// Try to use efficient cluster/resources endpoint
+				useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			}
+			
+			if !useClusterEndpoint {
+				// Use traditional polling for non-clusters or if cluster endpoint fails
 				// Use WithNodes versions to avoid duplicate GetNodes calls
 				if instanceCfg.MonitorVMs {
 					m.pollVMsWithNodes(ctx, instanceName, client, nodes)
@@ -855,35 +862,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 }
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
+// This should only be called for instances configured as clusters
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
-	// Get instance config to check if this is configured as a cluster
-	var instanceCfg *config.PVEInstance
-	for _, cfg := range m.config.PVEInstances {
-		if cfg.Name == instanceName {
-			instanceCfg = &cfg
-			break
-		}
-	}
-	
-	// If not configured as a cluster, don't even try cluster endpoints
-	if instanceCfg == nil || !instanceCfg.IsCluster {
-		log.Debug().Str("instance", instanceName).Bool("isCluster", instanceCfg != nil && instanceCfg.IsCluster).Msg("Instance not configured as cluster, using traditional polling")
-		return false
-	}
-	
-	// For cluster configurations, verify it's still a cluster
-	// This check is cached in the configuration, so we avoid repeated API calls
-	isCluster, err := client.IsClusterMember(ctx)
-	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not verify cluster membership, falling back to traditional polling")
-		return false
-	}
-	
-	if !isCluster {
-		log.Debug().Str("instance", instanceName).Msg("Configured as cluster but node reports not in a cluster, using traditional polling")
-		return false
-	}
-	
 	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using cluster/resources")
 	
 	// Get all resources in a single API call
