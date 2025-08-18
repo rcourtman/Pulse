@@ -188,6 +188,8 @@ type Manager struct {
 	resolvedMutex    sync.RWMutex
 	// Time threshold tracking
 	pendingAlerts    map[string]time.Time  // Track when thresholds were first exceeded
+	// Node offline confirmation tracking
+	nodeOfflineCount map[string]int        // Track consecutive offline counts for nodes
 }
 
 // NewManager creates a new alert manager
@@ -202,6 +204,7 @@ func NewManager() *Manager {
 		suppressedUntil: make(map[string]time.Time),
 		recentlyResolved: make(map[string]*ResolvedAlert),
 		pendingAlerts:  make(map[string]time.Time),
+		nodeOfflineCount: make(map[string]int),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -834,7 +837,7 @@ func (m *Manager) ClearAlertHistory() error {
 	return m.historyManager.ClearAllHistory()
 }
 
-// checkNodeOffline creates an alert for offline nodes
+// checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
 	
@@ -848,7 +851,29 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		return
 	}
 	
-	// Create new offline alert
+	// Increment offline count
+	m.nodeOfflineCount[node.ID]++
+	offlineCount := m.nodeOfflineCount[node.ID]
+	
+	log.Debug().
+		Str("node", node.Name).
+		Str("instance", node.Instance).
+		Int("offlineCount", offlineCount).
+		Msg("Node offline detection count")
+	
+	// Require 3 consecutive offline polls (~15 seconds) before alerting
+	// This prevents false positives from transient cluster communication issues
+	const requiredOfflineCount = 3
+	if offlineCount < requiredOfflineCount {
+		log.Info().
+			Str("node", node.Name).
+			Int("count", offlineCount).
+			Int("required", requiredOfflineCount).
+			Msg("Node appears offline, waiting for confirmation")
+		return
+	}
+	
+	// Create new offline alert after confirmation
 	alert := &Alert{
 		ID:           alertID,
 		Type:         "connectivity",
@@ -870,7 +895,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	// Add to history
 	m.historyManager.AddAlert(*alert)
 	
-	// Send notification immediately for offline nodes
+	// Send notification after confirmation
 	if m.onAlert != nil {
 		m.onAlert(alert)
 	}
@@ -881,7 +906,8 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		Str("instance", node.Instance).
 		Str("status", node.Status).
 		Str("connectionHealth", node.ConnectionHealth).
-		Msg("CRITICAL: Node is offline")
+		Int("confirmedAfter", requiredOfflineCount).
+		Msg("CRITICAL: Node is offline (confirmed)")
 }
 
 // clearNodeOfflineAlert removes offline alert when node comes back online
@@ -890,6 +916,15 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	
+	// Reset offline count when node comes back online
+	if m.nodeOfflineCount[node.ID] > 0 {
+		log.Debug().
+			Str("node", node.Name).
+			Int("previousCount", m.nodeOfflineCount[node.ID]).
+			Msg("Node back online, resetting offline count")
+		delete(m.nodeOfflineCount, node.ID)
+	}
 	
 	// Check if offline alert exists
 	alert, exists := m.activeAlerts[alertID]
