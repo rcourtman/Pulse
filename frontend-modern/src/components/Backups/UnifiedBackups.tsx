@@ -371,12 +371,6 @@ const UnifiedBackups: Component = () => {
       data = data.filter(item => item.backupType === backupType);
     }
 
-    // PBS instance filter - when a specific PBS is selected
-    const pbsInstance = selectedPBSInstance();
-    if (pbsInstance) {
-      data = data.filter(item => item.node === pbsInstance);
-    }
-
     // Sort
     const key = sortKey();
     const dir = sortDirection();
@@ -646,25 +640,52 @@ const UnifiedBackups: Component = () => {
     const type = typeFilter();
     const backupType = backupTypeFilter();
     
-    // Apply search filter
+    // Apply search filter - with advanced filtering support like the table
     if (search) {
-      const searchTerms = search.split(',').map(term => term.trim()).filter(term => term.length > 0);
-      dataForChart = dataForChart.filter(item => 
-        searchTerms.some(term => {
-          const searchFields = [
-            item.vmid?.toString(),
-            item.name,
-            item.node,
-            item.backupName,
-            item.description,
-            item.storage,
-            item.datastore,
-            item.namespace
-          ].filter(Boolean).map(field => field!.toString().toLowerCase());
-          
-          return searchFields.some(field => field.includes(term));
-        })
-      );
+      // Split by commas first
+      const searchParts = search.split(',').map(t => t.trim()).filter(t => t);
+      
+      // Separate filters from text searches
+      const filters: string[] = [];
+      const textSearches: string[] = [];
+      
+      searchParts.forEach(part => {
+        if (part.includes('>') || part.includes('<') || part.includes(':')) {
+          filters.push(part);
+        } else {
+          textSearches.push(part.toLowerCase());
+        }
+      });
+      
+      // Apply filters if any
+      if (filters.length > 0) {
+        // Join filters with AND operator
+        const filterString = filters.join(' AND ');
+        const stack = parseFilterStack(filterString);
+        if (stack.filters.length > 0) {
+          dataForChart = dataForChart.filter(item => evaluateFilterStack(item, stack));
+        }
+      }
+      
+      // Apply text search if any
+      if (textSearches.length > 0) {
+        dataForChart = dataForChart.filter(item => 
+          textSearches.some(term => {
+            const searchFields = [
+              item.vmid?.toString(),
+              item.name,
+              item.node,
+              item.backupName,
+              item.description,
+              item.storage,
+              item.datastore,
+              item.namespace
+            ].filter(Boolean).map(field => field!.toString().toLowerCase());
+            
+            return searchFields.some(field => field.includes(term));
+          })
+        );
+      }
     }
     
     // Apply type filter
@@ -675,12 +696,6 @@ const UnifiedBackups: Component = () => {
     // Apply backup type filter
     if (backupType !== 'all') {
       dataForChart = dataForChart.filter(item => item.backupType === backupType);
-    }
-    
-    // Apply PBS instance filter for chart
-    const pbsInstance = selectedPBSInstance();
-    if (pbsInstance) {
-      dataForChart = dataForChart.filter(item => item.node === pbsInstance);
     }
     
     // Count backups per day within the chart time range
