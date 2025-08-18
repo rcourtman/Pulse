@@ -856,16 +856,31 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
-	// First check if this is actually a cluster member
-	// Non-clustered nodes will trigger certificate errors when trying to use cluster/resources
+	// Get instance config to check if this is configured as a cluster
+	var instanceCfg *config.PVEInstance
+	for _, cfg := range m.config.PVEInstances {
+		if cfg.Name == instanceName {
+			instanceCfg = &cfg
+			break
+		}
+	}
+	
+	// If not configured as a cluster, don't even try cluster endpoints
+	if instanceCfg == nil || !instanceCfg.IsCluster {
+		log.Debug().Str("instance", instanceName).Bool("isCluster", instanceCfg != nil && instanceCfg.IsCluster).Msg("Instance not configured as cluster, using traditional polling")
+		return false
+	}
+	
+	// For cluster configurations, verify it's still a cluster
+	// This check is cached in the configuration, so we avoid repeated API calls
 	isCluster, err := client.IsClusterMember(ctx)
 	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not determine cluster membership, falling back to traditional polling")
+		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not verify cluster membership, falling back to traditional polling")
 		return false
 	}
 	
 	if !isCluster {
-		log.Debug().Str("instance", instanceName).Msg("Node is not in a cluster, using traditional polling")
+		log.Debug().Str("instance", instanceName).Msg("Configured as cluster but node reports not in a cluster, using traditional polling")
 		return false
 	}
 	
