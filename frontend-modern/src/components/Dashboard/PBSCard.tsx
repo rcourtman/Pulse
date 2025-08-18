@@ -15,10 +15,12 @@ const PBSCard: Component<PBSCardProps> = (props) => {
 
   // Detect if PBS is running in Docker (no system stats available)
   const isDockerPBS = () => {
-    // If all stats are 0 but PBS is online and responding (has version), it's likely Docker
+    // PBS in Docker typically has "docker" in the name
+    // pbs-docker has datastores but is still Docker, so check the name
     return props.instance.status === 'online' && 
            props.instance.version && 
-           !hasSystemStats();
+           !hasSystemStats() &&
+           props.instance.name.toLowerCase().includes('docker');
   };
 
   // Calculate percentages
@@ -208,16 +210,43 @@ const PBSCard: Component<PBSCardProps> = (props) => {
           </div>
         </Show>
         <Show when={!isDockerPBS()}>
-          {/* For non-Docker PBS, show the permission message */}
-          <div class="text-[11px] text-gray-500 dark:text-gray-400 italic py-2">
-            System stats unavailable - Add Sys.Audit permission to PBS token
-          </div>
-          <Show when={props.instance.datastores && props.instance.datastores.length > 0}>
-            <div class="text-[11px] text-gray-600 dark:text-gray-400">
-              <span class="font-medium">Datastores: </span>
-              <span class="text-gray-500">{props.instance.datastores.length}</span>
+          {/* For non-Docker PBS, show available info */}
+          <div class="text-[11px] text-gray-600 dark:text-gray-400">
+            {/* Show disk usage if datastores exist */}
+            <Show when={diskUsage().total > 0}>
+              <div>
+                <span class="font-medium">Storage:</span>
+                {createProgressBar(diskPercent(), diskText(), getColor(diskPercent(), 'disk'))}
+              </div>
+            </Show>
+            
+            <Show when={props.instance.datastores && props.instance.datastores.length > 0}>
+              <div class="flex justify-between pt-0.5">
+                <span>
+                  <span class="font-medium">Datastores: </span>
+                  <span class="text-gray-500">{props.instance.datastores.length}</span>
+                </span>
+                <Show when={(() => {
+                  const namespaceCount = props.instance.datastores?.reduce((acc, ds) => 
+                    acc + (ds.namespaces?.filter(ns => ns.path !== '').length || 0), 0) || 0;
+                  return namespaceCount > 0;
+                })()}>
+                  <span class="text-gray-500">
+                    {(() => {
+                      const count = props.instance.datastores?.reduce((acc, ds) => 
+                        acc + (ds.namespaces?.filter(ns => ns.path !== '').length || 0), 0) || 0;
+                      return `${count} namespace${count !== 1 ? 's' : ''}`;
+                    })()}
+                  </span>
+                </Show>
+              </div>
+            </Show>
+            
+            <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
+              <span>PBS v{props.instance.version}</span>
+              <span class="text-[10px] italic">No Sys.Audit permission</span>
             </div>
-          </Show>
+          </div>
         </Show>
       </Show>
     </div>

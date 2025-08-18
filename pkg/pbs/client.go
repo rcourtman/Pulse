@@ -334,33 +334,9 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Msg("PBS GetNodeStatus: starting")
 	
-	// PBS typically runs on a single node, often called "localhost" 
-	// We need to first get the node name
-	nodesResp, err := c.get(ctx, "/nodes")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nodes: %w", err)
-	}
-	defer nodesResp.Body.Close()
-
-	var nodesResult struct {
-		Data []struct {
-			Node string `json:"node"`
-		} `json:"data"`
-	}
-	
-	if err := json.NewDecoder(nodesResp.Body).Decode(&nodesResult); err != nil {
-		return nil, fmt.Errorf("failed to decode nodes response: %w", err)
-	}
-	
-	if len(nodesResult.Data) == 0 {
-		return nil, fmt.Errorf("no nodes found")
-	}
-	
-	// Get status for the first (usually only) node
-	nodeName := nodesResult.Data[0].Node
-	log.Debug().Str("node", nodeName).Msg("PBS GetNodeStatus: fetching status for node")
-	
-	statusResp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/status", nodeName))
+	// PBS uses "localhost" as the node name for single-node installations
+	// Try localhost directly (this is the standard for PBS)
+	statusResp, err := c.get(ctx, "/nodes/localhost/status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node status: %w", err)
 	}
