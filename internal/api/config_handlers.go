@@ -149,9 +149,11 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 	defer cancel()
 	
 	// Get full cluster status to find the actual cluster name
+	// Note: This can cause certificate lookup errors on standalone nodes, but it's only done once during configuration
 	clusterStatus, err := tempClient.GetClusterStatus(ctx)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get cluster status")
+		// This is expected for standalone nodes - they will return an error when accessing cluster endpoints
+		log.Debug().Err(err).Msg("Could not get cluster status - likely a standalone node")
 		return false, "", nil
 	}
 	
