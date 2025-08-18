@@ -3,6 +3,7 @@ import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import PBSCard from '@/components/Dashboard/PBSCard';
+import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
@@ -312,25 +313,52 @@ const UnifiedBackups: Component = () => {
       );
     }
 
-    // Search filter
+    // Search filter - with advanced filtering support like Dashboard
     if (search) {
-      const searchTerms = search.split(',').map(term => term.trim()).filter(term => term.length > 0);
-      data = data.filter(item => 
-        searchTerms.some(term => {
-          const searchFields = [
-            item.vmid?.toString(),
-            item.name,
-            item.node,
-            item.backupName,
-            item.description,
-            item.storage,
-            item.datastore,
-            item.namespace
-          ].filter(Boolean).map(field => field!.toString().toLowerCase());
-          
-          return searchFields.some(field => field.includes(term));
-        })
-      );
+      // Split by commas first
+      const searchParts = search.split(',').map(t => t.trim()).filter(t => t);
+      
+      // Separate filters from text searches
+      const filters: string[] = [];
+      const textSearches: string[] = [];
+      
+      searchParts.forEach(part => {
+        if (part.includes('>') || part.includes('<') || part.includes(':')) {
+          filters.push(part);
+        } else {
+          textSearches.push(part.toLowerCase());
+        }
+      });
+      
+      // Apply filters if any
+      if (filters.length > 0) {
+        // Join filters with AND operator
+        const filterString = filters.join(' AND ');
+        const stack = parseFilterStack(filterString);
+        if (stack.filters.length > 0) {
+          data = data.filter(item => evaluateFilterStack(item, stack));
+        }
+      }
+      
+      // Apply text search if any
+      if (textSearches.length > 0) {
+        data = data.filter(item => 
+          textSearches.some(term => {
+            const searchFields = [
+              item.vmid?.toString(),
+              item.name,
+              item.node,
+              item.backupName,
+              item.description,
+              item.storage,
+              item.datastore,
+              item.namespace
+            ].filter(Boolean).map(field => field!.toString().toLowerCase());
+            
+            return searchFields.some(field => field.includes(term));
+          })
+        );
+      }
     }
 
     // Type filter
@@ -1163,7 +1191,7 @@ const UnifiedBackups: Component = () => {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search VMID, Name, Node, Storage (use ',' for OR)"
+                  placeholder="Search: name, vmid:104, node:pbs1, size>1GB, type:VM"
                   value={searchTerm()}
                   onInput={(e) => {
                     if (!isSearchLocked()) {
@@ -1179,6 +1207,36 @@ const UnifiedBackups: Component = () => {
                 <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+                
+                {/* Help tooltip button */}
+                <button
+                  class="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  onClick={(e) => e.preventDefault()}
+                  type="button"
+                  aria-label="Search help"
+                  title="Search Examples:
+• jellyfin - Find backups with 'jellyfin' in name
+• plex,media - Find backups with 'plex' OR 'media'
+• vmid:104 - Find backups for specific VM/container
+• node:pve1 - Backups from specific node
+• node:pbs-docker - Backups from specific PBS
+• size>1000000000 - Backups larger than 1GB
+• type:VM - Only VM backups
+• type:LXC - Only LXC backups
+• storage:local - Backups on specific storage
+• datastore:default - PBS backups in specific datastore
+• namespace:production - PBS backups in namespace
+• verified:true - Only verified PBS backups
+• protected:true - Only protected backups
+
+Combine searches:
+• media,size>5000000000 - 'media' AND >5GB
+• node:pbs1,type:VM - PBS1 backups AND VMs only"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
               </div>
               
               <button
