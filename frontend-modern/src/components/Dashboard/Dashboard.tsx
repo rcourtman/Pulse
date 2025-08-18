@@ -1,7 +1,8 @@
 import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
-import type { VM, Container, Node, PBSInstance } from '@/types/api';
+import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
+import CompactNodeCard from './CompactNodeCard';
 import { useWebSocket } from '@/App';
 import { GuestUrlEditor } from './GuestUrlEditor';
 import { getAlertStyles } from '@/utils/alerts';
@@ -14,7 +15,6 @@ interface DashboardProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
-  pbs?: PBSInstance[];
 }
 
 type ViewMode = 'all' | 'vm' | 'lxc';
@@ -317,20 +317,49 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div>
-      {/* Node Summary Cards */}
+      {/* Node Summary Cards - Adaptive Layout */}
       <div id="node-summary-cards-container" class="mb-3">
         <Show when={props.nodes.length > 0}>
-          <div class="flex flex-wrap gap-2">
-            <For each={props.nodes}>
-              {(node) => (
-                <div class="flex-1 min-w-[250px]">
-                  <ComponentErrorBoundary name="NodeCard">
-                    <NodeCard node={node} />
+          {/* Regular cards for 1-4 nodes */}
+          <Show when={props.nodes.length <= 4}>
+            <div class="flex flex-wrap gap-2">
+              <For each={props.nodes}>
+                {(node) => (
+                  <div class="flex-1 min-w-[250px]">
+                    <ComponentErrorBoundary name="NodeCard">
+                      <NodeCard node={node} />
+                    </ComponentErrorBoundary>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          {/* Compact cards for 5-9 nodes */}
+          <Show when={props.nodes.length > 4 && props.nodes.length <= 9}>
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <For each={props.nodes}>
+                {(node) => (
+                  <ComponentErrorBoundary name="CompactNodeCard">
+                    <CompactNodeCard node={node} variant="compact" />
                   </ComponentErrorBoundary>
-                </div>
-              )}
-            </For>
-          </div>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          {/* Ultra-compact list for 10+ nodes */}
+          <Show when={props.nodes.length >= 10}>
+            <div class="space-y-1">
+              <For each={props.nodes}>
+                {(node) => (
+                  <ComponentErrorBoundary name="CompactNodeCard">
+                    <CompactNodeCard node={node} variant="ultra-compact" />
+                  </ComponentErrorBoundary>
+                )}
+              </For>
+            </div>
+          </Show>
         </Show>
       </div>
       

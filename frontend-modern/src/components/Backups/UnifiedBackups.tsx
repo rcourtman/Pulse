@@ -2,6 +2,7 @@ import { Component, createSignal, Show, For, createMemo, createEffect } from 'so
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import PBSCard from '@/components/Dashboard/PBSCard';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
@@ -652,6 +653,19 @@ const UnifiedBackups: Component = () => {
 
   return (
     <div class="space-y-4">
+      {/* PBS Status Summary */}
+      <Show when={state.pbs && state.pbs.length > 0}>
+        <div class="flex flex-wrap gap-2">
+          <For each={state.pbs}>
+            {(instance) => (
+              <div class="flex-1 min-w-[250px]">
+                <PBSCard instance={instance} />
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+
       {/* Backup Frequency Chart */}
       <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="flex justify-between items-center mb-3">

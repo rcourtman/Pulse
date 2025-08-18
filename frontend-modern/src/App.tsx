@@ -391,7 +391,6 @@ function App() {
                 vms={state().vms} 
                 containers={state().containers}
                 nodes={state().nodes}
-                pbs={state().pbs}
               />
             </Show>
             

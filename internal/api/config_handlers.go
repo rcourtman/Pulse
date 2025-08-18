@@ -2330,6 +2330,7 @@ echo ""
 # Set up permissions
 echo "Setting up permissions..."
 proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
+proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!%s'
 
 echo ""
 echo "✅ Setup complete!"
@@ -2349,7 +2350,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 2172,2174,2178,2181,2183
-			pulseURL, serverHost, tokenName, tokenName, apiToken, tokenName) // Lines 2208,2222,2235,2248,2257,2317
+			pulseURL, serverHost, tokenName, tokenName, apiToken, tokenName, tokenName) // Lines 2208,2222,2235,2248,2257,2317,2333
 	}
 	
 	// Set headers for script download
