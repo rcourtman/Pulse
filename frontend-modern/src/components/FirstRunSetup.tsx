@@ -16,16 +16,9 @@ export const FirstRunSetup: Component = () => {
   const [savedToken, setSavedToken] = createSignal('');
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
   
-  // Additional setup options
-  const [darkMode, setDarkMode] = createSignal(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
-  
   onMount(() => {
-    // Apply dark mode immediately if selected
-    if (darkMode()) {
-      document.documentElement.classList.add('dark');
-    }
+    // Force dark mode for setup screen
+    document.documentElement.classList.add('dark');
   });
 
   const generatePassword = () => {
@@ -80,8 +73,7 @@ export const FirstRunSetup: Component = () => {
         body: JSON.stringify({
           username: username(),
           password: finalPassword,
-          apiToken: token,
-          darkMode: darkMode()
+          apiToken: token
         })
       });
       
@@ -103,8 +95,6 @@ export const FirstRunSetup: Component = () => {
       setSavedPassword(useCustomPassword() ? password() : generatedPassword());
       setSavedToken(token);
       
-      // Apply settings - use consistent storage key
-      localStorage.setItem('darkMode', String(darkMode()));
       
       // Show credentials
       setShowCredentials(true);
@@ -263,44 +253,6 @@ IMPORTANT: Keep these credentials secure!
                   </Show>
                 </div>
 
-                {/* Additional Settings */}
-                <div class="space-y-4">
-                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Initial Configuration
-                  </h3>
-                  
-                  {/* Dark Mode */}
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <label class="text-sm text-gray-700 dark:text-gray-300">
-                        Dark Mode
-                      </label>
-                      <p class="text-xs text-gray-500 dark:text-gray-500">
-                        Use dark theme for the dashboard
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDarkMode(!darkMode());
-                        if (!darkMode()) {
-                          document.documentElement.classList.remove('dark');
-                        } else {
-                          document.documentElement.classList.add('dark');
-                        }
-                      }}
-                      class={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        darkMode() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
-                    >
-                      <span
-                        class={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          darkMode() ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
 
                 {/* Info Box */}
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
