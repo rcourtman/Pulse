@@ -46,6 +46,18 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	isProxied := detectProxy(r)
 	isSecure := isConnectionSecure(r)
 	
+	// Debug logging for Cloudflare tunnel issues
+	if isProxied {
+		log.Debug().
+			Bool("proxied", isProxied).
+			Bool("secure", isSecure).
+			Str("cf_ray", r.Header.Get("CF-Ray")).
+			Str("cf_connecting_ip", r.Header.Get("CF-Connecting-IP")).
+			Str("x_forwarded_for", r.Header.Get("X-Forwarded-For")).
+			Str("x_forwarded_proto", r.Header.Get("X-Forwarded-Proto")).
+			Msg("Proxy/tunnel detected - adjusting cookie settings")
+	}
+	
 	// Default to Lax for better compatibility
 	sameSitePolicy := http.SameSiteLaxMode
 	
@@ -209,7 +221,20 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
 			return true
+		} else {
+			// Debug logging for failed session validation
+			log.Debug().
+				Str("session_token", cookie.Value[:8]+"...").
+				Str("path", r.URL.Path).
+				Msg("Session validation failed - token not found or expired")
 		}
+	} else if err != nil {
+		// Debug logging when no session cookie found
+		log.Debug().
+			Err(err).
+			Str("path", r.URL.Path).
+			Bool("has_cf_headers", r.Header.Get("CF-Ray") != "").
+			Msg("No session cookie found")
 	}
 	
 	// Check basic auth
@@ -297,6 +322,24 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								
 								// Get appropriate cookie settings based on proxy detection
 								isSecure, sameSitePolicy := getCookieSettings(r)
+								
+								// Debug logging for Cloudflare tunnel issues
+								sameSiteName := "Default"
+								switch sameSitePolicy {
+								case http.SameSiteNoneMode:
+									sameSiteName = "None"
+								case http.SameSiteLaxMode:
+									sameSiteName = "Lax"
+								case http.SameSiteStrictMode:
+									sameSiteName = "Strict"
+								}
+								
+								log.Debug().
+									Bool("secure", isSecure).
+									Str("same_site", sameSiteName).
+									Str("token", token[:8]+"...").
+									Str("remote_addr", r.RemoteAddr).
+									Msg("Setting session cookie after successful login")
 								
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{

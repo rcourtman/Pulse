@@ -404,7 +404,7 @@ journalctl -u pulse -f
 ### Quick Start - Hot Reload (Recommended)
 ```bash
 # Best development experience with instant frontend updates
-./hot-dev.sh
+./scripts/hot-dev.sh
 # Frontend: http://localhost:5173 (hot reload)
 # Backend: http://localhost:7655
 ```
