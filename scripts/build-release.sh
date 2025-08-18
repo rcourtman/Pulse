@@ -87,6 +87,30 @@ for build_name in "${!builds[@]}"; do
     cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/"
 done
 
+# Create a detection script that creates the pulse symlink based on architecture
+cat > "$universal_dir/bin/pulse" << 'EOF'
+#!/bin/sh
+# Auto-detect architecture and run appropriate binary
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        exec "$(dirname "$0")/pulse-linux-amd64" "$@"
+        ;;
+    aarch64|arm64)
+        exec "$(dirname "$0")/pulse-linux-arm64" "$@"
+        ;;
+    armv7l|armhf)
+        exec "$(dirname "$0")/pulse-linux-armv7" "$@"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$universal_dir/bin/pulse"
+
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
 
