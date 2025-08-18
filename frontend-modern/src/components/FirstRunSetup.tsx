@@ -103,8 +103,8 @@ export const FirstRunSetup: Component = () => {
       setSavedPassword(useCustomPassword() ? password() : generatedPassword());
       setSavedToken(token);
       
-      // Apply settings
-      localStorage.setItem('dark-mode', String(darkMode()));
+      // Apply settings - use consistent storage key
+      localStorage.setItem('darkMode', String(darkMode()));
       
       // Show credentials
       setShowCredentials(true);
