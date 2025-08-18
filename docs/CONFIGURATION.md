@@ -120,12 +120,17 @@ For backwards compatibility, some settings can be overridden via environment var
    - `BACKEND_HOST` - IP address to bind to (default: `0.0.0.0`)
      - Set to `127.0.0.1` or `localhost` to only listen on localhost (for reverse proxy)
    - `FRONTEND_PORT` - Port to listen on (default: `7655`)
+   
+3. **HTTPS/TLS variables** - For enabling HTTPS
+   - `HTTPS_ENABLED` - Set to `true` to enable HTTPS (default: `false`)
+   - `TLS_CERT_FILE` - Path to TLS certificate file (e.g., `/etc/pulse/cert.pem`)
+   - `TLS_KEY_FILE` - Path to TLS private key file (e.g., `/etc/pulse/key.pem`)
 
-3. **System settings (from system.json)** - Normal priority
+4. **System settings (from system.json)** - Normal priority
    - If system.json exists, it takes precedence
    - If missing, environment variables are checked
 
-4. **Legacy environment variables** - Lowest priority (deprecated)
+5. **Legacy environment variables** - Lowest priority (deprecated)
    - `POLLING_INTERVAL` - Only used if system.json doesn't exist
    - `CONNECTION_TIMEOUT` - Can override system.json value
    - `ALLOWED_ORIGINS` - Can override system.json value

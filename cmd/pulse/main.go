@@ -82,12 +82,19 @@ func runServer() {
 		// This will be dynamically set based on the actual request host
 		allowedOrigins := []string{}
 		// Add localhost variants for development
-		allowedOrigins = append(allowedOrigins, 
-			"http://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
-			"http://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
-		)
-		// If HTTPS is likely being used, add those too
-		if cfg.FrontendPort == 443 || cfg.FrontendPort == 8443 {
+		if cfg.HTTPSEnabled {
+			allowedOrigins = append(allowedOrigins, 
+				"https://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
+				"https://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
+			)
+		} else {
+			allowedOrigins = append(allowedOrigins, 
+				"http://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
+				"http://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
+			)
+		}
+		// If HTTPS is likely being used based on port, add those too
+		if !cfg.HTTPSEnabled && (cfg.FrontendPort == 443 || cfg.FrontendPort == 8443) {
 			allowedOrigins = append(allowedOrigins,
 				"https://localhost:"+fmt.Sprintf("%d", cfg.FrontendPort),
 				"https://127.0.0.1:"+fmt.Sprintf("%d", cfg.FrontendPort),
@@ -140,12 +147,27 @@ func runServer() {
 	
 	// Start server
 	go func() {
-		log.Info().
-			Str("host", cfg.BackendHost).
-			Int("port", cfg.FrontendPort).
-			Msg("Server listening")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("Failed to start server")
+		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+			log.Info().
+				Str("host", cfg.BackendHost).
+				Int("port", cfg.FrontendPort).
+				Str("protocol", "HTTPS").
+				Msg("Server listening")
+			if err := srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("Failed to start HTTPS server")
+			}
+		} else {
+			if cfg.HTTPSEnabled {
+				log.Warn().Msg("HTTPS_ENABLED is true but TLS_CERT_FILE or TLS_KEY_FILE not configured, falling back to HTTP")
+			}
+			log.Info().
+				Str("host", cfg.BackendHost).
+				Int("port", cfg.FrontendPort).
+				Str("protocol", "HTTP").
+				Msg("Server listening")
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("Failed to start HTTP server")
+			}
 		}
 	}()
 

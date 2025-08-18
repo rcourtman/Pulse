@@ -253,6 +253,24 @@ Configure email notifications in **Settings → Alerts → Email Destinations**
 2. Use your email as username and app password as password
 3. Server: smtp-mail.outlook.com, Port: 587, Enable STARTTLS
 
+### HTTPS/TLS Configuration
+Enable HTTPS by setting these environment variables:
+```bash
+# Systemd: sudo systemctl edit pulse-backend
+Environment="HTTPS_ENABLED=true"
+Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
+Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
+
+# Docker
+docker run -d -p 7655:7655 \
+  -e HTTPS_ENABLED=true \
+  -e TLS_CERT_FILE=/data/cert.pem \
+  -e TLS_KEY_FILE=/data/key.pem \
+  -v pulse_data:/data \
+  -v /path/to/certs:/data/certs:ro \
+  rcourtman/pulse:latest
+```
+
 For deployment overrides (ports, etc), use environment variables:
 ```bash
 # Systemd: sudo systemctl edit pulse-backend
