@@ -30,7 +30,6 @@
 - Live monitoring of VMs, containers, nodes, storage
 - Alerts with email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
 - Unified view of PBS backups, PVE backups, and snapshots
-- PBS push mode for firewalled servers
 - Config export/import with encryption and authentication
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
