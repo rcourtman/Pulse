@@ -14,6 +14,7 @@ import { logger } from './utils/logger';
 import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
+import { apiFetch } from './utils/apiClient';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -117,7 +118,7 @@ function App() {
     
     // First check security status to see if auth is configured
     try {
-      const securityRes = await fetch('/api/security/status');
+      const securityRes = await apiFetch('/api/security/status');
       const securityData = await securityRes.json();
       console.log('[App] Security status:', securityData);
       const authConfigured = securityData.hasAuthentication || false;
@@ -132,12 +133,11 @@ function App() {
       }
       
       // If auth is configured, check if we're authenticated
-      const stateRes = await fetch('/api/state', {
+      const stateRes = await apiFetch('/api/state', {
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
           'Accept': 'application/json'
-        },
-        credentials: 'include'
+        }
       });
       
       if (stateRes.status === 401) {
