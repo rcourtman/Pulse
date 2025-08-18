@@ -73,13 +73,8 @@ function App() {
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   
-  // Dark mode - check localStorage first, only use system preference if never set
-  const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-  const [darkMode, setDarkMode] = createSignal(
-    savedDarkMode !== null 
-      ? savedDarkMode === 'true'
-      : window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
+  // Dark mode - only apply user preferences after authentication
+  const [darkMode, setDarkMode] = createSignal(false);
   
   // Toggle dark mode
   const toggleDarkMode = () => {
@@ -94,12 +89,7 @@ function App() {
     logger.info('Theme changed', { mode: newMode ? 'dark' : 'light' });
   };
   
-  // Initialize dark mode - ensure it matches the signal
-  if (darkMode()) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
+  // Don't initialize dark mode here - will be handled based on auth state
   
   // Check auth on mount
   onMount(async () => {
@@ -146,12 +136,36 @@ function App() {
         setNeedsAuth(false);
         // Only initialize WebSocket after successful auth check
         setWsStore(getGlobalWebSocketStore());
+        
+        // Apply user's theme preference only after successful authentication
+        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+        const prefersDark = savedDarkMode !== null 
+          ? savedDarkMode === 'true'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(prefersDark);
+        if (prefersDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
       }
     } catch (error) {
       console.error('Auth check error:', error);
       // On error, try to proceed without auth
       setNeedsAuth(false);
       setWsStore(getGlobalWebSocketStore());
+      
+      // Apply theme preference if we're proceeding without auth
+      const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+      const prefersDark = savedDarkMode !== null 
+        ? savedDarkMode === 'true'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setDarkMode(prefersDark);
+      if (prefersDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
     } finally {
       setIsLoading(false);
     }
