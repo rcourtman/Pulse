@@ -781,8 +781,8 @@ const Settings: Component = () => {
                               if (stateNode && stateNode.status === 'online') {
                                 return 'bg-green-500';
                               }
-                              // Default to gray if no state data
-                              return 'bg-gray-400';
+                              // Default to red if no state data (node is offline/unreachable)
+                              return 'bg-red-500';
                             })()
                           }`}></div>
                           </div>
@@ -996,8 +996,8 @@ const Settings: Component = () => {
                               if (statePBS && statePBS.status === 'online') {
                                 return 'bg-green-500';
                               }
-                              // Default to gray if no state data
-                              return 'bg-gray-400';
+                              // Default to red if no state data (server is offline/unreachable)
+                              return 'bg-red-500';
                             })()
                           }`}></div>
                           <div>
