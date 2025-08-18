@@ -88,6 +88,11 @@ type Config struct {
 	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	
+	// HTTPS/TLS settings
+	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
+	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile   string `envconfig:"TLS_KEY_FILE" default:""`
 
 	// Update settings
 	UpdateChannel           string        `envconfig:"UPDATE_CHANNEL" default:"stable"`
@@ -346,6 +351,20 @@ func Load() (*Config, error) {
 		}
 		log.Debug().Bool("is_hashed", IsPasswordHashed(authPass)).Msg("Loaded auth password from env var")
 	}
+	// HTTPS/TLS configuration from environment
+	if httpsEnabled := os.Getenv("HTTPS_ENABLED"); httpsEnabled != "" {
+		cfg.HTTPSEnabled = httpsEnabled == "true" || httpsEnabled == "1"
+		log.Debug().Bool("enabled", cfg.HTTPSEnabled).Msg("HTTPS enabled status from env var")
+	}
+	if tlsCertFile := os.Getenv("TLS_CERT_FILE"); tlsCertFile != "" {
+		cfg.TLSCertFile = tlsCertFile
+		log.Debug().Str("cert_file", tlsCertFile).Msg("TLS cert file from env var")
+	}
+	if tlsKeyFile := os.Getenv("TLS_KEY_FILE"); tlsKeyFile != "" {
+		cfg.TLSKeyFile = tlsKeyFile
+		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
+	}
+	
 	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
 	// These settings now ONLY come from system.json to prevent confusion
 	// Only keeping essential deployment/infrastructure env vars
