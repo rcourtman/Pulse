@@ -80,11 +80,11 @@ done
 echo "Creating universal tarball..."
 universal_dir="$BUILD_DIR/universal"
 rm -rf "$universal_dir"
-mkdir -p "$universal_dir"
+mkdir -p "$universal_dir/bin"
 
-# Copy all binaries
+# Copy all binaries to bin/ directory to maintain consistent structure
 for build_name in "${!builds[@]}"; do
-    cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/"
+    cp "$BUILD_DIR/pulse-$build_name" "$universal_dir/bin/"
 done
 
 # Add VERSION file
