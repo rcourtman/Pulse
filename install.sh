@@ -363,6 +363,7 @@ main() {
             1)
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
+                create_user
                 download_pulse
                 start_pulse
                 print_completion
@@ -370,6 +371,7 @@ main() {
             2)
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
+                create_user
                 download_pulse
                 setup_directories
                 install_systemd_service
