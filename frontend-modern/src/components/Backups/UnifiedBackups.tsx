@@ -44,6 +44,7 @@ const UnifiedBackups: Component = () => {
   const [selectedDateRange, setSelectedDateRange] = createSignal<{ start: number; end: number } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
   const [tooltip, setTooltip] = createSignal<{ text: string; x: number; y: number } | null>(null);
+  const [selectedPBSInstance, setSelectedPBSInstance] = createSignal<string | null>(null);
   const [showFilters, setShowFilters] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.BACKUPS_SHOW_FILTERS,
     false // Default to collapsed
@@ -52,6 +53,18 @@ const UnifiedBackups: Component = () => {
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false // Default to absolute time
   );
+
+  // Auto-set backup type filter to 'remote' when a PBS instance is selected
+  createEffect(() => {
+    const pbsInstance = selectedPBSInstance();
+    if (pbsInstance) {
+      // When a PBS instance is selected, only show remote backups
+      setBackupTypeFilter('remote');
+    } else {
+      // When deselected, reset to show all
+      setBackupTypeFilter('all');
+    }
+  });
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -114,7 +127,12 @@ const UnifiedBackups: Component = () => {
 
     // Process PBS backups FIRST from the new Go backend (state.pbsBackups)
     // This ensures we have the complete PBS data with namespaces
-    state.pbsBackups?.forEach((backup) => {
+    // Filter by selected PBS instance if one is selected
+    const pbsBackupsToProcess = selectedPBSInstance() 
+      ? state.pbsBackups?.filter(b => b.instance === selectedPBSInstance())
+      : state.pbsBackups;
+    
+    pbsBackupsToProcess?.forEach((backup) => {
       const backupDate = new Date(backup.backupTime);
       const dateStr = backupDate.toISOString().split('T')[0];
       const timeStr = backupDate.toISOString().split('T')[1].split('.')[0].replace(/:/g, '');
@@ -314,6 +332,12 @@ const UnifiedBackups: Component = () => {
     // Backup type filter
     if (backupType !== 'all') {
       data = data.filter(item => item.backupType === backupType);
+    }
+
+    // PBS instance filter - when a specific PBS is selected
+    const pbsInstance = selectedPBSInstance();
+    if (pbsInstance) {
+      data = data.filter(item => item.node === pbsInstance);
     }
 
     // Sort
@@ -655,14 +679,38 @@ const UnifiedBackups: Component = () => {
     <div class="space-y-4">
       {/* PBS Status Summary */}
       <Show when={state.pbs && state.pbs.length > 0}>
-        <div class="flex flex-wrap gap-2">
+        <div class="space-y-2">
+          <Show when={selectedPBSInstance()}>
+            <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <span>Showing only backups from PBS server: <strong>{selectedPBSInstance()}</strong></span>
+              <button
+                onClick={() => setSelectedPBSInstance(null)}
+                class="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Show all backups
+              </button>
+            </div>
+          </Show>
+          <div class="flex flex-wrap gap-2">
           <For each={state.pbs}>
             {(instance) => (
-              <div class="flex-1 min-w-[250px]">
-                <PBSCard instance={instance} />
+              <div 
+                class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
+                onClick={() => {
+                  // Toggle selection - click again to deselect
+                  setSelectedPBSInstance(
+                    selectedPBSInstance() === instance.name ? null : instance.name
+                  );
+                }}
+              >
+                <PBSCard 
+                  instance={instance} 
+                  isSelected={selectedPBSInstance() === instance.name}
+                />
               </div>
             )}
           </For>
+          </div>
         </div>
       </Show>
 
@@ -1154,44 +1202,52 @@ const UnifiedBackups: Component = () => {
             <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
             
             {/* Backup Type Filter */}
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <div class={`inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 ${selectedPBSInstance() ? 'opacity-50' : ''}`}>
               <button
-                onClick={() => setBackupTypeFilter('all')}
+                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('all')}
+                disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   backupTypeFilter() === 'all'
                     ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                    : 'text-gray-600 dark:text-gray-400'
+                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
+                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
               >
                 All Backups
               </button>
               <button
-                onClick={() => setBackupTypeFilter('snapshot')}
+                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('snapshot')}
+                disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   backupTypeFilter() === 'snapshot'
                     ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                    : 'text-gray-600 dark:text-gray-400'
+                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
+                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
               >
                 Snapshots
               </button>
               <button
-                onClick={() => setBackupTypeFilter('local')}
+                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('local')}
+                disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   backupTypeFilter() === 'local'
                     ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                    : 'text-gray-600 dark:text-gray-400'
+                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
+                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
               >
                 PVE
               </button>
               <button
-                onClick={() => setBackupTypeFilter('remote')}
+                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('remote')}
+                disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   backupTypeFilter() === 'remote'
                     ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                    : 'text-gray-600 dark:text-gray-400'
+                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
+                title={selectedPBSInstance() ? 'PBS filter locked when instance selected' : ''}
               >
                 PBS
               </button>

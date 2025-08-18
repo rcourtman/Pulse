@@ -24,6 +24,7 @@ type StatusMode = 'all' | 'running' | 'stopped';
 export function Dashboard(props: DashboardProps) {
   const { connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [search, setSearch] = createSignal('');
+  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -174,6 +175,11 @@ export function Dashboard(props: DashboardProps) {
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
 
+    // Filter by selected node
+    if (selectedNode()) {
+      guests = guests.filter(g => g.node === selectedNode());
+    }
+
     // Filter by type
     if (viewMode() === 'vm') {
       guests = guests.filter(g => g.type === 'qemu');
@@ -318,16 +324,39 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div>
       {/* Node Summary Cards - Adaptive Layout */}
-      <div id="node-summary-cards-container" class="mb-3">
+      <div id="node-summary-cards-container" class="mb-3 space-y-2">
+        <Show when={selectedNode()}>
+          <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+            <span>Showing guests for node: <strong>{selectedNode()}</strong></span>
+            <button
+              onClick={() => setSelectedNode(null)}
+              class="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        </Show>
+        <div>
         <Show when={props.nodes.length > 0}>
           {/* Regular cards for 1-4 nodes */}
           <Show when={props.nodes.length <= 4}>
             <div class="flex flex-wrap gap-2">
               <For each={props.nodes}>
                 {(node) => (
-                  <div class="flex-1 min-w-[250px]">
+                  <div 
+                    class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
+                    onClick={() => {
+                      // Toggle selection - click again to deselect
+                      setSelectedNode(
+                        selectedNode() === node.name ? null : node.name
+                      );
+                    }}
+                  >
                     <ComponentErrorBoundary name="NodeCard">
-                      <NodeCard node={node} />
+                      <NodeCard 
+                        node={node} 
+                        isSelected={selectedNode() === node.name}
+                      />
                     </ComponentErrorBoundary>
                   </div>
                 )}
@@ -361,6 +390,7 @@ export function Dashboard(props: DashboardProps) {
             </div>
           </Show>
         </Show>
+        </div>
       </div>
       
       {/* Dashboard Filter */}
