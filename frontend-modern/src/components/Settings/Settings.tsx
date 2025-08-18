@@ -457,10 +457,10 @@ const Settings: Component = () => {
       return;
     }
     
-    // Require 12 chars for custom passphrase or when no auth exists
+    // Just require a passphrase to be entered
     const hasAuth = securityStatus()?.hasAuthentication;
-    if ((!hasAuth || useCustomPassphrase()) && exportPassphrase().length < 12) {
-      showError('Passphrase must be at least 12 characters long');
+    if ((!hasAuth || useCustomPassphrase()) && !exportPassphrase()) {
+      showError('Please enter a passphrase');
       return;
     }
     
@@ -1607,7 +1607,7 @@ const Settings: Component = () => {
                       <p class="font-medium mb-1">Security Notice</p>
                       <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
                         <li>• Backups contain encrypted credentials and sensitive data</li>
-                        <li>• Use a strong passphrase (12+ characters recommended)</li>
+                        <li>• Use a strong passphrase to protect your backup</li>
                         <li>• Store backup files securely and never share the passphrase</li>
                       </ul>
                     </div>
@@ -2017,13 +2017,8 @@ const Settings: Component = () => {
                 />
                 <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Passphrase must be at least 12 characters. You'll need this to restore the backup.
+                    You'll need this passphrase to restore the backup.
                   </p>
-                  <Show when={exportPassphrase() && exportPassphrase().length < 12}>
-                    <p class="text-xs text-red-500 dark:text-red-400 mt-1">
-                      Passphrase too short: {exportPassphrase().length}/12 characters
-                    </p>
-                  </Show>
                 </Show>
                 <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
