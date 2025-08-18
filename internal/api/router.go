@@ -1023,6 +1023,9 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		csrfMu.Unlock()
 	}
 	
+	// Get appropriate cookie settings based on proxy detection (consistent with login)
+	isSecure, sameSitePolicy := getCookieSettings(req)
+	
 	// Clear the session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "pulse_session",
@@ -1030,8 +1033,8 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   req.TLS != nil || req.Header.Get("X-Forwarded-Proto") == "https",
-		SameSite: http.SameSiteStrictMode,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
 	})
 	
 	// Audit log logout (use admin as username since we have single user for now)

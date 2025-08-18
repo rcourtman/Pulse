@@ -36,8 +36,12 @@ In Pulse web UI: Settings → General → API Key → Generate
 In PBS web UI:
 1. Configuration → Access Control → API Tokens
 2. Add Token
-3. User: Choose user with Datastore.Audit permission
+3. User: Choose user with appropriate permissions:
+   - **Basic monitoring**: Datastore.Audit on /datastore/* (backups only)
+   - **Full monitoring**: Audit on / (backups + CPU/memory/uptime stats)
 4. Copy token ID (username@pbs!tokenname) and secret
+
+**Note:** For full monitoring visibility including system stats, use Audit on /. This is still read-only access.
 
 ## Verify
 
