@@ -20,6 +20,49 @@ var (
 	sessionMu sync.RWMutex
 )
 
+// detectProxy checks if the request is coming through a reverse proxy
+func detectProxy(r *http.Request) bool {
+	// Check multiple headers that proxies commonly set
+	return r.Header.Get("X-Forwarded-For") != "" ||
+		r.Header.Get("X-Real-IP") != "" ||
+		r.Header.Get("X-Forwarded-Proto") != "" ||
+		r.Header.Get("X-Forwarded-Host") != "" ||
+		r.Header.Get("Forwarded") != "" || // RFC 7239
+		r.Header.Get("CF-Ray") != "" || // Cloudflare
+		r.Header.Get("CF-Connecting-IP") != "" || // Cloudflare
+		r.Header.Get("X-Forwarded-Server") != "" || // Some proxies
+		r.Header.Get("X-Forwarded-Port") != "" // Some proxies
+}
+
+// isConnectionSecure checks if the connection is over HTTPS
+func isConnectionSecure(r *http.Request) bool {
+	return r.TLS != nil ||
+		r.Header.Get("X-Forwarded-Proto") == "https" ||
+		strings.Contains(r.Header.Get("Forwarded"), "proto=https")
+}
+
+// getCookieSettings returns the appropriate cookie settings based on proxy detection
+func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
+	isProxied := detectProxy(r)
+	isSecure := isConnectionSecure(r)
+	
+	// Default to Lax for better compatibility
+	sameSitePolicy := http.SameSiteLaxMode
+	
+	if isProxied {
+		// For proxied connections, we need to be more permissive
+		// But only use None if connection is secure (required by browsers)
+		if isSecure {
+			sameSitePolicy = http.SameSiteNoneMode
+		} else {
+			// For HTTP proxies, stay with Lax for compatibility
+			sameSitePolicy = http.SameSiteLaxMode
+		}
+	}
+	
+	return isSecure, sameSitePolicy
+}
+
 // generateSessionToken creates a cryptographically secure session token
 func generateSessionToken() string {
 	b := make([]byte, 32)
@@ -252,21 +295,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								// Generate CSRF token
 								csrfToken := generateCSRFToken(token)
 								
-								// Detect if we're behind a proxy/tunnel (Cloudflare, reverse proxy, etc)
-								isProxied := r.Header.Get("X-Forwarded-For") != "" || 
-									r.Header.Get("X-Real-IP") != "" ||
-									r.Header.Get("CF-Ray") != "" || // Cloudflare
-									r.Header.Get("X-Forwarded-Proto") != ""
-								
-								// Determine SameSite policy based on proxy detection
-								sameSitePolicy := http.SameSiteLaxMode
-								if isProxied {
-									// For proxied connections, use None to allow cross-origin cookies
-									sameSitePolicy = http.SameSiteNoneMode
-								}
-								
-								// Determine if connection is secure (required for SameSite=None)
-								isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+								// Get appropriate cookie settings based on proxy detection
+								isSecure, sameSitePolicy := getCookieSettings(r)
 								
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{

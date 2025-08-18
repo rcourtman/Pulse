@@ -897,7 +897,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </li>
                                     <li class="flex items-start">
                                       <span class="text-green-500 mr-2 mt-0.5">✓</span>
-                                      <span>Sets up Audit permissions for read-only access</span>
+                                      <span>Sets up Audit permissions (read-only access to backups + system stats)</span>
                                     </li>
                                     <li class="flex items-start">
                                       <span class="text-green-500 mr-2 mt-0.5">✓</span>
@@ -968,7 +968,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   
                                   {/* Step 3: Set permissions */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up read-only permissions:</p>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up read-only permissions (includes system stats):</p>
                                     <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
                                       <button
                                         type="button"
@@ -1016,6 +1016,16 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <li><strong>Token ID:</strong> pulse-monitor@pbs!pulse-token</li>
                                       <li><strong>Token Value:</strong> [The value from step 2]</li>
                                       <li><strong>Host URL:</strong> {formData().host || 'https://your-server:8007'}</li>
+                                    </ul>
+                                  </div>
+                                  
+                                  {/* Permission Info Box */}
+                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-3">
+                                    <p class="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">About PBS Permissions:</p>
+                                    <ul class="text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                                      <li><strong>Basic (DatastoreAudit):</strong> View backups only</li>
+                                      <li><strong>Enhanced (Audit on /):</strong> View backups + CPU/memory/uptime stats</li>
+                                      <li class="text-amber-600 dark:text-amber-400">→ We use Enhanced for better monitoring visibility</li>
                                     </ul>
                                   </div>
                                 </div>
