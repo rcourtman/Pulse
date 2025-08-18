@@ -884,6 +884,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	for _, res := range resources {
 		guestID := fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
 		
+		// Debug log the resource type
+		log.Debug().
+			Str("instance", instanceName).
+			Str("name", res.Name).
+			Int("vmid", res.VMID).
+			Str("type", res.Type).
+			Msg("Processing cluster resource")
+		
 		// Calculate I/O rates
 		currentMetrics := IOMetrics{
 			DiskRead:   int64(res.DiskRead),
@@ -908,6 +916,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Node:       res.Node,
 				Instance:   instanceName,
 				Status:     res.Status,
+				Type:       "qemu",
 				CPU:        safeFloat(res.CPU),
 				CPUs:       res.MaxCPU,
 				Memory: models.Memory{
@@ -954,6 +963,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Node:       res.Node,
 				Instance:   instanceName,
 				Status:     res.Status,
+				Type:       "lxc",
 				CPU:        safeFloat(res.CPU),
 				CPUs:       int(res.MaxCPU),
 				Memory: models.Memory{
