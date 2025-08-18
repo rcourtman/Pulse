@@ -166,7 +166,7 @@ environment:
 ## Common Issues
 
 ### Can't Access After Upgrade
-If upgrading from pre-v4.4.0:
+If upgrading from pre-v4.5.0:
 1. You'll see the security setup wizard
 2. Complete the setup - your nodes are preserved
 3. Use your new credentials to login
