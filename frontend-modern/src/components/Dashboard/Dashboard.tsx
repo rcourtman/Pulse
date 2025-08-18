@@ -24,7 +24,17 @@ type StatusMode = 'all' | 'running' | 'stopped';
 export function Dashboard(props: DashboardProps) {
   const { connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [search, setSearch] = createSignal('');
-  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  
+  // Extract selected node from search term
+  const selectedNode = createMemo(() => {
+    const searchStr = search();
+    const match = searchStr.match(/node:(\S+)/);
+    if (match && props.nodes.some(node => node.name === match[1])) {
+      return match[1];
+    }
+    return null;
+  });
   
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -131,6 +141,7 @@ export function Dashboard(props: DashboardProps) {
         if (search().trim() || sortKey() !== 'vmid' || sortDirection() !== 'asc') {
           // Clear search and reset filters
           setSearch('');
+          setIsSearchLocked(false);
           setSortKey('vmid');
           setSortDirection('asc');
           
@@ -174,11 +185,6 @@ export function Dashboard(props: DashboardProps) {
   // Filter guests based on current settings
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
-
-    // Filter by selected node
-    if (selectedNode()) {
-      guests = guests.filter(g => g.node === selectedNode());
-    }
 
     // Filter by type
     if (viewMode() === 'vm') {
@@ -329,7 +335,10 @@ export function Dashboard(props: DashboardProps) {
           <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
             <span>Showing guests for node: <strong>{selectedNode()}</strong></span>
             <button
-              onClick={() => setSelectedNode(null)}
+              onClick={() => {
+                setSearch('');
+                setIsSearchLocked(false);
+              }}
               class="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Clear filter
@@ -346,16 +355,32 @@ export function Dashboard(props: DashboardProps) {
                   <div 
                     class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
                     onClick={() => {
-                      // Toggle selection - click again to deselect
-                      setSelectedNode(
-                        selectedNode() === node.name ? null : node.name
-                      );
+                      const currentSearch = search();
+                      const nodeFilter = `node:${node.name}`;
+                      
+                      // Check if this node filter is already in the search
+                      if (currentSearch.includes(nodeFilter)) {
+                        // Remove the node filter
+                        setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                        setIsSearchLocked(false);
+                      } else {
+                        // Clear any existing node: filters and add the new one
+                        const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                        const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                        setSearch(newSearch);
+                        setIsSearchLocked(true);
+                        
+                        // Expand filters if collapsed
+                        if (!showFilters()) {
+                          setShowFilters(true);
+                        }
+                      }
                     }}
                   >
                     <ComponentErrorBoundary name="NodeCard">
                       <NodeCard 
                         node={node} 
-                        isSelected={selectedNode() === node.name}
+                        isSelected={search().includes(`node:${node.name}`)}
                       />
                     </ComponentErrorBoundary>
                   </div>
@@ -442,10 +467,16 @@ export function Dashboard(props: DashboardProps) {
                   type="text"
                   placeholder="Search: name, jellyfin,plex, or cpu>80"
                   value={search()}
-                  onInput={(e) => setSearch(e.currentTarget.value)}
-                  class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                  onInput={(e) => {
+                    if (!isSearchLocked()) {
+                      setSearch(e.currentTarget.value);
+                    }
+                  }}
+                  disabled={isSearchLocked()}
+                  class={`w-full pl-9 pr-9 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                          bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all
+                         ${isSearchLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   title="Search guests or use filters like cpu>80"
                 />
                 <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -491,6 +522,7 @@ export function Dashboard(props: DashboardProps) {
               <button 
                 onClick={() => {
                   setSearch('');
+                  setIsSearchLocked(false);
                   setSortKey('vmid');
                   setSortDirection('asc');
                   setViewMode('all');

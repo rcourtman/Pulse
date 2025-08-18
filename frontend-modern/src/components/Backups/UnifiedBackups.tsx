@@ -44,7 +44,28 @@ const UnifiedBackups: Component = () => {
   const [selectedDateRange, setSelectedDateRange] = createSignal<{ start: number; end: number } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
   const [tooltip, setTooltip] = createSignal<{ text: string; x: number; y: number } | null>(null);
-  const [selectedPBSInstance, setSelectedPBSInstance] = createSignal<string | null>(null);
+  const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  
+  // Extract PBS instance from search term
+  const selectedPBSInstance = createMemo(() => {
+    const search = searchTerm();
+    const match = search.match(/node:(\S+)/);
+    if (match && state.pbs?.some(pbs => pbs.name === match[1])) {
+      return match[1];
+    }
+    return null;
+  });
+  
+  // Auto-set backup type filter when PBS instance is selected
+  createEffect(() => {
+    const pbsInstance = selectedPBSInstance();
+    if (pbsInstance) {
+      setBackupTypeFilter('remote');
+    } else if (!isSearchLocked()) {
+      setBackupTypeFilter('all');
+    }
+  });
+  
   const [showFilters, setShowFilters] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.BACKUPS_SHOW_FILTERS,
     false // Default to collapsed
@@ -53,18 +74,6 @@ const UnifiedBackups: Component = () => {
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false // Default to absolute time
   );
-
-  // Auto-set backup type filter to 'remote' when a PBS instance is selected
-  createEffect(() => {
-    const pbsInstance = selectedPBSInstance();
-    if (pbsInstance) {
-      // When a PBS instance is selected, only show remote backups
-      setBackupTypeFilter('remote');
-    } else {
-      // When deselected, reset to show all
-      setBackupTypeFilter('all');
-    }
-  });
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -489,6 +498,7 @@ const UnifiedBackups: Component = () => {
   // Reset filters
   const resetFilters = () => {
     setSearchTerm('');
+    setIsSearchLocked(false);
     setTypeFilter('all');
     setBackupTypeFilter('all');
     setSortKey('backupTime');
@@ -690,7 +700,10 @@ const UnifiedBackups: Component = () => {
             <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
               <span>Showing only backups from PBS server: <strong>{selectedPBSInstance()}</strong></span>
               <button
-                onClick={() => setSelectedPBSInstance(null)}
+                onClick={() => {
+                  setSearchTerm('');
+                  setIsSearchLocked(false);
+                }}
                 class="text-blue-600 dark:text-blue-400 hover:underline"
               >
                 Show all backups
@@ -703,10 +716,26 @@ const UnifiedBackups: Component = () => {
               <div 
                 class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
                 onClick={() => {
-                  // Toggle selection - click again to deselect
-                  setSelectedPBSInstance(
-                    selectedPBSInstance() === instance.name ? null : instance.name
-                  );
+                  const currentSearch = searchTerm();
+                  const nodeFilter = `node:${instance.name}`;
+                  
+                  // Check if this PBS filter is already in the search
+                  if (currentSearch.includes(nodeFilter)) {
+                    // Remove the PBS filter
+                    setSearchTerm(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                    setIsSearchLocked(false);
+                  } else {
+                    // Clear any existing node: filters and add the new one
+                    const cleanedSearch = currentSearch.replace(/node:\S+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                    const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                    setSearchTerm(newSearch);
+                    setIsSearchLocked(true);
+                    
+                    // Expand filters if collapsed
+                    if (!showFilters()) {
+                      setShowFilters(true);
+                    }
+                  }
                 }}
               >
                 <PBSCard 
@@ -1152,10 +1181,16 @@ const UnifiedBackups: Component = () => {
                   type="text"
                   placeholder="Search VMID, Name, Node, Storage (use ',' for OR)"
                   value={searchTerm()}
-                  onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                  class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                  onInput={(e) => {
+                    if (!isSearchLocked()) {
+                      setSearchTerm(e.currentTarget.value);
+                    }
+                  }}
+                  disabled={isSearchLocked()}
+                  class={`w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                          bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all
+                         ${isSearchLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
                 <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
