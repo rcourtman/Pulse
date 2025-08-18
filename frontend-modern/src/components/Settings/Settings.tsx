@@ -1533,88 +1533,6 @@ const Settings: Component = () => {
                 </div>
               </Show>
 
-              {/* Backup & Restore */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Securely backup your node configurations and credentials or restore from a previous backup
-                </p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Export Section */}
-                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                    <div class="flex items-start gap-3">
-                      <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                        </svg>
-                      </div>
-                      <div class="flex-1">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Export Configuration</h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                          Download an encrypted backup of all nodes and settings
-                        </p>
-                        <button
-                          onClick={() => {
-                            // Default to custom passphrase if no auth is configured
-                            setUseCustomPassphrase(!securityStatus()?.hasAuthentication);
-                            setShowExportDialog(true);
-                          }}
-                          class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-                        >
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          Export Backup
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Import Section */}
-                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                    <div class="flex items-start gap-3">
-                      <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                      </div>
-                      <div class="flex-1">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Restore Configuration</h4>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                          Upload a backup file to restore nodes and settings
-                        </p>
-                        <button
-                          onClick={() => setShowImportDialog(true)}
-                          class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
-                        >
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                          </svg>
-                          Restore Backup
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <div class="flex gap-2">
-                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <div class="text-xs text-amber-700 dark:text-amber-300">
-                      <p class="font-medium mb-1">Security Notice</p>
-                      <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
-                        <li>• Backups contain encrypted credentials and sensitive data</li>
-                        <li>• Use a strong passphrase to protect your backup</li>
-                        <li>• Store backup files securely and never share the passphrase</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Advanced - Only show if auth is enabled */}
               {/* Advanced Options section removed - was only used for Registration Tokens */}
             </div>
@@ -1820,6 +1738,88 @@ const Settings: Component = () => {
                     >
                       Export Diagnostics
                     </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Backup & Restore - Moved from Security tab */}
+              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Backup your node configurations and credentials or restore from a previous backup
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Export Section */}
+                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                      <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Export Configuration</h4>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                          Download an encrypted backup of all nodes and settings
+                        </p>
+                        <button
+                          onClick={() => {
+                            // Default to custom passphrase if no auth is configured
+                            setUseCustomPassphrase(!securityStatus()?.hasAuthentication);
+                            setShowExportDialog(true);
+                          }}
+                          class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Export Backup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Import Section */}
+                  <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                      <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Restore Configuration</h4>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                          Upload a backup file to restore nodes and settings
+                        </p>
+                        <button
+                          onClick={() => setShowImportDialog(true)}
+                          class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Restore Backup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div class="flex gap-2">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                      <p class="font-medium mb-1">Important Notes</p>
+                      <ul class="space-y-0.5 text-amber-600 dark:text-amber-400">
+                        <li>• Backups contain encrypted credentials and sensitive data</li>
+                        <li>• Use a strong passphrase to protect your backup</li>
+                        <li>• Store backup files securely and never share the passphrase</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
