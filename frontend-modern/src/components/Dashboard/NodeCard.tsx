@@ -7,6 +7,7 @@ import { useWebSocket } from '@/App';
 
 interface NodeCardProps {
   node: Node;
+  isSelected?: boolean;
 }
 
 const NodeCard: Component<NodeCardProps> = (props) => {
@@ -120,6 +121,10 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   
   // Determine border/ring style based on status and alerts
   const getBorderClass = () => {
+    // Selected nodes get blue ring
+    if (props.isSelected) {
+      return 'ring-2 ring-blue-500 border border-gray-200 dark:border-gray-700';
+    }
     // Offline nodes get red ring
     if (!isOnline()) {
       return 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700';

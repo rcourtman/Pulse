@@ -4,6 +4,7 @@ import { formatUptime, formatBytes } from '@/utils/format';
 
 interface PBSCardProps {
   instance: PBSInstance;
+  isSelected?: boolean;
 }
 
 const PBSCard: Component<PBSCardProps> = (props) => {
@@ -111,6 +112,10 @@ const PBSCard: Component<PBSCardProps> = (props) => {
   };
 
   const getBorderClass = () => {
+    // Selected PBS gets blue ring
+    if (props.isSelected) {
+      return 'ring-2 ring-blue-500 border border-gray-200 dark:border-gray-700';
+    }
     // Offline PBS gets red ring
     if (!isOnline()) {
       return 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700';
