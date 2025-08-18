@@ -26,16 +26,6 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   
-  // Extract selected node from search term
-  const selectedNode = createMemo(() => {
-    const searchStr = search();
-    const match = searchStr.match(/node:(\S+)/);
-    if (match && props.nodes.some(node => node.name === match[1])) {
-      return match[1];
-    }
-    return null;
-  });
-  
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
   const [viewMode, setViewMode] = createSignal<ViewMode>(
@@ -330,21 +320,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div>
       {/* Node Summary Cards - Adaptive Layout */}
-      <div id="node-summary-cards-container" class="mb-3 space-y-2">
-        <Show when={selectedNode()}>
-          <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-            <span>Showing guests for node: <strong>{selectedNode()}</strong></span>
-            <button
-              onClick={() => {
-                setSearch('');
-                setIsSearchLocked(false);
-              }}
-              class="text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Clear filter
-            </button>
-          </div>
-        </Show>
+      <div id="node-summary-cards-container" class="mb-3">
         <div>
         <Show when={props.nodes.length > 0}>
           {/* Regular cards for 1-4 nodes */}

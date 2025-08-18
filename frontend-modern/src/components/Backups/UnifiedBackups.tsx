@@ -695,22 +695,7 @@ const UnifiedBackups: Component = () => {
     <div class="space-y-4">
       {/* PBS Status Summary */}
       <Show when={state.pbs && state.pbs.length > 0}>
-        <div class="space-y-2">
-          <Show when={selectedPBSInstance()}>
-            <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>Showing only backups from PBS server: <strong>{selectedPBSInstance()}</strong></span>
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setIsSearchLocked(false);
-                }}
-                class="text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Show all backups
-              </button>
-            </div>
-          </Show>
-          <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2">
           <For each={state.pbs}>
             {(instance) => (
               <div 
@@ -745,7 +730,6 @@ const UnifiedBackups: Component = () => {
               </div>
             )}
           </For>
-          </div>
         </div>
       </Show>
 
