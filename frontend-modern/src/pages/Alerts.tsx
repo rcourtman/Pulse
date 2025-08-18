@@ -169,7 +169,19 @@ export function Alerts() {
           }
         }
       });
-      setOverrides(overridesList);
+      
+      // Only update if there's an actual change to prevent losing edit state
+      const currentOverrides = overrides();
+      const hasChanged = overridesList.length !== currentOverrides.length ||
+        overridesList.some((newOverride) => {
+          const existing = currentOverrides.find(o => o.id === newOverride.id);
+          if (!existing) return true;
+          return JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
+        });
+        
+      if (hasChanged) {
+        setOverrides(overridesList);
+      }
     }
   });
 
@@ -998,11 +1010,16 @@ function OverrideItem(props: {
 }) {
   const [editValues, setEditValues] = createSignal({ ...props.override.thresholds });
 
-  // Update edit values when override changes or editing starts
+  // Only reset edit values when editing STARTS, not when override updates
+  // This preserves the user's changes during WebSocket updates
+  let previousEditingState = false;
   createEffect(() => {
-    if (props.isEditing) {
+    const isEditingNow = props.isEditing;
+    // Only reset values when transitioning from not-editing to editing
+    if (isEditingNow && !previousEditingState) {
       setEditValues({ ...props.override.thresholds });
     }
+    previousEditingState = isEditingNow;
   });
 
   const handleSave = () => {
