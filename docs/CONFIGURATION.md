@@ -35,7 +35,7 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 
 **Important Notes:**
 - Password hash MUST be in single quotes to prevent shell expansion
-- API tokens are stored in plain text (48 hex characters)
+- API tokens are stored in plain text (48-64 hex characters)
 - This file should have restricted permissions (600)
 - Never commit this file to version control
 - ProxmoxVE installations may pre-configure API_TOKEN

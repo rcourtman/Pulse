@@ -52,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | s
 
 # Install specific version or release channel
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc     # Latest RC
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.4.0  # Specific version
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0  # Specific version
 ```
 
 ### Initial Setup
@@ -196,7 +196,7 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | s
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc
 
 # Install specific version
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.4.0-rc.1
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0-rc.1
 ```
 
 ### Docker Updates
@@ -208,7 +208,7 @@ docker pull rcourtman/pulse:latest
 docker pull rcourtman/pulse:rc
 
 # Specific version
-docker pull rcourtman/pulse:v4.4.0-rc.1
+docker pull rcourtman/pulse:v4.5.0-rc.1
 ```
 
 ## Configuration
