@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import { setBasicAuth } from '@/utils/apiClient';
+import { STORAGE_KEYS } from '@/constants';
 
 // Force include FirstRunSetup with lazy loading
 const FirstRunSetup = lazy(() => import('./FirstRunSetup').then(m => ({ default: m.FirstRunSetup })));
@@ -17,8 +18,20 @@ export const Login: Component<LoginProps> = (props) => {
   const [loadingAuth, setLoadingAuth] = createSignal(true);
   
   onMount(async () => {
-    // Force dark mode for login screen
-    document.documentElement.classList.add('dark');
+    // Apply saved theme preference from localStorage
+    const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+    if (savedTheme === 'false') {
+      document.documentElement.classList.remove('dark');
+    } else if (savedTheme === 'true') {
+      document.documentElement.classList.add('dark');
+    } else {
+      // No saved preference - use system preference
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
     
     console.log('[Login] Starting auth check...');
     try {
