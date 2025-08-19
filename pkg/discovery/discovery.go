@@ -144,6 +144,12 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 			}
 			if server != nil {
 				result.Servers = append(result.Servers, *server)
+				// Log immediately when found for real-time feedback
+				log.Info().
+					Str("ip", server.IP).
+					Str("type", server.Type).
+					Str("hostname", server.Hostname).
+					Msg("🎯 Discovered server - adding to results")
 			}
 		case errMsg, ok := <-errorChan:
 			if ok && errMsg != "" {
@@ -415,12 +421,14 @@ func (s *Scanner) getLocalSubnet() *net.IPNet {
 
 // getCommonSubnets returns a list of common home/office network subnets
 func (s *Scanner) getCommonSubnets() []*net.IPNet {
+	// Ordered by likelihood - most common first for faster results
 	commonSubnets := []string{
 		"192.168.1.0/24",  // Most common home router default
-		"192.168.0.0/24",  // Very common alternative
+		"192.168.0.0/24",  // Very common alternative  
 		"10.0.0.0/24",     // Some routers use this
-		"192.168.88.0/24", // MikroTik default
-		"172.16.0.0/24",   // Less common but used
+		// Skip less common ones for speed:
+		// "192.168.88.0/24", // MikroTik default (uncommon)
+		// "172.16.0.0/24",   // Less common but used
 	}
 	
 	var nets []*net.IPNet
