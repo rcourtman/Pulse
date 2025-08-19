@@ -160,7 +160,7 @@ To configure the correct subnet:
 Or set via environment:
 ```yaml
 environment:
-  PULSE_DISCOVERY_SUBNET: "192.168.1.0/24"
+  DISCOVERY_SUBNET: "192.168.1.0/24"
 ```
 
 ## Common Issues
@@ -218,7 +218,7 @@ Common problems:
 |----------|-------------|---------|
 | `PORT` | Web UI port | `7655` |
 | `ALLOWED_ORIGINS` | CORS origins | Same-origin only |
-| `PULSE_DISCOVERY_SUBNET` | Network to scan | Auto-detect |
+| `DISCOVERY_SUBNET` | Network to scan | Auto-detect |
 
 ### System
 | Variable | Description | Default |

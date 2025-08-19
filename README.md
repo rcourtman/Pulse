@@ -87,16 +87,15 @@ docker run -d \
 ### With Network Discovery
 ```bash
 # Discovery runs automatically but may detect Docker's internal network
-# For proper discovery, configure subnet after first start:
-# 1. Access Pulse UI
-# 2. Edit /data/system.json and add: "discoverySubnet": "192.168.1.0/24"
-# 3. Restart container
+# Set your local subnet via environment variable:
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
+  -e DISCOVERY_SUBNET="192.168.1.0/24" \
   --restart unless-stopped \
   rcourtman/pulse:latest
+# Or configure later via UI Settings or /data/system.json
 ```
 
 ### Docker Compose
@@ -110,8 +109,8 @@ services:
     volumes:
       - pulse_data:/data
     environment:
-      # Network discovery (configured via system.json after first start)
-      # Add to /data/system.json: "discoverySubnet": "192.168.1.0/24"
+      # Network discovery
+      # - DISCOVERY_SUBNET=192.168.1.0/24   # Your local subnet (default: auto-detect)
       
       # Ports
       # - PORT=7655                         # Backend port (default: 7655)
@@ -148,10 +147,6 @@ volumes:
   pulse_data:
 ```
 
-
-## PBS Agent (Push Mode)
-
-For isolated PBS servers, see [PBS Agent documentation](docs/PBS-AGENT.md)
 
 ## Security
 
@@ -385,7 +380,6 @@ journalctl -u pulse -f
 - [API Reference](docs/API.md) - REST API endpoints and examples
 - [Webhook Guide](docs/WEBHOOKS.md) - Setting up webhooks and custom payloads
 - [Reverse Proxy Setup](docs/REVERSE_PROXY.md) - nginx, Caddy, Apache, Traefik configs
-- [PBS Agent](docs/PBS-AGENT.md) - Monitoring isolated PBS servers
 - [Security](docs/SECURITY.md) - Security features and best practices
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting
 - [Migration Guide](docs/MIGRATION.md) - Backup and migration procedures
