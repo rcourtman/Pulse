@@ -206,6 +206,8 @@ Common problems:
 
 ## Environment Variables Reference
 
+> **⚠️ Important**: Environment variables always override UI/system.json settings. If you set a value via env var (e.g., `DISCOVERY_SUBNET`), changes made in the UI for that setting will NOT take effect until you remove the env var. This follows standard container practices where env vars have highest precedence.
+
 ### Authentication
 | Variable | Description | Example |
 |----------|-------------|---------|
