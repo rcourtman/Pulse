@@ -279,8 +279,12 @@ const Settings: Component = () => {
           const existingMap = new Map(prev.map(s => [`${s.ip}:${s.port}`, s]));
           
           // Add/update the new servers
-          data.servers.forEach((server: any) => {
-            existingMap.set(`${server.ip}:${server.port}`, server);
+          data.servers.forEach((server) => {
+            const discoveredServer: DiscoveredServer = {
+              ...server,
+              type: server.type as 'pbs' | 'pve'
+            };
+            existingMap.set(`${server.ip}:${server.port}`, discoveredServer);
           });
           
           // Convert back to array

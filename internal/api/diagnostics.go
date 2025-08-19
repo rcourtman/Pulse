@@ -26,26 +26,41 @@ type DiagnosticsInfo struct {
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
 type NodeDiagnostic struct {
-	ID           string                 `json:"id"`
-	Name         string                 `json:"name"`
-	Host         string                 `json:"host"`
-	Type         string                 `json:"type"`
-	AuthMethod   string                 `json:"authMethod"`
-	Connected    bool                   `json:"connected"`
-	Error        string                 `json:"error,omitempty"`
-	Details      map[string]interface{} `json:"details,omitempty"`
-	LastPoll     string                 `json:"lastPoll,omitempty"`
-	ClusterInfo  map[string]interface{} `json:"clusterInfo,omitempty"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Host         string            `json:"host"`
+	Type         string            `json:"type"`
+	AuthMethod   string            `json:"authMethod"`
+	Connected    bool              `json:"connected"`
+	Error        string            `json:"error,omitempty"`
+	Details      *NodeDetails      `json:"details,omitempty"`
+	LastPoll     string            `json:"lastPoll,omitempty"`
+	ClusterInfo  *ClusterInfo      `json:"clusterInfo,omitempty"`
+}
+
+// NodeDetails contains node-specific details
+type NodeDetails struct {
+	NodeCount int `json:"node_count,omitempty"`
+}
+
+// ClusterInfo contains cluster information
+type ClusterInfo struct {
+	Nodes int `json:"nodes"`
 }
 
 // PBSDiagnostic contains diagnostic info for a PBS instance
 type PBSDiagnostic struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name"`
-	Host       string                 `json:"host"`
-	Connected  bool                   `json:"connected"`
-	Error      string                 `json:"error,omitempty"`
-	Details    map[string]interface{} `json:"details,omitempty"`
+	ID         string        `json:"id"`
+	Name       string        `json:"name"`
+	Host       string        `json:"host"`
+	Connected  bool          `json:"connected"`
+	Error      string        `json:"error,omitempty"`
+	Details    *PBSDetails   `json:"details,omitempty"`
+}
+
+// PBSDetails contains PBS-specific details
+type PBSDetails struct {
+	Version string `json:"version,omitempty"`
 }
 
 // SystemDiagnostic contains system-level diagnostic info
@@ -131,14 +146,14 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 					nodeDiag.Error = "Connection established but cluster status failed: " + err.Error()
 				} else {
 					nodeDiag.Connected = true
-					nodeDiag.ClusterInfo = map[string]interface{}{
-						"nodes": len(clusterStatus),
+					nodeDiag.ClusterInfo = &ClusterInfo{
+						Nodes: len(clusterStatus),
 					}
 					
 					// Get node details
 					if nodes, err := client.GetNodes(ctx); err == nil && len(nodes) > 0 {
-						nodeDiag.Details = map[string]interface{}{
-							"node_count": len(nodes),
+						nodeDiag.Details = &NodeDetails{
+							NodeCount: len(nodes),
 						}
 					}
 				}
@@ -177,8 +192,8 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
 			} else {
 				pbsDiag.Connected = true
-				pbsDiag.Details = map[string]interface{}{
-					"version": version.Version,
+				pbsDiag.Details = &PBSDetails{
+					Version: version.Version,
 				}
 			}
 		}

@@ -331,7 +331,12 @@ export type WSMessage =
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
   | { type: 'alertResolved'; data: { alertId: string } }
-  | { type: 'update:progress'; data: any }
+  | { type: 'update:progress'; data: {
+      phase: string;
+      progress: number;
+      message: string;
+    }
+  }
   | { type: 'node_auto_registered'; data: {
       type: string;
       host: string;
