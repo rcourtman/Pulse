@@ -109,31 +109,34 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 
 ---
 
-## Environment Variable Priority
+## Configuration Priority
 
-For backwards compatibility, some settings can be overridden via environment variables:
+Settings are loaded in this order (later overrides earlier):
 
-1. **Authentication variables (from .env)** - Always highest priority
-   - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS`, `API_TOKEN`
+1. **Built-in defaults** - Hardcoded application defaults
+2. **system.json file** - Settings configured via UI
+3. **Environment variables** - Override both defaults and system.json
 
-2. **Network binding variables** - For reverse proxy setups
-   - `BACKEND_HOST` - IP address to bind to (default: `0.0.0.0`)
-     - Set to `127.0.0.1` or `localhost` to only listen on localhost (for reverse proxy)
-   - `FRONTEND_PORT` - Port to listen on (default: `7655`)
-   
-3. **HTTPS/TLS variables** - For enabling HTTPS
-   - `HTTPS_ENABLED` - Set to `true` to enable HTTPS (default: `false`)
-   - `TLS_CERT_FILE` - Path to TLS certificate file (e.g., `/etc/pulse/cert.pem`)
-   - `TLS_KEY_FILE` - Path to TLS private key file (e.g., `/etc/pulse/key.pem`)
+### Environment Variables
 
-4. **System settings (from system.json)** - Normal priority
-   - If system.json exists, it takes precedence
-   - If missing, environment variables are checked
+#### Configuration Variables (override system.json)
+These env vars override system.json values. When set, the UI will show a warning and disable the affected fields:
 
-5. **Legacy environment variables** - Lowest priority (deprecated)
-   - `POLLING_INTERVAL` - Only used if system.json doesn't exist
-   - `CONNECTION_TIMEOUT` - Can override system.json value
-   - `ALLOWED_ORIGINS` - Can override system.json value
+- `DISCOVERY_SUBNET` - Network to scan (e.g., "192.168.1.0/24")
+- `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
+- `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
+- `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
+
+#### Network & Security Variables (always from env)
+These are only configurable via environment variables for security:
+
+- `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
+- `API_TOKEN` - API token for authentication
+- `FRONTEND_PORT` - Port to listen on (default: 7655)
+- `HTTPS_ENABLED` - Enable HTTPS (true/false)
+- `TLS_CERT_FILE`, `TLS_KEY_FILE` - Paths to TLS certificate files
+
+> **⚠️ UI Override Warning**: When configuration env vars are set (like `ALLOWED_ORIGINS`), the corresponding UI fields will be disabled with a warning message. Remove the env var and restart to enable UI configuration.
 
 ---
 
