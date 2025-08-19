@@ -385,8 +385,28 @@ func Load() (*Config, error) {
 			log.Info().Msg("Development mode: allowing localhost origins")
 		}
 	}
-	// REMOVED: LOG_LEVEL and DISCOVERY_SUBNET env vars
-	// These settings now ONLY come from system.json to prevent confusion
+	// Support env vars for important settings (override system.json)
+	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
+		cfg.DiscoverySubnet = discoverySubnet
+		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet set from DISCOVERY_SUBNET env var")
+	}
+	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
+		cfg.LogLevel = logLevel
+		log.Info().Str("level", logLevel).Msg("Log level set from LOG_LEVEL env var")
+	}
+	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
+		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
+			cfg.ConnectionTimeout = d
+			log.Info().Dur("timeout", d).Msg("Connection timeout set from CONNECTION_TIMEOUT env var")
+		} else if d, err := time.ParseDuration(connectionTimeout); err == nil {
+			cfg.ConnectionTimeout = d
+			log.Info().Dur("timeout", d).Msg("Connection timeout set from CONNECTION_TIMEOUT env var")
+		}
+	}
+	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
+		cfg.AllowedOrigins = allowedOrigins
+		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins set from ALLOWED_ORIGINS env var")
+	}
 	
 	// Set log level
 	switch cfg.LogLevel {

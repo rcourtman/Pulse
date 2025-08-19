@@ -219,12 +219,12 @@ Common problems:
 | `PORT` | Web UI port | `7655` |
 | `ALLOWED_ORIGINS` | CORS origins | Same-origin only |
 | `DISCOVERY_SUBNET` | Network to scan | Auto-detect |
+| `CONNECTION_TIMEOUT` | Connection timeout (seconds) | `10` |
+| `LOG_LEVEL` | Logging verbosity | `info` |
 
 ### System
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `POLLING_INTERVAL` | Check interval (seconds) | `10` |
-| `LOG_LEVEL` | Logging verbosity | `INFO` |
 | `TZ` | Timezone | `UTC` |
 
 ## Advanced Configuration
