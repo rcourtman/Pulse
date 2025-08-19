@@ -97,6 +97,7 @@ const Settings: Component = () => {
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
+  const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   // Connection timeout removed - backend-only setting
   
   // Update settings
@@ -349,6 +350,10 @@ const Settings: Component = () => {
           setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
           if (systemSettings.updateChannel) {
             setUpdateChannel(systemSettings.updateChannel as 'stable' | 'rc');
+          }
+          // Track environment variable overrides
+          if (systemSettings.envOverrides) {
+            setEnvOverrides(systemSettings.envOverrides);
           }
         } else {
           // Fallback to old endpoint
@@ -1153,16 +1158,38 @@ const Settings: Component = () => {
                     <div>
                       <label class="text-sm font-medium text-gray-900 dark:text-gray-100">CORS Allowed Origins</label>
                       <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all, empty = same-origin only)</p>
-                      <input
-                        type="text"
-                        value={allowedOrigins()}
-                        onChange={(e) => {
-                          setAllowedOrigins(e.currentTarget.value);
-                          setHasUnsavedChanges(true);
-                        }}
-                        placeholder="* or https://example.com"
-                        class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
-                      />
+                      <div class="relative">
+                        <input
+                          type="text"
+                          value={allowedOrigins()}
+                          onChange={(e) => {
+                            if (!envOverrides().allowedOrigins) {
+                              setAllowedOrigins(e.currentTarget.value);
+                              setHasUnsavedChanges(true);
+                            }
+                          }}
+                          disabled={envOverrides().allowedOrigins}
+                          placeholder="* or https://example.com"
+                          class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
+                            envOverrides().allowedOrigins 
+                              ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75' 
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                          }`}
+                        />
+                        {envOverrides().allowedOrigins && (
+                          <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                            <div class="flex items-center gap-1">
+                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              <span>Overridden by ALLOWED_ORIGINS environment variable</span>
+                            </div>
+                            <div class="mt-1 text-amber-700 dark:text-amber-300">
+                              Remove the env var and restart to enable UI configuration
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
