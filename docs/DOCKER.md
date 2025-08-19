@@ -157,18 +157,24 @@ docker run --rm -v pulse_data:/data -v $(pwd):/backup alpine tar xzf /backup/pul
 
 ## Network Discovery
 
-Discovery runs automatically but may detect Docker's internal network.
+**New in v4.5.0+**: Pulse automatically scans common home/office networks when running in Docker!
 
-To configure the correct subnet:
-1. Let Pulse start and complete setup
-2. Go to Settings → System
-3. Set Discovery Subnet (e.g., `192.168.1.0/24`)
-4. Save and restart container
+### How It Works
+1. Detects Docker environment automatically
+2. Scans multiple common subnets in parallel:
+   - 192.168.1.0/24 (most routers)
+   - 192.168.0.0/24 (very common)
+   - 10.0.0.0/24 (some setups)
+   - 192.168.88.0/24 (MikroTik)
+   - 172.16.0.0/24 (enterprise)
 
-Or set via environment:
+**Result**: Finds all Proxmox nodes without any configuration!
+
+### Custom Networks (Rarely Needed)
+Only for non-standard subnets:
 ```yaml
 environment:
-  DISCOVERY_SUBNET: "192.168.1.0/24"
+  DISCOVERY_SUBNET: "192.168.50.0/24"  # Only if using unusual subnet
 ```
 
 ## Common Issues
@@ -228,7 +234,7 @@ Common problems:
 |----------|-------------|---------|
 | `PORT` | Web UI port | `7655` |
 | `ALLOWED_ORIGINS` | CORS origins | Same-origin only |
-| `DISCOVERY_SUBNET` | Network to scan | Auto-detect |
+| `DISCOVERY_SUBNET` | Network to scan (rarely needed) | Auto-scans common networks |
 | `CONNECTION_TIMEOUT` | Connection timeout (seconds) | `10` |
 | `LOG_LEVEL` | Logging verbosity | `info` |
 

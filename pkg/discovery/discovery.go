@@ -58,40 +58,55 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 	log.Info().Str("subnet", subnet).Msg("Starting network discovery")
 	
 	// Parse subnet
-	var ipNet *net.IPNet
+	var ipNets []*net.IPNet
 	
 	if subnet == "" || subnet == "auto" {
-		// Auto-detect local subnet
-		ipNet = s.getLocalSubnet()
-		if ipNet == nil {
-			return nil, fmt.Errorf("failed to auto-detect local subnet")
+		// Check if we're in Docker (detected subnet is Docker network)
+		autoDetected := s.getLocalSubnet()
+		if autoDetected != nil && strings.HasPrefix(autoDetected.String(), "172.17.") {
+			log.Info().Msg("Running in Docker - scanning common home/office networks")
+			// In Docker, scan common subnets instead
+			ipNets = s.getCommonSubnets()
+		} else if autoDetected != nil {
+			// Use auto-detected subnet
+			ipNets = []*net.IPNet{autoDetected}
+			log.Info().Str("detected", autoDetected.String()).Msg("Auto-detected local subnet")
+		} else {
+			// Fallback to common subnets
+			log.Info().Msg("Auto-detection failed - scanning common networks")
+			ipNets = s.getCommonSubnets()
 		}
-		log.Info().Str("detected", ipNet.String()).Msg("Auto-detected local subnet")
 	} else {
 		// Parse provided subnet
 		_, parsedNet, err := net.ParseCIDR(subnet)
 		if err != nil {
 			return nil, fmt.Errorf("invalid subnet: %w", err)
 		}
-		ipNet = parsedNet
+		ipNets = []*net.IPNet{parsedNet}
 	}
 	
-	// Check subnet size - limit to /24 or smaller for safety
-	ones, bits := ipNet.Mask.Size()
-	if ones < 24 && bits == 32 { // IPv4 with more than 256 addresses
-		log.Warn().Str("subnet", ipNet.String()).Msg("Subnet too large, limiting to /24")
-		// Convert to /24
-		ipNet.Mask = net.CIDRMask(24, 32)
+	// Collect all IPs to scan from all subnets
+	var allIPs []string
+	for _, ipNet := range ipNets {
+		// Check subnet size - limit to /24 or smaller for safety
+		ones, bits := ipNet.Mask.Size()
+		if ones < 24 && bits == 32 { // IPv4 with more than 256 addresses
+			log.Warn().Str("subnet", ipNet.String()).Msg("Subnet too large, limiting to /24")
+			// Convert to /24
+			ipNet.Mask = net.CIDRMask(24, 32)
+		}
+		
+		// Generate list of IPs for this subnet
+		ips := s.generateIPs(ipNet)
+		allIPs = append(allIPs, ips...)
+		log.Info().Str("subnet", ipNet.String()).Int("count", len(ips)).Msg("Subnet IPs to scan")
 	}
-
-	// Generate list of IPs to scan
-	ips := s.generateIPs(ipNet)
-	log.Info().Int("count", len(ips)).Msg("IPs to scan")
+	log.Info().Int("total", len(allIPs)).Msg("Total IPs to scan")
 
 	// Create channels for work distribution
-	ipChan := make(chan string, len(ips))
-	resultChan := make(chan *DiscoveredServer, len(ips))
-	errorChan := make(chan string, len(ips))
+	ipChan := make(chan string, len(allIPs))
+	resultChan := make(chan *DiscoveredServer, len(allIPs))
+	errorChan := make(chan string, len(allIPs))
 
 	// Start workers
 	var wg sync.WaitGroup
@@ -101,7 +116,7 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 	}
 
 	// Send IPs to scan
-	for _, ip := range ips {
+	for _, ip := range allIPs {
 		ipChan <- ip
 	}
 	close(ipChan)
@@ -396,4 +411,25 @@ func (s *Scanner) getLocalSubnet() *net.IPNet {
 	// Default to common subnet if detection fails
 	_, defaultNet, _ := net.ParseCIDR("192.168.1.0/24")
 	return defaultNet
+}
+
+// getCommonSubnets returns a list of common home/office network subnets
+func (s *Scanner) getCommonSubnets() []*net.IPNet {
+	commonSubnets := []string{
+		"192.168.1.0/24",  // Most common home router default
+		"192.168.0.0/24",  // Very common alternative
+		"10.0.0.0/24",     // Some routers use this
+		"192.168.88.0/24", // MikroTik default
+		"172.16.0.0/24",   // Less common but used
+	}
+	
+	var nets []*net.IPNet
+	for _, subnet := range commonSubnets {
+		_, ipNet, err := net.ParseCIDR(subnet)
+		if err == nil {
+			nets = append(nets, ipNet)
+		}
+	}
+	
+	return nets
 }
