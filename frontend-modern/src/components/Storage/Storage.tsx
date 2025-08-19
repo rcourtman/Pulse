@@ -302,8 +302,30 @@ const Storage: Component = () => {
         </div>
       </Show>
 
-      {/* Empty State - No Storage Configured */}
-      <Show when={connected() && initialDataReceived() && sortedStorage().length === 0}>
+      {/* Empty State - No PVE Nodes Configured */}
+      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n: any) => n.type === 'pve').length === 0}>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div class="text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No Proxmox VE nodes configured</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure.</p>
+            <button
+              onClick={() => {
+                const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
+                settingsTab?.click();
+              }}
+              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Go to Settings
+            </button>
+          </div>
+        </div>
+      </Show>
+      
+      {/* Empty State - No Storage Found (but nodes are configured) */}
+      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n: any) => n.type === 'pve').length > 0 && sortedStorage().length === 0}>
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
           <div class="text-center">
             <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -316,7 +338,7 @@ const Storage: Component = () => {
       </Show>
       
       {/* Storage Table */}
-      <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
+      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n: any) => n.type === 'pve').length > 0 && sortedStorage().length > 0}>
         <ComponentErrorBoundary name="Storage Table">
           <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
             <table class="w-full text-xs">
