@@ -82,7 +82,7 @@ Reduce `metricsRetentionDays` in settings and restart
 Yes, add multiple nodes in Settings
 
 ### PBS push mode?
-Yes, use PBS agent for isolated servers. See [PBS Agent docs](PBS-AGENT.md)
+No, PBS push mode is not currently supported. PBS monitoring requires network connectivity from Pulse to the PBS server.
 
 ### Webhook providers?
 Discord, Slack, Gotify, Telegram, ntfy.sh, Teams, generic JSON
