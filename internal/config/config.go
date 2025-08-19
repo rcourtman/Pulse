@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -322,6 +323,13 @@ func Load() (*Config, error) {
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
 		cfg.APIToken = apiToken
 		log.Debug().Msg("Loaded API token from env var")
+		
+		// Check if token needs migration from plain text to hashed
+		if apiToken != "" && !auth.IsAPITokenHashed(apiToken) {
+			log.Warn().Msg("Detected plain text API token - please regenerate for better security")
+			// We don't auto-migrate here because we can't update the .env file from here safely
+			// The user should regenerate through the UI or API
+		}
 	}
 	// Check if API token is enabled
 	if apiTokenEnabled := os.Getenv("API_TOKEN_ENABLED"); apiTokenEnabled != "" {

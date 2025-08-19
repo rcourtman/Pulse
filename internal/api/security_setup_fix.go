@@ -1,8 +1,6 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
@@ -106,7 +104,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		
 		// Validate password complexity
-		if err := auth.ValidatePasswordComplexity(setupRequest.Password); err != nil {
+		if err := internalauth.ValidatePasswordComplexity(setupRequest.Password); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -117,7 +115,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		
 		// Hash the password
-		hashedPassword, err := auth.HashPassword(setupRequest.Password)
+		hashedPassword, err := internalauth.HashPassword(setupRequest.Password)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to hash password")
 			http.Error(w, "Failed to process password", http.StatusInternalServerError)
@@ -131,20 +129,21 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 		
-		// Don't hash the API token - store it as plain text
-		// (Hashing causes issues with token length detection)
-		// Always use the new token when setting up full security
-		// This ensures any API-only tokens are replaced with the new secure token
-		apiToken := setupRequest.APIToken
+		// Store the raw API token for displaying to the user
+		rawAPIToken := setupRequest.APIToken
+		
+		// Hash the API token for storage
+		hashedAPIToken := internalauth.HashAPIToken(rawAPIToken)
+		
 		if r.config.APIToken != "" && r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// We had API-only access before, now replacing with full security
 			log.Info().Msg("Replacing API-only token with new secure token")
 		}
 		
-		// Update runtime config immediately - no restart needed!
+		// Update runtime config immediately with hashed token - no restart needed!
 		r.config.AuthUser = setupRequest.Username
 		r.config.AuthPass = hashedPassword
-		r.config.APIToken = apiToken
+		r.config.APIToken = hashedAPIToken
 		r.config.APITokenEnabled = true
 		r.config.PollingInterval = time.Duration(setupRequest.PollingInterval) * time.Second
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
@@ -185,7 +184,7 @@ PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 			
 			// Ensure directory exists
 			os.MkdirAll(r.config.ConfigPath, 0755)
@@ -221,7 +220,7 @@ PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 			
 			// Save to config directory (usually /etc/pulse)
 			os.MkdirAll(r.config.ConfigPath, 0755)
@@ -272,7 +271,7 @@ Environment="PULSE_AUTH_USER=%s"
 Environment="PULSE_AUTH_PASS=%s"
 Environment="API_TOKEN=%s"
 Environment="ENABLE_AUDIT_LOG=true"
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 			
 			if err := os.WriteFile(overridePath, []byte(overrideContent), 0644); err != nil {
 				log.Error().Err(err).Msg("Failed to write systemd override")
@@ -310,7 +309,7 @@ PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 API_TOKEN=%s
 ENABLE_AUDIT_LOG=true
-`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, apiToken)
+`, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 			
 			// Try to create directory if needed
 			os.MkdirAll(filepath.Dir(envPath), 0755)
@@ -360,19 +359,21 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 	
-	// Generate new token (24 bytes = 48 hex chars, not 64 to avoid hash detection issue)
-	tokenBytes := make([]byte, 24)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		log.Error().Err(err).Msg("Failed to generate random token")
+	// Generate new token using the auth package
+	rawToken, err := internalauth.GenerateAPIToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate API token")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
-	newToken := hex.EncodeToString(tokenBytes)
 	
-	// Update runtime config immediately - no restart needed!
-	r.config.APIToken = newToken
+	// Hash the token for storage
+	hashedToken := internalauth.HashAPIToken(rawToken)
+	
+	// Update runtime config immediately with hashed token - no restart needed!
+	r.config.APIToken = hashedToken
 	r.config.APITokenEnabled = true
-	log.Info().Msg("Runtime config updated with new API token - active immediately")
+	log.Info().Msg("Runtime config updated with new hashed API token - active immediately")
 	
 	// Determine env file path
 	envPath := filepath.Join(r.config.ConfigPath, ".env")
@@ -393,12 +394,12 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 	
-	// Update the API_TOKEN line
+	// Update the API_TOKEN line with the hashed token
 	lines := strings.Split(string(content), "\n")
 	var updated bool
 	for i, line := range lines {
 		if strings.HasPrefix(line, "API_TOKEN=") {
-			lines[i] = fmt.Sprintf("API_TOKEN=%s", newToken)
+			lines[i] = fmt.Sprintf("API_TOKEN=%s", hashedToken)
 			updated = true
 			break
 		}
@@ -406,7 +407,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	
 	if !updated {
 		// API_TOKEN line not found, add it
-		lines = append(lines, fmt.Sprintf("API_TOKEN=%s", newToken))
+		lines = append(lines, fmt.Sprintf("API_TOKEN=%s", hashedToken))
 	}
 	
 	// Write updated content back
@@ -424,10 +425,10 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	
 	response := map[string]interface{}{
 		"success": true,
-		"token": newToken,
+		"token": rawToken,  // Return the raw token to the user (only shown once!)
 		"deploymentType": deploymentType,
 		"requiresRestart": false,
-		"message": "New API token generated and active immediately!",
+		"message": "New API token generated and active immediately! Save this token - it won't be shown again.",
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
