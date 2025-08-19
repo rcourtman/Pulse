@@ -109,6 +109,8 @@ services:
     volumes:
       - pulse_data:/data
     environment:
+      # NOTE: Env vars override UI settings. Remove env var to allow UI configuration.
+      
       # Network discovery
       # - DISCOVERY_SUBNET=192.168.1.0/24   # Your local subnet (default: auto-detect)
       
