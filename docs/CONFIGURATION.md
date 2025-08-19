@@ -1,5 +1,12 @@
 # Pulse Configuration Guide
 
+## Key Features
+
+- **🔒 Auto-Hashing Security** (v4.5.0+): Plain text credentials in environment variables are automatically hashed
+- **📁 Separated Configuration**: Authentication (.env), settings (system.json), and node credentials (nodes.enc) 
+- **🚀 Zero-Touch Deployment**: Configure via environment variables, skip UI setup entirely
+- **🔐 Enterprise Security**: Credentials encrypted at rest, hashed in memory
+
 ## Configuration File Structure
 
 Pulse uses three separate configuration files, each with a specific purpose. This separation ensures security, clarity, and proper access control.
@@ -137,6 +144,86 @@ These are only configurable via environment variables for security:
 - `TLS_CERT_FILE`, `TLS_KEY_FILE` - Paths to TLS certificate files
 
 > **⚠️ UI Override Warning**: When configuration env vars are set (like `ALLOWED_ORIGINS`), the corresponding UI fields will be disabled with a warning message. Remove the env var and restart to enable UI configuration.
+
+---
+
+## Automated Setup (Skip UI)
+
+For automated deployments (CI/CD, infrastructure as code, ProxmoxVE scripts), you can configure Pulse authentication via environment variables, completely bypassing the UI setup screen.
+
+### Simple Automated Setup
+
+**Option 1: API Token Authentication**
+```bash
+# Start Pulse with API token - setup screen is skipped
+API_TOKEN=your-secure-api-token ./pulse
+
+# The token is hashed and stored securely
+# Use this same token for all API calls
+curl -H "X-API-Token: your-secure-api-token" http://localhost:7655/api/nodes
+```
+
+**Option 2: Basic Authentication**
+```bash
+# Start Pulse with username/password - setup screen is skipped
+PULSE_AUTH_USER=admin \
+PULSE_AUTH_PASS=your-secure-password \
+./pulse
+
+# Password is bcrypt hashed and stored securely
+# Use these credentials for UI login or API calls
+```
+
+**Option 3: Both (API + Basic Auth)**
+```bash
+# Configure both authentication methods
+API_TOKEN=your-api-token \
+PULSE_AUTH_USER=admin \
+PULSE_AUTH_PASS=your-password \
+./pulse
+```
+
+### Security Notes
+
+- **Automatic hashing**: Plain text credentials are automatically hashed when provided via environment variables
+  - API tokens → SHA3-256 hash
+  - Passwords → bcrypt hash (cost 12)
+- **Pre-hashed credentials supported**: Advanced users can provide pre-hashed values:
+  - API tokens: 64-character hex string (SHA3-256 hash)
+  - Passwords: bcrypt hash starting with `$2a$`, `$2b$`, or `$2y$` (60 characters)
+- **No plain text in memory**: All credentials are hashed before use
+- Once configured, the setup screen is automatically skipped
+- Credentials work immediately - no additional setup required
+
+### Example: Docker Automated Deployment
+
+```bash
+#!/bin/bash
+# Generate secure token
+API_TOKEN=$(openssl rand -hex 32)
+
+# Deploy with authentication pre-configured
+docker run -d \
+  --name pulse \
+  -p 7655:7655 \
+  -e API_TOKEN="$API_TOKEN" \
+  -v pulse-data:/data \
+  rcourtman/pulse:latest
+
+echo "Pulse deployed! Use API token: $API_TOKEN"
+
+# Immediately use the API - no setup needed
+curl -H "X-API-Token: $API_TOKEN" http://localhost:7655/api/nodes
+```
+
+### ProxmoxVE Helper Script
+
+The ProxmoxVE community scripts already use this approach:
+
+```bash
+# They generate a token and set it directly
+API_TOKEN=generated-token-here /opt/pulse/bin/pulse
+```
 
 ---
 

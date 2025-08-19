@@ -756,10 +756,21 @@ func (c *Client) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) 
 func (c *Client) IsClusterMember(ctx context.Context) (bool, error) {
 	status, err := c.GetClusterStatus(ctx)
 	if err != nil {
-		return false, err
+		// If we can't get cluster status, assume it's not a cluster
+		// This prevents treating API errors as cluster membership
+		return false, nil
 	}
 
-	// If we have more than one node entry, it's a cluster
+	// Check for explicit cluster entry (most reliable indicator)
+	for _, s := range status {
+		if s.Type == "cluster" {
+			// Found a cluster entry - this is definitely a cluster
+			return true, nil
+		}
+	}
+
+	// Fallback: If we have more than one node entry, it's likely a cluster
+	// (though this shouldn't happen without a cluster entry)
 	nodeCount := 0
 	for _, s := range status {
 		if s.Type == "node" {

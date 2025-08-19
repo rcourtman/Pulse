@@ -89,7 +89,6 @@ type Config struct {
 	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
-	
 	// HTTPS/TLS settings
 	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
 	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
@@ -325,14 +324,15 @@ func Load() (*Config, error) {
 		}
 	}
 	if apiToken := os.Getenv("API_TOKEN"); apiToken != "" {
-		cfg.APIToken = apiToken
-		log.Debug().Msg("Loaded API token from env var")
-		
-		// Check if token needs migration from plain text to hashed
-		if apiToken != "" && !auth.IsAPITokenHashed(apiToken) {
-			log.Warn().Msg("Detected plain text API token - please regenerate for better security")
-			// We don't auto-migrate here because we can't update the .env file from here safely
-			// The user should regenerate through the UI or API
+		// Auto-hash plain text tokens for security
+		if !auth.IsAPITokenHashed(apiToken) {
+			// Plain text token - hash it immediately
+			cfg.APIToken = auth.HashAPIToken(apiToken)
+			log.Info().Msg("Auto-hashed plain text API token from environment variable")
+		} else {
+			// Already hashed
+			cfg.APIToken = apiToken
+			log.Debug().Msg("Loaded pre-hashed API token from env var")
 		}
 	}
 	// Check if API token is enabled
@@ -349,20 +349,30 @@ func Load() (*Config, error) {
 		log.Info().Msg("Overriding auth user from env var")
 	}
 	if authPass := os.Getenv("PULSE_AUTH_PASS"); authPass != "" {
-		cfg.AuthPass = authPass
-		// Note: We don't auto-migrate env var passwords to hashes
-		// because we can't modify environment variables
+		// Auto-hash plain text passwords for security
 		if !IsPasswordHashed(authPass) {
-			log.Warn().Msg("Password is stored in plain text - run 'pulse hash-password' to generate a secure hash")
+			// Plain text password - hash it immediately
+			hashedPass, err := auth.HashPassword(authPass)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to hash password from environment variable")
+				// Fall back to plain text if hashing fails (shouldn't happen)
+				cfg.AuthPass = authPass
+			} else {
+				cfg.AuthPass = hashedPass
+				log.Info().Msg("Auto-hashed plain text password from environment variable")
+			}
 		} else {
-			// Validate bcrypt hash is complete (60 characters)
+			// Already hashed - validate it's complete
 			if len(authPass) != 60 {
 				log.Error().Int("length", len(authPass)).Msg("Bcrypt hash appears truncated! Expected 60 characters. Authentication may fail.")
 				log.Error().Msg("Ensure the full hash is enclosed in single quotes in your .env file or Docker environment")
 			}
+			cfg.AuthPass = authPass
+			log.Debug().Msg("Loaded pre-hashed password from env var")
 		}
-		log.Debug().Bool("is_hashed", IsPasswordHashed(authPass)).Msg("Loaded auth password from env var")
 	}
+	
+	
 	// HTTPS/TLS configuration from environment
 	if httpsEnabled := os.Getenv("HTTPS_ENABLED"); httpsEnabled != "" {
 		cfg.HTTPSEnabled = httpsEnabled == "true" || httpsEnabled == "1"

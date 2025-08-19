@@ -91,9 +91,11 @@ volumes:
 Create `.env` file (no escaping needed here):
 ```env
 PULSE_AUTH_USER=admin
-PULSE_AUTH_PASS=$2a$12$YourHashHere...
-API_TOKEN=your-48-char-hex-token
+PULSE_AUTH_PASS=your-password          # Plain text (auto-hashed) or bcrypt hash
+API_TOKEN=your-token                   # Plain text (auto-hashed) or SHA3-256 hash
 ```
+
+**Note**: Plain text credentials are automatically hashed for security. You can provide either plain text (simpler) or pre-hashed values (advanced).
 
 Docker-compose.yml:
 ```yaml
@@ -112,21 +114,27 @@ volumes:
   pulse_data:
 ```
 
-## Generating Credentials
+## Generating Credentials (Optional)
 
-### Password Hash
+**Note**: Since v4.5.0, plain text credentials are automatically hashed. Pre-hashing is optional for advanced users.
+
+### Simple Approach (Recommended)
 ```bash
-# Interactive password prompt
-docker run --rm -it rcourtman/pulse:latest pulse hash-password
-
-# Or with password as argument
-docker run --rm rcourtman/pulse:latest pulse hash-password YourPassword123
+# Just use plain text - Pulse auto-hashes for you
+docker run -d \
+  -e PULSE_AUTH_USER=admin \
+  -e PULSE_AUTH_PASS=mypassword \
+  -e API_TOKEN=mytoken123 \
+  rcourtman/pulse:latest
 ```
 
-### API Token
+### Advanced: Pre-Hashing (Optional)
 ```bash
-# Generate 48-character hex token
-openssl rand -hex 24
+# Generate bcrypt hash for password
+docker run --rm -it rcourtman/pulse:latest pulse hash-password
+
+# Generate random API token
+openssl rand -hex 32
 ```
 
 ## Data Persistence

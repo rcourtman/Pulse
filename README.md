@@ -57,10 +57,25 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | s
 
 ### Initial Setup
 
+**Option A: Interactive Setup (UI)**
 1. Open `http://<your-server>:7655`
 2. **Complete the mandatory security setup** (first-time only)
 3. Create your admin username and password
 4. Save the generated API token for automation
+
+**Option B: Automated Setup (No UI)**
+For automated deployments, configure authentication via environment variables:
+```bash
+# Start Pulse with auth pre-configured - skips setup screen
+API_TOKEN=your-api-token ./pulse
+
+# Or use basic auth
+PULSE_AUTH_USER=admin PULSE_AUTH_PASS=password ./pulse
+
+# Plain text credentials are automatically hashed for security
+# You can also provide pre-hashed values if preferred
+```
+See [Configuration Guide](docs/CONFIGURATION.md#automated-setup-skip-ui) for details.
 
 ### Configure Nodes
 
@@ -98,6 +113,23 @@ docker run -d \
 # Or configure later via UI Settings or /data/system.json
 ```
 
+### Automated Docker Deployment
+```bash
+# Deploy with authentication pre-configured
+docker run -d \
+  --name pulse \
+  -p 7655:7655 \
+  -v pulse_data:/data \
+  -e API_TOKEN="your-secure-token" \
+  -e PULSE_AUTH_USER="admin" \
+  -e PULSE_AUTH_PASS="your-password" \
+  --restart unless-stopped \
+  rcourtman/pulse:latest
+
+# Plain text credentials are automatically hashed for security
+# No setup required - API works immediately
+```
+
 ### Docker Compose
 ```yaml
 services:
@@ -120,15 +152,15 @@ services:
       
       # Security (all optional - runs open by default)
       # - PULSE_AUTH_USER=admin             # Username for web UI login
-      # - PULSE_AUTH_PASS='$$2a$$12$$...'   # Bcrypt hash - ESCAPE $ as $$ in docker-compose!
-      # - API_TOKEN=<hex-token>            # API token (48 hex chars)
+      # - PULSE_AUTH_PASS=your-password     # Plain text or bcrypt hash (auto-hashed if plain)
+      # - API_TOKEN=your-token              # Plain text or SHA3-256 hash (auto-hashed if plain)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
-      # ⚠️ IMPORTANT: Docker Compose requires escaping $ characters!
-      # In docker-compose.yml, use $$ instead of $:
-      # WRONG: PULSE_AUTH_PASS='$2a$12$hash...'
-      # RIGHT: PULSE_AUTH_PASS='$$2a$$12$$hash...'
-      # Or use a .env file where no escaping is needed
+      # 🔒 Security: Plain text credentials are automatically hashed
+      # You can provide either:
+      # 1. Plain text (auto-hashed): PULSE_AUTH_PASS=mypassword
+      # 2. Pre-hashed (advanced): PULSE_AUTH_PASS='$$2a$$12$$...'
+      #    Note: Escape $ as $$ in docker-compose.yml for pre-hashed values
       
       # Performance
       # - CONNECTION_TIMEOUT=10             # Connection timeout in seconds (default: 10)

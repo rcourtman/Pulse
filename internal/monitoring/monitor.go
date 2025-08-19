@@ -800,8 +800,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// This prevents syslog spam on non-clustered nodes from certificate checks
 			useClusterEndpoint := false
 			if instanceCfg.IsCluster {
-				// Try to use efficient cluster/resources endpoint
-				useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+				// Double-check that this is actually a cluster to prevent misconfiguration
+				// This helps avoid certificate spam on standalone nodes incorrectly marked as clusters
+				isActuallyCluster, _ := client.IsClusterMember(ctx)
+				if isActuallyCluster {
+					// Try to use efficient cluster/resources endpoint
+					useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+				} else {
+					// Misconfigured - marked as cluster but isn't one
+					log.Warn().
+						Str("instance", instanceName).
+						Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
+					instanceCfg.IsCluster = false
+				}
 			}
 			
 			if !useClusterEndpoint {
