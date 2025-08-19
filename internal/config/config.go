@@ -107,6 +107,9 @@ type Config struct {
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
 	Debug bool `envconfig:"DEBUG" default:"false"`
+	
+	// Track which settings are overridden by environment variables
+	EnvOverrides map[string]bool `json:"-"`
 }
 
 // PVEInstance represents a Proxmox VE connection
@@ -207,6 +210,7 @@ func Load() (*Config, error) {
 		PVEPollingInterval:   10 * time.Second, // Deprecated - not used
 		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
 		DiscoverySubnet:      "auto",
+		EnvOverrides:         make(map[string]bool),
 	}
 	
 	// Initialize persistence
@@ -389,23 +393,28 @@ func Load() (*Config, error) {
 	// NOTE: Environment variables always take precedence over UI/system.json settings
 	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
 		cfg.DiscoverySubnet = discoverySubnet
+		cfg.EnvOverrides["discoverySubnet"] = true
 		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		cfg.LogLevel = logLevel
+		cfg.EnvOverrides["logLevel"] = true
 		log.Info().Str("level", logLevel).Msg("Log level overridden by LOG_LEVEL env var")
 	}
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
 		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
 			cfg.ConnectionTimeout = d
+			cfg.EnvOverrides["connectionTimeout"] = true
 			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
 		} else if d, err := time.ParseDuration(connectionTimeout); err == nil {
 			cfg.ConnectionTimeout = d
+			cfg.EnvOverrides["connectionTimeout"] = true
 			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
 		}
 	}
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
 		cfg.AllowedOrigins = allowedOrigins
+		cfg.EnvOverrides["allowedOrigins"] = true
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
 	
