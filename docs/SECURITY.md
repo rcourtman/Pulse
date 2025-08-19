@@ -112,15 +112,12 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
   - Automatic hashing on security setup
   - **CRITICAL**: Bcrypt hashes MUST be exactly 60 characters
 - **API Token Security**:
-  - 48-character hex tokens (24 bytes of entropy)
-  - Stored in plain text with file permissions (600)
-  - Live reloading when .env file changes (v4.3.9+)
-  - API-only mode supported (no password auth required)
-  - **Docker Users**: Always wrap hash in single quotes to prevent shell expansion
-- **API Token Security**:
-  - SHA3-256 hashing for all tokens
-  - 64-character hex format when hashed
+  - 64-character hex tokens (32 bytes of entropy)
+  - SHA3-256 hashed before storage (64-char hash)
+  - Raw token shown only once during generation
   - Tokens NEVER stored in plain text
+  - Live reloading when .env file changes
+  - API-only mode supported (no password auth required)
 - **CSRF Protection**: All state-changing operations require CSRF tokens
 - **Rate Limiting**: 
   - Authentication endpoints: 10 attempts/minute per IP
@@ -159,13 +156,14 @@ Pulse supports multiple authentication methods that can be used independently or
 The easiest way to enable authentication is through the web UI:
 1. Go to Settings → Security
 2. Click "Enable Security Now"
-3. Save the generated credentials
-4. Click "Restart Pulse" (or restart Docker container)
+3. Enter username and password
+4. Save the generated API token (shown only once!)
+5. Security is enabled immediately (no restart needed)
 
 This automatically:
 - Generates a secure random password
 - Hashes it with bcrypt (cost factor 12)
-- Creates secure API token (SHA3-256 hashed)
+- Creates secure API token (SHA3-256 hashed, raw token shown once)
 - For systemd: Configures systemd with hashed credentials
 - For Docker: Saves to `/data/.env` with hashed credentials (properly quoted to prevent shell expansion)
 - Restarts service/container with authentication enabled
