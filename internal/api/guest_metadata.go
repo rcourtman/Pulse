@@ -35,7 +35,7 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 
 	// Check if requesting specific guest
 	path := r.URL.Path
-	// Handle both /api/guests/metadata and /api/guests/metadata/ 
+	// Handle both /api/guests/metadata and /api/guests/metadata/
 	if path == "/api/guests/metadata" || path == "/api/guests/metadata/" {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
@@ -48,12 +48,12 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 		}
 		return
 	}
-	
+
 	// Get specific guest ID from path
 	guestID := strings.TrimPrefix(path, "/api/guests/metadata/")
-	
+
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if guestID != "" {
 		// Get specific guest metadata
 		meta := h.store.Get(guestID)
@@ -104,7 +104,7 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 	}
 
 	log.Info().Str("guestID", guestID).Str("url", meta.CustomURL).Msg("Updated guest metadata")
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&meta)
 }
@@ -129,6 +129,6 @@ func (h *GuestMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *ht
 	}
 
 	log.Info().Str("guestID", guestID).Msg("Deleted guest metadata")
-	
+
 	w.WriteHeader(http.StatusNoContent)
 }

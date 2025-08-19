@@ -1,0 +1,37 @@
+basePath: /
+definitions:
+  api.HealthResponse:
+    properties:
+      status:
+        description: '"healthy"'
+        type: string
+      timestamp:
+        description: UNIX timestamp
+        type: integer
+      uptime:
+        description: seconds
+        type: number
+    type: object
+host: localhost:7655
+info:
+  contact: {}
+  description: A responsive monitoring application for Proxmox VE that displays real-time
+    metrics across multiple nodes
+  title: Pulse API
+  version: "1.0"
+paths:
+  /api/health:
+    get:
+      description: Returns the current health status of the service, including uptime
+        and timestamp
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.HealthResponse'
+      summary: Check Pulse health
+      tags:
+      - system
+swagger: "2.0"

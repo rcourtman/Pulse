@@ -14,12 +14,12 @@ import (
 
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
-	config       *Config
-	envPath      string
-	watcher      *fsnotify.Watcher
-	stopChan     chan struct{}
-	lastModTime  time.Time
-	mu           sync.RWMutex
+	config      *Config
+	envPath     string
+	watcher     *fsnotify.Watcher
+	stopChan    chan struct{}
+	lastModTime time.Time
+	mu          sync.RWMutex
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -29,29 +29,29 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	if config.ConfigPath == "" {
 		envPath = "/etc/pulse/.env"
 	}
-	
+
 	// Check for Docker environment
 	if _, err := os.Stat("/data/.env"); err == nil {
 		envPath = "/data/.env"
 	}
-	
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	cw := &ConfigWatcher{
 		config:   config,
 		envPath:  envPath,
 		watcher:  watcher,
 		stopChan: make(chan struct{}),
 	}
-	
+
 	// Get initial mod time
 	if stat, err := os.Stat(envPath); err == nil {
 		cw.lastModTime = stat.ModTime()
 	}
-	
+
 	return cw, nil
 }
 
@@ -67,7 +67,7 @@ func (cw *ConfigWatcher) Start() error {
 		go cw.pollForChanges()
 		return nil
 	}
-	
+
 	go cw.watchForChanges()
 	log.Info().Str("path", cw.envPath).Msg("Started watching .env file for changes")
 	return nil
@@ -92,24 +92,24 @@ func (cw *ConfigWatcher) watchForChanges() {
 			if !ok {
 				return
 			}
-			
+
 			// Check if the event is for our .env file
 			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
 				// Debounce - wait a bit for write to complete
 				time.Sleep(100 * time.Millisecond)
-				
+
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected .env file change")
 					cw.reloadConfig()
 				}
 			}
-			
+
 		case err, ok := <-cw.watcher.Errors:
 			if !ok {
 				return
 			}
 			log.Error().Err(err).Msg("Config watcher error")
-			
+
 		case <-cw.stopChan:
 			return
 		}
@@ -120,7 +120,7 @@ func (cw *ConfigWatcher) watchForChanges() {
 func (cw *ConfigWatcher) pollForChanges() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -131,7 +131,7 @@ func (cw *ConfigWatcher) pollForChanges() {
 					cw.reloadConfig()
 				}
 			}
-			
+
 		case <-cw.stopChan:
 			return
 		}
@@ -142,7 +142,7 @@ func (cw *ConfigWatcher) pollForChanges() {
 func (cw *ConfigWatcher) reloadConfig() {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
-	
+
 	// Load the .env file
 	envMap, err := godotenv.Read(cw.envPath)
 	if err != nil {
@@ -153,15 +153,15 @@ func (cw *ConfigWatcher) reloadConfig() {
 		}
 		envMap = make(map[string]string)
 	}
-	
+
 	// Track what changed
 	var changes []string
-	
+
 	// Update auth settings
 	oldAuthUser := cw.config.AuthUser
 	oldAuthPass := cw.config.AuthPass
 	oldAPIToken := cw.config.APIToken
-	
+
 	// Apply auth user
 	newUser := strings.Trim(envMap["PULSE_AUTH_USER"], "'\"")
 	if newUser != oldAuthUser {
@@ -174,7 +174,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 			changes = append(changes, "auth user updated")
 		}
 	}
-	
+
 	// Apply auth password
 	newPass := strings.Trim(envMap["PULSE_AUTH_PASS"], "'\"")
 	if newPass != oldAuthPass {
@@ -187,7 +187,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 			changes = append(changes, "auth password updated")
 		}
 	}
-	
+
 	// Apply API token
 	newToken := strings.Trim(envMap["API_TOKEN"], "'\"")
 	if newToken != oldAPIToken {
@@ -201,10 +201,10 @@ func (cw *ConfigWatcher) reloadConfig() {
 			changes = append(changes, "API token updated")
 		}
 	}
-	
+
 	// REMOVED: POLLING_INTERVAL from .env - now ONLY in system.json
 	// This prevents confusion and ensures single source of truth
-	
+
 	// Log changes
 	if len(changes) > 0 {
 		log.Info().

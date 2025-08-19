@@ -9,36 +9,36 @@ import (
 
 // Base error types
 var (
-	ErrNotFound          = errors.New("not found")
-	ErrUnauthorized      = errors.New("unauthorized")
-	ErrForbidden         = errors.New("forbidden")
-	ErrTimeout           = errors.New("timeout")
-	ErrInvalidInput      = errors.New("invalid input")
-	ErrConnectionFailed  = errors.New("connection failed")
-	ErrInternalError     = errors.New("internal error")
+	ErrNotFound         = errors.New("not found")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrForbidden        = errors.New("forbidden")
+	ErrTimeout          = errors.New("timeout")
+	ErrInvalidInput     = errors.New("invalid input")
+	ErrConnectionFailed = errors.New("connection failed")
+	ErrInternalError    = errors.New("internal error")
 )
 
 // ErrorType represents the category of error
 type ErrorType string
 
 const (
-	ErrorTypeConnection   ErrorType = "connection"
-	ErrorTypeAuth         ErrorType = "auth"
-	ErrorTypeValidation   ErrorType = "validation"
-	ErrorTypeNotFound     ErrorType = "not_found"
-	ErrorTypeInternal     ErrorType = "internal"
-	ErrorTypeAPI          ErrorType = "api"
-	ErrorTypeTimeout      ErrorType = "timeout"
+	ErrorTypeConnection ErrorType = "connection"
+	ErrorTypeAuth       ErrorType = "auth"
+	ErrorTypeValidation ErrorType = "validation"
+	ErrorTypeNotFound   ErrorType = "not_found"
+	ErrorTypeInternal   ErrorType = "internal"
+	ErrorTypeAPI        ErrorType = "api"
+	ErrorTypeTimeout    ErrorType = "timeout"
 )
 
 // MonitorError is a structured error for monitoring operations
 type MonitorError struct {
 	Type       ErrorType
-	Op         string    // Operation that failed (e.g., "poll_nodes", "get_vms")
-	Instance   string    // Instance name where error occurred
-	Node       string    // Node name if applicable
-	Err        error     // Underlying error
-	StatusCode int       // HTTP status code if applicable
+	Op         string // Operation that failed (e.g., "poll_nodes", "get_vms")
+	Instance   string // Instance name where error occurred
+	Node       string // Node name if applicable
+	Err        error  // Underlying error
+	StatusCode int    // HTTP status code if applicable
 	Timestamp  time.Time
 	Retryable  bool
 }
@@ -62,7 +62,7 @@ func (e *MonitorError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	
+
 	// Check base error types
 	switch target {
 	case ErrNotFound:
@@ -74,7 +74,7 @@ func (e *MonitorError) Is(target error) bool {
 	case ErrConnectionFailed:
 		return e.Type == ErrorTypeConnection
 	}
-	
+
 	// Check wrapped error
 	return errors.Is(e.Err, target)
 }
@@ -126,7 +126,6 @@ func isRetryable(errorType ErrorType, err error) bool {
 	return false
 }
 
-
 // Helper functions
 
 // WrapConnectionError wraps a connection error with context
@@ -150,7 +149,7 @@ func IsRetryableError(err error) bool {
 	if errors.As(err, &monErr) {
 		return monErr.Retryable
 	}
-	
+
 	// Check for wrapped standard errors
 	return errors.Is(err, ErrTimeout) || errors.Is(err, ErrConnectionFailed)
 }
@@ -160,7 +159,7 @@ func IsAuthError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	var monErr *MonitorError
 	if errors.As(err, &monErr) {
 		// Check type
@@ -172,17 +171,17 @@ func IsAuthError(err error) bool {
 			return true
 		}
 	}
-	
+
 	// Check for wrapped standard errors
 	if errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden) {
 		return true
 	}
-	
+
 	// Check error message for authentication indicators
 	errMsg := err.Error()
-	return strings.Contains(errMsg, "authentication error") || 
+	return strings.Contains(errMsg, "authentication error") ||
 		strings.Contains(errMsg, "authentication failed") ||
-		strings.Contains(errMsg, "401") || 
+		strings.Contains(errMsg, "401") ||
 		strings.Contains(errMsg, "403") ||
 		strings.Contains(errMsg, "unauthorized") ||
 		strings.Contains(errMsg, "forbidden")

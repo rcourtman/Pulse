@@ -29,10 +29,10 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := r.Context()
-	
+
 	// Get channel from query parameter if provided
 	channel := r.URL.Query().Get("channel")
-	
+
 	info, err := h.manager.CheckForUpdatesWithChannel(ctx, channel)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to check for updates")
@@ -78,7 +78,7 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 	// Return success immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "started",
+		"status":  "started",
 		"message": "Update process started",
 	})
 }
@@ -91,7 +91,7 @@ func (h *UpdateHandlers) HandleUpdateStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	status := h.manager.GetStatus()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		log.Error().Err(err).Msg("Failed to encode update status")

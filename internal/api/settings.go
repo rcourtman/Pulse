@@ -29,9 +29,9 @@ type Capabilities struct {
 
 // SettingsUpdate represents a settings update request
 type SettingsUpdate struct {
-	Settings      *config.Settings `json:"settings"`
-	RestartNow    bool            `json:"restartNow"`
-	ValidateOnly  bool            `json:"validateOnly"`
+	Settings     *config.Settings `json:"settings"`
+	RestartNow   bool             `json:"restartNow"`
+	ValidateOnly bool             `json:"validateOnly"`
 }
 
 // getSettings returns current settings and configuration capabilities
@@ -107,7 +107,7 @@ func updateSettings(w http.ResponseWriter, r *http.Request) {
 	// If validate only, return success
 	if update.ValidateOnly {
 		utils.WriteJSONResponse(w, map[string]interface{}{
-			"valid": true,
+			"valid":   true,
 			"message": "Configuration is valid",
 		})
 		return
@@ -122,8 +122,8 @@ func updateSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare response
 	response := map[string]interface{}{
-		"success": true,
-		"message": "Settings saved successfully",
+		"success":         true,
+		"message":         "Settings saved successfully",
 		"requiresRestart": true,
 	}
 

@@ -30,12 +30,12 @@ func IsPasswordHashed(password string) bool {
 	if !strings.HasPrefix(password, "$2") {
 		return false
 	}
-	
+
 	length := len(password)
 	if length == 60 {
 		return true // Perfect bcrypt hash
 	}
-	
+
 	// Warn about truncated or invalid hashes
 	if length >= 55 && length < 60 {
 		log.Error().
@@ -44,7 +44,7 @@ func IsPasswordHashed(password string) bool {
 			Msg("Bcrypt hash appears truncated! Should be 60 characters. Password will be treated as plaintext.")
 		return false // Treat as plaintext to force user to fix it
 	}
-	
+
 	return false
 }
 
@@ -52,12 +52,12 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendHost   string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
-	BackendPort   int    `envconfig:"BACKEND_PORT" default:"3000"`
-	FrontendHost  string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
-	FrontendPort  int    `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath    string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
-	DataPath      string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
+	BackendHost  string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
+	BackendPort  int    `envconfig:"BACKEND_PORT" default:"3000"`
+	FrontendHost string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
+	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath   string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
+	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -66,7 +66,7 @@ type Config struct {
 	PBSInstances []PBSInstance
 
 	// Monitoring settings
-	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"` // Deprecated - ignored, always 10s
+	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"`     // Deprecated - ignored, always 10s
 	PVEPollingInterval   time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // Deprecated - ignored, always 10s
 	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
@@ -99,14 +99,14 @@ type Config struct {
 	AutoUpdateEnabled       bool          `envconfig:"AUTO_UPDATE_ENABLED" default:"false"`
 	AutoUpdateCheckInterval time.Duration `envconfig:"AUTO_UPDATE_CHECK_INTERVAL" default:"24h"`
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
-	
+
 	// Discovery settings
 	DiscoverySubnet string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
-	
+
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
 	Debug bool `envconfig:"DEBUG" default:"false"`
-	
+
 	// Track which settings are overridden by environment variables
 	EnvOverrides map[string]bool `json:"-"`
 }
@@ -114,7 +114,7 @@ type Config struct {
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name              string
-	Host              string   // Primary endpoint (user-provided)
+	Host              string // Primary endpoint (user-provided)
 	User              string
 	Password          string
 	TokenName         string
@@ -125,10 +125,10 @@ type PVEInstance struct {
 	MonitorContainers bool
 	MonitorStorage    bool
 	MonitorBackups    bool
-	
+
 	// Cluster support
-	IsCluster       bool              // True if this is a cluster
-	ClusterName     string            // Cluster name if applicable
+	IsCluster        bool              // True if this is a cluster
+	ClusterName      string            // Cluster name if applicable
 	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
 }
 
@@ -170,7 +170,7 @@ func Load() (*Config, error) {
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		dataDir = dir
 	}
-	
+
 	// Load .env file if it exists (for deployment overrides)
 	envFile := filepath.Join(dataDir, ".env")
 	if _, err := os.Stat(envFile); err == nil {
@@ -180,17 +180,17 @@ func Load() (*Config, error) {
 			log.Info().Str("file", envFile).Msg("Loaded .env file for deployment overrides")
 		}
 	}
-	
+
 	// Also try loading from current directory for development
 	if err := godotenv.Load(); err == nil {
 		log.Info().Msg("Loaded configuration from .env in current directory")
 	}
-	
+
 	// Initialize config with defaults
 	cfg := &Config{
 		BackendHost:          "0.0.0.0",
 		BackendPort:          3000,
-		FrontendHost:         "0.0.0.0", 
+		FrontendHost:         "0.0.0.0",
 		FrontendPort:         7655,
 		ConfigPath:           dataDir,
 		DataPath:             dataDir,
@@ -211,7 +211,7 @@ func Load() (*Config, error) {
 		DiscoverySubnet:      "auto",
 		EnvOverrides:         make(map[string]bool),
 	}
-	
+
 	// Initialize persistence
 	persistence := NewConfigPersistence(dataDir)
 	if persistence != nil {
@@ -228,7 +228,7 @@ func Load() (*Config, error) {
 		} else if err != nil {
 			log.Warn().Err(err).Msg("Failed to load nodes configuration")
 		}
-		
+
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
 			// Handle new separate intervals
@@ -238,19 +238,19 @@ func Load() (*Config, error) {
 				// Fallback to legacy interval for PVE
 				cfg.PVEPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
-			
+
 			if systemSettings.PBSPollingInterval > 0 {
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
 			} else if systemSettings.PollingInterval > 0 {
 				// Fallback to legacy interval for PBS
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
-			
+
 			// Keep legacy field for compatibility
 			if systemSettings.PollingInterval > 0 {
 				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
-			
+
 			if systemSettings.UpdateChannel != "" {
 				cfg.UpdateChannel = systemSettings.UpdateChannel
 			}
@@ -292,7 +292,7 @@ func Load() (*Config, error) {
 			}
 		}
 	}
-	
+
 	// Ensure new polling intervals have defaults if not set
 	if cfg.PVEPollingInterval == 0 {
 		cfg.PVEPollingInterval = cfg.PollingInterval
@@ -306,10 +306,10 @@ func Load() (*Config, error) {
 			cfg.PBSPollingInterval = 60 * time.Second
 		}
 	}
-	
+
 	// Limited environment variable support
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
-	
+
 	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
 	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {
 		if p, err := strconv.Atoi(frontendPort); err == nil {
@@ -371,8 +371,7 @@ func Load() (*Config, error) {
 			log.Debug().Msg("Loaded pre-hashed password from env var")
 		}
 	}
-	
-	
+
 	// HTTPS/TLS configuration from environment
 	if httpsEnabled := os.Getenv("HTTPS_ENABLED"); httpsEnabled != "" {
 		cfg.HTTPSEnabled = httpsEnabled == "true" || httpsEnabled == "1"
@@ -386,11 +385,11 @@ func Load() (*Config, error) {
 		cfg.TLSKeyFile = tlsKeyFile
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
 	}
-	
+
 	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
 	// These settings now ONLY come from system.json to prevent confusion
 	// Only keeping essential deployment/infrastructure env vars
-	
+
 	if cfg.AllowedOrigins == "" {
 		// If not configured and we're in development mode (different ports for frontend/backend)
 		// allow localhost for development convenience
@@ -427,7 +426,7 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["allowedOrigins"] = true
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
-	
+
 	// Set log level
 	switch cfg.LogLevel {
 	case "debug":
@@ -439,12 +438,12 @@ func Load() (*Config, error) {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel) // Default to info level
 	}
-	
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return cfg, nil
 }
 
@@ -453,12 +452,12 @@ func SaveConfig(cfg *Config) error {
 	if globalPersistence == nil {
 		return fmt.Errorf("config persistence not initialized")
 	}
-	
+
 	// Save nodes configuration
 	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances); err != nil {
 		return fmt.Errorf("failed to save nodes config: %w", err)
 	}
-	
+
 	// Save system configuration
 	systemSettings := SystemSettings{
 		PollingInterval:         int(cfg.PollingInterval.Seconds()),
@@ -475,7 +474,7 @@ func SaveConfig(cfg *Config) error {
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
 		return fmt.Errorf("failed to save system config: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -484,13 +483,12 @@ func UpdatePollingInterval(interval int) error {
 	if globalPersistence == nil {
 		return fmt.Errorf("config persistence not initialized")
 	}
-	
+
 	systemSettings := SystemSettings{
 		PollingInterval: interval,
 	}
 	return globalPersistence.SaveSystemSettings(systemSettings)
 }
-
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
@@ -501,7 +499,7 @@ func (c *Config) Validate() error {
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
 	}
-	
+
 	// Validate monitoring settings
 	if c.PollingInterval < time.Second {
 		return fmt.Errorf("polling interval must be at least 1 second")
@@ -509,7 +507,7 @@ func (c *Config) Validate() error {
 	if c.ConnectionTimeout < time.Second {
 		return fmt.Errorf("connection timeout must be at least 1 second")
 	}
-	
+
 	// Validate PVE instances
 	for i, pve := range c.PVEInstances {
 		if pve.Host == "" {

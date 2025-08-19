@@ -10,20 +10,20 @@ import (
 // State represents the current state of all monitored resources
 type State struct {
 	mu               sync.RWMutex
-	Nodes            []Node            `json:"nodes"`
-	VMs              []VM              `json:"vms"`
-	Containers       []Container       `json:"containers"`
-	Storage          []Storage         `json:"storage"`
-	PBSInstances     []PBSInstance     `json:"pbs"`
-	PBSBackups       []PBSBackup       `json:"pbsBackups"`
-	Metrics          []Metric          `json:"metrics"`
-	PVEBackups       PVEBackups        `json:"pveBackups"`
-	Performance      Performance       `json:"performance"`
-	ConnectionHealth map[string]bool   `json:"connectionHealth"`
-	Stats            Stats             `json:"stats"`
-	ActiveAlerts     []Alert           `json:"activeAlerts"`
-	RecentlyResolved []ResolvedAlert   `json:"recentlyResolved"`
-	LastUpdate       time.Time         `json:"lastUpdate"`
+	Nodes            []Node          `json:"nodes"`
+	VMs              []VM            `json:"vms"`
+	Containers       []Container     `json:"containers"`
+	Storage          []Storage       `json:"storage"`
+	PBSInstances     []PBSInstance   `json:"pbs"`
+	PBSBackups       []PBSBackup     `json:"pbsBackups"`
+	Metrics          []Metric        `json:"metrics"`
+	PVEBackups       PVEBackups      `json:"pveBackups"`
+	Performance      Performance     `json:"performance"`
+	ConnectionHealth map[string]bool `json:"connectionHealth"`
+	Stats            Stats           `json:"stats"`
+	ActiveAlerts     []Alert         `json:"activeAlerts"`
+	RecentlyResolved []ResolvedAlert `json:"recentlyResolved"`
+	LastUpdate       time.Time       `json:"lastUpdate"`
 }
 
 // Alert represents an active alert (simplified for State)
@@ -53,7 +53,7 @@ type Node struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`
 	Instance         string    `json:"instance"`
-	Host             string    `json:"host"`      // Full host URL from config
+	Host             string    `json:"host"` // Full host URL from config
 	Status           string    `json:"status"`
 	Type             string    `json:"type"`
 	CPU              float64   `json:"cpu"`
@@ -70,52 +70,52 @@ type Node struct {
 
 // VM represents a virtual machine
 type VM struct {
-	ID               string    `json:"id"`
-	VMID             int       `json:"vmid"`
-	Name             string    `json:"name"`
-	Node             string    `json:"node"`
-	Instance         string    `json:"instance"`
-	Status           string    `json:"status"`
-	Type             string    `json:"type"`
-	CPU              float64   `json:"cpu"`
-	CPUs             int       `json:"cpus"`
-	Memory           Memory    `json:"memory"`
-	Disk             Disk      `json:"disk"`
-	NetworkIn        int64     `json:"networkIn"`
-	NetworkOut       int64     `json:"networkOut"`
-	DiskRead         int64     `json:"diskRead"`
-	DiskWrite        int64     `json:"diskWrite"`
-	Uptime           int64     `json:"uptime"`
-	Template         bool      `json:"template"`
-	LastBackup       time.Time `json:"lastBackup,omitempty"`
-	Tags             []string  `json:"tags,omitempty"`
-	Lock             string    `json:"lock,omitempty"`
-	LastSeen         time.Time `json:"lastSeen"`
+	ID         string    `json:"id"`
+	VMID       int       `json:"vmid"`
+	Name       string    `json:"name"`
+	Node       string    `json:"node"`
+	Instance   string    `json:"instance"`
+	Status     string    `json:"status"`
+	Type       string    `json:"type"`
+	CPU        float64   `json:"cpu"`
+	CPUs       int       `json:"cpus"`
+	Memory     Memory    `json:"memory"`
+	Disk       Disk      `json:"disk"`
+	NetworkIn  int64     `json:"networkIn"`
+	NetworkOut int64     `json:"networkOut"`
+	DiskRead   int64     `json:"diskRead"`
+	DiskWrite  int64     `json:"diskWrite"`
+	Uptime     int64     `json:"uptime"`
+	Template   bool      `json:"template"`
+	LastBackup time.Time `json:"lastBackup,omitempty"`
+	Tags       []string  `json:"tags,omitempty"`
+	Lock       string    `json:"lock,omitempty"`
+	LastSeen   time.Time `json:"lastSeen"`
 }
 
 // Container represents an LXC container
 type Container struct {
-	ID               string    `json:"id"`
-	VMID             int       `json:"vmid"`
-	Name             string    `json:"name"`
-	Node             string    `json:"node"`
-	Instance         string    `json:"instance"`
-	Status           string    `json:"status"`
-	Type             string    `json:"type"`
-	CPU              float64   `json:"cpu"`
-	CPUs             int       `json:"cpus"`
-	Memory           Memory    `json:"memory"`
-	Disk             Disk      `json:"disk"`
-	NetworkIn        int64     `json:"networkIn"`
-	NetworkOut       int64     `json:"networkOut"`
-	DiskRead         int64     `json:"diskRead"`
-	DiskWrite        int64     `json:"diskWrite"`
-	Uptime           int64     `json:"uptime"`
-	Template         bool      `json:"template"`
-	LastBackup       time.Time `json:"lastBackup,omitempty"`
-	Tags             []string  `json:"tags,omitempty"`
-	Lock             string    `json:"lock,omitempty"`
-	LastSeen         time.Time `json:"lastSeen"`
+	ID         string    `json:"id"`
+	VMID       int       `json:"vmid"`
+	Name       string    `json:"name"`
+	Node       string    `json:"node"`
+	Instance   string    `json:"instance"`
+	Status     string    `json:"status"`
+	Type       string    `json:"type"`
+	CPU        float64   `json:"cpu"`
+	CPUs       int       `json:"cpus"`
+	Memory     Memory    `json:"memory"`
+	Disk       Disk      `json:"disk"`
+	NetworkIn  int64     `json:"networkIn"`
+	NetworkOut int64     `json:"networkOut"`
+	DiskRead   int64     `json:"diskRead"`
+	DiskWrite  int64     `json:"diskWrite"`
+	Uptime     int64     `json:"uptime"`
+	Template   bool      `json:"template"`
+	LastBackup time.Time `json:"lastBackup,omitempty"`
+	Tags       []string  `json:"tags,omitempty"`
+	Lock       string    `json:"lock,omitempty"`
+	LastSeen   time.Time `json:"lastSeen"`
 }
 
 // Storage represents a storage resource
@@ -138,24 +138,24 @@ type Storage struct {
 
 // PBSInstance represents a Proxmox Backup Server instance
 type PBSInstance struct {
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	Host             string            `json:"host"`
-	Status           string            `json:"status"`
-	Version          string            `json:"version"`
-	CPU              float64           `json:"cpu"`              // CPU usage percentage
-	Memory           float64           `json:"memory"`           // Memory usage percentage
-	MemoryUsed       int64             `json:"memoryUsed"`       // Memory used in bytes
-	MemoryTotal      int64             `json:"memoryTotal"`      // Total memory in bytes
-	Uptime           int64             `json:"uptime"`           // Uptime in seconds
-	Datastores       []PBSDatastore    `json:"datastores"`
-	BackupJobs       []PBSBackupJob    `json:"backupJobs"`
-	SyncJobs         []PBSSyncJob      `json:"syncJobs"`
-	VerifyJobs       []PBSVerifyJob    `json:"verifyJobs"`
-	PruneJobs        []PBSPruneJob     `json:"pruneJobs"`
-	GarbageJobs      []PBSGarbageJob   `json:"garbageJobs"`
-	ConnectionHealth string            `json:"connectionHealth"`
-	LastSeen         time.Time         `json:"lastSeen"`
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Host             string          `json:"host"`
+	Status           string          `json:"status"`
+	Version          string          `json:"version"`
+	CPU              float64         `json:"cpu"`         // CPU usage percentage
+	Memory           float64         `json:"memory"`      // Memory usage percentage
+	MemoryUsed       int64           `json:"memoryUsed"`  // Memory used in bytes
+	MemoryTotal      int64           `json:"memoryTotal"` // Total memory in bytes
+	Uptime           int64           `json:"uptime"`      // Uptime in seconds
+	Datastores       []PBSDatastore  `json:"datastores"`
+	BackupJobs       []PBSBackupJob  `json:"backupJobs"`
+	SyncJobs         []PBSSyncJob    `json:"syncJobs"`
+	VerifyJobs       []PBSVerifyJob  `json:"verifyJobs"`
+	PruneJobs        []PBSPruneJob   `json:"pruneJobs"`
+	GarbageJobs      []PBSGarbageJob `json:"garbageJobs"`
+	ConnectionHealth string          `json:"connectionHealth"`
+	LastSeen         time.Time       `json:"lastSeen"`
 }
 
 // PBSDatastore represents a PBS datastore
@@ -179,18 +179,18 @@ type PBSNamespace struct {
 
 // PBSBackup represents a backup stored on PBS
 type PBSBackup struct {
-	ID           string    `json:"id"`          // Unique ID combining PBS instance, namespace, type, vmid, and time
-	Instance     string    `json:"instance"`    // PBS instance name
-	Datastore    string    `json:"datastore"`   
-	Namespace    string    `json:"namespace"`   
-	BackupType   string    `json:"backupType"`  // "vm" or "ct"
-	VMID         string    `json:"vmid"`        
-	BackupTime   time.Time `json:"backupTime"`  
-	Size         int64     `json:"size"`        
-	Protected    bool      `json:"protected"`   
-	Verified     bool      `json:"verified"`    
-	Comment      string    `json:"comment,omitempty"`
-	Files        []string  `json:"files,omitempty"`
+	ID         string    `json:"id"`       // Unique ID combining PBS instance, namespace, type, vmid, and time
+	Instance   string    `json:"instance"` // PBS instance name
+	Datastore  string    `json:"datastore"`
+	Namespace  string    `json:"namespace"`
+	BackupType string    `json:"backupType"` // "vm" or "ct"
+	VMID       string    `json:"vmid"`
+	BackupTime time.Time `json:"backupTime"`
+	Size       int64     `json:"size"`
+	Protected  bool      `json:"protected"`
+	Verified   bool      `json:"verified"`
+	Comment    string    `json:"comment,omitempty"`
+	Files      []string  `json:"files,omitempty"`
 }
 
 // PBSBackupJob represents a PBS backup job
@@ -281,9 +281,9 @@ type Metric struct {
 
 // PVEBackups represents PVE backup information
 type PVEBackups struct {
-	BackupTasks     []BackupTask     `json:"backupTasks"`
-	StorageBackups  []StorageBackup  `json:"storageBackups"`
-	GuestSnapshots  []GuestSnapshot  `json:"guestSnapshots"`
+	BackupTasks    []BackupTask    `json:"backupTasks"`
+	StorageBackups []StorageBackup `json:"storageBackups"`
+	GuestSnapshots []GuestSnapshot `json:"guestSnapshots"`
 }
 
 // BackupTask represents a PVE backup task
@@ -307,14 +307,14 @@ type StorageBackup struct {
 	Type         string    `json:"type"`
 	VMID         int       `json:"vmid"`
 	Time         time.Time `json:"time"`
-	CTime        int64     `json:"ctime"`     // Unix timestamp for compatibility
+	CTime        int64     `json:"ctime"` // Unix timestamp for compatibility
 	Size         int64     `json:"size"`
 	Format       string    `json:"format"`
 	Notes        string    `json:"notes,omitempty"`
 	Protected    bool      `json:"protected"`
-	Volid        string    `json:"volid"`     // Volume ID for compatibility
-	IsPBS        bool      `json:"isPBS"`     // Indicates if backup is on PBS storage
-	Verified     bool      `json:"verified"`  // PBS verification status
+	Volid        string    `json:"volid"`                  // Volume ID for compatibility
+	IsPBS        bool      `json:"isPBS"`                  // Indicates if backup is on PBS storage
+	Verified     bool      `json:"verified"`               // PBS verification status
 	Verification string    `json:"verification,omitempty"` // Verification details
 }
 
@@ -333,11 +333,11 @@ type GuestSnapshot struct {
 
 // Performance represents performance metrics
 type Performance struct {
-	APICallDuration   map[string]float64 `json:"apiCallDuration"`
-	LastPollDuration  float64            `json:"lastPollDuration"`
-	PollingStartTime  time.Time          `json:"pollingStartTime"`
-	TotalAPICalls     int                `json:"totalApiCalls"`
-	FailedAPICalls    int                `json:"failedApiCalls"`
+	APICallDuration  map[string]float64 `json:"apiCallDuration"`
+	LastPollDuration float64            `json:"lastPollDuration"`
+	PollingStartTime time.Time          `json:"pollingStartTime"`
+	TotalAPICalls    int                `json:"totalApiCalls"`
+	FailedAPICalls   int                `json:"failedApiCalls"`
 }
 
 // Stats represents runtime statistics
@@ -352,13 +352,13 @@ type Stats struct {
 // NewState creates a new State instance
 func NewState() *State {
 	return &State{
-		Nodes:            make([]Node, 0),
-		VMs:              make([]VM, 0),
-		Containers:       make([]Container, 0),
-		Storage:          make([]Storage, 0),
-		PBSInstances:     make([]PBSInstance, 0),
-		PBSBackups:       make([]PBSBackup, 0),
-		Metrics:          make([]Metric, 0),
+		Nodes:        make([]Node, 0),
+		VMs:          make([]VM, 0),
+		Containers:   make([]Container, 0),
+		Storage:      make([]Storage, 0),
+		PBSInstances: make([]PBSInstance, 0),
+		PBSBackups:   make([]PBSBackup, 0),
+		Metrics:      make([]Metric, 0),
 		PVEBackups: PVEBackups{
 			BackupTasks:    make([]BackupTask, 0),
 			StorageBackups: make([]StorageBackup, 0),
@@ -370,7 +370,6 @@ func NewState() *State {
 		LastUpdate:       time.Now(),
 	}
 }
-
 
 // UpdateActiveAlerts updates the active alerts in the state
 func (s *State) UpdateActiveAlerts(alerts []Alert) {
@@ -390,12 +389,12 @@ func (s *State) UpdateRecentlyResolved(resolved []ResolvedAlert) {
 func (s *State) UpdateNodes(nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Sort nodes by name to ensure consistent ordering
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Name < nodes[j].Name
 	})
-	
+
 	s.Nodes = nodes
 	s.LastUpdate = time.Now()
 }
@@ -404,7 +403,7 @@ func (s *State) UpdateNodes(nodes []Node) {
 func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing nodes, excluding those from this instance
 	nodeMap := make(map[string]Node)
 	for _, node := range s.Nodes {
@@ -412,23 +411,23 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			nodeMap[node.ID] = node
 		}
 	}
-	
+
 	// Add or update nodes from this instance
 	for _, node := range nodes {
 		nodeMap[node.ID] = node
 	}
-	
+
 	// Convert map back to slice
 	newNodes := make([]Node, 0, len(nodeMap))
 	for _, node := range nodeMap {
 		newNodes = append(newNodes, node)
 	}
-	
+
 	// Sort nodes by name to ensure consistent ordering
 	sort.Slice(newNodes, func(i, j int) bool {
 		return newNodes[i].Name < newNodes[j].Name
 	})
-	
+
 	s.Nodes = newNodes
 	s.LastUpdate = time.Now()
 }
@@ -445,7 +444,7 @@ func (s *State) UpdateVMs(vms []VM) {
 func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing VMs, excluding those from this instance
 	vmMap := make(map[string]VM)
 	for _, vm := range s.VMs {
@@ -453,23 +452,23 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 			vmMap[vm.ID] = vm
 		}
 	}
-	
+
 	// Add or update VMs from this instance
 	for _, vm := range vms {
 		vmMap[vm.ID] = vm
 	}
-	
+
 	// Convert map back to slice
 	newVMs := make([]VM, 0, len(vmMap))
 	for _, vm := range vmMap {
 		newVMs = append(newVMs, vm)
 	}
-	
+
 	// Sort VMs by VMID to ensure consistent ordering
 	sort.Slice(newVMs, func(i, j int) bool {
 		return newVMs[i].VMID < newVMs[j].VMID
 	})
-	
+
 	s.VMs = newVMs
 	s.LastUpdate = time.Now()
 }
@@ -486,7 +485,7 @@ func (s *State) UpdateContainers(containers []Container) {
 func (s *State) UpdateContainersForInstance(instanceName string, containers []Container) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing containers, excluding those from this instance
 	containerMap := make(map[string]Container)
 	for _, container := range s.Containers {
@@ -494,23 +493,23 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 			containerMap[container.ID] = container
 		}
 	}
-	
+
 	// Add or update containers from this instance
 	for _, container := range containers {
 		containerMap[container.ID] = container
 	}
-	
+
 	// Convert map back to slice
 	newContainers := make([]Container, 0, len(containerMap))
 	for _, container := range containerMap {
 		newContainers = append(newContainers, container)
 	}
-	
+
 	// Sort containers by VMID to ensure consistent ordering
 	sort.Slice(newContainers, func(i, j int) bool {
 		return newContainers[i].VMID < newContainers[j].VMID
 	})
-	
+
 	s.Containers = newContainers
 	s.LastUpdate = time.Now()
 }
@@ -527,7 +526,7 @@ func (s *State) UpdateStorage(storage []Storage) {
 func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing storage, excluding those from this instance
 	storageMap := make(map[string]Storage)
 	for _, st := range s.Storage {
@@ -535,18 +534,18 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 			storageMap[st.ID] = st
 		}
 	}
-	
+
 	// Add or update storage from this instance
 	for _, st := range storage {
 		storageMap[st.ID] = st
 	}
-	
+
 	// Convert map back to slice
 	newStorage := make([]Storage, 0, len(storageMap))
 	for _, st := range storageMap {
 		newStorage = append(newStorage, st)
 	}
-	
+
 	// Sort storage by name to ensure consistent ordering
 	sort.Slice(newStorage, func(i, j int) bool {
 		if newStorage[i].Instance == newStorage[j].Instance {
@@ -554,7 +553,7 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 		}
 		return newStorage[i].Instance < newStorage[j].Instance
 	})
-	
+
 	s.Storage = newStorage
 	s.LastUpdate = time.Now()
 }
@@ -571,7 +570,7 @@ func (s *State) UpdatePBSInstances(instances []PBSInstance) {
 func (s *State) UpdatePBSInstance(instance PBSInstance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Find and update existing instance or append new one
 	found := false
 	for i, existing := range s.PBSInstances {
@@ -581,11 +580,11 @@ func (s *State) UpdatePBSInstance(instance PBSInstance) {
 			break
 		}
 	}
-	
+
 	if !found {
 		s.PBSInstances = append(s.PBSInstances, instance)
 	}
-	
+
 	s.LastUpdate = time.Now()
 }
 
@@ -593,7 +592,7 @@ func (s *State) UpdatePBSInstance(instance PBSInstance) {
 func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []BackupTask) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing tasks, excluding those from this instance
 	taskMap := make(map[string]BackupTask)
 	for _, task := range s.PVEBackups.BackupTasks {
@@ -602,23 +601,23 @@ func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []Backup
 			taskMap[task.ID] = task
 		}
 	}
-	
+
 	// Add or update tasks from this instance
 	for _, task := range tasks {
 		taskMap[task.ID] = task
 	}
-	
+
 	// Convert map back to slice
 	newTasks := make([]BackupTask, 0, len(taskMap))
 	for _, task := range taskMap {
 		newTasks = append(newTasks, task)
 	}
-	
+
 	// Sort by start time descending
 	sort.Slice(newTasks, func(i, j int) bool {
 		return newTasks[i].StartTime.After(newTasks[j].StartTime)
 	})
-	
+
 	s.PVEBackups.BackupTasks = newTasks
 	s.LastUpdate = time.Now()
 }
@@ -627,7 +626,7 @@ func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []Backup
 func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []StorageBackup) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing backups, excluding those from this instance
 	backupMap := make(map[string]StorageBackup)
 	for _, backup := range s.PVEBackups.StorageBackups {
@@ -636,23 +635,23 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 			backupMap[backup.ID] = backup
 		}
 	}
-	
+
 	// Add or update backups from this instance
 	for _, backup := range backups {
 		backupMap[backup.ID] = backup
 	}
-	
+
 	// Convert map back to slice
 	newBackups := make([]StorageBackup, 0, len(backupMap))
 	for _, backup := range backupMap {
 		newBackups = append(newBackups, backup)
 	}
-	
+
 	// Sort by time descending
 	sort.Slice(newBackups, func(i, j int) bool {
 		return newBackups[i].Time.After(newBackups[j].Time)
 	})
-	
+
 	s.PVEBackups.StorageBackups = newBackups
 	s.LastUpdate = time.Now()
 }
@@ -661,7 +660,7 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 func (s *State) UpdateGuestSnapshotsForInstance(instanceName string, snapshots []GuestSnapshot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing snapshots, excluding those from this instance
 	snapshotMap := make(map[string]GuestSnapshot)
 	for _, snapshot := range s.PVEBackups.GuestSnapshots {
@@ -670,23 +669,23 @@ func (s *State) UpdateGuestSnapshotsForInstance(instanceName string, snapshots [
 			snapshotMap[snapshot.ID] = snapshot
 		}
 	}
-	
+
 	// Add or update snapshots from this instance
 	for _, snapshot := range snapshots {
 		snapshotMap[snapshot.ID] = snapshot
 	}
-	
+
 	// Convert map back to slice
 	newSnapshots := make([]GuestSnapshot, 0, len(snapshotMap))
 	for _, snapshot := range snapshotMap {
 		newSnapshots = append(newSnapshots, snapshot)
 	}
-	
+
 	// Sort by time descending
 	sort.Slice(newSnapshots, func(i, j int) bool {
 		return newSnapshots[i].Time.After(newSnapshots[j].Time)
 	})
-	
+
 	s.PVEBackups.GuestSnapshots = newSnapshots
 	s.LastUpdate = time.Now()
 }
@@ -698,12 +697,11 @@ func (s *State) SetConnectionHealth(instanceID string, healthy bool) {
 	s.ConnectionHealth[instanceID] = healthy
 }
 
-
 // UpdatePBSBackups updates PBS backups for a specific instance
 func (s *State) UpdatePBSBackups(instanceName string, backups []PBSBackup) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Create a map of existing backups excluding ones from this instance
 	backupMap := make(map[string]PBSBackup)
 	for _, backup := range s.PBSBackups {
@@ -711,23 +709,23 @@ func (s *State) UpdatePBSBackups(instanceName string, backups []PBSBackup) {
 			backupMap[backup.ID] = backup
 		}
 	}
-	
+
 	// Add new backups from this instance
 	for _, backup := range backups {
 		backupMap[backup.ID] = backup
 	}
-	
+
 	// Convert map back to slice
 	newBackups := make([]PBSBackup, 0, len(backupMap))
 	for _, backup := range backupMap {
 		newBackups = append(newBackups, backup)
 	}
-	
+
 	// Sort by backup time (newest first)
 	sort.Slice(newBackups, func(i, j int) bool {
 		return newBackups[i].BackupTime.After(newBackups[j].BackupTime)
 	})
-	
+
 	s.PBSBackups = newBackups
 	s.LastUpdate = time.Now()
 }

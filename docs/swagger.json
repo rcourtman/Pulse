@@ -1,0 +1,52 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A responsive monitoring application for Proxmox VE that displays real-time metrics across multiple nodes",
+        "title": "Pulse API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:7655",
+    "basePath": "/",
+    "paths": {
+        "/api/health": {
+            "get": {
+                "description": "Returns the current health status of the service, including uptime and timestamp",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "Check Pulse health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.HealthResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "api.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "description": "\"healthy\"",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "description": "UNIX timestamp",
+                    "type": "integer"
+                },
+                "uptime": {
+                    "description": "seconds",
+                    "type": "number"
+                }
+            }
+        }
+    }
+}

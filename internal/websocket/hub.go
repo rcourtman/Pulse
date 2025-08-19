@@ -26,34 +26,34 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		// No origin header, allow for non-browser clients
 		return true
 	}
-	
+
 	h.mu.RLock()
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
-	
+
 	// Determine the actual origin based on proxy headers
 	scheme := "http"
 	host := r.Host
-	
+
 	// Check if we're behind a reverse proxy
 	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
 		scheme = forwardedProto
 	} else if r.TLS != nil {
 		scheme = "https"
 	}
-	
+
 	// Use X-Forwarded-Host if available (for reverse proxy scenarios)
 	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
 		host = forwardedHost
 	}
-	
+
 	requestOrigin := scheme + "://" + host
-	
+
 	// Allow same-origin requests (accounting for proxy headers)
 	if origin == requestOrigin {
 		return true
 	}
-	
+
 	// Check if wildcard is allowed
 	for _, allowed := range allowedOrigins {
 		if allowed == "*" {
@@ -63,18 +63,18 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 			return true
 		}
 	}
-	
+
 	// If no origins configured, allow same-origin only
 	if len(allowedOrigins) == 0 {
 		return origin == requestOrigin
 	}
-	
+
 	log.Warn().
 		Str("origin", origin).
 		Str("requestOrigin", requestOrigin).
 		Strs("allowedOrigins", allowedOrigins).
 		Msg("WebSocket connection rejected due to CORS")
-	
+
 	return false
 }
 
@@ -136,13 +136,13 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			h.mu.Unlock()
 			log.Info().Str("client", client.id).Msg("WebSocket client connected")
-			
+
 			// Send initial state to the new client immediately
 			if h.getState != nil {
 				// Add a small delay to ensure client is ready
 				go func() {
 					time.Sleep(500 * time.Millisecond)
-					
+
 					// First send a small welcome message
 					welcomeMsg := Message{
 						Type: "welcome",
@@ -162,19 +162,19 @@ func (h *Hub) Run() {
 							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
 						}
 					}
-					
+
 					// Then send the initial state after another delay
 					time.Sleep(100 * time.Millisecond)
-					
+
 					initialMsg := Message{
-						Type: "initialState", 
+						Type: "initialState",
 						Data: sanitizeData(h.getState()),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
 						// Check if client is still registered before sending
 						if _, ok := h.clients[client]; ok {
 							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
-							
+
 							select {
 							case client.send <- data:
 								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
@@ -210,7 +210,7 @@ func (h *Hub) Run() {
 				clients = append(clients, client)
 			}
 			h.mu.RUnlock()
-			
+
 			for _, client := range clients {
 				select {
 				case client.send <- message:
@@ -236,14 +236,14 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("host", r.Host).
 		Str("userAgent", r.Header.Get("User-Agent")).
 		Msg("WebSocket upgrade request")
-	
+
 	// Create upgrader with our origin check
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 64,  // 64KB to handle large state messages
-		WriteBufferSize: 1024 * 64,  // 64KB to handle large state messages
+		ReadBufferSize:  1024 * 64, // 64KB to handle large state messages
+		WriteBufferSize: 1024 * 64, // 64KB to handle large state messages
 		CheckOrigin:     h.checkOrigin,
 	}
-		
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
@@ -307,8 +307,8 @@ func (h *Hub) GetClientCount() int {
 // Broadcast sends a custom message to all connected clients
 func (h *Hub) Broadcast(data interface{}) {
 	h.BroadcastMessage(Message{
-		Type: "custom",
-		Data: data,
+		Type:      "custom",
+		Data:      data,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
 }
@@ -317,7 +317,7 @@ func (h *Hub) Broadcast(data interface{}) {
 func (h *Hub) BroadcastMessage(msg Message) {
 	// Sanitize the message data to handle NaN values
 	msg.Data = sanitizeData(msg.Data)
-	
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal WebSocket message")
@@ -459,7 +459,6 @@ func (c *Client) writePump() {
 	}
 }
 
-
 // sanitizeData recursively sanitizes data to replace NaN/Inf values with nil
 func sanitizeData(data interface{}) interface{} {
 	// First, marshal to JSON to convert structs to maps
@@ -467,12 +466,12 @@ func sanitizeData(data interface{}) interface{} {
 	if err != nil {
 		return data
 	}
-	
+
 	var jsonData interface{}
 	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
 		return data
 	}
-	
+
 	return sanitizeValue(jsonData)
 }
 

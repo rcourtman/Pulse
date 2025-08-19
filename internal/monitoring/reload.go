@@ -12,14 +12,14 @@ import (
 
 // ReloadableMonitor wraps a Monitor with reload capability
 type ReloadableMonitor struct {
-	mu          sync.RWMutex
-	monitor     *Monitor
-	config      *config.Config
-	wsHub       *websocket.Hub
-	ctx         context.Context
-	cancel      context.CancelFunc
-	parentCtx   context.Context
-	reloadChan  chan struct{}
+	mu         sync.RWMutex
+	monitor    *Monitor
+	config     *config.Config
+	wsHub      *websocket.Hub
+	ctx        context.Context
+	cancel     context.CancelFunc
+	parentCtx  context.Context
+	reloadChan chan struct{}
 }
 
 // NewReloadableMonitor creates a new reloadable monitor
@@ -100,26 +100,26 @@ func (rm *ReloadableMonitor) doReload() error {
 			Dur("oldInterval", rm.config.PollingInterval).
 			Dur("newInterval", cfg.PollingInterval).
 			Msg("Updating polling interval without full reload")
-		
+
 		// Update config
 		rm.config.PollingInterval = cfg.PollingInterval
 		rm.monitor.config.PollingInterval = cfg.PollingInterval
-		
+
 		// Cancel and restart the monitoring loop
 		if rm.cancel != nil {
 			rm.cancel()
 		}
-		
+
 		// Start new monitoring loop with updated interval
 		rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
 		go rm.monitor.Start(rm.ctx, rm.wsHub)
-		
+
 		return nil
 	}
 
 	// For other changes, do a full reload
 	log.Info().Msg("Performing full monitor reload")
-	
+
 	// Cancel current monitor
 	if rm.cancel != nil {
 		rm.cancel()
@@ -153,7 +153,7 @@ func onlyPollingIntervalChanged(old, new *config.Config) bool {
 	if old == nil || new == nil {
 		return false
 	}
-	
+
 	// Check if only polling interval is different
 	return old.PollingInterval != new.PollingInterval &&
 		old.BackendHost == new.BackendHost &&
@@ -179,11 +179,11 @@ func (rm *ReloadableMonitor) GetState() interface{} {
 func (rm *ReloadableMonitor) Stop() {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	
+
 	if rm.cancel != nil {
 		rm.cancel()
 	}
-	
+
 	if rm.monitor != nil {
 		rm.monitor.Stop()
 	}
@@ -193,25 +193,25 @@ func (rm *ReloadableMonitor) Stop() {
 func (rm *ReloadableMonitor) UpdatePollingInterval(interval time.Duration) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	
+
 	if rm.config.PollingInterval == interval {
 		return // No change
 	}
-	
+
 	log.Info().
 		Dur("oldInterval", rm.config.PollingInterval).
 		Dur("newInterval", interval).
 		Msg("Updating polling interval via SIGHUP")
-	
+
 	// Update config
 	rm.config.PollingInterval = interval
 	rm.monitor.config.PollingInterval = interval
-	
+
 	// Cancel and restart the monitoring loop
 	if rm.cancel != nil {
 		rm.cancel()
 	}
-	
+
 	// Start new monitoring loop with updated interval
 	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
 	go rm.monitor.Start(rm.ctx, rm.wsHub)

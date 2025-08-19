@@ -3,8 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 	"regexp"
+	"strings"
+
 	"github.com/rs/zerolog/log"
 )
 
@@ -52,7 +53,7 @@ func (cr *CredentialResolver) ResolveValue(value string, fieldName string) (stri
 		}
 		// Trim any whitespace/newlines
 		resolved := strings.TrimSpace(string(content))
-		
+
 		// Check file permissions
 		if info, err := os.Stat(filePath); err == nil {
 			mode := info.Mode()
@@ -63,7 +64,7 @@ func (cr *CredentialResolver) ResolveValue(value string, fieldName string) (stri
 					Msg("Credential file has overly permissive permissions. Consider: chmod 600 " + filePath)
 			}
 		}
-		
+
 		log.Debug().Str("field", fieldName).Str("file", filePath).Msg("Resolved credential from file")
 		return resolved, nil
 	}
@@ -110,8 +111,8 @@ func looksLikeCredential(value string) bool {
 
 	// Contains words like secret, token, key, password
 	lowerValue := strings.ToLower(value)
-	if strings.Contains(lowerValue, "secret") || strings.Contains(lowerValue, "token") || 
-	   strings.Contains(lowerValue, "key") || strings.Contains(lowerValue, "password") {
+	if strings.Contains(lowerValue, "secret") || strings.Contains(lowerValue, "token") ||
+		strings.Contains(lowerValue, "key") || strings.Contains(lowerValue, "password") {
 		return true
 	}
 

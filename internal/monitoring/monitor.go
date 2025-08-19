@@ -595,7 +595,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			ID:       instanceName + "-" + node.Node,
 			Name:     node.Node,
 			Instance: instanceName,
-			Host:     instanceCfg.Host,  // Add the actual host URL
+			Host:     instanceCfg.Host, // Add the actual host URL
 			Status:   node.Status,
 			Type:     "node",
 			CPU:      safeFloat(node.CPU), // Already in percentage
@@ -760,7 +760,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	// Update state again with corrected disk metrics
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
-	
+
 	// Update cluster endpoint online status if this is a cluster
 	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
 		// Create a map of online nodes from our polling results
@@ -769,7 +769,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// Node is online if we successfully got its data
 			onlineNodes[node.Name] = node.Status == "online"
 		}
-		
+
 		// Update the online status for each cluster endpoint
 		for i := range instanceCfg.ClusterEndpoints {
 			if online, exists := onlineNodes[instanceCfg.ClusterEndpoints[i].NodeName]; exists {
@@ -779,7 +779,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				}
 			}
 		}
-		
+
 		// Update the config with the new online status
 		// This is needed so the UI can reflect the current status
 		for idx, cfg := range m.config.PVEInstances {
@@ -814,7 +814,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					instanceCfg.IsCluster = false
 				}
 			}
-			
+
 			if !useClusterEndpoint {
 				// Use traditional polling for non-clusters or if cluster endpoint fails
 				// Use WithNodes versions to avoid duplicate GetNodes calls
@@ -876,20 +876,20 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 // This should only be called for instances configured as clusters
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
 	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using cluster/resources")
-	
+
 	// Get all resources in a single API call
 	resources, err := client.GetClusterResources(ctx, "vm")
 	if err != nil {
 		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
 		return false
 	}
-	
+
 	var allVMs []models.VM
 	var allContainers []models.Container
-	
+
 	for _, res := range resources {
 		guestID := fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
-		
+
 		// Debug log the resource type
 		log.Debug().
 			Str("instance", instanceName).
@@ -897,7 +897,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Int("vmid", res.VMID).
 			Str("type", res.Type).
 			Msg("Processing cluster resource")
-		
+
 		// Calculate I/O rates
 		currentMetrics := IOMetrics{
 			DiskRead:   int64(res.DiskRead),
@@ -907,24 +907,23 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Timestamp:  time.Now(),
 		}
 		diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-		
-		
+
 		if res.Type == "qemu" {
 			// Skip templates if configured
 			if res.Template == 1 {
 				continue
 			}
-			
+
 			vm := models.VM{
-				ID:         guestID,
-				VMID:       res.VMID,
-				Name:       res.Name,
-				Node:       res.Node,
-				Instance:   instanceName,
-				Status:     res.Status,
-				Type:       "qemu",
-				CPU:        safeFloat(res.CPU),
-				CPUs:       res.MaxCPU,
+				ID:       guestID,
+				VMID:     res.VMID,
+				Name:     res.Name,
+				Node:     res.Node,
+				Instance: instanceName,
+				Status:   res.Status,
+				Type:     "qemu",
+				CPU:      safeFloat(res.CPU),
+				CPUs:     res.MaxCPU,
 				Memory: models.Memory{
 					Total: int64(res.MaxMem),
 					Used:  int64(res.Mem),
@@ -945,33 +944,33 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Template:   res.Template == 1,
 				LastSeen:   time.Now(),
 			}
-			
+
 			// Parse tags
 			if res.Tags != "" {
 				vm.Tags = strings.Split(res.Tags, ";")
 			}
-			
+
 			allVMs = append(allVMs, vm)
-			
+
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(vm, instanceName)
-			
+
 		} else if res.Type == "lxc" {
 			// Skip templates if configured
 			if res.Template == 1 {
 				continue
 			}
-			
+
 			container := models.Container{
-				ID:         guestID,
-				VMID:       res.VMID,
-				Name:       res.Name,
-				Node:       res.Node,
-				Instance:   instanceName,
-				Status:     res.Status,
-				Type:       "lxc",
-				CPU:        safeFloat(res.CPU),
-				CPUs:       int(res.MaxCPU),
+				ID:       guestID,
+				VMID:     res.VMID,
+				Name:     res.Name,
+				Node:     res.Node,
+				Instance: instanceName,
+				Status:   res.Status,
+				Type:     "lxc",
+				CPU:      safeFloat(res.CPU),
+				CPUs:     int(res.MaxCPU),
 				Memory: models.Memory{
 					Total: int64(res.MaxMem),
 					Used:  int64(res.Mem),
@@ -992,19 +991,19 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				Template:   res.Template == 1,
 				LastSeen:   time.Now(),
 			}
-			
+
 			// Parse tags
 			if res.Tags != "" {
 				container.Tags = strings.Split(res.Tags, ";")
 			}
-			
+
 			allContainers = append(allContainers, container)
-			
+
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(container, instanceName)
 		}
 	}
-	
+
 	// Update state
 	if len(allVMs) > 0 {
 		m.state.UpdateVMsForInstance(instanceName, allVMs)
@@ -1012,13 +1011,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	if len(allContainers) > 0 {
 		m.state.UpdateContainersForInstance(instanceName, allContainers)
 	}
-	
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("vms", len(allVMs)).
 		Int("containers", len(allContainers)).
 		Msg("VMs and containers polled efficiently with cluster/resources")
-	
+
 	return true
 }
 
@@ -1027,7 +1026,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 // Use pollVMsWithNodes instead.
 func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Warn().Str("instance", instanceName).Msg("pollVMs called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
-	
+
 	// Get all nodes first
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
@@ -1084,7 +1083,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
 						memTotal = vmStatus.Balloon
 					}
-					
+
 					// If we have free memory from guest agent, calculate actual usage
 					if vmStatus.FreeMem > 0 {
 						// Guest agent reports free memory, so calculate used
@@ -1170,7 +1169,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 // Use pollContainersWithNodes instead.
 func (m *Monitor) pollContainers(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Warn().Str("instance", instanceName).Msg("pollContainers called directly - this causes duplicate GetNodes calls and syslog spam on non-clustered nodes")
-	
+
 	// Get all nodes first
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
@@ -1228,7 +1227,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			// ct.Mem shows actual usage for running containers
 			memUsed := uint64(0)
 			memTotal := ct.MaxMem
-			
+
 			if ct.Status == "running" {
 				// For running containers, ct.Mem is actual usage
 				memUsed = ct.Mem
@@ -1519,7 +1518,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		pbsInst.ConnectionHealth = "healthy"
 		m.resetAuthFailures(instanceName, "pbs")
 		m.state.SetConnectionHealth("pbs-"+instanceName, true)
-		
+
 		log.Debug().
 			Str("instance", instanceName).
 			Str("version", version.Version).
@@ -1527,11 +1526,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			Msg("PBS version retrieved successfully")
 	} else {
 		log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
-		
+
 		// Version failed, try datastores as fallback (like test connection does)
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel2()
-		
+
 		_, datastoreErr := client.GetDatastores(ctx2)
 		if datastoreErr == nil {
 			// Datastores succeeded - PBS is online but version unavailable
@@ -1540,7 +1539,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.ConnectionHealth = "healthy"
 			m.resetAuthFailures(instanceName, "pbs")
 			m.state.SetConnectionHealth("pbs-"+instanceName, true)
-			
+
 			log.Info().
 				Str("instance", instanceName).
 				Msg("PBS connected (version unavailable but datastores accessible)")
@@ -1551,7 +1550,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
 			m.state.SetConnectionHealth("pbs-"+instanceName, false)
-			
+
 			// Track auth failure if it's an authentication error
 			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
 				m.recordAuthFailure(instanceName, "pbs")
@@ -2077,13 +2076,13 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 			break
 		}
 	}
-	
+
 	// Create a failed node entry to show in UI with error status
 	failedNode := models.Node{
 		ID:               instanceName + "-failed",
 		Name:             instanceName,
 		Instance:         instanceName,
-		Host:             hostURL,  // Include host URL even for failed nodes
+		Host:             hostURL, // Include host URL even for failed nodes
 		Status:           "offline",
 		Type:             "node",
 		ConnectionHealth: "error",

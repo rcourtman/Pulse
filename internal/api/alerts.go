@@ -27,7 +27,7 @@ func NewAlertHandlers(monitor *monitoring.Monitor) *AlertHandlers {
 // GetAlertConfig returns the current alert configuration
 func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.monitor.GetAlertManager().GetConfig()
-	
+
 	utils.WriteJSONResponse(w, config)
 }
 
@@ -38,9 +38,9 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	
+
 	h.monitor.GetAlertManager().UpdateConfig(config)
-	
+
 	// Update notification manager with schedule settings
 	if config.Schedule.Cooldown > 0 {
 		h.monitor.GetNotificationManager().SetCooldown(config.Schedule.Cooldown)
@@ -54,13 +54,13 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		config.Schedule.Grouping.ByNode,
 		config.Schedule.Grouping.ByGuest,
 	)
-	
+
 	// Save to persistent storage
 	if err := h.monitor.GetConfigPersistence().SaveAlertConfig(config); err != nil {
 		// Log error but don't fail the request
 		log.Error().Err(err).Msg("Failed to save alert configuration")
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
@@ -68,7 +68,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 // GetActiveAlerts returns all active alerts
 func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) {
 	alerts := h.monitor.GetAlertManager().GetActiveAlerts()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(alerts)
 }
@@ -81,9 +81,9 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 			limit = l
 		}
 	}
-	
+
 	history := h.monitor.GetAlertManager().GetAlertHistory(limit)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(history)
 }
@@ -94,7 +94,7 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Alert history cleared"})
 }
@@ -112,16 +112,16 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	alertID := parts[3]
-	
+
 	// Log the acknowledge attempt
 	log.Debug().
 		Str("alertID", alertID).
 		Str("path", r.URL.Path).
 		Msg("Attempting to acknowledge alert")
-	
+
 	// In a real implementation, you'd get the user from authentication
 	user := "admin"
-	
+
 	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().
 			Err(err).
@@ -130,12 +130,12 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	
+
 	log.Info().
 		Str("alertID", alertID).
 		Str("user", user).
 		Msg("Alert acknowledged successfully")
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
@@ -149,9 +149,9 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	alertID := parts[3]
-	
+
 	h.monitor.GetAlertManager().ClearAlert(alertID)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
@@ -159,7 +159,7 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 // HandleAlerts routes alert requests to appropriate handlers
 func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
-	
+
 	switch {
 	case path == "/config" && r.Method == http.MethodGet:
 		h.GetAlertConfig(w, r)

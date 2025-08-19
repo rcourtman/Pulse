@@ -8,11 +8,11 @@ import (
 
 // RateLimiter is a generic rate limiter using channels
 type RateLimiter[T any] struct {
-	rate       int           // requests per interval
-	interval   time.Duration // time interval
-	tokens     chan struct{} // token bucket
-	stopCh     chan struct{}
-	once       sync.Once
+	rate     int           // requests per interval
+	interval time.Duration // time interval
+	tokens   chan struct{} // token bucket
+	stopCh   chan struct{}
+	once     sync.Once
 }
 
 // NewRateLimiter creates a new rate limiter
@@ -23,15 +23,15 @@ func NewRateLimiter[T any](rate int, interval time.Duration) *RateLimiter[T] {
 		tokens:   make(chan struct{}, rate),
 		stopCh:   make(chan struct{}),
 	}
-	
+
 	// Fill initial tokens
 	for i := 0; i < rate; i++ {
 		rl.tokens <- struct{}{}
 	}
-	
+
 	// Start token refill goroutine
 	go rl.refillTokens()
-	
+
 	return rl
 }
 
@@ -39,7 +39,7 @@ func NewRateLimiter[T any](rate int, interval time.Duration) *RateLimiter[T] {
 func (rl *RateLimiter[T]) refillTokens() {
 	ticker := time.NewTicker(rl.interval / time.Duration(rl.rate))
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -108,7 +108,7 @@ func (rlp *RateLimitedProcessor[T, R]) Process(ctx context.Context, item T) (R, 
 // ProcessBatch processes multiple items with rate limiting
 func (rlp *RateLimitedProcessor[T, R]) ProcessBatch(ctx context.Context, items []T) []Result[R] {
 	results := make([]Result[R], len(items))
-	
+
 	for i, item := range items {
 		r, err := rlp.Process(ctx, item)
 		if err != nil {
@@ -117,7 +117,7 @@ func (rlp *RateLimitedProcessor[T, R]) ProcessBatch(ctx context.Context, items [
 			results[i] = Ok(r)
 		}
 	}
-	
+
 	return results
 }
 
@@ -154,7 +154,7 @@ func (p *Pipeline[T, R]) SetFinal(final func(T) Result[R]) *Pipeline[T, R] {
 // Process runs an item through the pipeline
 func (p *Pipeline[T, R]) Process(input T) Result[R] {
 	current := Ok(input)
-	
+
 	// Process through each stage
 	for _, stage := range p.stages {
 		if current.IsErr() {
@@ -162,18 +162,18 @@ func (p *Pipeline[T, R]) Process(input T) Result[R] {
 		}
 		current = stage(current.Unwrap())
 	}
-	
+
 	// If any stage failed, return error
 	if current.IsErr() {
 		var zero R
 		return Result[R]{value: zero, err: current.err}
 	}
-	
+
 	// Apply final transformation
 	if p.final != nil {
 		return p.final(current.Unwrap())
 	}
-	
+
 	// If no final transformation, return error
 	// In a real implementation, we'd need type constraints to handle T->R conversion
 	return Err[R](nil)
@@ -206,7 +206,7 @@ func NewThrottle[T any](bufferSize int, delay time.Duration) *Throttle[T] {
 func (t *Throttle[T]) run() {
 	ticker := time.NewTicker(t.delay)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case item, ok := <-t.input:

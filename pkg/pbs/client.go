@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -55,14 +55,14 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		// Log that we're defaulting to HTTPS
 		log.Debug().Str("host", cfg.Host).Msg("No protocol specified in PBS host, defaulting to HTTPS")
 	}
-	
+
 	// Warn if using HTTP
 	if strings.HasPrefix(cfg.Host, "http://") {
 		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PBS connection. PBS typically requires HTTPS. If connection fails, try using https:// instead")
 	}
-	
+
 	var user, realm string
-	
+
 	// For token auth, user might be empty or in a different format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
 		// Token authentication - parse the token name to extract user info if needed
@@ -160,7 +160,7 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 	var result struct {
 		Data struct {
-			Ticket            string `json:"ticket"`
+			Ticket              string `json:"ticket"`
 			CSRFPreventionToken string `json:"CSRFPreventionToken"`
 		} `json:"data"`
 	}
@@ -236,15 +236,15 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		
+
 		// Create base error
 		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-		
+
 		// Wrap with appropriate error type
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, fmt.Errorf("authentication error: %w", err)
 		}
-		
+
 		return nil, err
 	}
 
@@ -265,17 +265,17 @@ type Version struct {
 
 // Datastore represents a PBS datastore
 type Datastore struct {
-	Store     string `json:"store"`
-	Total     int64  `json:"total,omitempty"`
-	Used      int64  `json:"used,omitempty"`
-	Avail     int64  `json:"avail,omitempty"`
+	Store string `json:"store"`
+	Total int64  `json:"total,omitempty"`
+	Used  int64  `json:"used,omitempty"`
+	Avail int64  `json:"avail,omitempty"`
 	// Alternative field names PBS might use
-	TotalSpace int64  `json:"total-space,omitempty"`
-	UsedSpace  int64  `json:"used-space,omitempty"`
-	AvailSpace int64  `json:"avail-space,omitempty"`
+	TotalSpace int64 `json:"total-space,omitempty"`
+	UsedSpace  int64 `json:"used-space,omitempty"`
+	AvailSpace int64 `json:"avail-space,omitempty"`
 	// Status fields
-	GCStatus  string `json:"gc-status,omitempty"`
-	Error     string `json:"error,omitempty"`
+	GCStatus string `json:"gc-status,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 // GetVersion returns PBS version information
@@ -303,7 +303,7 @@ func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
 // GetNodeName returns the PBS node's hostname
 func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 	log.Debug().Msg("PBS GetNodeName: fetching node name")
-	
+
 	resp, err := c.get(ctx, "/nodes")
 	if err != nil {
 		return "", fmt.Errorf("failed to get nodes: %w", err)
@@ -315,15 +315,15 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 			Node string `json:"node"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to decode nodes response: %w", err)
 	}
-	
+
 	if len(result.Data) == 0 {
 		return "", fmt.Errorf("no nodes found")
 	}
-	
+
 	// Return the first (usually only) node name
 	nodeName := result.Data[0].Node
 	log.Debug().Str("nodeName", nodeName).Msg("PBS GetNodeName: found node name")
@@ -333,7 +333,7 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 // GetNodeStatus returns the status of the PBS node (CPU, memory, etc.)
 func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Msg("PBS GetNodeStatus: starting")
-	
+
 	// PBS uses "localhost" as the node name for single-node installations
 	// Try localhost directly (this is the standard for PBS)
 	statusResp, err := c.get(ctx, "/nodes/localhost/status")
@@ -347,17 +347,17 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read status response: %w", err)
 	}
-	
+
 	log.Debug().Str("response", string(body)).Msg("PBS node status response")
-	
+
 	var statusResult struct {
 		Data NodeStatus `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &statusResult); err != nil {
 		return nil, fmt.Errorf("failed to decode status response: %w", err)
 	}
-	
+
 	return &statusResult.Data, nil
 }
 
@@ -469,13 +469,13 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 
 // NodeStatus represents PBS node status information
 type NodeStatus struct {
-	CPU         float64 `json:"cpu"`         // CPU usage percentage
-	Memory      Memory  `json:"memory"`      // Memory information
-	Uptime      int64   `json:"uptime"`      // Uptime in seconds
-	LoadAverage []float64 `json:"loadavg"`   // Load average [1min, 5min, 15min]
-	KSM         KSMInfo `json:"ksm"`        // Kernel Same-page Merging info
-	Swap        Memory  `json:"swap"`       // Swap information
-	RootFS      FSInfo  `json:"root"`       // Root filesystem info
+	CPU         float64   `json:"cpu"`     // CPU usage percentage
+	Memory      Memory    `json:"memory"`  // Memory information
+	Uptime      int64     `json:"uptime"`  // Uptime in seconds
+	LoadAverage []float64 `json:"loadavg"` // Load average [1min, 5min, 15min]
+	KSM         KSMInfo   `json:"ksm"`     // Kernel Same-page Merging info
+	Swap        Memory    `json:"swap"`    // Swap information
+	RootFS      FSInfo    `json:"root"`    // Root filesystem info
 }
 
 // Memory represents memory information
@@ -507,9 +507,9 @@ type Namespace struct {
 
 // BackupGroup represents a group of backups for a specific VM/CT
 type BackupGroup struct {
-	BackupType  string   `json:"backup-type"`  // "vm" or "ct"
-	BackupID    string   `json:"backup-id"`    // VMID
-	LastBackup  int64    `json:"last-backup"`  // Unix timestamp
+	BackupType  string   `json:"backup-type"` // "vm" or "ct"
+	BackupID    string   `json:"backup-id"`   // VMID
+	LastBackup  int64    `json:"last-backup"` // Unix timestamp
 	BackupCount int      `json:"backup-count"`
 	Files       []string `json:"files,omitempty"`
 	Owner       string   `json:"owner,omitempty"`
@@ -517,21 +517,21 @@ type BackupGroup struct {
 
 // BackupSnapshot represents a single backup snapshot
 type BackupSnapshot struct {
-	BackupType   string         `json:"backup-type"`  // "vm" or "ct"
-	BackupID     string         `json:"backup-id"`    // VMID
-	BackupTime   int64          `json:"backup-time"`  // Unix timestamp
-	Files        []interface{}  `json:"files,omitempty"` // Can be strings or objects
-	Size         int64          `json:"size"`
-	Protected    bool           `json:"protected"`
-	Comment      string         `json:"comment,omitempty"`
-	Owner        string         `json:"owner,omitempty"`
-	Verification interface{}    `json:"verification,omitempty"` // Can be string or object
+	BackupType   string        `json:"backup-type"`     // "vm" or "ct"
+	BackupID     string        `json:"backup-id"`       // VMID
+	BackupTime   int64         `json:"backup-time"`     // Unix timestamp
+	Files        []interface{} `json:"files,omitempty"` // Can be strings or objects
+	Size         int64         `json:"size"`
+	Protected    bool          `json:"protected"`
+	Comment      string        `json:"comment,omitempty"`
+	Owner        string        `json:"owner,omitempty"`
+	Verification interface{}   `json:"verification,omitempty"` // Can be string or object
 }
 
 // ListNamespaces lists namespaces for a datastore
 func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNamespace string, maxDepth int) ([]Namespace, error) {
 	path := fmt.Sprintf("/admin/datastore/%s/namespace", datastore)
-	
+
 	// Build query parameters
 	params := url.Values{}
 	if parentNamespace != "" {
@@ -540,11 +540,11 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	if maxDepth > 0 {
 		params.Set("max-depth", fmt.Sprintf("%d", maxDepth))
 	}
-	
+
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}
-	
+
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		// If namespace endpoint doesn't exist (older PBS versions), return empty list
@@ -565,23 +565,24 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 
 	return result.Data, nil
 }
+
 // ListBackupGroups lists all backup groups in a datastore/namespace
 func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespace string) ([]BackupGroup, error) {
 	path := fmt.Sprintf("/admin/datastore/%s/groups", datastore)
-	
+
 	// Add namespace parameter if provided
 	params := url.Values{}
 	if namespace != "" {
 		params.Set("ns", namespace)
 	}
-	
+
 	if len(params) > 0 {
 		path = path + "?" + params.Encode()
 	}
-	
+
 	// Log the API call
 	log.Debug().Str("url", c.baseURL+path).Msg("PBS API: ListBackupGroups")
-	
+
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -610,7 +611,7 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 // ListBackupSnapshots lists all snapshots for a specific backup group
 func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, namespace string, backupType string, backupID string) ([]BackupSnapshot, error) {
 	path := fmt.Sprintf("/admin/datastore/%s/snapshots", datastore)
-	
+
 	// Build parameters
 	params := url.Values{}
 	if namespace != "" {
@@ -618,9 +619,9 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	}
 	params.Set("backup-type", backupType)
 	params.Set("backup-id", backupID)
-	
+
 	path = path + "?" + params.Encode()
-	
+
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -647,28 +648,28 @@ func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespace
 	type namespaceResult struct {
 		namespace string
 		snapshots []BackupSnapshot
-		err      error
+		err       error
 	}
-	
+
 	// Channel for results
 	resultCh := make(chan namespaceResult, len(namespaces))
-	
+
 	// WaitGroup to track goroutines
 	var wg sync.WaitGroup
-	
+
 	// Semaphore to limit concurrent requests
 	sem := make(chan struct{}, 3) // Max 3 concurrent requests
-	
+
 	// Fetch backups from each namespace concurrently
 	for _, ns := range namespaces {
 		wg.Add(1)
 		go func(namespace string) {
 			defer wg.Done()
-			
+
 			// Acquire semaphore
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			
+
 			// Get groups first
 			groups, err := c.ListBackupGroups(ctx, datastore, namespace)
 			if err != nil {
@@ -680,15 +681,15 @@ func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespace
 				resultCh <- namespaceResult{namespace: namespace, err: err}
 				return
 			}
-			
+
 			log.Info().
 				Str("datastore", datastore).
 				Str("namespace", namespace).
 				Int("groups", len(groups)).
 				Msg("Found backup groups")
-			
+
 			var allSnapshots []BackupSnapshot
-			
+
 			// For each group, get snapshots
 			for _, group := range groups {
 				snapshots, err := c.ListBackupSnapshots(ctx, datastore, namespace, group.BackupType, group.BackupID)
@@ -704,25 +705,25 @@ func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespace
 				}
 				allSnapshots = append(allSnapshots, snapshots...)
 			}
-			
+
 			resultCh <- namespaceResult{
 				namespace: namespace,
 				snapshots: allSnapshots,
-				err:      nil,
+				err:       nil,
 			}
 		}(ns)
 	}
-	
+
 	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultCh)
 	}()
-	
+
 	// Collect results
 	results := make(map[string][]BackupSnapshot)
 	var errors []error
-	
+
 	for result := range resultCh {
 		if result.err != nil {
 			errors = append(errors, fmt.Errorf("namespace %s: %w", result.namespace, result.err))
@@ -730,11 +731,11 @@ func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespace
 			results[result.namespace] = result.snapshots
 		}
 	}
-	
+
 	// Return combined error if any occurred
 	if len(errors) > 0 {
 		return results, fmt.Errorf("errors fetching backups: %v", errors)
 	}
-	
+
 	return results, nil
 }

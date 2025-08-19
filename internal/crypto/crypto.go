@@ -25,7 +25,7 @@ func NewCryptoManager() (*CryptoManager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key: %w", err)
 	}
-	
+
 	return &CryptoManager{
 		key: key,
 	}, nil
@@ -37,12 +37,12 @@ func getOrCreateKey() ([]byte, error) {
 	dataDir := utils.GetDataDir()
 	keyPath := filepath.Join(dataDir, ".encryption.key")
 	oldKeyPath := "/etc/pulse/.encryption.key"
-	
+
 	log.Debug().
 		Str("dataDir", dataDir).
 		Str("keyPath", keyPath).
 		Msg("Looking for encryption key")
-	
+
 	// Try to read existing key from new location
 	if data, err := os.ReadFile(keyPath); err == nil {
 		key := make([]byte, 32)
@@ -59,7 +59,7 @@ func getOrCreateKey() ([]byte, error) {
 	} else {
 		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
 	}
-	
+
 	// Check for key in old location and migrate if found (only if paths differ)
 	if dataDir != "/etc/pulse" && keyPath != oldKeyPath {
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
@@ -89,24 +89,24 @@ func getOrCreateKey() ([]byte, error) {
 			}
 		}
 	}
-	
+
 	// Generate new key
 	key := make([]byte, 32) // AES-256
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	// Save key with restricted permissions
 	encoded := base64.StdEncoding.EncodeToString(key)
 	if err := os.WriteFile(keyPath, []byte(encoded), 0600); err != nil {
 		return nil, fmt.Errorf("failed to save key: %w", err)
 	}
-	
+
 	log.Info().Msg("Generated new encryption key")
 	return key, nil
 }
@@ -117,17 +117,17 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
-	
+
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
 	return ciphertext, nil
 }
@@ -138,23 +138,23 @@ func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
-	
+
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return plaintext, nil
 }
 
@@ -173,12 +173,12 @@ func (c *CryptoManager) DecryptString(ciphertext string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	decrypted, err := c.Decrypt(data)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(decrypted), nil
 }
 

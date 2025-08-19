@@ -11,14 +11,14 @@ import (
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
-	config *config.Config
+	config      *config.Config
 	persistence *config.ConfigPersistence
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
 func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
-		config: cfg,
+		config:      cfg,
 		persistence: persistence,
 	}
 }
@@ -85,7 +85,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel
 	}
-	
+
 	// Update auto-update settings
 	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
 	if settings.AutoUpdateCheckInterval > 0 {

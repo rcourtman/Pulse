@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -24,24 +24,24 @@ const (
 
 // Alert represents an active alert
 type Alert struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"` // cpu, memory, disk, etc.
-	Level       AlertLevel             `json:"level"`
-	ResourceID  string                 `json:"resourceId"`  // guest or node ID
-	ResourceName string                `json:"resourceName"`
-	Node        string                 `json:"node"`
-	Instance    string                 `json:"instance"`
-	Message     string                 `json:"message"`
-	Value       float64                `json:"value"`
-	Threshold   float64                `json:"threshold"`
-	StartTime   time.Time              `json:"startTime"`
-	LastSeen    time.Time              `json:"lastSeen"`
-	Acknowledged bool                  `json:"acknowledged"`
-	AckTime     *time.Time             `json:"ackTime,omitempty"`
-	AckUser     string                 `json:"ackUser,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID           string                 `json:"id"`
+	Type         string                 `json:"type"` // cpu, memory, disk, etc.
+	Level        AlertLevel             `json:"level"`
+	ResourceID   string                 `json:"resourceId"` // guest or node ID
+	ResourceName string                 `json:"resourceName"`
+	Node         string                 `json:"node"`
+	Instance     string                 `json:"instance"`
+	Message      string                 `json:"message"`
+	Value        float64                `json:"value"`
+	Threshold    float64                `json:"threshold"`
+	StartTime    time.Time              `json:"startTime"`
+	LastSeen     time.Time              `json:"lastSeen"`
+	Acknowledged bool                   `json:"acknowledged"`
+	AckTime      *time.Time             `json:"ackTime,omitempty"`
+	AckUser      string                 `json:"ackUser,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	// Escalation tracking
-	LastEscalation  int       `json:"lastEscalation,omitempty"`  // Last escalation level notified
+	LastEscalation  int         `json:"lastEscalation,omitempty"`  // Last escalation level notified
 	EscalationTimes []time.Time `json:"escalationTimes,omitempty"` // Times when escalations were sent
 }
 
@@ -78,11 +78,11 @@ type ThresholdConfig struct {
 
 // QuietHours represents quiet hours configuration
 type QuietHours struct {
-	Enabled  bool              `json:"enabled"`
-	Start    string            `json:"start"`    // 24-hour format "HH:MM"
-	End      string            `json:"end"`      // 24-hour format "HH:MM"
-	Timezone string            `json:"timezone"`
-	Days     map[string]bool   `json:"days"`     // monday, tuesday, etc.
+	Enabled  bool            `json:"enabled"`
+	Start    string          `json:"start"` // 24-hour format "HH:MM"
+	End      string          `json:"end"`   // 24-hour format "HH:MM"
+	Timezone string          `json:"timezone"`
+	Days     map[string]bool `json:"days"` // monday, tuesday, etc.
 }
 
 // EscalationLevel represents an escalation rule
@@ -117,30 +117,30 @@ type ScheduleConfig struct {
 
 // FilterCondition represents a single filter condition
 type FilterCondition struct {
-	Type     string  `json:"type"`     // "metric", "text", or "raw"
-	Field    string  `json:"field,omitempty"`
-	Operator string  `json:"operator,omitempty"`
+	Type     string      `json:"type"` // "metric", "text", or "raw"
+	Field    string      `json:"field,omitempty"`
+	Operator string      `json:"operator,omitempty"`
 	Value    interface{} `json:"value,omitempty"`
-	RawText  string  `json:"rawText,omitempty"`
+	RawText  string      `json:"rawText,omitempty"`
 }
 
 // FilterStack represents a collection of filters with logical operator
 type FilterStack struct {
 	Filters         []FilterCondition `json:"filters"`
-	LogicalOperator string           `json:"logicalOperator"` // "AND" or "OR"
+	LogicalOperator string            `json:"logicalOperator"` // "AND" or "OR"
 }
 
 // CustomAlertRule represents a custom alert rule with filter conditions
 type CustomAlertRule struct {
-	ID               string                 `json:"id"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	FilterConditions FilterStack            `json:"filterConditions"`
-	Thresholds       ThresholdConfig        `json:"thresholds"`
-	Priority         int                    `json:"priority"`
-	Enabled          bool                   `json:"enabled"`
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description,omitempty"`
+	FilterConditions FilterStack     `json:"filterConditions"`
+	Thresholds       ThresholdConfig `json:"thresholds"`
+	Priority         int             `json:"priority"`
+	Enabled          bool            `json:"enabled"`
 	Notifications    struct {
-		Email   *struct {
+		Email *struct {
 			Enabled    bool     `json:"enabled"`
 			Recipients []string `json:"recipients"`
 		} `json:"email,omitempty"`
@@ -149,61 +149,61 @@ type CustomAlertRule struct {
 			URL     string `json:"url"`
 		} `json:"webhook,omitempty"`
 	} `json:"notifications"`
-	CreatedAt        time.Time              `json:"createdAt"`
-	UpdatedAt        time.Time              `json:"updatedAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
-	Enabled           bool                        `json:"enabled"`
-	GuestDefaults     ThresholdConfig             `json:"guestDefaults"`
-	NodeDefaults      ThresholdConfig             `json:"nodeDefaults"`
-	StorageDefault    HysteresisThreshold         `json:"storageDefault"`
-	Overrides         map[string]ThresholdConfig  `json:"overrides"` // keyed by resource ID
-	CustomRules       []CustomAlertRule           `json:"customRules,omitempty"`
-	Schedule          ScheduleConfig              `json:"schedule"`
+	Enabled        bool                       `json:"enabled"`
+	GuestDefaults  ThresholdConfig            `json:"guestDefaults"`
+	NodeDefaults   ThresholdConfig            `json:"nodeDefaults"`
+	StorageDefault HysteresisThreshold        `json:"storageDefault"`
+	Overrides      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
+	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
+	Schedule       ScheduleConfig             `json:"schedule"`
 	// New configuration options
-	MinimumDelta      float64                     `json:"minimumDelta"`      // Minimum % change to trigger new alert
-	SuppressionWindow int                         `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
-	HysteresisMargin  float64                     `json:"hysteresisMargin"`  // Default margin for legacy thresholds
-	TimeThreshold     int                         `json:"timeThreshold"`     // Seconds that threshold must be exceeded before triggering
+	MinimumDelta      float64 `json:"minimumDelta"`      // Minimum % change to trigger new alert
+	SuppressionWindow int     `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
+	HysteresisMargin  float64 `json:"hysteresisMargin"`  // Default margin for legacy thresholds
+	TimeThreshold     int     `json:"timeThreshold"`     // Seconds that threshold must be exceeded before triggering
 }
 
 // Manager handles alert monitoring and state
 type Manager struct {
-	mu              sync.RWMutex
-	config          AlertConfig
-	activeAlerts    map[string]*Alert
-	historyManager  *HistoryManager
-	onAlert         func(alert *Alert)
-	onResolved      func(alertID string)
-	onEscalate      func(alert *Alert, level int)
-	escalationStop  chan struct{}
-	alertRateLimit  map[string][]time.Time // Track alert times for rate limiting
+	mu             sync.RWMutex
+	config         AlertConfig
+	activeAlerts   map[string]*Alert
+	historyManager *HistoryManager
+	onAlert        func(alert *Alert)
+	onResolved     func(alertID string)
+	onEscalate     func(alert *Alert, level int)
+	escalationStop chan struct{}
+	alertRateLimit map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
-	recentAlerts    map[string]*Alert     // Track recent alerts for deduplication
-	suppressedUntil map[string]time.Time  // Track suppression windows
+	recentAlerts    map[string]*Alert    // Track recent alerts for deduplication
+	suppressedUntil map[string]time.Time // Track suppression windows
 	// Recently resolved alerts (kept for 5 minutes)
 	recentlyResolved map[string]*ResolvedAlert
 	resolvedMutex    sync.RWMutex
 	// Time threshold tracking
-	pendingAlerts    map[string]time.Time  // Track when thresholds were first exceeded
+	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Node offline confirmation tracking
-	nodeOfflineCount map[string]int        // Track consecutive offline counts for nodes
+	nodeOfflineCount map[string]int // Track consecutive offline counts for nodes
 }
 
 // NewManager creates a new alert manager
 func NewManager() *Manager {
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	m := &Manager{
-		activeAlerts:   make(map[string]*Alert),
-		historyManager: NewHistoryManager(alertsDir),
-		escalationStop: make(chan struct{}),
-		alertRateLimit: make(map[string][]time.Time),
-		recentAlerts:   make(map[string]*Alert),
-		suppressedUntil: make(map[string]time.Time),
+		activeAlerts:     make(map[string]*Alert),
+		historyManager:   NewHistoryManager(alertsDir),
+		escalationStop:   make(chan struct{}),
+		alertRateLimit:   make(map[string][]time.Time),
+		recentAlerts:     make(map[string]*Alert),
+		suppressedUntil:  make(map[string]time.Time),
 		recentlyResolved: make(map[string]*ResolvedAlert),
-		pendingAlerts:  make(map[string]time.Time),
+		pendingAlerts:    make(map[string]time.Time),
 		nodeOfflineCount: make(map[string]int),
 		config: AlertConfig{
 			Enabled: true,
@@ -225,7 +225,7 @@ func NewManager() *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
-			Overrides: make(map[string]ThresholdConfig),
+			Overrides:         make(map[string]ThresholdConfig),
 			Schedule: ScheduleConfig{
 				QuietHours: QuietHours{
 					Enabled:  false,
@@ -262,18 +262,18 @@ func NewManager() *Manager {
 			},
 		},
 	}
-	
+
 	// Load saved active alerts
 	if err := m.LoadActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("Failed to load active alerts")
 	}
-	
+
 	// Start escalation checker
 	go m.escalationChecker()
-	
+
 	// Start periodic save of active alerts
 	go m.periodicSaveAlerts()
-	
+
 	return m
 }
 
@@ -302,13 +302,13 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Preserve defaults for zero values
 	if config.StorageDefault.Trigger <= 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
 	}
-	
+
 	// Ensure minimums for other important fields
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -319,7 +319,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
-	
+
 	m.config = config
 	log.Info().Msg("Alert configuration updated")
 }
@@ -339,7 +339,7 @@ func (m *Manager) isInQuietHours() bool {
 
 	now := time.Now().In(loc)
 	dayName := strings.ToLower(now.Format("Monday"))
-	
+
 	// Check if today is enabled for quiet hours
 	if enabled, ok := m.config.Schedule.QuietHours.Days[dayName]; !ok || !enabled {
 		return false
@@ -351,7 +351,7 @@ func (m *Manager) isInQuietHours() bool {
 		log.Warn().Err(err).Str("start", m.config.Schedule.QuietHours.Start).Msg("Failed to parse quiet hours start time")
 		return false
 	}
-	
+
 	endTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
 	if err != nil {
 		log.Warn().Err(err).Str("end", m.config.Schedule.QuietHours.End).Msg("Failed to parse quiet hours end time")
@@ -460,11 +460,11 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Float64("disk", diskUsage).
 		Interface("thresholds", thresholds).
 		Msg("Checking guest thresholds")
-	
+
 	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk)
-	
+
 	// Check I/O metrics (convert bytes/s to MB/s)
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
 		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead)
@@ -524,7 +524,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	if threshold == nil || threshold.Trigger <= 0 {
 		return
 	}
-	
+
 	log.Debug().
 		Str("resource", resourceName).
 		Str("metric", metricType).
@@ -535,7 +535,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Msg("Checking metric threshold")
 
 	alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -585,21 +585,21 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					return
 				}
 			}
-			
+
 			// Check for recent similar alert to prevent spam
 			if recent, hasRecent := m.recentAlerts[alertID]; hasRecent {
 				// Check minimum delta
-				if m.config.MinimumDelta > 0 && 
-				   time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
-				   abs(recent.Value - value) < m.config.MinimumDelta {
+				if m.config.MinimumDelta > 0 &&
+					time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
+					abs(recent.Value-value) < m.config.MinimumDelta {
 					log.Debug().
 						Str("alertID", alertID).
 						Float64("recentValue", recent.Value).
 						Float64("currentValue", value).
-						Float64("delta", abs(recent.Value - value)).
+						Float64("delta", abs(recent.Value-value)).
 						Float64("minimumDelta", m.config.MinimumDelta).
 						Msg("Alert suppressed due to minimum delta")
-					
+
 					// Set suppression window
 					m.suppressedUntil[alertID] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
 					return
@@ -621,25 +621,25 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					}
 					return fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
 				}(),
-				Value:        value,
-				Threshold:    threshold.Trigger,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
+				Value:     value,
+				Threshold: threshold.Trigger,
+				StartTime: time.Now(),
+				LastSeen:  time.Now(),
 				Metadata: map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType":   resourceType,
 					"clearThreshold": threshold.Clear,
 				},
 			}
 
 			// Set level based on how much over threshold
-			if value >= threshold.Trigger + 10 {
+			if value >= threshold.Trigger+10 {
 				alert.Level = AlertLevelCritical
 			}
 
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			// Save active alerts after adding new one
 			go func() {
 				if err := m.SaveActiveAlerts(); err != nil {
@@ -666,7 +666,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				// Don't delete the alert, just suppress notifications
 				return
 			}
-			
+
 			// Check if we should suppress notifications due to quiet hours
 			if m.isInQuietHours() && alert.Level != AlertLevelCritical {
 				log.Debug().
@@ -685,9 +685,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Update existing alert
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
-			
+
 			// Update level if needed
-			if value >= threshold.Trigger + 10 {
+			if value >= threshold.Trigger+10 {
 				existingAlert.Level = AlertLevelCritical
 			} else {
 				existingAlert.Level = AlertLevelWarning
@@ -702,41 +702,41 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Str("alertID", alertID).
 				Msg("Value dropped below threshold, clearing pending alert")
 		}
-		
+
 		if exists {
 			// Use hysteresis for resolution - only resolve if below clear threshold
 			clearThreshold := threshold.Clear
 			if clearThreshold <= 0 {
 				clearThreshold = threshold.Trigger // Fallback to trigger if clear not set
 			}
-			
+
 			if value <= clearThreshold {
 				// Threshold cleared with hysteresis - auto resolve
 				resolvedAlert := &ResolvedAlert{
 					Alert:        existingAlert,
 					ResolvedTime: time.Now(),
 				}
-				
+
 				// Remove from active alerts
 				delete(m.activeAlerts, alertID)
-				
+
 				// Save active alerts after resolution
 				go func() {
 					if err := m.SaveActiveAlerts(); err != nil {
 						log.Error().Err(err).Msg("Failed to save active alerts after resolution")
 					}
 				}()
-				
+
 				// Add to recently resolved
 				m.resolvedMutex.Lock()
 				m.recentlyResolved[alertID] = resolvedAlert
 				m.resolvedMutex.Unlock()
-				
+
 				log.Info().
 					Str("alertID", alertID).
 					Int("totalRecentlyResolved", len(m.recentlyResolved)).
 					Msg("Added alert to recently resolved")
-				
+
 				// Schedule cleanup after 5 minutes
 				go func() {
 					time.Sleep(5 * time.Minute)
@@ -744,7 +744,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					delete(m.recentlyResolved, alertID)
 					m.resolvedMutex.Unlock()
 				}()
-				
+
 				log.Info().
 					Str("resource", resourceName).
 					Str("metric", metricType).
@@ -840,27 +840,27 @@ func (m *Manager) ClearAlertHistory() error {
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {
 		// Alert already exists, just update time
 		m.activeAlerts[alertID].StartTime = time.Now()
 		return
 	}
-	
+
 	// Increment offline count
 	m.nodeOfflineCount[node.ID]++
 	offlineCount := m.nodeOfflineCount[node.ID]
-	
+
 	log.Debug().
 		Str("node", node.Name).
 		Str("instance", node.Instance).
 		Int("offlineCount", offlineCount).
 		Msg("Node offline detection count")
-	
+
 	// Require 3 consecutive offline polls (~15 seconds) before alerting
 	// This prevents false positives from transient cluster communication issues
 	const requiredOfflineCount = 3
@@ -872,7 +872,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 			Msg("Node appears offline, waiting for confirmation")
 		return
 	}
-	
+
 	// Create new offline alert after confirmation
 	alert := &Alert{
 		ID:           alertID,
@@ -888,18 +888,18 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		StartTime:    time.Now(),
 		Acknowledged: false,
 	}
-	
+
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
-	
+
 	// Add to history
 	m.historyManager.AddAlert(*alert)
-	
+
 	// Send notification after confirmation
 	if m.onAlert != nil {
 		m.onAlert(alert)
 	}
-	
+
 	// Log the critical event
 	log.Error().
 		Str("node", node.Name).
@@ -913,10 +913,10 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 // clearNodeOfflineAlert removes offline alert when node comes back online
 func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Reset offline count when node comes back online
 	if m.nodeOfflineCount[node.ID] > 0 {
 		log.Debug().
@@ -925,28 +925,28 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 			Msg("Node back online, resetting offline count")
 		delete(m.nodeOfflineCount, node.ID)
 	}
-	
+
 	// Check if offline alert exists
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
 	}
-	
+
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
-	
-	// Add to recently resolved  
+
+	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
 		ResolvedTime: time.Now(),
 	}
 	resolvedAlert.Alert = alert
 	m.recentlyResolved[alertID] = resolvedAlert
-	
+
 	// Send recovery notification
 	if m.onResolved != nil {
 		m.onResolved(alertID)
 	}
-	
+
 	// Log recovery
 	log.Info().
 		Str("node", node.Name).
@@ -955,14 +955,13 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 		Msg("Node is back online")
 }
 
-
 // ClearAlert manually clears an alert
 func (m *Manager) ClearAlert(alertID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.activeAlerts, alertID)
-	
+
 	if m.onResolved != nil {
 		go m.onResolved(alertID)
 	}
@@ -974,26 +973,26 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	defer m.mu.Unlock()
 
 	now := time.Now()
-	
+
 	// Clean up acknowledged alerts
 	for id, alert := range m.activeAlerts {
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
 			delete(m.activeAlerts, id)
 		}
 	}
-	
+
 	// Clean up recent alerts older than suppression window
 	suppressionWindow := time.Duration(m.config.SuppressionWindow) * time.Minute
 	if suppressionWindow == 0 {
 		suppressionWindow = 5 * time.Minute // Default
 	}
-	
+
 	for id, alert := range m.recentAlerts {
 		if now.Sub(alert.StartTime) > suppressionWindow {
 			delete(m.recentAlerts, id)
 		}
 	}
-	
+
 	// Clean up expired suppressions
 	for id, suppressUntil := range m.suppressedUntil {
 		if now.After(suppressUntil) {
@@ -1001,7 +1000,6 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 }
-
 
 // convertLegacyThreshold converts a legacy float64 threshold to HysteresisThreshold
 func (m *Manager) convertLegacyThreshold(legacy *float64) *HysteresisThreshold {
@@ -1064,7 +1062,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		default:
 			return false
 		}
-		
+
 		condValue, ok := condition.Value.(float64)
 		if !ok {
 			// Try to convert from int
@@ -1074,7 +1072,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 				return false
 			}
 		}
-		
+
 		switch condition.Operator {
 		case ">":
 			return value > condValue
@@ -1085,9 +1083,9 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		case "<=":
 			return value <= condValue
 		case "=", "==":
-			return value >= condValue - 0.5 && value <= condValue + 0.5
+			return value >= condValue-0.5 && value <= condValue+0.5
 		}
-		
+
 	case "text":
 		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
 		switch strings.ToLower(condition.Field) {
@@ -1098,7 +1096,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		case "vmid":
 			return strings.Contains(vm.ID, searchValue)
 		}
-		
+
 	case "raw":
 		if condition.RawText != "" {
 			term := strings.ToLower(condition.RawText)
@@ -1108,7 +1106,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 				strings.Contains(strings.ToLower(vm.Status), term)
 		}
 	}
-	
+
 	return false
 }
 
@@ -1136,7 +1134,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		default:
 			return false
 		}
-		
+
 		condValue, ok := condition.Value.(float64)
 		if !ok {
 			if intVal, ok := condition.Value.(int); ok {
@@ -1145,7 +1143,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 				return false
 			}
 		}
-		
+
 		switch condition.Operator {
 		case ">":
 			return value > condValue
@@ -1156,9 +1154,9 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		case "<=":
 			return value <= condValue
 		case "=", "==":
-			return value >= condValue - 0.5 && value <= condValue + 0.5
+			return value >= condValue-0.5 && value <= condValue+0.5
 		}
-		
+
 	case "text":
 		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
 		switch strings.ToLower(condition.Field) {
@@ -1169,7 +1167,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		case "vmid":
 			return strings.Contains(ct.ID, searchValue)
 		}
-		
+
 	case "raw":
 		if condition.RawText != "" {
 			term := strings.ToLower(condition.RawText)
@@ -1179,7 +1177,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 				strings.Contains(strings.ToLower(ct.Status), term)
 		}
 	}
-	
+
 	return false
 }
 
@@ -1188,12 +1186,12 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 	if len(stack.Filters) == 0 {
 		return true
 	}
-	
+
 	results := make([]bool, len(stack.Filters))
 	for i, filter := range stack.Filters {
 		results[i] = m.evaluateFilterCondition(guest, filter)
 	}
-	
+
 	// Apply logical operator
 	if stack.LogicalOperator == "AND" {
 		for _, result := range results {
@@ -1217,17 +1215,17 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 func (m *Manager) getGuestThresholds(guest interface{}, guestID string) ThresholdConfig {
 	// Start with defaults
 	thresholds := m.config.GuestDefaults
-	
+
 	// Check custom rules (sorted by priority, highest first)
 	var applicableRule *CustomAlertRule
 	highestPriority := -1
-	
+
 	for i := range m.config.CustomRules {
 		rule := &m.config.CustomRules[i]
 		if !rule.Enabled {
 			continue
 		}
-		
+
 		// Check if this rule applies to the guest
 		if m.evaluateFilterStack(guest, rule.FilterConditions) {
 			if rule.Priority > highestPriority {
@@ -1236,7 +1234,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			}
 		}
 	}
-	
+
 	// Apply custom rule thresholds if found
 	if applicableRule != nil {
 		if applicableRule.Thresholds.CPU != nil {
@@ -1274,14 +1272,14 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 		} else if applicableRule.Thresholds.NetworkOutLegacy != nil {
 			thresholds.NetworkOut = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkOutLegacy)
 		}
-		
+
 		log.Debug().
 			Str("guest", guestID).
 			Str("rule", applicableRule.Name).
 			Int("priority", applicableRule.Priority).
 			Msg("Applied custom alert rule")
 	}
-	
+
 	// Finally check guest-specific overrides (highest priority)
 	if override, exists := m.config.Overrides[guestID]; exists {
 		if override.CPU != nil {
@@ -1320,7 +1318,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			thresholds.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
 		}
 	}
-	
+
 	return thresholds
 }
 
@@ -1332,7 +1330,7 @@ func (m *Manager) checkRateLimit(alertID string) bool {
 
 	now := time.Now()
 	cutoff := now.Add(-1 * time.Hour)
-	
+
 	// Clean old entries and count recent alerts
 	var recentAlerts []time.Time
 	if times, exists := m.alertRateLimit[alertID]; exists {
@@ -1342,16 +1340,16 @@ func (m *Manager) checkRateLimit(alertID string) bool {
 			}
 		}
 	}
-	
+
 	// Check if we've hit the limit
 	if len(recentAlerts) >= m.config.Schedule.MaxAlertsHour {
 		return false
 	}
-	
+
 	// Add current time
 	recentAlerts = append(recentAlerts, now)
 	m.alertRateLimit[alertID] = recentAlerts
-	
+
 	return true
 }
 
@@ -1361,7 +1359,7 @@ func (m *Manager) escalationChecker() {
 	cleanupTicker := time.NewTicker(10 * time.Minute) // Run cleanup every 10 minutes
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -1378,38 +1376,38 @@ func (m *Manager) escalationChecker() {
 func (m *Manager) checkEscalations() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if !m.config.Schedule.Escalation.Enabled {
 		return
 	}
-	
+
 	now := time.Now()
 	for _, alert := range m.activeAlerts {
 		// Skip acknowledged alerts
 		if alert.Acknowledged {
 			continue
 		}
-		
+
 		// Check each escalation level
 		for i, level := range m.config.Schedule.Escalation.Levels {
 			// Skip if we've already escalated to this level
 			if alert.LastEscalation >= i+1 {
 				continue
 			}
-			
+
 			// Check if it's time to escalate
 			escalateTime := alert.StartTime.Add(time.Duration(level.After) * time.Minute)
 			if now.After(escalateTime) {
 				// Update alert escalation state
 				alert.LastEscalation = i + 1
 				alert.EscalationTimes = append(alert.EscalationTimes, now)
-				
+
 				log.Info().
 					Str("alertID", alert.ID).
 					Int("level", i+1).
 					Str("notify", level.Notify).
 					Msg("Alert escalated")
-				
+
 				// Trigger escalation callback
 				if m.onEscalate != nil {
 					go m.onEscalate(alert, i+1)
@@ -1433,36 +1431,36 @@ func (m *Manager) Stop() {
 func (m *Manager) SaveActiveAlerts() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// Create directory if it doesn't exist
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	if err := os.MkdirAll(alertsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
 	}
-	
+
 	// Convert map to slice for JSON encoding
 	alerts := make([]*Alert, 0, len(m.activeAlerts))
 	for _, alert := range m.activeAlerts {
 		alerts = append(alerts, alert)
 	}
-	
+
 	data, err := json.MarshalIndent(alerts, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal active alerts: %w", err)
 	}
-	
+
 	// Write to temporary file first, then rename (atomic operation)
 	tmpFile := filepath.Join(alertsDir, "active-alerts.json.tmp")
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")
-	
+
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
-	
+
 	if err := os.Rename(tmpFile, finalFile); err != nil {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
 	}
-	
+
 	log.Info().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil
 }
@@ -1471,7 +1469,7 @@ func (m *Manager) SaveActiveAlerts() error {
 func (m *Manager) LoadActiveAlerts() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	alertsFile := filepath.Join(utils.GetDataDir(), "alerts", "active-alerts.json")
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
@@ -1481,12 +1479,12 @@ func (m *Manager) LoadActiveAlerts() error {
 		}
 		return fmt.Errorf("failed to read active alerts: %w", err)
 	}
-	
+
 	var alerts []*Alert
 	if err := json.Unmarshal(data, &alerts); err != nil {
 		return fmt.Errorf("failed to unmarshal active alerts: %w", err)
 	}
-	
+
 	// Restore alerts to the map
 	now := time.Now()
 	restoredCount := 0
@@ -1496,17 +1494,17 @@ func (m *Manager) LoadActiveAlerts() error {
 			log.Debug().Str("alertID", alert.ID).Msg("Skipping old alert during restore")
 			continue
 		}
-		
+
 		// Skip acknowledged alerts older than 1 hour
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > time.Hour {
 			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert")
 			continue
 		}
-		
+
 		m.activeAlerts[alert.ID] = alert
 		restoredCount++
 	}
-	
+
 	log.Info().Int("restored", restoredCount).Int("total", len(alerts)).Msg("Restored active alerts from disk")
 	return nil
 }
@@ -1515,7 +1513,7 @@ func (m *Manager) LoadActiveAlerts() error {
 func (m *Manager) periodicSaveAlerts() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:

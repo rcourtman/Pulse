@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
@@ -16,7 +16,7 @@ import (
 
 // Simple session store - in production you'd use Redis or similar
 var (
-	sessions = make(map[string]time.Time)
+	sessions  = make(map[string]time.Time)
 	sessionMu sync.RWMutex
 )
 
@@ -45,7 +45,7 @@ func isConnectionSecure(r *http.Request) bool {
 func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	isProxied := detectProxy(r)
 	isSecure := isConnectionSecure(r)
-	
+
 	// Debug logging for Cloudflare tunnel issues
 	if isProxied {
 		log.Debug().
@@ -57,10 +57,10 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			Str("x_forwarded_proto", r.Header.Get("X-Forwarded-Proto")).
 			Msg("Proxy/tunnel detected - adjusting cookie settings")
 	}
-	
+
 	// Default to Lax for better compatibility
 	sameSitePolicy := http.SameSiteLaxMode
-	
+
 	if isProxied {
 		// For proxied connections, we need to be more permissive
 		// But only use None if connection is secure (required by browsers)
@@ -71,7 +71,7 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			sameSitePolicy = http.SameSiteLaxMode
 		}
 	}
-	
+
 	return isSecure, sameSitePolicy
 }
 
@@ -90,12 +90,12 @@ func generateSessionToken() string {
 func ValidateSession(token string) bool {
 	sessionMu.RLock()
 	defer sessionMu.RUnlock()
-	
+
 	expiry, exists := sessions[token]
 	if !exists {
 		return false
 	}
-	
+
 	// Check if expired
 	if time.Now().After(expiry) {
 		// Clean up expired session
@@ -106,7 +106,7 @@ func ValidateSession(token string) bool {
 		sessionMu.RLock()
 		return false
 	}
-	
+
 	return true
 }
 
@@ -117,7 +117,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		log.Debug().Msg("No auth configured, allowing access")
 		return true
 	}
-	
+
 	// API-only mode: when only API token is configured (no password auth)
 	// Allow read-only endpoints for the UI to work
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken != "" {
@@ -126,7 +126,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if providedToken == "" {
 			providedToken = r.URL.Query().Get("token")
 		}
-		
+
 		// If a token was provided, validate it
 		if providedToken != "" {
 			if providedToken == cfg.APIToken {
@@ -138,7 +138,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 			return false
 		}
-		
+
 		// No token provided - allow read-only endpoints for UI
 		if r.Method == "GET" || r.URL.Path == "/ws" {
 			// Allow these endpoints without auth for UI to function
@@ -163,7 +163,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				}
 			}
 		}
-		
+
 		// Require token for everything else
 		if w != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="API Token Required"`)
@@ -171,14 +171,14 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 		return false
 	}
-	
+
 	log.Debug().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
 		Bool("has_token", cfg.APIToken != "").
 		Str("url", r.URL.Path).
 		Msg("Checking authentication")
-	
+
 	// Check API token first (for backward compatibility)
 	if cfg.APIToken != "" {
 		// Check header
@@ -196,7 +196,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 		}
 	}
-	
+
 	// Check session cookie (for WebSocket and UI)
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
@@ -216,7 +216,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			Bool("has_cf_headers", r.Header.Get("CF-Ray") != "").
 			Msg("No session cookie found")
 	}
-	
+
 	// Check basic auth
 	if cfg.AuthUser != "" && cfg.AuthPass != "" {
 		auth := r.Header.Get("Authorization")
@@ -229,7 +229,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 					parts := strings.SplitN(string(decoded), ":", 2)
 					if len(parts) == 2 {
 						clientIP := GetClientIP(r)
-						
+
 						// Only apply rate limiting for actual login attempts, not regular auth checks
 						// Login attempts come to /api/login endpoint
 						if r.URL.Path == "/api/login" {
@@ -243,7 +243,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								return false
 							}
 						}
-						
+
 						// Check if account is locked out
 						if IsLockedOut(parts[0]) || IsLockedOut(clientIP) {
 							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
@@ -255,44 +255,44 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 						}
 						// Check username
 						userMatch := parts[0] == cfg.AuthUser
-						
+
 						// Check password - support both hashed and plain text for migration
 						// Config always has hashed password now (auto-hashed on load)
 						passMatch := internalauth.CheckPasswordHash(parts[1], cfg.AuthPass)
-						
+
 						log.Debug().
 							Str("provided_user", parts[0]).
 							Str("expected_user", cfg.AuthUser).
 							Bool("user_match", userMatch).
 							Bool("pass_match", passMatch).
 							Msg("Auth check")
-						
+
 						if userMatch && passMatch {
 							// Clear failed login attempts
 							ClearFailedLogins(parts[0])
 							ClearFailedLogins(GetClientIP(r))
-							
+
 							// Valid credentials - create session
 							if w != nil {
 								token := generateSessionToken()
 								if token == "" {
 									return false
 								}
-								
+
 								// Store session
 								sessionMu.Lock()
 								sessions[token] = time.Now().Add(24 * time.Hour)
 								sessionMu.Unlock()
-								
+
 								// Track session for user
 								TrackUserSession(parts[0], token)
-								
+
 								// Generate CSRF token
 								csrfToken := generateCSRFToken(token)
-								
+
 								// Get appropriate cookie settings based on proxy detection
 								isSecure, sameSitePolicy := getCookieSettings(r)
-								
+
 								// Debug logging for Cloudflare tunnel issues
 								sameSiteName := "Default"
 								switch sameSitePolicy {
@@ -303,14 +303,14 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								case http.SameSiteStrictMode:
 									sameSiteName = "Strict"
 								}
-								
+
 								log.Debug().
 									Bool("secure", isSecure).
 									Str("same_site", sameSiteName).
 									Str("token", token[:8]+"...").
 									Str("remote_addr", r.RemoteAddr).
 									Msg("Setting session cookie after successful login")
-								
+
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_session",
@@ -321,7 +321,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
-								
+
 								// Set CSRF cookie (not HttpOnly so JS can read it)
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_csrf",
@@ -331,7 +331,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
-								
+
 								// Audit log successful login
 								LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
@@ -347,7 +347,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -358,14 +358,14 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			handler(w, r)
 			return
 		}
-		
+
 		// Log the failed attempt
 		log.Warn().
 			Str("ip", r.RemoteAddr).
 			Str("path", r.URL.Path).
 			Str("method", r.Method).
 			Msg("Unauthorized access attempt")
-		
+
 		// Never send WWW-Authenticate header - we want to use our custom login page
 		// The frontend will detect 401 responses and show the login component
 		// Return JSON error for API requests, plain text for others

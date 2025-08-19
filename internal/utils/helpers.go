@@ -37,4 +37,3 @@ func DecodeJSONBody(r *http.Request, v interface{}) error {
 	}
 	return nil
 }
-

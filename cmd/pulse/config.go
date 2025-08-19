@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	exportFile     string
-	importFile     string
-	passphrase     string
-	forceImport    bool
+	exportFile  string
+	importFile  string
+	passphrase  string
+	forceImport bool
 )
 
 var configCmd = &cobra.Command{
