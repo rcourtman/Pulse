@@ -2,6 +2,7 @@ package api
 
 import (
 	"embed"
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -32,15 +33,39 @@ func serveFrontendHandler() http.HandlerFunc {
 		log.Fatal().Err(err).Msg("Failed to get embedded frontend")
 	}
 	
-	fileServer := http.FileServer(fsys)
-	
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Clean the path
 		p := r.URL.Path
 		
-		// Default to index.html for root
-		if p == "/" {
-			p = "/index.html"
+		// Handle root path specially to avoid FileServer's directory redirect
+		// Issue #334: Serve index.html directly without using FileServer for root
+		if p == "/" || p == "" {
+			// Directly serve index.html content
+			file, err := fsys.Open("index.html")
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			defer file.Close()
+			
+			// Check that it's not a directory
+			_, err = file.Stat()
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			
+			// Read the file content
+			content, err := io.ReadAll(file)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			
+			// Serve the content
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write(content)
+			return
 		}
 		
 		// Remove leading slash for filesystem lookup
@@ -49,10 +74,33 @@ func serveFrontendHandler() http.HandlerFunc {
 		// Check if file exists in embedded FS
 		file, err := fsys.Open(lookupPath)
 		if err == nil {
-			file.Close()
-			// File exists, serve it
-			fileServer.ServeHTTP(w, r)
-			return
+			defer file.Close()
+			
+			// Get file info
+			stat, err := file.Stat()
+			if err == nil && !stat.IsDir() {
+				// Read and serve the file
+				content, err := io.ReadAll(file)
+				if err == nil {
+					// Detect content type
+					contentType := "application/octet-stream"
+					if strings.HasSuffix(lookupPath, ".html") {
+						contentType = "text/html; charset=utf-8"
+					} else if strings.HasSuffix(lookupPath, ".css") {
+						contentType = "text/css; charset=utf-8"
+					} else if strings.HasSuffix(lookupPath, ".js") {
+						contentType = "application/javascript; charset=utf-8"
+					} else if strings.HasSuffix(lookupPath, ".json") {
+						contentType = "application/json"
+					} else if strings.HasSuffix(lookupPath, ".svg") {
+						contentType = "image/svg+xml"
+					}
+					
+					w.Header().Set("Content-Type", contentType)
+					w.Write(content)
+					return
+				}
+			}
 		}
 		
 		// For SPA routing, serve index.html for non-API routes
@@ -60,9 +108,16 @@ func serveFrontendHandler() http.HandlerFunc {
 		   !strings.HasPrefix(p, "/ws") && 
 		   !strings.HasPrefix(p, "/socket.io/") {
 			// Serve index.html for client-side routing
-			r.URL.Path = "/index.html"
-			fileServer.ServeHTTP(w, r)
-			return
+			indexFile, err := fsys.Open("index.html")
+			if err == nil {
+				defer indexFile.Close()
+				content, err := io.ReadAll(indexFile)
+				if err == nil {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.Write(content)
+					return
+				}
+			}
 		}
 		
 		// Not found

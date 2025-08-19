@@ -30,6 +30,12 @@ func (e *APIError) Error() string {
 // ErrorHandler is a middleware that handles panics and errors
 func ErrorHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Fix for issue #334: Normalize empty path to "/" before ServeMux processes it
+		// This prevents the automatic redirect from "" to "./"
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
+		}
+		
 		// Skip error handling for WebSocket endpoints
 		if r.Header.Get("Upgrade") == "websocket" {
 			next.ServeHTTP(w, r)
