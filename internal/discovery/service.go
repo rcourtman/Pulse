@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -105,42 +106,76 @@ func (s *Service) performScan() {
 		s.isScanning = false
 		s.lastScan = time.Now()
 		s.mu.Unlock()
+		
+		// Send scan complete notification
+		if s.wsHub != nil {
+			s.wsHub.Broadcast(websocket.Message{
+				Type: "discovery_complete",
+				Data: map[string]interface{}{
+					"scanning": false,
+					"timestamp": time.Now().Unix(),
+				},
+			})
+		}
 	}()
 
 	log.Info().Str("subnet", s.subnet).Msg("Starting background discovery scan")
+	
+	// Send scan started notification
+	if s.wsHub != nil {
+		s.wsHub.Broadcast(websocket.Message{
+			Type: "discovery_started",
+			Data: map[string]interface{}{
+				"scanning": true,
+				"subnet": s.subnet,
+				"timestamp": time.Now().Unix(),
+			},
+		})
+	}
 
 	// Create a context with timeout for the scan
-	scanCtx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	// Scanning multiple subnets takes longer, allow 2 minutes
+	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
 	// Perform the scan
 	result, err := s.scanner.DiscoverServers(scanCtx, s.subnet)
 	if err != nil {
-		log.Error().Err(err).Msg("Background discovery scan failed")
-		return
+		// Even if scan timed out, we might have partial results
+		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
+			log.Error().Err(err).Msg("Background discovery scan failed")
+			return
+		}
+		log.Warn().
+			Err(err).
+			Int("servers_found", len(result.Servers)).
+			Msg("Discovery scan incomplete but found some servers")
 	}
 
-	// Update cache
-	s.cache.mu.Lock()
-	s.cache.result = result
-	s.cache.updated = time.Now()
-	s.cache.mu.Unlock()
+	// Update cache even with partial results
+	if result != nil && len(result.Servers) > 0 {
+		s.cache.mu.Lock()
+		s.cache.result = result
+		s.cache.updated = time.Now()
+		s.cache.mu.Unlock()
 
-	log.Info().
-		Int("servers", len(result.Servers)).
-		Int("errors", len(result.Errors)).
-		Msg("Background discovery scan completed")
+		log.Info().
+			Int("servers", len(result.Servers)).
+			Int("errors", len(result.Errors)).
+			Msg("Background discovery scan completed")
 
-	// Send update via WebSocket
-	if s.wsHub != nil {
-		s.wsHub.Broadcast(websocket.Message{
-			Type: "discovery_update",
-			Data: map[string]interface{}{
-				"servers":   result.Servers,
-				"errors":    result.Errors,
-				"timestamp": time.Now().Unix(),
-			},
-		})
+		// Send final update via WebSocket with all servers
+		if s.wsHub != nil {
+			s.wsHub.Broadcast(websocket.Message{
+				Type: "discovery_update",
+				Data: map[string]interface{}{
+					"servers":   result.Servers,
+					"errors":    result.Errors,
+					"scanning":  false,
+					"timestamp": time.Now().Unix(),
+				},
+			})
+		}
 	}
 }
 
@@ -157,6 +192,13 @@ func (s *Service) GetCachedResult() (*discovery.DiscoveryResult, time.Time) {
 	}
 	
 	return s.cache.result, s.cache.updated
+}
+
+// IsScanning returns whether a scan is currently in progress
+func (s *Service) IsScanning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.isScanning
 }
 
 // ForceRefresh triggers an immediate scan

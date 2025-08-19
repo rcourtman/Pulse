@@ -66,19 +66,35 @@ func (r *Router) handleDiscovery(w http.ResponseWriter, req *http.Request) {
 	
 	// Get cached discovery results from the monitor's discovery service
 	if r.monitor != nil && r.monitor.GetDiscoveryService() != nil {
-		result, _ := r.monitor.GetDiscoveryService().GetCachedResult()
-		if result != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(result)
-			return
+		svc := r.monitor.GetDiscoveryService()
+		result, updated := svc.GetCachedResult()
+		isScanning := svc.IsScanning()
+		
+		response := map[string]interface{}{
+			"servers":   []interface{}{},
+			"errors":    []string{},
+			"scanning":  isScanning,
 		}
+		
+		if result != nil {
+			response["servers"] = result.Servers
+			if result.Errors != nil {
+				response["errors"] = result.Errors
+			}
+			response["updated"] = updated.Unix()
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 	
-	// Return empty result if no discovery service or no cached results
+	// Return empty result if no discovery service
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"servers": []interface{}{},
-		"errors":  []string{},
+		"servers":  []interface{}{},
+		"errors":   []string{},
+		"scanning": false,
 	})
 }
 
