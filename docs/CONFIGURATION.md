@@ -129,7 +129,7 @@ Settings are loaded in this order (later overrides earlier):
 #### Configuration Variables (override system.json)
 These env vars override system.json values. When set, the UI will show a warning and disable the affected fields:
 
-- `DISCOVERY_SUBNET` - Network to scan (e.g., "192.168.1.0/24")
+- `DISCOVERY_SUBNET` - Custom network to scan (default: auto-scans common networks)
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
 - `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
