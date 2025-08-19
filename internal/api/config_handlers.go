@@ -2935,4 +2935,6 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		"tokenValue": tokenValue,
 		"action":     "create_token", // Tells the script to create this token
 	})
+
 }
+	
