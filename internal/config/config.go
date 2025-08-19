@@ -386,26 +386,27 @@ func Load() (*Config, error) {
 		}
 	}
 	// Support env vars for important settings (override system.json)
+	// NOTE: Environment variables always take precedence over UI/system.json settings
 	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
 		cfg.DiscoverySubnet = discoverySubnet
-		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet set from DISCOVERY_SUBNET env var")
+		log.Info().Str("subnet", discoverySubnet).Msg("Discovery subnet overridden by DISCOVERY_SUBNET env var")
 	}
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		cfg.LogLevel = logLevel
-		log.Info().Str("level", logLevel).Msg("Log level set from LOG_LEVEL env var")
+		log.Info().Str("level", logLevel).Msg("Log level overridden by LOG_LEVEL env var")
 	}
 	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
 		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
 			cfg.ConnectionTimeout = d
-			log.Info().Dur("timeout", d).Msg("Connection timeout set from CONNECTION_TIMEOUT env var")
+			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
 		} else if d, err := time.ParseDuration(connectionTimeout); err == nil {
 			cfg.ConnectionTimeout = d
-			log.Info().Dur("timeout", d).Msg("Connection timeout set from CONNECTION_TIMEOUT env var")
+			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
 		}
 	}
 	if allowedOrigins := os.Getenv("ALLOWED_ORIGINS"); allowedOrigins != "" {
 		cfg.AllowedOrigins = allowedOrigins
-		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins set from ALLOWED_ORIGINS env var")
+		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
 	
 	// Set log level
