@@ -1206,7 +1206,7 @@ const UnifiedBackups: Component = () => {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search: name, vmid:104, node:pbs1, size>1GB, type:VM"
+                  placeholder="Search: name, vmid:104, node:pbs1, namespace:prod, size>1GB, type:VM"
                   value={searchTerm()}
                   onInput={(e) => {
                     if (!isSearchLocked()) {
