@@ -38,8 +38,17 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		}
 	}
 
+	// Include env override information
+	response := struct {
+		*config.SystemSettings
+		EnvOverrides map[string]bool `json:"envOverrides,omitempty"`
+	}{
+		SystemSettings: settings,
+		EnvOverrides:   h.config.EnvOverrides,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(settings)
+	json.NewEncoder(w).Encode(response)
 }
 
 // HandleUpdateSystemSettings updates the system settings
