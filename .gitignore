@@ -80,3 +80,12 @@ screenshots/
 # Master plan documents (local only)
 PULSE_V4_ISSUES_MASTER_PLAN.md
 FIX_SUMMARY_*.md
+
+# Development documentation
+TYPING_*.md
+test-config.json
+
+# Local test scripts
+scripts/test-*.sh
+scripts/run-tests.sh
+scripts/TEST_*.md

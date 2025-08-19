@@ -3,7 +3,7 @@ import { logger } from './logger';
 export interface ErrorContext {
   component?: string;
   action?: string;
-  data?: any;
+  data?: unknown;
 }
 
 export class AppError extends Error {
