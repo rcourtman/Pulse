@@ -568,7 +568,6 @@ func (r *Router) setupRoutes() {
 	
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
-	
 	// Discovery endpoint
 	r.mux.HandleFunc("/api/discover", r.handleDiscovery)
 	
@@ -709,7 +708,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/api/security/quick-setup" && req.Method == http.MethodPost {
 			isPublic = true
 		}
-		
 		// Check auth for protected routes
 		if !isPublic && !CheckAuth(r.config, w, req) {
 			// Never send WWW-Authenticate - use custom login page

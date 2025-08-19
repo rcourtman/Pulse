@@ -183,36 +183,16 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	if cfg.APIToken != "" {
 		// Check header
 		if token := r.Header.Get("X-API-Token"); token != "" {
-			// Check if stored token is hashed or plain text
-			isHashed := internalauth.IsAPITokenHashed(cfg.APIToken)
-			log.Debug().
-				Bool("is_hashed", isHashed).
-				Msg("Comparing API tokens")
-			
-			if isHashed {
-				// Compare against hash
-				if internalauth.CompareAPIToken(token, cfg.APIToken) {
-					return true
-				}
-			} else {
-				// Legacy plain text comparison (should migrate)
-				if token == cfg.APIToken {
-					log.Warn().Msg("Using plain text API token - please regenerate for security")
-					return true
-				}
+			// Config always has hashed token now (auto-hashed on load)
+			if internalauth.CompareAPIToken(token, cfg.APIToken) {
+				return true
 			}
 		}
 		// Check query parameter (for export/import)
 		if token := r.URL.Query().Get("token"); token != "" {
-			if internalauth.IsAPITokenHashed(cfg.APIToken) {
-				if internalauth.CompareAPIToken(token, cfg.APIToken) {
-					return true
-				}
-			} else {
-				if token == cfg.APIToken {
-					log.Warn().Msg("Using plain text API token - please regenerate for security")
-					return true
-				}
+			// Config always has hashed token now (auto-hashed on load)
+			if internalauth.CompareAPIToken(token, cfg.APIToken) {
+				return true
 			}
 		}
 	}
@@ -277,24 +257,14 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 						userMatch := parts[0] == cfg.AuthUser
 						
 						// Check password - support both hashed and plain text for migration
-						var passMatch bool
-						if strings.HasPrefix(cfg.AuthPass, "$2") && len(cfg.AuthPass) == 60 {
-							// Config has hashed password, check against hash
-							passMatch = internalauth.CheckPasswordHash(parts[1], cfg.AuthPass)
-						} else {
-							// Config has plain text password (legacy), do direct comparison
-							passMatch = parts[1] == cfg.AuthPass
-							if passMatch {
-								log.Warn().Msg("Using plain text password comparison - please update to hashed password")
-							}
-						}
+						// Config always has hashed password now (auto-hashed on load)
+						passMatch := internalauth.CheckPasswordHash(parts[1], cfg.AuthPass)
 						
 						log.Debug().
 							Str("provided_user", parts[0]).
 							Str("expected_user", cfg.AuthUser).
 							Bool("user_match", userMatch).
 							Bool("pass_match", passMatch).
-							Bool("password_is_hashed", strings.HasPrefix(cfg.AuthPass, "$2") && len(cfg.AuthPass) == 60).
 							Msg("Auth check")
 						
 						if userMatch && passMatch {
