@@ -128,15 +128,8 @@ services:
       # RIGHT: PULSE_AUTH_PASS='$$2a$$12$$hash...'
       # Or use a .env file where no escaping is needed
       
-      # Polling & timeouts
-      # - POLLING_INTERVAL=10               # Fixed at 10 seconds (matches Proxmox update cycle)
+      # Performance
       # - CONNECTION_TIMEOUT=10             # Connection timeout in seconds (default: 10)
-      
-      # Updates
-      # - UPDATE_CHANNEL=stable             # Update channel: stable or rc (default: stable)
-      # - AUTO_UPDATE_ENABLED=false         # Enable auto-updates (default: false)
-      # - AUTO_UPDATE_CHECK_INTERVAL=24     # Hours between update checks (default: 24)
-      # - AUTO_UPDATE_TIME=03:00            # Time to install updates HH:MM (default: 03:00)
       
       # CORS & logging
       # - ALLOWED_ORIGINS=https://app.example.com  # CORS origins (default: none, same-origin only)
