@@ -1,6 +1,7 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import { STORAGE_KEYS } from '@/constants';
 
 export const FirstRunSetup: Component = () => {
   const [username, setUsername] = createSignal('admin');
@@ -15,10 +16,44 @@ export const FirstRunSetup: Component = () => {
   const [savedPassword, setSavedPassword] = createSignal('');
   const [savedToken, setSavedToken] = createSignal('');
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
+  const [themeMode, setThemeMode] = createSignal<'system' | 'light' | 'dark'>('system');
   
+  const applyTheme = (mode: 'system' | 'light' | 'dark') => {
+    if (mode === 'light') {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem(STORAGE_KEYS.DARK_MODE, 'false');
+    } else if (mode === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem(STORAGE_KEYS.DARK_MODE, 'true');
+    } else {
+      // System preference
+      localStorage.removeItem(STORAGE_KEYS.DARK_MODE);
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  };
+
   onMount(() => {
-    // Force dark mode for setup screen
-    document.documentElement.classList.add('dark');
+    // Check for saved theme preference
+    const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+    if (savedTheme === 'false') {
+      setThemeMode('light');
+      document.documentElement.classList.remove('dark');
+    } else if (savedTheme === 'true') {
+      setThemeMode('dark');
+      document.documentElement.classList.add('dark');
+    } else {
+      // No saved preference - use system preference
+      setThemeMode('system');
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
   });
 
   const generatePassword = () => {
@@ -253,6 +288,58 @@ IMPORTANT: Keep these credentials secure!
                   </Show>
                 </div>
 
+                {/* Theme Selection */}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Theme Preference
+                  </label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => {
+                        setThemeMode('system');
+                        applyTheme('system');
+                      }}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        themeMode() === 'system'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      System
+                    </button>
+                    <button
+                      onClick={() => {
+                        setThemeMode('light');
+                        applyTheme('light');
+                      }}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        themeMode() === 'light'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Light
+                    </button>
+                    <button
+                      onClick={() => {
+                        setThemeMode('dark');
+                        applyTheme('dark');
+                      }}
+                      class={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        themeMode() === 'dark'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Dark
+                    </button>
+                  </div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {themeMode() === 'system' 
+                      ? 'Using your operating system theme preference'
+                      : `Using ${themeMode()} mode`}
+                  </p>
+                </div>
 
                 {/* Info Box */}
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
