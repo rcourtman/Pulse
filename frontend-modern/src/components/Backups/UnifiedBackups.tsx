@@ -736,15 +736,15 @@ const UnifiedBackups: Component = () => {
 
   return (
     <div class="space-y-4">
-      {/* Empty State - No PVE Nodes Configured */}
-      <Show when={!isLoading() && (state.nodes || []).filter((n: any) => n.type === 'pve').length === 0}>
+      {/* Empty State - No nodes at all configured */}
+      <Show when={!isLoading() && (state.nodes || []).length === 0 && (!state.pbs || state.pbs.length === 0)}>
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
           <div class="text-center">
             <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No Proxmox VE nodes configured</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure.</p>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No backup sources configured</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE or PBS node in the Settings tab to start monitoring backups.</p>
             <button
               onClick={() => {
                 const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
@@ -758,8 +758,8 @@ const UnifiedBackups: Component = () => {
         </div>
       </Show>
       
-      {/* PBS Status Summary */}
-      <Show when={state.pbs && state.pbs.length > 0 && (state.nodes || []).filter((n: any) => n.type === 'pve').length > 0}>
+      {/* PBS Status Summary - show regardless of PVE nodes */}
+      <Show when={state.pbs && state.pbs.length > 0}>
         <div class="flex flex-wrap gap-2">
           <For each={state.pbs}>
             {(instance) => (
@@ -798,8 +798,8 @@ const UnifiedBackups: Component = () => {
         </div>
       </Show>
 
-      {/* Main Content - Only show when PVE nodes are configured */}
-      <Show when={(state.nodes || []).filter((n: any) => n.type === 'pve').length > 0}>
+      {/* Main Content - show when any nodes or PBS are configured */}
+      <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
       {/* Backup Frequency Chart */}
       <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="flex justify-between items-center mb-3">
