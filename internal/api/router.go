@@ -636,9 +636,8 @@ func (r *Router) setupRoutes() {
 	// Simple stats page
 	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
 	
-	// Serve embedded frontend
-	log.Info().Msg("Serving embedded frontend")
-	r.mux.Handle("/", serveFrontendHandler())
+	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
+	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
 }
 
@@ -658,6 +657,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	
 
 	// Check if we need authentication
 	needsAuth := true
@@ -798,7 +798,24 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		// Log request
 		start := time.Now()
-		r.mux.ServeHTTP(w, req)
+		
+		// Fix for issue #334: Custom routing to prevent ServeMux's "./" redirect
+		// When accessing without trailing slash, ServeMux redirects to "./" which is wrong
+		// We handle routing manually to avoid this issue
+		
+		// Check if this is an API or WebSocket route
+		if strings.HasPrefix(req.URL.Path, "/api/") || 
+		   strings.HasPrefix(req.URL.Path, "/ws") || 
+		   strings.HasPrefix(req.URL.Path, "/socket.io/") ||
+		   req.URL.Path == "/simple-stats" {
+			// Use the mux for API and special routes
+			r.mux.ServeHTTP(w, req)
+		} else {
+			// Serve frontend for all other paths (including root)
+			handler := serveFrontendHandler()
+			handler(w, req)
+		}
+		
 		log.Debug().
 			Str("method", req.Method).
 			Str("path", req.URL.Path).
