@@ -31,12 +31,25 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
 	
-	// Always allow same-origin requests
+	// Determine the actual origin based on proxy headers
 	scheme := "http"
-	if r.TLS != nil {
+	host := r.Host
+	
+	// Check if we're behind a reverse proxy
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		scheme = forwardedProto
+	} else if r.TLS != nil {
 		scheme = "https"
 	}
-	requestOrigin := scheme + "://" + r.Host
+	
+	// Use X-Forwarded-Host if available (for reverse proxy scenarios)
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		host = forwardedHost
+	}
+	
+	requestOrigin := scheme + "://" + host
+	
+	// Allow same-origin requests (accounting for proxy headers)
 	if origin == requestOrigin {
 		return true
 	}
