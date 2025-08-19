@@ -303,7 +303,7 @@ const Storage: Component = () => {
       </Show>
 
       {/* Helpful hint for no PVE nodes but still show content */}
-      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n: any) => n.type === 'pve').length === 0 && sortedStorage().length === 0}>
+      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n) => n.type === 'pve').length === 0 && sortedStorage().length === 0}>
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
           <div class="text-center">
             <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

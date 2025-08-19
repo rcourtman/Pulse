@@ -1493,7 +1493,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       const config = props.emailConfig();
       await NotificationsAPI.testNotification({ 
         type: 'email',
-        config: config // Send current form data, not saved config
+        config: { ...config } as Record<string, unknown> // Send current form data, not saved config
       });
       showSuccess('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {

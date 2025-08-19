@@ -58,7 +58,7 @@ export interface Webhook {
 
 export interface NotificationTestRequest {
   type: 'email' | 'webhook';
-  config?: any;  // Backend expects different format than frontend types
+  config?: Record<string, unknown>;  // Backend expects different format than frontend types
   webhookId?: string;
 }
 
@@ -141,7 +141,7 @@ export class NotificationsAPI {
 
   // Testing
   static async testNotification(request: NotificationTestRequest): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: any } = { method: request.type };
+    const body: { method: string; config?: Record<string, unknown> } = { method: request.type };
     
     // Include config if provided for testing without saving
     if (request.config) {

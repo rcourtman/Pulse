@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -832,13 +833,13 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	health := map[string]interface{}{
-		"status":    "healthy",
-		"timestamp": time.Now().Unix(),
-		"uptime":    time.Since(r.monitor.GetStartTime()).Seconds(),
+	response := HealthResponse{
+		Status:    "healthy",
+		Timestamp: time.Now().Unix(),
+		Uptime:    time.Since(r.monitor.GetStartTime()).Seconds(),
 	}
 
-	utils.WriteJSONResponse(w, health)
+	utils.WriteJSONResponse(w, response)
 }
 
 // handleChangePassword handles password change requests
@@ -1119,21 +1120,25 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		// Fallback to VERSION file
 		versionBytes, _ := os.ReadFile("VERSION")
-		version := map[string]interface{}{
-			"version": strings.TrimSpace(string(versionBytes)),
-			"build":   "development",
-			"runtime": "go",
+		response := VersionResponse{
+			Version:   strings.TrimSpace(string(versionBytes)),
+			BuildTime: "development",
+			GoVersion: runtime.Version(),
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(version)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 	
-	// Add update channel from config
-	versionInfo.Channel = r.config.UpdateChannel
+	// Convert to typed response
+	response := VersionResponse{
+		Version:   versionInfo.Version,
+		BuildTime: versionInfo.Build,
+		GoVersion: runtime.Version(),
+	}
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(versionInfo)
+	json.NewEncoder(w).Encode(response)
 }
 
 // handleStorage handles storage detail requests
@@ -1225,8 +1230,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	state := r.monitor.GetState()
 	
 	// Create chart data structure that matches frontend expectations
-	chartData := make(map[string]map[string][]map[string]interface{})
-	nodeData := make(map[string]map[string][]map[string]interface{})
+	chartData := make(map[string]VMChartData)
+	nodeData := make(map[string]NodeChartData)
 	
 	currentTime := time.Now().Unix() * 1000 // JavaScript timestamp format
 	oldestTimestamp := currentTime
@@ -1234,7 +1239,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	// Process VMs - get historical data
 	for _, vm := range state.VMs {
 		if chartData[vm.ID] == nil {
-			chartData[vm.ID] = make(map[string][]map[string]interface{})
+			chartData[vm.ID] = make(VMChartData)
 		}
 		
 		// Get historical metrics
@@ -1242,41 +1247,41 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		
 		// Convert metric points to API format
 		for metricType, points := range metrics {
-			chartData[vm.ID][metricType] = make([]map[string]interface{}, len(points))
+			chartData[vm.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				chartData[vm.ID][metricType][i] = map[string]interface{}{
-					"timestamp": ts,
-					"value": point.Value,
+				chartData[vm.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value: point.Value,
 				}
 			}
 		}
 		
 		// If no historical data, add current value
 		if len(chartData[vm.ID]["cpu"]) == 0 {
-			chartData[vm.ID]["cpu"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.CPU * 100},
+			chartData[vm.ID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.CPU * 100},
 			}
-			chartData[vm.ID]["memory"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.Memory.Usage},
+			chartData[vm.ID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.Memory.Usage},
 			}
-			chartData[vm.ID]["disk"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.Disk.Usage},
+			chartData[vm.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: vm.Disk.Usage},
 			}
-			chartData[vm.ID]["diskread"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.DiskRead},
+			chartData[vm.ID]["diskread"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(vm.DiskRead)},
 			}
-			chartData[vm.ID]["diskwrite"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.DiskWrite},
+			chartData[vm.ID]["diskwrite"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(vm.DiskWrite)},
 			}
-			chartData[vm.ID]["netin"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.NetworkIn},
+			chartData[vm.ID]["netin"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(vm.NetworkIn)},
 			}
-			chartData[vm.ID]["netout"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": vm.NetworkOut},
+			chartData[vm.ID]["netout"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(vm.NetworkOut)},
 			}
 		}
 	}
@@ -1284,7 +1289,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	// Process Containers - get historical data  
 	for _, ct := range state.Containers {
 		if chartData[ct.ID] == nil {
-			chartData[ct.ID] = make(map[string][]map[string]interface{})
+			chartData[ct.ID] = make(VMChartData)
 		}
 		
 		// Get historical metrics
@@ -1292,50 +1297,50 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		
 		// Convert metric points to API format
 		for metricType, points := range metrics {
-			chartData[ct.ID][metricType] = make([]map[string]interface{}, len(points))
+			chartData[ct.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				chartData[ct.ID][metricType][i] = map[string]interface{}{
-					"timestamp": ts,
-					"value": point.Value,
+				chartData[ct.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value: point.Value,
 				}
 			}
 		}
 		
 		// If no historical data, add current value
 		if len(chartData[ct.ID]["cpu"]) == 0 {
-			chartData[ct.ID]["cpu"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.CPU * 100},
+			chartData[ct.ID]["cpu"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.CPU * 100},
 			}
-			chartData[ct.ID]["memory"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.Memory.Usage},
+			chartData[ct.ID]["memory"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.Memory.Usage},
 			}
-			chartData[ct.ID]["disk"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.Disk.Usage},
+			chartData[ct.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: ct.Disk.Usage},
 			}
-			chartData[ct.ID]["diskread"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.DiskRead},
+			chartData[ct.ID]["diskread"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(ct.DiskRead)},
 			}
-			chartData[ct.ID]["diskwrite"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.DiskWrite},
+			chartData[ct.ID]["diskwrite"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(ct.DiskWrite)},
 			}
-			chartData[ct.ID]["netin"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.NetworkIn},
+			chartData[ct.ID]["netin"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(ct.NetworkIn)},
 			}
-			chartData[ct.ID]["netout"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": ct.NetworkOut},
+			chartData[ct.ID]["netout"] = []MetricPoint{
+				{Timestamp: currentTime, Value: float64(ct.NetworkOut)},
 			}
 		}
 	}
 	
 	// Process Storage - get historical data
-	storageData := make(map[string]map[string][]map[string]interface{})
+	storageData := make(map[string]StorageChartData)
 	for _, storage := range state.Storage {
 		if storageData[storage.ID] == nil {
-			storageData[storage.ID] = make(map[string][]map[string]interface{})
+			storageData[storage.ID] = make(StorageChartData)
 		}
 		
 		// Get historical metrics
@@ -1344,15 +1349,15 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		// Convert usage metrics to chart format
 		if usagePoints, ok := metrics["usage"]; ok && len(usagePoints) > 0 {
 			// Convert MetricPoint slice to chart format
-			storageData[storage.ID]["disk"] = make([]map[string]interface{}, len(usagePoints))
+			storageData[storage.ID]["disk"] = make([]MetricPoint, len(usagePoints))
 			for i, point := range usagePoints {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				storageData[storage.ID]["disk"][i] = map[string]interface{}{
-					"timestamp": ts,
-					"value": point.Value,
+				storageData[storage.ID]["disk"][i] = MetricPoint{
+					Timestamp: ts,
+					Value: point.Value,
 				}
 			}
 		} else {
@@ -1361,8 +1366,8 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			if storage.Total > 0 {
 				usagePercent = (float64(storage.Used) / float64(storage.Total)) * 100
 			}
-			storageData[storage.ID]["disk"] = []map[string]interface{}{
-				{"timestamp": currentTime, "value": usagePercent},
+			storageData[storage.ID]["disk"] = []MetricPoint{
+				{Timestamp: currentTime, Value: usagePercent},
 			}
 		}
 	}
@@ -1370,21 +1375,21 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	// Process Nodes - get historical data
 	for _, node := range state.Nodes {
 		if nodeData[node.ID] == nil {
-			nodeData[node.ID] = make(map[string][]map[string]interface{})
+			nodeData[node.ID] = make(NodeChartData)
 		}
 		
 		// Get historical metrics for each type
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
 			points := r.monitor.GetNodeMetrics(node.ID, metricType, duration)
-			nodeData[node.ID][metricType] = make([]map[string]interface{}, len(points))
+			nodeData[node.ID][metricType] = make([]MetricPoint, len(points))
 			for i, point := range points {
 				ts := point.Timestamp.Unix() * 1000
 				if ts < oldestTimestamp {
 					oldestTimestamp = ts
 				}
-				nodeData[node.ID][metricType][i] = map[string]interface{}{
-					"timestamp": ts,
-					"value": point.Value,
+				nodeData[node.ID][metricType][i] = MetricPoint{
+					Timestamp: ts,
+					Value: point.Value,
 				}
 			}
 			
@@ -1399,20 +1404,20 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				case "disk":
 					value = node.Disk.Usage
 				}
-				nodeData[node.ID][metricType] = []map[string]interface{}{
-					{"timestamp": currentTime, "value": value},
+				nodeData[node.ID][metricType] = []MetricPoint{
+					{Timestamp: currentTime, Value: value},
 				}
 			}
 		}
 	}
 
-	response := map[string]interface{}{
-		"data":        chartData,
-		"nodeData":    nodeData,
-		"storageData": storageData,
-		"timestamp":   currentTime,
-		"stats": map[string]interface{}{
-			"oldestDataTimestamp": oldestTimestamp,
+	response := ChartResponse{
+		ChartData:   chartData,
+		NodeData:    nodeData,
+		StorageData: storageData,
+		Timestamp:   currentTime,
+		Stats: ChartStats{
+			OldestDataTimestamp: oldestTimestamp,
 		},
 	}
 
@@ -1449,16 +1454,16 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	state := r.monitor.GetState()
 	
 	// Build storage chart data
-	storageData := make(map[string]interface{})
+	storageData := make(StorageChartsResponse)
 	
 	for _, storage := range state.Storage {
 		metrics := r.monitor.GetStorageMetrics(storage.ID, duration)
 		
-		storageData[storage.ID] = map[string]interface{}{
-			"usage": metrics["usage"],
-			"used":  metrics["used"],
-			"total": metrics["total"],
-			"avail": metrics["avail"],
+		storageData[storage.ID] = StorageMetrics{
+			Usage: metrics["usage"],
+			Used:  metrics["used"],
+			Total: metrics["total"],
+			Avail: metrics["avail"],
 		}
 	}
 
