@@ -80,11 +80,20 @@ Other regions: us-west-2, eu-west-1, etc.`,
 			TLS:          false,
 			StartTLS:     true,
 			AuthRequired: true,
-			Instructions: `1. Use your Microsoft 365 email and password
-2. May need to enable SMTP AUTH for your account:
-   - Admin center > Users > Active users > Select user
-   - Mail > Manage email apps > Enable "Authenticated SMTP"
-3. Consider using App Password if MFA is enabled`,
+			Instructions: `IMPORTANT: Basic authentication (username/password) is being deprecated.
+You MUST use an App Password:
+
+1. Enable 2-factor authentication on your Microsoft account
+2. Generate an App Password:
+   - Go to https://account.microsoft.com/security
+   - Click "Advanced security options"
+   - Under "App passwords", create a new app password
+   - Use this app password (not your regular password)
+3. Username: Your full email address (e.g., user@domain.com)
+4. Password: The app password you generated
+
+Note: If using a work/school account, your admin may need to enable
+"Authenticated SMTP" in the Microsoft 365 admin center.`,
 		},
 		{
 			Name:         "Brevo (formerly Sendinblue)",
