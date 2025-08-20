@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, createEffect } from 'solid-js';
+import { Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -6,6 +6,7 @@ import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { getResourceAlerts } from '@/utils/alerts';
 import { useWebSocket } from '@/App';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
 
@@ -28,29 +29,58 @@ interface GuestRowProps {
   };
   hasOverride?: boolean;
   overrideDisabled?: boolean;
+  customUrl?: string;
 }
 
 export function GuestRow(props: GuestRowProps) {
   const { activeAlerts } = useWebSocket();
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(undefined);
+  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   
   // Create guest ID for metadata
   const guestId = createMemo(() => {
     return props.guest.id || `${props.guest.node}-${props.guest.vmid}`;
   });
   
-  // Load custom URL from localStorage
+  // Update custom URL when prop changes
   createEffect(() => {
-    const guestURLs = JSON.parse(localStorage.getItem('guestURLs') || '{}');
-    const config = guestURLs[guestId()];
-    if (config && config.url) {
-      setCustomUrl(config.url);
-    } else if (config && config.host) {
-      // Support old format for backward compatibility
-      const port = config.port ? `:${config.port}` : '';
-      setCustomUrl(`${config.protocol}://${config.host}${port}`);
-    } else {
-      setCustomUrl(undefined);
+    if (props.customUrl !== undefined) {
+      setCustomUrl(props.customUrl);
+    }
+  });
+  
+  // Load custom URL from backend if not provided via props
+  onMount(async () => {
+    if (!props.customUrl) {
+      try {
+        const metadata = await GuestMetadataAPI.getMetadata(guestId());
+        if (metadata && metadata.customUrl) {
+          setCustomUrl(metadata.customUrl);
+        }
+      } catch (err) {
+        // Silently fail - not critical for display
+        console.debug('Failed to load guest metadata:', err);
+      }
+    }
+  });
+  
+  // Also check localStorage for backward compatibility during transition
+  createEffect(() => {
+    // Only use localStorage if we haven't loaded from backend yet
+    if (!customUrl()) {
+      const guestURLs = JSON.parse(localStorage.getItem('guestURLs') || '{}');
+      const config = guestURLs[guestId()];
+      if (config && config.url) {
+        setCustomUrl(config.url);
+        // Migrate to backend
+        GuestMetadataAPI.updateMetadata(guestId(), { customUrl: config.url }).catch(() => {});
+      } else if (config && config.host) {
+        // Support old format for backward compatibility
+        const port = config.port ? `:${config.port}` : '';
+        const url = `${config.protocol}://${config.host}${port}`;
+        setCustomUrl(url);
+        // Migrate to backend
+        GuestMetadataAPI.updateMetadata(guestId(), { customUrl: url }).catch(() => {});
+      }
     }
   });
   
