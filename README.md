@@ -274,44 +274,54 @@ Configure email notifications in **Settings → Alerts → Email Destinations**
 2. Use your email as username and app password as password
 3. Server: smtp-mail.outlook.com, Port: 587, Enable STARTTLS
 
-### Alert Suppression Using VM/CT Tags
+### Alert Configuration
 
-Control alert behavior per VM/container using Proxmox tags (no UI configuration needed):
+Pulse provides two complementary approaches for managing alerts:
 
-#### Available Tags
-- **`pulse-no-alerts`** - Completely disables all alerts for this VM/CT
-- **`pulse-monitor-only`** - Shows in UI but suppresses notifications (email, webhooks)
-- **`pulse-relaxed`** - Sets thresholds to 95% for CPU/RAM, 98% for disk
+#### Custom Alert Rules (Permanent Policy)
+Configure persistent alert policies in **Settings → Alerts → Custom Rules**:
+- Define thresholds for specific VMs/containers based on name patterns
+- Set different thresholds for production vs development environments
+- Create complex rules with AND/OR logic
+- Manage all rules through the UI with priority ordering
 
-#### Priority Order
-Tags take precedence over other configurations:
-1. `pulse-no-alerts` tag - Overrides everything, no alerts at all
-2. `pulse-relaxed` tag - Overrides to 95%/98% regardless of custom rules
-3. Custom Alert Rules from UI - Applied if no tags present
-4. Default global thresholds - Used if nothing else is configured
+**Use for:** Long-term alert policies like "all database VMs should alert at 90%"
 
-**Note:** `pulse-monitor-only` works with any threshold source. Tags are checked every 30-60 seconds, no restart needed.
+#### Proxmox Tags (Temporary Overrides)
+Apply operational overrides directly in Proxmox using VM/CT tags:
 
-#### How to Use
-1. In Proxmox, edit your VM/CT
-2. Add one or more tags in the Options tab
-3. Pulse picks up changes within 30-60 seconds (no restart needed)
+| Tag | Purpose | Use Case |
+|-----|---------|----------|
+| `pulse-no-alerts` | Maintenance mode | Suppress all alerts during maintenance windows |
+| `pulse-monitor-only` | Silent monitoring | Development/staging VMs you want to watch but not get paged for |
+| `pulse-relaxed` | Temporary tolerance | Expected high load periods (backups, batch jobs) |
 
-#### Examples
+**How tags work:**
+- Tags are operational overrides that take priority over custom rules
+- Changes apply within 30-60 seconds (no restart needed)
+- `pulse-relaxed` sets fixed thresholds: 95% CPU/RAM, 98% disk
+- Multiple tags can be combined (e.g., relaxed + monitor-only)
+
+**Examples:**
 ```bash
-# Via Proxmox CLI
-pvesh set /nodes/pve/lxc/100/config -tags 'production,pulse-monitor-only'
-pvesh set /nodes/pve/qemu/200/config -tags 'dev,pulse-no-alerts'
-pvesh set /nodes/pve/lxc/300/config -tags 'database,pulse-relaxed'
+# Maintenance window - suppress all alerts
+pvesh set /nodes/pve/lxc/100/config -tags 'prod,pulse-no-alerts'
 
-# Multiple tags work together
-pvesh set /nodes/pve/lxc/400/config -tags 'pulse-relaxed,pulse-monitor-only'
+# Development VM - monitor but don't notify
+pvesh set /nodes/pve/qemu/200/config -tags 'dev,pulse-monitor-only'
+
+# Backup server during backup window - relax thresholds
+pvesh set /nodes/pve/lxc/300/config -tags 'backup-server,pulse-relaxed'
+
+# Remove tag after maintenance
+pvesh set /nodes/pve/lxc/100/config -tags 'prod'
 ```
 
-Perfect for:
-- Development VMs that shouldn't trigger alerts
-- Services that naturally run hot (databases, media servers)
-- Temporary maintenance windows (add tag, remove when done)
+**Best practices:**
+- Use Custom Rules for "what should normally happen"
+- Use Tags for "temporary exceptions to normal"
+- Remove tags when temporary need ends
+- Document tag usage in your runbooks
 
 ### HTTPS/TLS Configuration
 Enable HTTPS by setting these environment variables:
