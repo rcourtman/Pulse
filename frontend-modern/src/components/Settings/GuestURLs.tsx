@@ -5,9 +5,7 @@ import type { VM, Container } from '@/types/api';
 
 interface GuestURL {
   guestId: string;
-  protocol: 'http' | 'https';
-  host: string;
-  port: string;
+  url: string;
 }
 
 interface GuestURLsProps {
@@ -62,19 +60,12 @@ export function GuestURLs(props: GuestURLsProps) {
   };
 
   // Update a guest's URL configuration
-  const updateGuestURL = (guestId: string, field: keyof GuestURL, value: string) => {
-    const current = guestURLs()[guestId] || {
-      guestId,
-      protocol: 'https',
-      host: '',
-      port: '8006'
-    };
-    
+  const updateGuestURL = (guestId: string, url: string) => {
     setGuestURLs({
       ...guestURLs(),
       [guestId]: {
-        ...current,
-        [field]: value
+        guestId,
+        url
       }
     });
     
@@ -89,13 +80,10 @@ export function GuestURLs(props: GuestURLsProps) {
     props.setHasUnsavedChanges(true);
   };
 
-  // Generate the full URL for a guest
-  const getFullURL = (guestId: string): string | undefined => {
+  // Get the URL for a guest
+  const getURL = (guestId: string): string | undefined => {
     const config = guestURLs()[guestId];
-    if (!config || !config.host) return undefined;
-    
-    const port = config.port ? `:${config.port}` : '';
-    return `${config.protocol}://${config.host}${port}`;
+    return config?.url || undefined;
   };
 
   return (
@@ -146,13 +134,7 @@ export function GuestURLs(props: GuestURLsProps) {
                   Guest
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Protocol
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Host / IP
-                </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Port
+                  Custom URL
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
@@ -162,7 +144,7 @@ export function GuestURLs(props: GuestURLsProps) {
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <For each={filteredGuests()} fallback={
                 <tr>
-                  <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     No guests found
                   </td>
                 </tr>
@@ -170,7 +152,7 @@ export function GuestURLs(props: GuestURLsProps) {
                 {(guest) => {
                   const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
                   const config = guestURLs()[guestId];
-                  const fullURL = getFullURL(guestId);
+                  const url = getURL(guestId);
                   
                   return (
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
@@ -187,44 +169,21 @@ export function GuestURLs(props: GuestURLsProps) {
                         </div>
                       </td>
                       <td class="px-4 py-3">
-                        <select
-                          value={config?.protocol || 'https'}
-                          onChange={(e) => updateGuestURL(guestId, 'protocol', e.currentTarget.value)}
-                          class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                                 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="https">HTTPS</option>
-                          <option value="http">HTTP</option>
-                        </select>
-                      </td>
-                      <td class="px-4 py-3">
                         <input
                           type="text"
-                          placeholder="IP or domain"
-                          value={config?.host || ''}
-                          onInput={(e) => updateGuestURL(guestId, 'host', e.currentTarget.value)}
+                          placeholder="https://192.168.1.100:8006 or http://example.com"
+                          value={config?.url || ''}
+                          onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
                           class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                  focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
                       <td class="px-4 py-3">
-                        <input
-                          type="text"
-                          placeholder="Port"
-                          value={config?.port || ''}
-                          onInput={(e) => updateGuestURL(guestId, 'port', e.currentTarget.value)}
-                          class="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                                 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="px-4 py-3">
                         <div class="flex items-center gap-2">
-                          <Show when={fullURL}>
+                          <Show when={url}>
                             <a
-                              href={fullURL}
+                              href={url}
                               target="_blank"
                               rel="noopener noreferrer"
                               class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -236,7 +195,7 @@ export function GuestURLs(props: GuestURLsProps) {
                               </svg>
                             </a>
                           </Show>
-                          <Show when={config?.host}>
+                          <Show when={config?.url}>
                             <button
                               onClick={() => clearGuestURL(guestId)}
                               class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
