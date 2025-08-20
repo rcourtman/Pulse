@@ -4,7 +4,6 @@ import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
 import CompactNodeCard from './CompactNodeCard';
 import { useWebSocket } from '@/App';
-import { GuestUrlEditor } from './GuestUrlEditor';
 import { getAlertStyles } from '@/utils/alerts';
 import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
@@ -64,22 +63,6 @@ export function Dashboard(props: DashboardProps) {
     }
   });
   
-  // URL Editor state
-  const [urlEditorState, setUrlEditorState] = createSignal<{
-    guestId: string;
-    guestName: string;
-    currentUrl?: string;
-  } | null>(null);
-  
-  // Function to open URL editor
-  const openUrlEditor = (guestId: string, guestName: string, currentUrl?: string) => {
-    setUrlEditorState({ guestId, guestName, currentUrl });
-  };
-  
-  // Function to close URL editor
-  const closeUrlEditor = () => {
-    setUrlEditorState(null);
-  };
   
   // Create a mapping from node name to host URL
   const nodeHostMap = createMemo(() => {
@@ -786,7 +769,6 @@ export function Dashboard(props: DashboardProps) {
                                 alertStyles={getAlertStyles(guestId, activeAlerts)}
                                 hasOverride={!!override}
                                 overrideDisabled={override?.disabled === true}
-                                onEditUrl={openUrlEditor}
                               />
                             );
                           })()}
@@ -831,21 +813,6 @@ export function Dashboard(props: DashboardProps) {
       
       {/* Tooltip System */}
       <TooltipComponent />
-      
-      {/* URL Editor Modal */}
-      <Show when={urlEditorState()}>
-        <GuestUrlEditor
-          guestId={urlEditorState()!.guestId}
-          guestName={urlEditorState()!.guestName}
-          currentUrl={urlEditorState()!.currentUrl}
-          onUpdate={() => {
-            // Update will be handled by GuestRow when it reloads
-            closeUrlEditor();
-          }}
-          onClose={closeUrlEditor}
-        />
-      </Show>
-      
     </div>
   );
 }
