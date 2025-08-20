@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Show, createMemo, createSignal, createEffect } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -6,7 +6,6 @@ import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { getResourceAlerts } from '@/utils/alerts';
 import { useWebSocket } from '@/App';
-import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
 
@@ -29,7 +28,6 @@ interface GuestRowProps {
   };
   hasOverride?: boolean;
   overrideDisabled?: boolean;
-  onEditUrl?: (guestId: string, guestName: string, currentUrl?: string) => void;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -41,15 +39,15 @@ export function GuestRow(props: GuestRowProps) {
     return props.guest.id || `${props.guest.node}-${props.guest.vmid}`;
   });
   
-  // Load custom URL on mount
-  onMount(async () => {
-    try {
-      const metadata = await GuestMetadataAPI.getMetadata(guestId());
-      if (metadata?.customUrl) {
-        setCustomUrl(metadata.customUrl);
-      }
-    } catch (err) {
-      // Ignore errors - guest might not have metadata yet
+  // Load custom URL from localStorage
+  createEffect(() => {
+    const guestURLs = JSON.parse(localStorage.getItem('guestURLs') || '{}');
+    const config = guestURLs[guestId()];
+    if (config && config.host) {
+      const port = config.port ? `:${config.port}` : '';
+      setCustomUrl(`${config.protocol}://${config.host}${port}`);
+    } else {
+      setCustomUrl(undefined);
     }
   });
   
@@ -109,18 +107,6 @@ export function GuestRow(props: GuestRowProps) {
             </a>
           </Show>
           
-          {/* Edit URL button */}
-          <Show when={props.onEditUrl}>
-            <button
-              onClick={() => props.onEditUrl?.(guestId(), props.guest.name, customUrl())}
-              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title="Edit custom URL"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-            </button>
-          </Show>
           
           {/* Override indicator */}
           <Show when={props.hasOverride}>

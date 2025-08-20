@@ -4,6 +4,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
 import { GenerateAPIToken } from './GenerateAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { GuestURLs } from './GuestURLs';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -73,7 +74,7 @@ interface DiagnosticsData {
   errors: string[];
 }
 
-type SettingsTab = 'pve' | 'pbs' | 'system' | 'security' | 'diagnostics';
+type SettingsTab = 'pve' | 'pbs' | 'system' | 'urls' | 'security' | 'diagnostics';
 
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
@@ -152,6 +153,11 @@ const Settings: Component = () => {
       id: 'system', 
       label: 'System',
       icon: 'M12 4v16m4-11h4m-4 6h4M8 9H4m4 6H4'
+    },
+    {
+      id: 'urls',
+      label: 'Guest URLs',
+      icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'
     },
     { 
       id: 'security', 
@@ -1855,6 +1861,14 @@ const Settings: Component = () => {
                 </div>
               </div>
             </div>
+          </Show>
+          
+          {/* Guest URLs Tab */}
+          <Show when={activeTab() === 'urls'}>
+            <GuestURLs 
+              hasUnsavedChanges={hasUnsavedChanges}
+              setHasUnsavedChanges={setHasUnsavedChanges}
+            />
           </Show>
         </div>
       </div>
