@@ -55,6 +55,7 @@ interface Override {
   vmid?: number;  // Only for guests
   node?: string;  // Node name (for guests), undefined for nodes themselves
   instance?: string;
+  disabled?: boolean;  // Completely disable alerts for this guest
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -174,6 +175,7 @@ export function Alerts() {
               vmid: guest.vmid,
               node: guest.node,
               instance: guest.instance,
+              disabled: thresholds.disabled || false,
               thresholds: extractTriggerValues(thresholds)
             });
           }
@@ -452,13 +454,17 @@ export function Alerts() {
                       timeThreshold: timeThreshold() || 0,
                       overrides: overrides().reduce((acc, o) => {
                         // Convert thresholds to hysteresis format
-                        const hysteresisThresholds: AlertThresholds = {};
+                        const hysteresisThresholds: any = {};
                         Object.entries(o.thresholds).forEach(([metric, value]) => {
                           hysteresisThresholds[metric] = createHysteresisThreshold(value as number);
                         });
+                        // Include disabled field if present
+                        if (o.disabled) {
+                          hysteresisThresholds.disabled = true;
+                        }
                         acc[o.id] = hysteresisThresholds;
                         return acc;
-                      }, {} as Record<string, AlertThresholds>),
+                      }, {} as Record<string, any>),
                       schedule: scheduleRef.getScheduleConfig ? scheduleRef.getScheduleConfig() : {
                         quietHours: {
                           enabled: false,
@@ -709,42 +715,6 @@ function OverviewTab(props: {
         </div>
       </div>
       
-      {/* Proxmox Tags Help */}
-      <Show when={props.showQuickTip()}>
-        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div class="flex-1 text-sm">
-              <div class="flex items-start justify-between">
-                <p class="font-medium text-green-800 dark:text-green-200 mb-1">💡 Quick Tip: Control alerts directly in Proxmox!</p>
-                <button
-                  onClick={props.dismissQuickTip}
-                  class="ml-2 -mt-1 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 transition-colors"
-                  title="Dismiss tip"
-                >
-                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <p class="text-green-700 dark:text-green-300 mb-2">
-                Add these tags to any VM/CT in Proxmox to control alert behavior without navigating to Pulse:
-              </p>
-              <ul class="space-y-1 text-xs text-green-700 dark:text-green-300">
-                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Completely silent - no alerts in UI or notifications</li>
-                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Shows alerts in UI but won't email/page you</li>
-                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-relaxed</code> - Use higher thresholds (95% CPU/RAM, 98% disk)</li>
-              </ul>
-              <p class="text-xs text-green-600 dark:text-green-400 mt-2">
-                Perfect for dev VMs, services that run hot (TrueNAS, databases), or temporary maintenance windows.
-              </p>
-            </div>
-          </div>
-        </div>
-      </Show>
-      
       {/* Recent Alerts */}
       <div>
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Active Alerts</h3>
@@ -853,19 +823,61 @@ function AddOverrideForm(props: {
   guests: Array<{ id: string; name: string; vmid: number; type: string; node: string; instance: string }>;
   nodes: Array<{ id: string; name: string }>;
   existingOverrides: Override[];
+  editingOverride?: Override | null;
   onAdd: (override: Override) => void;
+  onUpdate?: (override: Override) => void;
+  onCancelEdit?: () => void;
 }) {
   const [resourceType, setResourceType] = createSignal<'guest' | 'node'>('guest');
   const [selectedResource, setSelectedResource] = createSignal('');
+  const [alertsDisabled, setAlertsDisabled] = createSignal(false);
   const [thresholds, setThresholds] = createSignal({
     cpu: 80,
     memory: 85, 
     disk: 90
   });
   const [enabledThresholds, setEnabledThresholds] = createSignal({
-    cpu: false,
-    memory: false,
-    disk: false
+    cpu: true,
+    memory: true,
+    disk: true
+  });
+
+  // When editing, populate the form with existing values
+  let previousEditingId: string | null = null;
+  createEffect(() => {
+    const currentEditing = props.editingOverride;
+    const currentId = currentEditing?.id || null;
+    
+    // Only update if the editing override changed
+    if (currentId !== previousEditingId) {
+      previousEditingId = currentId;
+      
+      if (currentEditing) {
+        setResourceType(currentEditing.type);
+        setSelectedResource(currentEditing.id);
+        setAlertsDisabled(currentEditing.disabled || false);
+        
+        const editThresholds = { cpu: 80, memory: 85, disk: 90 };
+        const editEnabled = { cpu: false, memory: false, disk: false };
+        
+        Object.entries(currentEditing.thresholds).forEach(([key, value]) => {
+          if (key in editThresholds) {
+            editThresholds[key as keyof typeof editThresholds] = value as number;
+            editEnabled[key as keyof typeof editEnabled] = true;
+          }
+        });
+        
+        setThresholds(editThresholds);
+        setEnabledThresholds(editEnabled);
+      } else {
+        // Reset when not editing
+        setResourceType('guest');
+        setSelectedResource('');
+        setAlertsDisabled(false);
+        setThresholds({ cpu: 80, memory: 85, disk: 90 });
+        setEnabledThresholds({ cpu: true, memory: true, disk: true });
+      }
+    }
   });
 
   const availableResources = createMemo(() => {
@@ -878,7 +890,7 @@ function AddOverrideForm(props: {
     }
   });
 
-  const handleAdd = () => {
+  const handleSubmit = () => {
     const resourceId = selectedResource();
     if (!resourceId) return;
 
@@ -890,109 +902,151 @@ function AddOverrideForm(props: {
       }
     });
 
-    if (Object.keys(activeThresholds).length === 0) return;
+    // Allow creation if either thresholds are set OR alerts are disabled
+    if (Object.keys(activeThresholds).length === 0 && !alertsDisabled()) return;
 
-    let newOverride: Override;
+    let override: Override;
     
-    if (resourceType() === 'node') {
-      const node = props.nodes.find(n => n.id === resourceId);
-      if (!node) return;
-      
-      newOverride = {
-        id: node.id,
-        name: node.name,
-        type: 'node',
-        resourceType: 'Node',
+    if (props.editingOverride) {
+      // Update existing override
+      override = {
+        ...props.editingOverride,
+        disabled: alertsDisabled(),
         thresholds: activeThresholds
       };
+      props.onUpdate?.(override);
     } else {
-      const guest = props.guests.find(g => g.id === resourceId);
-      if (!guest) return;
-      
-      newOverride = {
-        id: guest.id,
-        name: guest.name,
-        type: 'guest',
-        resourceType: guest.type === 'qemu' ? 'VM' : 'CT',  // Now this will work correctly
-        vmid: guest.vmid,
-        node: guest.node,
-        instance: guest.instance,
-        thresholds: activeThresholds
-      };
+      // Create new override
+      if (resourceType() === 'node') {
+        const node = props.nodes.find(n => n.id === resourceId);
+        if (!node) return;
+        
+        override = {
+          id: node.id,
+          name: node.name,
+          type: 'node',
+          resourceType: 'Node',
+          thresholds: activeThresholds
+        };
+      } else {
+        const guest = props.guests.find(g => g.id === resourceId);
+        if (!guest) return;
+        
+        override = {
+          id: guest.id,
+          name: guest.name,
+          type: 'guest',
+          resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+          vmid: guest.vmid,
+          node: guest.node,
+          instance: guest.instance,
+          disabled: alertsDisabled(),
+          thresholds: activeThresholds
+        };
+      }
+      props.onAdd(override);
     }
-
-    props.onAdd(newOverride);
     
-    // Reset form
+    // Reset form after successful submission
     setSelectedResource('');
+    setAlertsDisabled(false);
     setThresholds({ cpu: 80, memory: 85, disk: 90 });
-    setEnabledThresholds({ cpu: false, memory: false, disk: false });
+    setEnabledThresholds({ cpu: true, memory: true, disk: true });
   };
 
   return (
     <div class="space-y-4">
-      <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-        </svg>
-        Add New Override
-      </h4>
+      <div class="flex items-center justify-between">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+          </svg>
+          {props.editingOverride ? 'Edit Override' : 'Add New Override'}
+        </h4>
+        <Show when={props.editingOverride}>
+          <button
+            onClick={props.onCancelEdit}
+            class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Cancel
+          </button>
+        </Show>
+      </div>
       
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Resource Selection */}
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Select Resource
+              {props.editingOverride ? 'Resource' : 'Select Resource'}
             </label>
             
-            {/* Resource Type Toggle */}
-            <div class="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4">
-              <button
-                onClick={() => {
-                  setResourceType('guest');
-                  setSelectedResource('');
-                }}
-                class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
-                  resourceType() === 'guest'
-                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-              >
-                Guests
-              </button>
-              <button
-                onClick={() => {
-                  setResourceType('node');
-                  setSelectedResource('');
-                }}
-                class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
-                  resourceType() === 'node'
-                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-              >
-                Nodes
-              </button>
-            </div>
-            
-            <select
-              value={selectedResource()}
-              onChange={(e) => setSelectedResource(e.target.value)}
-              class="w-full px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                     bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     transition-colors"
-            >
-              <option value="">Choose a {resourceType()}...</option>
-              <For each={availableResources()}>
-                {(resource) => (
-                  <option value={resource.id}>
-                    {resource.name}
-                    {resourceType() === 'guest' && 'vmid' in resource && ` (${resource.vmid})`}
-                  </option>
-                )}
-              </For>
-            </select>
+            <Show when={props.editingOverride} fallback={
+              <>
+                {/* Resource Type Toggle */}
+                <div class="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4">
+                  <button
+                    onClick={() => {
+                      setResourceType('guest');
+                      setSelectedResource('');
+                    }}
+                    class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+                      resourceType() === 'guest'
+                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    Guests
+                  </button>
+                  <button
+                    onClick={() => {
+                      setResourceType('node');
+                      setSelectedResource('');
+                    }}
+                    class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+                      resourceType() === 'node'
+                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    Nodes
+                  </button>
+                </div>
+                
+                <select
+                  value={selectedResource()}
+                  onChange={(e) => setSelectedResource(e.target.value)}
+                  class="w-full px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                         bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                         transition-colors"
+                >
+                  <option value="">Choose a {resourceType()}...</option>
+                  <For each={availableResources()}>
+                    {(resource) => (
+                      <option value={resource.id}>
+                        {resource.name}
+                        {resourceType() === 'guest' && 'vmid' in resource && ` (${resource.vmid})`}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </>
+            }>
+              {/* When editing, just show the resource name */}
+              <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {props.editingOverride?.name}
+                  {props.editingOverride?.vmid && ` (${props.editingOverride.vmid})`}
+                  <span class={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                    props.editingOverride?.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
+                    props.editingOverride?.resourceType === 'VM' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
+                    'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
+                  }`}>
+                    {props.editingOverride?.type === 'node' ? 'Node' : props.editingOverride?.resourceType}
+                  </span>
+                </span>
+              </div>
+            </Show>
           </div>
         </div>
 
@@ -1001,7 +1055,40 @@ function AddOverrideForm(props: {
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Configure Thresholds
           </label>
-          <div class="space-y-4">
+          
+          {/* Alert Mode Selection for Guests */}
+          <Show when={resourceType() === 'guest'}>
+            <div class="flex gap-3">
+              <label class="flex items-center gap-2 flex-1 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <input
+                  type="radio"
+                  name="alert-mode"
+                  checked={!alertsDisabled()}
+                  onChange={() => setAlertsDisabled(false)}
+                  class="text-blue-600"
+                />
+                <div>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Custom thresholds</span>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Alert when thresholds exceeded</p>
+                </div>
+              </label>
+              <label class="flex items-center gap-2 flex-1 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <input
+                  type="radio"
+                  name="alert-mode"
+                  checked={alertsDisabled()}
+                  onChange={() => setAlertsDisabled(true)}
+                  class="text-red-600"
+                />
+                <div>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Disable alerts</span>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Never alert for this guest</p>
+                </div>
+              </label>
+            </div>
+          </Show>
+          
+          <div class={`space-y-4 ${alertsDisabled() ? 'opacity-50 pointer-events-none' : ''}`}>
             <For each={['cpu', 'memory', 'disk']}>
               {(metric) => (
                 <div>
@@ -1035,7 +1122,7 @@ function AddOverrideForm(props: {
 
       <div class="flex justify-end pt-2">
         <button
-          onClick={handleAdd}
+          onClick={handleSubmit}
           disabled={!selectedResource()}
           class="px-6 py-2.5 text-sm font-medium bg-gradient-to-r from-blue-600 to-blue-700 
                  text-white rounded-lg hover:from-blue-700 hover:to-blue-800 
@@ -1044,10 +1131,16 @@ function AddOverrideForm(props: {
         >
           <span class="flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
+              {props.editingOverride ? (
+                <path d="M20 6L9 17l-5-5" />
+              ) : (
+                <>
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </>
+              )}
             </svg>
-            Add Override
+            {props.editingOverride ? 'Update Override' : 'Add Override'}
           </span>
         </button>
       </div>
@@ -1058,33 +1151,9 @@ function AddOverrideForm(props: {
 // Override Item Component
 function OverrideItem(props: {
   override: Override;
-  isEditing: boolean;
-  onEditStart: () => void;
-  onEditEnd: () => void;
-  onUpdate: (override: Override) => void;
+  onEdit: () => void;
   onRemove: () => void;
 }) {
-  const [editValues, setEditValues] = createSignal({ ...props.override.thresholds });
-
-  // Only reset edit values when editing STARTS, not when override updates
-  // This preserves the user's changes during WebSocket updates
-  let previousEditingState = false;
-  createEffect(() => {
-    const isEditingNow = props.isEditing;
-    // Only reset values when transitioning from not-editing to editing
-    if (isEditingNow && !previousEditingState) {
-      setEditValues({ ...props.override.thresholds });
-    }
-    previousEditingState = isEditingNow;
-  });
-
-  const handleSave = () => {
-    props.onUpdate({
-      ...props.override,
-      thresholds: { ...editValues() }
-    });
-    props.onEditEnd();
-  };
 
   return (
     <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
@@ -1104,9 +1173,18 @@ function OverrideItem(props: {
             }`}>
               {props.override.type === 'node' ? 'Node' : props.override.resourceType}
             </span>
+            <Show when={props.override.disabled}>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
+                Alerts Disabled
+              </span>
+            </Show>
           </div>
 
-          <Show when={!props.isEditing}>
+          <Show when={!props.override.disabled} fallback={
+            <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+              All alerts disabled for this guest
+            </div>
+          }>
             <div class="flex gap-4">
               <For each={Object.entries(props.override.thresholds).filter(([_, v]) => v)}>
                 {([key, value]) => (
@@ -1118,67 +1196,21 @@ function OverrideItem(props: {
               </For>
             </div>
           </Show>
-
-          <Show when={props.isEditing}>
-            <div class="space-y-3 mt-4">
-              <For each={Object.entries(props.override.thresholds).filter(([_, v]) => v)}>
-                {([key]) => (
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                      <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {key === 'cpu' ? 'CPU' : key === 'memory' ? 'Memory' : 'Disk'} Usage
-                      </label>
-                      <span class="text-sm text-gray-500">{editValues()[key as keyof typeof editValues]}%</span>
-                    </div>
-                    <ThresholdSlider
-                      value={editValues()[key as keyof typeof editValues]}
-                      onChange={(value) => setEditValues({
-                        ...editValues(),
-                        [key]: value
-                      })}
-                      type={key === 'cpu' ? 'cpu' : key === 'memory' ? 'memory' : 'disk'}
-                    />
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
         </div>
 
         <div class="flex items-center gap-2 ml-4">
-          <Show when={!props.isEditing}>
-            <button
-              onClick={() => {
-                props.onEditStart();
-              }}
-              class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
-            >
-              Edit
-            </button>
-            <button
-              onClick={props.onRemove}
-              class="text-sm text-red-600 hover:text-red-700 dark:text-red-400"
-            >
-              Remove
-            </button>
-          </Show>
-          <Show when={props.isEditing}>
-            <button
-              onClick={handleSave}
-              class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => {
-                props.onEditEnd();
-                setEditValues({ ...props.override.thresholds });
-              }}
-              class="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-          </Show>
+          <button
+            onClick={props.onEdit}
+            class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          >
+            Edit
+          </button>
+          <button
+            onClick={props.onRemove}
+            class="text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+          >
+            Remove
+          </button>
         </div>
       </div>
     </div>
@@ -1206,8 +1238,8 @@ interface ThresholdsTabProps {
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
-  // Track which override is currently being edited to preserve state across re-renders
-  const [editingOverrideId, setEditingOverrideId] = createSignal<string | null>(null);
+  // Track which override is currently being edited
+  const [editingOverride, setEditingOverride] = createSignal<Override | null>(null);
   
   return (
     <div class="space-y-8">
@@ -1442,23 +1474,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
                 {(override) => (
                   <OverrideItem
                     override={override}
-                    isEditing={editingOverrideId() === override.id}
-                    onEditStart={() => setEditingOverrideId(override.id)}
-                    onEditEnd={() => setEditingOverrideId(null)}
-                    onUpdate={(updatedOverride) => {
-                      props.setOverrides(props.overrides().map((o: Override) => 
-                        o.id === override.id ? updatedOverride : o
-                      ));
-                      // Update raw config too
-                      const newRawConfig = { ...props.rawOverridesConfig() };
-                      const hysteresisThresholds: Record<string, any> = {};
-                      Object.entries(updatedOverride.thresholds).forEach(([metric, value]) => {
-                        hysteresisThresholds[metric] = { trigger: value, clear: Math.max(0, (value as number) - 5) };
-                      });
-                      newRawConfig[updatedOverride.id] = hysteresisThresholds;
-                      props.setRawOverridesConfig(newRawConfig);
-                      props.setHasUnsavedChanges(true);
-                    }}
+                    onEdit={() => setEditingOverride(override)}
                     onRemove={() => {
                       props.setOverrides(props.overrides().filter((o) => o.id !== override.id));
                       // Update raw config too
@@ -1493,6 +1509,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
             guests={props.allGuests()}
             nodes={props.state.nodes || []}
             existingOverrides={props.overrides()}
+            editingOverride={editingOverride()}
             onAdd={(override) => {
               props.setOverrides([...props.overrides(), override]);
               // Update raw config too
@@ -1501,10 +1518,34 @@ function ThresholdsTab(props: ThresholdsTabProps) {
               Object.entries(override.thresholds).forEach(([metric, value]) => {
                 hysteresisThresholds[metric] = { trigger: value, clear: Math.max(0, (value as number) - 5) };
               });
+              // Include disabled field if present
+              if (override.disabled) {
+                hysteresisThresholds.disabled = true;
+              }
               newRawConfig[override.id] = hysteresisThresholds;
               props.setRawOverridesConfig(newRawConfig);
               props.setHasUnsavedChanges(true);
             }}
+            onUpdate={(override) => {
+              props.setOverrides(props.overrides().map((o: Override) => 
+                o.id === override.id ? override : o
+              ));
+              // Update raw config too
+              const newRawConfig = { ...props.rawOverridesConfig() };
+              const hysteresisThresholds: Record<string, any> = {};
+              Object.entries(override.thresholds).forEach(([metric, value]) => {
+                hysteresisThresholds[metric] = { trigger: value, clear: Math.max(0, (value as number) - 5) };
+              });
+              // Include disabled field if present
+              if (override.disabled) {
+                hysteresisThresholds.disabled = true;
+              }
+              newRawConfig[override.id] = hysteresisThresholds;
+              props.setRawOverridesConfig(newRawConfig);
+              props.setHasUnsavedChanges(true);
+              setEditingOverride(null);
+            }}
+            onCancelEdit={() => setEditingOverride(null)}
           />
         </div>
       </div>

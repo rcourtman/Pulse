@@ -63,12 +63,10 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
           <div class="text-sm text-blue-800 dark:text-blue-200">
             <p class="font-medium mb-1">Alert Control Methods:</p>
             <ol class="list-decimal list-inside space-y-0.5 text-xs">
-              <li>Proxmox VM/CT tags (pulse-no-alerts, pulse-monitor-only, pulse-relaxed)</li>
               <li>Guest-specific overrides in Settings</li>
               <li>Custom rules (evaluated by priority number)</li>
               <li>Global default thresholds</li>
             </ol>
-            <p class="text-xs mt-2 italic">Tip: Use Proxmox tags for direct VM control without UI navigation!</p>
           </div>
         </div>
       </div>
