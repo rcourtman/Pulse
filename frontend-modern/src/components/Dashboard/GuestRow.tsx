@@ -43,7 +43,10 @@ export function GuestRow(props: GuestRowProps) {
   createEffect(() => {
     const guestURLs = JSON.parse(localStorage.getItem('guestURLs') || '{}');
     const config = guestURLs[guestId()];
-    if (config && config.host) {
+    if (config && config.url) {
+      setCustomUrl(config.url);
+    } else if (config && config.host) {
+      // Support old format for backward compatibility
       const port = config.port ? `:${config.port}` : '';
       setCustomUrl(`${config.protocol}://${config.host}${port}`);
     } else {
