@@ -697,6 +697,12 @@ func (m *Manager) checkMetricInternal(resourceID, resourceName, node, instance, 
 					if metricType == "usage" {
 						return fmt.Sprintf("%s at %.1f%%", resourceType, value)
 					}
+					// For I/O metrics (diskRead, diskWrite, networkIn, networkOut), show MB/s not percentage
+					if metricType == "diskRead" || metricType == "diskWrite" || 
+					   metricType == "networkIn" || metricType == "networkOut" {
+						return fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
+					}
+					// For CPU, memory, disk metrics show percentage
 					return fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
 				}(),
 				Value:        value,
