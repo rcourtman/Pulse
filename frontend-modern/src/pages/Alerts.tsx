@@ -701,8 +701,8 @@ function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string
               Add these tags to any VM/CT in Proxmox to control alert behavior without navigating to Pulse:
             </p>
             <ul class="space-y-1 text-xs text-green-700 dark:text-green-300">
-              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Disable all alerts for maintenance or special VMs</li>
-              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Show in UI but don't send notifications</li>
+              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Completely silent - no alerts in UI or notifications</li>
+              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Shows alerts in UI but won't email/page you</li>
               <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-relaxed</code> - Use higher thresholds (95% CPU/RAM, 98% disk)</li>
             </ul>
             <p class="text-xs text-green-600 dark:text-green-400 mt-2">
