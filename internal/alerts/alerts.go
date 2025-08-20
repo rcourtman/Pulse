@@ -486,31 +486,23 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	
 	// Apply relaxed thresholds if the tag is present
 	if useRelaxedThresholds {
-		// Increase thresholds by 15 percentage points (e.g., 80% -> 95%)
-		if thresholds.CPU != nil {
-			relaxedCPU := &HysteresisThreshold{
-				Trigger: min(thresholds.CPU.Trigger+15, 100),
-				Clear:   min(thresholds.CPU.Clear+15, 95),
-			}
-			thresholds.CPU = relaxedCPU
+		// Override with fixed relaxed thresholds (not additive)
+		// This provides consistent behavior regardless of other settings
+		thresholds.CPU = &HysteresisThreshold{
+			Trigger: 95,
+			Clear:   90,
 		}
-		if thresholds.Memory != nil {
-			relaxedMem := &HysteresisThreshold{
-				Trigger: min(thresholds.Memory.Trigger+15, 100),
-				Clear:   min(thresholds.Memory.Clear+15, 95),
-			}
-			thresholds.Memory = relaxedMem
+		thresholds.Memory = &HysteresisThreshold{
+			Trigger: 95,
+			Clear:   90,
 		}
-		if thresholds.Disk != nil {
-			relaxedDisk := &HysteresisThreshold{
-				Trigger: min(thresholds.Disk.Trigger+10, 100),
-				Clear:   min(thresholds.Disk.Clear+10, 95),
-			}
-			thresholds.Disk = relaxedDisk
+		thresholds.Disk = &HysteresisThreshold{
+			Trigger: 98,
+			Clear:   95,
 		}
 		log.Info().
 			Str("guest", name).
-			Msg("Applied relaxed thresholds due to pulse:relaxed tag")
+			Msg("Applied relaxed thresholds due to pulse-relaxed tag (95% CPU/RAM, 98% disk)")
 	}
 
 	// Check each metric
