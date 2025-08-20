@@ -433,16 +433,16 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		return
 	}
 	
-	// Check for Pulse-specific tags (operational overrides - highest priority)
-	// Tags are meant for temporary operational control, complementing (not replacing) custom rules
+	// Check for Pulse-specific tags (direct VM control - highest priority)
+	// Tags provide direct per-VM alert control without UI configuration
 	var suppressAlerts, monitorOnly, useRelaxedThresholds bool
 	for _, tag := range tags {
 		switch tag {
-		case "pulse-no-alerts":  // Maintenance mode - completely suppress all alerts
+		case "pulse-no-alerts":  // Completely suppress all alerts for this VM
 			suppressAlerts = true
-		case "pulse-monitor-only":  // Operational mode - show in UI but suppress notifications
+		case "pulse-monitor-only":  // Show in UI but suppress notifications
 			monitorOnly = true  
-		case "pulse-relaxed":  // Temporary override - relax thresholds during expected high load
+		case "pulse-relaxed":  // Use relaxed thresholds (95% CPU/RAM, 98% disk)
 			useRelaxedThresholds = true
 		}
 	}
@@ -456,7 +456,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				log.Info().
 					Str("alertID", alertID).
 					Str("guest", name).
-					Msg("Cleared alert - guest has pulse-no-alerts tag (maintenance mode)")
+					Msg("Cleared alert - guest has pulse-no-alerts tag")
 			}
 		}
 		m.mu.Unlock()
@@ -503,7 +503,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		}
 		log.Info().
 			Str("guest", name).
-			Msg("Applied pulse-relaxed tag override (95% CPU/RAM, 98% disk) - temporary operational override")
+			Msg("Applied pulse-relaxed tag (95% CPU/RAM, 98% disk)")
 	}
 
 	// Check each metric
