@@ -131,7 +131,16 @@ export function GuestURLs(props: GuestURLsProps) {
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Guest
+                  Name
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Type
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  VMID
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Node
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Custom URL
@@ -144,7 +153,7 @@ export function GuestURLs(props: GuestURLsProps) {
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <For each={filteredGuests()} fallback={
                 <tr>
-                  <td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     No guests found
                   </td>
                 </tr>
@@ -157,21 +166,29 @@ export function GuestURLs(props: GuestURLsProps) {
                   return (
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                       <td class="px-4 py-3">
-                        <div class="flex items-center gap-2">
-                          <div>
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {guest.name}
-                            </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                              {guest.type === 'qemu' ? 'VM' : 'LXC'} • {guest.vmid} • {guest.node}
-                            </div>
-                          </div>
+                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {guest.name}
                         </div>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                          guest.type === 'qemu' 
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
+                            : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                        }`}>
+                          {guest.type === 'qemu' ? 'VM' : 'LXC'}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {guest.vmid}
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {guest.node}
                       </td>
                       <td class="px-4 py-3">
                         <input
                           type="text"
-                          placeholder="https://192.168.1.100:8006 or http://example.com"
+                          placeholder="https://192.168.1.100:8006"
                           value={config?.url || ''}
                           onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
                           class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
