@@ -949,6 +949,18 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// Parse tags
 			if res.Tags != "" {
 				vm.Tags = strings.Split(res.Tags, ";")
+				
+				// Log if Pulse-specific tags are detected
+				for _, tag := range vm.Tags {
+					switch tag {
+					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
+						log.Info().
+							Str("vm", vm.Name).
+							Str("node", vm.Node).
+							Str("tag", tag).
+							Msg("Pulse control tag detected on VM")
+					}
+				}
 			}
 			
 			allVMs = append(allVMs, vm)
@@ -996,6 +1008,18 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// Parse tags
 			if res.Tags != "" {
 				container.Tags = strings.Split(res.Tags, ";")
+				
+				// Log if Pulse-specific tags are detected
+				for _, tag := range container.Tags {
+					switch tag {
+					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
+						log.Info().
+							Str("container", container.Name).
+							Str("node", container.Node).
+							Str("tag", tag).
+							Msg("Pulse control tag detected on container")
+					}
+				}
 			}
 			
 			allContainers = append(allContainers, container)
@@ -1060,6 +1084,18 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			var tags []string
 			if vm.Tags != "" {
 				tags = strings.Split(vm.Tags, ";")
+				
+				// Log if Pulse-specific tags are detected
+				for _, tag := range tags {
+					switch tag {
+					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
+						log.Info().
+							Str("vm", vm.Name).
+							Str("node", node.Node).
+							Str("tag", tag).
+							Msg("Pulse control tag detected on VM (legacy API)")
+					}
+				}
 			}
 
 			// Calculate I/O rates
@@ -1204,6 +1240,18 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			var tags []string
 			if ct.Tags != "" {
 				tags = strings.Split(ct.Tags, ";")
+				
+				// Log if Pulse-specific tags are detected
+				for _, tag := range tags {
+					switch tag {
+					case "pulse-no-alerts", "pulse-monitor-only", "pulse-relaxed":
+						log.Info().
+							Str("container", ct.Name).
+							Str("node", node.Node).
+							Str("tag", tag).
+							Msg("Pulse control tag detected on container (legacy API)")
+					}
+				}
 			}
 
 			// Calculate I/O rates
