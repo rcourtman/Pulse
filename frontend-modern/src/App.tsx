@@ -132,6 +132,11 @@ function App() {
           document.documentElement.classList.remove('dark');
         }
         
+        // Load version info even when auth is disabled
+        UpdatesAPI.getVersion()
+          .then(version => setVersionInfo(version))
+          .catch(error => console.error('Failed to load version:', error));
+        
         setIsLoading(false);
         return;
       }
