@@ -689,11 +689,8 @@ func isPreV4Installation() bool {
 		return true
 	}
 	
-	// Check for old service names
-	cmd := exec.Command("systemctl", "list-unit-files", "--no-legend", "pulse-backend.service")
-	if output, err := cmd.Output(); err == nil && len(output) > 0 {
-		return true
-	}
+	// Note: pulse-backend.service is used by both v4 and pre-v4, so we can't use it as an indicator
+	// Only check for Node.js artifacts which are exclusive to pre-v4
 	
 	// Check for Node.js artifacts
 	nodeArtifacts := []string{

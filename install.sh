@@ -19,6 +19,17 @@ SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
 REQUIRED_GO_VERSION="1.21"
 
+# Detect existing service name (pulse or pulse-backend)
+detect_service_name() {
+    if systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
+        echo "pulse-backend"
+    elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
+        echo "pulse"
+    else
+        echo "pulse"  # Default for new installations
+    fi
+}
+
 # Functions
 print_header() {
     echo -e "${BLUE}=================================================${NC}"
@@ -219,10 +230,13 @@ download_pulse() {
         exit 1
     fi
     
+    # Detect existing service name
+    EXISTING_SERVICE=$(detect_service_name)
+    
     # Stop service if running (for updates)
-    if systemctl is-active --quiet $SERVICE_NAME; then
-        print_info "Stopping existing Pulse service..."
-        systemctl stop $SERVICE_NAME
+    if systemctl is-active --quiet $EXISTING_SERVICE; then
+        print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+        systemctl stop $EXISTING_SERVICE
     fi
     
     # Extract to temporary directory first
@@ -276,6 +290,14 @@ setup_directories() {
 
 install_systemd_service() {
     print_info "Installing systemd service..."
+    
+    # Use existing service name if found, otherwise use default
+    EXISTING_SERVICE=$(detect_service_name)
+    if [[ "$EXISTING_SERVICE" == "pulse-backend" ]] && [[ -f "/etc/systemd/system/pulse-backend.service" ]]; then
+        # Keep using pulse-backend for compatibility (ProxmoxVE)
+        SERVICE_NAME="pulse-backend"
+        print_info "Using existing service name: pulse-backend"
+    fi
     
     cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
 [Unit]
