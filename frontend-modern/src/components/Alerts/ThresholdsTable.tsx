@@ -149,6 +149,26 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     const thresholds = editingThresholds();
     
+    // Check if there are any actual changes from the defaults
+    const defaultThresholds = resource.type === 'guest' ? props.guestDefaults : props.nodeDefaults;
+    const hasChanges = Object.keys(thresholds).some(key => {
+      const editedValue = thresholds[key];
+      const defaultValue = defaultThresholds[key as keyof typeof defaultThresholds];
+      return editedValue !== defaultValue;
+    });
+    
+    // If no changes and no existing override, just cancel the edit
+    if (!hasChanges && !resource.hasOverride) {
+      cancelEdit();
+      return;
+    }
+    
+    // If no changes but there's an existing override, keep it as is
+    if (!hasChanges && resource.hasOverride) {
+      cancelEdit();
+      return;
+    }
+    
     // Create or update override
     const override: Override = {
       id: resourceId,
@@ -277,190 +297,189 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </div>
         
         <Show when={showGlobalSettings()}>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-            {/* Time Threshold */}
-            <div class="flex items-center gap-4">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 w-32">
-                Time Threshold:
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="300"
-                value={props.timeThreshold()}
-                onInput={(e) => {
-                  props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
-                  props.setHasUnsavedChanges(true);
-                }}
-                class="w-20 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
-                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                       focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <span class="text-sm text-gray-500 dark:text-gray-400">
-                seconds {props.timeThreshold() === 0 ? '(disabled)' : ''}
-              </span>
-            </div>
-            
-            {/* Default Thresholds Grid */}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Guest Defaults */}
-              <div class="space-y-3">
-                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">VMs & Containers</h4>
-                <div class="space-y-2">
+          <div class="border-t border-gray-200 dark:border-gray-700 p-4">
+            {/* Compact grid layout */}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left column - Time threshold and reset button */}
+              <div class="space-y-4">
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-fit">
+                    Time Threshold:
+                  </label>
                   <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">CPU:</label>
                     <input
                       type="number"
                       min="0"
-                      max="100"
-                      value={props.guestDefaults.cpu || 0}
+                      max="300"
+                      value={props.timeThreshold()}
                       onInput={(e) => {
-                        props.setGuestDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
+                        props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      class="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                             focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">Memory:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.guestDefaults.memory || 0}
-                      onInput={(e) => {
-                        props.setGuestDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">Disk:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.guestDefaults.disk || 0}
-                      onInput={(e) => {
-                        props.setGuestDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                      sec {props.timeThreshold() === 0 ? '(disabled)' : `(wait ${props.timeThreshold()}s before alerting)`}
+                    </span>
                   </div>
                 </div>
+                
+                <button 
+                  onClick={() => {
+                    props.setGuestDefaults({
+                      cpu: 80,
+                      memory: 85,
+                      disk: 90,
+                      diskRead: 150,
+                      diskWrite: 150,
+                      networkIn: 200,
+                      networkOut: 200
+                    });
+                    props.setNodeDefaults({
+                      cpu: 80,
+                      memory: 85,
+                      disk: 90
+                    });
+                    props.setStorageDefault(85);
+                    props.setTimeThreshold(0);
+                    props.setHasUnsavedChanges(true);
+                  }}
+                  class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                >
+                  Reset All to Defaults
+                </button>
               </div>
               
-              {/* Node Defaults */}
-              <div class="space-y-3">
-                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Proxmox Nodes</h4>
-                <div class="space-y-2">
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">CPU:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.nodeDefaults.cpu || 0}
-                      onInput={(e) => {
-                        props.setNodeDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">Memory:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.nodeDefaults.memory || 0}
-                      onInput={(e) => {
-                        props.setNodeDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">Disk:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.nodeDefaults.disk || 0}
-                      onInput={(e) => {
-                        props.setNodeDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                </div>
+              {/* Right column - Threshold values in compact table */}
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                      <th class="text-left py-1 px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Type</th>
+                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CPU %</th>
+                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Memory %</th>
+                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Disk %</th>
+                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Storage %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">VMs & Containers</td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.guestDefaults.cpu || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.guestDefaults.memory || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.guestDefaults.disk || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2 text-gray-400">-</td>
+                    </tr>
+                    <tr>
+                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Proxmox Nodes</td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.nodeDefaults.cpu || 0}
+                          onInput={(e) => {
+                            props.setNodeDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.nodeDefaults.memory || 0}
+                          onInput={(e) => {
+                            props.setNodeDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.nodeDefaults.disk || 0}
+                          onInput={(e) => {
+                            props.setNodeDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                      <td class="text-center px-2 text-gray-400">-</td>
+                    </tr>
+                    <tr>
+                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Storage</td>
+                      <td class="text-center px-2 text-gray-400">-</td>
+                      <td class="text-center px-2 text-gray-400">-</td>
+                      <td class="text-center px-2 text-gray-400">-</td>
+                      <td class="text-center px-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={props.storageDefault()}
+                          onInput={(e) => {
+                            props.setStorageDefault(parseInt(e.currentTarget.value) || 0);
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              
-              {/* Storage Default */}
-              <div class="space-y-3">
-                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Storage</h4>
-                <div class="space-y-2">
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-600 dark:text-gray-400 w-16">Usage:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={props.storageDefault()}
-                      onInput={(e) => {
-                        props.setStorageDefault(parseInt(e.currentTarget.value) || 0);
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    />
-                    <span class="text-xs text-gray-500">%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="flex justify-end pt-2">
-              <button 
-                onClick={() => {
-                  props.setGuestDefaults({
-                    cpu: 80,
-                    memory: 85,
-                    disk: 90,
-                    diskRead: 150,
-                    diskWrite: 150,
-                    networkIn: 200,
-                    networkOut: 200
-                  });
-                  props.setNodeDefaults({
-                    cpu: 80,
-                    memory: 85,
-                    disk: 90
-                  });
-                  props.setStorageDefault(85);
-                  props.setHasUnsavedChanges(true);
-                }}
-                class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-              >
-                Reset to Defaults
-              </button>
             </div>
           </div>
         </Show>
