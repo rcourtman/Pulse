@@ -111,6 +111,31 @@ function App() {
       const securityRes = await apiFetch('/api/security/status');
       const securityData = await securityRes.json();
       console.log('[App] Security status:', securityData);
+      
+      // Check if auth is disabled via DISABLE_AUTH
+      if (securityData.disabled === true) {
+        console.log('[App] Auth is disabled via DISABLE_AUTH, skipping authentication');
+        setHasAuth(false);
+        setNeedsAuth(false);
+        // Initialize WebSocket immediately since no auth needed
+        setWsStore(getGlobalWebSocketStore());
+        
+        // Apply theme preference
+        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+        const prefersDark = savedDarkMode !== null 
+          ? savedDarkMode === 'true'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(prefersDark);
+        if (prefersDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
       
