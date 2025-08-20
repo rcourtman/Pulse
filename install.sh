@@ -47,14 +47,14 @@ check_root() {
 }
 
 check_pre_v4_installation() {
-    # Check for Node.js version indicators
+    # Check for Node.js version indicators (pre-v4 used Node.js)
+    # Note: pulse-backend.service is NOT a reliable indicator as v4 can use it too
     if [[ -f "$INSTALL_DIR/.env" ]] || \
        [[ -d "$INSTALL_DIR/node_modules" ]] || \
        [[ -f "$INSTALL_DIR/package.json" ]] || \
        [[ -f "$INSTALL_DIR/server.js" ]] || \
        [[ -d "$INSTALL_DIR/backend" ]] || \
-       [[ -d "$INSTALL_DIR/frontend" ]] || \
-       systemctl list-unit-files --no-legend | grep -q "pulse-backend.service"; then
+       [[ -d "$INSTALL_DIR/frontend" ]]; then
         
         echo
         print_error "Pre-v4 Pulse Installation Detected"
