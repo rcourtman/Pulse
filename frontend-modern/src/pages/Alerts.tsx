@@ -689,6 +689,29 @@ function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string
         </div>
       </div>
       
+      {/* Proxmox Tags Help */}
+      <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="text-sm">
+            <p class="font-medium text-green-800 dark:text-green-200 mb-1">💡 Quick Tip: Control alerts directly in Proxmox!</p>
+            <p class="text-green-700 dark:text-green-300 mb-2">
+              Add these tags to any VM/CT in Proxmox to control alert behavior without navigating to Pulse:
+            </p>
+            <ul class="space-y-1 text-xs text-green-700 dark:text-green-300">
+              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Disable all alerts for maintenance or special VMs</li>
+              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Show in UI but don't send notifications</li>
+              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-relaxed</code> - Use higher thresholds (95% CPU/RAM, 98% disk)</li>
+            </ul>
+            <p class="text-xs text-green-600 dark:text-green-400 mt-2">
+              Perfect for dev VMs, services that run hot (TrueNAS, databases), or temporary maintenance windows.
+            </p>
+          </div>
+        </div>
+      </div>
+      
       {/* Recent Alerts */}
       <div>
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Active Alerts</h3>
