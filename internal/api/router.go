@@ -212,6 +212,16 @@ func (r *Router) setupRoutes() {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 			
+			// Check if auth is globally disabled
+			if r.config.DisableAuth {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"configured": false,
+					"disabled": true,
+					"message": "Authentication is disabled via DISABLE_AUTH environment variable",
+				})
+				return
+			}
+			
 			// Check for basic auth configuration
 			// Check both environment variables and loaded config
 			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || 
@@ -663,6 +673,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Check if we need authentication
 	needsAuth := true
 	
+	// Check if auth is globally disabled
+	if r.config.DisableAuth {
+		needsAuth = false
+		w.Header().Set("X-Auth-Disabled", "true")
+	}
+	
 	// Recovery mechanism: Check if recovery mode is enabled
 	recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 	if _, err := os.Stat(recoveryFile); err == nil {
@@ -725,8 +741,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/api/security/quick-setup" && req.Method == http.MethodPost {
 			isPublic = true
 		}
-		// Check auth for protected routes
-		if !isPublic && !CheckAuth(r.config, w, req) {
+		// Check auth for protected routes (only if auth is needed)
+		if needsAuth && !isPublic && !CheckAuth(r.config, w, req) {
 			// Never send WWW-Authenticate - use custom login page
 			// For API requests, return JSON
 			if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
@@ -1093,8 +1109,8 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Use standard auth check (supports both basic auth and API tokens)
-	if !CheckAuth(r.config, w, req) {
+	// Use standard auth check (supports both basic auth and API tokens) unless auth is disabled
+	if !r.config.DisableAuth && !CheckAuth(r.config, w, req) {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
 			"Authentication required", nil)
 		return
