@@ -224,19 +224,18 @@ download_pulse() {
     DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
     print_info "Downloading from: $DOWNLOAD_URL"
     
+    # Detect and stop existing service BEFORE downloading (to free the binary)
+    EXISTING_SERVICE=$(detect_service_name)
+    if systemctl is-active --quiet $EXISTING_SERVICE; then
+        print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+        systemctl stop $EXISTING_SERVICE
+        sleep 2  # Give the process time to fully stop and release the binary
+    fi
+    
     cd /tmp
     if ! wget -q -O pulse.tar.gz "$DOWNLOAD_URL"; then
         print_error "Failed to download Pulse release"
         exit 1
-    fi
-    
-    # Detect existing service name
-    EXISTING_SERVICE=$(detect_service_name)
-    
-    # Stop service if running (for updates)
-    if systemctl is-active --quiet $EXISTING_SERVICE; then
-        print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-        systemctl stop $EXISTING_SERVICE
     fi
     
     # Extract to temporary directory first
