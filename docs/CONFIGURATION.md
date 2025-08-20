@@ -37,6 +37,7 @@ PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
 API_TOKEN=abc123...                  # API token (plain text, not hashed)
 
 # Security settings
+DISABLE_AUTH=true                    # Disable authentication entirely (for proxy auth)
 ENABLE_AUDIT_LOG=true                # Enable security audit logging
 ```
 
@@ -139,6 +140,7 @@ These are only configurable via environment variables for security:
 
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
 - `API_TOKEN` - API token for authentication
+- `DISABLE_AUTH` - Set to `true` to disable authentication entirely (useful for reverse proxy auth)
 - `FRONTEND_PORT` - Port to listen on (default: 7655)
 - `HTTPS_ENABLED` - Enable HTTPS (true/false)
 - `TLS_CERT_FILE`, `TLS_KEY_FILE` - Paths to TLS certificate files
