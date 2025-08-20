@@ -16,6 +16,7 @@ export function GuestURLs(props: GuestURLsProps) {
   const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
   const [searchTerm, setSearchTerm] = createSignal('');
   const [loading, setLoading] = createSignal(false);
+  const [initialLoad, setInitialLoad] = createSignal(true);
 
   // Combine VMs and containers into a single list
   const allGuests = createMemo(() => {
@@ -66,6 +67,7 @@ export function GuestURLs(props: GuestURLsProps) {
       showError('Failed to load guest URLs');
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   });
 
@@ -166,29 +168,34 @@ export function GuestURLs(props: GuestURLsProps) {
 
       {/* Guest URLs Table */}
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Name
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Type
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  VMID
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Custom URL
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-              <Show when={Object.keys(groupedGuests()).length === 0} fallback={
+        <Show when={!initialLoad()} fallback={
+          <div class="flex items-center justify-center py-12">
+            <div class="text-gray-500 dark:text-gray-400">Loading guest URLs...</div>
+          </div>
+        }>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    VMID
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Custom URL
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <Show when={Object.keys(groupedGuests()).length === 0} fallback={
                 <For each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))}>
                   {([node, guests]) => (
                     <>
@@ -278,10 +285,11 @@ export function GuestURLs(props: GuestURLsProps) {
                     No guests found
                   </td>
                 </tr>
-              </Show>
-            </tbody>
-          </table>
-        </div>
+                </Show>
+              </tbody>
+            </table>
+          </div>
+        </Show>
       </div>
     </div>
   );
