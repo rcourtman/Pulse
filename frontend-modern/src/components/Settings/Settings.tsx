@@ -1502,6 +1502,48 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
+              {/* Show message when auth is disabled */}
+              <Show when={!securityStatus()?.hasAuthentication}>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
+                  <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                      <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        Authentication is Disabled
+                      </h4>
+                      <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Pulse is currently running without authentication. This means anyone who can access this interface has full control.
+                      </p>
+                      <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                          Why is authentication disabled?
+                        </p>
+                        <ul class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                          <li>• DISABLE_AUTH environment variable is set to true</li>
+                          <li>• Recovery mode is active (.auth_recovery file exists)</li>
+                          <li>• Or authentication hasn't been configured yet</li>
+                        </ul>
+                      </div>
+                      <div class="mt-3 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
+                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                          To enable authentication:
+                        </p>
+                        <ol class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                          <li>1. Remove DISABLE_AUTH from environment variables</li>
+                          <li>2. Delete /etc/pulse/.auth_recovery if it exists</li>
+                          <li>3. Restart Pulse service</li>
+                          <li>4. Complete the security setup wizard on first access</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+              
               {/* Authentication */}
               <Show when={securityStatus()?.hasAuthentication}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
