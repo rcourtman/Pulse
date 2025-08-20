@@ -292,8 +292,8 @@ Control alerts directly on VMs/containers using Proxmox tags - perfect for both 
 
 | Tag | Purpose | Use Case |
 |-----|---------|----------|
-| `pulse-no-alerts` | Disable all alerts | VMs that shouldn't alert (dev, testing, or special workloads) |
-| `pulse-monitor-only` | Monitor without notifications | See metrics in UI but don't get paged |
+| `pulse-no-alerts` | Completely silent | No alerts in UI, no notifications - for VMs you don't monitor |
+| `pulse-monitor-only` | UI alerts only | Shows alerts in dashboard but no emails/webhooks - check manually |
 | `pulse-relaxed` | Higher thresholds (95%/98%) | Services that naturally run hot (databases, media servers) |
 
 **When to use tags vs custom rules:**
@@ -302,13 +302,13 @@ Control alerts directly on VMs/containers using Proxmox tags - perfect for both 
 
 **Common permanent uses:**
 ```bash
-# TrueNAS/Samba servers with aggressive caching
+# TrueNAS/Samba servers with aggressive caching - higher thresholds
 pvesh set /nodes/pve/lxc/100/config -tags 'truenas,pulse-relaxed'
 
-# Development VMs that shouldn't page anyone
+# Test/dev VMs - completely ignore, don't track alerts
 pvesh set /nodes/pve/qemu/200/config -tags 'dev,pulse-no-alerts'
 
-# Staging environment - monitor but don't notify
+# Production staging - see problems in UI but don't wake anyone up
 pvesh set /nodes/pve/lxc/300/config -tags 'staging,pulse-monitor-only'
 ```
 
