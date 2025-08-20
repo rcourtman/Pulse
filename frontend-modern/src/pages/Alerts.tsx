@@ -90,6 +90,16 @@ export function Alerts() {
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   
+  // Quick tip visibility state
+  const [showQuickTip, setShowQuickTip] = createSignal(
+    localStorage.getItem('hideAlertsQuickTip') !== 'true'
+  );
+  
+  const dismissQuickTip = () => {
+    setShowQuickTip(false);
+    localStorage.setItem('hideAlertsQuickTip', 'true');
+  };
+  
   // Store references to child component data
   let destinationsRef: DestinationsRef = {};
   let scheduleRef: ScheduleRef = {};
@@ -547,7 +557,12 @@ export function Alerts() {
         {/* Tab Content */}
         <div class="p-3 sm:p-6">
           <Show when={activeTab() === 'overview'}>
-            <OverviewTab overrides={overrides()} activeAlerts={activeAlerts} />
+            <OverviewTab 
+              overrides={overrides()} 
+              activeAlerts={activeAlerts}
+              showQuickTip={showQuickTip}
+              dismissQuickTip={dismissQuickTip}
+            />
           </Show>
           
           <Show when={activeTab() === 'thresholds'}>
@@ -609,7 +624,12 @@ export function Alerts() {
 }
 
 // Overview Tab - Shows current alert status
-function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string, Alert> }) {
+function OverviewTab(props: { 
+  overrides: Override[]; 
+  activeAlerts: Record<string, Alert>;
+  showQuickTip: () => boolean;
+  dismissQuickTip: () => void;
+}) {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   
@@ -690,27 +710,40 @@ function OverviewTab(props: { overrides: Override[]; activeAlerts: Record<string
       </div>
       
       {/* Proxmox Tags Help */}
-      <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-        <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div class="text-sm">
-            <p class="font-medium text-green-800 dark:text-green-200 mb-1">💡 Quick Tip: Control alerts directly in Proxmox!</p>
-            <p class="text-green-700 dark:text-green-300 mb-2">
-              Add these tags to any VM/CT in Proxmox to control alert behavior without navigating to Pulse:
-            </p>
-            <ul class="space-y-1 text-xs text-green-700 dark:text-green-300">
-              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Completely silent - no alerts in UI or notifications</li>
-              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Shows alerts in UI but won't email/page you</li>
-              <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-relaxed</code> - Use higher thresholds (95% CPU/RAM, 98% disk)</li>
-            </ul>
-            <p class="text-xs text-green-600 dark:text-green-400 mt-2">
-              Perfect for dev VMs, services that run hot (TrueNAS, databases), or temporary maintenance windows.
-            </p>
+      <Show when={props.showQuickTip()}>
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="flex-1 text-sm">
+              <div class="flex items-start justify-between">
+                <p class="font-medium text-green-800 dark:text-green-200 mb-1">💡 Quick Tip: Control alerts directly in Proxmox!</p>
+                <button
+                  onClick={props.dismissQuickTip}
+                  class="ml-2 -mt-1 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 transition-colors"
+                  title="Dismiss tip"
+                >
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p class="text-green-700 dark:text-green-300 mb-2">
+                Add these tags to any VM/CT in Proxmox to control alert behavior without navigating to Pulse:
+              </p>
+              <ul class="space-y-1 text-xs text-green-700 dark:text-green-300">
+                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-no-alerts</code> - Completely silent - no alerts in UI or notifications</li>
+                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-monitor-only</code> - Shows alerts in UI but won't email/page you</li>
+                <li><code class="bg-green-100 dark:bg-green-900/50 px-1 py-0.5 rounded">pulse-relaxed</code> - Use higher thresholds (95% CPU/RAM, 98% disk)</li>
+              </ul>
+              <p class="text-xs text-green-600 dark:text-green-400 mt-2">
+                Perfect for dev VMs, services that run hot (TrueNAS, databases), or temporary maintenance windows.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </Show>
       
       {/* Recent Alerts */}
       <div>
