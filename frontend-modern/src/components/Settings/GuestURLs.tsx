@@ -130,22 +130,22 @@ export function GuestURLs(props: GuestURLsProps) {
           <table class="w-full">
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Name
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Type
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   VMID
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Node
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Custom URL
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -165,12 +165,12 @@ export function GuestURLs(props: GuestURLsProps) {
                   
                   return (
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
-                      <td class="px-4 py-3">
+                      <td class="px-3 py-1.5">
                         <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {guest.name}
                         </div>
                       </td>
-                      <td class="px-4 py-3">
+                      <td class="px-3 py-1.5">
                         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                           guest.type === 'qemu' 
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
@@ -179,24 +179,24 @@ export function GuestURLs(props: GuestURLsProps) {
                           {guest.type === 'qemu' ? 'VM' : 'LXC'}
                         </span>
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <td class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                         {guest.vmid}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <td class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                         {guest.node}
                       </td>
-                      <td class="px-4 py-3">
+                      <td class="px-3 py-1.5">
                         <input
                           type="text"
                           placeholder="https://192.168.1.100:8006"
                           value={config?.url || ''}
                           onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
-                          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
+                          class="w-full px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                  focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="px-4 py-3">
+                      <td class="px-3 py-1.5">
                         <div class="flex items-center gap-2">
                           <Show when={url}>
                             <a
