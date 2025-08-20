@@ -9,6 +9,7 @@ interface Override {
   type: string;
   node: string;
   instance?: string;
+  disabled?: boolean;  // Completely disable alerts for this guest
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -31,6 +32,7 @@ interface OverrideModalProps {
 export function OverrideModal(props: OverrideModalProps) {
   // Initialize state only when modal opens, not on every render
   const [selectedGuest, setSelectedGuest] = createSignal<string>('');
+  const [alertsDisabled, setAlertsDisabled] = createSignal(false);
   
   // Store the select element ref
   let selectRef: HTMLSelectElement | undefined;
@@ -72,6 +74,7 @@ export function OverrideModal(props: OverrideModalProps) {
     if (props.isOpen) {
       if (props.existingOverride) {
         setSelectedGuest(`${props.existingOverride.vmid}`);
+        setAlertsDisabled(props.existingOverride.disabled || false);
         setThresholds({
           cpu: props.existingOverride.thresholds.cpu || 80,
           memory: props.existingOverride.thresholds.memory || 80,
@@ -93,6 +96,7 @@ export function OverrideModal(props: OverrideModalProps) {
       } else {
         // Reset to defaults for new override
         setSelectedGuest('');
+        setAlertsDisabled(false);
         setThresholds({
           cpu: 80,
           memory: 80,
@@ -138,6 +142,7 @@ export function OverrideModal(props: OverrideModalProps) {
       type: guest.type,
       node: guest.node,
       instance: guest.instance,
+      disabled: alertsDisabled(),
       thresholds: enabledThresholds
     });
   };
@@ -184,8 +189,27 @@ export function OverrideModal(props: OverrideModalProps) {
                 </div>
               </Show>
               
+              {/* Disable Alerts Option */}
+              <div class="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <input
+                  type="checkbox"
+                  id="disable-alerts"
+                  checked={alertsDisabled()}
+                  onChange={(e) => setAlertsDisabled(e.currentTarget.checked)}
+                  class="rounded border-gray-300 dark:border-gray-600 text-red-600 focus:ring-red-500"
+                />
+                <label for="disable-alerts" class="flex-1">
+                  <span class="text-sm font-medium text-red-800 dark:text-red-200">
+                    Disable all alerts for this guest
+                  </span>
+                  <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                    No alerts will be generated for this guest, regardless of resource usage
+                  </p>
+                </label>
+              </div>
+              
               {/* Threshold Overrides */}
-              <div class="space-y-4">
+              <div class={`space-y-4 ${alertsDisabled() ? 'opacity-50 pointer-events-none' : ''}`}>
                 <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Threshold Overrides
                 </h3>

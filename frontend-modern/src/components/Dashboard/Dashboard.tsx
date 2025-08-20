@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import NodeCard from './NodeCard';
@@ -10,6 +10,7 @@ import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shar
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import { AlertsAPI } from '@/api/alerts';
 
 interface DashboardProps {
   vms: VM[];
@@ -25,6 +26,7 @@ export function Dashboard(props: DashboardProps) {
   const { connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  const [alertOverrides, setAlertOverrides] = createSignal<Record<string, any>>({});
   
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -49,6 +51,18 @@ export function Dashboard(props: DashboardProps) {
   
   // Create tooltip system
   const TooltipComponent = createTooltipSystem();
+  
+  // Load alert overrides on mount
+  onMount(async () => {
+    try {
+      const config = await AlertsAPI.getConfig();
+      if (config.overrides) {
+        setAlertOverrides(config.overrides);
+      }
+    } catch (err) {
+      console.error('Failed to load alert overrides:', err);
+    }
+  });
   
   // URL Editor state
   const [urlEditorState, setUrlEditorState] = createSignal<{
@@ -762,12 +776,20 @@ export function Dashboard(props: DashboardProps) {
                     <For each={guests} fallback={<></>}>
                       {(guest) => (
                         <ComponentErrorBoundary name="GuestRow">
-                          <GuestRow 
-                            guest={guest} 
-                            showNode={false} 
-                            alertStyles={getAlertStyles(guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`, activeAlerts)}
-                            onEditUrl={openUrlEditor}
-                          />
+                          {(() => {
+                            const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
+                            const override = alertOverrides()[guestId];
+                            return (
+                              <GuestRow 
+                                guest={guest} 
+                                showNode={false} 
+                                alertStyles={getAlertStyles(guestId, activeAlerts)}
+                                hasOverride={!!override}
+                                overrideDisabled={override?.disabled === true}
+                                onEditUrl={openUrlEditor}
+                              />
+                            );
+                          })()}
                         </ComponentErrorBoundary>
                       )}
                     </For>

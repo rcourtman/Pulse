@@ -287,44 +287,6 @@ Configure persistent alert policies in **Settings → Alerts → Custom Rules**:
 
 **Use for:** Long-term alert policies like "all database VMs should alert at 90%"
 
-#### Proxmox Tags (Direct VM Control)
-Control alerts directly on VMs/containers using Proxmox tags - perfect for both permanent and temporary needs:
-
-| Tag | Purpose | Use Case |
-|-----|---------|----------|
-| `pulse-no-alerts` | Completely silent | No alerts in UI, no notifications - for VMs you don't monitor |
-| `pulse-monitor-only` | UI alerts only | Shows alerts in dashboard but no emails/webhooks - check manually |
-| `pulse-relaxed` | Higher thresholds (95%/98%) | Services that naturally run hot (databases, media servers) |
-
-**When to use tags vs custom rules:**
-- **Use Tags**: When you want to control a specific VM directly ("this VM is special")
-- **Use Custom Rules**: When you want patterns/policies ("all VMs named *-dev should...")
-
-**Common permanent uses:**
-```bash
-# TrueNAS/Samba servers with aggressive caching - higher thresholds
-pvesh set /nodes/pve/lxc/100/config -tags 'truenas,pulse-relaxed'
-
-# Test/dev VMs - completely ignore, don't track alerts
-pvesh set /nodes/pve/qemu/200/config -tags 'dev,pulse-no-alerts'
-
-# Production staging - see problems in UI but don't wake anyone up
-pvesh set /nodes/pve/lxc/300/config -tags 'staging,pulse-monitor-only'
-```
-
-**Temporary uses:**
-```bash
-# Maintenance window
-pvesh set /nodes/pve/lxc/100/config -tags 'prod,pulse-no-alerts'
-# After maintenance, remove the pulse tag
-pvesh set /nodes/pve/lxc/100/config -tags 'prod'
-```
-
-**Key advantages of tags:**
-- No UI navigation needed - manage directly in Proxmox
-- Tags stay with the VM (survive Pulse reinstalls/migrations)
-- Clear visibility in Proxmox which VMs have special alert handling
-- Changes apply within 30-60 seconds
 
 ### HTTPS/TLS Configuration
 Enable HTTPS by setting these environment variables:
