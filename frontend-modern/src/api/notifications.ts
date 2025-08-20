@@ -141,11 +141,16 @@ export class NotificationsAPI {
 
   // Testing
   static async testNotification(request: NotificationTestRequest): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: Record<string, unknown> } = { method: request.type };
+    const body: { method: string; config?: Record<string, unknown>; webhookId?: string } = { method: request.type };
     
     // Include config if provided for testing without saving
     if (request.config) {
       body.config = request.config;
+    }
+    
+    // Include webhookId for webhook testing
+    if (request.webhookId) {
+      body.webhookId = request.webhookId;
     }
     
     return apiFetchJSON(`${this.baseUrl}/test`, {
