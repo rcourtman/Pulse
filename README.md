@@ -281,7 +281,16 @@ Control alert behavior per VM/container using Proxmox tags (no UI configuration 
 #### Available Tags
 - **`pulse-no-alerts`** - Completely disables all alerts for this VM/CT
 - **`pulse-monitor-only`** - Shows in UI but suppresses notifications (email, webhooks)
-- **`pulse-relaxed`** - Increases thresholds (CPU/RAM to 95%, disk to 98%)
+- **`pulse-relaxed`** - Sets thresholds to 95% for CPU/RAM, 98% for disk
+
+#### Priority Order
+Tags take precedence over other configurations:
+1. `pulse-no-alerts` tag - Overrides everything, no alerts at all
+2. `pulse-relaxed` tag - Overrides to 95%/98% regardless of custom rules
+3. Custom Alert Rules from UI - Applied if no tags present
+4. Default global thresholds - Used if nothing else is configured
+
+**Note:** `pulse-monitor-only` works with any threshold source. Tags are checked every 30-60 seconds, no restart needed.
 
 #### How to Use
 1. In Proxmox, edit your VM/CT
