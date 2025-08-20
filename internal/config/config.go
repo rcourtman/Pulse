@@ -87,6 +87,7 @@ type Config struct {
 	APITokenEnabled      bool   `envconfig:"API_TOKEN_ENABLED" default:"false"`
 	AuthUser             string `envconfig:"PULSE_AUTH_USER"`
 	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
+	DisableAuth          bool   `envconfig:"DISABLE_AUTH" default:"false"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 	// HTTPS/TLS settings
@@ -343,6 +344,13 @@ func Load() (*Config, error) {
 		// If token exists but no explicit enabled flag, assume enabled for backwards compatibility
 		cfg.APITokenEnabled = true
 		log.Debug().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
+	}
+	// Check if auth is disabled
+	if disableAuth := os.Getenv("DISABLE_AUTH"); disableAuth != "" {
+		cfg.DisableAuth = disableAuth == "true" || disableAuth == "1"
+		if cfg.DisableAuth {
+			log.Warn().Msg("⚠️  AUTHENTICATION DISABLED - Pulse is running without authentication!")
+		}
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser

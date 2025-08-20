@@ -9,6 +9,23 @@ Pulse uses WebSockets for real-time updates. Your reverse proxy **MUST** support
 3. **Timeouts** - Increase timeouts for long-lived connections
 4. **Buffer Sizes** - Increase for large state updates (64KB recommended)
 
+## Authentication with Reverse Proxy
+
+If you're using authentication at the reverse proxy level (Authentik, Authelia, etc.), you can disable Pulse's built-in authentication to avoid double login prompts:
+
+```bash
+# In your .env file or environment
+DISABLE_AUTH=true
+```
+
+When `DISABLE_AUTH=true` is set:
+- Pulse's built-in authentication is completely bypassed
+- All endpoints become accessible without authentication
+- The reverse proxy handles all authentication and authorization
+- A warning is logged on startup to confirm auth is disabled
+
+⚠️ **Warning**: Only use `DISABLE_AUTH=true` if your reverse proxy provides authentication. Never expose Pulse directly to the internet with authentication disabled.
+
 ## Nginx
 
 ```nginx
