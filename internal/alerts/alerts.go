@@ -397,6 +397,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	var guestID, name, node, guestType, status string
 	var cpu, memUsage, diskUsage float64
 	var diskRead, diskWrite, netIn, netOut int64
+	var tags []string
 
 	// Extract data based on guest type
 	switch g := guest.(type) {
@@ -413,6 +414,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
+		tags = g.Tags
 	case models.Container:
 		guestID = g.ID
 		name = g.Name
@@ -426,7 +428,37 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
+		tags = g.Tags
 	default:
+		return
+	}
+	
+	// Check for Pulse-specific tags for alert suppression
+	var suppressAlerts, monitorOnly, useRelaxedThresholds bool
+	for _, tag := range tags {
+		switch tag {
+		case "pulse-no-alerts":
+			suppressAlerts = true
+		case "pulse-monitor-only":
+			monitorOnly = true
+		case "pulse-relaxed":
+			useRelaxedThresholds = true
+		}
+	}
+	
+	// If alerts are completely suppressed, clear any existing alerts and return
+	if suppressAlerts {
+		m.mu.Lock()
+		for alertID, alert := range m.activeAlerts {
+			if alert.ResourceID == guestID {
+				delete(m.activeAlerts, alertID)
+				log.Info().
+					Str("alertID", alertID).
+					Str("guest", name).
+					Msg("Cleared alert for guest with pulse:no-alerts tag")
+			}
+		}
+		m.mu.Unlock()
 		return
 	}
 
@@ -451,6 +483,35 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	m.mu.RLock()
 	thresholds := m.getGuestThresholds(guest, guestID)
 	m.mu.RUnlock()
+	
+	// Apply relaxed thresholds if the tag is present
+	if useRelaxedThresholds {
+		// Increase thresholds by 15 percentage points (e.g., 80% -> 95%)
+		if thresholds.CPU != nil {
+			relaxedCPU := &HysteresisThreshold{
+				Trigger: min(thresholds.CPU.Trigger+15, 100),
+				Clear:   min(thresholds.CPU.Clear+15, 95),
+			}
+			thresholds.CPU = relaxedCPU
+		}
+		if thresholds.Memory != nil {
+			relaxedMem := &HysteresisThreshold{
+				Trigger: min(thresholds.Memory.Trigger+15, 100),
+				Clear:   min(thresholds.Memory.Clear+15, 95),
+			}
+			thresholds.Memory = relaxedMem
+		}
+		if thresholds.Disk != nil {
+			relaxedDisk := &HysteresisThreshold{
+				Trigger: min(thresholds.Disk.Trigger+10, 100),
+				Clear:   min(thresholds.Disk.Clear+10, 95),
+			}
+			thresholds.Disk = relaxedDisk
+		}
+		log.Info().
+			Str("guest", name).
+			Msg("Applied relaxed thresholds due to pulse:relaxed tag")
+	}
 
 	// Check each metric
 	log.Info().
@@ -459,24 +520,26 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Float64("memory", memUsage).
 		Float64("disk", diskUsage).
 		Interface("thresholds", thresholds).
+		Bool("monitorOnly", monitorOnly).
 		Msg("Checking guest thresholds")
 	
-	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk)
+	// Pass monitorOnly flag to checkMetric calls
+	m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, monitorOnly)
+	m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, monitorOnly)
+	m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, monitorOnly)
 	
 	// Check I/O metrics (convert bytes/s to MB/s)
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead)
+		m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, monitorOnly)
 	}
 	if thresholds.DiskWrite != nil && thresholds.DiskWrite.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite)
+		m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, monitorOnly)
 	}
 	if thresholds.NetworkIn != nil && thresholds.NetworkIn.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn)
+		m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, monitorOnly)
 	}
 	if thresholds.NetworkOut != nil && thresholds.NetworkOut.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut)
+		m.checkMetricWithOptions(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut, monitorOnly)
 	}
 }
 
@@ -519,8 +582,23 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 }
 
+// checkMetricWithOptions checks a single metric with optional monitor-only mode
+func (m *Manager) checkMetricWithOptions(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, monitorOnly bool) {
+	if threshold == nil || threshold.Trigger <= 0 {
+		return
+	}
+	
+	// Call the original checkMetric but with monitor-only awareness
+	m.checkMetricInternal(resourceID, resourceName, node, instance, resourceType, metricType, value, threshold, monitorOnly)
+}
+
 // checkMetric checks a single metric against its threshold with hysteresis
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold) {
+	m.checkMetricInternal(resourceID, resourceName, node, instance, resourceType, metricType, value, threshold, false)
+}
+
+// checkMetricInternal is the internal implementation with monitor-only support
+func (m *Manager) checkMetricInternal(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, monitorOnly bool) {
 	if threshold == nil || threshold.Trigger <= 0 {
 		return
 	}
@@ -628,6 +706,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Metadata: map[string]interface{}{
 					"resourceType": resourceType,
 					"clearThreshold": threshold.Clear,
+					"monitorOnly": monitorOnly,
 				},
 			}
 
@@ -647,7 +726,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				}
 			}()
 
-			log.Warn().
+			logLevel := log.Warn()
+			if monitorOnly {
+				logLevel = log.Info()
+			}
+			logLevel.
 				Str("alertID", alertID).
 				Str("resource", resourceName).
 				Str("metric", metricType).
@@ -655,7 +738,16 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Float64("trigger", threshold.Trigger).
 				Float64("clear", threshold.Clear).
 				Int("activeAlerts", len(m.activeAlerts)).
+				Bool("monitorOnly", monitorOnly).
 				Msg("Alert triggered")
+
+			// Skip notifications if monitor-only mode
+			if monitorOnly {
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Skipping notifications due to monitor-only mode")
+				return
+			}
 
 			// Check rate limit (but don't remove alert from tracking)
 			if !m.checkRateLimit(alertID) {
@@ -685,6 +777,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Update existing alert
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
+			
+			// Update monitor-only flag if changed
+			if existingAlert.Metadata == nil {
+				existingAlert.Metadata = make(map[string]interface{})
+			}
+			existingAlert.Metadata["monitorOnly"] = monitorOnly
 			
 			// Update level if needed
 			if value >= threshold.Trigger + 10 {
