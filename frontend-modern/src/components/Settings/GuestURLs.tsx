@@ -1,12 +1,10 @@
 import { createSignal, createMemo, onMount, For, Show } from 'solid-js';
 import { useWebSocket } from '@/App';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import type { VM, Container } from '@/types/api';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import type { GuestMetadata } from '@/api/guestMetadata';
 
-interface GuestURL {
-  guestId: string;
-  url: string;
-}
 
 interface GuestURLsProps {
   hasUnsavedChanges: () => boolean;
@@ -15,8 +13,9 @@ interface GuestURLsProps {
 
 export function GuestURLs(props: GuestURLsProps) {
   const { state } = useWebSocket();
-  const [guestURLs, setGuestURLs] = createSignal<Record<string, GuestURL>>({});
+  const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [loading, setLoading] = createSignal(false);
 
   // Combine VMs and containers into a single list
   const allGuests = createMemo(() => {
@@ -56,32 +55,52 @@ export function GuestURLs(props: GuestURLsProps) {
     return groups;
   });
 
-  // Load saved URLs on mount
-  onMount(() => {
-    const savedURLs = localStorage.getItem('guestURLs');
-    if (savedURLs) {
-      try {
-        setGuestURLs(JSON.parse(savedURLs));
-      } catch (err) {
-        console.error('Failed to parse saved URLs:', err);
-      }
+  // Load saved URLs from backend on mount
+  onMount(async () => {
+    setLoading(true);
+    try {
+      const metadata = await GuestMetadataAPI.getAllMetadata();
+      setGuestMetadata(metadata || {});
+    } catch (err) {
+      console.error('Failed to load guest metadata:', err);
+      showError('Failed to load guest URLs');
+    } finally {
+      setLoading(false);
     }
   });
 
-  // Save URLs to localStorage whenever they change
-  const saveURLs = () => {
-    localStorage.setItem('guestURLs', JSON.stringify(guestURLs()));
-    showSuccess('Guest URLs saved');
-    props.setHasUnsavedChanges(false);
+  // Save URLs to backend
+  const saveURLs = async () => {
+    setLoading(true);
+    try {
+      const metadata = guestMetadata();
+      const promises: Promise<any>[] = [];
+      
+      // Update each guest that has changes
+      for (const [guestId, meta] of Object.entries(metadata)) {
+        if (meta.customUrl !== undefined) {
+          promises.push(GuestMetadataAPI.updateMetadata(guestId, { customUrl: meta.customUrl }));
+        }
+      }
+      
+      await Promise.all(promises);
+      showSuccess('Guest URLs saved');
+      props.setHasUnsavedChanges(false);
+    } catch (err) {
+      console.error('Failed to save guest URLs:', err);
+      showError('Failed to save guest URLs');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update a guest's URL configuration
   const updateGuestURL = (guestId: string, url: string) => {
-    setGuestURLs({
-      ...guestURLs(),
+    setGuestMetadata({
+      ...guestMetadata(),
       [guestId]: {
-        guestId,
-        url
+        id: guestId,
+        customUrl: url
       }
     });
     
@@ -90,16 +109,20 @@ export function GuestURLs(props: GuestURLsProps) {
 
   // Clear a guest's URL configuration
   const clearGuestURL = (guestId: string) => {
-    const updated = { ...guestURLs() };
-    delete updated[guestId];
-    setGuestURLs(updated);
+    const updated = { ...guestMetadata() };
+    if (updated[guestId]) {
+      updated[guestId] = { ...updated[guestId], customUrl: '' };
+    } else {
+      updated[guestId] = { id: guestId, customUrl: '' };
+    }
+    setGuestMetadata(updated);
     props.setHasUnsavedChanges(true);
   };
 
   // Get the URL for a guest
   const getURL = (guestId: string): string | undefined => {
-    const config = guestURLs()[guestId];
-    return config?.url || undefined;
+    const meta = guestMetadata()[guestId];
+    return meta?.customUrl || undefined;
   };
 
   return (
@@ -133,9 +156,10 @@ export function GuestURLs(props: GuestURLsProps) {
         <div class="flex justify-end">
           <button
             onClick={saveURLs}
-            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={loading()}
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {loading() ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </Show>
@@ -178,7 +202,7 @@ export function GuestURLs(props: GuestURLsProps) {
                       <For each={guests}>
                         {(guest) => {
                           const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
-                          const config = guestURLs()[guestId];
+                          const meta = guestMetadata()[guestId];
                           const url = getURL(guestId);
                           
                           return (
@@ -204,7 +228,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                 <input
                                   type="text"
                                   placeholder="https://192.168.1.100:8006"
-                                  value={config?.url || ''}
+                                  value={meta?.customUrl || ''}
                                   onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
                                   class="w-full px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
                                          bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
@@ -227,7 +251,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                       </svg>
                                     </a>
                                   </Show>
-                                  <Show when={config?.url}>
+                                  <Show when={meta?.customUrl}>
                                     <button
                                       onClick={() => clearGuestURL(guestId)}
                                       class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
