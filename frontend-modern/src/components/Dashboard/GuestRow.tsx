@@ -63,27 +63,6 @@ export function GuestRow(props: GuestRowProps) {
     }
   });
   
-  // Also check localStorage for backward compatibility during transition
-  createEffect(() => {
-    // Only use localStorage if we haven't loaded from backend yet
-    if (!customUrl()) {
-      const guestURLs = JSON.parse(localStorage.getItem('guestURLs') || '{}');
-      const config = guestURLs[guestId()];
-      if (config && config.url) {
-        setCustomUrl(config.url);
-        // Migrate to backend
-        GuestMetadataAPI.updateMetadata(guestId(), { customUrl: config.url }).catch(() => {});
-      } else if (config && config.host) {
-        // Support old format for backward compatibility
-        const port = config.port ? `:${config.port}` : '';
-        const url = `${config.protocol}://${config.host}${port}`;
-        setCustomUrl(url);
-        // Migrate to backend
-        GuestMetadataAPI.updateMetadata(guestId(), { customUrl: url }).catch(() => {});
-      }
-    }
-  });
-  
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
