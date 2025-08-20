@@ -274,6 +274,36 @@ Configure email notifications in **Settings → Alerts → Email Destinations**
 2. Use your email as username and app password as password
 3. Server: smtp-mail.outlook.com, Port: 587, Enable STARTTLS
 
+### Alert Suppression Using VM/CT Tags
+
+Control alert behavior per VM/container using Proxmox tags (no UI configuration needed):
+
+#### Available Tags
+- **`pulse-no-alerts`** - Completely disables all alerts for this VM/CT
+- **`pulse-monitor-only`** - Shows in UI but suppresses notifications (email, webhooks)
+- **`pulse-relaxed`** - Increases thresholds (CPU/RAM to 95%, disk to 98%)
+
+#### How to Use
+1. In Proxmox, edit your VM/CT
+2. Add one or more tags in the Options tab
+3. Pulse picks up changes within 30-60 seconds (no restart needed)
+
+#### Examples
+```bash
+# Via Proxmox CLI
+pvesh set /nodes/pve/lxc/100/config -tags 'production,pulse-monitor-only'
+pvesh set /nodes/pve/qemu/200/config -tags 'dev,pulse-no-alerts'
+pvesh set /nodes/pve/lxc/300/config -tags 'database,pulse-relaxed'
+
+# Multiple tags work together
+pvesh set /nodes/pve/lxc/400/config -tags 'pulse-relaxed,pulse-monitor-only'
+```
+
+Perfect for:
+- Development VMs that shouldn't trigger alerts
+- Services that naturally run hot (databases, media servers)
+- Temporary maintenance windows (add tag, remove when done)
+
 ### HTTPS/TLS Configuration
 Enable HTTPS by setting these environment variables:
 ```bash
