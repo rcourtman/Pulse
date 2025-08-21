@@ -340,9 +340,10 @@ ENABLE_AUDIT_LOG=true
 
 // HandleRegenerateAPIToken generates a new API token and updates the .env file
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
-	// Only require authentication if auth is already configured
+	// Only require authentication if auth is already configured AND not disabled
 	// This allows users to set up API-only access without password auth
-	if (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
+	// When auth is disabled, allow API token generation for API-only access
+	if !r.config.DisableAuth && (r.config.AuthUser != "" || r.config.AuthPass != "") && !CheckAuth(r.config, w, rq) {
 		return
 	}
 	

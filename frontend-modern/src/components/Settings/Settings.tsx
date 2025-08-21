@@ -1667,10 +1667,8 @@ const Settings: Component = () => {
               
               {/* Security setup now handled by first-run wizard */}
 
-              {/* Removed confusing API Token section when no auth exists - API is already open */}
-
-              {/* API Token - Show current token when auth is enabled */}
-              <Show when={!securityStatusLoading() && securityStatus()?.hasAuthentication && securityStatus()?.apiTokenConfigured}>
+              {/* API Token - Show always to allow API access even when auth is disabled */}
+              <Show when={!securityStatusLoading()}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   {/* Header */}
                   <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -1689,6 +1687,14 @@ const Settings: Component = () => {
                   
                   {/* Content */}
                   <div class="p-6">
+                    {/* Show explanation when auth is disabled */}
+                    <Show when={!securityStatus()?.hasAuthentication}>
+                      <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <p class="text-xs text-blue-800 dark:text-blue-200">
+                          <strong>API Access Control:</strong> Even though authentication is disabled, you can still use API tokens to protect API access for automation and integrations.
+                        </p>
+                      </div>
+                    </Show>
                     <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
                   </div>
                 </div>
