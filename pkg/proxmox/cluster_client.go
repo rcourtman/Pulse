@@ -591,6 +591,20 @@ func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid i
 	return result, err
 }
 
+// GetVMFSInfo returns filesystem information from QEMU guest agent
+func (cc *ClusterClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
+	var result []VMFileSystem
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		info, err := client.GetVMFSInfo(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = info
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterResources returns all resources (VMs, containers) across the cluster in a single call
 func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
 	var result []ClusterResource
