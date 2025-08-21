@@ -1,5 +1,7 @@
 # Docker Deployment Guide
 
+> **Proxmox VE Users:** Consider using the [official installer](https://github.com/rcourtman/Pulse#install) instead, which automatically creates an optimized LXC container.
+
 ## Quick Start
 
 ```bash
