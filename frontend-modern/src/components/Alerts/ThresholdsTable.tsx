@@ -948,6 +948,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                   <Show when={'vmid' in resource && resource.vmid}>
                                     <span class="text-xs text-gray-500">({resource.vmid})</span>
                                   </Show>
+                                  <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
+                                    <span class="text-xs text-gray-500">on {resource.node}</span>
+                                  </Show>
                                   <Show when={(() => {
                                     const override = props.overrides().find(o => o.id === resource.id);
                                     if (!override) return false;
