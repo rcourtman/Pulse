@@ -36,6 +36,7 @@ export interface SystemConfig {
   allowedOrigins?: string;               // CORS allowed origins
   backendPort?: number;                  // Backend API port (default: 7655)
   frontendPort?: number;                 // Frontend UI port (default: 7655)
+  theme?: string;                        // Theme preference: 'light' | 'dark' | undefined (system default)
 }
 
 /**

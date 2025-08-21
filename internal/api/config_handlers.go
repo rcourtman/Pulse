@@ -1375,6 +1375,13 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 
 // HandleGetSystemSettings returns current system settings
 func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
+	// Load settings from persistence to get all fields including theme
+	persistedSettings, err := h.persistence.LoadSystemSettings()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to load persisted system settings")
+		persistedSettings = &config.SystemSettings{}
+	}
+	
 	// Get current values from running config
 	settings := config.SystemSettings{
 		PollingInterval:         int(h.config.PollingInterval.Seconds()),
@@ -1388,6 +1395,7 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		AutoUpdateEnabled:       h.config.AutoUpdateEnabled,
 		AutoUpdateCheckInterval: int(h.config.AutoUpdateCheckInterval.Hours()),
 		AutoUpdateTime:          h.config.AutoUpdateTime,
+		Theme:                   persistedSettings.Theme, // Include theme from persisted settings
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
