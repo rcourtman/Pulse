@@ -44,9 +44,14 @@ safe_read() {
     shift 2
     local read_args="$@"
     
-    if [[ -t 0 ]] && [[ -e /dev/tty ]]; then
-        read -p "$prompt" $read_args $var_name < /dev/tty
+    # Try to read from /dev/tty first (for interactive terminals)
+    if [[ -e /dev/tty ]]; then
+        read -p "$prompt" $read_args $var_name < /dev/tty 2>/dev/null || {
+            # If /dev/tty fails, try stdin
+            read -p "$prompt" $read_args $var_name
+        }
     else
+        # No /dev/tty available, use stdin
         read -p "$prompt" $read_args $var_name
     fi
 }
@@ -143,12 +148,18 @@ create_lxc_container() {
     echo "Proxmox VE detected. Installing Pulse in a container."
     echo
     
-    echo "Installation mode:"
-    echo "  1) Quick (recommended)"
-    echo "  2) Advanced"
-    echo "  3) Cancel"
-    safe_read "Select [1-3]: " mode -n 1 -r
-    echo
+    # Check if we're being piped (non-interactive)
+    if [[ ! -t 0 ]] && [[ ! -e /dev/tty ]]; then
+        echo "Non-interactive mode detected. Using Quick installation."
+        mode="1"
+    else
+        echo "Installation mode:"
+        echo "  1) Quick (recommended)"
+        echo "  2) Advanced"
+        echo "  3) Cancel"
+        safe_read "Select [1-3]: " mode -n 1 -r
+        echo
+    fi
     
     case $mode in
         3)
