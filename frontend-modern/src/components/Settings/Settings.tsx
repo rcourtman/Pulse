@@ -98,6 +98,8 @@ const Settings: Component = () => {
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
   const [allowedOrigins, setAllowedOrigins] = createSignal('*');
+  const [discoveryEnabled, setDiscoveryEnabled] = createSignal(true);
+  const [discoverySubnet, setDiscoverySubnet] = createSignal('auto');
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   // Connection timeout removed - backend-only setting
   
@@ -354,6 +356,9 @@ const Settings: Component = () => {
           // PBS polling interval is now fixed at 10 seconds
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
           // Connection timeout is backend-only
+          // Load discovery settings
+          setDiscoveryEnabled(systemSettings.discoveryEnabled !== false);  // Default to true
+          setDiscoverySubnet(systemSettings.discoverySubnet || 'auto');
           // Load auto-update settings
           setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
           setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
@@ -396,6 +401,8 @@ const Settings: Component = () => {
           // PBS polling interval is now fixed at 10 seconds
           allowedOrigins: allowedOrigins(),
           // Connection timeout is backend-only
+          discoveryEnabled: discoveryEnabled(),
+          discoverySubnet: discoverySubnet(),
           updateChannel: updateChannel(),
           autoUpdateEnabled: autoUpdateEnabled(),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
@@ -1200,6 +1207,78 @@ const Settings: Component = () => {
                           </div>
                         )}
                       </div>
+                    </div>
+                    
+                    {/* Discovery Settings */}
+                    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                      <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Network Discovery</label>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Automatically scan for Proxmox/PBS servers on your network</p>
+                      
+                      {/* Discovery Toggle */}
+                      <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Enable Discovery</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={discoveryEnabled()}
+                            onChange={(e) => {
+                              if (!envOverrides().discoveryEnabled) {
+                                setDiscoveryEnabled(e.currentTarget.checked);
+                                setHasUnsavedChanges(true);
+                              }
+                            }}
+                            disabled={envOverrides().discoveryEnabled}
+                            class="sr-only peer"
+                          />
+                          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                        </label>
+                      </div>
+                      
+                      {/* Discovery Subnet */}
+                      <Show when={discoveryEnabled()}>
+                        <div>
+                          <label class="text-sm text-gray-700 dark:text-gray-300">Discovery Subnet</label>
+                          <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Use "auto" for automatic detection or specify CIDR (e.g., 192.168.1.0/24)</p>
+                          <input
+                            type="text"
+                            value={discoverySubnet()}
+                            onChange={(e) => {
+                              if (!envOverrides().discoverySubnet) {
+                                setDiscoverySubnet(e.currentTarget.value);
+                                setHasUnsavedChanges(true);
+                              }
+                            }}
+                            disabled={envOverrides().discoverySubnet}
+                            placeholder="auto"
+                            class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
+                              envOverrides().discoverySubnet 
+                                ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75' 
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                            }`}
+                          />
+                          {envOverrides().discoverySubnet && (
+                            <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                              <div class="flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span>Overridden by DISCOVERY_SUBNET environment variable</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </Show>
+                      
+                      {envOverrides().discoveryEnabled && (
+                        <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                          <div class="flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>Overridden by DISCOVERY_ENABLED environment variable</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">

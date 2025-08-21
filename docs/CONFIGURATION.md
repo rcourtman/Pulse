@@ -67,7 +67,9 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
   "autoUpdateTime": "03:00",      // Time for automatic updates (24hr format)
   "allowedOrigins": "",           // CORS allowed origins (empty = same-origin only)
   "backendPort": 7655,            // Backend API port
-  "frontendPort": 7655            // Frontend UI port (same as backend in embedded mode)
+  "frontendPort": 7655,           // Frontend UI port (same as backend in embedded mode)
+  "discoveryEnabled": true,       // Enable/disable network discovery for Proxmox/PBS servers
+  "discoverySubnet": "auto"       // Subnet to scan ("auto" or CIDR like "192.168.1.0/24")
 }
 ```
 
@@ -130,6 +132,7 @@ Settings are loaded in this order (later overrides earlier):
 #### Configuration Variables (override system.json)
 These env vars override system.json values. When set, the UI will show a warning and disable the affected fields:
 
+- `DISCOVERY_ENABLED` - Enable/disable network discovery (default: true)
 - `DISCOVERY_SUBNET` - Custom network to scan (default: auto-scans common networks)
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)

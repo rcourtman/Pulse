@@ -102,7 +102,8 @@ type Config struct {
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
 	
 	// Discovery settings
-	DiscoverySubnet string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
+	DiscoveryEnabled bool   `envconfig:"DISCOVERY_ENABLED" default:"true"`
+	DiscoverySubnet  string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
 	
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
@@ -209,6 +210,7 @@ func Load() (*Config, error) {
 		PollingInterval:      10 * time.Second, // Deprecated - not used
 		PVEPollingInterval:   10 * time.Second, // Deprecated - not used
 		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
+		DiscoveryEnabled:     true,
 		DiscoverySubnet:      "auto",
 		EnvOverrides:         make(map[string]bool),
 	}
@@ -271,6 +273,8 @@ func Load() (*Config, error) {
 			if systemSettings.LogLevel != "" {
 				cfg.LogLevel = systemSettings.LogLevel
 			}
+			// Always load DiscoveryEnabled even if false
+			cfg.DiscoveryEnabled = systemSettings.DiscoveryEnabled
 			if systemSettings.DiscoverySubnet != "" {
 				cfg.DiscoverySubnet = systemSettings.DiscoverySubnet
 			}
@@ -409,6 +413,11 @@ func Load() (*Config, error) {
 	}
 	// Support env vars for important settings (override system.json)
 	// NOTE: Environment variables always take precedence over UI/system.json settings
+	if discoveryEnabled := os.Getenv("DISCOVERY_ENABLED"); discoveryEnabled != "" {
+		cfg.DiscoveryEnabled = discoveryEnabled == "true" || discoveryEnabled == "1"
+		cfg.EnvOverrides["discoveryEnabled"] = true
+		log.Info().Bool("enabled", cfg.DiscoveryEnabled).Msg("Discovery enabled overridden by DISCOVERY_ENABLED env var")
+	}
 	if discoverySubnet := os.Getenv("DISCOVERY_SUBNET"); discoverySubnet != "" {
 		cfg.DiscoverySubnet = discoverySubnet
 		cfg.EnvOverrides["discoverySubnet"] = true
@@ -477,6 +486,7 @@ func SaveConfig(cfg *Config) error {
 		AllowedOrigins:          cfg.AllowedOrigins,
 		ConnectionTimeout:       int(cfg.ConnectionTimeout.Seconds()),
 		LogLevel:                cfg.LogLevel,
+		DiscoveryEnabled:        cfg.DiscoveryEnabled,
 		DiscoverySubnet:         cfg.DiscoverySubnet,
 		// APIToken removed - now handled via .env only
 	}
