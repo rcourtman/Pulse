@@ -1,10 +1,10 @@
 import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
-import type { VM, Container, Node, Alert } from '@/types/api';
+import type { VM, Container, Node, Alert, Storage } from '@/types/api';
 
 interface Override {
   id: string;
   name: string;
-  type: 'guest' | 'node';
+  type: 'guest' | 'node' | 'storage';
   resourceType?: string;
   vmid?: number;
   node?: string;
@@ -19,6 +19,7 @@ interface Override {
     diskWrite?: number;
     networkIn?: number;
     networkOut?: number;
+    usage?: number;  // For storage devices
   };
 }
 
@@ -41,6 +42,7 @@ interface ThresholdsTableProps {
   setRawOverridesConfig: (config: Record<string, any>) => void;
   allGuests: () => (VM | Container)[];
   nodes: Node[];
+  storage: Storage[];
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   nodeDefaults: SimpleThresholds;
@@ -105,7 +107,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (value === undefined || value === null) return '0';
     
     // Percentage-based metrics
-    if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
+    if (metric === 'cpu' || metric === 'memory' || metric === 'disk' || metric === 'usage') {
       return `${value}%`;
     }
     
@@ -208,8 +210,31 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       };
     });
     
+    // Process storage devices
+    const storageDevices = props.storage.map(storage => {
+      const override = overridesMap.get(storage.id);
+      
+      // Storage only has usage threshold
+      const hasCustomThresholds = override?.thresholds?.usage !== undefined && 
+                                   override.thresholds.usage !== props.storageDefault();
+      
+      return {
+        id: storage.id,
+        name: storage.name,
+        type: 'storage' as const,
+        resourceType: 'Storage',
+        node: storage.node,
+        instance: storage.instance,
+        status: storage.status,
+        hasOverride: hasCustomThresholds || false,
+        disabled: override?.disabled || false,
+        thresholds: override?.thresholds || {},
+        defaults: { usage: props.storageDefault() }
+      };
+    });
+    
     // Combine and filter
-    const allResources = [...guests, ...nodes];
+    const allResources = [...guests, ...nodes, ...storageDevices];
     
     if (search) {
       return allResources.filter(r => 
@@ -227,7 +252,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const groups: Record<string, any[]> = {};
     
     resourcesWithOverrides().forEach(resource => {
-      const groupKey = resource.type === 'node' ? 'Nodes' : ('node' in resource ? resource.node : 'Unknown');
+      let groupKey: string;
+      if (resource.type === 'node') {
+        groupKey = 'Nodes';
+      } else if (resource.type === 'storage') {
+        groupKey = 'Storage';
+      } else {
+        groupKey = 'node' in resource ? resource.node : 'Unknown';
+      }
       
       if (!groups[groupKey]) {
         groups[groupKey] = [];
@@ -293,7 +325,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const override: Override = {
       id: resourceId,
       name: resource.name,
-      type: resource.type,
+      type: resource.type as 'guest' | 'node' | 'storage',
       resourceType: resource.resourceType,
       vmid: 'vmid' in resource ? resource.vmid : undefined,
       node: 'node' in resource ? resource.node : undefined,
@@ -842,6 +874,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   Disk %
                 </th>
                 <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Storage %
+                </th>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Disk R<br/><span class="text-[10px] font-normal">MB/s</span>
                 </th>
                 <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -872,7 +907,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <>
                       {/* Group header */}
                       <tr class="bg-gray-50 dark:bg-gray-700/50">
-                        <td colspan="12" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <td colspan="13" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                           {groupName}
                         </td>
                       </tr>
@@ -892,6 +927,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                 (metric === 'diskRead' || metric === 'diskWrite' || 
                                  metric === 'networkIn' || metric === 'networkOut')) {
                               return false;
+                            }
+                            // Storage only has usage metric
+                            if (resource.type === 'storage') {
+                              return metric === 'usage';
                             }
                             return true;
                           };
@@ -925,6 +964,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                               <td class="px-3 py-1.5">
                                 <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                                   resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
+                                  resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
                                   resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
                                   'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                                 }`}>
@@ -943,72 +983,111 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                 </span>
                               </td>
                               <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <MetricValueWithHeat 
-                                    resourceId={resource.id}
-                                    metric="cpu"
-                                    value={displayValue('cpu')}
-                                    isOverridden={isOverridden('cpu')}
-                                  />
+                                <Show when={resource.type === 'storage'} fallback={
+                                  <Show when={isEditing()} fallback={
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="cpu"
+                                      value={displayValue('cpu')}
+                                      isOverridden={isOverridden('cpu')}
+                                    />
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={thresholds().cpu || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        cpu: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
                                 }>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={thresholds().cpu || ''}
-                                    onInput={(e) => setEditingThresholds({
-                                      ...editingThresholds(),
-                                      cpu: parseInt(e.currentTarget.value) || undefined
-                                    })}
-                                    class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                  />
+                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
                                 </Show>
                               </td>
                               <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <MetricValueWithHeat 
-                                    resourceId={resource.id}
-                                    metric="memory"
-                                    value={displayValue('memory')}
-                                    isOverridden={isOverridden('memory')}
-                                  />
+                                <Show when={resource.type === 'storage'} fallback={
+                                  <Show when={isEditing()} fallback={
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="memory"
+                                      value={displayValue('memory')}
+                                      isOverridden={isOverridden('memory')}
+                                    />
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={thresholds().memory || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        memory: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
                                 }>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={thresholds().memory || ''}
-                                    onInput={(e) => setEditingThresholds({
-                                      ...editingThresholds(),
-                                      memory: parseInt(e.currentTarget.value) || undefined
-                                    })}
-                                    class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                  />
+                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
                                 </Show>
                               </td>
                               <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <MetricValueWithHeat 
-                                    resourceId={resource.id}
-                                    metric="disk"
-                                    value={displayValue('disk')}
-                                    isOverridden={isOverridden('disk')}
-                                  />
+                                <Show when={resource.type === 'storage'} fallback={
+                                  <Show when={isEditing()} fallback={
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="disk"
+                                      value={displayValue('disk')}
+                                      isOverridden={isOverridden('disk')}
+                                    />
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={thresholds().disk || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        disk: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
                                 }>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={thresholds().disk || ''}
-                                    onInput={(e) => setEditingThresholds({
-                                      ...editingThresholds(),
-                                      disk: parseInt(e.currentTarget.value) || undefined
-                                    })}
-                                    class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                  />
+                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                </Show>
+                              </td>
+                              <td class="px-3 py-1.5 text-center">
+                                <Show when={resource.type === 'storage'} fallback={
+                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                }>
+                                  <Show when={isEditing()} fallback={
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="usage"
+                                      value={displayValue('usage')}
+                                      isOverridden={isOverridden('usage')}
+                                    />
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={thresholds().usage || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        usage: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
                                 </Show>
                               </td>
                               <td class="px-3 py-1.5 text-center">
@@ -1226,7 +1305,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </For>
               }>
                 <tr>
-                  <td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colspan="13" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     No resources found
                   </td>
                 </tr>
