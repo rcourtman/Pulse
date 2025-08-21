@@ -32,8 +32,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 						{"name": "Resource", "value": "{{.ResourceName}}", "inline": true},
 						{"name": "Node", "value": "{{.Node}}", "inline": true},
 						{"name": "Type", "value": "{{.Type | title}}", "inline": true},
-						{"name": "Value", "value": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}}", "inline": true},
-						{"name": "Threshold", "value": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}}", "inline": true},
+						{"name": "Value", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}", "inline": true},
+						{"name": "Threshold", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}", "inline": true},
 						{"name": "Duration", "value": "{{.Duration}}", "inline": true}
 					],
 					"timestamp": "{{.Timestamp}}",
@@ -53,7 +53,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID}}",
-				"text": "🚨 *Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n📊 *Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n🔗 [View in Pulse]({{.Instance}})",
+				"text": "🚨 *Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n📊 *Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n🔗 [View in Pulse]({{.Instance}})",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
@@ -89,8 +89,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName}}"},
 							{"type": "mrkdwn", "text": "*Node:*\n{{.Node}}"},
 							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title}}"},
-							{"type": "mrkdwn", "text": "*Value:*\n{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}}"},
-							{"type": "mrkdwn", "text": "*Threshold:*\n{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}}"},
+							{"type": "mrkdwn", "text": "*Value:*\n{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}"},
+							{"type": "mrkdwn", "text": "*Threshold:*\n{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}"},
 							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration}}"}
 						]
 					},
@@ -125,8 +125,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 						{"name": "Resource", "value": "{{.ResourceName}}"},
 						{"name": "Node", "value": "{{.Node}}"},
 						{"name": "Type", "value": "{{.Type | title}}"},
-						{"name": "Value", "value": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}}"},
-						{"name": "Threshold", "value": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}}"},
+						{"name": "Value", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}"},
+						{"name": "Threshold", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}"},
 						{"name": "Duration", "value": "{{.Duration}}"},
 						{"name": "Instance", "value": "{{.Instance}}"}
 					],
@@ -167,8 +167,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 					"custom_details": {
 						"alert_id": "{{.ID}}",
 						"resource_type": "{{.Type}}",
-						"current_value": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.1f\" .Value}} MB/s{{else}}{{printf \"%.1f\" .Value}}%{{end}}",
-						"threshold": "{{if or (eq .Type \"diskRead\") (eq .Type \"diskWrite\")}}{{printf \"%.0f\" .Threshold}} MB/s{{else}}{{printf \"%.0f\" .Threshold}}%{{end}}",
+						"current_value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}",
+						"threshold": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}",
 						"duration": "{{.Duration}}",
 						"instance": "{{.Instance}}"
 					}
