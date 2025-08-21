@@ -103,6 +103,139 @@ detect_os() {
     fi
 }
 
+check_proxmox_host() {
+    # Check if this is a Proxmox VE host
+    if command -v pvesh &> /dev/null && [[ -d /etc/pve ]]; then
+        return 0
+    fi
+    return 1
+}
+
+create_lxc_container() {
+    print_header
+    echo -e "${YELLOW}Proxmox VE host detected!${NC}"
+    echo
+    echo "Installing directly on a PVE host is not recommended."
+    echo "Pulse should run in a container for better isolation."
+    echo
+    echo -e "${GREEN}This script will:${NC}"
+    echo "1. Create a new LXC container"
+    echo "2. Install Pulse inside the container"
+    echo "3. Start the service"
+    echo
+    read -p "Continue? [Y/n]: " -n 1 -r response < /dev/tty
+    echo
+    if [[ ! "$response" =~ ^[Yy]?$ ]]; then
+        print_info "Installation cancelled"
+        exit 0
+    fi
+    
+    # Find next available container ID
+    local CTID=100
+    while pct status $CTID &>/dev/null; do
+        ((CTID++))
+    done
+    
+    print_info "Using container ID: $CTID"
+    
+    # Get container settings
+    read -p "Container hostname [pulse]: " hostname < /dev/tty
+    hostname=${hostname:-pulse}
+    
+    read -p "Memory (MB) [1024]: " memory < /dev/tty
+    memory=${memory:-1024}
+    
+    read -p "Disk size (GB) [8]: " disk < /dev/tty
+    disk=${disk:-8}
+    
+    read -p "CPU cores [2]: " cores < /dev/tty
+    cores=${cores:-2}
+    
+    # Get network bridge
+    local DEFAULT_BRIDGE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+' | grep -E '^vmbr')
+    DEFAULT_BRIDGE=${DEFAULT_BRIDGE:-vmbr0}
+    read -p "Network bridge [$DEFAULT_BRIDGE]: " bridge < /dev/tty
+    bridge=${bridge:-$DEFAULT_BRIDGE}
+    
+    # Get storage
+    local DEFAULT_STORAGE=$(pvesm status -content rootdir | grep -E "^local" | head -1 | awk '{print $1}')
+    DEFAULT_STORAGE=${DEFAULT_STORAGE:-local-lvm}
+    read -p "Storage [$DEFAULT_STORAGE]: " storage < /dev/tty
+    storage=${storage:-$DEFAULT_STORAGE}
+    
+    print_info "Creating LXC container..."
+    
+    # Download Debian template if not exists
+    local TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+    if [[ ! -f "$TEMPLATE" ]]; then
+        print_info "Downloading Debian 12 template..."
+        pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+    fi
+    
+    # Create container
+    pct create $CTID $TEMPLATE \
+        --hostname $hostname \
+        --memory $memory \
+        --cores $cores \
+        --rootfs ${storage}:${disk} \
+        --net0 name=eth0,bridge=${bridge},ip=dhcp \
+        --unprivileged 1 \
+        --features nesting=1 \
+        --onboot 1
+    
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to create container"
+        exit 1
+    fi
+    
+    # Start container
+    print_info "Starting container..."
+    pct start $CTID
+    sleep 5
+    
+    # Wait for network to be ready
+    print_info "Waiting for container network..."
+    for i in {1..30}; do
+        if pct exec $CTID -- ping -c 1 8.8.8.8 &>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Install dependencies first
+    print_info "Installing dependencies in container..."
+    pct exec $CTID -- bash -c "apt-get update && apt-get install -y curl wget"
+    
+    # Install Pulse inside container
+    print_info "Installing Pulse in container..."
+    
+    # Copy this script to container and run it
+    pct push $CTID $0 /tmp/install.sh
+    pct exec $CTID -- bash /tmp/install.sh --in-container
+    
+    if [[ $? -eq 0 ]]; then
+        # Get container IP
+        local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
+        
+        print_header
+        print_success "Pulse installed successfully in LXC container $CTID!"
+        echo
+        echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:7655"
+        echo
+        echo -e "${YELLOW}Container management:${NC}"
+        echo "  pct enter $CTID           - Enter container console"
+        echo "  pct stop $CTID            - Stop container"  
+        echo "  pct start $CTID           - Start container"
+        echo "  pct destroy $CTID         - Remove container"
+        echo
+    else
+        print_error "Installation failed"
+        exit 1
+    fi
+    
+    exit 0
+}
+
 check_existing_installation() {
     if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
         print_info "Pulse is currently running"
@@ -347,6 +480,12 @@ print_completion() {
 
 # Main installation flow
 main() {
+    # Skip Proxmox host check if we're already inside a container
+    if [[ "$IN_CONTAINER" != "true" ]] && check_proxmox_host; then
+        create_lxc_container
+        exit 0
+    fi
+    
     print_header
     check_root
     detect_os
@@ -412,6 +551,7 @@ main() {
 # Parse command line arguments
 FORCE_VERSION=""
 FORCE_CHANNEL=""
+IN_CONTAINER=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -426,6 +566,10 @@ while [[ $# -gt 0 ]]; do
         --version)
             FORCE_VERSION="$2"
             shift 2
+            ;;
+        --in-container)
+            IN_CONTAINER=true
+            shift
             ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
