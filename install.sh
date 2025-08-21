@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Pulse Installer Script for Go Version
+# Pulse Installer Script
 # Supports: Ubuntu 20.04+, Debian 11+, Proxmox VE 7+
 
 set -euo pipefail
@@ -17,7 +17,6 @@ INSTALL_DIR="/opt/pulse"
 CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
 SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
-REQUIRED_GO_VERSION="1.21"
 
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
@@ -120,24 +119,7 @@ install_dependencies() {
     print_info "Installing dependencies..."
     
     apt-get update -qq
-    apt-get install -y -qq curl wget git build-essential
-    
-    # Install Go if not present or version is too old
-    if ! command -v go &> /dev/null; then
-        print_info "Installing Go..."
-        wget -q -O go.tar.gz https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go.tar.gz
-        rm go.tar.gz
-        export PATH=$PATH:/usr/local/go/bin
-        echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
-    fi
-    
-    # Install Node.js for frontend build
-    if ! command -v node &> /dev/null; then
-        print_info "Installing Node.js..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-        apt-get install -y nodejs
-    fi
+    apt-get install -y -qq curl wget
 }
 
 create_user() {
