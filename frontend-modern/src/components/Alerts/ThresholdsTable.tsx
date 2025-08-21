@@ -1,5 +1,6 @@
-import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createMemo, Show, onMount, onCleanup } from 'solid-js';
 import type { VM, Container, Node, Alert, Storage } from '@/types/api';
+import { ResourceTable } from './ResourceTable';
 
 interface Override {
   id: string;
@@ -126,36 +127,47 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return alertKey in props.activeAlerts;
   };
   
-  // Component for metric value with active alert indicator
-  const MetricValueWithHeat = (props: { 
-    resourceId: string; 
-    metric: string; 
-    value: number; 
-    isOverridden: boolean 
-  }) => (
-    <div class="flex items-center justify-center gap-1">
-      <span class={`text-sm ${
-        props.isOverridden 
-          ? 'text-gray-900 dark:text-gray-100 font-medium' 
-          : 'text-gray-400 dark:text-gray-500'
-      }`}>
-        {formatMetricValue(props.metric, props.value)}
-      </span>
-      <Show when={hasActiveAlert(props.resourceId, props.metric)}>
-        <div 
-          class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"
-          title="Active alert"
-        />
-      </Show>
-    </div>
-  );
-  
-  // Combine all resources (guests and nodes) with their overrides
-  const resourcesWithOverrides = createMemo(() => {
+  // Process nodes with their overrides
+  const nodesWithOverrides = createMemo(() => {
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
     
-    // Process guests
+    const nodes = props.nodes.map(node => {
+      const override = overridesMap.get(node.id);
+      
+      // Check if any threshold values actually differ from defaults
+      const hasCustomThresholds = override?.thresholds && 
+        Object.keys(override.thresholds).some(key => {
+          const k = key as keyof typeof override.thresholds;
+          return override.thresholds[k] !== undefined && 
+                 override.thresholds[k] !== (props.nodeDefaults as any)[k];
+        });
+      
+      return {
+        id: node.id,
+        name: node.name,
+        type: 'node' as const,
+        resourceType: 'Node',
+        status: node.status,
+        hasOverride: hasCustomThresholds || false,
+        disabled: false,
+        disableConnectivity: override?.disableConnectivity || false,
+        thresholds: override?.thresholds || {},
+        defaults: props.nodeDefaults
+      };
+    });
+    
+    if (search) {
+      return nodes.filter(n => n.name.toLowerCase().includes(search));
+    }
+    return nodes;
+  });
+  
+  // Process guests with their overrides  
+  const guestsWithOverrides = createMemo(() => {
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
+    
     const guests = props.allGuests().map(guest => {
       const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
       const override = overridesMap.get(guestId);
@@ -177,40 +189,28 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         node: guest.node,
         instance: guest.instance,
         status: guest.status,
-        hasOverride: hasCustomThresholds || false,  // Only true if thresholds differ
+        hasOverride: hasCustomThresholds || false,
         disabled: override?.disabled || false,
         thresholds: override?.thresholds || {},
         defaults: props.guestDefaults
       };
     });
     
-    // Process nodes
-    const nodes = props.nodes.map(node => {
-      const override = overridesMap.get(node.id);
-      
-      // Check if any threshold values actually differ from defaults
-      const hasCustomThresholds = override?.thresholds && 
-        Object.keys(override.thresholds).some(key => {
-          const k = key as keyof typeof override.thresholds;
-          return override.thresholds[k] !== undefined && 
-                 override.thresholds[k] !== (props.nodeDefaults as any)[k];
-        });
-      
-      return {
-        id: node.id,
-        name: node.name,
-        type: 'node' as const,
-        resourceType: 'Node',
-        status: node.status,
-        hasOverride: hasCustomThresholds || false,  // Only true if thresholds differ
-        disabled: false,
-        disableConnectivity: override?.disableConnectivity || false,
-        thresholds: override?.thresholds || {},
-        defaults: props.nodeDefaults
-      };
-    });
+    if (search) {
+      return guests.filter(g => 
+        g.name.toLowerCase().includes(search) ||
+        g.vmid?.toString().includes(search) ||
+        g.node?.toLowerCase().includes(search)
+      );
+    }
+    return guests;
+  });
+  
+  // Process storage with their overrides
+  const storageWithOverrides = createMemo(() => {
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
     
-    // Process storage devices
     const storageDevices = props.storage.map(storage => {
       const override = overridesMap.get(storage.id);
       
@@ -233,52 +233,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       };
     });
     
-    // Combine and filter
-    const allResources = [...guests, ...nodes, ...storageDevices];
-    
     if (search) {
-      return allResources.filter(r => 
-        r.name.toLowerCase().includes(search) ||
-        ('vmid' in r && r.vmid && r.vmid.toString().includes(search)) ||
-        ('node' in r && r.node && r.node.toLowerCase().includes(search))
+      return storageDevices.filter(s => 
+        s.name.toLowerCase().includes(search) ||
+        s.node?.toLowerCase().includes(search)
       );
     }
-    
-    return allResources;
+    return storageDevices;
   });
   
-  // Group resources by node for display
-  const groupedResources = createMemo(() => {
-    const groups: Record<string, any[]> = {};
-    
-    resourcesWithOverrides().forEach(resource => {
-      let groupKey: string;
-      if (resource.type === 'node') {
-        groupKey = 'Nodes';
-      } else if (resource.type === 'storage') {
-        groupKey = 'Storage';
-      } else {
-        groupKey = 'node' in resource ? resource.node : 'Unknown';
-      }
-      
-      if (!groups[groupKey]) {
-        groups[groupKey] = [];
-      }
-      groups[groupKey].push(resource);
-    });
-    
-    // Sort resources within each group
-    Object.keys(groups).forEach(key => {
-      groups[key] = groups[key].sort((a, b) => {
-        if (a.type === 'node' && b.type !== 'node') return -1;
-        if (a.type !== 'node' && b.type === 'node') return 1;
-        if ('vmid' in a && 'vmid' in b && a.vmid && b.vmid) return a.vmid - b.vmid;
-        return a.name.localeCompare(b.name);
-      });
-    });
-    
-    return groups;
-  });
   
   const startEditing = (resourceId: string, currentThresholds: any, defaults: any) => {
     setEditingId(resourceId);
@@ -288,7 +251,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   const saveEdit = (resourceId: string) => {
-    const resource = resourcesWithOverrides().find(r => r.id === resourceId);
+    const allResources = [...nodesWithOverrides(), ...guestsWithOverrides(), ...storageWithOverrides()];
+    const resource = allResources.find(r => r.id === resourceId);
     if (!resource) return;
     
     const editedThresholds = editingThresholds();
@@ -382,8 +346,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   const toggleDisabled = (resourceId: string) => {
-    const resource = resourcesWithOverrides().find(r => r.id === resourceId);
-    if (!resource || resource.type !== 'guest') return;
+    const allResources = [...guestsWithOverrides(), ...storageWithOverrides()];
+    const resource = allResources.find(r => r.id === resourceId);
+    if (!resource || (resource.type !== 'guest' && resource.type !== 'storage')) return;
     
     // Get existing override if it exists
     const existingOverride = props.overrides().find(o => o.id === resourceId);
@@ -465,7 +430,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   
   const toggleNodeConnectivity = (nodeId: string) => {
     console.log('toggleNodeConnectivity called for:', nodeId);
-    const node = resourcesWithOverrides().find(r => r.id === nodeId);
+    const node = nodesWithOverrides().find(r => r.id === nodeId);
     console.log('Found node:', node);
     if (!node || node.type !== 'node') return;
     
@@ -849,476 +814,65 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </Show>
       </div>
       
-      {/* Resources Table */}
-      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Resource
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Type
-                </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  CPU %
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Memory %
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Disk %
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Storage %
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Disk R<br/><span class="text-[10px] font-normal">MB/s</span>
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Disk W<br/><span class="text-[10px] font-normal">MB/s</span>
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Net In<br/><span class="text-[10px] font-normal">Mbps</span>
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Net Out<br/><span class="text-[10px] font-normal">Mbps</span>
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Alerts
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-              <Show when={Object.keys(groupedResources()).length === 0} fallback={
-                <For each={Object.entries(groupedResources()).sort(([a], [b]) => {
-                  if (a === 'Nodes') return -1;
-                  if (b === 'Nodes') return 1;
-                  if (a === 'Storage') return 1;
-                  if (b === 'Storage') return -1;
-                  return a.localeCompare(b);
-                })}>
-                  {([groupName, resources]) => (
-                    <>
-                      {/* Group header */}
-                      <tr class="bg-gray-50 dark:bg-gray-700/50">
-                        <td colspan="13" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                          {groupName}
-                        </td>
-                      </tr>
-                      {/* Resource rows */}
-                      <For each={resources}>
-                        {(resource) => {
-                          const isEditing = () => editingId() === resource.id;
-                          const thresholds = () => isEditing() ? editingThresholds() : resource.thresholds;
-                          const displayValue = (metric: string) => {
-                            if (isEditing()) return thresholds()[metric] || resource.defaults[metric] || '';
-                            // Show override value or default
-                            return resource.thresholds[metric] || resource.defaults[metric] || 0;
-                          };
-                          const shouldShowMetric = (metric: string) => {
-                            // Nodes don't have I/O metrics
-                            if (resource.type === 'node' && 
-                                (metric === 'diskRead' || metric === 'diskWrite' || 
-                                 metric === 'networkIn' || metric === 'networkOut')) {
-                              return false;
-                            }
-                            // Storage only has usage metric
-                            if (resource.type === 'storage') {
-                              return metric === 'usage';
-                            }
-                            return true;
-                          };
-                          const isOverridden = (metric: string) => {
-                            return resource.thresholds[metric] !== undefined && resource.thresholds[metric] !== null;
-                          };
-                          
-                          return (
-                            <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
-                              <td class="px-3 py-1.5">
-                                <div class="flex items-center gap-2">
-                                  <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                                    {resource.name}
-                                  </span>
-                                  <Show when={'vmid' in resource && resource.vmid}>
-                                    <span class="text-xs text-gray-500">({resource.vmid})</span>
-                                  </Show>
-                                  <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
-                                    <span class="text-xs text-gray-500">on {resource.node}</span>
-                                  </Show>
-                                  <Show when={(() => {
-                                    const override = props.overrides().find(o => o.id === resource.id);
-                                    if (!override) return false;
-                                    // Show badge if there are threshold overrides or connectivity is disabled for nodes
-                                    return Object.keys(override.thresholds).length > 0 || 
-                                           (resource.type === 'node' && resource.disableConnectivity);
-                                  })()}>
-                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                                      Custom
-                                    </span>
-                                  </Show>
-                                </div>
-                              </td>
-                              <td class="px-3 py-1.5">
-                                <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                  resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
-                                  resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
-                                  resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
-                                  'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                                }`}>
-                                  {resource.resourceType}
-                                </span>
-                              </td>
-                              <td class="px-3 py-1.5">
-                                <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                  resource.status === 'online' || resource.status === 'running' ?
-                                    'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                  resource.status === 'stopped' ?
-                                    'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' :
-                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                }`}>
-                                  {resource.status}
-                                </span>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={resource.type === 'storage'} fallback={
-                                  <Show when={isEditing()} fallback={
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="cpu"
-                                      value={displayValue('cpu')}
-                                      isOverridden={isOverridden('cpu')}
-                                    />
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      value={thresholds().cpu || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        cpu: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                }>
-                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={resource.type === 'storage'} fallback={
-                                  <Show when={isEditing()} fallback={
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="memory"
-                                      value={displayValue('memory')}
-                                      isOverridden={isOverridden('memory')}
-                                    />
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      value={thresholds().memory || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        memory: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                }>
-                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={resource.type === 'storage'} fallback={
-                                  <Show when={isEditing()} fallback={
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="disk"
-                                      value={displayValue('disk')}
-                                      isOverridden={isOverridden('disk')}
-                                    />
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      value={thresholds().disk || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        disk: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                }>
-                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={resource.type === 'storage'} fallback={
-                                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                }>
-                                  <Show when={isEditing()} fallback={
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="usage"
-                                      value={displayValue('usage')}
-                                      isOverridden={isOverridden('usage')}
-                                    />
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      value={thresholds().usage || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        usage: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <Show when={shouldShowMetric('diskRead')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="diskRead"
-                                      value={displayValue('diskRead')}
-                                      isOverridden={isOverridden('diskRead')}
-                                    />
-                                  </Show>
-                                }>
-                                  <Show when={shouldShowMetric('diskRead')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="10000"
-                                      value={thresholds().diskRead || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        diskRead: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <Show when={shouldShowMetric('diskWrite')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="diskWrite"
-                                      value={displayValue('diskWrite')}
-                                      isOverridden={isOverridden('diskWrite')}
-                                    />
-                                  </Show>
-                                }>
-                                  <Show when={shouldShowMetric('diskWrite')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="10000"
-                                      value={thresholds().diskWrite || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        diskWrite: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <Show when={shouldShowMetric('networkIn')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="networkIn"
-                                      value={displayValue('networkIn')}
-                                      isOverridden={isOverridden('networkIn')}
-                                    />
-                                  </Show>
-                                }>
-                                  <Show when={shouldShowMetric('networkIn')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="10000"
-                                      value={thresholds().networkIn || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        networkIn: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={isEditing()} fallback={
-                                  <Show when={shouldShowMetric('networkOut')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <MetricValueWithHeat 
-                                      resourceId={resource.id}
-                                      metric="networkOut"
-                                      value={displayValue('networkOut')}
-                                      isOverridden={isOverridden('networkOut')}
-                                    />
-                                  </Show>
-                                }>
-                                  <Show when={shouldShowMetric('networkOut')} fallback={
-                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                  }>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="10000"
-                                      value={thresholds().networkOut || ''}
-                                      onInput={(e) => setEditingThresholds({
-                                        ...editingThresholds(),
-                                        networkOut: parseInt(e.currentTarget.value) || undefined
-                                      })}
-                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                  </Show>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5 text-center">
-                                <Show when={resource.type === 'guest'}>
-                                  <button
-                                    onClick={() => toggleDisabled(resource.id)}
-                                    class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                                      (() => {
-                                        const override = props.overrides().find(o => o.id === resource.id);
-                                        return override?.disabled;
-                                      })()
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                        : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                                    }`}
-                                  >
-                                    {(() => {
-                                      const override = props.overrides().find(o => o.id === resource.id);
-                                      return override?.disabled ? 'Disabled' : 'Enabled';
-                                    })()}
-                                  </button>
-                                </Show>
-                                <Show when={resource.type === 'node'}>
-                                  <button
-                                    onClick={() => toggleNodeConnectivity(resource.id)}
-                                    class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                                      resource.disableConnectivity
-                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                        : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                                    }`}
-                                    title="Toggle connectivity alerts for this node"
-                                  >
-                                    {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
-                                  </button>
-                                </Show>
-                              </td>
-                              <td class="px-3 py-1.5">
-                                <div class="flex items-center justify-center gap-1">
-                                  <Show when={isEditing()} fallback={
-                                    <>
-                                      <button
-                                        onClick={() => startEditing(resource.id, resource.thresholds, resource.defaults)}
-                                        class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                        title="Edit thresholds"
-                                      >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                      </button>
-                                      <Show when={props.overrides().find(o => o.id === resource.id)}>
-                                        <button
-                                          onClick={() => removeOverride(resource.id)}
-                                          class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                          title="Remove all overrides"
-                                        >
-                                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                          </svg>
-                                        </button>
-                                      </Show>
-                                    </>
-                                  }>
-                                    <button
-                                      onClick={() => saveEdit(resource.id)}
-                                      class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                                      title="Save"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      onClick={cancelEdit}
-                                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                      title="Cancel"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    </button>
-                                  </Show>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </>
-                  )}
-                </For>
-              }>
-                <tr>
-                  <td colspan="13" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No resources found
-                  </td>
-                </tr>
-              </Show>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Nodes Table */}
+      <Show when={nodesWithOverrides().length > 0}>
+        <ResourceTable
+          title="Proxmox Nodes"
+          resources={nodesWithOverrides()}
+          columns={['CPU %', 'Memory %', 'Disk %']}
+          activeAlerts={props.activeAlerts}
+          onEdit={startEditing}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onRemoveOverride={removeOverride}
+          onToggleNodeConnectivity={toggleNodeConnectivity}
+          editingId={editingId}
+          editingThresholds={editingThresholds}
+          setEditingThresholds={setEditingThresholds}
+          formatMetricValue={formatMetricValue}
+          hasActiveAlert={hasActiveAlert}
+        />
+      </Show>
+      
+      {/* Guests Table */}
+      <Show when={guestsWithOverrides().length > 0}>
+        <ResourceTable
+          title="VMs & Containers"
+          resources={guestsWithOverrides()}
+          columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
+          activeAlerts={props.activeAlerts}
+          onEdit={startEditing}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onRemoveOverride={removeOverride}
+          onToggleDisabled={toggleDisabled}
+          editingId={editingId}
+          editingThresholds={editingThresholds}
+          setEditingThresholds={setEditingThresholds}
+          formatMetricValue={formatMetricValue}
+          hasActiveAlert={hasActiveAlert}
+        />
+      </Show>
+      
+      {/* Storage Table */}
+      <Show when={storageWithOverrides().length > 0}>
+        <ResourceTable
+          title="Storage Devices"
+          resources={storageWithOverrides()}
+          columns={['Usage %']}
+          activeAlerts={props.activeAlerts}
+          onEdit={startEditing}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onRemoveOverride={removeOverride}
+          onToggleDisabled={toggleDisabled}
+          editingId={editingId}
+          editingThresholds={editingThresholds}
+          setEditingThresholds={setEditingThresholds}
+          formatMetricValue={formatMetricValue}
+          hasActiveAlert={hasActiveAlert}
+        />
+      </Show>
     </div>
   );
 }
