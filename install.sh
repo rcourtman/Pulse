@@ -511,10 +511,28 @@ EOF
     # Install Pulse inside container
     print_info "Installing Pulse..."
     
+    # When piped through curl, $0 is "bash" not the script. Download fresh copy.
+    local script_source="/tmp/pulse_install_$$.sh"
+    if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
+        # We're being piped, download the script
+        if ! curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
+            print_error "Failed to download install script"
+            cleanup_on_error
+        fi
+    else
+        # We have a local script file
+        script_source="$0"
+    fi
+    
     # Copy this script to container and run it
-    if ! pct push $CTID $0 /tmp/install.sh >/dev/null 2>&1; then
+    if ! pct push $CTID "$script_source" /tmp/install.sh >/dev/null 2>&1; then
         print_error "Failed to copy install script to container"
         cleanup_on_error
+    fi
+    
+    # Clean up temp file if we created one
+    if [[ "$script_source" == "/tmp/pulse_install_"* ]]; then
+        rm -f "$script_source"
     fi
     
     # Run installation quietly (suppress verbose output) with port configuration
