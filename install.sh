@@ -45,7 +45,7 @@ safe_read() {
     local read_args="$@"
     
     # Try to read from /dev/tty first (for interactive terminals)
-    if [[ -e /dev/tty ]]; then
+    if test -e /dev/tty; then
         read -p "$prompt" $read_args $var_name < /dev/tty 2>/dev/null || {
             # If /dev/tty fails, try stdin
             read -p "$prompt" $read_args $var_name
@@ -149,7 +149,8 @@ create_lxc_container() {
     echo
     
     # Check if we're being piped (non-interactive)
-    if [[ ! -t 0 ]] && [[ ! -e /dev/tty ]]; then
+    # Test if stdin is not a TTY (being piped)
+    if ! test -t 0; then
         echo "Non-interactive mode detected. Using Quick installation."
         mode="1"
     else
