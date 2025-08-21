@@ -50,7 +50,12 @@ export function WebhookConfig(props: WebhookConfigProps) {
     if (!data.name || !data.url) return;
     
     if (editingId()) {
-      props.onUpdate({ ...data, id: editingId()!, service: data.service });
+      props.onUpdate({ 
+        ...data, 
+        id: editingId()!, 
+        service: data.service,
+        template: data.payloadTemplate 
+      });
       setEditingId(null);
       setAdding(false);
     } else {
