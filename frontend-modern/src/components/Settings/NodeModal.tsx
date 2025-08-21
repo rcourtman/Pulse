@@ -49,6 +49,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   });
   
   const [formData, setFormData] = createSignal(getCleanFormData());
+  const [setupCode, setSetupCode] = createSignal<{code: string, expires: number} | null>(null);
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -500,23 +501,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const data = await response.json();
                                             const cmd = `curl -sSL "${data.url}" | bash`;
                                             
-                                            // Show setup code in a modal or alert
+                                            // Store setup code for display
                                             if (data.setupCode) {
-                                              const message = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔐 SETUP CODE: ${data.setupCode}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Copy this command to clipboard
-2. Run it on your Proxmox server
-3. Enter the setup code when prompted
-
-The code expires in 5 minutes.`;
-                                              alert(message);
+                                              setSetupCode({code: data.setupCode, expires: data.expires});
                                             }
                                             
                                             if (await copyToClipboard(cmd)) {
-                                              showSuccess('Command copied! Setup code: ' + data.setupCode);
+                                              showSuccess('Command copied to clipboard!');
                                             }
                                           } else {
                                             showError('Failed to generate setup URL');
@@ -540,6 +531,36 @@ The code expires in 5 minutes.`;
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
+                                  
+                                  {/* Setup Code Display */}
+                                  <Show when={setupCode()}>
+                                    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
+                                      <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-sm font-semibold flex items-center">
+                                          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                          </svg>
+                                          Setup Code (One-Time Use)
+                                        </h4>
+                                        <button
+                                          onClick={() => setSetupCode(null)}
+                                          class="text-white/80 hover:text-white"
+                                        >
+                                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider">
+                                        {setupCode()?.code}
+                                      </div>
+                                      <div class="mt-3 text-xs text-white/90 space-y-1">
+                                        <p>✅ Command copied to clipboard</p>
+                                        <p>📋 Enter this code when the setup script prompts you</p>
+                                        <p>⏱️ Expires in 5 minutes</p>
+                                      </div>
+                                    </div>
+                                  </Show>
                                   
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                                     <div class="flex items-start space-x-2">
@@ -810,23 +831,13 @@ The code expires in 5 minutes.`;
                                               const data = await response.json();
                                               const cmd = `curl -sSL "${data.url}" | bash`;
                                               
-                                              // Show setup code in a modal or alert
+                                              // Store setup code for display
                                               if (data.setupCode) {
-                                                const message = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔐 SETUP CODE: ${data.setupCode}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Copy this command to clipboard
-2. Run it on your PBS server
-3. Enter the setup code when prompted
-
-The code expires in 5 minutes.`;
-                                                alert(message);
+                                                setSetupCode({code: data.setupCode, expires: data.expires});
                                               }
                                               
                                               if (await copyToClipboard(cmd)) {
-                                                showSuccess('Command copied! Setup code: ' + data.setupCode);
+                                                showSuccess('Command copied to clipboard!');
                                               }
                                             } else {
                                               showError('Failed to generate setup URL');
@@ -851,6 +862,36 @@ The code expires in 5 minutes.`;
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
+                                  
+                                  {/* Setup Code Display */}
+                                  <Show when={setupCode()}>
+                                    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
+                                      <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-sm font-semibold flex items-center">
+                                          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                          </svg>
+                                          Setup Code (One-Time Use)
+                                        </h4>
+                                        <button
+                                          onClick={() => setSetupCode(null)}
+                                          class="text-white/80 hover:text-white"
+                                        >
+                                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider">
+                                        {setupCode()?.code}
+                                      </div>
+                                      <div class="mt-3 text-xs text-white/90 space-y-1">
+                                        <p>✅ Command copied to clipboard</p>
+                                        <p>📋 Enter this code when the setup script prompts you</p>
+                                        <p>⏱️ Expires in 5 minutes</p>
+                                      </div>
+                                    </div>
+                                  </Show>
                                   
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                                     <div class="flex items-start space-x-2">
