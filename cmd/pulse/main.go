@@ -21,10 +21,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version information (set at build time with -ldflags)
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "pulse",
 	Short: "Pulse - Proxmox VE and PBS monitoring system",
 	Long:  `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
+	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
 		runServer()
 	},
@@ -33,6 +41,22 @@ var rootCmd = &cobra.Command{
 func init() {
 	// Add config command
 	rootCmd.AddCommand(configCmd)
+	// Add version command
+	rootCmd.AddCommand(versionCmd)
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("Pulse %s\n", Version)
+		if BuildTime != "unknown" {
+			fmt.Printf("Built: %s\n", BuildTime)
+		}
+		if GitCommit != "unknown" {
+			fmt.Printf("Commit: %s\n", GitCommit)
+		}
+	},
 }
 
 func main() {
