@@ -11,7 +11,7 @@
 ## 💖 Support Pulse Development
 
 Pulse is built by a solo developer in evenings and weekends. Your support helps cover:
-- Test hardware and Proxmox licenses  
+- Test hardware and hosting costs
 - Development time for new features and bug fixes
 - Keeping Pulse 100% free and open-source forever
 
