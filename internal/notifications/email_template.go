@@ -93,11 +93,11 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
             <div class="metrics">
                 <div class="metric">
                     <div class="metric-label">Current Value</div>
-                    <div class="metric-value">%.1f%%</div>
+                    <div class="metric-value">%s</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">Threshold</div>
-                    <div class="metric-value">%.0f%%</div>
+                    <div class="metric-value">%s</div>
                 </div>
             </div>
             
@@ -139,8 +139,8 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 		alert.Level,
 		alert.ResourceName,
 		alert.Message,
-		alert.Value,
-		alert.Threshold,
+		formatMetricValue(alert.Type, alert.Value),
+		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.ResourceID,
 		alertType,
 		alert.Node,
@@ -156,7 +156,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 
 Resource: %s (%s)
 Type: %s
-Current Value: %.1f%% (Threshold: %.0f%%)
+Current Value: %s (Threshold: %s)
 Message: %s
 
 Details:
@@ -172,8 +172,8 @@ View alerts and configure settings in your Pulse dashboard.`,
 		alert.ResourceName,
 		alert.ResourceID,
 		alert.Type,
-		alert.Value,
-		alert.Threshold,
+		formatMetricValue(alert.Type, alert.Value),
+		formatMetricThreshold(alert.Type, alert.Threshold),
 		alert.Message,
 		alert.Node,
 		alert.Instance,
@@ -227,8 +227,8 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                         <span style="color: %s; font-weight: 500; text-transform: uppercase; font-size: 12px;">%s</span>
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef; text-align: right;">
-                        <div style="font-weight: 500;">%.1f%%</div>
-                        <div style="font-size: 12px; color: #666;">of %.0f%%</div>
+                        <div style="font-weight: 500;">%s</div>
+                        <div style="font-size: 12px; color: #666;">of %s</div>
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef; text-align: right; color: #666; font-size: 12px;">
                         %s ago
@@ -238,7 +238,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 			alert.ResourceName,
 			alert.Type, alert.Node,
 			levelColor, alert.Level,
-			alert.Value, alert.Threshold,
+			formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold),
 			formatDuration(time.Since(alert.StartTime)),
 		))
 	}
@@ -344,7 +344,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 	for i, alert := range alertList {
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
 		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
-		textBuilder.WriteString(fmt.Sprintf("   Value: %.1f%% (Threshold: %.0f%%)\n", alert.Value, alert.Threshold))
+		textBuilder.WriteString(fmt.Sprintf("   Value: %s (Threshold: %s)\n", formatMetricValue(alert.Type, alert.Value), formatMetricThreshold(alert.Type, alert.Threshold)))
 		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alert.Node, formatDuration(time.Since(alert.StartTime))))
 		textBuilder.WriteString(fmt.Sprintf("   Message: %s\n", alert.Message))
 	}
@@ -373,4 +373,20 @@ func pluralize(count int) string {
 		return ""
 	}
 	return "s"
+}
+
+// formatMetricValue formats a metric value with the appropriate unit
+func formatMetricValue(metricType string, value float64) string {
+	if metricType == "diskRead" || metricType == "diskWrite" {
+		return fmt.Sprintf("%.1f MB/s", value)
+	}
+	return fmt.Sprintf("%.1f%%", value)
+}
+
+// formatMetricThreshold formats a metric threshold with the appropriate unit
+func formatMetricThreshold(metricType string, threshold float64) string {
+	if metricType == "diskRead" || metricType == "diskWrite" {
+		return fmt.Sprintf("%.0f MB/s", threshold)
+	}
+	return fmt.Sprintf("%.0f%%", threshold)
 }
