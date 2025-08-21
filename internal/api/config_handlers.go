@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +24,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// SetupCode represents a one-time setup code for secure node registration
+type SetupCode struct {
+	ExpiresAt time.Time
+	Used      bool
+	NodeType  string // "pve" or "pbs"
+	Host      string // The host URL for validation
+}
+
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
 	config               *config.Config
@@ -31,8 +40,8 @@ type ConfigHandlers struct {
 	reloadFunc           func() error
 	wsHub                *websocket.Hub
 	guestMetadataHandler *GuestMetadataHandler
-	setupTokens          map[string]time.Time // Temporary tokens for setup script access
-	tokenMutex           sync.RWMutex         // Mutex for thread-safe token access
+	setupCodes           map[string]*SetupCode // Map of code hash -> setup code details
+	codeMutex            sync.RWMutex          // Mutex for thread-safe code access
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -44,29 +53,30 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 		reloadFunc:           reloadFunc,
 		wsHub:                wsHub,
 		guestMetadataHandler: guestMetadataHandler,
-		setupTokens:          make(map[string]time.Time),
+		setupCodes:           make(map[string]*SetupCode),
 	}
 	
-	// Clean up expired tokens periodically
-	go h.cleanupExpiredTokens()
+	// Clean up expired codes periodically
+	go h.cleanupExpiredCodes()
 	
 	return h
 }
 
-// cleanupExpiredTokens removes expired setup tokens
-func (h *ConfigHandlers) cleanupExpiredTokens() {
+// cleanupExpiredCodes removes expired or used setup codes periodically
+func (h *ConfigHandlers) cleanupExpiredCodes() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	
 	for range ticker.C {
-		h.tokenMutex.Lock()
+		h.codeMutex.Lock()
 		now := time.Now()
-		for token, expiry := range h.setupTokens {
-			if now.After(expiry) {
-				delete(h.setupTokens, token)
+		for codeHash, code := range h.setupCodes {
+			if now.After(code.ExpiresAt) || code.Used {
+				delete(h.setupCodes, codeHash)
+				log.Debug().Bool("was_used", code.Used).Msg("Cleaned up setup code")
 			}
 		}
-		h.tokenMutex.Unlock()
+		h.codeMutex.Unlock()
 	}
 }
 
@@ -1768,7 +1778,6 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	serverHost := query.Get("host")
 	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
 	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
-	tempToken := query.Get("token") // Temporary token for authenticated access
 	
 	// Validate required parameters
 	if serverType == "" {
@@ -1803,50 +1812,8 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "").
 		Msg("HandleSetupScript called")
 	
-	// Check if authentication is required
-	if h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "" {
-		// Check temporary token first
-		if tempToken != "" {
-			h.tokenMutex.RLock()
-			expiry, exists := h.setupTokens[tempToken]
-			h.tokenMutex.RUnlock()
-			
-			log.Debug().
-				Bool("exists", exists).
-				Time("expiry", expiry).
-				Int("total_tokens", len(h.setupTokens)).
-				Msg("Checking setup token")
-			
-			if exists {
-				if time.Now().Before(expiry) {
-					// Token is valid, allow access
-					log.Info().Msg("Valid setup token - allowing access")
-					// Don't delete - let it expire naturally so the command can be reused
-				} else {
-					// Token expired
-					h.tokenMutex.Lock()
-					delete(h.setupTokens, tempToken)
-					h.tokenMutex.Unlock()
-					log.Warn().Msg("Setup token expired")
-					http.Error(w, "Token expired", http.StatusUnauthorized)
-					return
-				}
-			} else {
-				log.Warn().Msg("Invalid setup token, falling back to regular auth")
-				// Invalid token, fall back to regular auth check
-				if !CheckAuth(h.config, w, r) {
-					http.Error(w, "Authentication required", http.StatusUnauthorized)
-					return
-				}
-			}
-		} else {
-			// No temp token, check regular auth
-			if !CheckAuth(h.config, w, r) {
-				http.Error(w, "Authentication required", http.StatusUnauthorized)
-				return
-			}
-		}
-	}
+	// The setup script is now public - authentication happens via setup code
+	// No need to check auth here since the script will prompt for a code
 	
 	// Default to PVE if not specified
 	if serverType == "" {
@@ -2027,64 +1994,94 @@ else
     fi
     
     # Try auto-registration
-    echo "🔄 Auto-registering with Pulse..."
+    echo "🔄 Attempting auto-registration with Pulse..."
+    echo ""
     
-    # Get the server's hostname
-    SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-    SERVER_IP=$(hostname -I | awk '{print $1}')
+    # Prompt for setup code
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔐 SETUP CODE REQUIRED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Enter your 6-character setup code from Pulse UI: "
     
-    # Send registration to Pulse
-    PULSE_URL="%s"
-    
-    # Check if host URL was provided
-    HOST_URL="%s"
-    if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
-        echo ""
-        echo "❌ ERROR: No Proxmox host URL provided!"
-        echo "   The setup script URL is missing the 'host' parameter."
-        echo ""
-        echo "   Please use the correct URL format:"
-        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"
-        echo ""
-        echo "   Example:"
-        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
-        echo ""
-        echo "📝 For manual setup, use the token created above with:"
-        echo "   Token ID: pulse-monitor@pam!%s"
-        echo "   Token Value: [See above]"
-        echo ""
-        exit 1
+    # Read setup code from user
+    if [ -t 0 ]; then
+        # Running interactively
+        read -p "> " SETUP_CODE
+    else
+        # Being piped - try to read from terminal
+        if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
+            :
+        else
+            echo ""
+            echo "❌ Cannot read setup code in non-interactive mode"
+            echo "   Please run this script interactively or provide the code via environment variable:"
+            echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
+            echo ""
+            AUTO_REG_SUCCESS=false
+            SETUP_CODE=""
+        fi
     fi
     
-    # Construct registration request
-    # Use the actual PVE host URL provided to the script
-    REGISTER_JSON=$(cat <<EOF
+    # Check if code was provided via environment variable
+    if [ -z "$SETUP_CODE" ] && [ -n "$PULSE_SETUP_CODE" ]; then
+        SETUP_CODE="$PULSE_SETUP_CODE"
+        echo "Using setup code from environment variable"
+    fi
+    
+    echo ""
+    
+    # Only proceed with auto-registration if we have a setup code
+    if [ -n "$SETUP_CODE" ]; then
+        # Get the server's hostname
+        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        SERVER_IP=$(hostname -I | awk '{print $1}')
+        
+        # Send registration to Pulse
+        PULSE_URL="%s"
+        
+        # Check if host URL was provided
+        HOST_URL="%s"
+        if [ "$HOST_URL" = "https://YOUR_PROXMOX_HOST:8006" ] || [ -z "$HOST_URL" ]; then
+            echo ""
+            echo "❌ ERROR: No Proxmox host URL provided!"
+            echo "   The setup script URL is missing the 'host' parameter."
+            echo ""
+            echo "   Please use the correct URL format:"
+            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"
+            echo ""
+            echo "   Example:"
+            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=https://192.168.0.5:8006&pulse_url=$PULSE_URL\" | bash"
+            echo ""
+            echo "📝 For manual setup, use the token created above with:"
+            echo "   Token ID: pulse-monitor@pam!%s"
+            echo "   Token Value: [See above]"
+            echo ""
+            exit 1
+        fi
+        
+        # Construct registration request with setup code
+        REGISTER_JSON=$(cat <<EOF
 {
   "type": "pve",
   "host": "$HOST_URL",
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pam!%s",
-  "tokenValue": "$TOKEN_VALUE"
+  "tokenValue": "$TOKEN_VALUE",
+  "setupCode": "$SETUP_CODE"
 }
 EOF
-    )
-    # Remove newlines from JSON
-    REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
-    
-    # Send registration with appropriate authentication
-    SETUP_TOKEN="%s"
-    
-    if [ -n "$SETUP_TOKEN" ]; then
-        # Use setup token for authentication (passed from Pulse UI)
+        )
+        # Remove newlines from JSON
+        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+        
+        # Send registration with setup code
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
-            -H "X-Setup-Token: $SETUP_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
-        # Try without authentication (for systems without auth)
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
+        echo "⚠️  No setup code provided - skipping auto-registration"
+        AUTO_REG_SUCCESS=false
+        REGISTER_RESPONSE=""
     fi
     
     AUTO_REG_SUCCESS=false
@@ -2139,7 +2136,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			pulseURL, serverHost, tokenName, tokenName, tempToken, storagePerms, tokenName, serverHost)
+			pulseURL, serverHost, tokenName, tokenName, storagePerms, tokenName, serverHost)
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -2245,64 +2242,94 @@ else
     fi
     
     # Try auto-registration
-    echo "🔄 Auto-registering with Pulse..."
+    echo "🔄 Attempting auto-registration with Pulse..."
+    echo ""
     
-    # Get the server's hostname
-    SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-    SERVER_IP=$(hostname -I | awk '{print $1}')
+    # Prompt for setup code
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔐 SETUP CODE REQUIRED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Enter your 6-character setup code from Pulse UI: "
     
-    # Send registration to Pulse
-    PULSE_URL="%s"
-    
-    # Check if host URL was provided
-    HOST_URL="%s"
-    if [ "$HOST_URL" = "https://YOUR_PBS_HOST:8007" ] || [ -z "$HOST_URL" ]; then
-        echo ""
-        echo "❌ ERROR: No PBS host URL provided!"
-        echo "   The setup script URL is missing the 'host' parameter."
-        echo ""
-        echo "   Please use the correct URL format:"
-        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=YOUR_PBS_URL&pulse_url=$PULSE_URL\" | bash"
-        echo ""
-        echo "   Example:"
-        echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=https://192.168.0.8:8007&pulse_url=$PULSE_URL\" | bash"
-        echo ""
-        echo "📝 For manual setup, use the token created above with:"
-        echo "   Token ID: pulse-monitor@pbs!%s"
-        echo "   Token Value: [See above]"
-        echo ""
-        exit 1
+    # Read setup code from user
+    if [ -t 0 ]; then
+        # Running interactively
+        read -p "> " SETUP_CODE
+    else
+        # Being piped - try to read from terminal
+        if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
+            :
+        else
+            echo ""
+            echo "❌ Cannot read setup code in non-interactive mode"
+            echo "   Please run this script interactively or provide the code via environment variable:"
+            echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
+            echo ""
+            AUTO_REG_SUCCESS=false
+            SETUP_CODE=""
+        fi
     fi
     
-    # Construct registration request with the token we just created
-    # Use the actual PBS host URL provided to the script
-    REGISTER_JSON=$(cat <<EOF
+    # Check if code was provided via environment variable
+    if [ -z "$SETUP_CODE" ] && [ -n "$PULSE_SETUP_CODE" ]; then
+        SETUP_CODE="$PULSE_SETUP_CODE"
+        echo "Using setup code from environment variable"
+    fi
+    
+    echo ""
+    
+    # Only proceed with auto-registration if we have a setup code
+    if [ -n "$SETUP_CODE" ]; then
+        # Get the server's hostname
+        SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+        SERVER_IP=$(hostname -I | awk '{print $1}')
+        
+        # Send registration to Pulse
+        PULSE_URL="%s"
+        
+        # Check if host URL was provided
+        HOST_URL="%s"
+        if [ "$HOST_URL" = "https://YOUR_PBS_HOST:8007" ] || [ -z "$HOST_URL" ]; then
+            echo ""
+            echo "❌ ERROR: No PBS host URL provided!"
+            echo "   The setup script URL is missing the 'host' parameter."
+            echo ""
+            echo "   Please use the correct URL format:"
+            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=YOUR_PBS_URL&pulse_url=$PULSE_URL\" | bash"
+            echo ""
+            echo "   Example:"
+            echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pbs&host=https://192.168.0.8:8007&pulse_url=$PULSE_URL\" | bash"
+            echo ""
+            echo "📝 For manual setup, use the token created above with:"
+            echo "   Token ID: pulse-monitor@pbs!%s"
+            echo "   Token Value: [See above]"
+            echo ""
+            exit 1
+        fi
+        
+        # Construct registration request with setup code
+        REGISTER_JSON=$(cat <<EOF
 {
   "type": "pbs",
   "host": "$HOST_URL",
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pbs!%s",
-  "tokenValue": "$TOKEN_VALUE"
+  "tokenValue": "$TOKEN_VALUE",
+  "setupCode": "$SETUP_CODE"
 }
 EOF
-    )
-    # Remove newlines from JSON
-    REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
-    
-    # Send registration with appropriate authentication
-    SETUP_TOKEN="%s"
-    
-    if [ -n "$SETUP_TOKEN" ]; then
-        # Use setup token for authentication (passed from Pulse UI)
+        )
+        # Remove newlines from JSON
+        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+        
+        # Send registration with setup code
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
-            -H "X-Setup-Token: $SETUP_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
-        # Try without authentication (for systems without auth)
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
+        echo "⚠️  No setup code provided - skipping auto-registration"
+        AUTO_REG_SUCCESS=false
+        REGISTER_RESPONSE=""
     fi
     
     AUTO_REG_SUCCESS=false
@@ -2358,7 +2385,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName,
-			pulseURL, serverHost, tokenName, tokenName, tempToken, tokenName, tokenName)
+			pulseURL, serverHost, tokenName, tokenName, tokenName, tokenName)
 	}
 	
 	// Set headers for script download
@@ -2367,14 +2394,19 @@ fi
 	w.Write([]byte(script))
 }
 
-// generateSetupToken generates a random token for temporary setup script access
-func (h *ConfigHandlers) generateSetupToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
+// generateSetupCode generates a 6-character alphanumeric code for one-time use
+func (h *ConfigHandlers) generateSetupCode() string {
+	// Use alphanumeric characters (excluding similar looking ones)
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 6)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+	return string(b)
 }
 
-// HandleSetupScriptURL generates a temporary URL for downloading the setup script
+// HandleSetupScriptURL generates a one-time setup code and URL for the setup script
 func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -2393,19 +2425,28 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		return
 	}
 	
-	// Generate temporary token valid for 5 minutes
-	token := h.generateSetupToken()
+	// Generate a 6-character setup code
+	code := h.generateSetupCode()
+	codeHash := internalauth.HashAPIToken(code) // Reuse the hash function for consistency
+	
+	// Store the code with expiry (5 minutes)
 	expiry := time.Now().Add(5 * time.Minute)
-	h.tokenMutex.Lock()
-	h.setupTokens[token] = expiry
-	h.tokenMutex.Unlock()
+	h.codeMutex.Lock()
+	h.setupCodes[codeHash] = &SetupCode{
+		ExpiresAt: expiry,
+		Used:      false,
+		NodeType:  req.Type,
+		Host:      req.Host,
+	}
+	h.codeMutex.Unlock()
 	
 	log.Info().
+		Str("code_hash", codeHash[:8]+"...").
 		Time("expiry", expiry).
-		Int("total_tokens", len(h.setupTokens)).
-		Msg("Generated setup token")
+		Str("type", req.Type).
+		Msg("Generated setup code")
 	
-	// Build the URL with the temporary token
+	// Build the URL without any authentication tokens
 	pulseURL := fmt.Sprintf("%s://%s", "http", r.Host)
 	if r.TLS != nil {
 		pulseURL = fmt.Sprintf("%s://%s", "https", r.Host)
@@ -2421,17 +2462,16 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 	
-	// Note: We don't pass the API token in the URL since it's hashed and can't be used directly
-	// The temporary token provides authentication for the setup script
+	// URL doesn't contain any secrets - the code is entered interactively
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
 	
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&token=%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
-	
-	// Return the URL and curl command
+	// Return the URL, command, and setup code
 	response := map[string]interface{}{
-		"url":     scriptURL,
-		"command": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
-		"expires": time.Now().Add(5 * time.Minute).Unix(),
+		"url":        scriptURL,
+		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"setupCode":  code, // The user needs to see this
+		"expires":    expiry.Unix(),
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
@@ -2443,8 +2483,9 @@ type AutoRegisterRequest struct {
 	Type       string `json:"type"`       // "pve" or "pbs"
 	Host       string `json:"host"`       // The host URL
 	TokenID    string `json:"tokenId"`    // Full token ID like pulse-monitor@pam!pulse-token
-	TokenValue string `json:"tokenValue,omitempty"` // DEPRECATED - for backward compatibility only
+	TokenValue string `json:"tokenValue,omitempty"` // The token value for the node
 	ServerName string `json:"serverName"` // Hostname or IP
+	SetupCode  string `json:"setupCode,omitempty"` // One-time setup code for authentication
 	// New secure fields
 	RequestToken bool   `json:"requestToken,omitempty"` // If true, Pulse will generate and return a token
 	Username     string `json:"username,omitempty"`     // Username for creating token (e.g., "root@pam")
@@ -2458,22 +2499,57 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	// Check authentication - either API token or temporary setup token
-	authenticated := false
-	
-	// First check for temporary setup token
-	if tempToken := r.Header.Get("X-Setup-Token"); tempToken != "" {
-		h.tokenMutex.RLock()
-		expiry, exists := h.setupTokens[tempToken]
-		h.tokenMutex.RUnlock()
-		
-		if exists && time.Now().Before(expiry) {
-			authenticated = true
-			log.Info().Msg("Auto-register authenticated via temporary setup token")
-		}
+	// Parse request body first to get the setup code
+	var req AutoRegisterRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read request body")
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
 	}
 	
-	// If not authenticated via temp token, check API token if configured
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Error().Err(err).Str("body", string(body)).Msg("Failed to parse auto-register request")
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+	
+	// Check authentication - require either setup code or API token if auth is enabled
+	authenticated := false
+	
+	// First check for setup code in the request
+	if req.SetupCode != "" {
+		codeHash := internalauth.HashAPIToken(req.SetupCode)
+		h.codeMutex.Lock()
+		setupCode, exists := h.setupCodes[codeHash]
+		if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
+			// Validate that the code matches the node type and host
+			if setupCode.NodeType == req.Type && setupCode.Host == req.Host {
+				setupCode.Used = true // Mark as used immediately
+				authenticated = true
+				log.Info().
+					Str("type", req.Type).
+					Str("host", req.Host).
+					Msg("Auto-register authenticated via setup code")
+			} else {
+				log.Warn().
+					Str("expected_type", setupCode.NodeType).
+					Str("got_type", req.Type).
+					Str("expected_host", setupCode.Host).
+					Str("got_host", req.Host).
+					Msg("Setup code validation failed - type or host mismatch")
+			}
+		} else if exists && setupCode.Used {
+			log.Warn().Msg("Setup code already used")
+		} else if exists {
+			log.Warn().Msg("Setup code expired")
+		} else {
+			log.Warn().Msg("Invalid setup code")
+		}
+		h.codeMutex.Unlock()
+	}
+	
+	// If not authenticated via setup code, check API token if configured
 	if !authenticated && h.config.APIToken != "" {
 		apiToken := r.Header.Get("X-API-Token")
 		// Config always has hashed token now (auto-hashed on load)
@@ -2485,8 +2561,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	
 	// If still not authenticated and auth is required, reject
 	if !authenticated && h.config.APIToken != "" {
-		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - authentication required")
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - invalid or missing setup code")
+		http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
 		return
 	}
 	
@@ -2496,23 +2572,6 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		clientIP = forwarded
 	}
 	log.Info().Str("clientIP", clientIP).Msg("Auto-register request from")
-
-	// Read body first to debug
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to read request body")
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-	
-	log.Info().Msg("Auto-register request received")
-	
-	var req AutoRegisterRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode auto-register request")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
 	
 	// Registration token validation removed - feature deprecated
 	
