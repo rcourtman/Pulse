@@ -214,10 +214,19 @@ func (r *Router) setupRoutes() {
 			
 			// Check if auth is globally disabled
 			if r.config.DisableAuth {
+				// Even with auth disabled, report API token status for API access
+				var apiTokenHint string
+				if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
+					apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
+				}
+				
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"configured": false,
 					"disabled": true,
 					"message": "Authentication is disabled via DISABLE_AUTH environment variable",
+					"apiTokenConfigured": r.config.APIToken != "",
+					"apiTokenHint": apiTokenHint,
+					"hasAuthentication": false,
 				})
 				return
 			}
@@ -674,9 +683,30 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	needsAuth := true
 	
 	// Check if auth is globally disabled
+	// BUT still check for API tokens if provided (for API access when auth is disabled)
 	if r.config.DisableAuth {
-		needsAuth = false
-		w.Header().Set("X-Auth-Disabled", "true")
+		// Check if an API token was provided
+		providedToken := req.Header.Get("X-API-Token")
+		if providedToken == "" {
+			providedToken = req.URL.Query().Get("token")
+		}
+		
+		// If a valid API token is provided, allow access even with DisableAuth
+		if providedToken != "" && r.config.APIToken != "" {
+			if auth.CompareAPIToken(providedToken, r.config.APIToken) {
+				// Valid API token provided, allow access
+				needsAuth = false
+				w.Header().Set("X-Auth-Method", "api-token")
+			} else {
+				// Invalid API token - reject even with DisableAuth
+				http.Error(w, "Invalid API token", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			// No API token provided with DisableAuth - allow open access
+			needsAuth = false
+			w.Header().Set("X-Auth-Disabled", "true")
+		}
 	}
 	
 	// Recovery mechanism: Check if recovery mode is enabled
