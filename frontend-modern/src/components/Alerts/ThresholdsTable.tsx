@@ -109,9 +109,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       return `${value}%`;
     }
     
-    // MB/s metrics
+    // MB/s metrics - show "Off" for 0 values
     if (metric === 'diskRead' || metric === 'diskWrite' || metric === 'networkIn' || metric === 'networkOut') {
-      return `${value} MB/s`;
+      return value === 0 ? 'Off' : `${value} MB/s`;
     }
     
     return String(value);

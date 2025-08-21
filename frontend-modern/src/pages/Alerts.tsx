@@ -213,10 +213,10 @@ export function Alerts() {
             cpu: getTriggerValue(config.guestDefaults.cpu) || 80,
             memory: getTriggerValue(config.guestDefaults.memory) || 85,
             disk: getTriggerValue(config.guestDefaults.disk) || 90,
-            diskRead: getTriggerValue(config.guestDefaults.diskRead) || 150,
-            diskWrite: getTriggerValue(config.guestDefaults.diskWrite) || 150,
-            networkIn: getTriggerValue(config.guestDefaults.networkIn) || 200,
-            networkOut: getTriggerValue(config.guestDefaults.networkOut) || 200
+            diskRead: getTriggerValue(config.guestDefaults.diskRead) || 0,
+            diskWrite: getTriggerValue(config.guestDefaults.diskWrite) || 0,
+            networkIn: getTriggerValue(config.guestDefaults.networkIn) || 0,
+            networkOut: getTriggerValue(config.guestDefaults.networkOut) || 0
           });
         }
         
@@ -353,10 +353,10 @@ export function Alerts() {
     cpu: 80,
     memory: 85,
     disk: 90,
-    diskRead: 150,
-    diskWrite: 150,
-    networkIn: 200,
-    networkOut: 200
+    diskRead: 0,
+    diskWrite: 0,
+    networkIn: 0,
+    networkOut: 0
   });
 
   const [nodeDefaults, setNodeDefaults] = createSignal({
