@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,9 +65,50 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		}
 	}
 	
-	// If no origins configured, allow same-origin only
+	// If no origins configured, be more lenient for Docker/local deployments
 	if len(allowedOrigins) == 0 {
-		return origin == requestOrigin
+		// Allow connections from common local/private network patterns
+		// This handles Docker, VMs, and local network access scenarios
+		if strings.HasPrefix(origin, "http://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			strings.HasPrefix(origin, "http://192.168.") ||
+			strings.HasPrefix(origin, "http://10.") ||
+			strings.HasPrefix(origin, "http://172.") ||
+			strings.Contains(origin, ".local:") ||
+			strings.Contains(origin, ".lan:") {
+			log.Debug().
+				Str("origin", origin).
+				Str("requestOrigin", requestOrigin).
+				Msg("Allowing WebSocket connection from local/private network")
+			return true
+		}
+		
+		// For HTTPS, also allow from private networks
+		if strings.HasPrefix(origin, "https://") {
+			urlPart := strings.TrimPrefix(origin, "https://")
+			if strings.HasPrefix(urlPart, "192.168.") ||
+				strings.HasPrefix(urlPart, "10.") ||
+				strings.HasPrefix(urlPart, "172.") ||
+				strings.Contains(urlPart, ".local:") ||
+				strings.Contains(urlPart, ".lan:") {
+				log.Debug().
+					Str("origin", origin).
+					Str("requestOrigin", requestOrigin).
+					Msg("Allowing secure WebSocket connection from private network")
+				return true
+			}
+		}
+		
+		// Still check for exact same-origin match
+		if origin == requestOrigin {
+			return true
+		}
+		
+		log.Warn().
+			Str("origin", origin).
+			Str("requestOrigin", requestOrigin).
+			Msg("WebSocket connection rejected - not from allowed local/private network")
+		return false
 	}
 	
 	log.Warn().
