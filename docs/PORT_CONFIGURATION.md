@@ -4,7 +4,13 @@ Pulse supports multiple ways to configure the frontend port (default: 7655).
 
 ## Recommended Methods
 
-### 1. Using systemd override (Recommended for systemd installations)
+### 1. During Installation (Easiest)
+The installer prompts for the port. To skip the prompt, use:
+```bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+```
+
+### 2. Using systemd override (For existing installations)
 ```bash
 sudo systemctl edit pulse
 ```
@@ -15,7 +21,7 @@ Environment="FRONTEND_PORT=8080"
 ```
 Then restart: `sudo systemctl restart pulse`
 
-### 2. Using system.json (For persistent configuration)
+### 3. Using system.json (Alternative method)
 Edit `/etc/pulse/system.json`:
 ```json
 {
@@ -24,12 +30,10 @@ Edit `/etc/pulse/system.json`:
 ```
 Then restart: `sudo systemctl restart pulse`
 
-Note: This can also be configured via the Web UI settings.
-
-### 3. Using environment variables (Docker)
+### 4. Using environment variables (Docker)
 For Docker deployments:
 ```bash
-docker run -e FRONTEND_PORT=8080 -p 8080:8080 rcourtman/pulse
+docker run -e FRONTEND_PORT=8080 -p 8080:8080 rcourtman/pulse:latest
 ```
 
 ## Priority Order

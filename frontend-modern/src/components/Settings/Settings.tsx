@@ -1283,11 +1283,12 @@ const Settings: Component = () => {
                     
                     <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                       <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
-                        <strong>Port Configuration:</strong> Edit <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">/etc/pulse/.env</code>
+                        <strong>Port Configuration:</strong> Use <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">systemctl edit pulse</code>
                       </p>
                       <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
-                        FRONTEND_PORT=8080<br/>
-                        <span class="text-xs text-amber-600 dark:text-amber-400">Then restart: sudo systemctl restart pulse-backend</span>
+                        [Service]<br/>
+                        Environment="FRONTEND_PORT=8080"<br/>
+                        <span class="text-xs text-amber-600 dark:text-amber-400">Then restart: sudo systemctl restart pulse</span>
                       </p>
                     </div>
                   </div>

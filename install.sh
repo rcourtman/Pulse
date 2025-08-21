@@ -161,6 +161,15 @@ create_lxc_container() {
     
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo
+        # Ask for port configuration
+        read -p "Frontend port [7655]: " frontend_port < /dev/tty
+        frontend_port=${frontend_port:-7655}
+        if [[ ! "$frontend_port" =~ ^[0-9]+$ ]] || [[ "$frontend_port" -lt 1 ]] || [[ "$frontend_port" -gt 65535 ]]; then
+            print_error "Invalid port number. Using default port 7655."
+            frontend_port=7655
+        fi
+        
+        echo
         # Try to get cluster-wide IDs, fall back to local
         local USED_IDS=""
         if command -v pvesh &>/dev/null; then
@@ -261,6 +270,7 @@ create_lxc_container() {
         onboot=1
         firewall=1
         unprivileged=1
+        frontend_port=7655
     fi
     
     # Get available network bridges
@@ -481,8 +491,12 @@ EOF
         cleanup_on_error
     fi
     
-    # Run installation quietly (suppress verbose output)
-    local install_output=$(pct exec $CTID -- bash /tmp/install.sh --in-container 2>&1)
+    # Run installation quietly (suppress verbose output) with port configuration
+    local install_cmd="bash /tmp/install.sh --in-container"
+    if [[ "$frontend_port" != "7655" ]]; then
+        install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
+    fi
+    local install_output=$(pct exec $CTID -- bash -c "$install_cmd" 2>&1)
     local install_status=$?
     
     if [[ $install_status -ne 0 ]]; then
@@ -497,7 +511,7 @@ EOF
     echo
     print_success "Pulse installation complete!"
     echo
-    echo "  Web UI:     http://${IP}:7655"
+    echo "  Web UI:     http://${IP}:${frontend_port}"
     echo "  Container:  $CTID"
     echo
     echo "  Commands:"
@@ -725,6 +739,16 @@ StandardOutput=journal
 StandardError=journal
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PULSE_DATA_DIR=$CONFIG_DIR"
+EOF
+
+    # Add port configuration if not default
+    if [[ "$FRONTEND_PORT" != "7655" ]]; then
+        cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF
+Environment="FRONTEND_PORT=$FRONTEND_PORT"
+EOF
+    fi
+
+    cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF
 
 # Security hardening
 NoNewPrivileges=true
@@ -764,7 +788,7 @@ print_completion() {
     print_header
     print_success "Pulse installation completed!"
     echo
-    echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:7655"
+    echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:${FRONTEND_PORT}"
     echo
     echo -e "${YELLOW}Useful commands:${NC}"
     echo "  systemctl status $SERVICE_NAME    - Check service status"
@@ -791,6 +815,18 @@ main() {
     detect_os
     check_docker_environment
     check_pre_v4_installation
+    
+    # Ask for port configuration (non-container installs)
+    local FRONTEND_PORT=${FRONTEND_PORT:-}
+    if [[ -z "$FRONTEND_PORT" ]]; then
+        echo
+        read -p "Frontend port [7655]: " FRONTEND_PORT < /dev/tty
+        FRONTEND_PORT=${FRONTEND_PORT:-7655}
+        if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+            print_error "Invalid port number. Using default port 7655."
+            FRONTEND_PORT=7655
+        fi
+    fi
     
     if check_existing_installation; then
         # Get the latest available version for comparison
