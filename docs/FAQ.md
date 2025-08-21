@@ -22,12 +22,13 @@ Settings → System → Network Settings → Toggle "Enable Discovery" off → S
 Or set environment variable `DISCOVERY_ENABLED=false`
 
 ### How do I change the port?
-Systemd: `sudo systemctl edit pulse-backend`, add `Environment="FRONTEND_PORT=8080"`, restart
-Docker: Use `-e FRONTEND_PORT=8080` in your run command
+Systemd: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart
+Docker: Use `-e FRONTEND_PORT=8080 -p 8080:8080` in your run command
+See [Port Configuration Guide](PORT_CONFIGURATION.md) for details
 
 ### Why can't I change settings in the UI?
 If a setting is disabled with an amber warning, it's being overridden by an environment variable. 
-Remove the env var (check `sudo systemctl show pulse-backend | grep Environment`) and restart to enable UI configuration.
+Remove the env var (check `sudo systemctl show pulse | grep Environment`) and restart to enable UI configuration.
 
 ### What permissions needed?
 - PVE: `PVEAuditor` minimum

@@ -8,6 +8,11 @@ The official installer automatically detects your environment and chooses the be
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
+The installer will prompt you for the port (default: 7655). To skip the prompt, set the environment variable:
+```bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+```
+
 ## Installation Methods
 
 ### Proxmox VE Hosts
@@ -27,6 +32,7 @@ When run on a Proxmox VE host, the installer automatically:
 - Customize all container settings
 - Choose specific network bridges and storage
 - Configure static IP if needed
+- Set custom port (default: 7655)
 
 ### Standard Linux Systems
 
@@ -90,9 +96,13 @@ Ensure you have:
 - Network bridge configured
 
 ### Port Already in Use
-Pulse uses port 7655 by default. Check with:
+Pulse uses port 7655 by default. You can change it during installation or check current usage with:
 ```bash
 sudo netstat -tlnp | grep 7655
+```
+To use a different port during installation:
+```bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 ```
 
 ## Uninstalling
