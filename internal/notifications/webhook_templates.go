@@ -234,6 +234,35 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n\nThis uses the modern Adaptive Card format recommended for new implementations.",
 		},
 		{
+			Service:    "gotify",
+			Name:       "Gotify",
+			URLPattern: "https://{your-gotify-server}/message?token={your-app-token}",
+			Method:     "POST",
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			PayloadTemplate: `{
+				"message": "{{.Message}}",
+				"title": "Pulse Alert: {{.Level | title}}",
+				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
+				"extras": {
+					"client::display": {
+						"contentType": "text/markdown"
+					},
+					"pulse::alert": {
+						"id": "{{.ID}}",
+						"level": "{{.Level}}",
+						"type": "{{.Type}}",
+						"resource_name": "{{.ResourceName}}",
+						"node": "{{.Node}}",
+						"value": {{.Value}},
+						"threshold": {{.Threshold}},
+						"duration": "{{.Duration}}",
+						"instance": "{{.Instance}}"
+					}
+				}
+			}`,
+			Instructions: "1. In Gotify, create a new application\n2. Copy the application token\n3. URL format: https://your-gotify-server/message?token=YOUR_APP_TOKEN\n4. The token must be included in the URL as a parameter",
+		},
+		{
 			Service:    "generic",
 			Name:       "Generic JSON Webhook",
 			URLPattern: "",
