@@ -104,9 +104,24 @@ docker run -d \
   -v pulse_data:/data \
   --restart unless-stopped \
   rcourtman/pulse:latest
+```
 
-# Discovery automatically finds Proxmox nodes on your network!
-# For custom subnets (optional): -e DISCOVERY_SUBNET="192.168.50.0/24"
+### Network Discovery
+
+Pulse automatically discovers Proxmox nodes on your network! By default, it scans:
+- 192.168.0.0/16 (home networks)
+- 10.0.0.0/8 (private networks)
+- 172.16.0.0/12 (Docker/internal networks)
+
+To scan a custom subnet instead:
+```bash
+docker run -d \
+  --name pulse \
+  -p 7655:7655 \
+  -v pulse_data:/data \
+  -e DISCOVERY_SUBNET="192.168.50.0/24" \
+  --restart unless-stopped \
+  rcourtman/pulse:latest
 ```
 
 ### Automated Deployment
