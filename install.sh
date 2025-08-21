@@ -138,16 +138,27 @@ create_lxc_container() {
     
     print_info "Using container ID: $CTID"
     
-    # Get container settings
+    echo
+    echo -e "${BLUE}Recommended specifications for Pulse:${NC}"
+    echo "  • Memory: 2GB (handles 50+ nodes comfortably)"
+    echo "  • CPU: 2 cores (for responsive UI and polling)"
+    echo "  • Disk: 16GB (logs, metrics, future growth)"
+    echo "  • Network: Firewall enabled, DHCP"
+    echo
+    
+    # Get container settings with optimized defaults
     read -p "Container hostname [pulse]: " hostname < /dev/tty
     hostname=${hostname:-pulse}
     
-    read -p "Memory (MB) [1024]: " memory < /dev/tty
-    memory=${memory:-1024}
+    # Pulse is lightweight but needs enough RAM for monitoring multiple nodes
+    read -p "Memory (MB) [2048]: " memory < /dev/tty
+    memory=${memory:-2048}
     
-    read -p "Disk size (GB) [8]: " disk < /dev/tty
-    disk=${disk:-8}
+    # Enough disk for logs, metrics history, and future growth
+    read -p "Disk size (GB) [16]: " disk < /dev/tty
+    disk=${disk:-16}
     
+    # 2 cores is good for responsive UI and concurrent polling
     read -p "CPU cores [2]: " cores < /dev/tty
     cores=${cores:-2}
     
@@ -172,16 +183,25 @@ create_lxc_container() {
         pveam download local debian-12-standard_12.7-1_amd64.tar.zst
     fi
     
-    # Create container
+    # Create container with optimized settings
+    # - Unprivileged for security
+    # - Firewall enabled on network interface
+    # - Startup order 99 (starts after critical services)
+    # - Swap for memory flexibility
+    # - CPU limit to prevent runaway processes
     pct create $CTID $TEMPLATE \
         --hostname $hostname \
         --memory $memory \
         --cores $cores \
+        --cpulimit $cores \
         --rootfs ${storage}:${disk} \
-        --net0 name=eth0,bridge=${bridge},ip=dhcp \
+        --net0 name=eth0,bridge=${bridge},ip=dhcp,firewall=1 \
         --unprivileged 1 \
         --features nesting=1 \
-        --onboot 1
+        --onboot 1 \
+        --startup order=99 \
+        --protection 0 \
+        --swap 512
     
     if [[ $? -ne 0 ]]; then
         print_error "Failed to create container"
@@ -202,9 +222,17 @@ create_lxc_container() {
         sleep 1
     done
     
-    # Install dependencies first
+    # Install dependencies and optimize container
     print_info "Installing dependencies in container..."
-    pct exec $CTID -- bash -c "apt-get update && apt-get install -y curl wget"
+    pct exec $CTID -- bash -c "
+        apt-get update && apt-get install -y curl wget ca-certificates
+        # Set timezone to UTC for consistent logging
+        ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+        # Optimize sysctl for monitoring workload
+        echo 'net.core.somaxconn=1024' >> /etc/sysctl.conf
+        echo 'net.ipv4.tcp_keepalive_time=60' >> /etc/sysctl.conf
+        sysctl -p
+    "
     
     # Install Pulse inside container
     print_info "Installing Pulse in container..."
@@ -227,6 +255,14 @@ create_lxc_container() {
         echo "  pct stop $CTID            - Stop container"  
         echo "  pct start $CTID           - Start container"
         echo "  pct destroy $CTID         - Remove container"
+        echo
+        echo -e "${BLUE}Container optimizations applied:${NC}"
+        echo "  ✓ Unprivileged container (enhanced security)"
+        echo "  ✓ Firewall enabled on network interface"
+        echo "  ✓ Auto-start on boot with order 99"
+        echo "  ✓ CPU limit set to prevent resource hogging"
+        echo "  ✓ 512MB swap for memory flexibility"
+        echo "  ✓ UTC timezone for consistent logging"
         echo
     else
         print_error "Installation failed"
