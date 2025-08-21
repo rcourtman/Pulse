@@ -37,6 +37,20 @@ print_header() {
     echo
 }
 
+# Safe read function that works with or without TTY
+safe_read() {
+    local prompt="$1"
+    local var_name="$2"
+    shift 2
+    local read_args="$@"
+    
+    if [[ -t 0 ]] && [[ -e /dev/tty ]]; then
+        read -p "$prompt" $read_args $var_name < /dev/tty
+    else
+        read -p "$prompt" $read_args $var_name
+    fi
+}
+
 print_error() {
     echo -e "${RED}[ERROR] $1${NC}" >&2
 }
@@ -133,7 +147,7 @@ create_lxc_container() {
     echo "  1) Quick (recommended)"
     echo "  2) Advanced"
     echo "  3) Cancel"
-    read -p "Select [1-3]: " -n 1 -r mode < /dev/tty
+    safe_read "Select [1-3]: " mode -n 1 -r
     echo
     
     case $mode in
@@ -162,7 +176,7 @@ create_lxc_container() {
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo
         # Ask for port configuration
-        read -p "Frontend port [7655]: " frontend_port < /dev/tty
+        safe_read "Frontend port [7655]: " frontend_port
         frontend_port=${frontend_port:-7655}
         if [[ ! "$frontend_port" =~ ^[0-9]+$ ]] || [[ "$frontend_port" -lt 1 ]] || [[ "$frontend_port" -gt 65535 ]]; then
             print_error "Invalid port number. Using default port 7655."
@@ -189,7 +203,7 @@ create_lxc_container() {
         fi
         
         echo "Container/VM IDs in use: ${USED_IDS:-none}"
-        read -p "Container ID [$CTID]: " custom_ctid < /dev/tty
+        safe_read "Container ID [$CTID]: " custom_ctid
         if [[ -n "$custom_ctid" ]] && [[ "$custom_ctid" =~ ^[0-9]+$ ]]; then
             # Check if ID is in use
             if pct status $custom_ctid &>/dev/null 2>&1 || qm status $custom_ctid &>/dev/null 2>&1; then
@@ -216,25 +230,25 @@ create_lxc_container() {
         echo
         
         # Container settings
-        read -p "Container hostname [pulse]: " hostname < /dev/tty
+        safe_read "Container hostname [pulse]: " hostname
         hostname=${hostname:-pulse}
         
-        read -p "Memory (MB) [1024]: " memory < /dev/tty
+        safe_read "Memory (MB) [1024]: " memory
         memory=${memory:-1024}
         
-        read -p "Disk size (GB) [4]: " disk < /dev/tty
+        safe_read "Disk size (GB) [4]: " disk
         disk=${disk:-4}
         
-        read -p "CPU cores [2]: " cores < /dev/tty
+        safe_read "CPU cores [2]: " cores
         cores=${cores:-2}
         
-        read -p "CPU limit (0=unlimited) [2]: " cpulimit < /dev/tty
+        safe_read "CPU limit (0=unlimited) [2]: " cpulimit
         cpulimit=${cpulimit:-2}
         
-        read -p "Swap (MB) [256]: " swap < /dev/tty
+        safe_read "Swap (MB) [256]: " swap
         swap=${swap:-256}
         
-        read -p "Start on boot? [Y/n]: " -n 1 -r onboot < /dev/tty
+        safe_read "Start on boot? [Y/n]: " onboot -n 1 -r
         echo
         if [[ "$onboot" =~ ^[Nn]$ ]]; then
             onboot=0
@@ -242,7 +256,7 @@ create_lxc_container() {
             onboot=1
         fi
         
-        read -p "Enable firewall? [Y/n]: " -n 1 -r firewall < /dev/tty
+        safe_read "Enable firewall? [Y/n]: " firewall -n 1 -r
         echo
         if [[ "$firewall" =~ ^[Nn]$ ]]; then
             firewall=0
@@ -250,7 +264,7 @@ create_lxc_container() {
             firewall=1
         fi
         
-        read -p "Unprivileged container? [Y/n]: " -n 1 -r unprivileged < /dev/tty
+        safe_read "Unprivileged container? [Y/n]: " unprivileged -n 1 -r
         echo
         if [[ "$unprivileged" =~ ^[Nn]$ ]]; then
             unprivileged=0
@@ -291,21 +305,21 @@ create_lxc_container() {
         # Show available bridges
         echo
         echo "Available network bridges: ${BRIDGES:-none detected}"
-        read -p "Network bridge [$DEFAULT_BRIDGE]: " bridge < /dev/tty
+        safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
         bridge=${bridge:-$DEFAULT_BRIDGE}
         
         # Show available storage with usage details
         echo
         echo "Available storage pools:"
         echo "$STORAGE_INFO" | awk '{printf "  %-15s %-8s %5s used\n", $1, $2, $6}' || echo "  No storage pools found"
-        read -p "Storage [$DEFAULT_STORAGE]: " storage < /dev/tty
+        safe_read "Storage [$DEFAULT_STORAGE]: " storage
         storage=${storage:-$DEFAULT_STORAGE}
         
-        read -p "Static IP (leave empty for DHCP): " static_ip < /dev/tty
+        safe_read "Static IP (leave empty for DHCP): " static_ip
         
-        read -p "DNS servers (comma-separated, empty for host settings): " nameserver < /dev/tty
+        safe_read "DNS servers (comma-separated, empty for host settings): " nameserver
         
-        read -p "Startup order [99]: " startup < /dev/tty
+        safe_read "Startup order [99]: " startup
         startup=${startup:-99}
     else
         # Quick mode - use defaults
@@ -330,7 +344,7 @@ create_lxc_container() {
             echo "  u) Download Ubuntu 22.04 LTS"
             echo "  a) Download Alpine Linux (minimal)"
             echo
-            read -p "Select template number or option [Enter for Debian 12]: " template_choice < /dev/tty
+            safe_read "Select template number or option [Enter for Debian 12]: " template_choice
             if [[ -n "$template_choice" ]]; then
                 case "$template_choice" in
                     d|D)
@@ -819,12 +833,17 @@ main() {
     # Ask for port configuration (non-container installs)
     local FRONTEND_PORT=${FRONTEND_PORT:-}
     if [[ -z "$FRONTEND_PORT" ]]; then
-        echo
-        read -p "Frontend port [7655]: " FRONTEND_PORT < /dev/tty
-        FRONTEND_PORT=${FRONTEND_PORT:-7655}
-        if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
-            print_error "Invalid port number. Using default port 7655."
+        if [[ "$IN_CONTAINER" == "true" ]]; then
+            # In container mode, use default port without prompting
             FRONTEND_PORT=7655
+        else
+            echo
+            safe_read "Frontend port [7655]: " FRONTEND_PORT
+            FRONTEND_PORT=${FRONTEND_PORT:-7655}
+            if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                print_error "Invalid port number. Using default port 7655."
+                FRONTEND_PORT=7655
+            fi
         fi
     fi
     
@@ -847,7 +866,7 @@ main() {
         echo "2) Reinstall current version"
         echo "3) Remove Pulse"
         echo "4) Cancel"
-        read -p "Select option [1-4]: " choice < /dev/tty
+        safe_read "Select option [1-4]: " choice
         
         case $choice in
             1)
