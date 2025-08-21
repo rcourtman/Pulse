@@ -433,6 +433,7 @@ type VM struct {
 	Template   int     `json:"template"`
 	Tags       string  `json:"tags"`
 	Lock       string  `json:"lock"`
+	Agent      int     `json:"agent"`
 }
 
 // Container represents a Proxmox VE LXC container
@@ -835,6 +836,38 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 	}
 
 	return result.Data, nil
+}
+
+// VMFileSystem represents filesystem information from QEMU guest agent
+type VMFileSystem struct {
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Mountpoint string  `json:"mountpoint"`
+	TotalBytes uint64  `json:"total-bytes"`
+	UsedBytes  uint64  `json:"used-bytes"`
+	Disk       []interface{} `json:"disk"` // Disk device info, not needed for usage
+}
+
+// GetVMFSInfo returns filesystem information from QEMU guest agent
+func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid))
+	if err != nil {
+		// Guest agent might not be installed or running
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Result []VMFileSystem `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data.Result, nil
 }
 
 // GetVMStatus returns detailed VM status including balloon info

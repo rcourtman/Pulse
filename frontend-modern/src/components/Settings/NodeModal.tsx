@@ -640,7 +640,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </li>
                                   <li class="flex items-start">
                                     <span class="text-green-500 mr-2 mt-0.5">✓</span>
-                                    <span>Sets up monitoring permissions (PVEAuditor{formData().enableBackupManagement ? ' + backup access' : ''})</span>
+                                    <span>Sets up monitoring permissions (PVEAuditor + VM.Monitor{formData().enableBackupManagement ? ' + backup access' : ''})</span>
                                   </li>
                                   <li class="flex items-start">
                                     <span class="text-green-500 mr-2 mt-0.5">✓</span>
@@ -716,7 +716,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <button
                                       type="button"
                                       onClick={async () => {
-                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor';
+                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && pveum role create PulseMonitor -privs VM.Monitor 2>/dev/null; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor';
                                         if (await copyToClipboard(cmd)) {
                                           showSuccess('Command copied!');
                                         }
@@ -729,7 +729,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                       </svg>
                                     </button>
-                                    <code class="text-gray-800 dark:text-gray-200">pveum aclmod / -user pulse-monitor@pam -role PVEAuditor</code>
+                                    <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor\npveum role create PulseMonitor -privs VM.Monitor 2>/dev/null\npveum aclmod / -user pulse-monitor@pam -role PulseMonitor'}</code>
                                   </div>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
                                     <button
@@ -751,7 +751,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <code class="text-gray-800 dark:text-gray-200">pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin</code>
                                   </div>
                                   <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                    ℹ️ PVEAuditor gives read-only access. PVEDatastoreAdmin on /storage adds backup management capabilities.
+                                    ℹ️ PVEAuditor gives read-only access. PulseMonitor adds VM guest agent access for disk usage. PVEDatastoreAdmin on /storage adds backup management.
                                   </p>
                                 </div>
                                 

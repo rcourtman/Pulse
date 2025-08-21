@@ -39,6 +39,7 @@ type PVEClientInterface interface {
 	GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error)
 	GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error)
 	IsClusterMember(ctx context.Context) (bool, error)
+	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 }
 
 // Monitor handles all monitoring operations
@@ -920,6 +921,77 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				continue
 			}
 			
+			// Try to get actual disk usage from guest agent if VM is running
+			diskUsed := res.Disk
+			diskTotal := res.MaxDisk
+			diskFree := diskTotal - diskUsed
+			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+			
+			// For running VMs, try to get filesystem info from guest agent
+			if res.Status == "running" {
+				// First check if agent is enabled by getting VM status
+				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
+				if err == nil && vmStatus != nil && vmStatus.Agent == 1 {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Msg("VM has agent enabled, attempting to get filesystem info")
+					
+					fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
+					if err == nil && len(fsInfo) > 0 {
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", res.Name).
+							Int("filesystems", len(fsInfo)).
+							Msg("Got filesystem info from guest agent")
+						
+						// Aggregate disk usage from all filesystems
+						var totalBytes, usedBytes uint64
+						for _, fs := range fsInfo {
+							// Skip special filesystems and mounts
+							if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
+							   strings.HasPrefix(fs.Mountpoint, "/dev") ||
+							   strings.HasPrefix(fs.Mountpoint, "/proc") ||
+							   strings.HasPrefix(fs.Mountpoint, "/sys") ||
+							   strings.HasPrefix(fs.Mountpoint, "/run") ||
+							   fs.Mountpoint == "/boot/efi" {
+								continue
+							}
+							
+							// Only count real filesystems
+							if fs.TotalBytes > 0 {
+								totalBytes += fs.TotalBytes
+								usedBytes += fs.UsedBytes
+							}
+						}
+						
+						// If we got valid data from guest agent, use it
+						if totalBytes > 0 {
+							diskTotal = totalBytes
+							diskUsed = usedBytes
+							diskFree = totalBytes - usedBytes
+							diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+							
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", res.Name).
+								Uint64("totalBytes", totalBytes).
+								Uint64("usedBytes", usedBytes).
+								Float64("usage", diskUsage).
+								Msg("Using disk usage from guest agent")
+						}
+					} else if err != nil {
+						log.Debug().
+							Err(err).
+							Str("instance", instanceName).
+							Str("vm", res.Name).
+							Int("vmid", res.VMID).
+							Msg("Failed to get filesystem info from guest agent")
+					}
+				}
+			}
+			
 			vm := models.VM{
 				ID:         guestID,
 				VMID:       res.VMID,
@@ -937,10 +1009,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					Usage: safePercentage(float64(res.Mem), float64(res.MaxMem)),
 				},
 				Disk: models.Disk{
-					Total: int64(res.MaxDisk),
-					Used:  int64(res.Disk),
-					Free:  int64(res.MaxDisk - res.Disk),
-					Usage: safePercentage(float64(res.Disk), float64(res.MaxDisk)),
+					Total: int64(diskTotal),
+					Used:  int64(diskUsed),
+					Free:  int64(diskFree),
+					Usage: diskUsage,
 				},
 				NetworkIn:  maxInt64(0, int64(netInRate)),
 				NetworkOut: maxInt64(0, int64(netOutRate)),
@@ -1154,6 +1226,85 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				cpuUsage = 0
 			}
 
+			// Try to get actual disk usage from guest agent if available
+			diskUsed := uint64(vm.Disk)
+			diskTotal := uint64(vm.MaxDisk)
+			diskFree := diskTotal - diskUsed
+			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+			
+			// If VM has guest agent enabled and is running, try to get filesystem info
+			if vm.Agent == 1 && vm.Status == "running" {
+				log.Debug().
+					Str("instance", instanceName).
+					Str("vm", vm.Name).
+					Int("vmid", vm.VMID).
+					Int("agent", vm.Agent).
+					Msg("VM has agent enabled, attempting to get filesystem info")
+				
+				fsInfo, err := client.GetVMFSInfo(ctx, node.Node, vm.VMID)
+				if err == nil && len(fsInfo) > 0 {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", vm.Name).
+						Int("filesystems", len(fsInfo)).
+						Msg("Got filesystem info from guest agent")
+					// Aggregate disk usage from all filesystems
+					// Focus on actual filesystems, skip special mounts like /dev, /proc, /sys
+					var totalBytes, usedBytes uint64
+					for _, fs := range fsInfo {
+						// Skip special filesystems and mounts
+						if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
+						   strings.HasPrefix(fs.Mountpoint, "/dev") ||
+						   strings.HasPrefix(fs.Mountpoint, "/proc") ||
+						   strings.HasPrefix(fs.Mountpoint, "/sys") ||
+						   strings.HasPrefix(fs.Mountpoint, "/run") ||
+						   fs.Mountpoint == "/boot/efi" {
+							continue
+						}
+						
+						// Only count real filesystems (ext4, xfs, btrfs, ntfs, etc.)
+						if fs.TotalBytes > 0 {
+							totalBytes += fs.TotalBytes
+							usedBytes += fs.UsedBytes
+						}
+					}
+					
+					// If we got valid data from guest agent, use it
+					if totalBytes > 0 {
+						diskTotal = totalBytes
+						diskUsed = usedBytes
+						diskFree = totalBytes - usedBytes
+						diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+						
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Uint64("totalBytes", totalBytes).
+							Uint64("usedBytes", usedBytes).
+							Float64("usage", diskUsage).
+							Msg("Got disk usage from guest agent")
+					}
+				} else if err != nil {
+					// Log at debug level - guest agent might be temporarily unavailable
+					log.Debug().
+						Err(err).
+						Str("instance", instanceName).
+						Str("vm", vm.Name).
+						Int("vmid", vm.VMID).
+						Msg("Failed to get filesystem info from guest agent")
+				}
+			} else {
+				if vm.Agent != 1 {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", vm.Name).
+						Int("vmid", vm.VMID).
+						Int("agent", vm.Agent).
+						Msg("VM does not have guest agent enabled")
+				}
+			}
+
 			modelVM := models.VM{
 				ID:       guestID,
 				VMID:     vm.VMID,
@@ -1171,10 +1322,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Usage: safePercentage(float64(memUsed), float64(memTotal)),
 				},
 				Disk: models.Disk{
-					Total: int64(vm.MaxDisk),
-					Used:  int64(vm.Disk),
-					Free:  int64(vm.MaxDisk - vm.Disk),
-					Usage: safePercentage(float64(vm.Disk), float64(vm.MaxDisk)),
+					Total: int64(diskTotal),
+					Used:  int64(diskUsed),
+					Free:  int64(diskFree),
+					Usage: diskUsage,
 				},
 				NetworkIn:  maxInt64(0, int64(netInRate)),
 				NetworkOut: maxInt64(0, int64(netOutRate)),
