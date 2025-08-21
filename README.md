@@ -48,14 +48,14 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 ### Install
 
 ```bash
-# Option A: Proxmox Helper Script (creates LXC container)
-bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+# Option A: Official installer (recommended for systemd/bare metal)
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 
 # Option B: Docker
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
-# Option C: Manual install (latest stable)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+# Option C: Proxmox Helper Script (creates LXC container)
+bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
 # Install specific version or release channel
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc     # Latest RC
