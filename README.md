@@ -37,13 +37,27 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Security headers (CSP, X-Frame-Options, etc.)
   - Comprehensive audit logging
 - Live monitoring of VMs, containers, nodes, storage
-- Alerts with email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
+- **Smart Alerts**: Email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
+  - Example: "🔴 VM 'webserver' is down on node 'pve1'"
+  - Example: "⚠️ Storage 'local-lvm' at 85% capacity"
+  - Example: "✅ VM 'database' is back online"
 - Unified view of PBS backups, PVE backups, and snapshots
 - Config export/import with encryption and authentication
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
 [Screenshots →](docs/SCREENSHOTS.md)
+
+## Privacy
+
+**Pulse respects your privacy:**
+- ✅ No telemetry or analytics collection
+- ✅ No phone-home functionality
+- ✅ No external API calls (except for configured webhooks)
+- ✅ All data stays on your server
+- ✅ Open source - verify it yourself
+
+Your infrastructure data is yours alone.
 
 ## Quick Start
 

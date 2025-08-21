@@ -46,9 +46,9 @@ for build_name in "${!builds[@]}"; do
     # Get build environment
     build_env="${builds[$build_name]}"
     
-    # Build binary
+    # Build binary with version info
     env $build_env go build \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.GitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
         -trimpath \
         -o "$BUILD_DIR/pulse-$build_name" \
         ./cmd/pulse
