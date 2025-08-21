@@ -10,10 +10,10 @@
 
 ## 💖 Support Pulse Development
 
-Pulse is built by a solo developer in evenings and weekends. Your support helps cover:
-- Test hardware and hosting costs
-- Development time for new features and bug fixes
-- Keeping Pulse 100% free and open-source forever
+Pulse is built by a solo developer in evenings and weekends. Your support helps:
+- Keep me motivated to add new features
+- Prioritize bug fixes and user requests
+- Ensure Pulse stays 100% free and open-source forever
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
