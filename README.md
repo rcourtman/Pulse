@@ -48,19 +48,20 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 ### Install
 
 ```bash
-# Option A: Official installer (recommended for systemd/bare metal)
+# Official installer (auto-detects environment)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
 
-# Option B: Docker
+# Docker
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
-
-# Option C: Proxmox Helper Script (creates LXC container)
-bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
 
 # Install specific version or release channel
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc     # Latest RC
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0  # Specific version
 ```
+
+**Note for Proxmox users:** The installer automatically detects Proxmox VE hosts and creates an LXC container with optimized settings. Choose Quick mode for a one-minute automated setup.
+
+📖 [Detailed Installation Guide →](docs/INSTALL.md)
 
 ### Initial Setup
 

@@ -111,23 +111,28 @@ check_proxmox_host() {
     return 1
 }
 
+check_docker_environment() {
+    # Detect if we're running inside Docker
+    if [[ -f /.dockerenv ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+        print_error "Docker environment detected"
+        echo "Please use the Docker image directly: docker run -d -p 7655:7655 rcourtman/pulse:latest"
+        echo "See: https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER.md"
+        exit 1
+    fi
+}
+
 create_lxc_container() {
+    # Set up trap to cleanup on interrupt (CTID will be set later)
+    trap 'echo ""; print_error "Installation cancelled"; exit 1' INT
+    
     print_header
-    echo -e "${YELLOW}Proxmox VE host detected!${NC}"
-    echo
-    echo "Installing directly on a PVE host is not recommended."
-    echo "Pulse should run in a container for better isolation."
-    echo
-    echo -e "${GREEN}This script will:${NC}"
-    echo "1. Create a new LXC container"
-    echo "2. Install Pulse inside the container"
-    echo "3. Start the service"
+    echo "Proxmox VE detected. Installing Pulse in a container."
     echo
     
     echo "Installation mode:"
-    echo "1) Quick (recommended defaults)"
-    echo "2) Advanced (customize all settings)"
-    echo "3) Cancel"
+    echo "  1) Quick (recommended)"
+    echo "  2) Advanced"
+    echo "  3) Cancel"
     read -p "Select [1-3]: " -n 1 -r mode < /dev/tty
     echo
     
@@ -144,28 +149,72 @@ create_lxc_container() {
             ;;
     esac
     
-    # Find next available container ID
-    local CTID=100
-    while pct status $CTID &>/dev/null; do
-        ((CTID++))
-    done
+    # Get next available container ID from Proxmox
+    local CTID=$(pvesh get /cluster/nextid 2>/dev/null || echo "100")
+    
+    # If pvesh failed, fallback to manual search
+    if [[ "$CTID" == "100" ]]; then
+        while pct status $CTID &>/dev/null 2>&1 || qm status $CTID &>/dev/null 2>&1; do
+            ((CTID++))
+        done
+    fi
+    
+    if [[ "$ADVANCED_MODE" == "true" ]]; then
+        echo
+        # Try to get cluster-wide IDs, fall back to local
+        local USED_IDS=""
+        if command -v pvesh &>/dev/null; then
+            # Parse JSON output using grep and sed (works without jq)
+            USED_IDS=$(pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | \
+                      grep -o '"vmid":[0-9]*' | \
+                      sed 's/"vmid"://' | \
+                      sort -n | \
+                      paste -sd',' -)
+        fi
+        
+        if [[ -z "$USED_IDS" ]]; then
+            # Fallback: get local containers and VMs
+            local LOCAL_CTS=$(pct list 2>/dev/null | tail -n +2 | awk '{print $1}' | sort -n)
+            local LOCAL_VMS=$(qm list 2>/dev/null | tail -n +2 | awk '{print $1}' | sort -n)
+            USED_IDS=$(echo -e "$LOCAL_CTS\n$LOCAL_VMS" | grep -v '^$' | sort -n | paste -sd',' -)
+        fi
+        
+        echo "Container/VM IDs in use: ${USED_IDS:-none}"
+        read -p "Container ID [$CTID]: " custom_ctid < /dev/tty
+        if [[ -n "$custom_ctid" ]] && [[ "$custom_ctid" =~ ^[0-9]+$ ]]; then
+            # Check if ID is in use
+            if pct status $custom_ctid &>/dev/null 2>&1 || qm status $custom_ctid &>/dev/null 2>&1; then
+                print_error "Container/VM ID $custom_ctid is already in use"
+                exit 1
+            fi
+            # Also check cluster if possible
+            if command -v pvesh &>/dev/null; then
+                if pvesh get /cluster/resources --type vm 2>/dev/null | jq -e ".[] | select(.vmid == $custom_ctid)" &>/dev/null; then
+                    print_error "Container/VM ID $custom_ctid is already in use in the cluster"
+                    exit 1
+                fi
+            fi
+            CTID=$custom_ctid
+        fi
+    fi
     
     print_info "Using container ID: $CTID"
     
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo
         echo -e "${BLUE}Advanced Mode - Customize all settings${NC}"
+        echo -e "${YELLOW}Defaults shown are suitable for monitoring 10-20 nodes${NC}"
         echo
         
         # Container settings
         read -p "Container hostname [pulse]: " hostname < /dev/tty
         hostname=${hostname:-pulse}
         
-        read -p "Memory (MB) [2048]: " memory < /dev/tty
-        memory=${memory:-2048}
+        read -p "Memory (MB) [1024]: " memory < /dev/tty
+        memory=${memory:-1024}
         
-        read -p "Disk size (GB) [16]: " disk < /dev/tty
-        disk=${disk:-16}
+        read -p "Disk size (GB) [4]: " disk < /dev/tty
+        disk=${disk:-4}
         
         read -p "CPU cores [2]: " cores < /dev/tty
         cores=${cores:-2}
@@ -173,8 +222,8 @@ create_lxc_container() {
         read -p "CPU limit (0=unlimited) [2]: " cpulimit < /dev/tty
         cpulimit=${cpulimit:-2}
         
-        read -p "Swap (MB) [512]: " swap < /dev/tty
-        swap=${swap:-512}
+        read -p "Swap (MB) [256]: " swap < /dev/tty
+        swap=${swap:-256}
         
         read -p "Start on boot? [Y/n]: " -n 1 -r onboot < /dev/tty
         echo
@@ -200,44 +249,45 @@ create_lxc_container() {
             unprivileged=1
         fi
     else
-        echo
-        echo -e "${BLUE}Quick Mode - Using optimized defaults:${NC}"
-        echo "  • Memory: 2GB"
-        echo "  • CPU: 2 cores (with limit)"
-        echo "  • Disk: 16GB"
-        echo "  • Swap: 512MB"
-        echo "  • Auto-start: Yes"
-        echo "  • Firewall: Enabled"
-        echo "  • Unprivileged: Yes (secure)"
-        echo
+        # Quick mode - just use defaults silently
         
         # Use optimized defaults
         hostname="pulse"
-        memory=2048
-        disk=16
+        memory=1024
+        disk=4
         cores=2
         cpulimit=2
-        swap=512
+        swap=256
         onboot=1
         firewall=1
         unprivileged=1
-        
-        # Still ask for hostname in quick mode
-        read -p "Container hostname [pulse]: " custom_hostname < /dev/tty
-        hostname=${custom_hostname:-pulse}
     fi
     
-    # Get network and storage settings
+    # Get available network bridges
+    echo
+    print_info "Detecting available resources..."
+    
+    # Get available bridges
+    local BRIDGES=$(ip link show type bridge | grep -E '^[0-9]+:' | cut -d: -f2 | tr -d ' ' | paste -sd',' -)
     local DEFAULT_BRIDGE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+' | grep -E '^vmbr')
     DEFAULT_BRIDGE=${DEFAULT_BRIDGE:-vmbr0}
     
-    local DEFAULT_STORAGE=$(pvesm status -content rootdir | grep -E "^local" | head -1 | awk '{print $1}')
+    # Get available storage with usage info
+    local STORAGE_INFO=$(pvesm status -content rootdir 2>/dev/null | tail -n +2)
+    local DEFAULT_STORAGE=$(echo "$STORAGE_INFO" | awk '{print $1}' | head -1)
     DEFAULT_STORAGE=${DEFAULT_STORAGE:-local-lvm}
     
     if [[ "$ADVANCED_MODE" == "true" ]]; then
+        # Show available bridges
+        echo
+        echo "Available network bridges: ${BRIDGES:-none detected}"
         read -p "Network bridge [$DEFAULT_BRIDGE]: " bridge < /dev/tty
         bridge=${bridge:-$DEFAULT_BRIDGE}
         
+        # Show available storage with usage details
+        echo
+        echo "Available storage pools:"
+        echo "$STORAGE_INFO" | awk '{printf "  %-15s %-8s %5s used\n", $1, $2, $6}' || echo "  No storage pools found"
         read -p "Storage [$DEFAULT_STORAGE]: " storage < /dev/tty
         storage=${storage:-$DEFAULT_STORAGE}
         
@@ -256,14 +306,79 @@ create_lxc_container() {
         startup=99
     fi
     
-    print_info "Creating LXC container..."
-    
-    # Download Debian template if not exists
-    local TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
-    if [[ ! -f "$TEMPLATE" ]]; then
-        print_info "Downloading Debian 12 template..."
-        pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+    # Handle OS template selection
+    echo
+    if [[ "$ADVANCED_MODE" == "true" ]]; then
+        echo "Available OS templates:"
+        # Use pveam to list templates properly
+        local TEMPLATES=$(pveam list local 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/local:vztmpl\///' | nl -w2 -s') ')
+        if [[ -n "$TEMPLATES" ]]; then
+            echo "$TEMPLATES"
+            echo
+            echo "Or download a new template:"
+            echo "  d) Download Debian 12 (recommended)"
+            echo "  u) Download Ubuntu 22.04 LTS"
+            echo "  a) Download Alpine Linux (minimal)"
+            echo
+            read -p "Select template number or option [Enter for Debian 12]: " template_choice < /dev/tty
+            if [[ -n "$template_choice" ]]; then
+                case "$template_choice" in
+                    d|D)
+                        print_info "Downloading Debian 12..."
+                        pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+                        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                        ;;
+                    u|U)
+                        print_info "Downloading Ubuntu 22.04..."
+                        pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst
+                        TEMPLATE="/var/lib/vz/template/cache/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+                        ;;
+                    a|A)
+                        print_info "Downloading Alpine Linux..."
+                        pveam download local alpine-3.18-default_20230607_amd64.tar.xz
+                        TEMPLATE="/var/lib/vz/template/cache/alpine-3.18-default_20230607_amd64.tar.xz"
+                        ;;
+                    [0-9]*)
+                        TEMPLATE_NAME=$(pveam list local 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/local:vztmpl\///' | sed -n "${template_choice}p")
+                        if [[ -n "$TEMPLATE_NAME" ]]; then
+                            TEMPLATE="/var/lib/vz/template/cache/$TEMPLATE_NAME"
+                            print_info "Using template: $TEMPLATE_NAME"
+                        else
+                            TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                            print_info "Invalid selection, using Debian 12"
+                        fi
+                        ;;
+                    *)
+                        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                        ;;
+                esac
+            else
+                TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+            fi
+        else
+            TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+        fi
+    else
+        # Quick mode - use Debian 12
+        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
     fi
+    
+    # Download template if it doesn't exist
+    if [[ ! -f "$TEMPLATE" ]]; then
+        print_info "Template not found, downloading Debian 12..."
+        if ! pveam download local debian-12-standard_12.7-1_amd64.tar.zst; then
+            print_error "Failed to download template. Please check your internet connection and try again."
+            print_info "You can manually download with: pveam download local debian-12-standard_12.7-1_amd64.tar.zst"
+            exit 1
+        fi
+        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+        if [[ ! -f "$TEMPLATE" ]]; then
+            print_error "Template download succeeded but file not found at expected location"
+            exit 1
+        fi
+    fi
+    
+    print_info "Creating container..."
     
     # Build network configuration
     if [[ -n "$static_ip" ]]; then
@@ -295,88 +410,133 @@ create_lxc_container() {
         CREATE_CMD="$CREATE_CMD --nameserver $nameserver"
     fi
     
-    # Execute container creation
-    eval $CREATE_CMD
-    
-    if [[ $? -ne 0 ]]; then
+    # Execute container creation (suppress verbose output)
+    if ! eval $CREATE_CMD >/dev/null 2>&1; then
         print_error "Failed to create container"
         exit 1
     fi
     
+    # From this point on, cleanup container if we fail
+    cleanup_on_error() {
+        print_error "Installation failed, cleaning up container $CTID..."
+        pct stop $CTID 2>/dev/null || true
+        sleep 2
+        pct destroy $CTID 2>/dev/null || true
+        exit 1
+    }
+    
     # Start container
     print_info "Starting container..."
-    pct start $CTID
-    sleep 5
+    if ! pct start $CTID >/dev/null 2>&1; then
+        print_error "Failed to start container"
+        cleanup_on_error
+    fi
+    sleep 3
     
     # Wait for network to be ready
-    print_info "Waiting for container network..."
-    for i in {1..30}; do
-        if pct exec $CTID -- ping -c 1 8.8.8.8 &>/dev/null; then
+    print_info "Waiting for network..."
+    local network_ready=false
+    for i in {1..60}; do
+        if pct exec $CTID -- ping -c 1 8.8.8.8 &>/dev/null 2>&1; then
+            network_ready=true
             break
         fi
         sleep 1
     done
     
+    if [[ "$network_ready" != "true" ]]; then
+        print_error "Container network failed to come up after 60 seconds"
+        cleanup_on_error
+    fi
+    
     # Install dependencies and optimize container
-    print_info "Installing dependencies in container..."
-    pct exec $CTID -- bash -c "
-        apt-get update && apt-get install -y curl wget ca-certificates
+    print_info "Installing dependencies..."
+    if ! pct exec $CTID -- bash -c "
+        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq curl wget ca-certificates >/dev/null 2>&1
         # Set timezone to UTC for consistent logging
-        ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+        ln -sf /usr/share/zoneinfo/UTC /etc/localtime 2>/dev/null
         # Optimize sysctl for monitoring workload
         echo 'net.core.somaxconn=1024' >> /etc/sysctl.conf
         echo 'net.ipv4.tcp_keepalive_time=60' >> /etc/sysctl.conf
-        sysctl -p
-    "
+        sysctl -p >/dev/null 2>&1
+        
+        # Create convenient update script
+        cat > /usr/local/bin/update << 'EOF'
+#!/bin/bash
+echo 'Updating Pulse...'
+curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+EOF
+        chmod +x /usr/local/bin/update
+    "; then
+        print_error "Failed to install dependencies in container"
+        cleanup_on_error
+    fi
     
     # Install Pulse inside container
-    print_info "Installing Pulse in container..."
+    print_info "Installing Pulse..."
     
     # Copy this script to container and run it
-    pct push $CTID $0 /tmp/install.sh
-    pct exec $CTID -- bash /tmp/install.sh --in-container
-    
-    if [[ $? -eq 0 ]]; then
-        # Get container IP
-        local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
-        
-        print_header
-        print_success "Pulse installed successfully in LXC container $CTID!"
-        echo
-        echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:7655"
-        echo
-        echo -e "${YELLOW}Container management:${NC}"
-        echo "  pct enter $CTID           - Enter container console"
-        echo "  pct stop $CTID            - Stop container"  
-        echo "  pct start $CTID           - Start container"
-        echo "  pct destroy $CTID         - Remove container"
-        echo
-        if [[ "$ADVANCED_MODE" == "true" ]]; then
-            echo -e "${BLUE}Container created with your custom settings${NC}"
-        else
-            echo -e "${BLUE}Container optimizations applied:${NC}"
-            echo "  ✓ Unprivileged container (enhanced security)"
-            echo "  ✓ Firewall enabled on network interface"
-            echo "  ✓ Auto-start on boot with order 99"
-            echo "  ✓ CPU limit set to prevent resource hogging"
-            echo "  ✓ 512MB swap for memory flexibility"
-            echo "  ✓ UTC timezone for consistent logging"
-        fi
-        echo
-    else
-        print_error "Installation failed"
-        exit 1
+    if ! pct push $CTID $0 /tmp/install.sh >/dev/null 2>&1; then
+        print_error "Failed to copy install script to container"
+        cleanup_on_error
     fi
+    
+    # Run installation quietly (suppress verbose output)
+    local install_output=$(pct exec $CTID -- bash /tmp/install.sh --in-container 2>&1)
+    local install_status=$?
+    
+    if [[ $install_status -ne 0 ]]; then
+        print_error "Failed to install Pulse inside container"
+        cleanup_on_error
+    fi
+    
+    # Get container IP
+    local IP=$(pct exec $CTID -- hostname -I | awk '{print $1}')
+    
+    # Clean final output
+    echo
+    print_success "Pulse installation complete!"
+    echo
+    echo "  Web UI:     http://${IP}:7655"
+    echo "  Container:  $CTID"
+    echo
+    echo "  Commands:"
+    echo "    pct enter $CTID              # Enter container"
+    echo "    pct exec $CTID -- update     # Update Pulse"
+    echo
     
     exit 0
 }
 
 check_existing_installation() {
-    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
-        print_info "Pulse is currently running"
-        return 0
+    local CURRENT_VERSION=""
+    local BINARY_PATH=""
+    
+    # Check for the binary in expected locations
+    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+        BINARY_PATH="$INSTALL_DIR/bin/pulse"
     elif [[ -f "$INSTALL_DIR/pulse" ]]; then
-        print_info "Pulse is installed but not running"
+        BINARY_PATH="$INSTALL_DIR/pulse"
+    fi
+    
+    # Try to get version if binary exists
+    if [[ -n "$BINARY_PATH" ]]; then
+        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+    fi
+    
+    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+        if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
+            print_info "Pulse $CURRENT_VERSION is currently running"
+        else
+            print_info "Pulse is currently running"
+        fi
+        return 0
+    elif [[ -n "$BINARY_PATH" ]]; then
+        if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
+            print_info "Pulse $CURRENT_VERSION is installed but not running"
+        else
+            print_info "Pulse is installed but not running"
+        fi
         return 0
     else
         return 1
@@ -611,6 +771,10 @@ print_completion() {
     echo "  systemctl restart $SERVICE_NAME   - Restart Pulse"
     echo "  journalctl -u $SERVICE_NAME -f    - View logs"
     echo
+    echo -e "${YELLOW}Updating Pulse:${NC}"
+    echo "  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
+    echo "  Or: wget -qO- https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
+    echo
 }
 
 # Main installation flow
@@ -624,15 +788,27 @@ main() {
     print_header
     check_root
     detect_os
+    check_docker_environment
     check_pre_v4_installation
     
     if check_existing_installation; then
-        print_info "Existing Pulse installation detected"
+        # Get the latest available version for comparison
+        local AVAILABLE_VERSION=""
+        if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
+            AVAILABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+        else
+            AVAILABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+        fi
+        
         echo
         echo "What would you like to do?"
-        echo "1) Update to latest version"
-        echo "2) Reinstall"
-        echo "3) Remove"
+        if [[ -n "$AVAILABLE_VERSION" ]]; then
+            echo "1) Update to $AVAILABLE_VERSION"
+        else
+            echo "1) Update to latest version"
+        fi
+        echo "2) Reinstall current version"
+        echo "3) Remove Pulse"
         echo "4) Cancel"
         read -p "Select option [1-4]: " choice < /dev/tty
         

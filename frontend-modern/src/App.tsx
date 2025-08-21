@@ -15,6 +15,7 @@ import { POLLING_INTERVALS, STORAGE_KEYS } from './constants';
 import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
+import { SettingsAPI } from './api/settings';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -77,7 +78,7 @@ function App() {
   const [darkMode, setDarkMode] = createSignal(false);
   
   // Toggle dark mode
-  const toggleDarkMode = () => {
+  const toggleDarkMode = async () => {
     const newMode = !darkMode();
     setDarkMode(newMode);
     localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(newMode));
@@ -87,6 +88,17 @@ function App() {
       document.documentElement.classList.remove('dark');
     }
     logger.info('Theme changed', { mode: newMode ? 'dark' : 'light' });
+    
+    // Save theme preference to server if authenticated
+    if (!needsAuth()) {
+      try {
+        await SettingsAPI.updateSystemSettings({ theme: newMode ? 'dark' : 'light' });
+        logger.info('Theme preference saved to server');
+      } catch (error) {
+        logger.error('Failed to save theme preference to server', error);
+        // Don't show error to user - local change still works
+      }
+    }
   };
   
   // Don't initialize dark mode here - will be handled based on auth state
@@ -167,16 +179,43 @@ function App() {
         // Only initialize WebSocket after successful auth check
         setWsStore(getGlobalWebSocketStore());
         
-        // Apply user's theme preference only after successful authentication
-        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-        const prefersDark = savedDarkMode !== null 
-          ? savedDarkMode === 'true'
-          : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(prefersDark);
-        if (prefersDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
+        // Load theme preference from server
+        try {
+          const systemSettings = await SettingsAPI.getSystemSettings();
+          let prefersDark = false;
+          
+          if (systemSettings.theme) {
+            // Use server-side theme preference
+            prefersDark = systemSettings.theme === 'dark';
+            // Also update localStorage to match server
+            localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+          } else {
+            // No server preference, check localStorage then system preference
+            const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+            prefersDark = savedDarkMode !== null 
+              ? savedDarkMode === 'true'
+              : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          
+          setDarkMode(prefersDark);
+          if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (error) {
+          // If loading theme from server fails, fall back to localStorage
+          console.error('Failed to load theme from server:', error);
+          const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+          const prefersDark = savedDarkMode !== null 
+            ? savedDarkMode === 'true'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          setDarkMode(prefersDark);
+          if (prefersDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
         }
       }
     } catch (error) {

@@ -37,6 +37,14 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			PollingInterval: 5,
 		}
 	}
+	
+	// Log loaded settings for debugging
+	if settings != nil {
+		log.Debug().
+			Int("pollingInterval", settings.PollingInterval).
+			Str("theme", settings.Theme).
+			Msg("Loaded system settings for API response")
+	}
 
 	// Include env override information
 	response := struct {
@@ -93,6 +101,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
+	}
+	
+	// Validate theme if provided
+	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
+		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
+		return
 	}
 
 	// Save to persistence
