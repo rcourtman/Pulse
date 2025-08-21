@@ -108,6 +108,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
 		return
 	}
+	
+	// Update discovery settings
+	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
+	if settings.DiscoverySubnet != "" {
+		h.config.DiscoverySubnet = settings.DiscoverySubnet
+	}
 
 	// Save to persistence
 	if err := h.persistence.SaveSystemSettings(settings); err != nil {

@@ -313,6 +313,7 @@ type SystemSettings struct {
 	AutoUpdateCheckInterval int    `json:"autoUpdateCheckInterval,omitempty"`
 	AutoUpdateTime          string `json:"autoUpdateTime,omitempty"`
 	LogLevel                string `json:"logLevel,omitempty"`
+	DiscoveryEnabled        bool   `json:"discoveryEnabled"`
 	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
 	Theme                   string `json:"theme,omitempty"` // User theme preference: "light", "dark", or empty for system default
 	// APIToken removed - now handled via .env file only
