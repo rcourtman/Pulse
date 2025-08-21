@@ -44,10 +44,12 @@ safe_read() {
     shift 2
     local read_args="$@"
     
-    # Try to read from /dev/tty first (for interactive terminals)
+    # When piped, we need to both prompt and read from /dev/tty if available
     if test -e /dev/tty; then
-        read -p "$prompt" $read_args $var_name < /dev/tty 2>/dev/null || {
-            # If /dev/tty fails, try stdin
+        # Send prompt to /dev/tty and read from /dev/tty
+        echo -n "$prompt" > /dev/tty
+        read $read_args $var_name < /dev/tty 2>/dev/null || {
+            # If /dev/tty fails, fallback to normal read
             read -p "$prompt" $read_args $var_name
         }
     else
@@ -148,20 +150,20 @@ create_lxc_container() {
     echo "Proxmox VE detected. Installing Pulse in a container."
     echo
     
-    # Check if we're being piped (non-interactive)
-    # For Proxmox installations, try to use /dev/tty even when piped
-    # This allows interactive mode when using curl | bash
-    if ! test -t 0 && ! test -e /dev/tty; then
-        # No TTY available at all - truly non-interactive
-        echo "Non-interactive mode detected. Using Quick installation."
-        mode="1"
-    else
+    # Check if we can interact with the user
+    # Try to read from /dev/tty to test if we have terminal access
+    if test -e /dev/tty && (echo -n "" > /dev/tty) 2>/dev/null; then
+        # We have terminal access, show menu
         echo "Installation mode:"
         echo "  1) Quick (recommended)"
-        echo "  2) Advanced"
+        echo "  2) Advanced"  
         echo "  3) Cancel"
         safe_read "Select [1-3]: " mode -n 1 -r
         echo
+    else
+        # No terminal access - truly non-interactive
+        echo "Non-interactive mode detected. Using Quick installation."
+        mode="1"
     fi
     
     case $mode in
