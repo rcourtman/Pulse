@@ -6,6 +6,14 @@
 
 **Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.**
 
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+```
+
+*Auto-detects Proxmox and creates a container. For Docker, see [below](#install).*
+
 ![Dashboard](docs/images/01-dashboard.png)
 
 ## 💖 Support Pulse Development
@@ -43,23 +51,28 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 
 [Screenshots →](docs/SCREENSHOTS.md)
 
-## Quick Start
+## Installation Options
 
 ### Install
 
+**Standard Install** (shown above)
 ```bash
-# Official installer (auto-detects environment)
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
-
-# Docker
-docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
-
-# Install specific version or release channel
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc     # Latest RC
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0  # Specific version
 ```
 
-**Note for Proxmox users:** The installer automatically detects Proxmox VE hosts and creates an LXC container with optimized settings. Choose Quick mode for a one-minute automated setup.
+**Docker**
+```bash
+docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
+```
+
+**Advanced Options**
+```bash
+# Install release candidate
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc
+
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0
+```
 
 📖 [Detailed Installation Guide →](docs/INSTALL.md)
 
