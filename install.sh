@@ -123,12 +123,26 @@ create_lxc_container() {
     echo "2. Install Pulse inside the container"
     echo "3. Start the service"
     echo
-    read -p "Continue? [Y/n]: " -n 1 -r response < /dev/tty
+    
+    echo "Installation mode:"
+    echo "1) Quick (recommended defaults)"
+    echo "2) Advanced (customize all settings)"
+    echo "3) Cancel"
+    read -p "Select [1-3]: " -n 1 -r mode < /dev/tty
     echo
-    if [[ ! "$response" =~ ^[Yy]?$ ]]; then
-        print_info "Installation cancelled"
-        exit 0
-    fi
+    
+    case $mode in
+        3)
+            print_info "Installation cancelled"
+            exit 0
+            ;;
+        2)
+            ADVANCED_MODE=true
+            ;;
+        *)
+            ADVANCED_MODE=false
+            ;;
+    esac
     
     # Find next available container ID
     local CTID=100
@@ -138,41 +152,109 @@ create_lxc_container() {
     
     print_info "Using container ID: $CTID"
     
-    echo
-    echo -e "${BLUE}Recommended specifications for Pulse:${NC}"
-    echo "  • Memory: 2GB (handles 50+ nodes comfortably)"
-    echo "  • CPU: 2 cores (for responsive UI and polling)"
-    echo "  • Disk: 16GB (logs, metrics, future growth)"
-    echo "  • Network: Firewall enabled, DHCP"
-    echo
+    if [[ "$ADVANCED_MODE" == "true" ]]; then
+        echo
+        echo -e "${BLUE}Advanced Mode - Customize all settings${NC}"
+        echo
+        
+        # Container settings
+        read -p "Container hostname [pulse]: " hostname < /dev/tty
+        hostname=${hostname:-pulse}
+        
+        read -p "Memory (MB) [2048]: " memory < /dev/tty
+        memory=${memory:-2048}
+        
+        read -p "Disk size (GB) [16]: " disk < /dev/tty
+        disk=${disk:-16}
+        
+        read -p "CPU cores [2]: " cores < /dev/tty
+        cores=${cores:-2}
+        
+        read -p "CPU limit (0=unlimited) [2]: " cpulimit < /dev/tty
+        cpulimit=${cpulimit:-2}
+        
+        read -p "Swap (MB) [512]: " swap < /dev/tty
+        swap=${swap:-512}
+        
+        read -p "Start on boot? [Y/n]: " -n 1 -r onboot < /dev/tty
+        echo
+        if [[ "$onboot" =~ ^[Nn]$ ]]; then
+            onboot=0
+        else
+            onboot=1
+        fi
+        
+        read -p "Enable firewall? [Y/n]: " -n 1 -r firewall < /dev/tty
+        echo
+        if [[ "$firewall" =~ ^[Nn]$ ]]; then
+            firewall=0
+        else
+            firewall=1
+        fi
+        
+        read -p "Unprivileged container? [Y/n]: " -n 1 -r unprivileged < /dev/tty
+        echo
+        if [[ "$unprivileged" =~ ^[Nn]$ ]]; then
+            unprivileged=0
+        else
+            unprivileged=1
+        fi
+    else
+        echo
+        echo -e "${BLUE}Quick Mode - Using optimized defaults:${NC}"
+        echo "  • Memory: 2GB"
+        echo "  • CPU: 2 cores (with limit)"
+        echo "  • Disk: 16GB"
+        echo "  • Swap: 512MB"
+        echo "  • Auto-start: Yes"
+        echo "  • Firewall: Enabled"
+        echo "  • Unprivileged: Yes (secure)"
+        echo
+        
+        # Use optimized defaults
+        hostname="pulse"
+        memory=2048
+        disk=16
+        cores=2
+        cpulimit=2
+        swap=512
+        onboot=1
+        firewall=1
+        unprivileged=1
+        
+        # Still ask for hostname in quick mode
+        read -p "Container hostname [pulse]: " custom_hostname < /dev/tty
+        hostname=${custom_hostname:-pulse}
+    fi
     
-    # Get container settings with optimized defaults
-    read -p "Container hostname [pulse]: " hostname < /dev/tty
-    hostname=${hostname:-pulse}
-    
-    # Pulse is lightweight but needs enough RAM for monitoring multiple nodes
-    read -p "Memory (MB) [2048]: " memory < /dev/tty
-    memory=${memory:-2048}
-    
-    # Enough disk for logs, metrics history, and future growth
-    read -p "Disk size (GB) [16]: " disk < /dev/tty
-    disk=${disk:-16}
-    
-    # 2 cores is good for responsive UI and concurrent polling
-    read -p "CPU cores [2]: " cores < /dev/tty
-    cores=${cores:-2}
-    
-    # Get network bridge
+    # Get network and storage settings
     local DEFAULT_BRIDGE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+' | grep -E '^vmbr')
     DEFAULT_BRIDGE=${DEFAULT_BRIDGE:-vmbr0}
-    read -p "Network bridge [$DEFAULT_BRIDGE]: " bridge < /dev/tty
-    bridge=${bridge:-$DEFAULT_BRIDGE}
     
-    # Get storage
     local DEFAULT_STORAGE=$(pvesm status -content rootdir | grep -E "^local" | head -1 | awk '{print $1}')
     DEFAULT_STORAGE=${DEFAULT_STORAGE:-local-lvm}
-    read -p "Storage [$DEFAULT_STORAGE]: " storage < /dev/tty
-    storage=${storage:-$DEFAULT_STORAGE}
+    
+    if [[ "$ADVANCED_MODE" == "true" ]]; then
+        read -p "Network bridge [$DEFAULT_BRIDGE]: " bridge < /dev/tty
+        bridge=${bridge:-$DEFAULT_BRIDGE}
+        
+        read -p "Storage [$DEFAULT_STORAGE]: " storage < /dev/tty
+        storage=${storage:-$DEFAULT_STORAGE}
+        
+        read -p "Static IP (leave empty for DHCP): " static_ip < /dev/tty
+        
+        read -p "DNS servers (comma-separated, empty for host settings): " nameserver < /dev/tty
+        
+        read -p "Startup order [99]: " startup < /dev/tty
+        startup=${startup:-99}
+    else
+        # Quick mode - use defaults
+        bridge=$DEFAULT_BRIDGE
+        storage=$DEFAULT_STORAGE
+        static_ip=""
+        nameserver=""
+        startup=99
+    fi
     
     print_info "Creating LXC container..."
     
@@ -183,25 +265,38 @@ create_lxc_container() {
         pveam download local debian-12-standard_12.7-1_amd64.tar.zst
     fi
     
-    # Create container with optimized settings
-    # - Unprivileged for security
-    # - Firewall enabled on network interface
-    # - Startup order 99 (starts after critical services)
-    # - Swap for memory flexibility
-    # - CPU limit to prevent runaway processes
-    pct create $CTID $TEMPLATE \
-        --hostname $hostname \
-        --memory $memory \
-        --cores $cores \
-        --cpulimit $cores \
-        --rootfs ${storage}:${disk} \
-        --net0 name=eth0,bridge=${bridge},ip=dhcp,firewall=1 \
-        --unprivileged 1 \
-        --features nesting=1 \
-        --onboot 1 \
-        --startup order=99 \
-        --protection 0 \
-        --swap 512
+    # Build network configuration
+    if [[ -n "$static_ip" ]]; then
+        NET_CONFIG="name=eth0,bridge=${bridge},ip=${static_ip},firewall=${firewall}"
+    else
+        NET_CONFIG="name=eth0,bridge=${bridge},ip=dhcp,firewall=${firewall}"
+    fi
+    
+    # Build container create command
+    local CREATE_CMD="pct create $CTID $TEMPLATE"
+    CREATE_CMD="$CREATE_CMD --hostname $hostname"
+    CREATE_CMD="$CREATE_CMD --memory $memory"
+    CREATE_CMD="$CREATE_CMD --cores $cores"
+    
+    if [[ "$cpulimit" != "0" ]]; then
+        CREATE_CMD="$CREATE_CMD --cpulimit $cpulimit"
+    fi
+    
+    CREATE_CMD="$CREATE_CMD --rootfs ${storage}:${disk}"
+    CREATE_CMD="$CREATE_CMD --net0 $NET_CONFIG"
+    CREATE_CMD="$CREATE_CMD --unprivileged $unprivileged"
+    CREATE_CMD="$CREATE_CMD --features nesting=1"
+    CREATE_CMD="$CREATE_CMD --onboot $onboot"
+    CREATE_CMD="$CREATE_CMD --startup order=$startup"
+    CREATE_CMD="$CREATE_CMD --protection 0"
+    CREATE_CMD="$CREATE_CMD --swap $swap"
+    
+    if [[ -n "$nameserver" ]]; then
+        CREATE_CMD="$CREATE_CMD --nameserver $nameserver"
+    fi
+    
+    # Execute container creation
+    eval $CREATE_CMD
     
     if [[ $? -ne 0 ]]; then
         print_error "Failed to create container"
@@ -256,13 +351,17 @@ create_lxc_container() {
         echo "  pct start $CTID           - Start container"
         echo "  pct destroy $CTID         - Remove container"
         echo
-        echo -e "${BLUE}Container optimizations applied:${NC}"
-        echo "  ✓ Unprivileged container (enhanced security)"
-        echo "  ✓ Firewall enabled on network interface"
-        echo "  ✓ Auto-start on boot with order 99"
-        echo "  ✓ CPU limit set to prevent resource hogging"
-        echo "  ✓ 512MB swap for memory flexibility"
-        echo "  ✓ UTC timezone for consistent logging"
+        if [[ "$ADVANCED_MODE" == "true" ]]; then
+            echo -e "${BLUE}Container created with your custom settings${NC}"
+        else
+            echo -e "${BLUE}Container optimizations applied:${NC}"
+            echo "  ✓ Unprivileged container (enhanced security)"
+            echo "  ✓ Firewall enabled on network interface"
+            echo "  ✓ Auto-start on boot with order 99"
+            echo "  ✓ CPU limit set to prevent resource hogging"
+            echo "  ✓ 512MB swap for memory flexibility"
+            echo "  ✓ UTC timezone for consistent logging"
+        fi
         echo
     else
         print_error "Installation failed"
