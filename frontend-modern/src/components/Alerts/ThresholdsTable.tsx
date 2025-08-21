@@ -258,8 +258,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       } else if (resource.type === 'storage') {
         groupKey = 'Storage';
       } else {
-        // Group all guests together, but we'll show the node within the row
-        groupKey = 'Guests';
+        groupKey = 'node' in resource ? resource.node : 'Unknown';
       }
       
       if (!groups[groupKey]) {
@@ -271,27 +270,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Sort resources within each group
     Object.keys(groups).forEach(key => {
       groups[key] = groups[key].sort((a, b) => {
-        // For nodes, just sort by name
-        if (a.type === 'node' && b.type === 'node') {
-          return a.name.localeCompare(b.name);
-        }
-        
-        // For guests, sort by node first, then by vmid
-        if (a.type === 'guest' && b.type === 'guest') {
-          const nodeCompare = (a.node || '').localeCompare(b.node || '');
-          if (nodeCompare !== 0) return nodeCompare;
-          if ('vmid' in a && 'vmid' in b && a.vmid && b.vmid) return a.vmid - b.vmid;
-          return a.name.localeCompare(b.name);
-        }
-        
-        // For storage, sort by node first, then by name
-        if (a.type === 'storage' && b.type === 'storage') {
-          const nodeCompare = (a.node || '').localeCompare(b.node || '');
-          if (nodeCompare !== 0) return nodeCompare;
-          return a.name.localeCompare(b.name);
-        }
-        
-        // Default comparison
+        if (a.type === 'node' && b.type !== 'node') return -1;
+        if (a.type !== 'node' && b.type === 'node') return 1;
+        if ('vmid' in a && 'vmid' in b && a.vmid && b.vmid) return a.vmid - b.vmid;
         return a.name.localeCompare(b.name);
       });
     });
@@ -918,21 +899,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <Show when={Object.keys(groupedResources()).length === 0} fallback={
                 <For each={Object.entries(groupedResources()).sort(([a], [b]) => {
-                  // Define the order: Nodes, Guests, Storage
-                  const order = ['Nodes', 'Guests', 'Storage'];
-                  const aIndex = order.indexOf(a);
-                  const bIndex = order.indexOf(b);
-                  
-                  // If both are in the order array, sort by their position
-                  if (aIndex !== -1 && bIndex !== -1) {
-                    return aIndex - bIndex;
-                  }
-                  
-                  // If only one is in the order array, it comes first
-                  if (aIndex !== -1) return -1;
-                  if (bIndex !== -1) return 1;
-                  
-                  // Otherwise, sort alphabetically
+                  if (a === 'Nodes') return -1;
+                  if (b === 'Nodes') return 1;
+                  if (a === 'Storage') return 1;
+                  if (b === 'Storage') return -1;
                   return a.localeCompare(b);
                 })}>
                   {([groupName, resources]) => (
@@ -980,7 +950,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                   <Show when={'vmid' in resource && resource.vmid}>
                                     <span class="text-xs text-gray-500">({resource.vmid})</span>
                                   </Show>
-                                  <Show when={(resource.type === 'guest' || resource.type === 'storage') && 'node' in resource && resource.node}>
+                                  <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
                                     <span class="text-xs text-gray-500">on {resource.node}</span>
                                   </Show>
                                   <Show when={(() => {
