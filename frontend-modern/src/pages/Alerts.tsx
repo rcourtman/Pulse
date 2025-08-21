@@ -851,6 +851,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       allGuests={props.allGuests}
       nodes={props.state.nodes || []}
       storage={props.state.storage || []}
+      pbsInstances={props.state.pbs || []}
       guestDefaults={props.guestDefaults()}
       setGuestDefaults={props.setGuestDefaults}
       nodeDefaults={props.nodeDefaults()}

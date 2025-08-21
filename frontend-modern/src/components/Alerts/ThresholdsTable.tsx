@@ -44,6 +44,7 @@ interface ThresholdsTableProps {
   allGuests: () => (VM | Container)[];
   nodes: Node[];
   storage: Storage[];
+  pbsInstances?: any[]; // PBS instances from state
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   nodeDefaults: SimpleThresholds;
@@ -58,7 +59,7 @@ interface ThresholdsTableProps {
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [showGlobalSettings, setShowGlobalSettings] = createSignal(true);
+  const [showGlobalSettings, setShowGlobalSettings] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<Record<string, any>>({});
   
@@ -225,6 +226,58 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return grouped;
   });
   
+  // Process PBS servers with their overrides
+  const pbsServersWithOverrides = createMemo(() => {
+    const search = searchTerm().toLowerCase();
+    const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
+    
+    // Get PBS instances from props
+    const pbsInstances = (props as any).pbsInstances || [];
+    
+    const pbsServers = pbsInstances.filter((pbs: any) => pbs.cpu > 0 || pbs.memory > 0).map((pbs: any) => {
+      const pbsId = `pbs-${pbs.id}`;
+      const override = overridesMap.get(pbsId);
+      
+      // Check if any threshold values actually differ from defaults
+      const hasCustomThresholds = override?.thresholds && 
+        Object.keys(override.thresholds).some(key => {
+          const k = key as keyof typeof override.thresholds;
+          // PBS uses node defaults for CPU/Memory
+          return override.thresholds[k] !== undefined && 
+                 override.thresholds[k] !== (props.nodeDefaults as any)[k];
+        });
+      
+      return {
+        id: pbsId,
+        name: pbs.name,
+        type: 'pbs' as const,
+        resourceType: 'PBS',
+        host: pbs.host,
+        status: pbs.status,
+        cpu: pbs.cpu,
+        memory: pbs.memory,
+        memoryUsed: pbs.memoryUsed,
+        memoryTotal: pbs.memoryTotal,
+        uptime: pbs.uptime,
+        hasOverride: hasCustomThresholds || false,
+        disabled: false,
+        thresholds: override?.thresholds || {},
+        defaults: { 
+          cpu: props.nodeDefaults.cpu, 
+          memory: props.nodeDefaults.memory
+        }
+      };
+    });
+    
+    if (search) {
+      return pbsServers.filter((p: any) => 
+        p.name.toLowerCase().includes(search) ||
+        p.host?.toLowerCase().includes(search)
+      );
+    }
+    return pbsServers;
+  });
+  
   // Process storage with their overrides
   const storageWithOverrides = createMemo(() => {
     const search = searchTerm().toLowerCase();
@@ -272,7 +325,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const saveEdit = (resourceId: string) => {
     // Flatten grouped guests to find the resource
     const allGuests = Object.values(guestsGroupedByNode()).flat();
-    const allResources = [...nodesWithOverrides(), ...allGuests, ...storageWithOverrides()];
+    const allResources = [...nodesWithOverrides(), ...allGuests, ...storageWithOverrides(), ...pbsServersWithOverrides()];
     const resource = allResources.find(r => r.id === resourceId);
     if (!resource) return;
     
@@ -889,6 +942,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
           onToggleDisabled={toggleDisabled}
+          editingId={editingId}
+          editingThresholds={editingThresholds}
+          setEditingThresholds={setEditingThresholds}
+          formatMetricValue={formatMetricValue}
+          hasActiveAlert={hasActiveAlert}
+        />
+      </Show>
+      
+      {/* PBS Servers Table */}
+      <Show when={pbsServersWithOverrides().length > 0}>
+        <ResourceTable
+          title="PBS Servers"
+          resources={pbsServersWithOverrides()}
+          columns={['CPU %', 'Memory %']}
+          activeAlerts={props.activeAlerts}
+          onEdit={startEditing}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onRemoveOverride={removeOverride}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
