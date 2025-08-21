@@ -447,6 +447,7 @@ journalctl -u pulse -f
 
 - [Docker Guide](docs/DOCKER.md) - Complete Docker deployment guide
 - [Configuration Guide](docs/CONFIGURATION.md) - Complete setup and configuration
+- [Port Configuration](docs/PORT_CONFIGURATION.md) - How to change the default port
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Reference](docs/API.md) - REST API endpoints and examples
 - [Webhook Guide](docs/WEBHOOKS.md) - Setting up webhooks and custom payloads

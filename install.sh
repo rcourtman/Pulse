@@ -770,6 +770,7 @@ print_completion() {
     echo "  systemctl status $SERVICE_NAME    - Check service status"
     echo "  systemctl restart $SERVICE_NAME   - Restart Pulse"
     echo "  journalctl -u $SERVICE_NAME -f    - View logs"
+    echo "  systemctl edit $SERVICE_NAME      - Configure custom port"
     echo
     echo -e "${YELLOW}Updating Pulse:${NC}"
     echo "  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"

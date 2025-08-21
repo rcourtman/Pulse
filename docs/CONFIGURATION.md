@@ -16,9 +16,11 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 
 ```
 /etc/pulse/
-├── .env          # Authentication credentials
-├── system.json   # Application settings
-└── nodes.enc     # Encrypted node credentials
+├── .env          # Authentication credentials ONLY
+├── system.json   # Application settings (ports, intervals, etc.)
+├── nodes.enc     # Encrypted node credentials
+├── alerts.json   # Alert thresholds and rules
+└── webhooks.json # Webhook configurations
 ```
 
 ---
@@ -48,6 +50,7 @@ ENABLE_AUDIT_LOG=true                # Enable security audit logging
 - Never commit this file to version control
 - ProxmoxVE installations may pre-configure API_TOKEN
 - Changes to this file are applied immediately without restart (v4.3.9+)
+- **DO NOT** put port configuration here - use system.json or systemd overrides
 
 ---
 
@@ -138,13 +141,32 @@ These env vars override system.json values. When set, the UI will show a warning
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
 - `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
 
-#### Network & Security Variables (always from env)
-These are only configurable via environment variables for security:
+#### Authentication Variables (from .env file)
+These should be set in the .env file for security:
 
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
 - `API_TOKEN` - API token for authentication
 - `DISABLE_AUTH` - Set to `true` to disable authentication entirely (useful for reverse proxy auth)
-- `FRONTEND_PORT` - Port to listen on (default: 7655)
+
+#### Port Configuration
+Port configuration should be done via one of these methods:
+
+1. **systemd override** (Recommended for production):
+   ```bash
+   sudo systemctl edit pulse
+   # Add: Environment="FRONTEND_PORT=8080"
+   ```
+
+2. **system.json** (For persistent configuration):
+   ```json
+   {"frontendPort": 8080}
+   ```
+
+3. **Environment variable** (For Docker/testing):
+   - `FRONTEND_PORT` - Port to listen on (default: 7655)
+   - `PORT` - Legacy port variable (use FRONTEND_PORT instead)
+
+#### TLS/HTTPS Configuration
 - `HTTPS_ENABLED` - Enable HTTPS (true/false)
 - `TLS_CERT_FILE`, `TLS_KEY_FILE` - Paths to TLS certificate files
 
