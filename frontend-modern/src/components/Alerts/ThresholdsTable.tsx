@@ -900,10 +900,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                           };
                           
                           return (
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                            <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
                               <td class="px-3 py-1.5">
                                 <div class="flex items-center gap-2">
-                                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                                     {resource.name}
                                   </span>
                                   <Show when={'vmid' in resource && resource.vmid}>
