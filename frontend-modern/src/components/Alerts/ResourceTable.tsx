@@ -120,6 +120,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             </td>
                             <td class="px-3 py-1.5">
                               <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                                 resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
                                 resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
                                 resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
@@ -149,6 +150,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                 const showMetric = () => {
                                   if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
                                     return false;
+                                  }
+                                  if (resource.type === 'pbs') {
+                                    // PBS only has CPU and Memory metrics
+                                    return ['cpu', 'memory'].includes(metric);
                                   }
                                   if (resource.type === 'storage') {
                                     return metric === 'usage';
@@ -324,6 +329,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       </td>
                       <td class="px-3 py-1.5">
                         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                          resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                           resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
                           resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
                           resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
@@ -353,6 +359,10 @@ export function ResourceTable(props: ResourceTableProps) {
                           const showMetric = () => {
                             if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
                               return false;
+                            }
+                            if (resource.type === 'pbs') {
+                              // PBS only has CPU and Memory metrics
+                              return ['cpu', 'memory'].includes(metric);
                             }
                             if (resource.type === 'storage') {
                               return metric === 'usage';
