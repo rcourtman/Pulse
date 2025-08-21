@@ -75,6 +75,12 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
 📖 [Advanced installation options →](docs/INSTALL.md)
 
+### Updating
+
+**LXC Container:** `pct exec <container-id> -- update`  
+**Standard Install:** Re-run the installer  
+**Docker:** `docker pull rcourtman/pulse:latest` then recreate container
+
 ### Initial Setup
 
 **Option A: Interactive Setup (UI)**
