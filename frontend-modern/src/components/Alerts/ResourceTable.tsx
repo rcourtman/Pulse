@@ -120,7 +120,6 @@ export function ResourceTable(props: ResourceTableProps) {
                             </td>
                             <td class="px-3 py-1.5">
                               <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                resource.resourceType === 'PBS' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                                 resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
                                 resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
                                 resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
@@ -149,10 +148,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                 // Check if this metric applies to this resource type
                                 const showMetric = () => {
                                   if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-                                    return false;
-                                  }
-                                  // PBS nodes don't have disk metrics
-                                  if (resource.type === 'node' && resource.isPBS && metric === 'disk') {
                                     return false;
                                   }
                                   if (resource.type === 'storage') {
@@ -329,7 +324,6 @@ export function ResourceTable(props: ResourceTableProps) {
                       </td>
                       <td class="px-3 py-1.5">
                         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                          resource.resourceType === 'PBS' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                           resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
                           resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
                           resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
@@ -358,10 +352,6 @@ export function ResourceTable(props: ResourceTableProps) {
                           // Check if this metric applies to this resource type
                           const showMetric = () => {
                             if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-                              return false;
-                            }
-                            // PBS nodes don't have disk metrics
-                            if (resource.type === 'node' && resource.isPBS && metric === 'disk') {
                               return false;
                             }
                             if (resource.type === 'storage') {
