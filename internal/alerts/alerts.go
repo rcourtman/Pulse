@@ -213,10 +213,10 @@ func NewManager() *Manager {
 				CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
 				Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
 				Disk:       &HysteresisThreshold{Trigger: 90, Clear: 85},
-				DiskRead:   &HysteresisThreshold{Trigger: 150, Clear: 125}, // 150 MB/s
-				DiskWrite:  &HysteresisThreshold{Trigger: 150, Clear: 125}, // 150 MB/s
-				NetworkIn:  &HysteresisThreshold{Trigger: 200, Clear: 175}, // 200 MB/s
-				NetworkOut: &HysteresisThreshold{Trigger: 200, Clear: 175}, // 200 MB/s
+				DiskRead:   &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				DiskWrite:  &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				NetworkIn:  &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
+				NetworkOut: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
 			},
 			NodeDefaults: ThresholdConfig{
 				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
