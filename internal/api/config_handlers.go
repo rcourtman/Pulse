@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -1768,7 +1769,6 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
 	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
 	tempToken := query.Get("token") // Temporary token for authenticated access
-	apiToken := query.Get("api_token") // API token to pass to the script for auto-registration
 	
 	// Validate required parameters
 	if serverType == "" {
@@ -2021,7 +2021,7 @@ else
         echo "   Manual registration may be required."
         echo ""
     else
-        # Token created successfully, proceed with auto-registration
+        # Token created successfully
         echo "✅ Token created for Pulse monitoring"
         echo ""
     fi
@@ -2072,21 +2072,13 @@ EOF
     REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
     
     # Send registration with appropriate authentication
-    PULSE_API_TOKEN="%s"
-    REG_TOKEN="${PULSE_REG_TOKEN:-}"
+    SETUP_TOKEN="%s"
     
-    if [ -n "$PULSE_API_TOKEN" ]; then
-        # Use API token for authentication
+    if [ -n "$SETUP_TOKEN" ]; then
+        # Use setup token for authentication (passed from Pulse UI)
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
-            -H "X-API-Token: $PULSE_API_TOKEN" \
-            -d "$REGISTER_JSON" 2>&1)
-    elif [ -n "$REG_TOKEN" ]; then
-        # Legacy: Use registration token if provided
-        echo "🔑 Using registration token: $REG_TOKEN"
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -H "X-Registration-Token: $REG_TOKEN" \
+            -H "X-Setup-Token: $SETUP_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
         # Try without authentication (for systems without auth)
@@ -2100,8 +2092,21 @@ EOF
         AUTO_REG_SUCCESS=true
         echo "✅ Successfully registered with Pulse!"
     else
-        echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-        echo "   Response: $REGISTER_RESPONSE"
+        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
+            echo "⚠️  Auto-registration failed: Pulse requires authentication"
+            echo ""
+            if [ -z "$PULSE_API_TOKEN" ]; then
+                echo "   To enable auto-registration, add your Pulse API token to the setup URL:"
+                echo "   &api_token=YOUR_PULSE_API_TOKEN"
+                echo ""
+                echo "   You can find your API token in Pulse Settings → Security"
+            else
+                echo "   The provided API token was invalid. Please check your token."
+            fi
+        else
+            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+            echo "   Response: $REGISTER_RESPONSE"
+        fi
         echo ""
         echo "📝 For manual setup:"
         echo "   1. Copy the token value shown above"  
@@ -2120,23 +2125,21 @@ echo ""
 
 # Only show manual setup instructions if auto-registration failed
 if [ "$AUTO_REG_SUCCESS" != true ]; then
-    echo "Add this server to Pulse with:"
+    echo "Manual setup instructions:"
     echo "  Token ID: pulse-monitor@pam!%s"
     if [ "$TOKEN_EXISTED" = true ]; then
         echo "  Token Value: [Use your existing token or create a new one as shown above]"
+    elif [ -n "$TOKEN_VALUE" ]; then
+        echo "  Token Value: $TOKEN_VALUE"
     else
-        echo "  Token Value: [Copy from above]"
+        echo "  Token Value: [See token output above]"
     fi
     echo "  Host URL: %s"
     echo ""
-    echo "If auto-registration is enabled but requires a token:"
-    echo "  1. Generate a registration token in Pulse Settings → Security"
-    echo "  2. Re-run this script with: PULSE_REG_TOKEN=your-token ./setup.sh"
-    echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
-			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 1937,1941,1945,1948,1950,1954
-			pulseURL, serverHost, tokenName, tokenName, apiToken, storagePerms, tokenName, serverHost) // Lines 1984,1998,2011,2024,2033,2074,2080,2086
+			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
+			pulseURL, serverHost, tokenName, tokenName, tempToken, storagePerms, tokenName, serverHost)
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -2287,21 +2290,13 @@ EOF
     REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
     
     # Send registration with appropriate authentication
-    PULSE_API_TOKEN="%s"
-    REG_TOKEN="${PULSE_REG_TOKEN:-}"
+    SETUP_TOKEN="%s"
     
-    if [ -n "$PULSE_API_TOKEN" ]; then
-        # Use API token for authentication
+    if [ -n "$SETUP_TOKEN" ]; then
+        # Use setup token for authentication (passed from Pulse UI)
         REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
-            -H "X-API-Token: $PULSE_API_TOKEN" \
-            -d "$REGISTER_JSON" 2>&1)
-    elif [ -n "$REG_TOKEN" ]; then
-        # Legacy: Use registration token if provided
-        echo "🔑 Using registration token: $REG_TOKEN"
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
-            -H "Content-Type: application/json" \
-            -H "X-Registration-Token: $REG_TOKEN" \
+            -H "X-Setup-Token: $SETUP_TOKEN" \
             -d "$REGISTER_JSON" 2>&1)
     else
         # Try without authentication (for systems without auth)
@@ -2315,8 +2310,21 @@ EOF
         AUTO_REG_SUCCESS=true
         echo "✅ Successfully registered with Pulse!"
     else
-        echo "⚠️  Auto-registration failed. Manual configuration may be needed."
-        echo "   Response: $REGISTER_RESPONSE"
+        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
+            echo "⚠️  Auto-registration failed: Pulse requires authentication"
+            echo ""
+            if [ -z "$PULSE_API_TOKEN" ]; then
+                echo "   To enable auto-registration, add your Pulse API token to the setup URL:"
+                echo "   &api_token=YOUR_PULSE_API_TOKEN"
+                echo ""
+                echo "   You can find your API token in Pulse Settings → Security"
+            else
+                echo "   The provided API token was invalid. Please check your token."
+            fi
+        else
+            echo "⚠️  Auto-registration failed. Manual configuration may be needed."
+            echo "   Response: $REGISTER_RESPONSE"
+        fi
         echo ""
         echo "📝 For manual setup:"
         echo "   1. Copy the token value shown above"
@@ -2349,8 +2357,8 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
     echo ""
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
-			tokenName, tokenName, tokenName, tokenName, tokenName, // Lines 2172,2174,2178,2181,2183
-			pulseURL, serverHost, tokenName, tokenName, apiToken, tokenName, tokenName) // Lines 2208,2222,2235,2248,2257,2317,2333
+			tokenName, tokenName, tokenName, tokenName, tokenName,
+			pulseURL, serverHost, tokenName, tokenName, tempToken, tokenName, tokenName)
 	}
 	
 	// Set headers for script download
@@ -2413,14 +2421,11 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 	
-	// Add API token if configured
-	apiTokenParam := ""
-	if h.config.APIToken != "" {
-		apiTokenParam = "&api_token=" + url.QueryEscape(h.config.APIToken)
-	}
+	// Note: We don't pass the API token in the URL since it's hashed and can't be used directly
+	// The temporary token provides authentication for the setup script
 	
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&token=%s%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token, apiTokenParam)
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&token=%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
 	
 	// Return the URL and curl command
 	response := map[string]interface{}{
@@ -2453,14 +2458,36 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	// Check API token if configured (registration tokens removed)
-	if h.config.APIToken != "" {
-		apiToken := r.Header.Get("X-API-Token")
-		if apiToken == "" || apiToken != h.config.APIToken {
-			log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - missing or invalid API token")
-			http.Error(w, "Registration requires valid API token", http.StatusUnauthorized)
-			return
+	// Check authentication - either API token or temporary setup token
+	authenticated := false
+	
+	// First check for temporary setup token
+	if tempToken := r.Header.Get("X-Setup-Token"); tempToken != "" {
+		h.tokenMutex.RLock()
+		expiry, exists := h.setupTokens[tempToken]
+		h.tokenMutex.RUnlock()
+		
+		if exists && time.Now().Before(expiry) {
+			authenticated = true
+			log.Info().Msg("Auto-register authenticated via temporary setup token")
 		}
+	}
+	
+	// If not authenticated via temp token, check API token if configured
+	if !authenticated && h.config.APIToken != "" {
+		apiToken := r.Header.Get("X-API-Token")
+		// Config always has hashed token now (auto-hashed on load)
+		if apiToken != "" && internalauth.CompareAPIToken(apiToken, h.config.APIToken) {
+			authenticated = true
+			log.Info().Msg("Auto-register authenticated via API token")
+		}
+	}
+	
+	// If still not authenticated and auth is required, reject
+	if !authenticated && h.config.APIToken != "" {
+		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - authentication required")
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
 	}
 	
 	// Log source IP for security auditing
