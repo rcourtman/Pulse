@@ -2124,6 +2124,11 @@ fi
 echo "Setting up permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
+# Add VM.Monitor permission for guest agent access (disk usage monitoring)
+echo "Adding VM.Monitor permission for guest agent access..."
+pveum role create PulseMonitor -privs VM.Monitor 2>/dev/null || true
+pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+
 echo ""
 echo "✅ Setup complete!"
 echo ""
