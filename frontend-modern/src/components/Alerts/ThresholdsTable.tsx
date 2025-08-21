@@ -147,14 +147,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: node.id,
         name: node.name,
         type: 'node' as const,
-        resourceType: (node as any).isPBS ? 'PBS' : 'Node',
+        resourceType: 'Node',
         status: node.status,
         hasOverride: hasCustomThresholds || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
-        defaults: props.nodeDefaults,
-        isPBS: (node as any).isPBS || false
+        defaults: props.nodeDefaults
       };
     });
     

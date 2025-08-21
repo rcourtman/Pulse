@@ -849,22 +849,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       rawOverridesConfig={props.rawOverridesConfig}
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
-      nodes={[...(props.state.nodes || []), ...(props.state.pbs || []).filter(pbs => pbs.cpu > 0 || pbs.memory > 0).map(pbs => ({
-        id: `pbs-${pbs.id}`,
-        name: `PBS: ${pbs.name}`,
-        instance: pbs.name,
-        status: pbs.status,
-        cpu: pbs.cpu,
-        memory: {
-          total: pbs.memoryTotal,
-          used: pbs.memoryUsed,
-          free: pbs.memoryTotal - pbs.memoryUsed,
-          usage: pbs.memory
-        },
-        disk: { total: 0, used: 0, free: 0, usage: 0 }, // PBS doesn't provide root disk metrics
-        uptime: pbs.uptime,
-        isPBS: true
-      } as any))]}
+      nodes={props.state.nodes || []}
       storage={props.state.storage || []}
       guestDefaults={props.guestDefaults()}
       setGuestDefaults={props.setGuestDefaults}
