@@ -499,8 +499,24 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           if (response.ok) {
                                             const data = await response.json();
                                             const cmd = `curl -sSL "${data.url}" | bash`;
+                                            
+                                            // Show setup code in a modal or alert
+                                            if (data.setupCode) {
+                                              const message = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 SETUP CODE: ${data.setupCode}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Copy this command to clipboard
+2. Run it on your Proxmox server
+3. Enter the setup code when prompted
+
+The code expires in 5 minutes.`;
+                                              alert(message);
+                                            }
+                                            
                                             if (await copyToClipboard(cmd)) {
-                                              showSuccess('Command copied to clipboard!');
+                                              showSuccess('Command copied! Setup code: ' + data.setupCode);
                                             }
                                           } else {
                                             showError('Failed to generate setup URL');
@@ -793,8 +809,24 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             if (response.ok) {
                                               const data = await response.json();
                                               const cmd = `curl -sSL "${data.url}" | bash`;
+                                              
+                                              // Show setup code in a modal or alert
+                                              if (data.setupCode) {
+                                                const message = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 SETUP CODE: ${data.setupCode}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Copy this command to clipboard
+2. Run it on your PBS server
+3. Enter the setup code when prompted
+
+The code expires in 5 minutes.`;
+                                                alert(message);
+                                              }
+                                              
                                               if (await copyToClipboard(cmd)) {
-                                                showSuccess('Command copied to clipboard!');
+                                                showSuccess('Command copied! Setup code: ' + data.setupCode);
                                               }
                                             } else {
                                               showError('Failed to generate setup URL');
