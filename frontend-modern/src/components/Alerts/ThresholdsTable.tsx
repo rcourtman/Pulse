@@ -163,8 +163,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return nodes;
   });
   
-  // Process guests with their overrides  
-  const guestsWithOverrides = createMemo(() => {
+  // Process guests with their overrides and group by node
+  const guestsGroupedByNode = createMemo(() => {
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
     
@@ -196,14 +196,33 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       };
     });
     
-    if (search) {
-      return guests.filter(g => 
-        g.name.toLowerCase().includes(search) ||
-        g.vmid?.toString().includes(search) ||
-        g.node?.toLowerCase().includes(search)
-      );
-    }
-    return guests;
+    const filteredGuests = search 
+      ? guests.filter(g => 
+          g.name.toLowerCase().includes(search) ||
+          g.vmid?.toString().includes(search) ||
+          g.node?.toLowerCase().includes(search)
+        )
+      : guests;
+    
+    // Group by node
+    const grouped: Record<string, typeof filteredGuests> = {};
+    filteredGuests.forEach(guest => {
+      const node = guest.node || 'Unknown';
+      if (!grouped[node]) {
+        grouped[node] = [];
+      }
+      grouped[node].push(guest);
+    });
+    
+    // Sort guests within each group by vmid
+    Object.keys(grouped).forEach(node => {
+      grouped[node].sort((a, b) => {
+        if (a.vmid && b.vmid) return a.vmid - b.vmid;
+        return a.name.localeCompare(b.name);
+      });
+    });
+    
+    return grouped;
   });
   
   // Process storage with their overrides
@@ -251,7 +270,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   const saveEdit = (resourceId: string) => {
-    const allResources = [...nodesWithOverrides(), ...guestsWithOverrides(), ...storageWithOverrides()];
+    // Flatten grouped guests to find the resource
+    const allGuests = Object.values(guestsGroupedByNode()).flat();
+    const allResources = [...nodesWithOverrides(), ...allGuests, ...storageWithOverrides()];
     const resource = allResources.find(r => r.id === resourceId);
     if (!resource) return;
     
@@ -346,7 +367,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   const toggleDisabled = (resourceId: string) => {
-    const allResources = [...guestsWithOverrides(), ...storageWithOverrides()];
+    // Flatten grouped guests to find the resource
+    const allGuests = Object.values(guestsGroupedByNode()).flat();
+    const allResources = [...allGuests, ...storageWithOverrides()];
     const resource = allResources.find(r => r.id === resourceId);
     if (!resource || (resource.type !== 'guest' && resource.type !== 'storage')) return;
     
@@ -835,10 +858,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       </Show>
       
       {/* Guests Table */}
-      <Show when={guestsWithOverrides().length > 0}>
+      <Show when={Object.keys(guestsGroupedByNode()).length > 0}>
         <ResourceTable
           title="VMs & Containers"
-          resources={guestsWithOverrides()}
+          groupedResources={guestsGroupedByNode()}
           columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
           activeAlerts={props.activeAlerts}
           onEdit={startEditing}
