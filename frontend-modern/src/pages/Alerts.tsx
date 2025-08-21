@@ -50,12 +50,12 @@ interface ScheduleRef {
 interface Override {
   id: string;  // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node)
   name: string;  // Display name
-  type: 'guest' | 'node';
-  resourceType?: string;  // VM, CT, or Node
+  type: 'guest' | 'node' | 'storage';
+  resourceType?: string;  // VM, CT, Node, or Storage
   vmid?: number;  // Only for guests
-  node?: string;  // Node name (for guests), undefined for nodes themselves
+  node?: string;  // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;
-  disabled?: boolean;  // Completely disable alerts for this guest
+  disabled?: boolean;  // Completely disable alerts for this guest/storage
   disableConnectivity?: boolean;  // For nodes - disable offline/connectivity alerts
   thresholds: {
     cpu?: number;
@@ -65,6 +65,7 @@ interface Override {
     diskWrite?: number;
     networkIn?: number;
     networkOut?: number;
+    usage?: number;  // For storage devices
   };
 }
 
@@ -849,6 +850,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setRawOverridesConfig={props.setRawOverridesConfig}
       allGuests={props.allGuests}
       nodes={props.state.nodes || []}
+      storage={props.state.storage || []}
       guestDefaults={props.guestDefaults()}
       setGuestDefaults={props.setGuestDefaults}
       nodeDefaults={props.nodeDefaults()}
