@@ -294,17 +294,22 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Dur("pollingInterval", 10*time.Second).
 		Msg("Starting monitoring loop")
 
-	// Initialize and start discovery service
-	discoverySubnet := m.config.DiscoverySubnet
-	if discoverySubnet == "" {
-		discoverySubnet = "auto"
-	}
-	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet)
-	if m.discoveryService != nil {
-		m.discoveryService.Start(ctx)
-		log.Info().Msg("Discovery service initialized and started")
+	// Initialize and start discovery service if enabled
+	if m.config.DiscoveryEnabled {
+		discoverySubnet := m.config.DiscoverySubnet
+		if discoverySubnet == "" {
+			discoverySubnet = "auto"
+		}
+		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet)
+		if m.discoveryService != nil {
+			m.discoveryService.Start(ctx)
+			log.Info().Msg("Discovery service initialized and started")
+		} else {
+			log.Error().Msg("Failed to initialize discovery service")
+		}
 	} else {
-		log.Error().Msg("Failed to initialize discovery service")
+		log.Info().Msg("Discovery service disabled by configuration")
+		m.discoveryService = nil
 	}
 
 	// Set up alert callbacks

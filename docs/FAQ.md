@@ -17,6 +17,10 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 **Auto-discovery (Easiest)**: Settings → Nodes → Click "Setup Script" on discovered node → Run on Proxmox
 **Manual**: Settings → Nodes → Add Node → Enter credentials → Save
 
+### How do I disable network discovery?
+Settings → System → Network Settings → Toggle "Enable Discovery" off → Save
+Or set environment variable `DISCOVERY_ENABLED=false`
+
 ### How do I change the port?
 Systemd: `sudo systemctl edit pulse-backend`, add `Environment="FRONTEND_PORT=8080"`, restart
 Docker: Use `-e FRONTEND_PORT=8080` in your run command
