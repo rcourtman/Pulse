@@ -8,10 +8,17 @@
 
 ![Dashboard](docs/images/01-dashboard.png)
 
-## 💖 Support This Project
+## 💖 Support Pulse Development
+
+Pulse is built by a solo developer in evenings and weekends. Your support helps cover:
+- Test hardware and Proxmox licenses  
+- Development time for new features and bug fixes
+- Keeping Pulse 100% free and open-source forever
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
+**Not ready to sponsor?** Star ⭐ the project or share it with your homelab community!
 
 ## Features
 
