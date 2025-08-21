@@ -56,6 +56,7 @@ interface Override {
   node?: string;  // Node name (for guests), undefined for nodes themselves
   instance?: string;
   disabled?: boolean;  // Completely disable alerts for this guest
+  disableConnectivity?: boolean;  // For nodes - disable offline/connectivity alerts
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -159,6 +160,7 @@ export function Alerts() {
             name: node.name,
             type: 'node',
             resourceType: 'Node',
+            disableConnectivity: thresholds.disableConnectivity || false,
             thresholds: extractTriggerValues(thresholds)
           });
         } else {
@@ -188,7 +190,11 @@ export function Alerts() {
         overridesList.some((newOverride) => {
           const existing = currentOverrides.find(o => o.id === newOverride.id);
           if (!existing) return true;
-          return JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
+          // Check both thresholds and disableConnectivity for nodes
+          const thresholdsChanged = JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
+          const connectivityChanged = newOverride.type === 'node' && newOverride.disableConnectivity !== existing.disableConnectivity;
+          const disabledChanged = newOverride.type === 'guest' && newOverride.disabled !== existing.disabled;
+          return thresholdsChanged || connectivityChanged || disabledChanged;
         });
         
       if (hasChanged) {
@@ -335,6 +341,8 @@ export function Alerts() {
   const extractTriggerValues = (thresholds: AlertThresholds): Record<string, number> => {
     const result: Record<string, number> = {};
     Object.entries(thresholds).forEach(([key, value]) => {
+      // Skip non-threshold fields
+      if (key === 'disabled' || key === 'disableConnectivity') return;
       result[key] = getTriggerValue(value);
     });
     return result;
@@ -850,6 +858,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       timeThreshold={props.timeThreshold}
       setTimeThreshold={props.setTimeThreshold}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
+      activeAlerts={props.activeAlerts}
     />
   );
 }

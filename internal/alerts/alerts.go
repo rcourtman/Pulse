@@ -59,14 +59,15 @@ type HysteresisThreshold struct {
 
 // ThresholdConfig represents threshold configuration
 type ThresholdConfig struct {
-	Disabled   bool                 `json:"disabled,omitempty"`   // Completely disable alerts for this guest
-	CPU        *HysteresisThreshold `json:"cpu,omitempty"`
-	Memory     *HysteresisThreshold `json:"memory,omitempty"`
-	Disk       *HysteresisThreshold `json:"disk,omitempty"`
-	DiskRead   *HysteresisThreshold `json:"diskRead,omitempty"`
-	DiskWrite  *HysteresisThreshold `json:"diskWrite,omitempty"`
-	NetworkIn  *HysteresisThreshold `json:"networkIn,omitempty"`
-	NetworkOut *HysteresisThreshold `json:"networkOut,omitempty"`
+	Disabled            bool                 `json:"disabled,omitempty"`   // Completely disable alerts for this guest
+	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity alerts
+	CPU                 *HysteresisThreshold `json:"cpu,omitempty"`
+	Memory              *HysteresisThreshold `json:"memory,omitempty"`
+	Disk                *HysteresisThreshold `json:"disk,omitempty"`
+	DiskRead            *HysteresisThreshold `json:"diskRead,omitempty"`
+	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
+	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
+	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
 	// Legacy fields for backward compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
 	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
@@ -871,6 +872,19 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	
+	// Check if node connectivity alerts are disabled
+	if override, exists := m.config.Overrides[node.ID]; exists && override.DisableConnectivity {
+		// Node connectivity alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			delete(m.activeAlerts, alertID)
+			log.Debug().
+				Str("node", node.Name).
+				Msg("Node offline alert cleared (connectivity alerts disabled)")
+		}
+		delete(m.nodeOfflineCount, node.ID)
+		return
+	}
 	
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {

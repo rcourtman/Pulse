@@ -1,5 +1,5 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
-import type { VM, Container, Node } from '@/types/api';
+import { createSignal, createMemo, For, Show, onMount, onCleanup } from 'solid-js';
+import type { VM, Container, Node, Alert } from '@/types/api';
 
 interface Override {
   id: string;
@@ -10,6 +10,7 @@ interface Override {
   node?: string;
   instance?: string;
   disabled?: boolean;
+  disableConnectivity?: boolean;  // For nodes only - disable offline alerts
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -49,6 +50,7 @@ interface ThresholdsTableProps {
   timeThreshold: () => number;
   setTimeThreshold: (value: number) => void;
   setHasUnsavedChanges: (value: boolean) => void;
+  activeAlerts?: Record<string, Alert>;
 }
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
@@ -56,6 +58,95 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [showGlobalSettings, setShowGlobalSettings] = createSignal(true);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<Record<string, any>>({});
+  
+  let searchInputRef: HTMLInputElement | undefined;
+  
+  // Set up keyboard shortcuts
+  onMount(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input or textarea (unless it's Escape)
+      const target = e.target as HTMLElement;
+      const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true';
+      
+      // Escape clears search from anywhere
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSearchTerm('');
+        if (searchInputRef && isInInput) {
+          searchInputRef.blur();
+        }
+        return;
+      }
+      
+      // Skip other shortcuts if already in an input
+      if (isInInput) {
+        return;
+      }
+      
+      // Any letter/number focuses search and starts typing
+      if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
+        e.preventDefault();
+        if (searchInputRef) {
+          searchInputRef.focus();
+          setSearchTerm(e.key);
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown);
+    });
+  });
+  
+  // Helper function to format values with units
+  const formatMetricValue = (metric: string, value: number | undefined): string => {
+    if (value === undefined || value === null) return '0';
+    
+    // Percentage-based metrics
+    if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
+      return `${value}%`;
+    }
+    
+    // MB/s metrics
+    if (metric === 'diskRead' || metric === 'diskWrite' || metric === 'networkIn' || metric === 'networkOut') {
+      return `${value} MB/s`;
+    }
+    
+    return String(value);
+  };
+  
+  // Check if there's an active alert for a resource/metric
+  const hasActiveAlert = (resourceId: string, metric: string): boolean => {
+    if (!props.activeAlerts) return false;
+    const alertKey = `${resourceId}-${metric}`;
+    return alertKey in props.activeAlerts;
+  };
+  
+  // Component for metric value with active alert indicator
+  const MetricValueWithHeat = (props: { 
+    resourceId: string; 
+    metric: string; 
+    value: number; 
+    isOverridden: boolean 
+  }) => (
+    <div class="flex items-center justify-center gap-1">
+      <span class={`text-sm ${
+        props.isOverridden 
+          ? 'text-gray-900 dark:text-gray-100 font-medium' 
+          : 'text-gray-400 dark:text-gray-500'
+      }`}>
+        {formatMetricValue(props.metric, props.value)}
+      </span>
+      <Show when={hasActiveAlert(props.resourceId, props.metric)}>
+        <div 
+          class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"
+          title="Active alert"
+        />
+      </Show>
+    </div>
+  );
   
   // Combine all resources (guests and nodes) with their overrides
   const resourcesWithOverrides = createMemo(() => {
@@ -67,6 +158,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
       const override = overridesMap.get(guestId);
       
+      // Check if any threshold values actually differ from defaults
+      const hasCustomThresholds = override?.thresholds && 
+        Object.keys(override.thresholds).some(key => {
+          const k = key as keyof typeof override.thresholds;
+          return override.thresholds[k] !== undefined && 
+                 override.thresholds[k] !== (props.guestDefaults as any)[k];
+        });
+      
       return {
         id: guestId,
         name: guest.name,
@@ -76,9 +175,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         node: guest.node,
         instance: guest.instance,
         status: guest.status,
-        hasOverride: !!override,
+        hasOverride: hasCustomThresholds || false,  // Only true if thresholds differ
         disabled: override?.disabled || false,
-        thresholds: override?.thresholds || props.guestDefaults
+        thresholds: override?.thresholds || {},
+        defaults: props.guestDefaults
       };
     });
     
@@ -86,15 +186,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const nodes = props.nodes.map(node => {
       const override = overridesMap.get(node.id);
       
+      // Check if any threshold values actually differ from defaults
+      const hasCustomThresholds = override?.thresholds && 
+        Object.keys(override.thresholds).some(key => {
+          const k = key as keyof typeof override.thresholds;
+          return override.thresholds[k] !== undefined && 
+                 override.thresholds[k] !== (props.nodeDefaults as any)[k];
+        });
+      
       return {
         id: node.id,
         name: node.name,
         type: 'node' as const,
         resourceType: 'Node',
         status: node.status,
-        hasOverride: !!override,
+        hasOverride: hasCustomThresholds || false,  // Only true if thresholds differ
         disabled: false,
-        thresholds: override?.thresholds || props.nodeDefaults
+        disableConnectivity: override?.disableConnectivity || false,
+        thresholds: override?.thresholds || {},
+        defaults: props.nodeDefaults
       };
     });
     
@@ -138,33 +248,43 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     return groups;
   });
   
-  const startEditing = (resourceId: string, currentThresholds: any) => {
+  const startEditing = (resourceId: string, currentThresholds: any, defaults: any) => {
     setEditingId(resourceId);
-    setEditingThresholds(currentThresholds);
+    // Merge defaults with overrides for editing
+    const mergedThresholds = { ...defaults, ...currentThresholds };
+    setEditingThresholds(mergedThresholds);
   };
   
   const saveEdit = (resourceId: string) => {
     const resource = resourcesWithOverrides().find(r => r.id === resourceId);
     if (!resource) return;
     
-    const thresholds = editingThresholds();
+    const editedThresholds = editingThresholds();
+    const defaultThresholds = resource.defaults;
     
-    // Check if there are any actual changes from the defaults
-    const defaultThresholds = resource.type === 'guest' ? props.guestDefaults : props.nodeDefaults;
-    const hasChanges = Object.keys(thresholds).some(key => {
-      const editedValue = thresholds[key];
+    // Only include values that differ from defaults
+    const overrideThresholds: Record<string, any> = {};
+    Object.keys(editedThresholds).forEach(key => {
+      const editedValue = editedThresholds[key];
       const defaultValue = defaultThresholds[key as keyof typeof defaultThresholds];
-      return editedValue !== defaultValue;
+      if (editedValue !== defaultValue && editedValue !== undefined && editedValue !== '') {
+        overrideThresholds[key] = editedValue;
+      }
     });
     
-    // If no changes and no existing override, just cancel the edit
-    if (!hasChanges && !resource.hasOverride) {
-      cancelEdit();
-      return;
-    }
-    
-    // If no changes but there's an existing override, keep it as is
-    if (!hasChanges && resource.hasOverride) {
+    // If no overrides, just cancel the edit
+    if (Object.keys(overrideThresholds).length === 0) {
+      // If there was an existing override, remove it
+      if (resource.hasOverride) {
+        const newOverrides = props.overrides().filter(o => o.id !== resourceId);
+        props.setOverrides(newOverrides);
+        
+        // Also remove from raw config
+        const newRawConfig = { ...props.rawOverridesConfig() };
+        delete newRawConfig[resourceId];
+        props.setRawOverridesConfig(newRawConfig);
+        props.setHasUnsavedChanges(true);
+      }
       cancelEdit();
       return;
     }
@@ -179,7 +299,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       node: 'node' in resource ? resource.node : undefined,
       instance: 'instance' in resource ? resource.instance : undefined,
       disabled: resource.disabled,
-      thresholds
+      thresholds: overrideThresholds
     };
     
     // Update overrides list
@@ -195,7 +315,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Update raw config
     const newRawConfig = { ...props.rawOverridesConfig() };
     const hysteresisThresholds: Record<string, any> = {};
-    Object.entries(thresholds).forEach(([metric, value]) => {
+    Object.entries(overrideThresholds).forEach(([metric, value]) => {
       if (value !== undefined && value !== null) {
         hysteresisThresholds[metric] = { 
           trigger: value, 
@@ -233,41 +353,155 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const resource = resourcesWithOverrides().find(r => r.id === resourceId);
     if (!resource || resource.type !== 'guest') return;
     
-    const override: Override = {
-      id: resourceId,
-      name: resource.name,
-      type: resource.type,
-      resourceType: resource.resourceType,
-      vmid: 'vmid' in resource ? resource.vmid : undefined,
-      node: 'node' in resource ? resource.node : undefined,
-      instance: 'instance' in resource ? resource.instance : undefined,
-      disabled: !resource.disabled,
-      thresholds: resource.thresholds
-    };
+    // Get existing override if it exists
+    const existingOverride = props.overrides().find(o => o.id === resourceId);
     
-    const existingIndex = props.overrides().findIndex(o => o.id === resourceId);
-    if (existingIndex >= 0) {
-      const newOverrides = [...props.overrides()];
-      newOverrides[existingIndex] = override;
-      props.setOverrides(newOverrides);
+    console.log('Toggle disabled for:', resourceId);
+    console.log('Existing override:', existingOverride);
+    console.log('Existing thresholds:', existingOverride?.thresholds);
+    console.log('Threshold keys:', existingOverride ? Object.keys(existingOverride.thresholds || {}) : 'no override');
+    
+    // Determine the current disabled state from the override (or false if no override)
+    const currentDisabledState = existingOverride?.disabled || false;
+    const newDisabledState = !currentDisabledState;
+    
+    console.log('Current disabled state:', currentDisabledState);
+    console.log('New disabled state:', newDisabledState);
+    
+    // Clean the thresholds to exclude 'disabled' if it got in there
+    const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
+    delete cleanThresholds.disabled;
+    
+    // If enabling (disabled = false) and no custom thresholds exist, remove the override entirely
+    if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
+      console.log('REMOVING OVERRIDE - enabling with no custom thresholds');
+      // Remove the override completely
+      props.setOverrides(props.overrides().filter(o => o.id !== resourceId));
+      
+      // Remove from raw config
+      const newRawConfig = { ...props.rawOverridesConfig() };
+      delete newRawConfig[resourceId];
+      props.setRawOverridesConfig(newRawConfig);
     } else {
-      props.setOverrides([...props.overrides(), override]);
+      console.log('UPDATING OVERRIDE - either disabling or has custom thresholds');
+      
+      const override: Override = {
+        id: resourceId,
+        name: resource.name,
+        type: resource.type,
+        resourceType: resource.resourceType,
+        vmid: 'vmid' in resource ? resource.vmid : undefined,
+        node: 'node' in resource ? resource.node : undefined,
+        instance: 'instance' in resource ? resource.instance : undefined,
+        disabled: newDisabledState,
+        thresholds: cleanThresholds  // Only keep actual threshold overrides
+      };
+      
+      const existingIndex = props.overrides().findIndex(o => o.id === resourceId);
+      if (existingIndex >= 0) {
+        const newOverrides = [...props.overrides()];
+        newOverrides[existingIndex] = override;
+        props.setOverrides(newOverrides);
+      } else {
+        props.setOverrides([...props.overrides(), override]);
+      }
+      
+      // Update raw config
+      const newRawConfig = { ...props.rawOverridesConfig() };
+      const hysteresisThresholds: Record<string, any> = {};
+      
+      // Only add threshold overrides that differ from defaults
+      Object.entries(override.thresholds).forEach(([metric, value]) => {
+        if (value !== undefined && value !== null) {
+          hysteresisThresholds[metric] = { 
+            trigger: value, 
+            clear: Math.max(0, (value as number) - 5) 
+          };
+        }
+      });
+      
+      if (newDisabledState) {
+        hysteresisThresholds.disabled = true;
+      }
+      
+      newRawConfig[resourceId] = hysteresisThresholds;
+      props.setRawOverridesConfig(newRawConfig);
     }
     
-    // Update raw config
-    const newRawConfig = { ...props.rawOverridesConfig() };
-    const hysteresisThresholds: Record<string, any> = {};
-    Object.entries(resource.thresholds).forEach(([metric, value]) => {
-      if (value !== undefined && value !== null) {
-        hysteresisThresholds[metric] = { 
-          trigger: value, 
-          clear: Math.max(0, (value as number) - 5) 
-        };
+    props.setHasUnsavedChanges(true);
+  };
+  
+  const toggleNodeConnectivity = (nodeId: string) => {
+    console.log('toggleNodeConnectivity called for:', nodeId);
+    const node = resourcesWithOverrides().find(r => r.id === nodeId);
+    console.log('Found node:', node);
+    if (!node || node.type !== 'node') return;
+    
+    // Get existing override if it exists
+    const existingOverride = props.overrides().find(o => o.id === nodeId);
+    console.log('Existing override:', existingOverride);
+    
+    // Determine the current state
+    const currentDisableConnectivity = existingOverride?.disableConnectivity || false;
+    const newDisableConnectivity = !currentDisableConnectivity;
+    console.log('Current state:', currentDisableConnectivity, 'New state:', newDisableConnectivity);
+    
+    // Clean the thresholds to exclude any unwanted fields
+    const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
+    delete cleanThresholds.disabled;
+    delete cleanThresholds.disableConnectivity;
+    
+    // If enabling connectivity alerts (disableConnectivity = false) and no custom thresholds exist, remove the override entirely
+    if (!newDisableConnectivity && Object.keys(cleanThresholds).length === 0) {
+      // Remove the override completely
+      props.setOverrides(props.overrides().filter(o => o.id !== nodeId));
+      
+      // Remove from raw config
+      const newRawConfig = { ...props.rawOverridesConfig() };
+      delete newRawConfig[nodeId];
+      props.setRawOverridesConfig(newRawConfig);
+    } else {
+      // Update or create the override
+      const override: Override = {
+        id: nodeId,
+        name: node.name,
+        type: node.type,
+        resourceType: node.resourceType,
+        disableConnectivity: newDisableConnectivity,
+        thresholds: cleanThresholds
+      };
+      
+      // Update overrides list
+      const existingIndex = props.overrides().findIndex(o => o.id === nodeId);
+      if (existingIndex >= 0) {
+        const newOverrides = [...props.overrides()];
+        newOverrides[existingIndex] = override;
+        props.setOverrides(newOverrides);
+      } else {
+        props.setOverrides([...props.overrides(), override]);
       }
-    });
-    hysteresisThresholds.disabled = !resource.disabled;
-    newRawConfig[resourceId] = hysteresisThresholds;
-    props.setRawOverridesConfig(newRawConfig);
+      
+      // Update raw config
+      const newRawConfig = { ...props.rawOverridesConfig() };
+      const hysteresisThresholds: Record<string, any> = {};
+      
+      // Add threshold configs
+      Object.entries(cleanThresholds).forEach(([metric, value]) => {
+        if (value !== undefined && value !== null) {
+          hysteresisThresholds[metric] = { 
+            trigger: value, 
+            clear: Math.max(0, (value as number) - 5) 
+          };
+        }
+      });
+      
+      if (newDisableConnectivity) {
+        hysteresisThresholds.disableConnectivity = true;
+      }
+      
+      newRawConfig[nodeId] = hysteresisThresholds;
+      props.setRawOverridesConfig(newRawConfig);
+    }
     
     props.setHasUnsavedChanges(true);
   };
@@ -297,77 +531,31 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </div>
         
         <Show when={showGlobalSettings()}>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-            {/* Compact grid layout */}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left column - Time threshold and reset button */}
-              <div class="space-y-4">
-                <div class="flex items-center gap-3">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-fit">
-                    Time Threshold:
-                  </label>
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      max="300"
-                      value={props.timeThreshold()}
-                      onInput={(e) => {
-                        props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                             focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      sec {props.timeThreshold() === 0 ? '(disabled)' : `(wait ${props.timeThreshold()}s before alerting)`}
-                    </span>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => {
-                    props.setGuestDefaults({
-                      cpu: 80,
-                      memory: 85,
-                      disk: 90,
-                      diskRead: 150,
-                      diskWrite: 150,
-                      networkIn: 200,
-                      networkOut: 200
-                    });
-                    props.setNodeDefaults({
-                      cpu: 80,
-                      memory: 85,
-                      disk: 90
-                    });
-                    props.setStorageDefault(85);
-                    props.setTimeThreshold(0);
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-                >
-                  Reset All to Defaults
-                </button>
-              </div>
-              
-              {/* Right column - Threshold values in compact table */}
+          <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
+            {/* Threshold table */}
+            <div>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Default thresholds for all resources. Individual resources can override these values below.
+              </p>
               <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                   <thead>
                     <tr class="border-b border-gray-200 dark:border-gray-700">
-                      <th class="text-left py-1 px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Type</th>
-                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CPU %</th>
-                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Memory %</th>
-                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Disk %</th>
-                      <th class="text-center px-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Storage %</th>
+                      <th class="text-left py-2 px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Resource Type</th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">CPU<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Memory<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Storage<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk Read<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk Write<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Net In<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
+                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Net Out<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">VMs & Containers</td>
-                      <td class="text-center px-2">
+                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">VMs & Containers</td>
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -377,11 +565,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setGuestDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2">
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -391,11 +579,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setGuestDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2">
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -405,15 +593,71 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setGuestDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2 text-gray-400">-</td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10000"
+                          value={props.guestDefaults.diskRead || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, diskRead: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </td>
+                      <td class="text-center px-3 py-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10000"
+                          value={props.guestDefaults.diskWrite || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, diskWrite: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </td>
+                      <td class="text-center px-3 py-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10000"
+                          value={props.guestDefaults.networkIn || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, networkIn: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </td>
+                      <td class="text-center px-3 py-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10000"
+                          value={props.guestDefaults.networkOut || 0}
+                          onInput={(e) => {
+                            props.setGuestDefaults((prev) => ({...prev, networkOut: parseInt(e.currentTarget.value) || 0}));
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </td>
                     </tr>
-                    <tr>
-                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Proxmox Nodes</td>
-                      <td class="text-center px-2">
+                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">Proxmox Nodes</td>
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -423,11 +667,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setNodeDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2">
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -437,11 +681,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setNodeDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2">
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -451,18 +695,22 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setNodeDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-2 text-gray-400">-</td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
                     </tr>
                     <tr>
-                      <td class="py-2 px-2 font-medium text-gray-700 dark:text-gray-300">Storage</td>
-                      <td class="text-center px-2 text-gray-400">-</td>
-                      <td class="text-center px-2 text-gray-400">-</td>
-                      <td class="text-center px-2 text-gray-400">-</td>
-                      <td class="text-center px-2">
+                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">Storage</td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3">
                         <input
                           type="number"
                           min="0"
@@ -472,14 +720,71 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                             props.setStorageDefault(parseInt(e.currentTarget.value) || 0);
                             props.setHasUnsavedChanges(true);
                           }}
-                          class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+            </div>
+            
+            {/* Additional settings row */}
+            <div class="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-gray-500 dark:text-gray-400">
+                  Alert delay:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="300"
+                  value={props.timeThreshold()}
+                  onInput={(e) => {
+                    props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
+                    props.setHasUnsavedChanges(true);
+                  }}
+                  class="w-14 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  seconds before alerting
+                </span>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  props.setGuestDefaults({
+                    cpu: 80,
+                    memory: 85,
+                    disk: 90,
+                    diskRead: 150,
+                    diskWrite: 150,
+                    networkIn: 200,
+                    networkOut: 200
+                  });
+                  props.setNodeDefaults({
+                    cpu: 80,
+                    memory: 85,
+                    disk: 90
+                  });
+                  props.setStorageDefault(85);
+                  props.setTimeThreshold(0);
+                  props.setHasUnsavedChanges(true);
+                }}
+                class="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                title="Reset all values to factory defaults"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reset defaults
+              </button>
             </div>
           </div>
         </Show>
@@ -488,6 +793,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       {/* Search Bar */}
       <div class="relative">
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="Search resources..."
           value={searchTerm()}
@@ -499,6 +805,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
+        <Show when={searchTerm()}>
+          <button
+            onClick={() => setSearchTerm('')}
+            class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </Show>
       </div>
       
       {/* Resources Table */}
@@ -526,6 +842,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   Disk %
                 </th>
                 <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Disk R<br/><span class="text-[10px] font-normal">MB/s</span>
+                </th>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Disk W<br/><span class="text-[10px] font-normal">MB/s</span>
+                </th>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Net In<br/><span class="text-[10px] font-normal">Mbps</span>
+                </th>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Net Out<br/><span class="text-[10px] font-normal">Mbps</span>
+                </th>
+                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Alerts
                 </th>
                 <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -544,7 +872,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     <>
                       {/* Group header */}
                       <tr class="bg-gray-50 dark:bg-gray-700/50">
-                        <td colspan="8" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <td colspan="12" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                           {groupName}
                         </td>
                       </tr>
@@ -553,6 +881,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                         {(resource) => {
                           const isEditing = () => editingId() === resource.id;
                           const thresholds = () => isEditing() ? editingThresholds() : resource.thresholds;
+                          const displayValue = (metric: string) => {
+                            if (isEditing()) return thresholds()[metric] || resource.defaults[metric] || '';
+                            // Show override value or default
+                            return resource.thresholds[metric] || resource.defaults[metric] || 0;
+                          };
+                          const shouldShowMetric = (metric: string) => {
+                            // Nodes don't have I/O metrics
+                            if (resource.type === 'node' && 
+                                (metric === 'diskRead' || metric === 'diskWrite' || 
+                                 metric === 'networkIn' || metric === 'networkOut')) {
+                              return false;
+                            }
+                            return true;
+                          };
+                          const isOverridden = (metric: string) => {
+                            return resource.thresholds[metric] !== undefined && resource.thresholds[metric] !== null;
+                          };
                           
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
@@ -564,7 +909,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                   <Show when={'vmid' in resource && resource.vmid}>
                                     <span class="text-xs text-gray-500">({resource.vmid})</span>
                                   </Show>
-                                  <Show when={resource.hasOverride}>
+                                  <Show when={(() => {
+                                    const override = props.overrides().find(o => o.id === resource.id);
+                                    if (!override) return false;
+                                    // Show badge if there are threshold overrides or connectivity is disabled for nodes
+                                    return Object.keys(override.thresholds).length > 0 || 
+                                           (resource.type === 'node' && resource.disableConnectivity);
+                                  })()}>
                                     <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
                                       Custom
                                     </span>
@@ -593,9 +944,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                               </td>
                               <td class="px-3 py-1.5 text-center">
                                 <Show when={isEditing()} fallback={
-                                  <span class="text-sm text-gray-700 dark:text-gray-300">
-                                    {thresholds().cpu || '-'}
-                                  </span>
+                                  <MetricValueWithHeat 
+                                    resourceId={resource.id}
+                                    metric="cpu"
+                                    value={displayValue('cpu')}
+                                    isOverridden={isOverridden('cpu')}
+                                  />
                                 }>
                                   <input
                                     type="number"
@@ -613,9 +967,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                               </td>
                               <td class="px-3 py-1.5 text-center">
                                 <Show when={isEditing()} fallback={
-                                  <span class="text-sm text-gray-700 dark:text-gray-300">
-                                    {thresholds().memory || '-'}
-                                  </span>
+                                  <MetricValueWithHeat 
+                                    resourceId={resource.id}
+                                    metric="memory"
+                                    value={displayValue('memory')}
+                                    isOverridden={isOverridden('memory')}
+                                  />
                                 }>
                                   <input
                                     type="number"
@@ -633,9 +990,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                               </td>
                               <td class="px-3 py-1.5 text-center">
                                 <Show when={isEditing()} fallback={
-                                  <span class="text-sm text-gray-700 dark:text-gray-300">
-                                    {thresholds().disk || '-'}
-                                  </span>
+                                  <MetricValueWithHeat 
+                                    resourceId={resource.id}
+                                    metric="disk"
+                                    value={displayValue('disk')}
+                                    isOverridden={isOverridden('disk')}
+                                  />
                                 }>
                                   <input
                                     type="number"
@@ -652,20 +1012,160 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                 </Show>
                               </td>
                               <td class="px-3 py-1.5 text-center">
+                                <Show when={isEditing()} fallback={
+                                  <Show when={shouldShowMetric('diskRead')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="diskRead"
+                                      value={displayValue('diskRead')}
+                                      isOverridden={isOverridden('diskRead')}
+                                    />
+                                  </Show>
+                                }>
+                                  <Show when={shouldShowMetric('diskRead')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="10000"
+                                      value={thresholds().diskRead || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        diskRead: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
+                                </Show>
+                              </td>
+                              <td class="px-3 py-1.5 text-center">
+                                <Show when={isEditing()} fallback={
+                                  <Show when={shouldShowMetric('diskWrite')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="diskWrite"
+                                      value={displayValue('diskWrite')}
+                                      isOverridden={isOverridden('diskWrite')}
+                                    />
+                                  </Show>
+                                }>
+                                  <Show when={shouldShowMetric('diskWrite')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="10000"
+                                      value={thresholds().diskWrite || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        diskWrite: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
+                                </Show>
+                              </td>
+                              <td class="px-3 py-1.5 text-center">
+                                <Show when={isEditing()} fallback={
+                                  <Show when={shouldShowMetric('networkIn')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="networkIn"
+                                      value={displayValue('networkIn')}
+                                      isOverridden={isOverridden('networkIn')}
+                                    />
+                                  </Show>
+                                }>
+                                  <Show when={shouldShowMetric('networkIn')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="10000"
+                                      value={thresholds().networkIn || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        networkIn: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
+                                </Show>
+                              </td>
+                              <td class="px-3 py-1.5 text-center">
+                                <Show when={isEditing()} fallback={
+                                  <Show when={shouldShowMetric('networkOut')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <MetricValueWithHeat 
+                                      resourceId={resource.id}
+                                      metric="networkOut"
+                                      value={displayValue('networkOut')}
+                                      isOverridden={isOverridden('networkOut')}
+                                    />
+                                  </Show>
+                                }>
+                                  <Show when={shouldShowMetric('networkOut')} fallback={
+                                    <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+                                  }>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="10000"
+                                      value={thresholds().networkOut || ''}
+                                      onInput={(e) => setEditingThresholds({
+                                        ...editingThresholds(),
+                                        networkOut: parseInt(e.currentTarget.value) || undefined
+                                      })}
+                                      class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  </Show>
+                                </Show>
+                              </td>
+                              <td class="px-3 py-1.5 text-center">
                                 <Show when={resource.type === 'guest'}>
                                   <button
                                     onClick={() => toggleDisabled(resource.id)}
                                     class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                                      resource.disabled
+                                      (() => {
+                                        const override = props.overrides().find(o => o.id === resource.id);
+                                        return override?.disabled;
+                                      })()
                                         ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
                                         : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
                                     }`}
                                   >
-                                    {resource.disabled ? 'Disabled' : 'Enabled'}
+                                    {(() => {
+                                      const override = props.overrides().find(o => o.id === resource.id);
+                                      return override?.disabled ? 'Disabled' : 'Enabled';
+                                    })()}
                                   </button>
                                 </Show>
                                 <Show when={resource.type === 'node'}>
-                                  <span class="text-xs text-gray-500">-</span>
+                                  <button
+                                    onClick={() => toggleNodeConnectivity(resource.id)}
+                                    class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                      resource.disableConnectivity
+                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                        : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                    }`}
+                                    title="Toggle connectivity alerts for this node"
+                                  >
+                                    {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                                  </button>
                                 </Show>
                               </td>
                               <td class="px-3 py-1.5">
@@ -673,7 +1173,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                   <Show when={isEditing()} fallback={
                                     <>
                                       <button
-                                        onClick={() => startEditing(resource.id, resource.thresholds)}
+                                        onClick={() => startEditing(resource.id, resource.thresholds, resource.defaults)}
                                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                         title="Edit thresholds"
                                       >
@@ -682,11 +1182,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                         </svg>
                                       </button>
-                                      <Show when={resource.hasOverride}>
+                                      <Show when={props.overrides().find(o => o.id === resource.id)}>
                                         <button
                                           onClick={() => removeOverride(resource.id)}
                                           class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                          title="Remove override"
+                                          title="Remove all overrides"
                                         >
                                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -726,7 +1226,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </For>
               }>
                 <tr>
-                  <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colspan="12" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     No resources found
                   </td>
                 </tr>
