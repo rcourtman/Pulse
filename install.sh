@@ -149,8 +149,10 @@ create_lxc_container() {
     echo
     
     # Check if we're being piped (non-interactive)
-    # Test if stdin is not a TTY (being piped)
-    if ! test -t 0; then
+    # For Proxmox installations, try to use /dev/tty even when piped
+    # This allows interactive mode when using curl | bash
+    if ! test -t 0 && ! test -e /dev/tty; then
+        # No TTY available at all - truly non-interactive
         echo "Non-interactive mode detected. Using Quick installation."
         mode="1"
     else
