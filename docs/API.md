@@ -331,39 +331,98 @@ POST /api/notifications/alerts/clear  # Clear alert history
 
 ## Auto-Registration
 
-### Setup Script
-Generate setup script for automatic node configuration.
+Pulse provides a secure auto-registration system for adding Proxmox nodes using one-time setup codes.
+
+### Generate Setup Code and URL
+Generate a one-time setup code and URL for node configuration. This endpoint requires authentication.
 
 ```bash
-POST /api/setup-script
+POST /api/setup-script-url
 ```
 
 Request:
 ```json
 {
-  "type": "pve",
-  "host": "https://192.168.1.100:8006"
+  "type": "pve",        // "pve" or "pbs"
+  "host": "https://192.168.1.100:8006",
+  "backupPerms": true   // Optional: add backup management permissions (PVE only)
 }
 ```
 
+Response:
+```json
+{
+  "url": "http://pulse.local:7655/api/setup-script?type=pve&host=...",
+  "command": "curl -sSL \"http://pulse.local:7655/api/setup-script?...\" | bash",
+  "setupCode": "A7K9P2",  // 6-character one-time code
+  "expires": 1755123456    // Unix timestamp when code expires (5 minutes)
+}
+```
+
+### Setup Script
+Download the setup script for automatic node configuration. This endpoint is public but the script will prompt for a setup code.
+
+```bash
+GET /api/setup-script?type=pve&host=<encoded-url>&pulse_url=<encoded-url>
+```
+
+The script will:
+1. Create a monitoring user (pulse-monitor@pam or pulse-monitor@pbs)
+2. Generate an API token for that user
+3. Set appropriate permissions
+4. Prompt for the setup code
+5. Auto-register with Pulse if a valid code is provided
+
 ### Auto-Register Node
-Register a node automatically (used by setup scripts).
+Register a node automatically (used by setup scripts). Requires either a valid setup code or API token.
 
 ```bash
 POST /api/auto-register
 ```
 
+Request with setup code (preferred):
+```json
+{
+  "type": "pve",
+  "host": "https://node.local:8006",
+  "serverName": "node-hostname",
+  "tokenId": "pulse-monitor@pam!token-name",
+  "tokenValue": "token-secret-value",
+  "setupCode": "A7K9P2"  // One-time setup code from UI
+}
+```
+
+Request with API token (legacy):
 ```bash
 curl -X POST http://localhost:7655/api/auto-register \
   -H "Content-Type: application/json" \
+  -H "X-API-Token: your-api-token" \
   -d '{
     "type": "pve",
     "host": "https://node.local:8006",
-    "name": "Node Name",
-    "username": "monitor@pam",
-    "tokenId": "token-id",
-    "tokenValue": "token-secret"
+    "serverName": "node-hostname",
+    "tokenId": "pulse-monitor@pam!token-name",
+    "tokenValue": "token-secret-value"
   }'
+```
+
+### Security Features
+
+The setup code system provides multiple layers of security:
+
+- **One-time use**: Each code can only be used once
+- **Time-limited**: Codes expire after 5 minutes
+- **Hashed storage**: Codes are stored as SHA3-256 hashes
+- **Validation**: Codes are validated against node type and host URL
+- **No secrets in URLs**: Setup URLs contain no authentication tokens
+- **Interactive entry**: Codes are entered interactively, not passed in URLs
+
+### Alternative: Environment Variable
+
+For automation, the setup code can be provided via environment variable:
+
+```bash
+PULSE_SETUP_CODE=A7K9P2 curl -sSL "http://pulse:7655/api/setup-script?..." | bash
 ```
 
 
