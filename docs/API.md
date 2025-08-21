@@ -185,6 +185,8 @@ POST /api/config/nodes                   # Add new node
 PUT /api/config/nodes/<node-id>         # Update node
 DELETE /api/config/nodes/<node-id>      # Remove node
 POST /api/config/nodes/test-connection  # Test node connection
+POST /api/config/nodes/test-config      # Test node configuration (for new nodes)
+POST /api/config/nodes/<node-id>/test   # Test existing node
 ```
 
 #### Add Node Example
@@ -207,18 +209,64 @@ Get and update system configuration.
 
 ```bash
 GET /api/config/system   # Get system config
-POST /api/config/system  # Update system config
+PUT /api/config/system   # Update system config
 ```
 
-### API Token Management
+### Security Configuration
+
+#### Security Status
+Check current security configuration status.
+
+```bash
+GET /api/security/status
+```
+
+Returns information about:
+- Authentication configuration
+- API token status  
+- Network context (private/public)
+- HTTPS status
+- Audit logging status
+
+#### Password Management
+Manage user passwords.
+
+```bash
+POST /api/security/change-password
+```
+
+Request body:
+```json
+{
+  "currentPassword": "old-password",
+  "newPassword": "new-secure-password"
+}
+```
+
+#### Quick Security Setup
+Quick setup for authentication (first-time setup).
+
+```bash
+POST /api/security/quick-setup
+```
+
+Request body:
+```json
+{
+  "username": "admin",
+  "password": "secure-password",
+  "generateApiToken": true
+}
+```
+
+#### API Token Management
 Manage API tokens for programmatic access.
 
 ```bash
-GET /api/system/api-token           # Get token status
-GET /api/system/api-token?reveal=true  # Get actual token (auth required)
-POST /api/system/api-token/generate # Generate new token
-DELETE /api/system/api-token/delete # Remove token
+POST /api/security/regenerate-token   # Generate or regenerate API token
 ```
+
+Note: The old `/api/system/api-token` endpoints have been deprecated in favor of the simplified regenerate-token endpoint.
 
 ### Export/Import Configuration
 Backup and restore Pulse configuration with encryption.
@@ -253,9 +301,15 @@ Manage email notification settings.
 
 ```bash
 GET /api/notifications/email          # Get email config
-POST /api/notifications/email         # Update email config
-POST /api/notifications/email/test    # Send test email
+PUT /api/notifications/email          # Update email config (Note: Uses PUT, not POST)
 GET /api/notifications/email-providers # List email providers
+```
+
+### Test Notifications
+Test notification delivery.
+
+```bash
+POST /api/notifications/test          # Send test notification to all configured channels
 ```
 
 ### Webhook Configuration
@@ -268,6 +322,7 @@ PUT /api/notifications/webhooks/<id>               # Update webhook
 DELETE /api/notifications/webhooks/<id>            # Delete webhook
 POST /api/notifications/webhooks/test              # Test webhook
 GET /api/notifications/webhook-templates           # Get service templates
+GET /api/notifications/webhook-history             # Get webhook notification history
 ```
 
 #### Create Webhook Example
@@ -311,22 +366,23 @@ curl -X POST http://localhost:7655/api/notifications/webhooks/test \
   }'
 ```
 
-### Alert Thresholds
-Manage alert thresholds and overrides.
+
+### Alert Management
+Comprehensive alert management system.
 
 ```bash
-GET /api/notifications/thresholds            # Get thresholds
-POST /api/notifications/thresholds           # Update thresholds
-GET /api/notifications/thresholds/overrides  # Get overrides
-POST /api/notifications/thresholds/overrides # Set overrides
-```
+# Alert Configuration
+GET /api/alerts/config                # Get alert configuration
+PUT /api/alerts/config                # Update alert configuration
 
-### Alert History
-View alert history and manage alerts.
+# Alert Monitoring
+GET /api/alerts/active                # Get currently active alerts
+GET /api/alerts/history               # Get alert history
+DELETE /api/alerts/history            # Clear alert history
 
-```bash
-GET /api/notifications/alerts         # Get recent alerts
-POST /api/notifications/alerts/clear  # Clear alert history
+# Alert Actions
+POST /api/alerts/<id>/acknowledge    # Acknowledge an alert
+POST /api/alerts/<id>/clear          # Clear a specific alert
 ```
 
 ## Auto-Registration
@@ -406,6 +462,19 @@ curl -X POST http://localhost:7655/api/auto-register \
   }'
 ```
 
+### Security Management
+Additional security endpoints.
+
+```bash
+# Apply security settings and restart service
+POST /api/security/apply-restart
+
+# Recovery mode (localhost only)
+GET /api/security/recovery           # Check recovery status
+POST /api/security/recovery          # Enable/disable recovery mode
+  Body: {"action": "disable_auth" | "enable_auth"}
+```
+
 ### Security Features
 
 The setup code system provides multiple layers of security:
@@ -425,6 +494,137 @@ For automation, the setup code can be provided via environment variable:
 PULSE_SETUP_CODE=A7K9P2 curl -sSL "http://pulse:7655/api/setup-script?..." | bash
 ```
 
+
+## Guest Metadata
+
+Manage custom metadata for VMs and containers, such as console URLs.
+
+```bash
+# Get all guest metadata
+GET /api/guests/metadata
+
+# Get metadata for specific guest
+GET /api/guests/metadata/<node>/<vmid>
+
+# Update guest metadata
+PUT /api/guests/metadata/<node>/<vmid>
+POST /api/guests/metadata/<node>/<vmid>
+
+# Delete guest metadata
+DELETE /api/guests/metadata/<node>/<vmid>
+```
+
+Example metadata update:
+```bash
+curl -X PUT http://localhost:7655/api/guests/metadata/pve-node/100 \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: your-token" \
+  -d '{
+    "consoleUrl": "https://custom-console.example.com/vm/100",
+    "notes": "Production database server"
+  }'
+```
+
+## System Information
+
+### Current Configuration
+Get the current Pulse configuration.
+
+```bash
+GET /api/config
+```
+
+Returns the complete configuration including nodes, settings, and system parameters.
+
+### Diagnostics
+Get comprehensive system diagnostics information.
+
+```bash
+GET /api/diagnostics
+```
+
+Returns detailed information about:
+- System configuration
+- Node connectivity status
+- Error logs
+- Performance metrics
+- Service health
+
+### Network Discovery
+Discover Proxmox servers on the network.
+
+```bash
+GET /api/discover
+```
+
+Response:
+```json
+{
+  "servers": [
+    {
+      "host": "192.168.1.100",
+      "port": 8006,
+      "type": "pve",
+      "name": "pve-node-1"
+    }
+  ],
+  "errors": [],
+  "scanning": false,
+  "updated": 1755123456
+}
+```
+
+### Simple Statistics
+Get simplified statistics (lightweight endpoint).
+
+```bash
+GET /simple-stats
+```
+
+## Session Management
+
+### Logout
+End the current user session.
+
+```bash
+POST /api/logout
+```
+
+## Settings Management
+
+### UI Settings
+Manage user interface preferences.
+
+```bash
+# Get current UI settings
+GET /api/settings
+
+# Update UI settings
+POST /api/settings/update
+```
+
+Settings include:
+- Theme preferences
+- Dashboard layout
+- Refresh intervals
+- Display options
+
+### System Settings
+Manage system-wide settings.
+
+```bash
+# Get system settings
+GET /api/system/settings
+
+# Update system settings
+POST /api/system/settings/update
+```
+
+System settings include:
+- Polling intervals
+- Performance tuning
+- Feature flags
+- Global configurations
 
 ## Updates
 
@@ -458,8 +658,9 @@ is not used by the UI.
 GET /api/updates/status
 ```
 
-## WebSocket
+## Real-time Updates
 
+### WebSocket
 Real-time updates are available via WebSocket connection.
 
 ```javascript
@@ -472,6 +673,30 @@ ws.onmessage = (event) => {
 ```
 
 The WebSocket broadcasts state updates every few seconds with the complete system state.
+
+### Socket.IO Compatibility
+For Socket.IO clients, a compatibility endpoint is available:
+
+```bash
+GET /socket.io/
+```
+
+### Test Notifications
+Test WebSocket notifications:
+
+```bash
+POST /api/test-notification
+```
+
+## Simple Statistics
+
+Lightweight statistics endpoint for monitoring.
+
+```bash
+GET /simple-stats
+```
+
+Returns simplified metrics without authentication requirements.
 
 ## Rate Limiting
 
