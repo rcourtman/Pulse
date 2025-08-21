@@ -910,6 +910,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         />
       </Show>
       
+      {/* PBS Servers Table */}
+      <Show when={pbsServersWithOverrides().length > 0}>
+        <ResourceTable
+          title="PBS Servers"
+          resources={pbsServersWithOverrides()}
+          columns={['CPU %', 'Memory %']}
+          activeAlerts={props.activeAlerts}
+          onEdit={startEditing}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onRemoveOverride={removeOverride}
+          editingId={editingId}
+          editingThresholds={editingThresholds}
+          setEditingThresholds={setEditingThresholds}
+          formatMetricValue={formatMetricValue}
+          hasActiveAlert={hasActiveAlert}
+        />
+      </Show>
+      
       {/* Guests Table */}
       <Show when={Object.keys(guestsGroupedByNode()).length > 0}>
         <ResourceTable
@@ -942,25 +961,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
           onToggleDisabled={toggleDisabled}
-          editingId={editingId}
-          editingThresholds={editingThresholds}
-          setEditingThresholds={setEditingThresholds}
-          formatMetricValue={formatMetricValue}
-          hasActiveAlert={hasActiveAlert}
-        />
-      </Show>
-      
-      {/* PBS Servers Table */}
-      <Show when={pbsServersWithOverrides().length > 0}>
-        <ResourceTable
-          title="PBS Servers"
-          resources={pbsServersWithOverrides()}
-          columns={['CPU %', 'Memory %']}
-          activeAlerts={props.activeAlerts}
-          onEdit={startEditing}
-          onSaveEdit={saveEdit}
-          onCancelEdit={cancelEdit}
-          onRemoveOverride={removeOverride}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
