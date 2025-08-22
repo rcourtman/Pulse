@@ -181,6 +181,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                  override.thresholds[k] !== (props.guestDefaults as any)[k];
         });
       
+      // A guest has an override if it has custom thresholds OR is disabled
+      const hasOverride = hasCustomThresholds || override?.disabled || false;
+      
       return {
         id: guestId,
         name: guest.name,
@@ -190,7 +193,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         node: guest.node,
         instance: guest.instance,
         status: guest.status,
-        hasOverride: hasCustomThresholds || false,
+        hasOverride: hasOverride,
         disabled: override?.disabled || false,
         thresholds: override?.thresholds || {},
         defaults: props.guestDefaults
@@ -290,6 +293,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const hasCustomThresholds = override?.thresholds?.usage !== undefined && 
                                    override.thresholds.usage !== props.storageDefault();
       
+      // A storage device has an override if it has custom thresholds OR is disabled
+      const hasOverride = hasCustomThresholds || override?.disabled || false;
+      
       return {
         id: storage.id,
         name: storage.name,
@@ -298,7 +304,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         node: storage.node,
         instance: storage.instance,
         status: storage.status,
-        hasOverride: hasCustomThresholds || false,
+        hasOverride: hasOverride,
         disabled: override?.disabled || false,
         thresholds: override?.thresholds || {},
         defaults: { usage: props.storageDefault() }
@@ -429,17 +435,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Get existing override if it exists
     const existingOverride = props.overrides().find(o => o.id === resourceId);
     
-    console.log('Toggle disabled for:', resourceId);
-    console.log('Existing override:', existingOverride);
-    console.log('Existing thresholds:', existingOverride?.thresholds);
-    console.log('Threshold keys:', existingOverride ? Object.keys(existingOverride.thresholds || {}) : 'no override');
-    
-    // Determine the current disabled state from the override (or false if no override)
-    const currentDisabledState = existingOverride?.disabled || false;
+    // Determine the current disabled state - check the resource's current state, not the override
+    const currentDisabledState = resource.disabled;
     const newDisabledState = !currentDisabledState;
-    
-    console.log('Current disabled state:', currentDisabledState);
-    console.log('New disabled state:', newDisabledState);
     
     // Clean the thresholds to exclude 'disabled' if it got in there
     const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
@@ -447,7 +445,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     // If enabling (disabled = false) and no custom thresholds exist, remove the override entirely
     if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
-      console.log('REMOVING OVERRIDE - enabling with no custom thresholds');
       // Remove the override completely
       props.setOverrides(props.overrides().filter(o => o.id !== resourceId));
       
@@ -456,7 +453,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       delete newRawConfig[resourceId];
       props.setRawOverridesConfig(newRawConfig);
     } else {
-      console.log('UPDATING OVERRIDE - either disabling or has custom thresholds');
       
       const override: Override = {
         id: resourceId,
@@ -505,19 +501,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   const toggleNodeConnectivity = (nodeId: string) => {
-    console.log('toggleNodeConnectivity called for:', nodeId);
     const node = nodesWithOverrides().find(r => r.id === nodeId);
-    console.log('Found node:', node);
     if (!node || node.type !== 'node') return;
     
     // Get existing override if it exists
     const existingOverride = props.overrides().find(o => o.id === nodeId);
-    console.log('Existing override:', existingOverride);
     
     // Determine the current state
     const currentDisableConnectivity = existingOverride?.disableConnectivity || false;
     const newDisableConnectivity = !currentDisableConnectivity;
-    console.log('Current state:', currentDisableConnectivity, 'New state:', newDisableConnectivity);
     
     // Clean the thresholds to exclude any unwanted fields
     const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
