@@ -431,7 +431,8 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	var err error
 	
 	// Check if webhook has a custom template first
-	if webhook.Template != "" && len(alertList) > 0 {
+	// Only use custom template if it's not empty
+	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" && len(alertList) > 0 {
 		// Use custom template with enhanced message for grouped alerts
 		alert := alertList[0]
 		if len(alertList) > 1 {
@@ -684,7 +685,8 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	var err error
 	
 	// Check if webhook has a custom template first
-	if webhook.Template != "" {
+	// Only use custom template if it's not empty
+	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" {
 		// Use custom template provided by user
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
