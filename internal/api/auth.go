@@ -110,10 +110,89 @@ func ValidateSession(token string) bool {
 	return true
 }
 
+// CheckProxyAuth validates proxy authentication headers
+func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
+	// Check if proxy auth is configured
+	if cfg.ProxyAuthSecret == "" {
+		return false, "", false
+	}
+	
+	// Validate proxy secret header
+	proxySecret := r.Header.Get("X-Proxy-Secret")
+	if proxySecret != cfg.ProxyAuthSecret {
+		log.Debug().
+			Str("provided_secret", proxySecret[:min(8, len(proxySecret))]+"...").
+			Msg("Invalid proxy secret")
+		return false, "", false
+	}
+	
+	// Get username from header if configured
+	username := ""
+	if cfg.ProxyAuthUserHeader != "" {
+		username = r.Header.Get(cfg.ProxyAuthUserHeader)
+		if username == "" {
+			log.Debug().Str("header", cfg.ProxyAuthUserHeader).Msg("Proxy auth user header not found")
+			return false, "", false
+		}
+	}
+	
+	// Check admin role if configured
+	isAdmin := true // Default to admin if no role checking configured
+	if cfg.ProxyAuthRoleHeader != "" && cfg.ProxyAuthAdminRole != "" {
+		roles := r.Header.Get(cfg.ProxyAuthRoleHeader)
+		if roles != "" {
+			// Split roles by separator
+			separator := cfg.ProxyAuthRoleSeparator
+			if separator == "" {
+				separator = "|"
+			}
+			roleList := strings.Split(roles, separator)
+			isAdmin = false
+			for _, role := range roleList {
+				if strings.TrimSpace(role) == cfg.ProxyAuthAdminRole {
+					isAdmin = true
+					break
+				}
+			}
+			log.Debug().
+				Str("roles", roles).
+				Bool("is_admin", isAdmin).
+				Msg("Proxy auth roles checked")
+		}
+	}
+	
+	log.Debug().
+		Str("user", username).
+		Bool("is_admin", isAdmin).
+		Msg("Proxy authentication successful")
+	
+	return true, username, isAdmin
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	// Check proxy auth first if configured
+	if cfg.ProxyAuthSecret != "" {
+		if valid, username, _ := CheckProxyAuth(cfg, r); valid {
+			// Set username in response header for frontend
+			if username != "" {
+				w.Header().Set("X-Authenticated-User", username)
+			}
+			w.Header().Set("X-Auth-Method", "proxy")
+			return true
+		}
+	}
+	
 	// If no auth is configured at all, allow access
-	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken == "" {
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken == "" && cfg.ProxyAuthSecret == "" {
 		log.Debug().Msg("No auth configured, allowing access")
 		return true
 	}
