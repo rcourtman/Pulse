@@ -166,6 +166,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("Failed to load email configuration")
 	}
 
+	// Migrate webhooks if needed (from unencrypted to encrypted)
+	if err := m.configPersist.MigrateWebhooksIfNeeded(); err != nil {
+		log.Warn().Err(err).Msg("Failed to migrate webhooks")
+	}
+	
 	if webhooks, err := m.configPersist.LoadWebhooks(); err == nil {
 		for _, webhook := range webhooks {
 			m.notificationMgr.AddWebhook(webhook)
