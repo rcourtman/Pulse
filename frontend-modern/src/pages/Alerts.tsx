@@ -468,23 +468,8 @@ export function Alerts() {
                       suppressionWindow: 5,
                       hysteresisMargin: 5.0,
                       timeThreshold: timeThreshold() || 0,
-                      overrides: overrides().reduce((acc, o) => {
-                        // Convert thresholds to hysteresis format
-                        const hysteresisThresholds: any = {};
-                        Object.entries(o.thresholds).forEach(([metric, value]) => {
-                          hysteresisThresholds[metric] = createHysteresisThreshold(value as number);
-                        });
-                        // Include disabled field if present (for guests and storage)
-                        if (o.disabled) {
-                          hysteresisThresholds.disabled = true;
-                        }
-                        // Include disableConnectivity field if present (for nodes)
-                        if (o.disableConnectivity) {
-                          hysteresisThresholds.disableConnectivity = true;
-                        }
-                        acc[o.id] = hysteresisThresholds;
-                        return acc;
-                      }, {} as Record<string, any>),
+                      // Use rawOverridesConfig which is already properly formatted with disabled flags
+                      overrides: rawOverridesConfig(),
                       schedule: scheduleRef.getScheduleConfig ? scheduleRef.getScheduleConfig() : {
                         quietHours: {
                           enabled: false,
