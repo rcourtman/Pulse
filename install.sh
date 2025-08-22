@@ -640,18 +640,20 @@ download_pulse() {
             exit 1
         fi
     else
-        # Check if user has RC channel configured
-        UPDATE_CHANNEL="stable"
-        
-        # Allow override via command line
-        if [[ -n "${FORCE_CHANNEL}" ]]; then
-            UPDATE_CHANNEL="${FORCE_CHANNEL}"
-            print_info "Using $UPDATE_CHANNEL channel from command line"
-        elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
-            if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
-                UPDATE_CHANNEL="rc"
-                print_info "RC channel detected in configuration"
+        # UPDATE_CHANNEL should already be set by main(), but set default if not
+        if [[ -z "${UPDATE_CHANNEL}" ]]; then
+            UPDATE_CHANNEL="stable"
+            
+            # Allow override via command line
+            if [[ -n "${FORCE_CHANNEL}" ]]; then
+                UPDATE_CHANNEL="${FORCE_CHANNEL}"
+                print_info "Using $UPDATE_CHANNEL channel from command line"
+            elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+                if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
+                    UPDATE_CHANNEL="rc"
+                    print_info "RC channel detected in configuration"
+                fi
             fi
         fi
         
@@ -882,6 +884,19 @@ main() {
     fi
     
     if check_existing_installation; then
+        # Determine update channel before checking available version
+        UPDATE_CHANNEL="stable"
+        
+        # Allow override via command line
+        if [[ -n "${FORCE_CHANNEL}" ]]; then
+            UPDATE_CHANNEL="${FORCE_CHANNEL}"
+        elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+            if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
+                UPDATE_CHANNEL="rc"
+            fi
+        fi
+        
         # Get the latest available version for comparison
         local AVAILABLE_VERSION=""
         if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
