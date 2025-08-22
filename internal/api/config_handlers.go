@@ -392,7 +392,15 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			host = "https://" + host
 		}
 		// Add default PBS port if missing
-		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+		// Check if there's no port specified after the protocol
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		// Only add default port if no port is specified
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
 			host = host + ":8007"
 		}
 		
