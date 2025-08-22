@@ -209,7 +209,8 @@ volumes:
 
 - **Authentication required** - Protects your Proxmox infrastructure credentials
 - **Quick setup wizard** - Secure your installation in under a minute
-- **Multiple auth methods**: Password authentication, API tokens, or both
+- **Multiple auth methods**: Password authentication, API tokens, proxy auth (SSO), or combinations
+- **Proxy/SSO support** - Integrate with Authentik, Authelia, and other authentication proxies ([docs](docs/PROXY_AUTH.md))
 - **Enterprise-grade protection**:
   - Credentials encrypted at rest (AES-256-GCM)
   - CSRF tokens for state-changing operations
@@ -400,9 +401,11 @@ curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 
 **[Full API Documentation →](docs/API.md)** - Complete endpoint reference with examples
 
-## Reverse Proxy
+## Reverse Proxy & SSO
 
 Using Pulse behind a reverse proxy? **WebSocket support is required for real-time updates.**
+
+**NEW: Proxy Authentication Support** - Integrate with Authentik, Authelia, and other SSO providers. See [Proxy Authentication Guide](docs/PROXY_AUTH.md).
 
 See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy, Apache, Traefik, HAProxy, and Cloudflare Tunnel configurations.
 
@@ -451,6 +454,7 @@ journalctl -u pulse -f
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Reference](docs/API.md) - REST API endpoints and examples
 - [Webhook Guide](docs/WEBHOOKS.md) - Setting up webhooks and custom payloads
+- [Proxy Authentication](docs/PROXY_AUTH.md) - SSO integration with Authentik, Authelia, etc.
 - [Reverse Proxy Setup](docs/REVERSE_PROXY.md) - nginx, Caddy, Apache, Traefik configs
 - [Security](docs/SECURITY.md) - Security features and best practices
 - [FAQ](docs/FAQ.md) - Common questions and troubleshooting

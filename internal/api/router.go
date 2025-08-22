@@ -280,6 +280,18 @@ func (r *Router) setupRoutes() {
 				apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
 			}
 			
+			// Check for proxy auth
+			hasProxyAuth := r.config.ProxyAuthSecret != ""
+			proxyAuthUsername := ""
+			proxyAuthIsAdmin := false
+			if hasProxyAuth {
+				// Check if current request has valid proxy auth
+				if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
+					proxyAuthUsername = username
+					proxyAuthIsAdmin = isAdmin
+				}
+			}
+			
 			status := map[string]interface{}{
 				"apiTokenConfigured": r.config.APIToken != "",
 				"apiTokenHint": apiTokenHint,
@@ -295,6 +307,10 @@ func (r *Router) setupRoutes() {
 				"isPrivateNetwork": isPrivateNetwork,
 				"isTrustedNetwork": isTrustedNetwork,
 				"publicAccess": !isPrivateNetwork,
+				"hasProxyAuth": hasProxyAuth,
+				"proxyAuthLogoutURL": r.config.ProxyAuthLogoutURL,
+				"proxyAuthUsername": proxyAuthUsername,
+				"proxyAuthIsAdmin": proxyAuthIsAdmin,
 			}
 			json.NewEncoder(w).Encode(status)
 		} else {
@@ -436,7 +452,15 @@ func (r *Router) setupRoutes() {
 	// Config export/import routes (requires authentication)
 	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check authentication - accept either session auth or API token
+			// Check proxy auth first
+			hasValidProxyAuth := false
+			if r.config.ProxyAuthSecret != "" {
+				if valid, _, _ := CheckProxyAuth(r.config, req); valid {
+					hasValidProxyAuth = true
+				}
+			}
+			
+			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
@@ -455,27 +479,25 @@ func (r *Router) setupRoutes() {
 				}
 			}
 			
-			// If password auth is configured, session auth is sufficient
-			if r.config.AuthUser != "" && r.config.AuthPass != "" {
-				if !hasValidSession && !hasValidAPIToken {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Msg("Unauthorized export attempt - no valid session or API token")
-					http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
-					return
-				}
-			} else if r.config.APIToken != "" {
-				// API token configured but no password auth - require API token
-				if !hasValidAPIToken {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Msg("Unauthorized export attempt - invalid API token")
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
-			} else {
+			// Check if any valid auth method is present
+			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
+			
+			// Determine if auth is required
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
+				r.config.APIToken != "" || 
+				r.config.ProxyAuthSecret != ""
+			
+			if authRequired && !hasValidAuth {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Bool("proxyAuth", hasValidProxyAuth).
+					Bool("session", hasValidSession).
+					Bool("apiToken", hasValidAPIToken).
+					Msg("Unauthorized export attempt")
+				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+				return
+			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
 				clientIP := utils.GetClientIP(req.RemoteAddr, 
 					req.Header.Get("X-Forwarded-For"), 
@@ -504,6 +526,7 @@ func (r *Router) setupRoutes() {
 			// Log successful export attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
+				Bool("proxy_auth", hasValidProxyAuth).
 				Bool("session_auth", hasValidSession).
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration export initiated")
@@ -516,7 +539,15 @@ func (r *Router) setupRoutes() {
 	
 	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// Check authentication - accept either session auth or API token
+			// Check proxy auth first
+			hasValidProxyAuth := false
+			if r.config.ProxyAuthSecret != "" {
+				if valid, _, _ := CheckProxyAuth(r.config, req); valid {
+					hasValidProxyAuth = true
+				}
+			}
+			
+			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
@@ -535,27 +566,25 @@ func (r *Router) setupRoutes() {
 				}
 			}
 			
-			// If password auth is configured, session auth is sufficient
-			if r.config.AuthUser != "" && r.config.AuthPass != "" {
-				if !hasValidSession && !hasValidAPIToken {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Msg("Unauthorized import attempt - no valid session or API token")
-					http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
-					return
-				}
-			} else if r.config.APIToken != "" {
-				// API token configured but no password auth - require API token
-				if !hasValidAPIToken {
-					log.Warn().
-						Str("ip", req.RemoteAddr).
-						Str("path", req.URL.Path).
-						Msg("Unauthorized import attempt - invalid API token")
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
-			} else {
+			// Check if any valid auth method is present
+			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
+			
+			// Determine if auth is required
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
+				r.config.APIToken != "" || 
+				r.config.ProxyAuthSecret != ""
+			
+			if authRequired && !hasValidAuth {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Bool("proxyAuth", hasValidProxyAuth).
+					Bool("session", hasValidSession).
+					Bool("apiToken", hasValidAPIToken).
+					Msg("Unauthorized import attempt")
+				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
+				return
+			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
 				clientIP := utils.GetClientIP(req.RemoteAddr, 
 					req.Header.Get("X-Forwarded-For"), 

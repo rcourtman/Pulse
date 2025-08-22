@@ -39,8 +39,15 @@ PULSE_AUTH_PASS='$2a$12$...'        # Bcrypt hashed password (keep quotes!)
 API_TOKEN=abc123...                  # API token (plain text, not hashed)
 
 # Security settings
-DISABLE_AUTH=true                    # Disable authentication entirely (for proxy auth)
+DISABLE_AUTH=true                    # Disable authentication entirely
 ENABLE_AUDIT_LOG=true                # Enable security audit logging
+
+# Proxy/SSO Authentication (see docs/PROXY_AUTH.md for full details)
+PROXY_AUTH_SECRET=secret123          # Shared secret between proxy and Pulse
+PROXY_AUTH_USER_HEADER=X-Username    # Header containing authenticated username
+PROXY_AUTH_ROLE_HEADER=X-Groups      # Header containing user roles/groups
+PROXY_AUTH_ADMIN_ROLE=admin          # Role that grants admin access
+PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 ```
 
 **Important Notes:**
@@ -146,7 +153,19 @@ These should be set in the .env file for security:
 
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
 - `API_TOKEN` - API token for authentication
-- `DISABLE_AUTH` - Set to `true` to disable authentication entirely (useful for reverse proxy auth)
+- `DISABLE_AUTH` - Set to `true` to disable authentication entirely
+
+#### Proxy/SSO Authentication Variables
+For integration with authentication proxies (Authentik, Authelia, etc):
+
+- `PROXY_AUTH_SECRET` - Shared secret between proxy and Pulse (required for proxy auth)
+- `PROXY_AUTH_USER_HEADER` - Header containing authenticated username (default: none)
+- `PROXY_AUTH_ROLE_HEADER` - Header containing user roles/groups (default: none)
+- `PROXY_AUTH_ROLE_SEPARATOR` - Separator for multiple roles (default: |)
+- `PROXY_AUTH_ADMIN_ROLE` - Role name that grants admin access (default: admin)
+- `PROXY_AUTH_LOGOUT_URL` - URL to redirect for SSO logout (default: none)
+
+See [Proxy Authentication Guide](PROXY_AUTH.md) for detailed configuration examples.
 
 #### Port Configuration
 Port configuration should be done via one of these methods:
