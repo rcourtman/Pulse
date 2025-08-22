@@ -90,6 +90,14 @@ type Config struct {
 	DisableAuth          bool   `envconfig:"DISABLE_AUTH" default:"false"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
+	
+	// Proxy authentication settings
+	ProxyAuthSecret      string `envconfig:"PROXY_AUTH_SECRET"`
+	ProxyAuthUserHeader  string `envconfig:"PROXY_AUTH_USER_HEADER"`
+	ProxyAuthRoleHeader  string `envconfig:"PROXY_AUTH_ROLE_HEADER"`
+	ProxyAuthRoleSeparator string `envconfig:"PROXY_AUTH_ROLE_SEPARATOR" default:"|"`
+	ProxyAuthAdminRole   string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
+	ProxyAuthLogoutURL   string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
 	// HTTPS/TLS settings
 	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
 	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
@@ -354,6 +362,34 @@ func Load() (*Config, error) {
 		cfg.DisableAuth = disableAuth == "true" || disableAuth == "1"
 		if cfg.DisableAuth {
 			log.Warn().Msg("⚠️  AUTHENTICATION DISABLED - Pulse is running without authentication!")
+		}
+	}
+	
+	// Load proxy authentication settings
+	if proxyAuthSecret := os.Getenv("PROXY_AUTH_SECRET"); proxyAuthSecret != "" {
+		cfg.ProxyAuthSecret = proxyAuthSecret
+		log.Info().Msg("Proxy authentication secret configured")
+		
+		// Load other proxy auth settings
+		if userHeader := os.Getenv("PROXY_AUTH_USER_HEADER"); userHeader != "" {
+			cfg.ProxyAuthUserHeader = userHeader
+			log.Info().Str("header", userHeader).Msg("Proxy auth user header configured")
+		}
+		if roleHeader := os.Getenv("PROXY_AUTH_ROLE_HEADER"); roleHeader != "" {
+			cfg.ProxyAuthRoleHeader = roleHeader
+			log.Info().Str("header", roleHeader).Msg("Proxy auth role header configured")
+		}
+		if roleSeparator := os.Getenv("PROXY_AUTH_ROLE_SEPARATOR"); roleSeparator != "" {
+			cfg.ProxyAuthRoleSeparator = roleSeparator
+			log.Info().Str("separator", roleSeparator).Msg("Proxy auth role separator configured")
+		}
+		if adminRole := os.Getenv("PROXY_AUTH_ADMIN_ROLE"); adminRole != "" {
+			cfg.ProxyAuthAdminRole = adminRole
+			log.Info().Str("role", adminRole).Msg("Proxy auth admin role configured")
+		}
+		if logoutURL := os.Getenv("PROXY_AUTH_LOGOUT_URL"); logoutURL != "" {
+			cfg.ProxyAuthLogoutURL = logoutURL
+			log.Info().Str("url", logoutURL).Msg("Proxy auth logout URL configured")
 		}
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {

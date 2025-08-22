@@ -37,6 +37,7 @@ function App() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
+  const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{ username?: string; logoutURL?: string } | null>(null);
   
   // Don't initialize WebSocket until after auth check
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
@@ -156,6 +157,38 @@ function App() {
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
       
+      // Check for proxy auth
+      if (securityData.hasProxyAuth && securityData.proxyAuthUsername) {
+        console.log('[App] Proxy auth detected, user:', securityData.proxyAuthUsername);
+        setProxyAuthInfo({
+          username: securityData.proxyAuthUsername,
+          logoutURL: securityData.proxyAuthLogoutURL
+        });
+        setNeedsAuth(false);
+        // Initialize WebSocket for proxy auth users
+        setWsStore(getGlobalWebSocketStore());
+        
+        // Apply theme preference
+        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+        const prefersDark = savedDarkMode !== null 
+          ? savedDarkMode === 'true'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(prefersDark);
+        if (prefersDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        
+        // Load version info
+        UpdatesAPI.getVersion()
+          .then(version => setVersionInfo(version))
+          .catch(error => console.error('Failed to load version:', error));
+        
+        setIsLoading(false);
+        return;
+      }
+      
       // If no auth is configured, show FirstRunSetup
       if (!authConfigured) {
         console.log('[App] No auth configured, showing Login/FirstRunSetup');
@@ -250,6 +283,14 @@ function App() {
   };
   
   const handleLogout = async () => {
+    // Check if we're using proxy auth with a logout URL
+    const proxyAuth = proxyAuthInfo();
+    if (proxyAuth?.logoutURL) {
+      // Redirect to proxy auth logout URL
+      window.location.href = proxyAuth.logoutURL;
+      return;
+    }
+    
     try {
       // Import the apiClient to get CSRF token support
       const { apiFetch, clearAuth } = await import('./utils/apiClient');
@@ -368,6 +409,11 @@ function App() {
                   {connected() ? 'Connected' : reconnecting() ? 'Reconnecting...' : 'Disconnected'}
                 </div>
                 <Show when={hasAuth() && !needsAuth()}>
+                  <Show when={proxyAuthInfo()?.username}>
+                    <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
+                      {proxyAuthInfo()?.username}
+                    </span>
+                  </Show>
                   <button type="button"
                     onClick={handleLogout}
                     class="text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
