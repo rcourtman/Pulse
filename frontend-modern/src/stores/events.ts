@@ -1,7 +1,7 @@
 // Event bus for cross-component communication
 
 // Event types
-export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated';
+export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated' | 'theme_changed';
 
 // Event data types
 export interface NodeAutoRegisteredData {
@@ -36,6 +36,7 @@ export type EventDataMap = {
   'node_auto_registered': NodeAutoRegisteredData;
   'refresh_nodes': void;
   'discovery_updated': DiscoveryUpdatedData;
+  'theme_changed': string;  // 'light' or 'dark'
 }
 
 // Generic event handler
@@ -54,6 +55,10 @@ class EventBus {
     return () => {
       this.handlers.get(event)?.delete(handler as EventHandler<unknown>);
     };
+  }
+
+  off<T extends EventType>(event: T, handler: EventHandler<EventDataMap[T]>) {
+    this.handlers.get(event)?.delete(handler as EventHandler<unknown>);
   }
 
   emit<T extends EventType>(event: T, data?: EventDataMap[T]) {

@@ -1410,8 +1410,8 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(settings)
 }
 
-// HandleUpdateSystemSettings updates system settings in the unified config
-func (h *ConfigHandlers) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
+// HandleUpdateSystemSettingsOLD updates system settings in the unified config (DEPRECATED - use SystemSettingsHandler instead)
+func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r *http.Request) {
 	var settings config.SystemSettings
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

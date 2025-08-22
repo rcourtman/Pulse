@@ -212,6 +212,13 @@ export function createWebSocketStore(url: string) {
           } else if (message.type === 'discovery_update') {
             // Discovery scan completed with new results
             eventBus.emit('discovery_updated', message.data);
+          } else if (message.type === 'settingsUpdate') {
+            // Settings have been updated (e.g., theme change)
+            if (message.data?.theme) {
+              // Emit event for theme change
+              eventBus.emit('theme_changed', message.data.theme);
+              logger.info('Theme update received via WebSocket:', message.data.theme);
+            }
           } else {
             // Log any unhandled message types in dev mode only
             if (import.meta.env.DEV) {
