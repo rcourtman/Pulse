@@ -357,7 +357,8 @@ const Settings: Component = () => {
           setAllowedOrigins(systemSettings.allowedOrigins || '*');
           // Connection timeout is backend-only
           // Load discovery settings
-          setDiscoveryEnabled(systemSettings.discoveryEnabled !== false);  // Default to true
+          // Backend defaults to true, so we should respect that
+          setDiscoveryEnabled(systemSettings.discoveryEnabled ?? true);  // Default to true if undefined
           setDiscoverySubnet(systemSettings.discoverySubnet || 'auto');
           // Load auto-update settings
           setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
@@ -401,8 +402,7 @@ const Settings: Component = () => {
           // PBS polling interval is now fixed at 10 seconds
           allowedOrigins: allowedOrigins(),
           // Connection timeout is backend-only
-          discoveryEnabled: discoveryEnabled(),
-          discoverySubnet: discoverySubnet(),
+          // Discovery settings are saved immediately on toggle
           updateChannel: updateChannel(),
           autoUpdateEnabled: autoUpdateEnabled(),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
@@ -750,22 +750,66 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
-                <div class="flex gap-2">
-                  <button type="button" 
-                    onClick={() => {
-                      loadDiscoveredNodes();
-                      notificationStore.info('Refreshing discovery...', 2000);
-                    }}
-                    class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-                    title="Refresh discovered servers"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <polyline points="1 20 1 14 7 14"></polyline>
-                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
-                    </svg>
-                    Refresh Discovery
-                  </button>
+                <div class="flex gap-2 items-center">
+                  {/* Discovery toggle */}
+                  <label class="flex items-center gap-2 cursor-pointer" title="Enable automatic discovery of Proxmox servers on your network">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
+                    <div class="relative inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={discoveryEnabled()}
+                        onChange={async (e) => {
+                          if (!envOverrides().discoveryEnabled) {
+                            const newValue = e.currentTarget.checked;
+                            setDiscoveryEnabled(newValue);
+                            
+                            // Save discovery setting immediately
+                            try {
+                              await SettingsAPI.updateSystemSettings({
+                                discoveryEnabled: newValue,
+                                discoverySubnet: discoverySubnet()
+                              });
+                              
+                              if (newValue) {
+                                // Trigger discovery when enabled
+                                loadDiscoveredNodes();
+                                notificationStore.success('Discovery enabled', 2000);
+                              } else {
+                                notificationStore.info('Discovery disabled', 2000);
+                              }
+                            } catch (error) {
+                              console.error('Failed to update discovery setting:', error);
+                              notificationStore.error('Failed to update discovery setting');
+                              // Revert on error
+                              setDiscoveryEnabled(!newValue);
+                            }
+                          }
+                        }}
+                        disabled={envOverrides().discoveryEnabled}
+                        class="sr-only peer"
+                      />
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </div>
+                  </label>
+                  
+                  <Show when={discoveryEnabled()}>
+                    <button type="button" 
+                      onClick={() => {
+                        loadDiscoveredNodes();
+                        notificationStore.info('Refreshing discovery...', 2000);
+                      }}
+                      class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      title="Refresh discovered servers"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                      </svg>
+                      Refresh
+                    </button>
+                  </Show>
+                  
                   <button type="button" 
                     onClick={() => {
                       setEditingNode(null);
@@ -903,9 +947,10 @@ const Settings: Component = () => {
                   </div>
                 )}
                 
-                {/* Discovered PVE nodes */}
-                <For each={discoveredNodes().filter(n => n.type === 'pve')}>
-                  {(server) => (
+                {/* Discovered PVE nodes - only show when discovery is enabled */}
+                <Show when={discoveryEnabled()}>
+                  <For each={discoveredNodes().filter(n => n.type === 'pve')}>
+                    {(server) => (
                     <div 
                       class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                       onClick={() => {
@@ -957,6 +1002,7 @@ const Settings: Component = () => {
                     </div>
                   )}
                 </For>
+                </Show>
               </div>
             </div>
           </Show>
@@ -966,22 +1012,66 @@ const Settings: Component = () => {
             <div class="space-y-4">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
-                <div class="flex gap-2">
-                  <button type="button" 
-                    onClick={() => {
-                      loadDiscoveredNodes();
-                      notificationStore.info('Refreshing discovery...', 2000);
-                    }}
-                    class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-                    title="Refresh discovered servers"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <polyline points="1 20 1 14 7 14"></polyline>
-                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
-                    </svg>
-                    Refresh Discovery
-                  </button>
+                <div class="flex gap-2 items-center">
+                  {/* Discovery toggle */}
+                  <label class="flex items-center gap-2 cursor-pointer" title="Enable automatic discovery of PBS servers on your network">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
+                    <div class="relative inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={discoveryEnabled()}
+                        onChange={async (e) => {
+                          if (!envOverrides().discoveryEnabled) {
+                            const newValue = e.currentTarget.checked;
+                            setDiscoveryEnabled(newValue);
+                            
+                            // Save discovery setting immediately
+                            try {
+                              await SettingsAPI.updateSystemSettings({
+                                discoveryEnabled: newValue,
+                                discoverySubnet: discoverySubnet()
+                              });
+                              
+                              if (newValue) {
+                                // Trigger discovery when enabled
+                                loadDiscoveredNodes();
+                                notificationStore.success('Discovery enabled', 2000);
+                              } else {
+                                notificationStore.info('Discovery disabled', 2000);
+                              }
+                            } catch (error) {
+                              console.error('Failed to update discovery setting:', error);
+                              notificationStore.error('Failed to update discovery setting');
+                              // Revert on error
+                              setDiscoveryEnabled(!newValue);
+                            }
+                          }
+                        }}
+                        disabled={envOverrides().discoveryEnabled}
+                        class="sr-only peer"
+                      />
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </div>
+                  </label>
+                  
+                  <Show when={discoveryEnabled()}>
+                    <button type="button" 
+                      onClick={() => {
+                        loadDiscoveredNodes();
+                        notificationStore.info('Refreshing discovery...', 2000);
+                      }}
+                      class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      title="Refresh discovered servers"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                      </svg>
+                      Refresh
+                    </button>
+                  </Show>
+                  
                   <button type="button" 
                     onClick={() => {
                       setEditingNode(null);
@@ -1081,9 +1171,10 @@ const Settings: Component = () => {
                   </div>
                 )}
                 
-                {/* Discovered PBS nodes */}
-                <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
-                  {(server) => (
+                {/* Discovered PBS nodes - only show when discovery is enabled */}
+                <Show when={discoveryEnabled()}>
+                  <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
+                    {(server) => (
                     <div 
                       class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                       onClick={() => {
@@ -1135,6 +1226,7 @@ const Settings: Component = () => {
                     </div>
                   )}
                 </For>
+                </Show>
               </div>
             </div>
           </Show>
@@ -1207,78 +1299,6 @@ const Settings: Component = () => {
                           </div>
                         )}
                       </div>
-                    </div>
-                    
-                    {/* Discovery Settings */}
-                    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                      <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Network Discovery</label>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Automatically scan for Proxmox/PBS servers on your network</p>
-                      
-                      {/* Discovery Toggle */}
-                      <div class="flex items-center justify-between mb-3">
-                        <span class="text-sm text-gray-700 dark:text-gray-300">Enable Discovery</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={discoveryEnabled()}
-                            onChange={(e) => {
-                              if (!envOverrides().discoveryEnabled) {
-                                setDiscoveryEnabled(e.currentTarget.checked);
-                                setHasUnsavedChanges(true);
-                              }
-                            }}
-                            disabled={envOverrides().discoveryEnabled}
-                            class="sr-only peer"
-                          />
-                          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
-                        </label>
-                      </div>
-                      
-                      {/* Discovery Subnet */}
-                      <Show when={discoveryEnabled()}>
-                        <div>
-                          <label class="text-sm text-gray-700 dark:text-gray-300">Discovery Subnet</label>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Use "auto" for automatic detection or specify CIDR (e.g., 192.168.1.0/24)</p>
-                          <input
-                            type="text"
-                            value={discoverySubnet()}
-                            onChange={(e) => {
-                              if (!envOverrides().discoverySubnet) {
-                                setDiscoverySubnet(e.currentTarget.value);
-                                setHasUnsavedChanges(true);
-                              }
-                            }}
-                            disabled={envOverrides().discoverySubnet}
-                            placeholder="auto"
-                            class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
-                              envOverrides().discoverySubnet 
-                                ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75' 
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
-                            }`}
-                          />
-                          {envOverrides().discoverySubnet && (
-                            <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
-                              <div class="flex items-center gap-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                <span>Overridden by DISCOVERY_SUBNET environment variable</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </Show>
-                      
-                      {envOverrides().discoveryEnabled && (
-                        <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
-                          <div class="flex items-center gap-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <span>Overridden by DISCOVERY_ENABLED environment variable</span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                     
                     <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
