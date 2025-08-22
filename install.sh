@@ -923,7 +923,18 @@ main() {
         echo "${menu_option}) Cancel"
         local max_option=$menu_option
         
-        safe_read "Select option [1-${max_option}]: " choice
+        # In non-interactive container mode, auto-select update
+        if [[ "$IN_CONTAINER" == "true" ]] && ! test -t 0; then
+            print_info "Non-interactive mode detected. Auto-selecting update option."
+            # Select stable update by default, or RC if configured
+            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+                choice=2  # RC version
+            else
+                choice=1  # Stable version
+            fi
+        else
+            safe_read "Select option [1-${max_option}]: " choice
+        fi
         
         # Determine what action to take based on the dynamic menu
         local action=""
