@@ -20,7 +20,7 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 ├── system.json   # Application settings (ports, intervals, etc.)
 ├── nodes.enc     # Encrypted node credentials
 ├── alerts.json   # Alert thresholds and rules
-└── webhooks.json # Webhook configurations
+└── webhooks.enc  # Encrypted webhook configurations (v4.1.9+)
 ```
 
 ---
