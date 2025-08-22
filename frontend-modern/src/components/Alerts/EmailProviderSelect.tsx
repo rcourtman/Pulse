@@ -73,7 +73,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
             Email Provider
           </label>
-          <button
+          <button type="button"
             onClick={() => setShowProviders(!showProviders())}
             class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
           >
@@ -85,7 +85,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <For each={providers()}>
               {(provider) => (
-                <button
+                <button type="button"
                   onClick={() => selectProvider(provider)}
                   class={`p-3 text-left rounded-lg border transition-all ${
                     props.config.provider === provider.name
@@ -231,7 +231,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       
       {/* Advanced Settings */}
       <div>
-        <button
+        <button type="button"
           onClick={() => setShowAdvanced(!showAdvanced())}
           class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
         >
@@ -319,7 +319,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       
       {/* Test Button */}
       <div class="flex justify-end">
-        <button
+        <button type="button"
           onClick={props.onTest}
           disabled={props.testing || !props.config.enabled}
           class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

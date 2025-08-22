@@ -107,7 +107,7 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
                       </Show>
                     </div>
                     <div class="flex items-center gap-2">
-                      <button
+                      <button type="button"
                         onClick={() => toggleRule(rule.id)}
                         class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                         title={rule.enabled ? "Disable rule" : "Enable rule"}
@@ -120,7 +120,7 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
                           </Show>
                         </svg>
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => deleteRule(rule.id)}
                         class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                         title="Delete rule"

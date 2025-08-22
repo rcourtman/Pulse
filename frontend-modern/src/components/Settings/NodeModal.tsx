@@ -289,8 +289,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     {props.editingNode ? 'Edit' : 'Add'} {props.nodeType === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server'} Node
                   </h3>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={props.onClose}
                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                   >
@@ -424,8 +423,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons */}
                               <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-                                <button
-                                  type="button"
+                                <button type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
                                   class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
                                     formData().setupMode === 'auto' 
@@ -435,8 +433,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 >
                                   Quick Setup
                                 </button>
-                                <button
-                                  type="button"
+                                <button type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
                                   class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
                                     formData().setupMode === 'manual' 
@@ -475,8 +472,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 {/* One-line command */}
                                 <div class="space-y-3">
                                   <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
-                                    <button
-                                      type="button"
+                                    <button type="button"
                                       onClick={async () => {
                                         try {
                                           // Check if host is populated
@@ -542,7 +538,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           </svg>
                                           Setup Code (One-Time Use)
                                         </h4>
-                                        <button
+                                        <button type="button"
                                           onClick={() => setSetupCode(null)}
                                           class="text-white/80 hover:text-white"
                                         >
@@ -580,8 +576,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       Alternative: Download script manually
                                     </summary>
                                     <div class="mt-3 space-y-3">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           try {
                                             const hostValue = formData().host || '';
@@ -662,8 +657,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div>
                                   <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">1. Create monitoring user:</p>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                    <button
-                                      type="button"
+                                    <button type="button"
                                       onClick={async () => {
                                         const cmd = 'pveum user add pulse-monitor@pam --comment "Pulse monitoring service"';
                                         if (await copyToClipboard(cmd)) {
@@ -686,8 +680,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div>
                                   <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">2. Generate API token (save the output!):</p>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                    <button
-                                      type="button"
+                                    <button type="button"
                                       onClick={async () => {
                                         const cmd = 'pveum user token add pulse-monitor@pam pulse-token --privsep 0';
                                         if (await copyToClipboard(cmd)) {
@@ -713,8 +706,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div>
                                   <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up monitoring permissions:</p>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
-                                    <button
-                                      type="button"
+                                    <button type="button"
                                       onClick={async () => {
                                         const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && pveum role create PulseMonitor -privs VM.Monitor 2>/dev/null; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor';
                                         if (await copyToClipboard(cmd)) {
@@ -732,8 +724,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor\npveum role create PulseMonitor -privs VM.Monitor 2>/dev/null\npveum aclmod / -user pulse-monitor@pam -role PulseMonitor'}</code>
                                   </div>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                    <button
-                                      type="button"
+                                    <button type="button"
                                       onClick={async () => {
                                         const cmd = 'pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin';
                                         if (await copyToClipboard(cmd)) {
@@ -773,8 +764,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons for PBS */}
                               <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-                                <button
-                                  type="button"
+                                <button type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
                                   class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
                                     formData().setupMode === 'auto' || !formData().setupMode
@@ -784,8 +774,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 >
                                   Quick Setup
                                 </button>
-                                <button
-                                  type="button"
+                                <button type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
                                   class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
                                     formData().setupMode === 'manual' 
@@ -805,8 +794,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div class="space-y-3">
                                   <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <Show when={formData().host && formData().host.trim() !== ''}>
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           try {
                                             // Check if host is populated
@@ -873,7 +861,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           </svg>
                                           Setup Code (One-Time Use)
                                         </h4>
-                                        <button
+                                        <button type="button"
                                           onClick={() => setSetupCode(null)}
                                           class="text-white/80 hover:text-white"
                                         >
@@ -911,8 +899,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       Alternative: Download script manually
                                     </summary>
                                     <div class="mt-3 space-y-3">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           try {
                                             const hostValue = formData().host || '';
@@ -992,8 +979,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <div>
                                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">1. Create monitoring user:</p>
                                     <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           const cmd = 'proxmox-backup-manager user create pulse-monitor@pbs';
                                           if (await copyToClipboard(cmd)) {
@@ -1016,8 +1002,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <div>
                                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">2. Generate API token (save the output!):</p>
                                     <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           const cmd = 'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
                                           if (await copyToClipboard(cmd)) {
@@ -1043,8 +1028,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <div>
                                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">3. Set up read-only permissions (includes system stats):</p>
                                     <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           const cmd = 'proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs';
                                           if (await copyToClipboard(cmd)) {
@@ -1062,8 +1046,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <code class="text-gray-800 dark:text-gray-200">proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs</code>
                                     </div>
                                     <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
-                                      <button
-                                        type="button"
+                                      <button type="button"
                                         onClick={async () => {
                                           const cmd = "proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'";
                                           if (await copyToClipboard(cmd)) {
@@ -1304,8 +1287,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 
                 {/* Footer */}
                 <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={handleTestConnection}
                     disabled={isTesting()}
                     class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1315,8 +1297,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   
                   <div class="flex items-center gap-3">
                     <Show when={props.showBackToDiscovery && props.onBackToDiscovery}>
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => {
                           props.onBackToDiscovery!();
                           props.onClose();
@@ -1330,8 +1311,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         Back to Discovery
                       </button>
                     </Show>
-                    <button
-                      type="button"
+                    <button type="button"
                       onClick={props.onClose}
                       class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >

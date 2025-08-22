@@ -130,7 +130,7 @@ export const SecurityWarning: Component = () => {
                       {status()!.score}/{status()!.maxScore}
                     </span>
                   </h3>
-                  <button
+                  <button type="button"
                     onClick={() => setShowDetails(!showDetails())}
                     class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
@@ -200,26 +200,26 @@ export const SecurityWarning: Component = () => {
                     Learn More
                   </a>
                   <div class="relative group">
-                    <button
+                    <button type="button"
                       onClick={() => handleDismiss('day')}
                       class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                     >
                       Dismiss ▼
                     </button>
                     <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-                      <button
+                      <button type="button"
                         onClick={() => handleDismiss('day')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         For 1 day
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => handleDismiss('week')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         For 1 week
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => handleDismiss('forever')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >

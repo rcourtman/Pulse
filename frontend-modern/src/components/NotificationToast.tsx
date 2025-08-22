@@ -94,7 +94,7 @@ const NotificationToast: Component<NotificationToastProps> = (props) => {
         <div class="flex-1">
           <p class="text-gray-800 dark:text-gray-100 font-medium text-sm leading-relaxed">{props.message}</p>
         </div>
-        <button
+        <button type="button"
           onClick={handleClose}
           class="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/10 rounded-lg p-1.5 transition-all duration-200"
         >

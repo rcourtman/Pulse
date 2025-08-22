@@ -35,13 +35,13 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
         </div>
 
         <div class="flex gap-2">
-          <button
+          <button type="button"
             onClick={props.reset}
             class="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
             Try Again
           </button>
-          <button
+          <button type="button"
             onClick={() => window.location.reload()}
             class="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
           >
@@ -49,7 +49,7 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           </button>
         </div>
 
-        <button
+        <button type="button"
           onClick={() => setDetails(!details())}
           class="mt-4 text-sm text-gray-500 dark:text-gray-400 underline hover:text-gray-700 dark:hover:text-gray-300"
         >
@@ -114,7 +114,7 @@ export const ComponentErrorBoundary: Component<{
           <p class="text-xs text-red-700 dark:text-red-300 mb-2">
             {error.message}
           </p>
-          <button
+          <button type="button"
             onClick={reset}
             class="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
           >

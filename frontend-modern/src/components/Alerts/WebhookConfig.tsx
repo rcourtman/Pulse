@@ -202,7 +202,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Service Type
               </label>
-              <button
+              <button type="button"
                 onClick={() => setShowServiceDropdown(!showServiceDropdown())}
                 class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
               >
@@ -214,7 +214,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg mb-4">
                 <For each={['generic', 'discord', 'slack', 'telegram', 'teams', 'teams-adaptive', 'pagerduty']}>
                   {(service) => (
-                    <button
+                    <button type="button"
                       onClick={() => selectService(service)}
                       class={`p-3 text-left rounded-lg border transition-all ${
                         formData().service === service

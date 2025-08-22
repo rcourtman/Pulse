@@ -148,7 +148,7 @@ export function Alerts() {
   // Process raw overrides config when state changes
   createEffect(() => {
     const rawConfig = rawOverridesConfig();
-    if (Object.keys(rawConfig).length > 0 && state.nodes && state.vms && state.containers) {
+    if (Object.keys(rawConfig).length > 0 && state.nodes && state.vms && state.containers && state.storage) {
       // Convert overrides object to array format
       const overridesList: Override[] = [];
       
@@ -165,22 +165,37 @@ export function Alerts() {
             thresholds: extractTriggerValues(thresholds)
           });
         } else {
-          // Find the guest by matching the full ID
-          const vm = (state.vms || []).find((g) => g.id === key);
-          const container = (state.containers || []).find((g) => g.id === key);
-          const guest = vm || container;
-          if (guest) {
+          // Check if it's a storage device
+          const storage = (state.storage || []).find((s) => s.id === key);
+          if (storage) {
             overridesList.push({
               id: key,
-              name: guest.name,
-              type: 'guest',
-              resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-              vmid: guest.vmid,
-              node: guest.node,
-              instance: guest.instance,
+              name: storage.name,
+              type: 'storage',
+              resourceType: 'Storage',
+              node: storage.node,
+              instance: storage.instance,
               disabled: thresholds.disabled || false,
               thresholds: extractTriggerValues(thresholds)
             });
+          } else {
+            // Find the guest by matching the full ID
+            const vm = (state.vms || []).find((g) => g.id === key);
+            const container = (state.containers || []).find((g) => g.id === key);
+            const guest = vm || container;
+            if (guest) {
+              overridesList.push({
+                id: key,
+                name: guest.name,
+                type: 'guest',
+                resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+                vmid: guest.vmid,
+                node: guest.node,
+                instance: guest.instance,
+                disabled: thresholds.disabled || false,
+                thresholds: extractTriggerValues(thresholds)
+              });
+            }
           }
         }
       });
@@ -194,7 +209,7 @@ export function Alerts() {
           // Check both thresholds and disableConnectivity for nodes
           const thresholdsChanged = JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
           const connectivityChanged = newOverride.type === 'node' && newOverride.disableConnectivity !== existing.disableConnectivity;
-          const disabledChanged = newOverride.type === 'guest' && newOverride.disabled !== existing.disabled;
+          const disabledChanged = (newOverride.type === 'guest' || newOverride.type === 'storage') && newOverride.disabled !== existing.disabled;
           return thresholdsChanged || connectivityChanged || disabledChanged;
         });
         
@@ -459,9 +474,13 @@ export function Alerts() {
                         Object.entries(o.thresholds).forEach(([metric, value]) => {
                           hysteresisThresholds[metric] = createHysteresisThreshold(value as number);
                         });
-                        // Include disabled field if present
+                        // Include disabled field if present (for guests and storage)
                         if (o.disabled) {
                           hysteresisThresholds.disabled = true;
+                        }
+                        // Include disableConnectivity field if present (for nodes)
+                        if (o.disableConnectivity) {
+                          hysteresisThresholds.disableConnectivity = true;
                         }
                         acc[o.id] = hysteresisThresholds;
                         return acc;
@@ -545,7 +564,7 @@ export function Alerts() {
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
             <For each={tabs}>
               {(tab) => (
-                <button
+                <button type="button"
                   class={`flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                     activeTab() === tab.id
                       ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -1239,7 +1258,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               <div class="grid grid-cols-7 gap-1">
                 <For each={days}>
                   {(day) => (
-                    <button
+                    <button type="button"
                       onClick={() => {
                         const currentDays = quietHours().days;
                         setQuietHours({
@@ -1546,7 +1565,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       </select>
                     </div>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       const newLevels = escalation().levels.filter((_, i) => i !== index());
                       setEscalation({ ...escalation(), levels: newLevels });
@@ -1563,7 +1582,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               )}
             </For>
             
-            <button
+            <button type="button"
               onClick={() => {
                 const lastLevel = escalation().levels[escalation().levels.length - 1];
                 const newAfter = lastLevel ? lastLevel.after + 30 : 15;
@@ -1907,7 +1926,7 @@ function HistoryTab() {
           </h3>
           <div class="flex items-center gap-2">
             <Show when={selectedBarIndex() !== null}>
-              <button
+              <button type="button"
                 onClick={() => setSelectedBarIndex(null)}
                 class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
               >
@@ -2167,7 +2186,7 @@ function HistoryTab() {
                   Permanently clear all alert history. Use with caution - this action cannot be undone.
                 </p>
               </div>
-              <button
+              <button type="button"
                 onClick={async () => {
                   if (confirm('Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.')) {
                     try {
