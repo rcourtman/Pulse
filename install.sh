@@ -641,7 +641,7 @@ download_pulse() {
         fi
     else
         # UPDATE_CHANNEL should already be set by main(), but set default if not
-        if [[ -z "${UPDATE_CHANNEL}" ]]; then
+        if [[ -z "${UPDATE_CHANNEL:-}" ]]; then
             UPDATE_CHANNEL="stable"
             
             # Allow override via command line
