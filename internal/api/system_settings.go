@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
@@ -13,13 +14,15 @@ import (
 type SystemSettingsHandler struct {
 	config *config.Config
 	persistence *config.ConfigPersistence
+	wsHub *websocket.Hub
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
-func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence) *SystemSettingsHandler {
+func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config: cfg,
 		persistence: persistence,
+		wsHub: wsHub,
 	}
 }
 
@@ -71,14 +74,79 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	var settings config.SystemSettings
-	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+	// Load existing settings first to preserve fields not in the request
+	existingSettings, err := h.persistence.LoadSystemSettings()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to load existing settings")
+		existingSettings = &config.SystemSettings{}
+	}
+	if existingSettings == nil {
+		existingSettings = &config.SystemSettings{}
+	}
+
+	// Read the request body into a map to check which fields were provided
+	var rawRequest map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&rawRequest); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Load existing settings to preserve fields not in the request
-	// (removed - not needed without API token preservation)
+	// Convert the map back to JSON for decoding into struct
+	jsonBytes, err := json.Marshal(rawRequest)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Decode into updates struct
+	var updates config.SystemSettings
+	if err := json.Unmarshal(jsonBytes, &updates); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Start with existing settings
+	settings := *existingSettings
+	
+	// Only update fields that were provided in the request
+	if updates.PollingInterval > 0 {
+		settings.PollingInterval = updates.PollingInterval
+	}
+	if updates.PVEPollingInterval > 0 {
+		settings.PVEPollingInterval = updates.PVEPollingInterval
+	}
+	if updates.PBSPollingInterval > 0 {
+		settings.PBSPollingInterval = updates.PBSPollingInterval
+	}
+	if updates.AllowedOrigins != "" {
+		settings.AllowedOrigins = updates.AllowedOrigins
+	}
+	if updates.ConnectionTimeout > 0 {
+		settings.ConnectionTimeout = updates.ConnectionTimeout
+	}
+	if updates.UpdateChannel != "" {
+		settings.UpdateChannel = updates.UpdateChannel
+	}
+	if updates.AutoUpdateCheckInterval > 0 {
+		settings.AutoUpdateCheckInterval = updates.AutoUpdateCheckInterval
+	}
+	if updates.AutoUpdateTime != "" {
+		settings.AutoUpdateTime = updates.AutoUpdateTime
+	}
+	if updates.Theme != "" {
+		settings.Theme = updates.Theme
+	}
+	if updates.DiscoverySubnet != "" {
+		settings.DiscoverySubnet = updates.DiscoverySubnet
+	}
+	
+	// Boolean fields need special handling since false is a valid value
+	if _, ok := rawRequest["autoUpdateEnabled"]; ok {
+		settings.AutoUpdateEnabled = updates.AutoUpdateEnabled
+	}
+	if _, ok := rawRequest["discoveryEnabled"]; ok {
+		settings.DiscoveryEnabled = updates.DiscoveryEnabled
+	}
 
 	// Update the config
 	if settings.PollingInterval > 0 {
@@ -123,6 +191,17 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 
 	log.Info().Msg("System settings updated")
+
+	// Broadcast theme change to all connected clients if theme was updated
+	if settings.Theme != "" && h.wsHub != nil {
+		h.wsHub.BroadcastMessage(websocket.Message{
+			Type: "settingsUpdate",
+			Data: map[string]interface{}{
+				"theme": settings.Theme,
+			},
+		})
+		log.Debug().Str("theme", settings.Theme).Msg("Broadcasting theme change to WebSocket clients")
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})

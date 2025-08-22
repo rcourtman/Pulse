@@ -179,6 +179,12 @@ func min(a, b int) int {
 
 // CheckAuth checks both basic auth and API token
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	// If auth is explicitly disabled, allow all access
+	if cfg.DisableAuth {
+		w.Header().Set("X-Auth-Disabled", "true")
+		return true
+	}
+	
 	// Check proxy auth first if configured
 	if cfg.ProxyAuthSecret != "" {
 		if valid, username, _ := CheckProxyAuth(cfg, r); valid {

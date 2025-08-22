@@ -331,6 +331,7 @@ export type WSMessage =
   | { type: 'welcome'; data?: unknown }
   | { type: 'alert'; data: Alert }
   | { type: 'alertResolved'; data: { alertId: string } }
+  | { type: 'settingsUpdate'; data: { theme?: string } }
   | { type: 'update:progress'; data: {
       phase: string;
       progress: number;

@@ -197,7 +197,8 @@ func (r *Router) setupRoutes() {
 		case http.MethodGet:
 			configHandlers.HandleGetSystemSettings(w, r)
 		case http.MethodPut:
-			configHandlers.HandleUpdateSystemSettings(w, r)
+			// DEPRECATED - use /api/system/settings/update instead
+			configHandlers.HandleUpdateSystemSettingsOLD(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -671,7 +672,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
 	
 	// System settings and API token management
-	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence)
+	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence, r.wsHub)
 	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
 	// Old API token endpoints removed - now using /api/security/regenerate-token

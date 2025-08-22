@@ -1,4 +1,4 @@
-import { Show, createSignal, createContext, useContext, createEffect, onMount } from 'solid-js';
+import { Show, createSignal, createContext, useContext, createEffect, onMount, onCleanup } from 'solid-js';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import StorageComponent from './components/Storage/Storage';
@@ -16,6 +16,7 @@ import { UpdatesAPI } from './api/updates';
 import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
 import { SettingsAPI } from './api/settings';
+import { eventBus } from './stores/events';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -103,6 +104,34 @@ function App() {
   };
   
   // Don't initialize dark mode here - will be handled based on auth state
+  
+  // Listen for theme changes from other browser instances
+  onMount(() => {
+    const handleThemeChange = (theme?: string) => {
+      if (!theme) return;
+      logger.info('Received theme change from another browser instance', { theme });
+      const isDark = theme === 'dark';
+      
+      // Update local state
+      setDarkMode(isDark);
+      localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(isDark));
+      
+      // Update DOM
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    
+    // Subscribe to theme change events
+    eventBus.on('theme_changed', handleThemeChange);
+    
+    // Cleanup on unmount
+    onCleanup(() => {
+      eventBus.off('theme_changed', handleThemeChange);
+    });
+  });
   
   // Check auth on mount
   onMount(async () => {
