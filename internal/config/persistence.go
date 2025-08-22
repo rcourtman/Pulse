@@ -44,7 +44,7 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		configDir:   configDir,
 		alertFile:   filepath.Join(configDir, "alerts.json"),
 		emailFile:   filepath.Join(configDir, "email.enc"),
-		webhookFile: filepath.Join(configDir, "webhooks.json"),
+		webhookFile: filepath.Join(configDir, "webhooks.enc"),
 		nodesFile:   filepath.Join(configDir, "nodes.enc"),
 		systemFile:  filepath.Join(configDir, "system.json"),
 		crypto:      cryptoMgr,
@@ -262,26 +262,73 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 		return err
 	}
 	
+	// Encrypt if crypto manager is available
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+	
 	if err := os.WriteFile(c.webhookFile, data, 0600); err != nil {
 		return err
 	}
 	
-	log.Info().Str("file", c.webhookFile).Int("count", len(webhooks)).Msg("Webhooks saved")
+	log.Info().Str("file", c.webhookFile).
+		Int("count", len(webhooks)).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Webhooks saved")
 	return nil
 }
 
-// LoadWebhooks loads webhook configurations from file
+// LoadWebhooks loads webhook configurations from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	
+	// First try to load from encrypted file
 	data, err := os.ReadFile(c.webhookFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return empty list if file doesn't exist
+			// Check for legacy unencrypted file
+			legacyFile := filepath.Join(c.configDir, "webhooks.json")
+			legacyData, legacyErr := os.ReadFile(legacyFile)
+			if legacyErr == nil {
+				// Legacy file exists, parse it
+				var webhooks []notifications.WebhookConfig
+				if err := json.Unmarshal(legacyData, &webhooks); err == nil {
+					log.Info().
+						Str("file", legacyFile).
+						Int("count", len(webhooks)).
+						Msg("Found unencrypted webhooks - migration needed")
+					
+					// Return the loaded webhooks - migration will be handled by caller
+					return webhooks, nil
+				}
+			}
+			// No webhooks file exists
 			return []notifications.WebhookConfig{}, nil
 		}
 		return nil, err
+	}
+	
+	// Decrypt if crypto manager is available
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			// Try parsing as plain JSON (migration case)
+			var webhooks []notifications.WebhookConfig
+			if jsonErr := json.Unmarshal(data, &webhooks); jsonErr == nil {
+				log.Info().
+					Str("file", c.webhookFile).
+					Int("count", len(webhooks)).
+					Msg("Loaded unencrypted webhooks (will encrypt on next save)")
+				return webhooks, nil
+			}
+			return nil, fmt.Errorf("failed to decrypt webhooks: %w", err)
+		}
+		data = decrypted
 	}
 	
 	var webhooks []notifications.WebhookConfig
@@ -289,8 +336,59 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 		return nil, err
 	}
 	
-	log.Info().Str("file", c.webhookFile).Int("count", len(webhooks)).Msg("Webhooks loaded")
+	log.Info().
+		Str("file", c.webhookFile).
+		Int("count", len(webhooks)).
+		Bool("encrypted", c.crypto != nil).
+		Msg("Webhooks loaded")
 	return webhooks, nil
+}
+
+// MigrateWebhooksIfNeeded checks for legacy webhooks.json and migrates to encrypted format
+func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
+	// Check if encrypted file already exists
+	if _, err := os.Stat(c.webhookFile); err == nil {
+		// Encrypted file exists, no migration needed
+		return nil
+	}
+	
+	// Check for legacy unencrypted file
+	legacyFile := filepath.Join(c.configDir, "webhooks.json")
+	legacyData, err := os.ReadFile(legacyFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No legacy file, nothing to migrate
+			return nil
+		}
+		return fmt.Errorf("failed to read legacy webhooks file: %w", err)
+	}
+	
+	// Parse legacy webhooks
+	var webhooks []notifications.WebhookConfig
+	if err := json.Unmarshal(legacyData, &webhooks); err != nil {
+		return fmt.Errorf("failed to parse legacy webhooks: %w", err)
+	}
+	
+	log.Info().
+		Str("from", legacyFile).
+		Str("to", c.webhookFile).
+		Int("count", len(webhooks)).
+		Msg("Migrating webhooks to encrypted format")
+	
+	// Save to encrypted file
+	if err := c.SaveWebhooks(webhooks); err != nil {
+		return fmt.Errorf("failed to save encrypted webhooks: %w", err)
+	}
+	
+	// Create backup of original file
+	backupFile := legacyFile + ".backup"
+	if err := os.Rename(legacyFile, backupFile); err != nil {
+		log.Warn().Err(err).Msg("Failed to rename legacy webhooks file to backup")
+	} else {
+		log.Info().Str("backup", backupFile).Msg("Legacy webhooks file backed up")
+	}
+	
+	return nil
 }
 
 // NodesConfig represents the saved nodes configuration
