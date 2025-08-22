@@ -237,7 +237,7 @@ IMPORTANT: Keep these credentials secure!
                   </label>
                   
                   <div class="flex gap-2 mb-3">
-                    <button
+                    <button type="button"
                       onClick={() => setUseCustomPassword(false)}
                       class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
                         !useCustomPassword() 
@@ -247,7 +247,7 @@ IMPORTANT: Keep these credentials secure!
                     >
                       Generate Secure Password
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => setUseCustomPassword(true)}
                       class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
                         useCustomPassword() 
@@ -294,7 +294,7 @@ IMPORTANT: Keep these credentials secure!
                     Theme Preference
                   </label>
                   <div class="grid grid-cols-3 gap-2">
-                    <button
+                    <button type="button"
                       onClick={() => {
                         setThemeMode('system');
                         applyTheme('system');
@@ -307,7 +307,7 @@ IMPORTANT: Keep these credentials secure!
                     >
                       System
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => {
                         setThemeMode('light');
                         applyTheme('light');
@@ -320,7 +320,7 @@ IMPORTANT: Keep these credentials secure!
                     >
                       Light
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => {
                         setThemeMode('dark');
                         applyTheme('dark');
@@ -367,7 +367,7 @@ IMPORTANT: Keep these credentials secure!
                 </div>
 
                 {/* Setup Button */}
-                <button
+                <button type="button"
                   onClick={handleSetup}
                   disabled={isSettingUp()}
                   class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
@@ -414,7 +414,7 @@ IMPORTANT: Keep these credentials secure!
                     <code class="font-mono text-lg text-gray-900 dark:text-gray-100 break-all">
                       {savedPassword()}
                     </code>
-                    <button
+                    <button type="button"
                       onClick={() => handleCopy('password')}
                       class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                       title="Copy password"
@@ -441,7 +441,7 @@ IMPORTANT: Keep these credentials secure!
                     <code class="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">
                       {savedToken()}
                     </code>
-                    <button
+                    <button type="button"
                       onClick={() => handleCopy('token')}
                       class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                       title="Copy token"
@@ -471,7 +471,7 @@ IMPORTANT: Keep these credentials secure!
 
                 {/* Action Buttons */}
                 <div class="flex gap-3">
-                  <button
+                  <button type="button"
                     onClick={downloadCredentials}
                     class="flex-1 py-3 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
@@ -480,7 +480,7 @@ IMPORTANT: Keep these credentials secure!
                     </svg>
                     Download Credentials
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => window.location.reload()}
                     class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   >

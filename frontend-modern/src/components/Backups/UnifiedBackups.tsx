@@ -745,7 +745,7 @@ const UnifiedBackups: Component = () => {
             </svg>
             <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No backup sources configured</h3>
             <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE or PBS node in the Settings tab to start monitoring backups.</p>
-            <button
+            <button type="button"
               onClick={() => {
                 const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
                 settingsTab?.click();
@@ -806,7 +806,7 @@ const UnifiedBackups: Component = () => {
           <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
           <div class="flex items-center gap-2 text-xs">
             <div class="flex items-center gap-1">
-              <button
+              <button type="button"
                 onClick={() => setChartTimeRange(7)}
                 class={`px-2 py-0.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 7
@@ -816,7 +816,7 @@ const UnifiedBackups: Component = () => {
               >
                 7d
               </button>
-              <button
+              <button type="button"
                 onClick={() => setChartTimeRange(30)}
                 class={`px-2 py-0.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 30
@@ -826,7 +826,7 @@ const UnifiedBackups: Component = () => {
               >
                 30d
               </button>
-              <button
+              <button type="button"
                 onClick={() => setChartTimeRange(90)}
                 class={`px-2 py-0.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 90
@@ -836,7 +836,7 @@ const UnifiedBackups: Component = () => {
               >
                 90d
               </button>
-              <button
+              <button type="button"
                 onClick={() => setChartTimeRange(365)}
                 class={`px-2 py-0.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 365
@@ -852,7 +852,7 @@ const UnifiedBackups: Component = () => {
               Last {chartTimeRange()} days
             </span>
             <Show when={selectedDateRange()}>
-              <button
+              <button type="button"
                 onClick={() => setSelectedDateRange(null)}
                 class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
               >
@@ -1186,7 +1186,7 @@ const UnifiedBackups: Component = () => {
       {/* Filter Controls */}
       <div class="filter-controls bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         {/* Filter toggle - visible on all screen sizes */}
-        <button
+        <button type="button"
           onClick={() => setShowFilters(!showFilters())}
           class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
         >
@@ -1248,10 +1248,9 @@ const UnifiedBackups: Component = () => {
                 </svg>
                 
                 {/* Help tooltip button */}
-                <button
+                <button type="button"
                   class="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   onClick={(e) => e.preventDefault()}
-                  type="button"
                   aria-label="Search help"
                   title="Search Examples:
 • jellyfin - Find backups with 'jellyfin' in name
@@ -1278,7 +1277,7 @@ Combine searches:
                 </button>
               </div>
               
-              <button
+              <button type="button"
                 onClick={resetFilters}
                 title="Reset all filters (Esc)"
                 class="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 
@@ -1299,7 +1298,7 @@ Combine searches:
             <div class="flex flex-col sm:flex-row gap-2">
             {/* Time Format Toggle */}
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button
+              <button type="button"
                 onClick={() => setUseRelativeTime(false)}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   !useRelativeTime()
@@ -1309,7 +1308,7 @@ Combine searches:
               >
                 Absolute
               </button>
-              <button
+              <button type="button"
                 onClick={() => setUseRelativeTime(true)}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   useRelativeTime()
@@ -1325,7 +1324,7 @@ Combine searches:
             
             {/* Backup Type Filter */}
             <div class={`inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 ${selectedPBSInstance() ? 'opacity-50' : ''}`}>
-              <button
+              <button type="button"
                 onClick={() => !selectedPBSInstance() && setBackupTypeFilter('all')}
                 disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -1337,7 +1336,7 @@ Combine searches:
               >
                 All Backups
               </button>
-              <button
+              <button type="button"
                 onClick={() => !selectedPBSInstance() && setBackupTypeFilter('snapshot')}
                 disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -1349,7 +1348,7 @@ Combine searches:
               >
                 Snapshots
               </button>
-              <button
+              <button type="button"
                 onClick={() => !selectedPBSInstance() && setBackupTypeFilter('local')}
                 disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -1361,7 +1360,7 @@ Combine searches:
               >
                 PVE
               </button>
-              <button
+              <button type="button"
                 onClick={() => !selectedPBSInstance() && setBackupTypeFilter('remote')}
                 disabled={!!selectedPBSInstance()}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -1379,7 +1378,7 @@ Combine searches:
             
             {/* Type Filter */}
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button
+              <button type="button"
                 onClick={() => setTypeFilter('all')}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   typeFilter() === 'all'
@@ -1389,7 +1388,7 @@ Combine searches:
               >
                 All Types
               </button>
-              <button
+              <button type="button"
                 onClick={() => setTypeFilter('VM')}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   typeFilter() === 'VM'
@@ -1399,7 +1398,7 @@ Combine searches:
               >
                 VMs
               </button>
-              <button
+              <button type="button"
                 onClick={() => setTypeFilter('LXC')}
                 class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   typeFilter() === 'LXC'

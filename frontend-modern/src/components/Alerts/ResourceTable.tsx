@@ -196,7 +196,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             {/* Alerts column */}
                             <td class="px-3 py-1.5 text-center">
                               <Show when={resource.type === 'guest' && props.onToggleDisabled}>
-                                <button
+                                <button type="button"
                                   onClick={() => props.onToggleDisabled!(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
@@ -208,7 +208,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </button>
                               </Show>
                               <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
-                                <button
+                                <button type="button"
                                   onClick={() => props.onToggleNodeConnectivity!(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disableConnectivity
@@ -221,7 +221,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </button>
                               </Show>
                               <Show when={resource.type === 'storage'}>
-                                <button
+                                <button type="button"
                                   onClick={() => props.onToggleDisabled!(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
@@ -239,7 +239,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               <div class="flex items-center justify-center gap-1">
                                 <Show when={!isEditing()} fallback={
                                   <>
-                                    <button
+                                    <button type="button"
                                       onClick={() => props.onSaveEdit(resource.id)}
                                       class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                       title="Save"
@@ -248,7 +248,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                       </svg>
                                     </button>
-                                    <button
+                                    <button type="button"
                                       onClick={props.onCancelEdit}
                                       class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                       title="Cancel"
@@ -259,7 +259,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     </button>
                                   </>
                                 }>
-                                  <button
+                                  <button type="button"
                                     onClick={() => props.onEdit(resource.id, resource.thresholds, resource.defaults)}
                                     class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                     title="Edit thresholds"
@@ -269,7 +269,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     </svg>
                                   </button>
                                   <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                                    <button
+                                    <button type="button"
                                       onClick={() => props.onRemoveOverride(resource.id)}
                                       class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                       title="Remove override"
@@ -405,7 +405,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       {/* Alerts column */}
                       <td class="px-3 py-1.5 text-center">
                         <Show when={resource.type === 'guest' && props.onToggleDisabled}>
-                          <button
+                          <button type="button"
                             onClick={() => props.onToggleDisabled!(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disabled
@@ -417,7 +417,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           </button>
                         </Show>
                         <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
-                          <button
+                          <button type="button"
                             onClick={() => props.onToggleNodeConnectivity!(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disableConnectivity
@@ -430,7 +430,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           </button>
                         </Show>
                         <Show when={resource.type === 'storage'}>
-                          <button
+                          <button type="button"
                             onClick={() => props.onToggleDisabled!(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disabled
@@ -448,7 +448,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         <div class="flex items-center justify-center gap-1">
                           <Show when={!isEditing()} fallback={
                             <>
-                              <button
+                              <button type="button"
                                 onClick={() => props.onSaveEdit(resource.id)}
                                 class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                 title="Save"
@@ -457,7 +457,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                 </svg>
                               </button>
-                              <button
+                              <button type="button"
                                 onClick={props.onCancelEdit}
                                 class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                 title="Cancel"
@@ -468,7 +468,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               </button>
                             </>
                           }>
-                            <button
+                            <button type="button"
                               onClick={() => props.onEdit(resource.id, resource.thresholds, resource.defaults)}
                               class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                               title="Edit thresholds"
@@ -478,7 +478,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               </svg>
                             </button>
                             <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                              <button
+                              <button type="button"
                                 onClick={() => props.onRemoveOverride(resource.id)}
                                 class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                 title="Remove override"

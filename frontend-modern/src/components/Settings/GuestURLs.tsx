@@ -156,7 +156,7 @@ export function GuestURLs(props: GuestURLsProps) {
       {/* Save Button */}
       <Show when={props.hasUnsavedChanges()}>
         <div class="flex justify-end">
-          <button
+          <button type="button"
             onClick={saveURLs}
             disabled={loading()}
             class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -259,7 +259,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                     </a>
                                   </Show>
                                   <Show when={meta?.customUrl}>
-                                    <button
+                                    <button type="button"
                                       onClick={() => clearGuestURL(guestId)}
                                       class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                       title="Clear URL"

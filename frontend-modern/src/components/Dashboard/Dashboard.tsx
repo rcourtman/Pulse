@@ -381,7 +381,7 @@ export function Dashboard(props: DashboardProps) {
       {/* Dashboard Filter */}
       <div class="dashboard-filter mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         {/* Filter toggle - now visible on all screen sizes */}
-        <button
+        <button type="button"
           onClick={() => setShowFilters(!showFilters())}
           class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
         >
@@ -442,7 +442,7 @@ export function Dashboard(props: DashboardProps) {
                 <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <button
+                <button type="button"
                   class="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   onMouseEnter={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -469,7 +469,6 @@ export function Dashboard(props: DashboardProps) {
                   }}
                   onMouseLeave={() => hideTooltip()}
                   onClick={(e) => e.preventDefault()}
-                  type="button"
                   aria-label="Search help"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -509,7 +508,7 @@ export function Dashboard(props: DashboardProps) {
 
               {/* Type Filter */}
               <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <button
+                <button type="button"
                   onClick={() => setViewMode('all')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     viewMode() === 'all'
@@ -519,7 +518,7 @@ export function Dashboard(props: DashboardProps) {
                 >
                   All
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setViewMode('vm')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     viewMode() === 'vm'
@@ -529,7 +528,7 @@ export function Dashboard(props: DashboardProps) {
                 >
                   VMs
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setViewMode('lxc')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     viewMode() === 'lxc'
@@ -545,7 +544,7 @@ export function Dashboard(props: DashboardProps) {
 
               {/* Status Filter */}
               <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <button
+                <button type="button"
                   onClick={() => setStatusMode('all')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     statusMode() === 'all'
@@ -555,7 +554,7 @@ export function Dashboard(props: DashboardProps) {
                 >
                   All
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setStatusMode('running')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     statusMode() === 'running'
@@ -565,7 +564,7 @@ export function Dashboard(props: DashboardProps) {
                 >
                   Running
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setStatusMode('stopped')}
                   class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     statusMode() === 'stopped'
@@ -606,7 +605,7 @@ export function Dashboard(props: DashboardProps) {
             </svg>
             <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No Proxmox VE nodes configured</h3>
             <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure.</p>
-            <button
+            <button type="button"
               onClick={() => {
                 const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
                 settingsTab?.click();

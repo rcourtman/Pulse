@@ -69,7 +69,7 @@ export const APIOnlySetup: Component<APIOnlySetupProps> = (props) => {
             </p>
           </div>
           
-          <button
+          <button type="button"
             onClick={generateToken}
             disabled={isGenerating()}
             class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -96,7 +96,7 @@ export const APIOnlySetup: Component<APIOnlySetupProps> = (props) => {
               <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                 {token()}
               </code>
-              <button
+              <button type="button"
                 onClick={handleCopy}
                 class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
               >
@@ -106,7 +106,7 @@ export const APIOnlySetup: Component<APIOnlySetupProps> = (props) => {
           </div>
           
           
-          <button
+          <button type="button"
             onClick={() => {
               setShowToken(false);
               setToken(null);

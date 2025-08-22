@@ -190,7 +190,7 @@ Important:
                 Password Setup
               </label>
               <div class="flex items-center space-x-2">
-                <button
+                <button type="button"
                   onClick={() => setUseCustomPassword(false)}
                   class={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     !useCustomPassword() 
@@ -200,7 +200,7 @@ Important:
                 >
                   Auto-Generate
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setUseCustomPassword(true)}
                   class={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     useCustomPassword() 
@@ -275,7 +275,7 @@ Important:
             </div>
           </div>
 
-          <button
+          <button type="button"
             onClick={setupSecurity}
             disabled={isSettingUp()}
             class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -301,7 +301,7 @@ Important:
             <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
               🎉 Security Enabled Successfully!
             </h4>
-            <button
+            <button type="button"
               onClick={downloadCredentials}
               class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
@@ -322,7 +322,7 @@ Important:
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
                   {credentials()!.username}
                 </code>
-                <button
+                <button type="button"
                   onClick={() => handleCopy(credentials()!.username, 'username')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
@@ -337,7 +337,7 @@ Important:
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                   {credentials()!.password}
                 </code>
-                <button
+                <button type="button"
                   onClick={() => handleCopy(credentials()!.password, 'password')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
@@ -352,7 +352,7 @@ Important:
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                   {credentials()!.apiToken}
                 </code>
-                <button
+                <button type="button"
                   onClick={() => handleCopy(credentials()!.apiToken!, 'token')}
                   class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                 >
@@ -381,7 +381,7 @@ Important:
           </div>
           
           <div class="flex justify-end">
-            <button
+            <button type="button"
               onClick={() => {
                 setShowCredentials(false);
                 // Now notify parent that configuration is complete

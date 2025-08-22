@@ -368,7 +368,7 @@ function App() {
                   {connected() ? 'Connected' : reconnecting() ? 'Reconnecting...' : 'Disconnected'}
                 </div>
                 <Show when={hasAuth() && !needsAuth()}>
-                  <button
+                  <button type="button"
                     onClick={handleLogout}
                     class="text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
                     title="Logout"

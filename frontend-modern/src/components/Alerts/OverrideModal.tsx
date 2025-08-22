@@ -342,13 +342,13 @@ export function OverrideModal(props: OverrideModalProps) {
             
             {/* Footer */}
             <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-              <button
+              <button type="button"
                 onClick={props.onClose}
                 class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={handleSave}
                 disabled={!selectedGuest() && !props.existingOverride}
                 class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
