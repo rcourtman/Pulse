@@ -502,21 +502,45 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		
 		// Fix for missing port in PBS host
 		host := config.PBSInstances[i].Host
-		if host != "" && !strings.Contains(host, ":8007") {
-			// Add default PBS port if missing
+		if host != "" {
+			// Check if we need to add default port
+			protocolEnd := 0
 			if strings.HasPrefix(host, "https://") {
-				config.PBSInstances[i].Host = host + ":8007"
+				protocolEnd = 8
 			} else if strings.HasPrefix(host, "http://") {
-				config.PBSInstances[i].Host = host + ":8007"
+				protocolEnd = 7
 			} else if !strings.Contains(host, "://") {
-				// No protocol specified, add https and port
-				config.PBSInstances[i].Host = "https://" + host + ":8007"
+				// No protocol specified, add https and check for port
+				if !strings.Contains(host, ":") {
+					// No port specified, add protocol and default port
+					config.PBSInstances[i].Host = "https://" + host + ":8007"
+					log.Info().
+						Str("instance", config.PBSInstances[i].Name).
+						Str("oldHost", host).
+						Str("newHost", config.PBSInstances[i].Host).
+						Msg("Fixed PBS host by adding protocol and default port")
+				} else {
+					// Port specified, just add protocol
+					config.PBSInstances[i].Host = "https://" + host
+					log.Info().
+						Str("instance", config.PBSInstances[i].Name).
+						Str("oldHost", host).
+						Str("newHost", config.PBSInstances[i].Host).
+						Msg("Fixed PBS host by adding protocol")
+				}
+			} else if protocolEnd > 0 {
+				// Has protocol, check if port is missing
+				hostAfterProtocol := host[protocolEnd:]
+				if !strings.Contains(hostAfterProtocol, ":") {
+					// No port specified, add default PBS port
+					config.PBSInstances[i].Host = host + ":8007"
+					log.Info().
+						Str("instance", config.PBSInstances[i].Name).
+						Str("oldHost", host).
+						Str("newHost", config.PBSInstances[i].Host).
+						Msg("Fixed PBS host by adding default port 8007")
+				}
 			}
-			log.Info().
-				Str("instance", config.PBSInstances[i].Name).
-				Str("oldHost", host).
-				Str("newHost", config.PBSInstances[i].Host).
-				Msg("Fixed PBS host by adding default port 8007")
 		}
 	}
 	
