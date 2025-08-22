@@ -58,11 +58,18 @@ If you're comfortable with your security setup, you can dismiss warnings:
 
 ## Credential Security
 
-- **Storage**: Encrypted at rest using AES-256-GCM (`/etc/pulse/nodes.enc`)
+### Encrypted at Rest (AES-256-GCM)
+- **Node Credentials**: Passwords and API tokens (`/etc/pulse/nodes.enc`)
+- **Email Settings**: SMTP passwords (`/etc/pulse/email.enc`)  
+- **Webhook Data**: URLs and auth headers (`/etc/pulse/webhooks.enc`) - v4.1.9+
+- **Encryption Key**: Auto-generated (`/etc/pulse/.encryption.key`)
+
+### Security Features
 - **Logs**: Token values masked with `***` in all outputs
 - **API**: Frontend receives only `hasToken: true`, never actual values
 - **Export**: Requires API_TOKEN authentication to extract credentials
 - **Migration**: Use passphrase-protected export/import (see [Migration Guide](MIGRATION.md))
+- **Auto-Migration**: Unencrypted configs automatically migrate to encrypted format
 
 ## Export/Import Protection
 
@@ -140,11 +147,13 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
 - Node credentials (passwords, API tokens)
 - PBS credentials
 - Email settings passwords
+- Webhook URLs and authentication headers (v4.1.9+)
 
 ### What's NOT Encrypted
 - Node hostnames and IPs
 - Threshold settings
 - General configuration
+- Alert rules and schedules
 
 ## Authentication
 
