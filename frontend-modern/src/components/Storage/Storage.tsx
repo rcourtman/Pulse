@@ -181,7 +181,7 @@ const Storage: Component = () => {
       
       {/* Filters and Search */}
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-4 overflow-hidden">
-        <button
+        <button type="button"
           onClick={() => setShowFilters(!showFilters())}
           class="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
         >
@@ -261,7 +261,7 @@ const Storage: Component = () => {
               <div class="flex items-center gap-2">
                 <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Group by:</span>
                 <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <button
+                  <button type="button"
                     onClick={() => setViewMode('node')}
                     class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       viewMode() === 'node'
@@ -271,7 +271,7 @@ const Storage: Component = () => {
                   >
                     Node
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => setViewMode('storage')}
                     class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       viewMode() === 'storage'
@@ -311,7 +311,7 @@ const Storage: Component = () => {
             </svg>
             <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage configured</h3>
             <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE or PBS node in the Settings tab to start monitoring storage.</p>
-            <button
+            <button type="button"
               onClick={() => {
                 const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
                 settingsTab?.click();

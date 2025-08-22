@@ -100,7 +100,7 @@ const Toast: Component<ToastProps> = (props) => {
             <p class="mt-1 text-xs text-gray-700 dark:text-gray-300 opacity-90">{props.toast.message}</p>
           </Show>
         </div>
-        <button
+        <button type="button"
           onClick={handleClose}
           class="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/10 rounded-lg p-1.5 transition-all duration-200"
         >

@@ -114,7 +114,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
                 Change Password
               </h2>
-              <button
+              <button type="button"
                 onClick={handleClose}
                 disabled={loading()}
                 class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
@@ -182,16 +182,14 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               </Show>
 
               <div class="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={handleClose}
                   disabled={loading()}
                   class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                <button type="button"
                   disabled={loading()}
                   class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                 >

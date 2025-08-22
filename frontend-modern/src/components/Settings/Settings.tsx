@@ -702,13 +702,13 @@ const Settings: Component = () => {
               <span class="text-sm font-medium">You have unsaved changes</span>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">
-              <button 
+              <button type="button" 
                 class="flex-1 sm:flex-initial px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 onClick={saveSettings}
               >
                 Save Changes
               </button>
-              <button 
+              <button type="button" 
                 class="flex-1 sm:flex-initial px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => {
                   window.location.reload();
@@ -727,7 +727,7 @@ const Settings: Component = () => {
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
             <For each={tabs}>
               {(tab) => (
-                <button
+                <button type="button"
                   class={`flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                     activeTab() === tab.id
                       ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -751,7 +751,7 @@ const Settings: Component = () => {
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
                 <div class="flex gap-2">
-                  <button 
+                  <button type="button" 
                     onClick={() => {
                       loadDiscoveredNodes();
                       notificationStore.info('Refreshing discovery...', 2000);
@@ -766,7 +766,7 @@ const Settings: Component = () => {
                     </svg>
                     Refresh Discovery
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={() => {
                       setEditingNode(null);
                       setCurrentNodeType('pve');
@@ -859,7 +859,7 @@ const Settings: Component = () => {
                           </div>
                         </div>
                         <div class="flex items-center gap-2">
-                          <button
+                          <button type="button"
                             onClick={() => testNodeConnection(node.id)}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
                             title="Test connection"
@@ -868,7 +868,7 @@ const Settings: Component = () => {
                               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                             </svg>
                           </button>
-                          <button
+                          <button type="button"
                             onClick={() => {
                               setEditingNode(node);
                               setCurrentNodeType(node.type as 'pve' | 'pbs');
@@ -881,7 +881,7 @@ const Settings: Component = () => {
                               <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                           </button>
-                          <button
+                          <button type="button"
                             onClick={() => deleteNode(node.id)}
                             class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                           >
@@ -967,7 +967,7 @@ const Settings: Component = () => {
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
                 <div class="flex gap-2">
-                  <button 
+                  <button type="button" 
                     onClick={() => {
                       loadDiscoveredNodes();
                       notificationStore.info('Refreshing discovery...', 2000);
@@ -982,7 +982,7 @@ const Settings: Component = () => {
                     </svg>
                     Refresh Discovery
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={() => {
                       setEditingNode(null);
                       setCurrentNodeType('pbs');
@@ -1037,7 +1037,7 @@ const Settings: Component = () => {
                           </div>
                         </div>
                         <div class="flex items-center gap-2">
-                          <button
+                          <button type="button"
                             onClick={() => testNodeConnection(node.id)}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
                             title="Test connection"
@@ -1046,7 +1046,7 @@ const Settings: Component = () => {
                               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                             </svg>
                           </button>
-                          <button
+                          <button type="button"
                             onClick={() => {
                               setEditingNode(node);
                               setCurrentNodeType(node.type as 'pve' | 'pbs');
@@ -1059,7 +1059,7 @@ const Settings: Component = () => {
                               <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                           </button>
-                          <button
+                          <button type="button"
                             onClick={() => deleteNode(node.id)}
                             class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                           >
@@ -1315,7 +1315,7 @@ const Settings: Component = () => {
                             {versionInfo()?.isDocker && ' - Docker'}
                           </p>
                         </div>
-                        <button
+                        <button type="button"
                           onClick={checkForUpdates}
                           disabled={checkingForUpdates() || versionInfo()?.isDocker}
                           class={`px-4 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 ${
@@ -1516,7 +1516,7 @@ const Settings: Component = () => {
                         <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
                           Download an encrypted backup of all nodes and settings
                         </p>
-                        <button
+                        <button type="button"
                           onClick={() => {
                             // Default to custom passphrase if no auth is configured
                             setUseCustomPassphrase(!securityStatus()?.hasAuthentication);
@@ -1546,7 +1546,7 @@ const Settings: Component = () => {
                         <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
                           Upload a backup file to restore nodes and settings
                         </p>
-                        <button
+                        <button type="button"
                           onClick={() => setShowImportDialog(true)}
                           class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
                         >
@@ -1645,7 +1645,7 @@ const Settings: Component = () => {
                   {/* Content */}
                   <div class="p-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <button
+                      <button type="button"
                         onClick={() => setShowPasswordModal(true)}
                         class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
                       >
@@ -1798,7 +1798,7 @@ const Settings: Component = () => {
                     <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
                       Test all configured node connections and view detailed status
                     </p>
-                    <button
+                    <button type="button"
                       onClick={async () => {
                         setRunningDiagnostics(true);
                         try {
@@ -1943,7 +1943,7 @@ const Settings: Component = () => {
                     <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
                       Export system diagnostics data for troubleshooting
                     </p>
-                    <button
+                    <button type="button"
                       onClick={() => {
                         const diagnostics = {
                           timestamp: new Date().toISOString(),
@@ -2214,7 +2214,7 @@ const Settings: Component = () => {
               </div>
               
               <div class="flex justify-end space-x-3">
-                <button
+                <button type="button"
                   onClick={() => {
                     setShowExportDialog(false);
                     setExportPassphrase('');
@@ -2224,7 +2224,7 @@ const Settings: Component = () => {
                 >
                   Cancel
                 </button>
-                <button
+                <button type="button"
                   onClick={handleExport}
                   disabled={!exportPassphrase() || (useCustomPassphrase() && exportPassphrase().length < 12)}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2270,7 +2270,7 @@ const Settings: Component = () => {
             </div>
             
             <div class="flex justify-end space-x-2 mt-6">
-              <button
+              <button type="button"
                 onClick={() => {
                   setShowApiTokenModal(false);
                   setApiTokenInput('');
@@ -2279,7 +2279,7 @@ const Settings: Component = () => {
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   if (apiTokenInput()) {
                     localStorage.setItem('apiToken', apiTokenInput());
@@ -2352,7 +2352,7 @@ const Settings: Component = () => {
               </div>
               
               <div class="flex justify-end space-x-3">
-                <button
+                <button type="button"
                   onClick={() => {
                     setShowImportDialog(false);
                     setImportPassphrase('');
@@ -2362,7 +2362,7 @@ const Settings: Component = () => {
                 >
                   Cancel
                 </button>
-                <button
+                <button type="button"
                   onClick={handleImport}
                   disabled={!importPassphrase() || !importFile()}
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"

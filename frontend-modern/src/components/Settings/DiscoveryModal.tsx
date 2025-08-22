@@ -177,8 +177,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Network Discovery
                 </h3>
-                <button
-                  type="button"
+                <button type="button"
                   onClick={props.onClose}
                   class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                 >
@@ -226,7 +225,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                     </select>
                     
                     {/* Refresh button */}
-                    <button
+                    <button type="button"
                       onClick={handleScan}
                       disabled={isScanning()}
                       title="Refresh scan"
@@ -356,8 +355,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
               
               {/* Footer */}
               <div class="flex items-center justify-center px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={props.onClose}
                   class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >

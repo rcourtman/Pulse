@@ -81,7 +81,7 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
             An API token is configured for this instance. Use it with the X-API-Token header for automation.
           </p>
           
-          <button
+          <button type="button"
             onClick={() => setShowConfirm(true)}
             disabled={isGenerating()}
             class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -108,7 +108,7 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
               <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                 {newToken()}
               </code>
-              <button
+              <button type="button"
                 onClick={handleCopy}
                 class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
               >
@@ -130,7 +130,7 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
             </div>
           </div>
           
-          <button
+          <button type="button"
             onClick={() => {
               setShowToken(false);
               setNewToken(null);
@@ -153,13 +153,13 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
               Any scripts or integrations using the old token will stop working.
             </p>
             <div class="flex gap-3 justify-end">
-              <button
+              <button type="button"
                 onClick={() => setShowConfirm(false)}
                 class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={generateNewToken}
                 class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               >

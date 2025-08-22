@@ -122,8 +122,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                   Add {props.servers.length} Discovered Servers
                 </h3>
                 <Show when={!isAdding()}>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={props.onClose}
                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                   >
@@ -294,15 +293,14 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
               
               {/* Footer */}
               <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={props.onClose}
                   disabled={isAdding()}
                   class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
-                <button
+                <button type="button"
                   onClick={handleBatchAdd}
                   disabled={isAdding()}
                   class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
