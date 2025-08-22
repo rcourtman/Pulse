@@ -10,7 +10,7 @@ Monitor your entire Proxmox infrastructure from a single dashboard. Get instant 
 
 ![Dashboard](docs/images/01-dashboard.png)
 
-## 💖 Support Pulse Development
+## Support Pulse Development
 
 Pulse is built by a solo developer in evenings and weekends. Your support helps:
 - Keep me motivated to add new features
@@ -20,7 +20,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/rcourtman?style=social&label=Sponsor)](https://github.com/sponsors/rcourtman)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
-**Not ready to sponsor?** Star ⭐ the project or share it with your homelab community!
+**Not ready to sponsor?** Star the project or share it with your homelab community!
 
 ## Features
 
@@ -38,9 +38,9 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Comprehensive audit logging
 - Live monitoring of VMs, containers, nodes, storage
 - **Smart Alerts**: Email and webhooks (Discord, Slack, Telegram, Teams, ntfy.sh, Gotify)
-  - Example: "🔴 VM 'webserver' is down on node 'pve1'"
-  - Example: "⚠️ Storage 'local-lvm' at 85% capacity"
-  - Example: "✅ VM 'database' is back online"
+  - Example: "VM 'webserver' is down on node 'pve1'"
+  - Example: "Storage 'local-lvm' at 85% capacity"
+  - Example: "VM 'database' is back online"
 - Unified view of PBS backups, PVE backups, and snapshots
 - Config export/import with encryption and authentication
 - Dark/light themes, responsive design
@@ -51,11 +51,11 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
 ## Privacy
 
 **Pulse respects your privacy:**
-- ✅ No telemetry or analytics collection
-- ✅ No phone-home functionality
-- ✅ No external API calls (except for configured webhooks)
-- ✅ All data stays on your server
-- ✅ Open source - verify it yourself
+- No telemetry or analytics collection
+- No phone-home functionality
+- No external API calls (except for configured webhooks)
+- All data stays on your server
+- Open source - verify it yourself
 
 Your infrastructure data is yours alone.
 
@@ -73,7 +73,7 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
 **Proxmox users**: The installer detects PVE hosts and automatically creates an optimized LXC container. Choose Quick mode for one-minute setup.
 
-📖 [Advanced installation options →](docs/INSTALL.md)
+[Advanced installation options →](docs/INSTALL.md)
 
 ### Updating
 
@@ -186,7 +186,7 @@ services:
       # - API_TOKEN=your-token              # Plain text or SHA3-256 hash (auto-hashed if plain)
       # - ALLOW_UNPROTECTED_EXPORT=false    # Allow export without auth (default: false)
       
-      # 🔒 Security: Plain text credentials are automatically hashed
+      # Security: Plain text credentials are automatically hashed
       # You can provide either:
       # 1. Plain text (auto-hashed): PULSE_AUTH_PASS=mypassword
       # 2. Pre-hashed (advanced): PULSE_AUTH_PASS='$$2a$$12$$...'
@@ -344,7 +344,7 @@ Environment="FRONTEND_PORT=8080"
 # Docker: -e FRONTEND_PORT=8080
 ```
 
-📖 **[Full Configuration Guide →](docs/CONFIGURATION.md)**
+**[Full Configuration Guide →](docs/CONFIGURATION.md)**
 
 ### Backup/Restore
 
@@ -398,7 +398,7 @@ curl http://localhost:7655/api/charts
 curl -H "X-API-Token: your-token" http://localhost:7655/api/health
 ```
 
-📖 **[Full API Documentation →](docs/API.md)** - Complete endpoint reference with examples
+**[Full API Documentation →](docs/API.md)** - Complete endpoint reference with examples
 
 ## Reverse Proxy
 
