@@ -884,7 +884,11 @@ main() {
     fi
     
     if check_existing_installation; then
-        # Determine update channel before checking available version
+        # Get both stable and RC versions
+        local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+        local RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+        
+        # Determine default update channel
         UPDATE_CHANNEL="stable"
         
         # Allow override via command line
@@ -897,28 +901,76 @@ main() {
             fi
         fi
         
-        # Get the latest available version for comparison
-        local AVAILABLE_VERSION=""
-        if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
-            AVAILABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
-        else
-            AVAILABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
-        fi
-        
         echo
         echo "What would you like to do?"
-        if [[ -n "$AVAILABLE_VERSION" ]]; then
-            echo "1) Update to $AVAILABLE_VERSION"
-        else
-            echo "1) Update to latest version"
-        fi
-        echo "2) Reinstall current version"
-        echo "3) Remove Pulse"
-        echo "4) Cancel"
-        safe_read "Select option [1-4]: " choice
         
-        case $choice in
-            1)
+        # Show update options based on available versions
+        local menu_option=1
+        if [[ -n "$STABLE_VERSION" ]]; then
+            echo "${menu_option}) Update to $STABLE_VERSION (stable)"
+            ((menu_option++))
+        fi
+        
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+            echo "${menu_option}) Update to $RC_VERSION (release candidate)"
+            ((menu_option++))
+        fi
+        
+        echo "${menu_option}) Reinstall current version"
+        ((menu_option++))
+        echo "${menu_option}) Remove Pulse"
+        ((menu_option++))
+        echo "${menu_option}) Cancel"
+        local max_option=$menu_option
+        
+        safe_read "Select option [1-${max_option}]: " choice
+        
+        # Determine what action to take based on the dynamic menu
+        local action=""
+        local target_version=""
+        local current_choice=1
+        
+        # Check if user selected stable update
+        if [[ -n "$STABLE_VERSION" ]]; then
+            if [[ "$choice" == "$current_choice" ]]; then
+                action="update"
+                target_version="$STABLE_VERSION"
+                UPDATE_CHANNEL="stable"
+            fi
+            ((current_choice++))
+        fi
+        
+        # Check if user selected RC update
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+            if [[ "$choice" == "$current_choice" ]]; then
+                action="update"
+                target_version="$RC_VERSION"
+                UPDATE_CHANNEL="rc"
+            fi
+            ((current_choice++))
+        fi
+        
+        # Check if user selected reinstall
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="reinstall"
+        fi
+        ((current_choice++))
+        
+        # Check if user selected remove
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="remove"
+        fi
+        ((current_choice++))
+        
+        # Check if user selected cancel
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="cancel"
+        fi
+        
+        case $action in
+            update)
+                print_info "Updating to $target_version..."
+                LATEST_RELEASE="$target_version"
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
                 create_user
@@ -926,7 +978,7 @@ main() {
                 start_pulse
                 print_completion
                 ;;
-            2)
+            reinstall)
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
                 create_user
@@ -936,14 +988,14 @@ main() {
                 start_pulse
                 print_completion
                 ;;
-            3)
+            remove)
                 systemctl stop $SERVICE_NAME || true
                 systemctl disable $SERVICE_NAME || true
                 rm -f /etc/systemd/system/$SERVICE_NAME.service
                 rm -rf "$INSTALL_DIR"
                 print_success "Pulse removed successfully"
                 ;;
-            4)
+            cancel)
                 print_info "Installation cancelled"
                 exit 0
                 ;;
