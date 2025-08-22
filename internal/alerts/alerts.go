@@ -533,8 +533,26 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.RUnlock()
 		return
 	}
+	
+	// Check if there's an override for this storage device
+	override, hasOverride := m.config.Overrides[storage.ID]
 	threshold := m.config.StorageDefault
 	m.mu.RUnlock()
+
+	// If alerts are disabled for this storage device, clear any existing alerts and return
+	if hasOverride && override.Disabled {
+		m.mu.Lock()
+		alertID := fmt.Sprintf("%s-usage", storage.ID)
+		if _, exists := m.activeAlerts[alertID]; exists {
+			delete(m.activeAlerts, alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Str("storage", storage.Name).
+				Msg("Cleared alert - storage has alerts disabled")
+		}
+		m.mu.Unlock()
+		return
+	}
 
 	m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 }
