@@ -671,6 +671,10 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			}
 		}
 		
+		log.Info().
+			Str("processedHost", host).
+			Msg("PBS host after port processing")
+		
 		// PBS test connection
 		// Parse PBS authentication details
 		pbsUser := user
@@ -788,7 +792,15 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 			host = "https://" + host
 		}
-		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+		// Check if port is missing
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		// Only add default port if no port is specified
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
 			host = host + ":8007"
 		}
 		pbs.Host = host
@@ -2654,7 +2666,14 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			host = "https://" + host
 		}
 		// Add PBS port if missing
-		if !strings.Contains(host, ":8007") && !strings.Contains(host[8:], ":") {
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		// Only add default port if no port is specified
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
 			host += ":8007"
 		}
 	}
@@ -2941,15 +2960,16 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 			host = "https://" + host
 		}
-		if !strings.Contains(host, ":8007") && !strings.Contains(host, ":443") {
-			if strings.HasPrefix(host, "https://") {
-				host = strings.Replace(host, "https://", "", 1)
-				if !strings.Contains(host, ":") {
-					host = "https://" + host + ":8007"
-				} else {
-					host = "https://" + host
-				}
-			}
+		// Check if port is missing
+		protocolEnd := 0
+		if strings.HasPrefix(host, "https://") {
+			protocolEnd = 8
+		} else if strings.HasPrefix(host, "http://") {
+			protocolEnd = 7
+		}
+		// Only add default port if no port is specified
+		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
+			host += ":8007"
 		}
 	}
 	
