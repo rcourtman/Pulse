@@ -30,15 +30,15 @@ export class SettingsAPI {
   
   // System settings update (preferred) - uses SystemConfig type from config.ts
   static async updateSystemSettings(settings: Partial<SystemConfig>): Promise<ApiResponse> {
-    return apiFetchJSON(`${this.baseUrl}/config/system`, {
-      method: 'PUT',
+    return apiFetchJSON(`${this.baseUrl}/system/settings/update`, {
+      method: 'POST',
       body: JSON.stringify(settings),
     }) as Promise<ApiResponse>;
   }
   
   // Get system settings - returns SystemConfig
   static async getSystemSettings(): Promise<SystemConfig> {
-    return apiFetchJSON(`${this.baseUrl}/config/system`) as Promise<SystemConfig>;
+    return apiFetchJSON(`${this.baseUrl}/system/settings`) as Promise<SystemConfig>;
   }
 
   static async validateSettings(settings: SettingsUpdateRequest): Promise<ApiResponse> {
