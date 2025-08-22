@@ -708,7 +708,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
                                     <button type="button"
                                       onClick={async () => {
-                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && pveum role create PulseMonitor -privs VM.Monitor 2>/dev/null; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor';
+                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && pveum role delete PulseMonitor 2>/dev/null; pveum role add PulseMonitor -privs VM.Monitor && pveum aclmod / -user pulse-monitor@pam -role PulseMonitor';
                                         if (await copyToClipboard(cmd)) {
                                           showSuccess('Command copied!');
                                         }
@@ -721,7 +721,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                       </svg>
                                     </button>
-                                    <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor\npveum role create PulseMonitor -privs VM.Monitor 2>/dev/null\npveum aclmod / -user pulse-monitor@pam -role PulseMonitor'}</code>
+                                    <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor\npveum role delete PulseMonitor 2>/dev/null\npveum role add PulseMonitor -privs VM.Monitor\npveum aclmod / -user pulse-monitor@pam -role PulseMonitor'}</code>
                                   </div>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
                                     <button type="button"
