@@ -31,7 +31,8 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 Remove the env var (check `sudo systemctl show pulse | grep Environment`) and restart to enable UI configuration.
 
 ### What permissions needed?
-- PVE: `PVEAuditor` minimum
+- PVE: `PVEAuditor` minimum (includes VM.GuestAgent.Audit for disk usage in PVE 9+)
+- PVE 8: Also needs `VM.Monitor` permission for VM disk usage via QEMU agent
 - PBS: `DatastoreReader` minimum
 
 ### API tokens vs passwords?
@@ -86,6 +87,16 @@ Yes! When you add one cluster node, Pulse automatically discovers and monitors a
 Reduce `metricsRetentionDays` in settings and restart
 
 ## Features
+
+### Why do VMs show allocated size instead of actual usage?
+VMs need the QEMU Guest Agent installed to report actual disk usage. Without it, Pulse can only show the allocated disk size. See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for setup instructions.
+
+### How do I see real disk usage for VMs?
+Install QEMU Guest Agent in your VMs:
+- Linux: `apt install qemu-guest-agent` or `yum install qemu-guest-agent`
+- Windows: Install virtio-win guest tools
+- Enable in VM Options → QEMU Guest Agent
+See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for details.
 
 ### Multiple clusters?
 Yes, add multiple nodes in Settings
