@@ -2145,7 +2145,7 @@ echo "Setting up permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
 # Detect Proxmox version to handle permission differences
-PVE_VERSION=$(pveversion --verbose | grep "pve-manager" | cut -d'/' -f2 | cut -d'.' -f1)
+PVE_VERSION=$(pveversion --verbose | grep "pve-manager" | awk '{print $2}' | cut -d'.' -f1)
 echo "Detected Proxmox VE version $PVE_VERSION"
 
 # Create PulseMonitor role with appropriate permissions based on PVE version
