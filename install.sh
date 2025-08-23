@@ -831,23 +831,7 @@ main() {
     detect_os
     check_docker_environment
     
-    # Ask for port configuration (non-container installs)
-    local FRONTEND_PORT=${FRONTEND_PORT:-}
-    if [[ -z "$FRONTEND_PORT" ]]; then
-        if [[ "$IN_CONTAINER" == "true" ]]; then
-            # In container mode, use default port without prompting
-            FRONTEND_PORT=7655
-        else
-            echo
-            safe_read "Frontend port [7655]: " FRONTEND_PORT
-            FRONTEND_PORT=${FRONTEND_PORT:-7655}
-            if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
-                print_error "Invalid port number. Using default port 7655."
-                FRONTEND_PORT=7655
-            fi
-        fi
-    fi
-    
+    # Check for existing installation FIRST before asking for configuration
     if check_existing_installation; then
         # Get both stable and RC versions
         local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
@@ -981,7 +965,23 @@ main() {
                 ;;
         esac
     else
-        # Fresh installation
+        # Fresh installation - ask for port configuration
+        FRONTEND_PORT=${FRONTEND_PORT:-}
+        if [[ -z "$FRONTEND_PORT" ]]; then
+            if [[ "$IN_CONTAINER" == "true" ]]; then
+                # In container mode, use default port without prompting
+                FRONTEND_PORT=7655
+            else
+                echo
+                safe_read "Frontend port [7655]: " FRONTEND_PORT
+                FRONTEND_PORT=${FRONTEND_PORT:-7655}
+                if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                    print_error "Invalid port number. Using default port 7655."
+                    FRONTEND_PORT=7655
+                fi
+            fi
+        fi
+        
         install_dependencies
         create_user
         setup_directories
