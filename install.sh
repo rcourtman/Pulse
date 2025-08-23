@@ -849,8 +849,17 @@ main() {
         fi
         
         # Get both stable and RC versions
-        local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
-        local RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
+        # Try GitHub API first, but have a fallback
+        local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
+        
+        # If rate limited or failed, try direct GitHub latest URL
+        if [[ -z "$STABLE_VERSION" ]] || [[ "$STABLE_VERSION" == *"rate limit"* ]]; then
+            # Use the GitHub latest release redirect to get version
+            STABLE_VERSION=$(curl -sI https://github.com/$GITHUB_REPO/releases/latest | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+        fi
+        
+        # For RC, we need the API, so if it fails just use empty
+        local RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
         
         # Determine default update channel
         UPDATE_CHANNEL="stable"
@@ -859,7 +868,7 @@ main() {
         if [[ -n "${FORCE_CHANNEL}" ]]; then
             UPDATE_CHANNEL="${FORCE_CHANNEL}"
         elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
             if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
                 UPDATE_CHANNEL="rc"
             fi
