@@ -44,17 +44,19 @@ safe_read() {
     shift 2
     local read_args="$@"
     
-    # When piped, we need to both prompt and read from /dev/tty if available
-    if test -e /dev/tty; then
-        # Send prompt to /dev/tty and read from /dev/tty
+    # Try to read from TTY if available, but don't fail if it's not
+    if test -t 0 && test -e /dev/tty 2>/dev/null; then
+        # Interactive terminal with TTY available
         echo -n "$prompt" > /dev/tty
-        read $read_args $var_name < /dev/tty 2>/dev/null || {
-            # If /dev/tty fails, fallback to normal read
-            read -p "$prompt" $read_args $var_name
-        }
+        read $read_args $var_name < /dev/tty 2>/dev/null || read -p "$prompt" $read_args $var_name
+    elif test -e /dev/tty 2>/dev/null; then
+        # Non-interactive but TTY exists (piped input)
+        echo -n "$prompt" > /dev/tty 2>/dev/null || echo -n "$prompt"
+        read $read_args $var_name < /dev/tty 2>/dev/null || read $read_args $var_name
     else
-        # No /dev/tty available, use stdin
-        read -p "$prompt" $read_args $var_name
+        # No TTY at all (e.g., in pct exec)
+        echo -n "$prompt"
+        read $read_args $var_name
     fi
 }
 
