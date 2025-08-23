@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -15,14 +17,24 @@ type SystemSettingsHandler struct {
 	config *config.Config
 	persistence *config.ConfigPersistence
 	wsHub *websocket.Hub
+	monitor interface {
+		GetDiscoveryService() *discovery.Service
+		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
+		StopDiscoveryService()
+	}
 }
 
 // NewSystemSettingsHandler creates a new system settings handler
-func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub) *SystemSettingsHandler {
+func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPersistence, wsHub *websocket.Hub, monitor interface {
+	GetDiscoveryService() *discovery.Service
+	StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
+	StopDiscoveryService()
+}) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
 		config: cfg,
 		persistence: persistence,
 		wsHub: wsHub,
+		monitor: monitor,
 	}
 }
 
@@ -177,10 +189,33 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 	
-	// Update discovery settings
+	// Update discovery settings and manage the service
+	prevDiscoveryEnabled := h.config.DiscoveryEnabled
 	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet
+	}
+	
+	// Start or stop discovery service based on setting change
+	if h.monitor != nil {
+		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
+			// Discovery was just enabled, start the service
+			subnet := h.config.DiscoverySubnet
+			if subnet == "" {
+				subnet = "auto"
+			}
+			h.monitor.StartDiscoveryService(context.Background(), h.wsHub, subnet)
+			log.Info().Msg("Discovery service started via settings update")
+		} else if !settings.DiscoveryEnabled && prevDiscoveryEnabled {
+			// Discovery was just disabled, stop the service
+			h.monitor.StopDiscoveryService()
+			log.Info().Msg("Discovery service stopped via settings update")
+		} else if settings.DiscoveryEnabled && settings.DiscoverySubnet != "" {
+			// Subnet changed while discovery is enabled, update it
+			if svc := h.monitor.GetDiscoveryService(); svc != nil {
+				svc.SetSubnet(settings.DiscoverySubnet)
+			}
+		}
 	}
 
 	// Save to persistence

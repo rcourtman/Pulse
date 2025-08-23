@@ -1925,6 +1925,41 @@ func (m *Monitor) GetDiscoveryService() *discovery.Service {
 	return m.discoveryService
 }
 
+// StartDiscoveryService starts the discovery service if not already running
+func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if m.discoveryService != nil {
+		log.Debug().Msg("Discovery service already running")
+		return
+	}
+	
+	if subnet == "" {
+		subnet = "auto"
+	}
+	
+	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet)
+	if m.discoveryService != nil {
+		m.discoveryService.Start(ctx)
+		log.Info().Str("subnet", subnet).Msg("Discovery service started")
+	} else {
+		log.Error().Msg("Failed to create discovery service")
+	}
+}
+
+// StopDiscoveryService stops the discovery service if running
+func (m *Monitor) StopDiscoveryService() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if m.discoveryService != nil {
+		m.discoveryService.Stop()
+		m.discoveryService = nil
+		log.Info().Msg("Discovery service stopped")
+	}
+}
+
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
 	return m.metricsHistory.GetAllGuestMetrics(guestID, duration)
