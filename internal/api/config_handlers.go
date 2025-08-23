@@ -1806,6 +1806,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	serverHost := query.Get("host")
 	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
 	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
+	authToken := query.Get("auth_token") // Temporary auth token for auto-registration
 	
 	// Validate required parameters
 	if serverType == "" {
@@ -2025,41 +2026,11 @@ else
     echo "🔄 Attempting auto-registration with Pulse..."
     echo ""
     
-    # Prompt for setup code
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔐 SETUP CODE REQUIRED"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Enter your 6-character setup code from Pulse UI: "
+    # Use auth token from URL parameter (much simpler!)
+    AUTH_TOKEN="%s"
     
-    # Check if code was provided via environment variable first
-    if [ -n "$PULSE_SETUP_CODE" ]; then
-        SETUP_CODE="$PULSE_SETUP_CODE"
-        echo "Using setup code from environment variable: $SETUP_CODE"
-    else
-        # Read setup code from user
-        if [ -t 0 ]; then
-            # Running interactively
-            read -p "> " SETUP_CODE
-        else
-            # Being piped - try to read from terminal
-            if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
-                :
-            else
-                echo ""
-                echo "❌ Cannot read setup code in non-interactive mode"
-                echo "   Please run this script interactively or provide the code via environment variable:"
-                echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
-                echo ""
-                AUTO_REG_SUCCESS=false
-                SETUP_CODE=""
-            fi
-        fi
-    fi
-    
-    echo ""
-    
-    # Only proceed with auto-registration if we have a setup code
-    if [ -n "$SETUP_CODE" ]; then
+    # Only proceed with auto-registration if we have an auth token
+    if [ -n "$AUTH_TOKEN" ]; then
         # Get the server's hostname
         SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -2095,7 +2066,7 @@ else
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pam!%s",
   "tokenValue": "$TOKEN_VALUE",
-  "setupCode": "$SETUP_CODE"
+  "authToken": "$AUTH_TOKEN"
 }
 EOF
         )
@@ -2183,7 +2154,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			pulseURL, serverHost, tokenName, tokenName, storagePerms, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, tokenName, serverHost)
 		
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -2292,41 +2263,11 @@ else
     echo "🔄 Attempting auto-registration with Pulse..."
     echo ""
     
-    # Prompt for setup code
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔐 SETUP CODE REQUIRED"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Enter your 6-character setup code from Pulse UI: "
+    # Use auth token from URL parameter (much simpler!)
+    AUTH_TOKEN="%s"
     
-    # Check if code was provided via environment variable first
-    if [ -n "$PULSE_SETUP_CODE" ]; then
-        SETUP_CODE="$PULSE_SETUP_CODE"
-        echo "Using setup code from environment variable: $SETUP_CODE"
-    else
-        # Read setup code from user
-        if [ -t 0 ]; then
-            # Running interactively
-            read -p "> " SETUP_CODE
-        else
-            # Being piped - try to read from terminal
-            if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
-                :
-            else
-                echo ""
-                echo "❌ Cannot read setup code in non-interactive mode"
-                echo "   Please run this script interactively or provide the code via environment variable:"
-                echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
-                echo ""
-                AUTO_REG_SUCCESS=false
-                SETUP_CODE=""
-            fi
-        fi
-    fi
-    
-    echo ""
-    
-    # Only proceed with auto-registration if we have a setup code
-    if [ -n "$SETUP_CODE" ]; then
+    # Only proceed with auto-registration if we have an auth token
+    if [ -n "$AUTH_TOKEN" ]; then
         # Get the server's hostname
         SERVER_HOSTNAME=$(hostname -f 2>/dev/null || hostname)
         SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -2362,7 +2303,7 @@ else
   "serverName": "$SERVER_HOSTNAME",
   "tokenId": "pulse-monitor@pbs!%s",
   "tokenValue": "$TOKEN_VALUE",
-  "setupCode": "$SETUP_CODE"
+  "authToken": "$AUTH_TOKEN"
 }
 EOF
         )
@@ -2432,7 +2373,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName,
-			pulseURL, serverHost, tokenName, tokenName, tokenName, tokenName)
+			authToken, pulseURL, serverHost, tokenName, tokenName, tokenName, tokenName)
 	}
 	
 	// Set headers for script download
@@ -2472,14 +2413,14 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		return
 	}
 	
-	// Generate a 6-character setup code
-	code := h.generateSetupCode()
-	codeHash := internalauth.HashAPIToken(code) // Reuse the hash function for consistency
+	// Generate a temporary auth token (simpler than setup codes)
+	token := h.generateSetupCode() // Reuse the generation function
+	tokenHash := internalauth.HashAPIToken(token)
 	
-	// Store the code with expiry (5 minutes)
+	// Store the token with expiry (5 minutes)
 	expiry := time.Now().Add(5 * time.Minute)
 	h.codeMutex.Lock()
-	h.setupCodes[codeHash] = &SetupCode{
+	h.setupCodes[tokenHash] = &SetupCode{
 		ExpiresAt: expiry,
 		Used:      false,
 		NodeType:  req.Type,
@@ -2488,12 +2429,12 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	h.codeMutex.Unlock()
 	
 	log.Info().
-		Str("code_hash", codeHash[:8]+"...").
+		Str("token_hash", tokenHash[:8]+"...").
 		Time("expiry", expiry).
 		Str("type", req.Type).
-		Msg("Generated setup code")
+		Msg("Generated temporary auth token")
 	
-	// Build the URL without any authentication tokens
+	// Build the URL with the token included
 	pulseURL := fmt.Sprintf("%s://%s", "http", r.Host)
 	if r.TLS != nil {
 		pulseURL = fmt.Sprintf("%s://%s", "https", r.Host)
@@ -2509,16 +2450,15 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		backupPerms = "&backup_perms=true"
 	}
 	
-	// URL doesn't contain any secrets - the code is entered interactively
-	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s",
-		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
+	// Include the token directly in the URL - much simpler!
+	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&auth_token=%s",
+		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
 	
-	// Return the URL, command, and setup code
-	// Include the setup code in the command for easy copy-paste in Proxmox shell
+	// Return a simple curl command - no environment variables needed
 	response := map[string]interface{}{
 		"url":        scriptURL,
-		"command":    fmt.Sprintf(`PULSE_SETUP_CODE=%s curl -sSL "%s" | bash`, code, scriptURL),
-		"setupCode":  code, // The user needs to see this
+		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"setupCode":  token, // Keep for backwards compatibility but it's really just a token now
 		"expires":    expiry.Unix(),
 	}
 	
@@ -2533,7 +2473,8 @@ type AutoRegisterRequest struct {
 	TokenID    string `json:"tokenId"`    // Full token ID like pulse-monitor@pam!pulse-token
 	TokenValue string `json:"tokenValue,omitempty"` // The token value for the node
 	ServerName string `json:"serverName"` // Hostname or IP
-	SetupCode  string `json:"setupCode,omitempty"` // One-time setup code for authentication
+	SetupCode  string `json:"setupCode,omitempty"` // One-time setup code for authentication (deprecated)
+	AuthToken  string `json:"authToken,omitempty"`  // Direct auth token from URL (new approach)
 	// New secure fields
 	RequestToken bool   `json:"requestToken,omitempty"` // If true, Pulse will generate and return a token
 	Username     string `json:"username,omitempty"`     // Username for creating token (e.g., "root@pam")
@@ -2565,9 +2506,15 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// Check authentication - require either setup code or API token if auth is enabled
 	authenticated := false
 	
-	// First check for setup code in the request
-	if req.SetupCode != "" {
-		codeHash := internalauth.HashAPIToken(req.SetupCode)
+	// Support both setupCode (old) and authToken (new) fields
+	authCode := req.SetupCode
+	if req.AuthToken != "" {
+		authCode = req.AuthToken
+	}
+	
+	// First check for setup code/auth token in the request
+	if authCode != "" {
+		codeHash := internalauth.HashAPIToken(authCode)
 		h.codeMutex.Lock()
 		setupCode, exists := h.setupCodes[codeHash]
 		if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
@@ -2580,7 +2527,8 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				log.Info().
 					Str("type", req.Type).
 					Str("host", req.Host).
-					Msg("Auto-register authenticated via setup code")
+					Bool("via_authToken", req.AuthToken != "").
+					Msg("Auto-register authenticated via setup code/token")
 			} else {
 				log.Warn().
 					Str("expected_type", setupCode.NodeType).
@@ -2592,7 +2540,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		} else if exists {
 			log.Warn().Msg("Setup code expired")
 		} else {
-			log.Warn().Msg("Invalid setup code")
+			log.Warn().Msg("Invalid setup code/token")
 		}
 		h.codeMutex.Unlock()
 	}

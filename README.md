@@ -450,6 +450,7 @@ journalctl -u pulse -f
 
 - [Docker Guide](docs/DOCKER.md) - Complete Docker deployment guide
 - [Configuration Guide](docs/CONFIGURATION.md) - Complete setup and configuration
+- [VM Disk Monitoring](docs/VM_DISK_MONITORING.md) - Set up QEMU Guest Agent for accurate VM disk usage
 - [Port Configuration](docs/PORT_CONFIGURATION.md) - How to change the default port
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Reference](docs/API.md) - REST API endpoints and examples
