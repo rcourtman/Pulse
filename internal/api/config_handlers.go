@@ -2144,10 +2144,24 @@ fi
 echo "Setting up permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
-# Create PulseMonitor role with VM.Monitor permission (remove old one if exists)
+# Detect Proxmox version to handle permission differences
+PVE_VERSION=$(pveversion --verbose | grep "pve-manager" | cut -d'/' -f2 | cut -d'.' -f1)
+echo "Detected Proxmox VE version $PVE_VERSION"
+
+# Create PulseMonitor role with appropriate permissions based on PVE version
 echo "Setting up PulseMonitor role for guest agent access..."
 pveum role delete PulseMonitor 2>/dev/null || true
-pveum role add PulseMonitor -privs VM.Monitor
+
+if [ "$PVE_VERSION" -ge "9" ]; then
+    # Proxmox 9+ uses VM.GuestAgent.Audit instead of VM.Monitor
+    echo "Using Proxmox 9+ permissions (VM.GuestAgent.Audit)"
+    pveum role add PulseMonitor -privs VM.GuestAgent.Audit
+else
+    # Proxmox 8 and below use VM.Monitor
+    echo "Using Proxmox 8 permissions (VM.Monitor)"
+    pveum role add PulseMonitor -privs VM.Monitor
+fi
+
 pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
 
 echo ""
