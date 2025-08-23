@@ -622,13 +622,14 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		req.Header.Set(key, value)
 	}
 
-	// Debug log the payload for Telegram webhooks
-	if webhook.Service == "telegram" {
+	// Debug log the payload for Telegram and Gotify webhooks
+	if webhook.Service == "telegram" || webhook.Service == "gotify" {
 		log.Debug().
 			Str("webhook", webhook.Name).
+			Str("service", webhook.Service).
 			Str("url", webhookURL).
 			Str("payload", string(jsonData)).
-			Msg("Sending Telegram webhook")
+			Msg("Sending webhook with payload")
 	}
 
 	// Send request
