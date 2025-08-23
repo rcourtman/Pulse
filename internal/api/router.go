@@ -672,7 +672,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
 	
 	// System settings and API token management
-	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence, r.wsHub)
+	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor)
 	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
 	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
@@ -790,9 +790,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 		
-		// Special case: setup-script with a token parameter should be allowed
-		if req.URL.Path == "/api/setup-script" && req.URL.Query().Get("token") != "" {
-			// Let the handler validate the token
+		// Special case: setup-script should be public (uses setup codes for auth)
+		if req.URL.Path == "/api/setup-script" {
+			// The script itself prompts for a setup code
 			isPublic = true
 		}
 		
