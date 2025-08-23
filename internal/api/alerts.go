@@ -156,6 +156,79 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// BulkAcknowledgeAlerts acknowledges multiple alerts at once
+func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		AlertIDs []string `json:"alertIds"`
+		User     string   `json:"user,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(request.AlertIDs) == 0 {
+		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	user := request.User
+	if user == "" {
+		user = "admin"
+	}
+
+	var results []map[string]interface{}
+	for _, alertID := range request.AlertIDs {
+		result := map[string]interface{}{
+			"alertId": alertID,
+			"success": true,
+		}
+		if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
+			result["success"] = false
+			result["error"] = err.Error()
+		}
+		results = append(results, result)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results": results,
+	})
+}
+
+// BulkClearAlerts clears multiple alerts at once
+func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		AlertIDs []string `json:"alertIds"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(request.AlertIDs) == 0 {
+		http.Error(w, "No alert IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	var results []map[string]interface{}
+	for _, alertID := range request.AlertIDs {
+		result := map[string]interface{}{
+			"alertId": alertID,
+			"success": true,
+		}
+		h.monitor.GetAlertManager().ClearAlert(alertID)
+		results = append(results, result)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results": results,
+	})
+}
+
 // HandleAlerts routes alert requests to appropriate handlers
 func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
@@ -175,6 +248,10 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 		h.AcknowledgeAlert(w, r)
 	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
 		h.ClearAlert(w, r)
+	case path == "/bulk/acknowledge" && r.Method == http.MethodPost:
+		h.BulkAcknowledgeAlerts(w, r)
+	case path == "/bulk/clear" && r.Method == http.MethodPost:
+		h.BulkClearAlerts(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
