@@ -835,6 +835,19 @@ main() {
     
     # Check for existing installation FIRST before asking for configuration
     if check_existing_installation; then
+        # If a specific version was requested, just update to it
+        if [[ -n "${FORCE_VERSION}" ]]; then
+            print_info "Updating to version ${FORCE_VERSION}..."
+            LATEST_RELEASE="${FORCE_VERSION}"
+            backup_existing
+            systemctl stop $SERVICE_NAME || true
+            create_user
+            download_pulse
+            start_pulse
+            print_completion
+            return 0
+        fi
+        
         # Get both stable and RC versions
         local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
         local RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null)
