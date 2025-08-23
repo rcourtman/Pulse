@@ -63,4 +63,18 @@ export class AlertsAPI {
       method: 'DELETE',
     });
   }
+
+  static async bulkAcknowledge(alertIds: string[], user?: string): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
+    return apiFetchJSON(`${this.baseUrl}/bulk/acknowledge`, {
+      method: 'POST',
+      body: JSON.stringify({ alertIds, user }),
+    });
+  }
+
+  static async bulkClear(alertIds: string[]): Promise<{ results: Array<{ alertId: string; success: boolean; error?: string }> }> {
+    return apiFetchJSON(`${this.baseUrl}/bulk/clear`, {
+      method: 'POST',
+      body: JSON.stringify({ alertIds }),
+    });
+  }
 }
