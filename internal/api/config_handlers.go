@@ -2031,29 +2031,29 @@ else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Enter your 6-character setup code from Pulse UI: "
     
-    # Read setup code from user
-    if [ -t 0 ]; then
-        # Running interactively
-        read -p "> " SETUP_CODE
-    else
-        # Being piped - try to read from terminal
-        if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
-            :
-        else
-            echo ""
-            echo "❌ Cannot read setup code in non-interactive mode"
-            echo "   Please run this script interactively or provide the code via environment variable:"
-            echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
-            echo ""
-            AUTO_REG_SUCCESS=false
-            SETUP_CODE=""
-        fi
-    fi
-    
-    # Check if code was provided via environment variable
-    if [ -z "$SETUP_CODE" ] && [ -n "$PULSE_SETUP_CODE" ]; then
+    # Check if code was provided via environment variable first
+    if [ -n "$PULSE_SETUP_CODE" ]; then
         SETUP_CODE="$PULSE_SETUP_CODE"
-        echo "Using setup code from environment variable"
+        echo "Using setup code from environment variable: $SETUP_CODE"
+    else
+        # Read setup code from user
+        if [ -t 0 ]; then
+            # Running interactively
+            read -p "> " SETUP_CODE
+        else
+            # Being piped - try to read from terminal
+            if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
+                :
+            else
+                echo ""
+                echo "❌ Cannot read setup code in non-interactive mode"
+                echo "   Please run this script interactively or provide the code via environment variable:"
+                echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
+                echo ""
+                AUTO_REG_SUCCESS=false
+                SETUP_CODE=""
+            fi
+        fi
     fi
     
     echo ""
@@ -2298,29 +2298,29 @@ else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Enter your 6-character setup code from Pulse UI: "
     
-    # Read setup code from user
-    if [ -t 0 ]; then
-        # Running interactively
-        read -p "> " SETUP_CODE
-    else
-        # Being piped - try to read from terminal
-        if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
-            :
-        else
-            echo ""
-            echo "❌ Cannot read setup code in non-interactive mode"
-            echo "   Please run this script interactively or provide the code via environment variable:"
-            echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
-            echo ""
-            AUTO_REG_SUCCESS=false
-            SETUP_CODE=""
-        fi
-    fi
-    
-    # Check if code was provided via environment variable
-    if [ -z "$SETUP_CODE" ] && [ -n "$PULSE_SETUP_CODE" ]; then
+    # Check if code was provided via environment variable first
+    if [ -n "$PULSE_SETUP_CODE" ]; then
         SETUP_CODE="$PULSE_SETUP_CODE"
-        echo "Using setup code from environment variable"
+        echo "Using setup code from environment variable: $SETUP_CODE"
+    else
+        # Read setup code from user
+        if [ -t 0 ]; then
+            # Running interactively
+            read -p "> " SETUP_CODE
+        else
+            # Being piped - try to read from terminal
+            if read -p "> " SETUP_CODE </dev/tty 2>/dev/null; then
+                :
+            else
+                echo ""
+                echo "❌ Cannot read setup code in non-interactive mode"
+                echo "   Please run this script interactively or provide the code via environment variable:"
+                echo "   PULSE_SETUP_CODE=XXXXXX curl -sSL ... | bash"
+                echo ""
+                AUTO_REG_SUCCESS=false
+                SETUP_CODE=""
+            fi
+        fi
     fi
     
     echo ""
@@ -2570,8 +2570,10 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		h.codeMutex.Lock()
 		setupCode, exists := h.setupCodes[codeHash]
 		if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
-			// Validate that the code matches the node type and host
-			if setupCode.NodeType == req.Type && setupCode.Host == req.Host {
+			// Validate that the code matches the node type
+			// Note: We don't validate the host anymore as it may differ between
+			// what's entered in the UI and what's provided in the setup script URL
+			if setupCode.NodeType == req.Type {
 				setupCode.Used = true // Mark as used immediately
 				authenticated = true
 				log.Info().
@@ -2582,9 +2584,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				log.Warn().
 					Str("expected_type", setupCode.NodeType).
 					Str("got_type", req.Type).
-					Str("expected_host", setupCode.Host).
-					Str("got_host", req.Host).
-					Msg("Setup code validation failed - type or host mismatch")
+					Msg("Setup code validation failed - type mismatch")
 			}
 		} else if exists && setupCode.Used {
 			log.Warn().Msg("Setup code already used")
