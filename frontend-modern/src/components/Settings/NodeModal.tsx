@@ -708,7 +708,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
                                     <button type="button"
                                       onClick={async () => {
-                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && pveum role delete PulseMonitor 2>/dev/null; PVE_VERSION=$(pveversion --verbose | grep "pve-manager" | awk "{print \\$2}" | cut -d"." -f1); if [ "$PVE_VERSION" -ge "9" ]; then pveum role add PulseMonitor -privs VM.GuestAgent.Audit; else pveum role add PulseMonitor -privs VM.Monitor; fi && pveum aclmod / -user pulse-monitor@pam -role PulseMonitor';
+                                        const cmd = 'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor && if pveum role list 2>/dev/null | grep -q "VM.Monitor" || pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then pveum role delete TestMonitor 2>/dev/null; pveum role delete PulseMonitor 2>/dev/null; pveum role add PulseMonitor -privs VM.Monitor; pveum aclmod / -user pulse-monitor@pam -role PulseMonitor; fi';
                                         if (await copyToClipboard(cmd)) {
                                           showSuccess('Command copied!');
                                         }
@@ -721,7 +721,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                       </svg>
                                     </button>
-                                    <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'pveum aclmod / -user pulse-monitor@pam -role PVEAuditor\npveum role delete PulseMonitor 2>/dev/null\n# Detect PVE version and use appropriate permissions\nPVE_VERSION=$(pveversion --verbose | grep "pve-manager" | awk "{print \\$2}" | cut -d"." -f1)\nif [ "$PVE_VERSION" -ge "9" ]; then\n  pveum role add PulseMonitor -privs VM.GuestAgent.Audit  # PVE 9+\nelse\n  pveum role add PulseMonitor -privs VM.Monitor  # PVE 8 and below\nfi\npveum aclmod / -user pulse-monitor@pam -role PulseMonitor'}</code>
+                                    <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">{'# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pam -role PVEAuditor\n\n# For Proxmox 8 and below, also check if VM.Monitor is needed\nif pveum role list 2>/dev/null | grep -q "VM.Monitor" || \\\n   pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then\n  # VM.Monitor exists (PVE 8 or below) - create additional role\n  pveum role delete TestMonitor 2>/dev/null\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs VM.Monitor\n  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor\nfi'}</code>
                                   </div>
                                   <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
                                     <button type="button"
@@ -742,7 +742,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <code class="text-gray-800 dark:text-gray-200">pveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin</code>
                                   </div>
                                   <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                                    ℹ️ PVEAuditor gives read-only access. PulseMonitor adds VM guest agent access for disk usage (VM.Monitor for PVE 8, VM.GuestAgent.Audit for PVE 9+). PVEDatastoreAdmin on /storage adds backup management.
+                                    ℹ️ PVEAuditor gives read-only access including VM.GuestAgent.Audit (required for disk usage on PVE 9+). PulseMonitor adds VM.Monitor (PVE 8 only). PVEDatastoreAdmin on /storage adds backup management.
                                   </p>
                                 </div>
                                 
