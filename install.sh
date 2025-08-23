@@ -77,41 +77,7 @@ check_root() {
     fi
 }
 
-check_pre_v4_installation() {
-    # Check for Node.js version indicators (pre-v4 used Node.js)
-    # Note: pulse-backend.service is NOT a reliable indicator as v4 can use it too
-    if [[ -f "$INSTALL_DIR/.env" ]] || \
-       [[ -d "$INSTALL_DIR/node_modules" ]] || \
-       [[ -f "$INSTALL_DIR/package.json" ]] || \
-       [[ -f "$INSTALL_DIR/server.js" ]] || \
-       [[ -d "$INSTALL_DIR/backend" ]] || \
-       [[ -d "$INSTALL_DIR/frontend" ]]; then
-        
-        echo
-        print_error "Pre-v4 Pulse Installation Detected"
-        echo
-        echo -e "${BLUE}=========================================================${NC}"
-        echo -e "${YELLOW}Pulse v4 is a complete rewrite that requires migration${NC}"
-        echo -e "${BLUE}=========================================================${NC}"
-        echo
-        echo "Your current installation appears to be a pre-v4 version."
-        echo "Due to fundamental architecture changes, automatic upgrade is not supported."
-        echo
-        echo -e "${GREEN}Recommended approach:${NC}"
-        echo "1. Create a fresh LXC container or VM"
-        echo "2. Install Pulse v4 in the new environment"
-        echo "3. Configure your nodes through the new web UI"
-        echo "4. Reference your old .env file for credentials if needed"
-        echo
-        echo -e "${YELLOW}Your existing data is preserved at: $INSTALL_DIR${NC}"
-        echo
-        echo "For more information, see:"
-        echo "https://github.com/rcourtman/Pulse/releases/v4.0.0"
-        echo -e "${BLUE}=========================================================${NC}"
-        echo
-        exit 1
-    fi
-}
+# V3 is deprecated - no longer checking for it
 
 detect_os() {
     if [[ -f /etc/os-release ]]; then
@@ -864,7 +830,6 @@ main() {
     check_root
     detect_os
     check_docker_environment
-    check_pre_v4_installation
     
     # Ask for port configuration (non-container installs)
     local FRONTEND_PORT=${FRONTEND_PORT:-}
