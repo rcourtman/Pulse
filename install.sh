@@ -45,14 +45,14 @@ safe_read() {
     local read_args="$@"
     
     # Try to read from TTY if available, but don't fail if it's not
-    if test -t 0 && test -e /dev/tty 2>/dev/null; then
+    if [[ -t 0 ]] && [[ -e /dev/tty ]]; then
         # Interactive terminal with TTY available
         echo -n "$prompt" > /dev/tty
         read $read_args $var_name < /dev/tty 2>/dev/null || read -p "$prompt" $read_args $var_name
-    elif test -e /dev/tty 2>/dev/null; then
+    elif [[ -e /dev/tty ]]; then
         # Non-interactive but TTY exists (piped input)
-        echo -n "$prompt" > /dev/tty 2>/dev/null || echo -n "$prompt"
-        read $read_args $var_name < /dev/tty 2>/dev/null || read $read_args $var_name
+        { echo -n "$prompt" > /dev/tty; } 2>/dev/null || echo -n "$prompt"
+        { read $read_args $var_name < /dev/tty; } 2>/dev/null || read $read_args $var_name
     else
         # No TTY at all (e.g., in pct exec)
         echo -n "$prompt"
