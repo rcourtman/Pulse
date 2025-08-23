@@ -244,14 +244,14 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 		h.GetAlertHistory(w, r)
 	case path == "/history" && r.Method == http.MethodDelete:
 		h.ClearAlertHistory(w, r)
-	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
-		h.AcknowledgeAlert(w, r)
-	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
-		h.ClearAlert(w, r)
 	case path == "/bulk/acknowledge" && r.Method == http.MethodPost:
 		h.BulkAcknowledgeAlerts(w, r)
 	case path == "/bulk/clear" && r.Method == http.MethodPost:
 		h.BulkClearAlerts(w, r)
+	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
+		h.AcknowledgeAlert(w, r)
+	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
+		h.ClearAlert(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
