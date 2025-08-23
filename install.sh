@@ -802,11 +802,18 @@ start_pulse() {
 print_completion() {
     local IP=$(hostname -I | awk '{print $1}')
     
+    # Get the port from the service file or use default
+    local PORT="${FRONTEND_PORT:-7655}"
+    if [[ -z "$FRONTEND_PORT" ]] && [[ -f "/etc/systemd/system/$SERVICE_NAME.service" ]]; then
+        # Try to extract port from service file
+        PORT=$(grep -oP 'FRONTEND_PORT=\K\d+' "/etc/systemd/system/$SERVICE_NAME.service" 2>/dev/null || echo "7655")
+    fi
+    
     echo
     print_header
     print_success "Pulse installation completed!"
     echo
-    echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:${FRONTEND_PORT}"
+    echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:${PORT}"
     echo
     echo -e "${YELLOW}Useful commands:${NC}"
     echo "  systemctl status $SERVICE_NAME    - Check service status"
