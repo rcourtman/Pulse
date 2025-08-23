@@ -2514,9 +2514,10 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		pulseURL, req.Type, encodedHost, pulseURL, backupPerms)
 	
 	// Return the URL, command, and setup code
+	// Include the setup code in the command for easy copy-paste in Proxmox shell
 	response := map[string]interface{}{
 		"url":        scriptURL,
-		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"command":    fmt.Sprintf(`PULSE_SETUP_CODE=%s curl -sSL "%s" | bash`, code, scriptURL),
 		"setupCode":  code, // The user needs to see this
 		"expires":    expiry.Unix(),
 	}
