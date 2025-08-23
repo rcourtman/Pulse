@@ -427,6 +427,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		result["error"] = err.Error()
 		w.WriteHeader(http.StatusBadRequest)
+	} else if status < 200 || status >= 300 {
+		// HTTP error from webhook endpoint
+		result["error"] = fmt.Sprintf("Webhook returned HTTP %d: %s", status, response)
+		result["success"] = false
+		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		result["success"] = true
 	}
