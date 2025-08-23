@@ -2515,8 +2515,16 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// First check for setup code/auth token in the request
 	if authCode != "" {
 		codeHash := internalauth.HashAPIToken(authCode)
+		log.Debug().
+			Str("authCode", authCode).
+			Str("codeHash", codeHash[:8]+"...").
+			Msg("Checking auth token")
 		h.codeMutex.Lock()
 		setupCode, exists := h.setupCodes[codeHash]
+		log.Debug().
+			Bool("exists", exists).
+			Int("totalCodes", len(h.setupCodes)).
+			Msg("Setup code lookup result")
 		if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
 			// Validate that the code matches the node type
 			// Note: We don't validate the host anymore as it may differ between
@@ -2556,8 +2564,15 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	}
 	
 	// If still not authenticated and auth is required, reject
-	if !authenticated && h.config.APIToken != "" {
-		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - invalid or missing setup code")
+	// BUT: Always allow if a valid setup code/auth token was provided (even if expired/used)
+	// This ensures the error message is accurate
+	if !authenticated && h.config.APIToken != "" && authCode == "" {
+		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - no authentication provided")
+		http.Error(w, "Pulse requires authentication", http.StatusUnauthorized)
+		return
+	} else if !authenticated && h.config.APIToken != "" {
+		// Had a code but it didn't validate
+		log.Warn().Str("ip", r.RemoteAddr).Msg("Unauthorized auto-register attempt - invalid or expired setup code")
 		http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
 		return
 	}
