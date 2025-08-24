@@ -538,8 +538,32 @@ EOF
     exit 0
 }
 
+# Compare two version strings
+# Returns: 0 if equal, 1 if first > second, 2 if first < second
+compare_versions() {
+    local v1="${1#v}"  # Remove 'v' prefix
+    local v2="${2#v}"
+    
+    # Split versions into parts
+    IFS='.' read -ra V1_PARTS <<< "$v1"
+    IFS='.' read -ra V2_PARTS <<< "$v2"
+    
+    # Compare major.minor.patch
+    for i in 0 1 2; do
+        local p1="${V1_PARTS[$i]:-0}"
+        local p2="${V2_PARTS[$i]:-0}"
+        if [[ "$p1" -gt "$p2" ]]; then
+            return 1
+        elif [[ "$p1" -lt "$p2" ]]; then
+            return 2
+        fi
+    done
+    
+    return 0  # versions are equal
+}
+
 check_existing_installation() {
-    local CURRENT_VERSION=""
+    CURRENT_VERSION=""  # Make it global so we can use it later
     local BINARY_PATH=""
     
     # Check for the binary in expected locations
@@ -844,7 +868,17 @@ main() {
     if check_existing_installation; then
         # If a specific version was requested, just update to it
         if [[ -n "${FORCE_VERSION}" ]]; then
-            print_info "Updating to version ${FORCE_VERSION}..."
+            # Determine if this is an upgrade, downgrade, or reinstall
+            local action_word="Installing"
+            if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
+                compare_versions "$FORCE_VERSION" "$CURRENT_VERSION"
+                case $? in
+                    0) action_word="Reinstalling" ;;
+                    1) action_word="Updating to" ;;
+                    2) action_word="Downgrading to" ;;
+                esac
+            fi
+            print_info "${action_word} version ${FORCE_VERSION}..."
             LATEST_RELEASE="${FORCE_VERSION}"
             backup_existing
             systemctl stop $SERVICE_NAME || true
@@ -960,7 +994,17 @@ main() {
         
         case $action in
             update)
-                print_info "Updating to $target_version..."
+                # Determine if this is an upgrade or downgrade
+                local action_word="Installing"
+                if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
+                    compare_versions "$target_version" "$CURRENT_VERSION"
+                    case $? in
+                        0) action_word="Reinstalling" ;;
+                        1) action_word="Updating to" ;;
+                        2) action_word="Downgrading to" ;;
+                    esac
+                fi
+                print_info "${action_word} $target_version..."
                 LATEST_RELEASE="$target_version"
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
