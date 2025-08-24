@@ -578,7 +578,7 @@ check_existing_installation() {
     
     # Try to get version if binary exists
     if [[ -n "$BINARY_PATH" ]]; then
-        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
     fi
     
     if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
