@@ -280,8 +280,32 @@ create_lxc_container() {
     
     # Get available bridges
     local BRIDGES=$(ip link show type bridge | grep -E '^[0-9]+:' | cut -d: -f2 | tr -d ' ' | paste -sd',' -)
-    local DEFAULT_BRIDGE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+' | grep -E '^vmbr')
-    DEFAULT_BRIDGE=${DEFAULT_BRIDGE:-vmbr0}
+    
+    # First try to find the default network interface (could be bridge or regular interface)
+    local DEFAULT_INTERFACE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+')
+    
+    # Check if the default interface is a bridge
+    local DEFAULT_BRIDGE=""
+    if [[ -n "$DEFAULT_INTERFACE" ]]; then
+        if ip link show "$DEFAULT_INTERFACE" type bridge &>/dev/null; then
+            # Default interface is a bridge, use it
+            DEFAULT_BRIDGE="$DEFAULT_INTERFACE"
+        fi
+    fi
+    
+    # If no default bridge found, try to use the first available bridge
+    if [[ -z "$DEFAULT_BRIDGE" && -n "$BRIDGES" ]]; then
+        DEFAULT_BRIDGE=$(echo "$BRIDGES" | cut -d',' -f1)
+    fi
+    
+    # If still no bridge found, we'll need to ask the user
+    if [[ -z "$DEFAULT_BRIDGE" ]]; then
+        if [[ -n "$DEFAULT_INTERFACE" ]]; then
+            # We have a default interface but it's not a bridge
+            print_info "Default network interface is $DEFAULT_INTERFACE (not a bridge)"
+        fi
+        DEFAULT_BRIDGE="vmbr0"  # Fallback suggestion only
+    fi
     
     # Get available storage with usage info
     local STORAGE_INFO=$(pvesm status -content rootdir 2>/dev/null | tail -n +2)
@@ -291,9 +315,22 @@ create_lxc_container() {
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         # Show available bridges
         echo
-        echo "Available network bridges: ${BRIDGES:-none detected}"
-        safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
-        bridge=${bridge:-$DEFAULT_BRIDGE}
+        if [[ -n "$BRIDGES" ]]; then
+            echo "Available network bridges: $BRIDGES"
+        else
+            echo "No network bridges detected"
+            echo "You may need to create a bridge first (e.g., vmbr0) or use the host's network interface"
+        fi
+        
+        # If no valid default bridge, warn the user
+        if [[ "$DEFAULT_BRIDGE" == "vmbr0" && ! -z "$BRIDGES" && ! "$BRIDGES" =~ vmbr0 ]]; then
+            print_info "Warning: vmbr0 does not exist on this system"
+            print_info "Please enter one of the available bridges: $BRIDGES"
+            safe_read "Network bridge: " bridge
+        else
+            safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
+            bridge=${bridge:-$DEFAULT_BRIDGE}
+        fi
         
         # Show available storage with usage details
         echo
@@ -310,7 +347,19 @@ create_lxc_container() {
         startup=${startup:-99}
     else
         # Quick mode - use defaults
-        bridge=$DEFAULT_BRIDGE
+        # But if no valid bridge exists, we must ask the user
+        if [[ "$DEFAULT_BRIDGE" == "vmbr0" && -n "$BRIDGES" && ! "$BRIDGES" =~ vmbr0 ]]; then
+            echo
+            print_info "No default bridge found. Available bridges: $BRIDGES"
+            safe_read "Please select a network bridge: " bridge
+        elif [[ "$DEFAULT_BRIDGE" == "vmbr0" && -z "$BRIDGES" ]]; then
+            echo
+            print_error "No network bridges detected on this system"
+            print_info "You may need to create a bridge first (e.g., vmbr0)"
+            safe_read "Enter network bridge name to use: " bridge
+        else
+            bridge=$DEFAULT_BRIDGE
+        fi
         storage=$DEFAULT_STORAGE
         static_ip=""
         nameserver=""
