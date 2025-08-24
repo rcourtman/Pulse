@@ -871,8 +871,9 @@ main() {
             # Determine if this is an upgrade, downgrade, or reinstall
             local action_word="Installing"
             if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
-                compare_versions "$FORCE_VERSION" "$CURRENT_VERSION"
-                case $? in
+                local compare_result
+                compare_versions "$FORCE_VERSION" "$CURRENT_VERSION" && compare_result=$? || compare_result=$?
+                case $compare_result in
                     0) action_word="Reinstalling" ;;
                     1) action_word="Updating to" ;;
                     2) action_word="Downgrading to" ;;
@@ -880,6 +881,10 @@ main() {
             fi
             print_info "${action_word} version ${FORCE_VERSION}..."
             LATEST_RELEASE="${FORCE_VERSION}"
+            
+            # Detect the actual service name before trying to stop it
+            SERVICE_NAME=$(detect_service_name)
+            
             backup_existing
             systemctl stop $SERVICE_NAME || true
             create_user
