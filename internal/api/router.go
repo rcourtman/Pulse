@@ -53,9 +53,18 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	// Start forwarding update progress to WebSocket
 	go r.forwardUpdateProgress()
 	
-	// Wrap with error handler middleware only
+	// Load system settings to configure security headers
+	allowEmbedding := false
+	allowedOrigins := ""
+	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+		allowEmbedding = systemSettings.AllowEmbedding
+		allowedOrigins = systemSettings.AllowedEmbedOrigins
+	}
+	
+	// Apply security headers with embedding configuration
+	// Then wrap with error handler middleware  
 	// Note: TimeoutHandler breaks WebSocket upgrades
-	return ErrorHandler(r)
+	return ErrorHandler(SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins))
 }
 
 // handleDiscovery returns cached discovery results
