@@ -1083,19 +1083,26 @@ main() {
                 ;;
         esac
     else
-        # Fresh installation - ask for port configuration
-        FRONTEND_PORT=${FRONTEND_PORT:-}
-        if [[ -z "$FRONTEND_PORT" ]]; then
-            if [[ "$IN_CONTAINER" == "true" ]]; then
-                # In container mode, use default port without prompting
-                FRONTEND_PORT=7655
-            else
-                echo
-                safe_read "Frontend port [7655]: " FRONTEND_PORT
-                FRONTEND_PORT=${FRONTEND_PORT:-7655}
-                if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
-                    print_error "Invalid port number. Using default port 7655."
+        # Check if this is truly a fresh installation or an update
+        # If binary exists OR config exists OR --version was specified, it's likely an update
+        if [[ -f "$INSTALL_DIR/bin/pulse" ]] || [[ -f "$INSTALL_DIR/pulse" ]] || [[ -d "$CONFIG_DIR" ]] || [[ -n "${FORCE_VERSION}" ]]; then
+            # This is an update/reinstall, don't prompt for port
+            FRONTEND_PORT=${FRONTEND_PORT:-7655}
+        else
+            # Fresh installation - ask for port configuration
+            FRONTEND_PORT=${FRONTEND_PORT:-}
+            if [[ -z "$FRONTEND_PORT" ]]; then
+                if [[ "$IN_CONTAINER" == "true" ]]; then
+                    # In container mode, use default port without prompting
                     FRONTEND_PORT=7655
+                else
+                    echo
+                    safe_read "Frontend port [7655]: " FRONTEND_PORT
+                    FRONTEND_PORT=${FRONTEND_PORT:-7655}
+                    if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                        print_error "Invalid port number. Using default port 7655."
+                        FRONTEND_PORT=7655
+                    fi
                 fi
             fi
         fi
