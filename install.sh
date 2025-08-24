@@ -44,19 +44,16 @@ safe_read() {
     shift 2
     local read_args="$@"
     
-    # Try to read from TTY if available, but don't fail if it's not
-    if [[ -t 0 ]] && [[ -e /dev/tty ]]; then
-        # Interactive terminal with TTY available
+    # When script is piped (curl | bash), stdin is the pipe, not the terminal
+    # We need to read from /dev/tty for user input
+    if [[ -e /dev/tty ]]; then
+        # TTY is available, read from it
         echo -n "$prompt" > /dev/tty
-        read $read_args $var_name < /dev/tty 2>/dev/null || read -p "$prompt" $read_args $var_name
-    elif [[ -e /dev/tty ]]; then
-        # Non-interactive but TTY exists (piped input)
-        { echo -n "$prompt" > /dev/tty; } 2>/dev/null || echo -n "$prompt"
-        { read $read_args $var_name < /dev/tty; } 2>/dev/null || read $read_args $var_name
+        IFS= read -r $read_args $var_name < /dev/tty
     else
-        # No TTY at all (e.g., in pct exec)
+        # No TTY (e.g., in automated environments)
         echo -n "$prompt"
-        read $read_args $var_name
+        IFS= read -r $read_args $var_name
     fi
 }
 
@@ -953,6 +950,12 @@ main() {
             fi
         else
             safe_read "Select option [1-${max_option}]: " choice
+        fi
+        
+        # Debug: Check if choice was read correctly
+        if [[ -z "$choice" ]]; then
+            print_error "No option selected. Exiting."
+            exit 1
         fi
         
         # Determine what action to take based on the dynamic menu
