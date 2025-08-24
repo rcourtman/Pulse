@@ -936,7 +936,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			if res.Status == "running" {
 				// First check if agent is enabled by getting VM status
 				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
-				if err == nil && vmStatus != nil && vmStatus.Agent == 1 {
+				if err == nil && vmStatus != nil && vmStatus.Agent > 0 {
 					log.Debug().
 						Str("instance", instanceName).
 						Str("vm", res.Name).
@@ -1238,7 +1238,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
 			
 			// If VM has guest agent enabled and is running, try to get filesystem info
-			if vm.Agent == 1 && vm.Status == "running" {
+			if vm.Agent > 0 && vm.Status == "running" {
 				log.Debug().
 					Str("instance", instanceName).
 					Str("vm", vm.Name).
