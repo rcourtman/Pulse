@@ -414,6 +414,8 @@ type SystemSettings struct {
 	DiscoveryEnabled        bool   `json:"discoveryEnabled"`
 	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
 	Theme                   string `json:"theme,omitempty"` // User theme preference: "light", "dark", or empty for system default
+	AllowEmbedding          bool   `json:"allowEmbedding"`   // Allow iframe embedding
+	AllowedEmbedOrigins     string `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	// APIToken removed - now handled via .env file only
 }
 

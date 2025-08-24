@@ -693,8 +693,16 @@ func (r *Router) setupRoutes() {
 
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// Apply security headers first
-	SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	// Load system settings to get embedding configuration
+	var allowEmbedding bool
+	var allowedEmbedOrigins string
+	if systemSettings, err := r.persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
+		allowEmbedding = systemSettings.AllowEmbedding
+		allowedEmbedOrigins = systemSettings.AllowedEmbedOrigins
+	}
+	
+	// Apply security headers with embedding configuration
+	SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Add CORS headers if configured
 		if r.config.AllowedOrigins != "" {
 			w.Header().Set("Access-Control-Allow-Origin", r.config.AllowedOrigins)
@@ -904,7 +912,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Str("path", req.URL.Path).
 			Dur("duration", time.Since(start)).
 			Msg("Request handled")
-	})).ServeHTTP(w, req)
+	}), allowEmbedding, allowedEmbedOrigins).ServeHTTP(w, req)
 }
 
 
