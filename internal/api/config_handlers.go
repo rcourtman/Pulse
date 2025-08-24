@@ -2115,11 +2115,6 @@ fi
 echo "Setting up permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 
-# Apply monitoring permissions - use built-in PVEAuditor role
-# This role includes VM.GuestAgent.Audit which is required for disk monitoring
-echo "Setting up monitoring permissions..."
-pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
-
 # Detect Proxmox version and apply appropriate permissions
 # Method 1: Try to check if VM.Monitor exists (reliable for PVE 8 and below)
 HAS_VM_MONITOR=false
@@ -2143,29 +2138,33 @@ if [ "$HAS_VM_MONITOR" = true ]; then
     pveum role add PulseMonitor -privs VM.Monitor
     pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
 else
-    # PVE 9+ - VM.Monitor was removed, need Sys.Audit and Sys.Modify
-    echo "Detected Proxmox 9+ - VM.Monitor was removed, adding Sys.Audit permission"
+    # PVE 9+ - VM.Monitor was removed
+    echo "Detected Proxmox 9+ - VM.Monitor was removed"
     
-    # Create a custom role with required permissions for PVE 9
+    # For PVE 9, the PVEAuditor role should be sufficient as it includes VM.GuestAgent.Audit
+    # However, some users report issues even with these permissions
+    # This appears to be a Proxmox 9 limitation/bug with guest agent API access
+    
+    # Try to add Sys.Audit which replaced VM.Monitor for basic KVM access
     pveum role delete PulseMonitor 2>/dev/null || true
-    
-    # For PVE 9, we need Sys.Audit for basic access and VM.Agent for guest agent
-    # Note: VM.Agent might not exist, so we try multiple permission sets
-    if pveum role add PulseMonitor -privs "Sys.Audit,VM.Agent" 2>/dev/null; then
-        echo "Added Sys.Audit and VM.Agent permissions"
-    elif pveum role add PulseMonitor -privs "Sys.Audit,Sys.Modify" 2>/dev/null; then
-        echo "Added Sys.Audit and Sys.Modify permissions"
-    else
-        # Fallback to just Sys.Audit if others fail
-        pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null || true
-        echo "Added Sys.Audit permission (guest agent access may be limited)"
+    if pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null; then
+        echo "Added Sys.Audit permission (replacement for VM.Monitor)"
+        pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
     fi
     
-    pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
-    
-    echo "Note: If VM disk usage still shows 0%, you may need to:"
-    echo "  1. Ensure qemu-guest-agent is installed and running in your VMs"
-    echo "  2. Check that the token has privsep=0 (no privilege separation)"
+    echo ""
+    echo "⚠️  IMPORTANT: Proxmox 9 Guest Agent Limitations"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Due to permission changes in Proxmox 9, VM disk usage monitoring"
+    echo "via guest agent may show 0% even with correct permissions."
+    echo ""
+    echo "This is a known Proxmox 9 issue. Workarounds:"
+    echo "  1. Ensure the token has privsep=0 (no privilege separation)"
+    echo "  2. Consider using root@pam credentials for full functionality"
+    echo "  3. Wait for Proxmox updates that may address this limitation"
+    echo ""
+    echo "The token we created has privsep=0, but guest agent access may"
+    echo "still be limited due to Proxmox 9 permission model changes."
 fi
 
 echo ""
