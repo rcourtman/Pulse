@@ -1029,10 +1029,48 @@ main() {
                 print_completion
                 ;;
             remove)
-                systemctl stop $SERVICE_NAME || true
-                systemctl disable $SERVICE_NAME || true
+                # Stop and disable service
+                systemctl stop $SERVICE_NAME 2>/dev/null || true
+                systemctl disable $SERVICE_NAME 2>/dev/null || true
+                
+                # Remove service files
                 rm -f /etc/systemd/system/$SERVICE_NAME.service
+                rm -f /etc/systemd/system/pulse.service
+                rm -f /etc/systemd/system/pulse-backend.service
+                systemctl daemon-reload
+                
+                # Remove installation directory
                 rm -rf "$INSTALL_DIR"
+                
+                # Remove symlink
+                rm -f /usr/local/bin/pulse
+                
+                # Ask about config/data removal
+                echo
+                print_info "Config and data files exist in $CONFIG_DIR"
+                safe_read "Remove all configuration and data? (y/N): " remove_config
+                if [[ "$remove_config" =~ ^[Yy]$ ]]; then
+                    rm -rf "$CONFIG_DIR"
+                    print_success "Configuration and data removed"
+                else
+                    print_info "Configuration preserved in $CONFIG_DIR"
+                fi
+                
+                # Ask about user removal
+                if id "pulse" &>/dev/null; then
+                    safe_read "Remove pulse user account? (y/N): " remove_user
+                    if [[ "$remove_user" =~ ^[Yy]$ ]]; then
+                        userdel pulse 2>/dev/null || true
+                        print_success "User account removed"
+                    else
+                        print_info "User account preserved"
+                    fi
+                fi
+                
+                # Remove any log files
+                rm -f /var/log/pulse*.log 2>/dev/null || true
+                rm -f /opt/pulse.log 2>/dev/null || true
+                
                 print_success "Pulse removed successfully"
                 ;;
             cancel)
