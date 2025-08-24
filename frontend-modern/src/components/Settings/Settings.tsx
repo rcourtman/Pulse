@@ -1963,9 +1963,63 @@ const Settings: Component = () => {
                     <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
                       Export system diagnostics data for troubleshooting
                     </p>
-                    <button type="button"
-                      onClick={() => {
-                        const diagnostics = {
+                    
+                    {/* Helper function to sanitize sensitive data */}
+                    {(() => {
+                      const sanitizeForGitHub = (data: any) => {
+                        // Deep clone the data
+                        const sanitized = JSON.parse(JSON.stringify(data));
+                        
+                        // Sanitize IP addresses (keep first octet for network type identification)
+                        const sanitizeIP = (ip: string) => {
+                          if (!ip) return ip;
+                          const parts = ip.split('.');
+                          if (parts.length === 4) {
+                            return `${parts[0]}.xxx.xxx.xxx`;
+                          }
+                          return 'xxx.xxx.xxx.xxx';
+                        };
+                        
+                        // Sanitize hostname but keep domain suffix for context
+                        const sanitizeHostname = (hostname: string) => {
+                          if (!hostname) return hostname;
+                          // Keep common suffixes like .lan, .local, .home
+                          const suffixMatch = hostname.match(/\.(lan|local|home|internal)$/);
+                          const suffix = suffixMatch ? suffixMatch[0] : '';
+                          return `node-REDACTED${suffix}`;
+                        };
+                        
+                        // Sanitize nodes
+                        if (sanitized.nodes) {
+                          sanitized.nodes = sanitized.nodes.map((node: any, index: number) => ({
+                            ...node,
+                            id: `${node.type}-${index}`,
+                            name: sanitizeHostname(node.name),
+                            host: node.host ? node.host.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED') : node.host,
+                            tokenName: node.tokenName ? 'token-REDACTED' : node.tokenName,
+                            clusterName: node.clusterName ? 'cluster-REDACTED' : node.clusterName,
+                            clusterEndpoints: node.clusterEndpoints ? node.clusterEndpoints.map((ep: any, epIndex: number) => ({
+                              ...ep,
+                              NodeName: `node-${epIndex + 1}`,
+                              Host: `node-${epIndex + 1}`,
+                              IP: sanitizeIP(ep.IP)
+                            })) : node.clusterEndpoints
+                          }));
+                        }
+                        
+                        // Sanitize websocket URL
+                        if (sanitized.websocket?.url) {
+                          sanitized.websocket.url = sanitized.websocket.url.replace(/\/\/[^\/]+/, '//REDACTED');
+                        }
+                        
+                        // Add sanitization notice
+                        sanitized._notice = 'This diagnostic data has been sanitized for sharing on GitHub. IP addresses, hostnames, and tokens have been redacted.';
+                        
+                        return sanitized;
+                      };
+                      
+                      const exportDiagnostics = (sanitize: boolean) => {
+                        let diagnostics = {
                           timestamp: new Date().toISOString(),
                           version: '2.0.0',
                           environment: {
@@ -1991,20 +2045,44 @@ const Settings: Component = () => {
                           }
                         };
                         
+                        if (sanitize) {
+                          diagnostics = sanitizeForGitHub(diagnostics);
+                        }
+                        
                         const blob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `pulse-diagnostics-${new Date().toISOString().split('T')[0]}.json`;
+                        const type = sanitize ? 'sanitized' : 'full';
+                        a.download = `pulse-diagnostics-${type}-${new Date().toISOString().split('T')[0]}.json`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
                         URL.revokeObjectURL(url);
-                      }}
-                      class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Export Diagnostics
-                    </button>
+                      };
+                      
+                      return (
+                        <div class="flex gap-2">
+                          <button type="button"
+                            onClick={() => exportDiagnostics(false)}
+                            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            Export Full
+                          </button>
+                          <button type="button"
+                            onClick={() => exportDiagnostics(true)}
+                            class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            Export for GitHub
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                      <strong>Export Full:</strong> Complete data for private troubleshooting<br/>
+                      <strong>Export for GitHub:</strong> Sanitized data safe for public sharing
+                    </p>
                   </div>
                 </div>
               </div>
