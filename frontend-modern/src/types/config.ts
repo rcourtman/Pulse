@@ -39,6 +39,8 @@ export interface SystemConfig {
   theme?: string;                        // Theme preference: 'light' | 'dark' | undefined (system default)
   discoveryEnabled?: boolean;            // Enable/disable network discovery
   discoverySubnet?: string;              // Subnet to scan for discovery (default: 'auto')
+  allowEmbedding?: boolean;              // Allow iframe embedding
+  allowedEmbedOrigins?: string;          // Comma-separated list of allowed origins for embedding
 }
 
 /**

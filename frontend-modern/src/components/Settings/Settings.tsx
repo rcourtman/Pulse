@@ -103,6 +103,10 @@ const Settings: Component = () => {
   const [envOverrides, setEnvOverrides] = createSignal<Record<string, boolean>>({});
   // Connection timeout removed - backend-only setting
   
+  // Iframe embedding settings
+  const [allowEmbedding, setAllowEmbedding] = createSignal(false);
+  const [allowedEmbedOrigins, setAllowedEmbedOrigins] = createSignal('');
+  
   // Update settings
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
@@ -360,6 +364,9 @@ const Settings: Component = () => {
           // Backend defaults to true, so we should respect that
           setDiscoveryEnabled(systemSettings.discoveryEnabled ?? true);  // Default to true if undefined
           setDiscoverySubnet(systemSettings.discoverySubnet || 'auto');
+          // Load embedding settings
+          setAllowEmbedding(systemSettings.allowEmbedding ?? false);
+          setAllowedEmbedOrigins(systemSettings.allowedEmbedOrigins || '');
           // Load auto-update settings
           setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
           setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
@@ -406,7 +413,9 @@ const Settings: Component = () => {
           updateChannel: updateChannel(),
           autoUpdateEnabled: autoUpdateEnabled(),
           autoUpdateCheckInterval: autoUpdateCheckInterval(),
-          autoUpdateTime: autoUpdateTime()
+          autoUpdateTime: autoUpdateTime(),
+          allowEmbedding: allowEmbedding(),
+          allowedEmbedOrigins: allowedEmbedOrigins()
         });
       }
       
@@ -1298,6 +1307,51 @@ const Settings: Component = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                    
+                    {/* Iframe Embedding Settings */}
+                    <div class="mt-4">
+                      <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Iframe Embedding</label>
+                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)</p>
+                      
+                      <div class="space-y-3">
+                        <div class="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="allowEmbedding"
+                            checked={allowEmbedding()}
+                            onChange={(e) => {
+                              setAllowEmbedding(e.currentTarget.checked);
+                              setHasUnsavedChanges(true);
+                            }}
+                            class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                          />
+                          <label for="allowEmbedding" class="text-sm text-gray-700 dark:text-gray-300">
+                            Allow iframe embedding
+                          </label>
+                        </div>
+                        
+                        <Show when={allowEmbedding()}>
+                          <div>
+                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Allowed Embed Origins (optional)</label>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Comma-separated list of origins that can embed Pulse (leave empty for same-origin only)</p>
+                            <input
+                              type="text"
+                              value={allowedEmbedOrigins()}
+                              onChange={(e) => {
+                                setAllowedEmbedOrigins(e.currentTarget.value);
+                                setHasUnsavedChanges(true);
+                              }}
+                              placeholder="https://my.domain, https://dashboard.example.com"
+                              class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                            />
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at <code>my.domain</code>, 
+                              add <code>https://my.domain</code> here.
+                            </p>
+                          </div>
+                        </Show>
                       </div>
                     </div>
                     
