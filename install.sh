@@ -908,7 +908,8 @@ main() {
         fi
         
         # For RC, we need the API, so if it fails just use empty
-        local RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
+        local RC_VERSION=""
+        RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
         
         # Determine default update channel
         UPDATE_CHANNEL="stable"
