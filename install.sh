@@ -346,21 +346,51 @@ create_lxc_container() {
         safe_read "Startup order [99]: " startup
         startup=${startup:-99}
     else
-        # Quick mode - use defaults
-        # But if no valid bridge exists, we must ask the user
+        # Quick mode - but still need to verify critical settings
+        
+        # Network bridge selection
+        echo
+        if [[ -n "$BRIDGES" ]]; then
+            echo "Available network bridges: $BRIDGES"
+        else
+            echo "No network bridges detected"
+        fi
+        
+        # Always ask if default doesn't exist or no bridges found
         if [[ "$DEFAULT_BRIDGE" == "vmbr0" && -n "$BRIDGES" && ! "$BRIDGES" =~ vmbr0 ]]; then
-            echo
-            print_info "No default bridge found. Available bridges: $BRIDGES"
-            safe_read "Please select a network bridge: " bridge
-        elif [[ "$DEFAULT_BRIDGE" == "vmbr0" && -z "$BRIDGES" ]]; then
-            echo
+            print_info "Default bridge vmbr0 not found"
+            safe_read "Select network bridge: " bridge
+        elif [[ -z "$BRIDGES" ]]; then
             print_error "No network bridges detected on this system"
             print_info "You may need to create a bridge first (e.g., vmbr0)"
             safe_read "Enter network bridge name to use: " bridge
         else
-            bridge=$DEFAULT_BRIDGE
+            safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
+            bridge=${bridge:-$DEFAULT_BRIDGE}
         fi
-        storage=$DEFAULT_STORAGE
+        
+        # Storage selection
+        echo
+        if [[ -n "$STORAGE_INFO" ]]; then
+            echo "Available storage pools:"
+            echo "$STORAGE_INFO" | awk '{printf "  %-15s %-8s %5s used\n", $1, $2, $6}'
+        else
+            echo "No storage pools detected"
+        fi
+        
+        # Always ask if default doesn't exist
+        local STORAGE_LIST=$(echo "$STORAGE_INFO" | awk '{print $1}' | paste -sd',' -)
+        if [[ "$DEFAULT_STORAGE" == "local-lvm" && -n "$STORAGE_LIST" && ! "$STORAGE_LIST" =~ local-lvm ]]; then
+            print_info "Default storage local-lvm not found"
+            safe_read "Select storage pool: " storage
+        elif [[ -z "$STORAGE_INFO" ]]; then
+            print_error "No storage pools detected"
+            safe_read "Enter storage pool name to use: " storage
+        else
+            safe_read "Storage [$DEFAULT_STORAGE]: " storage
+            storage=${storage:-$DEFAULT_STORAGE}
+        fi
+        
         static_ip=""
         nameserver=""
         startup=99
