@@ -2120,18 +2120,52 @@ pveum aclmod / -user pulse-monitor@pam -role PVEAuditor%s
 echo "Setting up monitoring permissions..."
 pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
 
-# For Proxmox 8 and below, also need custom role with VM.Monitor
-# Check if we're on PVE 8 or below (VM.Monitor permission exists)
+# Detect Proxmox version and apply appropriate permissions
+# Method 1: Try to check if VM.Monitor exists (reliable for PVE 8 and below)
+HAS_VM_MONITOR=false
 if pveum role list 2>/dev/null | grep -q "VM.Monitor" || 
    pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then
-    # VM.Monitor exists (PVE 8 or below) - create additional role
+    HAS_VM_MONITOR=true
     pveum role delete TestMonitor 2>/dev/null || true
-    pveum role delete PulseMonitor 2>/dev/null || true
+fi
+
+# Method 2: Try to detect PVE version directly
+PVE_VERSION=""
+if command -v pveversion >/dev/null 2>&1; then
+    # Extract major version (e.g., "9" from "pve-manager/9.0.5/...")
+    PVE_VERSION=$(pveversion --verbose 2>/dev/null | grep "pve-manager" | awk -F'/' '{print $2}' | cut -d'.' -f1)
+fi
+
+if [ "$HAS_VM_MONITOR" = true ]; then
+    # PVE 8 or below - VM.Monitor exists
     echo "Detected Proxmox 8 or below - adding VM.Monitor permission"
+    pveum role delete PulseMonitor 2>/dev/null || true
     pveum role add PulseMonitor -privs VM.Monitor
     pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
 else
-    echo "Detected Proxmox 9+ - PVEAuditor role is sufficient"
+    # PVE 9+ - VM.Monitor was removed, need Sys.Audit and Sys.Modify
+    echo "Detected Proxmox 9+ - VM.Monitor was removed, adding Sys.Audit permission"
+    
+    # Create a custom role with required permissions for PVE 9
+    pveum role delete PulseMonitor 2>/dev/null || true
+    
+    # For PVE 9, we need Sys.Audit for basic access and VM.Agent for guest agent
+    # Note: VM.Agent might not exist, so we try multiple permission sets
+    if pveum role add PulseMonitor -privs "Sys.Audit,VM.Agent" 2>/dev/null; then
+        echo "Added Sys.Audit and VM.Agent permissions"
+    elif pveum role add PulseMonitor -privs "Sys.Audit,Sys.Modify" 2>/dev/null; then
+        echo "Added Sys.Audit and Sys.Modify permissions"
+    else
+        # Fallback to just Sys.Audit if others fail
+        pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null || true
+        echo "Added Sys.Audit permission (guest agent access may be limited)"
+    fi
+    
+    pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+    
+    echo "Note: If VM disk usage still shows 0%, you may need to:"
+    echo "  1. Ensure qemu-guest-agent is installed and running in your VMs"
+    echo "  2. Check that the token has privsep=0 (no privilege separation)"
 fi
 
 echo ""
