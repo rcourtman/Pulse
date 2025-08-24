@@ -115,7 +115,7 @@ Yes, ensure WebSocket support is enabled
 ### How to update?
 - **ProxmoxVE LXC**: Type `update` in the LXC console
 - **Docker**: Pull latest image, recreate container  
-- **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash`
+- **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash`
 
 ### Why can't I update from the UI?
 For security reasons, Pulse cannot self-update. The UI will notify you when updates are available and show the appropriate update command for your deployment type.

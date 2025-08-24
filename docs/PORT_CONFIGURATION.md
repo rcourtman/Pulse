@@ -7,7 +7,7 @@ Pulse supports multiple ways to configure the frontend port (default: 7655).
 ### 1. During Installation (Easiest)
 The installer prompts for the port. To skip the prompt, use:
 ```bash
-FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 ### 2. Using systemd override (For existing installations)
