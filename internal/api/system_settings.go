@@ -151,6 +151,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if updates.DiscoverySubnet != "" {
 		settings.DiscoverySubnet = updates.DiscoverySubnet
 	}
+	// Allow clearing of AllowedEmbedOrigins by setting to empty string
+	if _, ok := rawRequest["allowedEmbedOrigins"]; ok {
+		settings.AllowedEmbedOrigins = updates.AllowedEmbedOrigins
+	}
 	
 	// Boolean fields need special handling since false is a valid value
 	if _, ok := rawRequest["autoUpdateEnabled"]; ok {
@@ -158,6 +162,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	if _, ok := rawRequest["discoveryEnabled"]; ok {
 		settings.DiscoveryEnabled = updates.DiscoveryEnabled
+	}
+	if _, ok := rawRequest["allowEmbedding"]; ok {
+		settings.AllowEmbedding = updates.AllowEmbedding
 	}
 
 	// Update the config

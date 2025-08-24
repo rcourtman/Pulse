@@ -265,9 +265,26 @@ func IsLockedOut(identifier string) bool {
 
 // Security Headers Middleware
 func SecurityHeaders(next http.Handler) http.Handler {
+	return SecurityHeadersWithConfig(next, false, "")
+}
+
+// SecurityHeadersWithConfig applies security headers with embedding configuration
+func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOrigins string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Prevent clickjacking
-		w.Header().Set("X-Frame-Options", "DENY")
+		// Configure clickjacking protection based on embedding settings
+		if allowEmbedding {
+			if allowedOrigins != "" {
+				// Use ALLOW-FROM for specific origins (legacy browsers)
+				// Note: Most modern browsers ignore this in favor of CSP frame-ancestors
+				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+			} else {
+				// Allow same-origin embedding
+				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+			}
+		} else {
+			// Deny all embedding
+			w.Header().Set("X-Frame-Options", "DENY")
+		}
 		
 		// Prevent MIME type sniffing
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -275,14 +292,39 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// Enable XSS protection
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		
-		// Content Security Policy
-		w.Header().Set("Content-Security-Policy", 
-			"default-src 'self'; "+
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+ // Needed for React
-			"style-src 'self' 'unsafe-inline'; "+ // Needed for inline styles
-			"img-src 'self' data: blob:; "+
-			"connect-src 'self' ws: wss:; "+ // WebSocket support
-			"font-src 'self' data:;")
+		// Build Content Security Policy
+		cspDirectives := []string{
+			"default-src 'self'",
+			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Needed for React
+			"style-src 'self' 'unsafe-inline'", // Needed for inline styles
+			"img-src 'self' data: blob:",
+			"connect-src 'self' ws: wss:", // WebSocket support
+			"font-src 'self' data:",
+		}
+		
+		// Add frame-ancestors based on embedding settings
+		if allowEmbedding {
+			if allowedOrigins != "" {
+				// Parse comma-separated origins and add them to frame-ancestors
+				origins := strings.Split(allowedOrigins, ",")
+				frameAncestors := "frame-ancestors 'self'"
+				for _, origin := range origins {
+					origin = strings.TrimSpace(origin)
+					if origin != "" {
+						frameAncestors += " " + origin
+					}
+				}
+				cspDirectives = append(cspDirectives, frameAncestors)
+			} else {
+				// Allow same-origin embedding
+				cspDirectives = append(cspDirectives, "frame-ancestors 'self'")
+			}
+		} else {
+			// Deny all embedding
+			cspDirectives = append(cspDirectives, "frame-ancestors 'none'")
+		}
+		
+		w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
 		
 		// Referrer Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
