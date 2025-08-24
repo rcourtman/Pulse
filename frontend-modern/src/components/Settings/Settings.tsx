@@ -1451,7 +1451,7 @@ const Settings: Component = () => {
                               <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
                                 <p>Run the install script:</p>
                                 <code class="block p-1 bg-green-200 dark:bg-green-800 rounded text-xs">
-                                  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+                                  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
                                 </code>
                               </div>
                             </Show>
