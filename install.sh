@@ -44,15 +44,22 @@ safe_read() {
     
     # When script is piped (curl | bash), stdin is the pipe, not the terminal
     # We need to read from /dev/tty for user input
-    if [[ -e /dev/tty ]]; then
-        # TTY is available, read from it
-        echo -n "$prompt" > /dev/tty
-        # Use read with -u to read from file descriptor
-        IFS= read -r "$var_name" < /dev/tty
-    else
-        # No TTY (e.g., in automated environments)
+    if [[ -t 0 ]]; then
+        # stdin is a terminal, read normally
         echo -n "$prompt"
         IFS= read -r "$var_name"
+    else
+        # stdin is not a terminal (piped), try /dev/tty if available
+        if { exec 3< /dev/tty; } 2>/dev/null; then
+            # /dev/tty is available and usable
+            echo -n "$prompt"
+            IFS= read -r "$var_name" <&3
+            exec 3<&-
+        else
+            # No TTY available, read from stdin (which may be piped)
+            echo -n "$prompt"
+            IFS= read -r "$var_name"
+        fi
     fi
 }
 
@@ -1010,8 +1017,9 @@ main() {
                 # Determine if this is an upgrade or downgrade
                 local action_word="Installing"
                 if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
-                    compare_versions "$target_version" "$CURRENT_VERSION"
-                    case $? in
+                    local cmp_result=0
+                    compare_versions "$target_version" "$CURRENT_VERSION" || cmp_result=$?
+                    case $cmp_result in
                         0) action_word="Reinstalling" ;;
                         1) action_word="Updating to" ;;
                         2) action_word="Downgrading to" ;;
