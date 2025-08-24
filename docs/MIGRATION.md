@@ -65,7 +65,7 @@ The export/import process works across all installation methods:
 4. Store passphrase securely (password manager)
 
 ### Disaster Recovery
-1. Install Pulse: `curl -sL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | sudo bash`
+1. Install Pulse: `curl -sL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash`
 2. Import latest backup
 3. System restored in under 5 minutes!
 

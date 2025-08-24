@@ -5,12 +5,12 @@
 The official installer automatically detects your environment and chooses the best installation method:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 The installer will prompt you for the port (default: 7655). To skip the prompt, set the environment variable:
 ```bash
-FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 ## Installation Methods
@@ -61,7 +61,7 @@ pct exec <container-id> -- update
 
 ### For Standard Installations
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 ### For Docker
@@ -76,18 +76,18 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 
 ### Install Specific Version
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.6.0
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.6.0
 ```
 
 ### Install Release Candidate
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --rc
 ```
 
 ## Troubleshooting
 
 ### Permission Denied
-Make sure to run with `sudo` on standard Linux systems.
+If you encounter permission errors, you may need to run with `sudo` on some systems, though most installations (including LXC containers) run as root and don't need it.
 
 ### Container Creation Failed
 Ensure you have:
@@ -102,7 +102,7 @@ sudo netstat -tlnp | grep 7655
 ```
 To use a different port during installation:
 ```bash
-FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+FRONTEND_PORT=8080 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 ## Uninstalling

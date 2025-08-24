@@ -65,7 +65,7 @@ Your infrastructure data is yours alone.
 
 ```bash
 # Recommended: Official installer (auto-detects Proxmox and creates container)
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 
 # Alternative: Docker
 docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
@@ -243,13 +243,13 @@ The ProxmoxVE script handles everything automatically.
 ### Manual Installation (systemd)
 ```bash
 # Update to latest stable
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 
 # Update to latest RC/pre-release  
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --rc
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --rc
 
 # Install specific version
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version v4.5.0-rc.1
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.5.0-rc.1
 ```
 
 ### Docker Updates
@@ -381,7 +381,7 @@ docker rm pulse
 
 ### Manual Install
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 The UI will detect your deployment type and show the appropriate update method when a new version is available.
