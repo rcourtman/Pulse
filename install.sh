@@ -41,19 +41,18 @@ print_header() {
 safe_read() {
     local prompt="$1"
     local var_name="$2"
-    shift 2
-    local read_args="$@"
     
     # When script is piped (curl | bash), stdin is the pipe, not the terminal
     # We need to read from /dev/tty for user input
     if [[ -e /dev/tty ]]; then
         # TTY is available, read from it
         echo -n "$prompt" > /dev/tty
-        IFS= read -r $read_args $var_name < /dev/tty
+        # Use read with -u to read from file descriptor
+        IFS= read -r "$var_name" < /dev/tty
     else
         # No TTY (e.g., in automated environments)
         echo -n "$prompt"
-        IFS= read -r $read_args $var_name
+        IFS= read -r "$var_name"
     fi
 }
 
@@ -958,6 +957,9 @@ main() {
             exit 1
         fi
         
+        # Debug output to see what's happening
+        print_info "DEBUG: You selected option $choice"
+        
         # Determine what action to take based on the dynamic menu
         local action=""
         local target_version=""
@@ -999,6 +1001,9 @@ main() {
         if [[ "$choice" == "$current_choice" ]]; then
             action="cancel"
         fi
+        
+        # Debug: Show what action was determined
+        print_info "DEBUG: Action determined: ${action:-'none'}"
         
         case $action in
             update)
