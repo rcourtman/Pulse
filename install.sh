@@ -335,7 +335,12 @@ create_lxc_container() {
         # Show available storage with usage details
         echo
         echo "Available storage pools:"
-        echo "$STORAGE_INFO" | awk '{printf "  %-15s %-8s %5s used\n", $1, $2, $6}' || echo "  No storage pools found"
+        echo "$STORAGE_INFO" | awk '{
+            # Convert KB to GB for readability
+            avail_gb = $6 / 1048576
+            total_gb = $4 / 1048576
+            printf "  %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n", $1, $2, avail_gb, total_gb, $7
+        }' || echo "  No storage pools found"
         safe_read "Storage [$DEFAULT_STORAGE]: " storage
         storage=${storage:-$DEFAULT_STORAGE}
         
@@ -373,7 +378,12 @@ create_lxc_container() {
         echo
         if [[ -n "$STORAGE_INFO" ]]; then
             echo "Available storage pools:"
-            echo "$STORAGE_INFO" | awk '{printf "  %-15s %-8s %5s used\n", $1, $2, $6}'
+            echo "$STORAGE_INFO" | awk '{
+                # Convert KB to GB for readability
+                avail_gb = $6 / 1048576
+                total_gb = $4 / 1048576
+                printf "  %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n", $1, $2, avail_gb, total_gb, $7
+            }'
         else
             echo "No storage pools detected"
         fi
