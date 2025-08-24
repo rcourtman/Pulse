@@ -936,63 +936,126 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			if res.Status == "running" {
 				// First check if agent is enabled by getting VM status
 				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
-				if err == nil && vmStatus != nil && vmStatus.Agent > 0 {
+				if err != nil {
 					log.Debug().
+						Err(err).
 						Str("instance", instanceName).
 						Str("vm", res.Name).
 						Int("vmid", res.VMID).
-						Msg("VM has agent enabled, attempting to get filesystem info")
-					
-					fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
-					if err == nil && len(fsInfo) > 0 {
+						Msg("Could not get VM status to check guest agent availability")
+				} else if vmStatus != nil {
+					if vmStatus.Agent > 0 {
 						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", res.Name).
-							Int("filesystems", len(fsInfo)).
-							Msg("Got filesystem info from guest agent")
-						
-						// Aggregate disk usage from all filesystems
-						var totalBytes, usedBytes uint64
-						for _, fs := range fsInfo {
-							// Skip special filesystems and mounts
-							if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
-							   strings.HasPrefix(fs.Mountpoint, "/dev") ||
-							   strings.HasPrefix(fs.Mountpoint, "/proc") ||
-							   strings.HasPrefix(fs.Mountpoint, "/sys") ||
-							   strings.HasPrefix(fs.Mountpoint, "/run") ||
-							   fs.Mountpoint == "/boot/efi" {
-								continue
-							}
-							
-							// Only count real filesystems
-							if fs.TotalBytes > 0 {
-								totalBytes += fs.TotalBytes
-								usedBytes += fs.UsedBytes
-							}
-						}
-						
-						// If we got valid data from guest agent, use it
-						if totalBytes > 0 {
-							diskTotal = totalBytes
-							diskUsed = usedBytes
-							diskFree = totalBytes - usedBytes
-							diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
-							
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", res.Name).
-								Uint64("totalBytes", totalBytes).
-								Uint64("usedBytes", usedBytes).
-								Float64("usage", diskUsage).
-								Msg("Using disk usage from guest agent")
-						}
-					} else if err != nil {
-						log.Debug().
-							Err(err).
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
-							Msg("Failed to get filesystem info from guest agent")
+							Int("agent", vmStatus.Agent).
+							Msg("VM has agent enabled in config, attempting to get filesystem info")
+						
+						fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
+						if err != nil {
+							// Log more helpful error messages based on the error type
+							errMsg := err.Error()
+							if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("vmid", res.VMID).
+									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
+							} else if strings.Contains(errMsg, "timeout") {
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("vmid", res.VMID).
+									Msg("Guest agent timeout - agent may be installed but not responding")
+							} else {
+								log.Debug().
+									Err(err).
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("vmid", res.VMID).
+									Msg("Failed to get filesystem info from guest agent")
+							}
+						} else if len(fsInfo) == 0 {
+							log.Info().
+								Str("instance", instanceName).
+								Str("vm", res.Name).
+								Int("vmid", res.VMID).
+								Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems")
+						} else {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", res.Name).
+								Int("filesystems", len(fsInfo)).
+								Msg("Got filesystem info from guest agent")
+							
+							// Aggregate disk usage from all filesystems
+							var totalBytes, usedBytes uint64
+							var skippedFS []string
+							for _, fs := range fsInfo {
+								// Skip special filesystems and mounts
+								if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
+								   strings.HasPrefix(fs.Mountpoint, "/dev") ||
+								   strings.HasPrefix(fs.Mountpoint, "/proc") ||
+								   strings.HasPrefix(fs.Mountpoint, "/sys") ||
+								   strings.HasPrefix(fs.Mountpoint, "/run") ||
+								   fs.Mountpoint == "/boot/efi" {
+									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s)", fs.Mountpoint, fs.Type))
+									continue
+								}
+								
+								// Only count real filesystems
+								if fs.TotalBytes > 0 {
+									totalBytes += fs.TotalBytes
+									usedBytes += fs.UsedBytes
+									log.Debug().
+										Str("instance", instanceName).
+										Str("vm", res.Name).
+										Str("mountpoint", fs.Mountpoint).
+										Str("type", fs.Type).
+										Uint64("total", fs.TotalBytes).
+										Uint64("used", fs.UsedBytes).
+										Msg("Including filesystem in disk usage calculation")
+								}
+							}
+							
+							if len(skippedFS) > 0 {
+								log.Debug().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Strs("skipped", skippedFS).
+									Msg("Skipped special filesystems")
+							}
+							
+							// If we got valid data from guest agent, use it
+							if totalBytes > 0 {
+								diskTotal = totalBytes
+								diskUsed = usedBytes
+								diskFree = totalBytes - usedBytes
+								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+								
+								log.Debug().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Uint64("totalBytes", totalBytes).
+									Uint64("usedBytes", usedBytes).
+									Float64("usage", diskUsage).
+									Msg("Using disk usage from guest agent")
+							} else {
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("filesystems_found", len(fsInfo)).
+									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+							}
+						}
+					} else {
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", res.Name).
+							Int("vmid", res.VMID).
+							Int("agent", vmStatus.Agent).
+							Msg("VM does not have guest agent enabled in config")
 					}
 				}
 			}
@@ -1244,18 +1307,48 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Str("vm", vm.Name).
 					Int("vmid", vm.VMID).
 					Int("agent", vm.Agent).
-					Msg("VM has agent enabled, attempting to get filesystem info")
+					Msg("VM has agent enabled in config, attempting to get filesystem info (legacy API)")
 				
 				fsInfo, err := client.GetVMFSInfo(ctx, node.Node, vm.VMID)
-				if err == nil && len(fsInfo) > 0 {
+				if err != nil {
+					// Log more helpful error messages based on the error type
+					errMsg := err.Error()
+					if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM (legacy API)")
+					} else if strings.Contains(errMsg, "timeout") {
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
+					} else {
+						log.Debug().
+							Err(err).
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Msg("Failed to get filesystem info from guest agent (legacy API)")
+					}
+				} else if len(fsInfo) == 0 {
+					log.Info().
+						Str("instance", instanceName).
+						Str("vm", vm.Name).
+						Int("vmid", vm.VMID).
+						Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems (legacy API)")
+				} else {
 					log.Debug().
 						Str("instance", instanceName).
 						Str("vm", vm.Name).
 						Int("filesystems", len(fsInfo)).
-						Msg("Got filesystem info from guest agent")
+						Msg("Got filesystem info from guest agent (legacy API)")
 					// Aggregate disk usage from all filesystems
 					// Focus on actual filesystems, skip special mounts like /dev, /proc, /sys
 					var totalBytes, usedBytes uint64
+					var skippedFS []string
 					for _, fs := range fsInfo {
 						// Skip special filesystems and mounts
 						if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
@@ -1264,6 +1357,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						   strings.HasPrefix(fs.Mountpoint, "/sys") ||
 						   strings.HasPrefix(fs.Mountpoint, "/run") ||
 						   fs.Mountpoint == "/boot/efi" {
+							skippedFS = append(skippedFS, fmt.Sprintf("%s(%s)", fs.Mountpoint, fs.Type))
 							continue
 						}
 						
@@ -1271,7 +1365,23 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						if fs.TotalBytes > 0 {
 							totalBytes += fs.TotalBytes
 							usedBytes += fs.UsedBytes
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Str("mountpoint", fs.Mountpoint).
+								Str("type", fs.Type).
+								Uint64("total", fs.TotalBytes).
+								Uint64("used", fs.UsedBytes).
+								Msg("Including filesystem in disk usage calculation (legacy API)")
 						}
+					}
+					
+					if len(skippedFS) > 0 {
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Strs("skipped", skippedFS).
+							Msg("Skipped special filesystems (legacy API)")
 					}
 					
 					// If we got valid data from guest agent, use it
@@ -1288,25 +1398,23 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Uint64("totalBytes", totalBytes).
 							Uint64("usedBytes", usedBytes).
 							Float64("usage", diskUsage).
-							Msg("Got disk usage from guest agent")
+							Msg("Got disk usage from guest agent (legacy API)")
+					} else {
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("filesystems_found", len(fsInfo)).
+							Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts) (legacy API)")
 					}
-				} else if err != nil {
-					// Log at debug level - guest agent might be temporarily unavailable
-					log.Debug().
-						Err(err).
-						Str("instance", instanceName).
-						Str("vm", vm.Name).
-						Int("vmid", vm.VMID).
-						Msg("Failed to get filesystem info from guest agent")
 				}
 			} else {
-				if vm.Agent != 1 {
+				if vm.Agent == 0 {
 					log.Debug().
 						Str("instance", instanceName).
 						Str("vm", vm.Name).
 						Int("vmid", vm.VMID).
 						Int("agent", vm.Agent).
-						Msg("VM does not have guest agent enabled")
+						Msg("VM does not have guest agent enabled in config (legacy API)")
 				}
 			}
 
