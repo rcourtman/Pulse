@@ -925,12 +925,12 @@ main() {
         
         # Show update options based on available versions
         local menu_option=1
-        if [[ -n "$STABLE_VERSION" ]]; then
+        if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
             echo "${menu_option}) Update to $STABLE_VERSION (stable)"
             ((menu_option++))
         fi
         
-        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
             echo "${menu_option}) Update to $RC_VERSION (release candidate)"
             ((menu_option++))
         fi
@@ -961,7 +961,7 @@ main() {
         local current_choice=1
         
         # Check if user selected stable update
-        if [[ -n "$STABLE_VERSION" ]]; then
+        if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
             if [[ "$choice" == "$current_choice" ]]; then
                 action="update"
                 target_version="$STABLE_VERSION"
@@ -971,7 +971,7 @@ main() {
         fi
         
         # Check if user selected RC update
-        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
             if [[ "$choice" == "$current_choice" ]]; then
                 action="update"
                 target_version="$RC_VERSION"
