@@ -600,8 +600,8 @@ check_existing_installation() {
 install_dependencies() {
     print_info "Installing dependencies..."
     
-    apt-get update -qq
-    apt-get install -y -qq curl wget
+    apt-get update -qq >/dev/null 2>&1
+    apt-get install -y -qq curl wget >/dev/null 2>&1
 }
 
 create_user() {
@@ -803,12 +803,12 @@ ReadWritePaths=$INSTALL_DIR $CONFIG_DIR
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
+    systemctl daemon-reload >/dev/null 2>&1
 }
 
 start_pulse() {
     print_info "Starting Pulse..."
-    systemctl enable $SERVICE_NAME
+    systemctl enable $SERVICE_NAME >/dev/null 2>&1
     systemctl start $SERVICE_NAME
     
     # Wait for service to start
@@ -1037,7 +1037,7 @@ main() {
                 rm -f /etc/systemd/system/$SERVICE_NAME.service
                 rm -f /etc/systemd/system/pulse.service
                 rm -f /etc/systemd/system/pulse-backend.service
-                systemctl daemon-reload
+                systemctl daemon-reload >/dev/null 2>&1
                 
                 # Remove installation directory
                 rm -rf "$INSTALL_DIR"
