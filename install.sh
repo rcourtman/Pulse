@@ -760,7 +760,7 @@ Environment="PULSE_DATA_DIR=$CONFIG_DIR"
 EOF
 
     # Add port configuration if not default
-    if [[ "$FRONTEND_PORT" != "7655" ]]; then
+    if [[ "${FRONTEND_PORT:-7655}" != "7655" ]]; then
         cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF
 Environment="FRONTEND_PORT=$FRONTEND_PORT"
 EOF
@@ -804,7 +804,7 @@ print_completion() {
     
     # Get the port from the service file or use default
     local PORT="${FRONTEND_PORT:-7655}"
-    if [[ -z "$FRONTEND_PORT" ]] && [[ -f "/etc/systemd/system/$SERVICE_NAME.service" ]]; then
+    if [[ -z "${FRONTEND_PORT:-}" ]] && [[ -f "/etc/systemd/system/$SERVICE_NAME.service" ]]; then
         # Try to extract port from service file
         PORT=$(grep -oP 'FRONTEND_PORT=\K\d+' "/etc/systemd/system/$SERVICE_NAME.service" 2>/dev/null || echo "7655")
     fi
