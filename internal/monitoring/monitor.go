@@ -968,6 +968,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
 									Msg("Guest agent timeout - agent may be installed but not responding")
+							} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
+								// Permission error - this is the PVE 9 issue
+								log.Warn().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("vmid", res.VMID).
+									Str("error", errMsg).
+									Msg("Permission denied accessing guest agent API. On PVE 9+, re-run the setup script to fix permissions")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1325,6 +1333,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
 							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
+					} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
+						// Permission error - this is the PVE 9 issue
+						log.Warn().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Str("error", errMsg).
+							Msg("Permission denied accessing guest agent API. On PVE 9+, re-run the setup script to fix permissions (legacy API)")
 					} else {
 						log.Debug().
 							Err(err).
