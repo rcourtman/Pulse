@@ -958,8 +958,7 @@ main() {
         fi
         
         # Debug output to see what's happening
-        print_info "DEBUG: You selected option $choice"
-        print_info "DEBUG: RC_VERSION=$RC_VERSION, STABLE_VERSION=$STABLE_VERSION, CURRENT_VERSION=$CURRENT_VERSION"
+        # print_info "DEBUG: You selected option $choice"
         
         # Determine what action to take based on the dynamic menu
         local action=""
@@ -978,12 +977,10 @@ main() {
         
         # Check if user selected RC update
         if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
-            print_info "DEBUG: RC section - choice=$choice, current_choice=$current_choice"
             if [[ "$choice" == "$current_choice" ]]; then
                 action="update"
                 target_version="$RC_VERSION"
                 UPDATE_CHANNEL="rc"
-                print_info "DEBUG: RC update selected, target=$target_version"
             fi
             ((current_choice++))
         fi
@@ -1006,7 +1003,7 @@ main() {
         fi
         
         # Debug: Show what action was determined
-        print_info "DEBUG: Action determined: ${action:-'none'}"
+        # print_info "DEBUG: Action determined: ${action:-'none'}"
         
         case $action in
             update)
@@ -1028,6 +1025,7 @@ main() {
                 download_pulse
                 start_pulse
                 print_completion
+                exit 0
                 ;;
             reinstall)
                 backup_existing
@@ -1038,6 +1036,7 @@ main() {
                 install_systemd_service
                 start_pulse
                 print_completion
+                exit 0
                 ;;
             remove)
                 # Stop and disable service
