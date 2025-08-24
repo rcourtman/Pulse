@@ -969,13 +969,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Int("vmid", res.VMID).
 									Msg("Guest agent timeout - agent may be installed but not responding")
 							} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-								// Permission error - this is the PVE 9 issue
-								log.Warn().
+								// Permission error - known PVE 9 limitation with API tokens
+								// Guest agent get-fsinfo doesn't work with tokens on PVE 9, only root@pam
+								log.Debug().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
 									Str("error", errMsg).
-									Msg("Permission denied accessing guest agent API. On PVE 9+, re-run the setup script to fix permissions")
+									Msg("Guest agent API permission denied. Known PVE 9 limitation - API tokens cannot access get-fsinfo even with correct permissions. Use root@pam for full VM disk monitoring")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1334,13 +1335,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Int("vmid", vm.VMID).
 							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
 					} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-						// Permission error - this is the PVE 9 issue
-						log.Warn().
+						// Permission error - known PVE 9 limitation with API tokens
+						// Guest agent get-fsinfo doesn't work with tokens on PVE 9, only root@pam
+						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
 							Str("error", errMsg).
-							Msg("Permission denied accessing guest agent API. On PVE 9+, re-run the setup script to fix permissions (legacy API)")
+							Msg("Guest agent API permission denied (legacy API). Known PVE 9 limitation - API tokens cannot access get-fsinfo even with correct permissions. Use root@pam for full VM disk monitoring")
 					} else {
 						log.Debug().
 							Err(err).
