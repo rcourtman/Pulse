@@ -355,7 +355,33 @@ export function Dashboard(props: DashboardProps) {
               <For each={props.nodes}>
                 {(node) => (
                   <ComponentErrorBoundary name="CompactNodeCard">
-                    <CompactNodeCard node={node} variant="compact" />
+                    <CompactNodeCard 
+                      node={node} 
+                      variant="compact"
+                      isSelected={search().includes(`node:${node.name}`)}
+                      onClick={() => {
+                        const currentSearch = search();
+                        const nodeFilter = `node:${node.name}`;
+                        
+                        // Check if this node filter is already in the search
+                        if (currentSearch.includes(nodeFilter)) {
+                          // Remove the node filter
+                          setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                          setIsSearchLocked(false);
+                        } else {
+                          // Clear any existing node: filters and add the new one
+                          const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                          const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                          setSearch(newSearch);
+                          setIsSearchLocked(true);
+                          
+                          // Expand filters if collapsed
+                          if (!showFilters()) {
+                            setShowFilters(true);
+                          }
+                        }
+                      }}
+                    />
                   </ComponentErrorBoundary>
                 )}
               </For>
@@ -368,7 +394,33 @@ export function Dashboard(props: DashboardProps) {
               <For each={props.nodes}>
                 {(node) => (
                   <ComponentErrorBoundary name="CompactNodeCard">
-                    <CompactNodeCard node={node} variant="ultra-compact" />
+                    <CompactNodeCard 
+                      node={node} 
+                      variant="ultra-compact"
+                      isSelected={search().includes(`node:${node.name}`)}
+                      onClick={() => {
+                        const currentSearch = search();
+                        const nodeFilter = `node:${node.name}`;
+                        
+                        // Check if this node filter is already in the search
+                        if (currentSearch.includes(nodeFilter)) {
+                          // Remove the node filter
+                          setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                          setIsSearchLocked(false);
+                        } else {
+                          // Clear any existing node: filters and add the new one
+                          const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                          const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                          setSearch(newSearch);
+                          setIsSearchLocked(true);
+                          
+                          // Expand filters if collapsed
+                          if (!showFilters()) {
+                            setShowFilters(true);
+                          }
+                        }
+                      }}
+                    />
                   </ComponentErrorBoundary>
                 )}
               </For>
