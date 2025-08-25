@@ -988,7 +988,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 9: API tokens may not be able to access guest agent data")
+									Msg("• Check token has PVEAuditor role (includes VM.GuestAgent.Audit on PVE 9)")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -996,7 +996,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Some PVE 9 users report it works in cluster configs, but results vary")
+									Msg("• Verify guest agent is installed and running inside the VM")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1370,7 +1370,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 9: API tokens may not be able to access guest agent data")
+							Msg("• Check token has PVEAuditor role (includes VM.GuestAgent.Audit on PVE 9)")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
@@ -1378,7 +1378,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Some PVE 9 users report it works in cluster configs, but results vary")
+							Msg("• Verify guest agent is installed and running inside the VM")
 					} else {
 						log.Debug().
 							Err(err).
