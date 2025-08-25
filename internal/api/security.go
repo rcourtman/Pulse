@@ -1,8 +1,6 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"net/http"
 	"strings"
 	"sync"
@@ -19,57 +17,16 @@ type CSRFToken struct {
 	Expires time.Time
 }
 
-var (
-	csrfTokens = make(map[string]*CSRFToken)
-	csrfMu     sync.RWMutex
-)
+// CSRF tokens are now managed by the persistent CSRFTokenStore
 
 // generateCSRFToken creates a new CSRF token for a session
 func generateCSRFToken(sessionID string) string {
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		log.Error().Err(err).Msg("Failed to generate CSRF token")
-		return ""
-	}
-	
-	token := base64.URLEncoding.EncodeToString(tokenBytes)
-	
-	csrfMu.Lock()
-	csrfTokens[sessionID] = &CSRFToken{
-		Token:   token,
-		Expires: time.Now().Add(4 * time.Hour),
-	}
-	csrfMu.Unlock()
-	
-	return token
+	return GetCSRFStore().GenerateCSRFToken(sessionID)
 }
 
 // validateCSRFToken checks if a CSRF token is valid for a session
 func validateCSRFToken(sessionID, token string) bool {
-	csrfMu.RLock()
-	defer csrfMu.RUnlock()
-	
-	csrfToken, exists := csrfTokens[sessionID]
-	if !exists {
-		// No CSRF token for this session
-		// This can happen if:
-		// 1. Session is old/invalid
-		// 2. Server restarted (in-memory storage)
-		// 3. Auth was disabled after session created
-		
-		// If the server was restarted, we lost the in-memory CSRF tokens
-		// In this case, we should accept the request but generate a new CSRF token
-		// For now, we'll just skip CSRF check for this edge case
-		log.Debug().Str("session", sessionID[:8]+"...").Msg("No CSRF token found for session (possibly server restart)")
-		// Return true to allow the request through - the session itself provides auth
-		return true
-	}
-	
-	if time.Now().After(csrfToken.Expires) {
-		return false
-	}
-	
-	return csrfToken.Token == token
+	return GetCSRFStore().ValidateCSRFToken(sessionID, token)
 }
 
 // CheckCSRF validates CSRF token for state-changing requests
@@ -394,15 +351,11 @@ func InvalidateUserSessions(user string) {
 	
 	sessionIDs := allSessions[user]
 	for _, sid := range sessionIDs {
-		// Delete from main session store
-		sessionMu.Lock()
-		delete(sessions, sid)
-		sessionMu.Unlock()
+		// Delete from persistent session store
+		GetSessionStore().DeleteSession(sid)
 		
 		// Delete CSRF tokens
-		csrfMu.Lock()
-		delete(csrfTokens, sid)
-		csrfMu.Unlock()
+		GetCSRFStore().DeleteCSRFToken(sid)
 	}
 	
 	delete(allSessions, user)

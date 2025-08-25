@@ -14,11 +14,27 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Simple session store - in production you'd use Redis or similar
+// Global session store instance
 var (
-	sessions = make(map[string]time.Time)
-	sessionMu sync.RWMutex
+	sessionStore *SessionStore
+	sessionOnce  sync.Once
 )
+
+// InitSessionStore initializes the persistent session store
+func InitSessionStore(dataPath string) {
+	sessionOnce.Do(func() {
+		sessionStore = NewSessionStore(dataPath)
+	})
+}
+
+// GetSessionStore returns the global session store instance
+func GetSessionStore() *SessionStore {
+	if sessionStore == nil {
+		// Initialize with default path if not already initialized
+		InitSessionStore("/etc/pulse")
+	}
+	return sessionStore
+}
 
 // detectProxy checks if the request is coming through a reverse proxy
 func detectProxy(r *http.Request) bool {
@@ -88,26 +104,7 @@ func generateSessionToken() string {
 
 // ValidateSession checks if a session token is valid
 func ValidateSession(token string) bool {
-	sessionMu.RLock()
-	defer sessionMu.RUnlock()
-	
-	expiry, exists := sessions[token]
-	if !exists {
-		return false
-	}
-	
-	// Check if expired
-	if time.Now().After(expiry) {
-		// Clean up expired session
-		sessionMu.RUnlock()
-		sessionMu.Lock()
-		delete(sessions, token)
-		sessionMu.Unlock()
-		sessionMu.RLock()
-		return false
-	}
-	
-	return true
+	return GetSessionStore().ValidateSession(token)
 }
 
 // CheckProxyAuth validates proxy authentication headers
@@ -364,10 +361,10 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									return false
 								}
 								
-								// Store session
-								sessionMu.Lock()
-								sessions[token] = time.Now().Add(24 * time.Hour)
-								sessionMu.Unlock()
+								// Store session persistently
+								userAgent := r.Header.Get("User-Agent")
+								clientIP := GetClientIP(r)
+								GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
 								
 								// Track session for user
 								TrackUserSession(parts[0], token)
