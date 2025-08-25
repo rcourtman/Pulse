@@ -112,7 +112,7 @@ GET /api/version
 Response:
 ```json
 {
-  "version": "v4.2.1",
+  "version": "v4.8.0",
   "build": "release",
   "runtime": "go",
   "channel": "stable",
@@ -172,6 +172,33 @@ Get snapshot information for VMs and containers.
 
 ```bash
 GET /api/snapshots
+```
+
+### Guest Metadata
+Manage custom metadata for VMs and containers (e.g., console URLs).
+
+```bash
+GET /api/guests/metadata              # Get all guest metadata
+GET /api/guests/metadata/<guest-id>   # Get metadata for specific guest
+PUT /api/guests/metadata/<guest-id>   # Update guest metadata
+DELETE /api/guests/metadata/<guest-id> # Remove guest metadata
+```
+
+### Network Discovery
+Discover Proxmox nodes on your network.
+
+```bash
+GET /api/discover     # Get cached discovery results (updates every 5 minutes)
+```
+
+Note: Manual subnet scanning via POST is currently not available through the API.
+
+### System Settings
+Manage system-wide settings.
+
+```bash
+GET /api/system/settings         # Get current system settings
+POST /api/system/settings/update  # Update system settings
 ```
 
 ## Configuration
@@ -372,8 +399,8 @@ Comprehensive alert management system.
 
 ```bash
 # Alert Configuration
-GET /api/alerts/config                # Get alert configuration
-PUT /api/alerts/config                # Update alert configuration
+GET /api/alerts/                     # Get alert configuration and status
+POST /api/alerts/                    # Update alert settings
 
 # Alert Monitoring
 GET /api/alerts/active                # Get currently active alerts
@@ -383,6 +410,15 @@ DELETE /api/alerts/history            # Clear alert history
 # Alert Actions
 POST /api/alerts/<id>/acknowledge    # Acknowledge an alert
 POST /api/alerts/<id>/clear          # Clear a specific alert
+```
+
+### Notification Management
+Manage notification destinations and history.
+
+```bash
+GET /api/notifications/               # Get notification configuration
+POST /api/notifications/              # Update notification settings
+GET /api/notifications/history        # Get notification history
 ```
 
 ## Auto-Registration

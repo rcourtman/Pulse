@@ -2137,6 +2137,21 @@ if [ "$HAS_VM_MONITOR" = true ]; then
     pveum role delete PulseMonitor 2>/dev/null || true
     pveum role add PulseMonitor -privs VM.Monitor
     pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+    
+    echo ""
+    echo "ℹ️  Note for Proxmox 8 VM Disk Monitoring:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "If VM disk usage shows 0%, check that:"
+    echo "  1. qemu-guest-agent is installed and running in the VM"
+    echo "  2. Your token has privilege separation disabled (privsep=0)"
+    echo ""
+    echo "To check token privsep status:"
+    echo "  pveum user token list pulse-monitor@pam | grep %s"
+    echo ""
+    echo "If privsep=1, recreate the token:"
+    echo "  pveum user token remove pulse-monitor@pam %s"
+    echo "  pveum user token add pulse-monitor@pam %s --privsep 0"
+    echo ""
 else
     # PVE 9+ - VM.Monitor was removed
     echo "Detected Proxmox 9+ - VM.Monitor was removed"
@@ -2159,12 +2174,12 @@ else
     echo ""
     echo "This is a known Proxmox issue where guest agent data (get-fsinfo)"
     echo "is not accessible to API tokens, even with correct permissions."
-    echo "Proxmox's own web UI also shows 0% for VM disk usage."
+    echo "Proxmox's own web UI also shows 0% for VM disk usage (bug #1373)."
     echo ""
     echo "Workarounds:"
     echo "  1. Use root@pam credentials instead of API tokens (full access)"
     echo "  2. Container (LXC) disk usage works correctly with tokens"
-    echo "  3. Wait for Proxmox to fix this upstream (bug #1373)"
+    echo "  3. Wait for Proxmox to fix this upstream"
     echo ""
     echo "Note: qemu-guest-agent must be installed in VMs for any disk"
     echo "monitoring to work. The data exists but token access is restricted."
