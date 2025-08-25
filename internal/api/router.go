@@ -37,6 +37,10 @@ type Router struct {
 
 // NewRouter creates a new router instance
 func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) http.Handler {
+	// Initialize persistent session and CSRF stores
+	InitSessionStore(cfg.DataPath)
+	InitCSRFStore(cfg.DataPath)
+	
 	r := &Router{
 		mux:           http.NewServeMux(),
 		config:        cfg,
@@ -61,10 +65,15 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		allowedOrigins = systemSettings.AllowedEmbedOrigins
 	}
 	
-	// Apply security headers with embedding configuration
-	// Then wrap with error handler middleware  
+	// Apply middleware chain:
+	// 1. Universal rate limiting (outermost to stop attacks early)
+	// 2. Error handling
+	// 3. Security headers with embedding configuration
 	// Note: TimeoutHandler breaks WebSocket upgrades
-	return ErrorHandler(SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins))
+	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins)
+	handler = ErrorHandler(handler)
+	handler = UniversalRateLimitMiddleware(handler)
+	return handler
 }
 
 // handleDiscovery returns cached discovery results
@@ -124,7 +133,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
 	r.mux.HandleFunc("/api/charts", r.handleCharts)
-	r.mux.HandleFunc("/api/diagnostics", r.handleDiagnostics)
+	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
 	r.mux.HandleFunc("/api/config", r.handleConfig)
 	r.mux.HandleFunc("/api/backups", r.handleBackups)
 	r.mux.HandleFunc("/api/backups/", r.handleBackups)
@@ -389,19 +398,37 @@ func (r *Router) setupRoutes() {
 		}
 	})
 	
-	// Recovery endpoint - only accessible from localhost
+	// Initialize recovery token store
+	InitRecoveryTokenStore(r.config.DataPath)
+	
+	// Recovery endpoint - requires localhost access OR valid recovery token
 	r.mux.HandleFunc("/api/security/recovery", func(w http.ResponseWriter, req *http.Request) {
-		// Only allow from localhost
+		// Get client IP
 		ip := strings.Split(req.RemoteAddr, ":")[0]
-		if ip != "127.0.0.1" && ip != "::1" && ip != "localhost" {
-			http.Error(w, "Recovery endpoint only accessible from localhost", http.StatusForbidden)
+		isLocalhost := ip == "127.0.0.1" || ip == "::1" || ip == "localhost"
+		
+		// Check for recovery token in header
+		recoveryToken := req.Header.Get("X-Recovery-Token")
+		hasValidToken := false
+		if recoveryToken != "" {
+			hasValidToken = GetRecoveryTokenStore().ValidateRecoveryTokenConstantTime(recoveryToken, ip)
+		}
+		
+		// Only allow from localhost OR with valid recovery token
+		if !isLocalhost && !hasValidToken {
+			log.Warn().
+				Str("ip", ip).
+				Bool("has_token", recoveryToken != "").
+				Msg("Unauthorized recovery endpoint access attempt")
+			http.Error(w, "Recovery endpoint requires localhost access or valid recovery token", http.StatusForbidden)
 			return
 		}
 		
 		if req.Method == http.MethodPost {
 			// Parse action
 			var recoveryRequest struct {
-				Action string `json:"action"`
+				Action   string `json:"action"`
+				Duration int    `json:"duration,omitempty"` // Duration in minutes for token generation
 			}
 			
 			if err := json.NewDecoder(req.Body).Decode(&recoveryRequest); err != nil {
@@ -412,17 +439,48 @@ func (r *Router) setupRoutes() {
 			response := map[string]interface{}{}
 			
 			switch recoveryRequest.Action {
+			case "generate_token":
+				// Only allow token generation from localhost
+				if !isLocalhost {
+					http.Error(w, "Token generation only allowed from localhost", http.StatusForbidden)
+					return
+				}
+				
+				// Default to 15 minutes if not specified
+				duration := 15
+				if recoveryRequest.Duration > 0 && recoveryRequest.Duration <= 60 {
+					duration = recoveryRequest.Duration
+				}
+				
+				token, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Duration(duration) * time.Minute)
+				if err != nil {
+					response["success"] = false
+					response["message"] = fmt.Sprintf("Failed to generate recovery token: %v", err)
+				} else {
+					response["success"] = true
+					response["token"] = token
+					response["expires_in_minutes"] = duration
+					response["message"] = fmt.Sprintf("Recovery token generated. Valid for %d minutes.", duration)
+					log.Warn().
+						Str("ip", ip).
+						Int("duration_minutes", duration).
+						Msg("Recovery token generated")
+				}
+				
 			case "disable_auth":
 				// Temporarily disable auth by creating recovery file
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\n", time.Now().Format(time.RFC3339))
+				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\nEnabled by: %s\n", time.Now().Format(time.RFC3339), ip)
 				if err := os.WriteFile(recoveryFile, []byte(content), 0600); err != nil {
 					response["success"] = false
 					response["message"] = fmt.Sprintf("Failed to enable recovery mode: %v", err)
 				} else {
 					response["success"] = true
 					response["message"] = "Recovery mode enabled. Auth disabled for localhost. Delete .auth_recovery file to re-enable."
-					log.Warn().Msg("AUTH RECOVERY: Authentication disabled for localhost via recovery endpoint")
+					log.Warn().
+						Str("ip", ip).
+						Bool("via_token", hasValidToken).
+						Msg("AUTH RECOVERY: Authentication disabled via recovery endpoint")
 				}
 				
 			case "enable_auth":
@@ -1144,14 +1202,10 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	
 	// Delete the session if it exists
 	if sessionToken != "" {
-		sessionMu.Lock()
-		delete(sessions, sessionToken)
-		sessionMu.Unlock()
+		GetSessionStore().DeleteSession(sessionToken)
 		
 		// Also delete CSRF token if exists
-		csrfMu.Lock()
-		delete(csrfTokens, sessionToken)
-		csrfMu.Unlock()
+		GetCSRFStore().DeleteCSRFToken(sessionToken)
 	}
 	
 	// Get appropriate cookie settings based on proxy detection (consistent with login)
