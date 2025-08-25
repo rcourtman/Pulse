@@ -992,11 +992,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 8: If you added this node before v4.7, re-run the setup script to add VM.Monitor permission")
+									Msg("• Proxmox 8: Re-run setup script to add VM.Monitor permission if added before v4.7")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("Workaround: Grant VM.Monitor permission to your API token user or accept that VM disk usage will show 0%")
+									Msg("Unfortunately, there's no working workaround for API tokens on PVE 9 - VM disk will show 0%")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1374,11 +1374,11 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 8: If you added this node before v4.7, re-run the setup script to add VM.Monitor permission")
+							Msg("• Proxmox 8: Re-run setup script to add VM.Monitor permission if added before v4.7")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("Workaround: Grant VM.Monitor permission to your API token user or accept that VM disk usage will show 0%")
+							Msg("Unfortunately, there's no working workaround for API tokens on PVE 9 - VM disk will show 0%")
 					} else {
 						log.Debug().
 							Err(err).
