@@ -425,7 +425,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
   
-  const toggleDisabled = (resourceId: string) => {
+  const toggleDisabled = (resourceId: string, forceState?: boolean) => {
     // Flatten grouped guests to find the resource
     const allGuests = Object.values(guestsGroupedByNode()).flat();
     const allResources = [...allGuests, ...storageWithOverrides()];
@@ -437,7 +437,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     // Determine the current disabled state - check the resource's current state, not the override
     const currentDisabledState = resource.disabled;
-    const newDisabledState = !currentDisabledState;
+    const newDisabledState = forceState !== undefined ? forceState : !currentDisabledState;
     
     // Clean the thresholds to exclude 'disabled' if it got in there
     const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
@@ -500,7 +500,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
   
-  const toggleNodeConnectivity = (nodeId: string) => {
+  const toggleNodeConnectivity = (nodeId: string, forceState?: boolean) => {
     const node = nodesWithOverrides().find(r => r.id === nodeId);
     if (!node || node.type !== 'node') return;
     
@@ -509,7 +509,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     // Determine the current state
     const currentDisableConnectivity = existingOverride?.disableConnectivity || false;
-    const newDisableConnectivity = !currentDisableConnectivity;
+    const newDisableConnectivity = forceState !== undefined ? forceState : !currentDisableConnectivity;
     
     // Clean the thresholds to exclude any unwanted fields
     const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
