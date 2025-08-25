@@ -99,9 +99,8 @@ This is usually one of these issues:
 **Proxmox 8**: Check that:
 1. QEMU Guest Agent is installed and running in the VM
 2. Your API token has `VM.Monitor` permission
-3. Token has privilege separation disabled (`privsep=0`)
-   - Check with: `pveum user token list pulse-monitor@pam | grep pulse-token`
-   - If privsep=1, recreate: `pveum user token add pulse-monitor@pam pulse-token --privsep 0`
+   - If you added this node before Pulse v4.7, you need to re-run the setup script
+   - Or manually add: `pveum role add PulseMonitor -privs VM.Monitor && pveum aclmod / -user pulse-monitor@pam -role PulseMonitor`
 
 **All versions**: 
 - Guest agent must be installed: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)

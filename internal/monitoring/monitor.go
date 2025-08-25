@@ -982,7 +982,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 8: Ensure token has VM.Monitor permission and privsep=0")
+									Msg("• Proxmox 8: If you added this node before v4.7, re-run the setup script to add VM.Monitor permission")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -1358,7 +1358,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 8: Ensure token has VM.Monitor permission and privsep=0")
+							Msg("• Proxmox 8: If you added this node before v4.7, re-run the setup script to add VM.Monitor permission")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
