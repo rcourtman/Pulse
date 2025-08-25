@@ -636,9 +636,19 @@ compare_versions() {
     local v1="${1#v}"  # Remove 'v' prefix
     local v2="${2#v}"
     
-    # Split versions into parts
-    IFS='.' read -ra V1_PARTS <<< "$v1"
-    IFS='.' read -ra V2_PARTS <<< "$v2"
+    # Strip any pre-release suffix (e.g., -rc.1, -beta, etc.)
+    local base_v1="${v1%%-*}"
+    local base_v2="${v2%%-*}"
+    local suffix_v1="${v1#*-}"
+    local suffix_v2="${v2#*-}"
+    
+    # If no suffix, suffix equals the full version
+    [[ "$suffix_v1" == "$v1" ]] && suffix_v1=""
+    [[ "$suffix_v2" == "$v2" ]] && suffix_v2=""
+    
+    # Split base versions into parts
+    IFS='.' read -ra V1_PARTS <<< "$base_v1"
+    IFS='.' read -ra V2_PARTS <<< "$base_v2"
     
     # Compare major.minor.patch
     for i in 0 1 2; do
@@ -650,6 +660,21 @@ compare_versions() {
             return 2
         fi
     done
+    
+    # Base versions are equal, now compare suffixes
+    # No suffix (stable) > rc suffix
+    if [[ -z "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
+        return 1  # v1 (stable) > v2 (rc)
+    elif [[ -n "$suffix_v1" ]] && [[ -z "$suffix_v2" ]]; then
+        return 2  # v1 (rc) < v2 (stable)
+    elif [[ -n "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
+        # Both have suffixes, compare them lexicographically
+        if [[ "$suffix_v1" > "$suffix_v2" ]]; then
+            return 1
+        elif [[ "$suffix_v1" < "$suffix_v2" ]]; then
+            return 2
+        fi
+    fi
     
     return 0  # versions are equal
 }
