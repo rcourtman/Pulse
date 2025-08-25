@@ -13,7 +13,8 @@ interface ResourceTableProps {
   onRemoveOverride: (resourceId: string) => void;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
-  onBatchToggleAlerts?: (resourceIds: string[], enable: boolean) => void;
+  onBatchToggleNodeConnectivity?: (nodeIds: string[], targetState: boolean) => void;
+  onBatchToggleDisabled?: (resourceIds: string[], targetState: boolean) => void;
   editingId: () => string | null;
   editingThresholds: () => Record<string, any>;
   setEditingThresholds: (value: Record<string, any>) => void;
@@ -100,27 +101,20 @@ export function ResourceTable(props: ResourceTableProps) {
                       onClick={() => {
                         const allDisabled = areAllAlertsDisabled();
                         const resourceIds = getAllResourceIds();
-                        if (props.title === 'Proxmox Nodes' && props.onToggleNodeConnectivity) {
+                        if (props.title === 'Proxmox Nodes' && props.onBatchToggleNodeConnectivity) {
                           // For nodes, toggle connectivity alerts
                           // If all are disabled, enable all. If any are enabled, disable all.
                           const targetState = !allDisabled; // true = disable alerts, false = enable alerts
-                          resourceIds.forEach(id => {
-                            const resource = props.resources?.find(r => r.id === id);
-                            if (resource && resource.disableConnectivity !== targetState) {
-                              props.onToggleNodeConnectivity!(id);
-                            }
-                          });
-                        } else if (props.onToggleDisabled) {
+                          
+                          // Use batch toggle to update all at once
+                          props.onBatchToggleNodeConnectivity(resourceIds, targetState);
+                        } else if (props.onBatchToggleDisabled) {
                           // For guests and storage, toggle disabled flag
                           // If all are disabled, enable all. If any are enabled, disable all.
                           const targetState = !allDisabled; // true = disable alerts, false = enable alerts
-                          resourceIds.forEach(id => {
-                            const resources = props.groupedResources ? Object.values(props.groupedResources).flat() : (props.resources || []);
-                            const resource = resources.find(r => r.id === id);
-                            if (resource && resource.disabled !== targetState) {
-                              props.onToggleDisabled!(id);
-                            }
-                          });
+                          
+                          // Use batch toggle to update all at once
+                          props.onBatchToggleDisabled(resourceIds, targetState);
                         }
                       }}
                       class={`p-0.5 rounded transition-colors ${
