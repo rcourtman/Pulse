@@ -996,7 +996,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("Workaround: Use root@pam credentials or accept that VM disk usage will show 0%")
+									Msg("Workaround: Grant VM.Monitor permission to your API token user or accept that VM disk usage will show 0%")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1378,7 +1378,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("Workaround: Use root@pam credentials or accept that VM disk usage will show 0%")
+							Msg("Workaround: Grant VM.Monitor permission to your API token user or accept that VM disk usage will show 0%")
 					} else {
 						log.Debug().
 							Err(err).
