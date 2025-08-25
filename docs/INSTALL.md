@@ -76,7 +76,7 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 
 ### Install Specific Version
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.6.0
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --version v4.8.0
 ```
 
 ### Install Release Candidate

@@ -88,14 +88,32 @@ Reduce `metricsRetentionDays` in settings and restart
 
 ## Features
 
-### Why do VMs show allocated size instead of actual usage?
-VMs need the QEMU Guest Agent installed to report actual disk usage. Without it, Pulse can only show the allocated disk size. See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for setup instructions.
+### Why do VMs show 0% disk usage?
+This is usually one of these issues:
+
+**Proxmox 9**: API tokens cannot access guest agent data due to a Proxmox bug (#1373). Even with correct permissions, tokens are blocked from accessing VM disk info. Workarounds:
+- Use root@pam credentials instead of API tokens
+- Accept that VM disk will show 0% until Proxmox fixes this upstream
+- Note: Container (LXC) disk usage works fine
+
+**Proxmox 8**: Check that:
+1. QEMU Guest Agent is installed and running in the VM
+2. Your API token has `VM.Monitor` permission
+3. Token has privilege separation disabled (`privsep=0`)
+   - Check with: `pveum user token list pulse-monitor@pam | grep pulse-token`
+   - If privsep=1, recreate: `pveum user token add pulse-monitor@pam pulse-token --privsep 0`
+
+**All versions**: 
+- Guest agent must be installed: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)
+- Enable in VM Options → QEMU Guest Agent
+- Restart the VM after installing
 
 ### How do I see real disk usage for VMs?
 Install QEMU Guest Agent in your VMs:
 - Linux: `apt install qemu-guest-agent` or `yum install qemu-guest-agent`
 - Windows: Install virtio-win guest tools
 - Enable in VM Options → QEMU Guest Agent
+- Restart the VM for changes to take effect
 See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for details.
 
 ### Multiple clusters?

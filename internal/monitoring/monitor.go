@@ -969,14 +969,24 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Int("vmid", res.VMID).
 									Msg("Guest agent timeout - agent may be installed but not responding")
 							} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-								// Permission error - known PVE 9 limitation with API tokens
-								// Guest agent get-fsinfo doesn't work with tokens on PVE 9, only root@pam
-								log.Debug().
+								// Permission error - check if it's the known PVE 9 limitation
+								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
-									Str("error", errMsg).
-									Msg("Guest agent API permission denied. Known PVE 9 limitation - API tokens cannot access get-fsinfo even with correct permissions. Use root@pam for full VM disk monitoring")
+									Msg("VM disk monitoring permission denied. This is a known limitation:")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("• Proxmox 9: API tokens cannot access guest agent data (Proxmox bug #1373)")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("• Proxmox 8: Ensure token has VM.Monitor permission and privsep=0")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("Workaround: Use root@pam credentials or accept that VM disk usage will show 0%")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1335,14 +1345,24 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Int("vmid", vm.VMID).
 							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
 					} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-						// Permission error - known PVE 9 limitation with API tokens
-						// Guest agent get-fsinfo doesn't work with tokens on PVE 9, only root@pam
-						log.Debug().
+						// Permission error - check if it's the known PVE 9 limitation
+						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
-							Str("error", errMsg).
-							Msg("Guest agent API permission denied (legacy API). Known PVE 9 limitation - API tokens cannot access get-fsinfo even with correct permissions. Use root@pam for full VM disk monitoring")
+							Msg("VM disk monitoring permission denied (legacy API). This is a known limitation:")
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("• Proxmox 9: API tokens cannot access guest agent data (Proxmox bug #1373)")
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("• Proxmox 8: Ensure token has VM.Monitor permission and privsep=0")
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("Workaround: Use root@pam credentials or accept that VM disk usage will show 0%")
 					} else {
 						log.Debug().
 							Err(err).
