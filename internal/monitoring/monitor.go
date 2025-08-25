@@ -899,7 +899,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	var allContainers []models.Container
 	
 	for _, res := range resources {
-		guestID := fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
+		// Avoid duplicating node name in ID when instance name equals node name
+		var guestID string
+		if instanceName == res.Node {
+			guestID = fmt.Sprintf("%s-%d", res.Node, res.VMID)
+		} else {
+			guestID = fmt.Sprintf("%s-%s-%d", instanceName, res.Node, res.VMID)
+		}
 		
 		// Debug log the resource type
 		log.Debug().
@@ -1267,7 +1273,13 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			}
 
 			// Calculate I/O rates
-			guestID := fmt.Sprintf("%s-%s-%d", instanceName, node.Node, vm.VMID)
+			// Avoid duplicating node name in ID when instance name equals node name
+			var guestID string
+			if instanceName == node.Node {
+				guestID = fmt.Sprintf("%s-%d", node.Node, vm.VMID)
+			} else {
+				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, vm.VMID)
+			}
 			currentMetrics := IOMetrics{
 				DiskRead:   int64(vm.DiskRead),
 				DiskWrite:  int64(vm.DiskWrite),
@@ -1566,7 +1578,13 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			}
 
 			// Calculate I/O rates
-			guestID := fmt.Sprintf("%s-%s-%d", instanceName, node.Node, ct.VMID)
+			// Avoid duplicating node name in ID when instance name equals node name
+			var guestID string
+			if instanceName == node.Node {
+				guestID = fmt.Sprintf("%s-%d", node.Node, ct.VMID)
+			} else {
+				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, ct.VMID)
+			}
 			currentMetrics := IOMetrics{
 				DiskRead:   int64(ct.DiskRead),
 				DiskWrite:  int64(ct.DiskWrite),
