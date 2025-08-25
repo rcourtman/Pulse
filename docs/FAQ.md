@@ -91,9 +91,9 @@ Reduce `metricsRetentionDays` in settings and restart
 ### Why do VMs show 0% disk usage?
 This is usually one of these issues:
 
-**Proxmox 9**: API tokens cannot access guest agent data due to a Proxmox bug (#1373). Even with correct permissions, tokens are blocked from accessing VM disk info. Workarounds:
-- Use root@pam credentials instead of API tokens
-- Accept that VM disk will show 0% until Proxmox fixes this upstream
+**Proxmox 9**: API tokens may have issues accessing guest agent data in some configurations. Workarounds:
+- Ensure your API token has VM.Monitor permission (re-run setup script if needed)
+- Accept that VM disk will show 0% if permissions aren't sufficient
 - Note: Container (LXC) disk usage works fine
 
 **Proxmox 8**: Check that:
@@ -111,7 +111,7 @@ This is usually one of these issues:
   - Alternative check: `ps aux | grep qemu-ga`
 - Restart the VM after installing/enabling in Proxmox options
 
-**Still showing 0% with root@pam?**
+**Still showing 0%?**
 - Verify from Proxmox host: `qm agent <VMID> get-fsinfo`
 - If that works but Pulse doesn't show it, check Pulse logs for errors
 - Some VMs may need: `systemctl restart qemu-guest-agent` inside the VM
