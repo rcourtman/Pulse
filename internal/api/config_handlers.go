@@ -2502,10 +2502,10 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
 	
 	// Return a simple curl command - no environment variables needed
+	// Don't include setupCode since it's already embedded in the URL
 	response := map[string]interface{}{
 		"url":        scriptURL,
 		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
-		"setupCode":  token, // Keep for backwards compatibility but it's really just a token now
 		"expires":    expiry.Unix(),
 	}
 	
