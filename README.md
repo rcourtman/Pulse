@@ -105,11 +105,38 @@ See [Configuration Guide](docs/CONFIGURATION.md#automated-setup-skip-ui) for det
 
 ### Configure Nodes
 
+**Two authentication methods available:**
+
+#### Method 1: Manual Setup (Recommended for interactive use)
 1. After login, go to Settings → Nodes
 2. Discovered nodes appear automatically
 3. Click "Setup Script" next to any node
-4. Run the generated one-liner on that node
-5. Node is configured and monitoring starts
+4. Click "Generate Setup Code" button (creates a 6-character code valid for 5 minutes)
+5. Copy and run the provided one-liner on your Proxmox/PBS host
+6. Node is configured and monitoring starts automatically
+
+**Example:**
+```bash
+curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https://pve:8006&auth_token=ABC123" | bash
+```
+
+#### Method 2: Automated Setup (For scripts/automation)
+Use your permanent API token directly in the URL for automation:
+
+```bash
+# For Proxmox VE
+curl -sSL "http://pulse:7655/api/setup-script?type=pve&host=https://pve:8006&auth_token=YOUR_API_TOKEN" | bash
+
+# For Proxmox Backup Server
+curl -sSL "http://pulse:7655/api/setup-script?type=pbs&host=https://pbs:8007&auth_token=YOUR_API_TOKEN" | bash
+```
+
+**Parameters:**
+- `type`: `pve` for Proxmox VE, `pbs` for Proxmox Backup Server
+- `host`: Full URL of your Proxmox/PBS server (e.g., https://192.168.1.100:8006)
+- `auth_token`: Either a 6-character setup code (expires in 5 min) or your permanent API token
+- `backup_perms=true` (optional): Add backup management permissions
+- `pulse_url` (optional): Pulse server URL if different from where script is downloaded
 
 The script handles user creation, permissions, token generation, and registration automatically.
 
@@ -467,6 +494,11 @@ journalctl -u pulse -f
 - Credentials stored encrypted (AES-256-GCM)
 - API token support for automation
 - Export/import requires authentication
+- **Setup script authentication**:
+  - **Setup codes**: Temporary 6-character codes for manual setup (expire in 5 minutes)
+  - **API tokens**: Permanent tokens for automation and scripting
+  - Use setup codes when giving access to others without sharing your API token
+  - Use API tokens for your own automation or trusted environments
 - [Security Details →](docs/SECURITY.md)
 
 ## Development
