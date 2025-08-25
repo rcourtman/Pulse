@@ -1925,6 +1925,42 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
+# Check if running inside a container (LXC/Docker)
+if [ -f /run/systemd/container ] || [ -f /.dockerenv ] || [ ! -z "${container:-}" ]; then
+   echo ""
+   echo "❌ ERROR: This script is running inside a container!"
+   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+   echo ""
+   echo "This setup script must be run on the Proxmox VE host itself,"
+   echo "not inside an LXC container or Docker container."
+   echo ""
+   echo "Please:"
+   echo "  1. Exit this container (type 'exit')"
+   echo "  2. Run the script directly on your Proxmox host"
+   echo ""
+   echo "The script needs access to 'pveum' commands which are only"
+   echo "available on the Proxmox VE host system."
+   echo ""
+   exit 1
+fi
+
+# Check if pveum command exists
+if ! command -v pveum &> /dev/null; then
+   echo ""
+   echo "❌ ERROR: 'pveum' command not found!"
+   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+   echo ""
+   echo "This script must be run on a Proxmox VE host."
+   echo "The 'pveum' command is required to create users and tokens."
+   echo ""
+   echo "If you're seeing this error, you might be:"
+   echo "  • Running on a non-Proxmox system"
+   echo "  • Inside an LXC container (exit and run on the host)"
+   echo "  • On a PBS server (use the PBS setup script instead)"
+   echo ""
+   exit 1
+fi
+
 # Extract Pulse server IP from the URL for token matching
 PULSE_IP_PATTERN=$(echo "%s" | sed 's/\./\-/g')
 
@@ -2059,24 +2095,16 @@ else
         fi
         
         # Construct registration request with setup code
-        REGISTER_JSON=$(cat <<EOF
-{
-  "type": "pve",
-  "host": "$HOST_URL",
-  "serverName": "$SERVER_HOSTNAME",
-  "tokenId": "pulse-monitor@pam!%s",
-  "tokenValue": "$TOKEN_VALUE",
-  "authToken": "$AUTH_TOKEN"
-}
-EOF
-        )
-        # Remove newlines from JSON
-        REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+        # Build JSON carefully to preserve the exclamation mark
+        REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"pulse-monitor@pam!%s","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
+        
+        # Debug output
+        echo "🔍 Debug: Sending registration request to $PULSE_URL/api/auto-register"
         
         # Send registration with setup code
-        REGISTER_RESPONSE=$(curl -s -X POST "$PULSE_URL/api/auto-register" \
+        REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
-            -d "$REGISTER_JSON" 2>&1)
+            -d @- 2>&1)
     else
         echo "⚠️  No setup code provided - skipping auto-registration"
         AUTO_REG_SUCCESS=false
@@ -2171,7 +2199,7 @@ else
     echo "The PVEAuditor role includes VM.GuestAgent.Audit permission"
     echo "which allows reading guest agent data for disk usage."
     echo ""
-    echo "If VMs show 0% disk usage:"
+    echo "If VMs show zero disk usage:"
     echo "  • Ensure qemu-guest-agent is installed and running in the VM"
     echo "  • Check that the token has PVEAuditor role applied"
     echo "  • Verify with: qm agent <VMID> get-fsinfo"
@@ -2216,6 +2244,42 @@ echo ""
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
    echo "Please run this script as root"
+   exit 1
+fi
+
+# Check if running inside a container (LXC/Docker)
+if [ -f /run/systemd/container ] || [ -f /.dockerenv ] || [ ! -z "${container:-}" ]; then
+   echo ""
+   echo "❌ ERROR: This script is running inside a container!"
+   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+   echo ""
+   echo "This setup script must be run on the Proxmox VE host itself,"
+   echo "not inside an LXC container or Docker container."
+   echo ""
+   echo "Please:"
+   echo "  1. Exit this container (type 'exit')"
+   echo "  2. Run the script directly on your Proxmox host"
+   echo ""
+   echo "The script needs access to 'pveum' commands which are only"
+   echo "available on the Proxmox VE host system."
+   echo ""
+   exit 1
+fi
+
+# Check if pveum command exists
+if ! command -v pveum &> /dev/null; then
+   echo ""
+   echo "❌ ERROR: 'pveum' command not found!"
+   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+   echo ""
+   echo "This script must be run on a Proxmox VE host."
+   echo "The 'pveum' command is required to create users and tokens."
+   echo ""
+   echo "If you're seeing this error, you might be:"
+   echo "  • Running on a non-Proxmox system"
+   echo "  • Inside an LXC container (exit and run on the host)"
+   echo "  • On a PBS server (use the PBS setup script instead)"
+   echo ""
    exit 1
 fi
 
@@ -2559,45 +2623,61 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		authCode = req.AuthToken
 	}
 	
+	log.Debug().
+		Str("authToken", req.AuthToken).
+		Str("authCode", authCode).
+		Bool("hasConfigToken", h.config.APIToken != "").
+		Msg("Checking authentication for auto-register")
+	
 	// First check for setup code/auth token in the request
 	if authCode != "" {
-		codeHash := internalauth.HashAPIToken(authCode)
-		log.Debug().
-			Str("authCode", authCode).
-			Str("codeHash", codeHash[:8]+"...").
-			Msg("Checking auth token")
-		h.codeMutex.Lock()
-		setupCode, exists := h.setupCodes[codeHash]
-		log.Debug().
-			Bool("exists", exists).
-			Int("totalCodes", len(h.setupCodes)).
-			Msg("Setup code lookup result")
-		if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
-			// Validate that the code matches the node type
-			// Note: We don't validate the host anymore as it may differ between
-			// what's entered in the UI and what's provided in the setup script URL
-			if setupCode.NodeType == req.Type {
-				setupCode.Used = true // Mark as used immediately
-				authenticated = true
-				log.Info().
-					Str("type", req.Type).
-					Str("host", req.Host).
-					Bool("via_authToken", req.AuthToken != "").
-					Msg("Auto-register authenticated via setup code/token")
-			} else {
-				log.Warn().
-					Str("expected_type", setupCode.NodeType).
-					Str("got_type", req.Type).
-					Msg("Setup code validation failed - type mismatch")
-			}
-		} else if exists && setupCode.Used {
-			log.Warn().Msg("Setup code already used")
-		} else if exists {
-			log.Warn().Msg("Setup code expired")
+		// First check if it's the actual API token (for direct authentication)
+		if h.config.APIToken != "" && internalauth.CompareAPIToken(authCode, h.config.APIToken) {
+			authenticated = true
+			log.Info().
+				Str("type", req.Type).
+				Str("host", req.Host).
+				Msg("Auto-register authenticated via direct API token")
 		} else {
-			log.Warn().Msg("Invalid setup code/token")
+			// Not the API token, check if it's a temporary setup code
+			codeHash := internalauth.HashAPIToken(authCode)
+			log.Debug().
+				Str("authCode", authCode).
+				Str("codeHash", codeHash[:8]+"...").
+				Msg("Checking auth token as setup code")
+			h.codeMutex.Lock()
+			setupCode, exists := h.setupCodes[codeHash]
+			log.Debug().
+				Bool("exists", exists).
+				Int("totalCodes", len(h.setupCodes)).
+				Msg("Setup code lookup result")
+			if exists && !setupCode.Used && time.Now().Before(setupCode.ExpiresAt) {
+				// Validate that the code matches the node type
+				// Note: We don't validate the host anymore as it may differ between
+				// what's entered in the UI and what's provided in the setup script URL
+				if setupCode.NodeType == req.Type {
+					setupCode.Used = true // Mark as used immediately
+					authenticated = true
+					log.Info().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Bool("via_authToken", req.AuthToken != "").
+						Msg("Auto-register authenticated via setup code/token")
+				} else {
+					log.Warn().
+						Str("expected_type", setupCode.NodeType).
+						Str("got_type", req.Type).
+						Msg("Setup code validation failed - type mismatch")
+				}
+			} else if exists && setupCode.Used {
+				log.Warn().Msg("Setup code already used")
+			} else if exists {
+				log.Warn().Msg("Setup code expired")
+			} else {
+				log.Warn().Msg("Invalid setup code/token - not in setup codes map")
+			}
+			h.codeMutex.Unlock()
 		}
-		h.codeMutex.Unlock()
 	}
 	
 	// If not authenticated via setup code, check API token if configured
