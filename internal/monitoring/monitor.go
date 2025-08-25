@@ -962,6 +962,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
 									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("To verify: ssh into VM and run 'systemctl status qemu-guest-agent' or 'ps aux | grep qemu-ga'")
 							} else if strings.Contains(errMsg, "timeout") {
 								log.Info().
 									Str("instance", instanceName).
