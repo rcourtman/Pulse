@@ -82,6 +82,38 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
     }
   };
 
+  const handleRefresh = async () => {
+    // First try to get cached results immediately
+    try {
+      const { apiFetch } = await import('@/utils/apiClient');
+      const response = await apiFetch('/api/discover', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // If we have cached results, show them immediately
+        if (data.servers && data.servers.length > 0) {
+          setDiscoveryResult({
+            servers: data.servers,
+            errors: data.errors || []
+          });
+          showSuccess(`Showing ${data.servers.length} cached server(s)`);
+          return; // Don't start a new scan
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load cached results:', error);
+    }
+    
+    // If no cached results or error, start a new scan
+    handleScan();
+  };
+
   const handleScan = async () => {
     setIsScanning(true);
     setDiscoveryResult(null);
@@ -226,7 +258,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                     
                     {/* Refresh button */}
                     <button type="button"
-                      onClick={handleScan}
+                      onClick={handleRefresh}
                       disabled={isScanning()}
                       title="Refresh scan"
                       class="p-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
