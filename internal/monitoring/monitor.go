@@ -988,7 +988,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 9: API tokens cannot access guest agent data (Proxmox bug #1373)")
+									Msg("• Proxmox 9: API tokens may not be able to access guest agent data")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -996,7 +996,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("Unfortunately, there's no working workaround for API tokens on PVE 9 - VM disk will show 0%")
+									Msg("• Some PVE 9 users report it works in cluster configs, but results vary")
 							} else {
 								log.Debug().
 									Err(err).
@@ -1370,7 +1370,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 9: API tokens cannot access guest agent data (Proxmox bug #1373)")
+							Msg("• Proxmox 9: API tokens may not be able to access guest agent data")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
@@ -1378,7 +1378,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("Unfortunately, there's no working workaround for API tokens on PVE 9 - VM disk will show 0%")
+							Msg("• Some PVE 9 users report it works in cluster configs, but results vary")
 					} else {
 						log.Debug().
 							Err(err).
