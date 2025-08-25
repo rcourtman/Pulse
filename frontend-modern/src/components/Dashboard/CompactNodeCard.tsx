@@ -8,6 +8,8 @@ import { useWebSocket } from '@/App';
 interface CompactNodeCardProps {
   node: Node;
   variant: 'compact' | 'ultra-compact';
+  onClick?: () => void;
+  isSelected?: boolean;
 }
 
 const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
@@ -55,11 +57,14 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   if (props.variant === 'ultra-compact') {
     // Single line format for 10+ nodes
     return (
-      <div class={`flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 rounded border ${
-        !isOnline() ? 'border-red-500' :
-        alertStyles.hasAlert ? 'border-orange-500' :
-        'border-gray-200 dark:border-gray-700'
-      } hover:shadow-sm transition-shadow`}>
+      <div 
+        class={`flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 rounded border ${
+          props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
+          !isOnline() ? 'border-red-500' :
+          alertStyles.hasAlert ? 'border-orange-500' :
+          'border-gray-200 dark:border-gray-700'
+        } hover:shadow-sm transition-all cursor-pointer hover:scale-[1.01]`}
+        onClick={props.onClick}>
         {/* Status dot */}
         <span class={`w-2 h-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`} />
         
@@ -101,11 +106,14 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
 
   // Compact bar format for 5-9 nodes
   return (
-    <div class={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${
-      !isOnline() ? 'border-red-500' :
-      alertStyles.hasAlert ? 'border-orange-500' :
-      'border-gray-200 dark:border-gray-700'
-    } p-3`}>
+    <div 
+      class={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${
+        props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
+        !isOnline() ? 'border-red-500' :
+        alertStyles.hasAlert ? 'border-orange-500' :
+        'border-gray-200 dark:border-gray-700'
+      } p-3 cursor-pointer transition-all hover:scale-[1.02]`}
+      onClick={props.onClick}>
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <span class={`w-2 h-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`} />
