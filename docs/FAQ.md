@@ -91,9 +91,10 @@ Reduce `metricsRetentionDays` in settings and restart
 ### Why do VMs show 0% disk usage?
 This is usually one of these issues:
 
-**Proxmox 9**: API tokens may have issues accessing guest agent data in some configurations. Workarounds:
-- Ensure your API token has VM.Monitor permission (re-run setup script if needed)
-- Accept that VM disk will show 0% if permissions aren't sufficient
+**Proxmox 9**: API tokens cannot access guest agent data due to a Proxmox bug (#1373). Unfortunately there's no workaround:
+- VM.Monitor permission was removed in PVE 9 (replaced with VM.GuestAgent.Audit)
+- Even with correct permissions, API tokens are blocked from accessing VM disk info
+- You'll have to accept that VM disk usage will show 0% until Proxmox fixes this
 - Note: Container (LXC) disk usage works fine
 
 **Proxmox 8**: Check that:
