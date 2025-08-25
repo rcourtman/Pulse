@@ -956,27 +956,15 @@ print_completion() {
     echo
     echo -e "${GREEN}Access Pulse at:${NC} http://${IP}:${PORT}"
     echo
-    echo -e "${YELLOW}Useful commands:${NC}"
-    echo "  systemctl status $SERVICE_NAME    - Check service status"
-    echo "  systemctl restart $SERVICE_NAME   - Restart Pulse"
+    echo -e "${YELLOW}Quick commands:${NC}"
+    echo "  systemctl status $SERVICE_NAME    - Check status"
+    echo "  systemctl restart $SERVICE_NAME   - Restart"
     echo "  journalctl -u $SERVICE_NAME -f    - View logs"
-    echo "  systemctl edit $SERVICE_NAME      - Configure custom port"
     echo
-    echo -e "${YELLOW}Updating Pulse:${NC}"
-    echo "  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
-    echo "  Or: wget -qO- https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
-    echo
-    echo -e "${YELLOW}Reset configuration (start fresh):${NC}"
-    echo "  systemctl stop $SERVICE_NAME      - Stop Pulse"
-    echo "  rm -rf /etc/pulse/*               - Remove all config/data"
-    echo "  systemctl start $SERVICE_NAME     - Start with fresh config"
-    echo
-    echo -e "${YELLOW}Complete removal:${NC}"
-    echo "  systemctl stop $SERVICE_NAME"
-    echo "  systemctl disable $SERVICE_NAME"
-    echo "  rm -rf /etc/pulse /opt/pulse"
-    echo "  rm /etc/systemd/system/${SERVICE_NAME}.service"
-    echo "  systemctl daemon-reload"
+    echo -e "${YELLOW}Management:${NC}"
+    echo "  Update:     curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
+    echo "  Reset:      curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --reset"
+    echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
     echo
 }
 
@@ -1262,6 +1250,79 @@ main() {
     fi
 }
 
+# Uninstall function
+uninstall_pulse() {
+    check_root
+    print_header
+    echo -e "\033[0;33mUninstalling Pulse...\033[0m"
+    echo
+    
+    # Detect service name
+    local SERVICE_NAME=$(detect_service_name)
+    
+    # Stop and disable service
+    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+        echo "Stopping $SERVICE_NAME..."
+        systemctl stop $SERVICE_NAME
+    fi
+    
+    if systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null; then
+        echo "Disabling $SERVICE_NAME..."
+        systemctl disable $SERVICE_NAME
+    fi
+    
+    # Remove files
+    echo "Removing Pulse files..."
+    rm -rf /opt/pulse
+    rm -rf /etc/pulse
+    rm -f /etc/systemd/system/pulse.service
+    rm -f /etc/systemd/system/pulse-backend.service
+    rm -f /usr/local/bin/pulse
+    
+    # Remove user (if it exists and isn't being used by other services)
+    if id "pulse" &>/dev/null; then
+        echo "Removing pulse user..."
+        userdel pulse 2>/dev/null || true
+    fi
+    
+    # Reload systemd
+    systemctl daemon-reload
+    
+    echo
+    echo -e "\033[0;32m✓ Pulse has been completely uninstalled\033[0m"
+    exit 0
+}
+
+# Reset function
+reset_pulse() {
+    check_root
+    print_header
+    echo -e "\033[0;33mResetting Pulse configuration...\033[0m"
+    echo
+    
+    # Detect service name
+    local SERVICE_NAME=$(detect_service_name)
+    
+    # Stop service
+    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+        echo "Stopping $SERVICE_NAME..."
+        systemctl stop $SERVICE_NAME
+    fi
+    
+    # Remove config but keep binary
+    echo "Removing configuration and data..."
+    rm -rf /etc/pulse/*
+    
+    # Restart service
+    echo "Starting $SERVICE_NAME with fresh configuration..."
+    systemctl start $SERVICE_NAME
+    
+    echo
+    echo -e "\033[0;32m✓ Pulse has been reset to fresh configuration\033[0m"
+    echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):7655"
+    exit 0
+}
+
 # Parse command line arguments
 FORCE_VERSION=""
 FORCE_CHANNEL=""
@@ -1269,6 +1330,12 @@ IN_CONTAINER=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --uninstall)
+            uninstall_pulse
+            ;;
+        --reset)
+            reset_pulse
+            ;;
         --rc|--pre|--prerelease)
             FORCE_CHANNEL="rc"
             shift
@@ -1287,10 +1354,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
-            echo "Options:"
+            echo ""
+            echo "Installation options:"
             echo "  --rc, --pre        Install latest RC/pre-release version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
+            echo ""
+            echo "Management options:"
+            echo "  --reset            Reset Pulse to fresh configuration"
+            echo "  --uninstall        Completely remove Pulse from system"
+            echo ""
             echo "  -h, --help         Show this help message"
             exit 0
             ;;
