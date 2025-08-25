@@ -102,18 +102,22 @@ export function ResourceTable(props: ResourceTableProps) {
                         const resourceIds = getAllResourceIds();
                         if (props.title === 'Proxmox Nodes' && props.onToggleNodeConnectivity) {
                           // For nodes, toggle connectivity alerts
+                          // If all are disabled, enable all. If any are enabled, disable all.
+                          const targetState = !allDisabled; // true = disable alerts, false = enable alerts
                           resourceIds.forEach(id => {
                             const resource = props.resources?.find(r => r.id === id);
-                            if (resource && (allDisabled || !resource.disableConnectivity)) {
+                            if (resource && resource.disableConnectivity !== targetState) {
                               props.onToggleNodeConnectivity!(id);
                             }
                           });
                         } else if (props.onToggleDisabled) {
                           // For guests and storage, toggle disabled flag
+                          // If all are disabled, enable all. If any are enabled, disable all.
+                          const targetState = !allDisabled; // true = disable alerts, false = enable alerts
                           resourceIds.forEach(id => {
                             const resources = props.groupedResources ? Object.values(props.groupedResources).flat() : (props.resources || []);
                             const resource = resources.find(r => r.id === id);
-                            if (resource && (allDisabled || !resource.disabled)) {
+                            if (resource && resource.disabled !== targetState) {
                               props.onToggleDisabled!(id);
                             }
                           });
