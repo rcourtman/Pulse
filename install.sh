@@ -941,6 +941,18 @@ print_completion() {
     echo "  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
     echo "  Or: wget -qO- https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
     echo
+    echo -e "${YELLOW}Reset configuration (start fresh):${NC}"
+    echo "  systemctl stop $SERVICE_NAME      - Stop Pulse"
+    echo "  rm -rf /etc/pulse/*               - Remove all config/data"
+    echo "  systemctl start $SERVICE_NAME     - Start with fresh config"
+    echo
+    echo -e "${YELLOW}Complete removal:${NC}"
+    echo "  systemctl stop $SERVICE_NAME"
+    echo "  systemctl disable $SERVICE_NAME"
+    echo "  rm -rf /etc/pulse /opt/pulse"
+    echo "  rm /etc/systemd/system/${SERVICE_NAME}.service"
+    echo "  systemctl daemon-reload"
+    echo
 }
 
 # Main installation flow
