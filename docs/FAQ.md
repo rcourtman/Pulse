@@ -111,6 +111,12 @@ This is usually one of these issues:
   - Alternative check: `ps aux | grep qemu-ga`
 - Restart the VM after installing/enabling in Proxmox options
 
+**Still showing 0% with root@pam?**
+- Verify from Proxmox host: `qm agent <VMID> get-fsinfo`
+- If that works but Pulse doesn't show it, check Pulse logs for errors
+- Some VMs may need: `systemctl restart qemu-guest-agent` inside the VM
+- Windows VMs: Ensure QEMU Guest Agent VSS Provider service is running
+
 ### How do I see real disk usage for VMs?
 Install QEMU Guest Agent in your VMs:
 - Linux: `apt install qemu-guest-agent` or `yum install qemu-guest-agent`
