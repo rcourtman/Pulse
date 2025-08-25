@@ -105,7 +105,11 @@ This is usually one of these issues:
 **All versions**: 
 - Guest agent must be installed: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)
 - Enable in VM Options → QEMU Guest Agent
-- Restart the VM after installing
+- The service should start automatically after install. To verify:
+  - Check status: `systemctl status qemu-guest-agent`
+  - If not running: `systemctl start qemu-guest-agent` (not `enable` - it's socket-activated)
+  - Alternative check: `ps aux | grep qemu-ga`
+- Restart the VM after installing/enabling in Proxmox options
 
 ### How do I see real disk usage for VMs?
 Install QEMU Guest Agent in your VMs:
