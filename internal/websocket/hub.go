@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"math"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -12,6 +13,33 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
+
+// isValidPrivateOrigin checks if the origin is from a valid private network
+func isValidPrivateOrigin(host string) bool {
+	// Check localhost variations
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	
+	// Check if it's a valid IP address
+	ip := net.ParseIP(host)
+	if ip != nil {
+		// Check if it's a private IP
+		return ip.IsLoopback() || ip.IsPrivate()
+	}
+	
+	// Allow common local domain patterns but be more restrictive
+	// Only allow if it's clearly a local domain
+	if strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".lan") {
+		// But not arbitrary subdomains that could be malicious
+		parts := strings.Split(host, ".")
+		if len(parts) <= 3 { // hostname.local or hostname.subdomain.local
+			return true
+		}
+	}
+	
+	return false
+}
 
 // SetAllowedOrigins sets the allowed origins for CORS
 func (h *Hub) SetAllowedOrigins(origins []string) {
@@ -65,38 +93,28 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		}
 	}
 	
-	// If no origins configured, be more lenient for Docker/local deployments
+	// If no origins configured, only allow from truly private networks
 	if len(allowedOrigins) == 0 {
-		// Allow connections from common local/private network patterns
-		// This handles Docker, VMs, and local network access scenarios
-		if strings.HasPrefix(origin, "http://localhost:") ||
-			strings.HasPrefix(origin, "http://127.0.0.1:") ||
-			strings.HasPrefix(origin, "http://192.168.") ||
-			strings.HasPrefix(origin, "http://10.") ||
-			strings.HasPrefix(origin, "http://172.") ||
-			strings.Contains(origin, ".local:") ||
-			strings.Contains(origin, ".lan:") {
-			log.Debug().
-				Str("origin", origin).
-				Str("requestOrigin", requestOrigin).
-				Msg("Allowing WebSocket connection from local/private network")
-			return true
+		// Parse the origin URL to validate it properly
+		originHost := origin
+		if strings.HasPrefix(origin, "http://") {
+			originHost = strings.TrimPrefix(origin, "http://")
+		} else if strings.HasPrefix(origin, "https://") {
+			originHost = strings.TrimPrefix(origin, "https://")
 		}
 		
-		// For HTTPS, also allow from private networks
-		if strings.HasPrefix(origin, "https://") {
-			urlPart := strings.TrimPrefix(origin, "https://")
-			if strings.HasPrefix(urlPart, "192.168.") ||
-				strings.HasPrefix(urlPart, "10.") ||
-				strings.HasPrefix(urlPart, "172.") ||
-				strings.Contains(urlPart, ".local:") ||
-				strings.Contains(urlPart, ".lan:") {
-				log.Debug().
-					Str("origin", origin).
-					Str("requestOrigin", requestOrigin).
-					Msg("Allowing secure WebSocket connection from private network")
-				return true
-			}
+		// Extract just the hostname/IP part (remove port)
+		if colonIdx := strings.IndexByte(originHost, ':'); colonIdx != -1 {
+			originHost = originHost[:colonIdx]
+		}
+		
+		// Check if it's a valid private IP or localhost
+		if isValidPrivateOrigin(originHost) {
+			log.Debug().
+				Str("origin", origin).
+				Str("host", originHost).
+				Msg("Allowing WebSocket connection from private network")
+			return true
 		}
 		
 		// Still check for exact same-origin match

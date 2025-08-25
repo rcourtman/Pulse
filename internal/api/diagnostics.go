@@ -115,7 +115,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			Type: "pve",
 		}
 
-		// Determine auth method
+		// Determine auth method (sanitized - don't expose actual values)
 		if node.TokenName != "" && node.TokenValue != "" {
 			nodeDiag.AuthMethod = "api_token"
 		} else if node.User != "" && node.Password != "" {
