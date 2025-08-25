@@ -76,46 +76,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	return handler
 }
 
-// handleDiscovery returns cached discovery results
-func (r *Router) handleDiscovery(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	
-	// Get cached discovery results from the monitor's discovery service
-	if r.monitor != nil && r.monitor.GetDiscoveryService() != nil {
-		svc := r.monitor.GetDiscoveryService()
-		result, updated := svc.GetCachedResult()
-		isScanning := svc.IsScanning()
-		
-		response := map[string]interface{}{
-			"servers":   []interface{}{},
-			"errors":    []string{},
-			"scanning":  isScanning,
-		}
-		
-		if result != nil {
-			response["servers"] = result.Servers
-			if result.Errors != nil {
-				response["errors"] = result.Errors
-			}
-			response["updated"] = updated.Unix()
-		}
-		
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-	
-	// Return empty result if no discovery service
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"servers":  []interface{}{},
-		"errors":   []string{},
-		"scanning": false,
-	})
-}
 
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
@@ -702,7 +662,7 @@ func (r *Router) setupRoutes() {
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
 	// Discovery endpoint
-	r.mux.HandleFunc("/api/discover", r.handleDiscovery)
+	r.mux.HandleFunc("/api/discover", RequireAuth(r.config, configHandlers.HandleDiscoverServers))
 	
 	// Test endpoint for WebSocket notifications
 	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
