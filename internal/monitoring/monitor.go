@@ -2030,6 +2030,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					Free:   avail,
 					Usage:  safePercentage(float64(used), float64(total)),
 					Status: "available",
+					DeduplicationFactor: ds.DeduplicationFactor,
 				}
 
 				// Discover namespaces for this datastore

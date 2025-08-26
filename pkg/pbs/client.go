@@ -265,16 +265,17 @@ type Version struct {
 
 // Datastore represents a PBS datastore
 type Datastore struct {
-	Store     string `json:"store"`
-	Total     int64  `json:"total,omitempty"`
-	Used      int64  `json:"used,omitempty"`
-	Avail     int64  `json:"avail,omitempty"`
+	Store     string  `json:"store"`
+	Total     int64   `json:"total,omitempty"`
+	Used      int64   `json:"used,omitempty"`
+	Avail     int64   `json:"avail,omitempty"`
 	// Alternative field names PBS might use
-	TotalSpace int64  `json:"total-space,omitempty"`
-	UsedSpace  int64  `json:"used-space,omitempty"`
-	AvailSpace int64  `json:"avail-space,omitempty"`
+	TotalSpace int64   `json:"total-space,omitempty"`
+	UsedSpace  int64   `json:"used-space,omitempty"`
+	AvailSpace int64   `json:"avail-space,omitempty"`
 	// Status fields
-	GCStatus  string `json:"gc-status,omitempty"`
+	GCStatus  string  `json:"gc-status,omitempty"`
+	DeduplicationFactor float64 `json:"deduplication_factor,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -427,9 +428,10 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 
 		var statusResult struct {
 			Data struct {
-				Total int64 `json:"total"`
-				Used  int64 `json:"used"`
-				Avail int64 `json:"avail"`
+				Total            int64   `json:"total"`
+				Used             int64   `json:"used"`
+				Avail            int64   `json:"avail"`
+				DeduplicationFactor float64 `json:"deduplication_factor,omitempty"`
 			} `json:"data"`
 		}
 
@@ -452,6 +454,7 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			Total: statusResult.Data.Total,
 			Used:  statusResult.Data.Used,
 			Avail: statusResult.Data.Avail,
+			DeduplicationFactor: statusResult.Data.DeduplicationFactor,
 		}
 
 		log.Debug().
@@ -459,6 +462,7 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
+			Float64("dedup_factor", datastore.DeduplicationFactor).
 			Msg("PBS datastore status retrieved")
 
 		datastores = append(datastores, datastore)
