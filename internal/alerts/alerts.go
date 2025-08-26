@@ -190,8 +190,9 @@ type Manager struct {
 	resolvedMutex    sync.RWMutex
 	// Time threshold tracking
 	pendingAlerts    map[string]time.Time  // Track when thresholds were first exceeded
-	// Node offline confirmation tracking
-	nodeOfflineCount map[string]int        // Track consecutive offline counts for nodes
+	// Offline confirmation tracking
+	nodeOfflineCount map[string]int        // Track consecutive offline counts for nodes (legacy)
+	offlineConfirmations map[string]int    // Track consecutive offline counts for all resources
 }
 
 // NewManager creates a new alert manager
@@ -207,6 +208,7 @@ func NewManager() *Manager {
 		recentlyResolved: make(map[string]*ResolvedAlert),
 		pendingAlerts:  make(map[string]time.Time),
 		nodeOfflineCount: make(map[string]int),
+		offlineConfirmations: make(map[string]int),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -526,6 +528,83 @@ func (m *Manager) CheckNode(node models.Node) {
 	}
 }
 
+// CheckPBS checks PBS instance metrics against thresholds
+func (m *Manager) CheckPBS(pbs models.PBSInstance) {
+	m.mu.RLock()
+	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	
+	// Check if there's an override for this PBS instance
+	override, hasOverride := m.config.Overrides[pbs.ID]
+	
+	// Use node defaults for PBS (same as nodes: CPU, Memory)
+	cpuThreshold := m.config.NodeDefaults.CPU
+	memoryThreshold := m.config.NodeDefaults.Memory
+	m.mu.RUnlock()
+
+	// Check if PBS is offline first (similar to nodes)
+	if pbs.Status == "offline" || pbs.ConnectionHealth == "error" || pbs.ConnectionHealth == "unhealthy" {
+		m.checkPBSOffline(pbs)
+	} else {
+		// Clear any existing offline alert if PBS is back online
+		m.clearPBSOfflineAlert(pbs)
+	}
+
+	// If alerts are disabled for this PBS instance, clear any existing alerts and return
+	if hasOverride && override.Disabled {
+		m.mu.Lock()
+		// Clear CPU alert
+		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
+		if _, exists := m.activeAlerts[cpuAlertID]; exists {
+			delete(m.activeAlerts, cpuAlertID)
+			log.Info().
+				Str("alertID", cpuAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared CPU alert - PBS has alerts disabled")
+		}
+		// Clear Memory alert
+		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
+		if _, exists := m.activeAlerts[memAlertID]; exists {
+			delete(m.activeAlerts, memAlertID)
+			log.Info().
+				Str("alertID", memAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared Memory alert - PBS has alerts disabled")
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			delete(m.activeAlerts, offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("pbs", pbs.Name).
+				Msg("Cleared offline alert - PBS has alerts disabled")
+		}
+		m.mu.Unlock()
+		return
+	}
+
+	// Check if there are custom thresholds for this PBS instance
+	if hasOverride {
+		if override.CPU != nil {
+			cpuThreshold = override.CPU
+		}
+		if override.Memory != nil {
+			memoryThreshold = override.Memory
+		}
+	}
+
+	// Check metrics only if PBS is online
+	if pbs.Status != "offline" {
+		// PBS CPU is already a percentage
+		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold)
+		// PBS Memory is already a percentage
+		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "memory", pbs.Memory, memoryThreshold)
+	}
+}
+
 // CheckStorage checks storage against thresholds
 func (m *Manager) CheckStorage(storage models.Storage) {
 	m.mu.RLock()
@@ -539,22 +618,44 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	threshold := m.config.StorageDefault
 	m.mu.RUnlock()
 
+	// Check if storage is truly offline/unavailable (not just inactive from other nodes)
+	// Note: In a cluster, local storage from other nodes shows as inactive which is normal
+	if storage.Status == "offline" || storage.Status == "unavailable" {
+		m.checkStorageOffline(storage)
+	} else {
+		// Clear any existing offline alert if storage is back online
+		m.clearStorageOfflineAlert(storage)
+	}
+
 	// If alerts are disabled for this storage device, clear any existing alerts and return
 	if hasOverride && override.Disabled {
 		m.mu.Lock()
-		alertID := fmt.Sprintf("%s-usage", storage.ID)
-		if _, exists := m.activeAlerts[alertID]; exists {
-			delete(m.activeAlerts, alertID)
+		// Clear usage alert
+		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
+		if _, exists := m.activeAlerts[usageAlertID]; exists {
+			delete(m.activeAlerts, usageAlertID)
 			log.Info().
-				Str("alertID", alertID).
+				Str("alertID", usageAlertID).
 				Str("storage", storage.Name).
-				Msg("Cleared alert - storage has alerts disabled")
+				Msg("Cleared usage alert - storage has alerts disabled")
+		}
+		// Clear offline alert
+		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+		if _, exists := m.activeAlerts[offlineAlertID]; exists {
+			delete(m.activeAlerts, offlineAlertID)
+			log.Info().
+				Str("alertID", offlineAlertID).
+				Str("storage", storage.Name).
+				Msg("Cleared offline alert - storage has alerts disabled")
 		}
 		m.mu.Unlock()
 		return
 	}
 
-	m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
+	// Only check usage if storage is active
+	if storage.Active {
+		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
+	}
 }
 
 
@@ -1015,6 +1116,232 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 		Msg("Node is back online")
 }
 
+// checkPBSOffline creates an alert for offline PBS instances
+func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
+	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Check if PBS offline alerts are disabled
+	if override, exists := m.config.Overrides[pbs.ID]; exists && override.Disabled {
+		// PBS alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			delete(m.activeAlerts, alertID)
+			log.Debug().
+				Str("pbs", pbs.Name).
+				Msg("PBS offline alert cleared (alerts disabled)")
+		}
+		return
+	}
+	
+	// Track confirmation count for this PBS
+	m.offlineConfirmations[pbs.ID]++
+	
+	// Require 3 consecutive offline polls (~15 seconds) before alerting
+	if m.offlineConfirmations[pbs.ID] < 3 {
+		log.Debug().
+			Str("pbs", pbs.Name).
+			Int("confirmations", m.offlineConfirmations[pbs.ID]).
+			Msg("PBS offline detected, waiting for confirmation")
+		return
+	}
+	
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		// Update last seen time
+		m.activeAlerts[alertID].LastSeen = time.Now()
+		return
+	}
+	
+	// Create new offline alert after confirmation
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "offline",
+		Level:        AlertLevelCritical,
+		ResourceID:   pbs.ID,
+		ResourceName: pbs.Name,
+		Node:         pbs.Host,
+		Instance:     pbs.Name,
+		Message:      fmt.Sprintf("PBS instance %s is offline", pbs.Name),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+	
+	m.activeAlerts[alertID] = alert
+	
+	// Log and notify
+	log.Error().
+		Str("pbs", pbs.Name).
+		Str("host", pbs.Host).
+		Int("confirmations", m.offlineConfirmations[pbs.ID]).
+		Msg("PBS instance is offline")
+	
+	if m.onAlert != nil {
+		go m.onAlert(alert)
+	}
+}
+
+// clearPBSOfflineAlert removes offline alert when PBS comes back online
+func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
+	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Reset offline confirmation count
+	if count, exists := m.offlineConfirmations[pbs.ID]; exists && count > 0 {
+		log.Debug().
+			Str("pbs", pbs.Name).
+			Int("previousCount", count).
+			Msg("PBS is online, resetting offline confirmation count")
+		delete(m.offlineConfirmations, pbs.ID)
+	}
+	
+	// Check if offline alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+	
+	// Remove from active alerts
+	delete(m.activeAlerts, alertID)
+	
+	// Add to recently resolved  
+	resolvedAlert := &ResolvedAlert{
+		ResolvedTime: time.Now(),
+	}
+	resolvedAlert.Alert = alert
+	m.recentlyResolved[alertID] = resolvedAlert
+	
+	// Send recovery notification
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+	
+	// Log recovery
+	log.Info().
+		Str("pbs", pbs.Name).
+		Str("host", pbs.Host).
+		Dur("downtime", time.Since(alert.StartTime)).
+		Msg("PBS instance is back online")
+}
+
+// checkStorageOffline creates an alert for offline/unavailable storage
+func (m *Manager) checkStorageOffline(storage models.Storage) {
+	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Check if storage offline alerts are disabled
+	if override, exists := m.config.Overrides[storage.ID]; exists && override.Disabled {
+		// Storage alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			delete(m.activeAlerts, alertID)
+			log.Debug().
+				Str("storage", storage.Name).
+				Msg("Storage offline alert cleared (alerts disabled)")
+		}
+		return
+	}
+	
+	// Track confirmation count for this storage
+	m.offlineConfirmations[storage.ID]++
+	
+	// Require 2 consecutive offline polls (~10 seconds) before alerting for storage
+	// (less than nodes since storage status can be more transient)
+	if m.offlineConfirmations[storage.ID] < 2 {
+		log.Debug().
+			Str("storage", storage.Name).
+			Int("confirmations", m.offlineConfirmations[storage.ID]).
+			Msg("Storage offline detected, waiting for confirmation")
+		return
+	}
+	
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		// Update last seen time
+		m.activeAlerts[alertID].LastSeen = time.Now()
+		return
+	}
+	
+	// Create new offline alert after confirmation
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "offline",
+		Level:        AlertLevelWarning, // Storage offline is Warning, not Critical
+		ResourceID:   storage.ID,
+		ResourceName: storage.Name,
+		Node:         storage.Node,
+		Instance:     storage.Instance,
+		Message:      fmt.Sprintf("Storage %s on node %s is unavailable", storage.Name, storage.Node),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+	
+	m.activeAlerts[alertID] = alert
+	
+	// Log and notify
+	log.Warn().
+		Str("storage", storage.Name).
+		Str("node", storage.Node).
+		Int("confirmations", m.offlineConfirmations[storage.ID]).
+		Msg("Storage is offline/unavailable")
+	
+	if m.onAlert != nil {
+		go m.onAlert(alert)
+	}
+}
+
+// clearStorageOfflineAlert removes offline alert when storage comes back online
+func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
+	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Reset offline confirmation count
+	if count, exists := m.offlineConfirmations[storage.ID]; exists && count > 0 {
+		log.Debug().
+			Str("storage", storage.Name).
+			Int("previousCount", count).
+			Msg("Storage is online, resetting offline confirmation count")
+		delete(m.offlineConfirmations, storage.ID)
+	}
+	
+	// Check if offline alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+	
+	// Remove from active alerts
+	delete(m.activeAlerts, alertID)
+	
+	// Add to recently resolved  
+	resolvedAlert := &ResolvedAlert{
+		ResolvedTime: time.Now(),
+	}
+	resolvedAlert.Alert = alert
+	m.recentlyResolved[alertID] = resolvedAlert
+	
+	// Send recovery notification
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+	
+	// Log recovery
+	log.Info().
+		Str("storage", storage.Name).
+		Str("node", storage.Node).
+		Dur("downtime", time.Since(alert.StartTime)).
+		Msg("Storage is back online")
+}
 
 // ClearAlert manually clears an alert
 func (m *Manager) ClearAlert(alertID string) {
