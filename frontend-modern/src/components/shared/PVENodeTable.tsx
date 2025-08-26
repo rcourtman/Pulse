@@ -146,11 +146,18 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     return nodes && nodes.length > 0;
   });
   
+  // Calculate table width based on number of count columns
+  const tableWidth = createMemo(() => {
+    const countColumns = getCountHeaders().length;
+    // Base: 200 + 80 + 100 + (countColumns * 80) + 180 + 180 + 180 + 100
+    return 1020 + (countColumns * 80);
+  });
+  
   return (
     <Show when={showTable()}>
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="overflow-x-auto" style="overflow-x: auto;">
-          <table style="width: 1100px; table-layout: fixed;">
+          <table style={`width: ${tableWidth()}px; table-layout: fixed;`}>
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
