@@ -88,13 +88,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div class="overflow-x-auto">
-        <table class="min-w-[1000px]">
+        <table class="w-[1000px] table-fixed">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[150px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[80px]">Status</th>
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">CPU</th>
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">Memory</th>
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">
@@ -102,10 +102,10 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">{header}</th>
+                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[80px]">{header}</th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Uptime</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[100px]">Uptime</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -166,13 +166,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
-                    <td class="px-2 py-0.5 whitespace-nowrap">
-                      <div class="flex items-center gap-1">
+                    <td class="px-2 py-0.5">
+                      <div class="flex items-center gap-1 whitespace-nowrap">
                         <a 
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
                           target="_blank"
                           onClick={(e) => e.stopPropagation()}
-                          class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                          class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
                         >
                           {item.data.name}
                         </a>
@@ -197,9 +197,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-0.5 whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span class={`h-2 w-2 rounded-full ${
+                    <td class="px-2 py-0.5">
+                      <div class="flex items-center gap-1 whitespace-nowrap">
+                        <span class={`h-2 w-2 flex-shrink-0 rounded-full ${
                           isOnline() ? 'bg-green-500' : 'bg-red-500'
                         }`} />
                         <span class="text-xs text-gray-600 dark:text-gray-400">
