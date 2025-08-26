@@ -40,11 +40,10 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
       // If we have any PBS backups, filter to matching instances
       if (pbsWithBackups.size > 0) {
         instances = instances.filter(pbs => pbsWithBackups.has(pbs.name));
-      } else if (props.filteredBackups.length > 0) {
-        // We have filtered backups but none are PBS backups, hide PBS table
+      } else {
+        // No PBS backups found in the filtered results, hide PBS table
         instances = [];
       }
-      // If no filtered backups at all (empty search), show all PBS instances
     }
     
     return instances.sort((a, b) => {

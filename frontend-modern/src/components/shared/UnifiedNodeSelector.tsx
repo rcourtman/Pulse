@@ -6,6 +6,7 @@ import { PBSNodeTable } from './PBSNodeTable';
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
+  nodes?: any[];
   filteredVms?: any[];
   filteredContainers?: any[];
   filteredStorage?: any[];
@@ -14,8 +15,9 @@ interface UnifiedNodeSelectorProps {
 }
 
 export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
-  const { state, connected, initialDataReceived } = useWebSocket();
+  const { state } = useWebSocket();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  
   
   // Reset selection when tab changes
   createEffect(() => {
@@ -28,8 +30,9 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     const counts: Record<string, number> = {};
     
     // Count PVE backups and snapshots by node
-    if (state.nodes) {
-      state.nodes.forEach(node => {
+    const nodes = props.nodes || state.nodes;
+    if (nodes) {
+      nodes.forEach((node: any) => {
         let count = 0;
         
         // Count storage backups
@@ -78,36 +81,33 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     }
   };
   
-  // Only render when we have connection and initial data
-  // This prevents the tables from disappearing on refresh
+  // Parent components now handle conditional rendering, so we can render directly
+  const nodes = createMemo(() => props.nodes || state.nodes || []);
+  
   return (
-    <Show when={connected() && initialDataReceived()}>
-      <div class="space-y-2 mb-4">
-        <Show when={state.nodes && state.nodes.length > 0}>
-          <PVENodeTable
-            nodes={state.nodes}
-            vms={props.filteredVms !== undefined ? props.filteredVms : state.vms}
-            containers={props.filteredContainers !== undefined ? props.filteredContainers : state.containers}
-            storage={props.filteredStorage !== undefined ? props.filteredStorage : state.storage}
-            backupCounts={backupCounts()}
-            currentTab={props.currentTab}
-            selectedNode={selectedNode()}
-            onNodeClick={handlePVENodeClick}
-            searchTerm={props.searchTerm}
-            filteredBackups={props.filteredBackups}
-          />
-        </Show>
-        <Show when={props.currentTab === 'backups' && state.pbs && state.pbs.length > 0}>
-          <PBSNodeTable
-            pbsInstances={state.pbs}
-            backupCounts={backupCounts()}
-            selectedNode={selectedNode()}
-            onNodeClick={handlePBSNodeClick}
-            currentTab={props.currentTab}
-            filteredBackups={props.filteredBackups}
-          />
-        </Show>
-      </div>
-    </Show>
+    <div class="space-y-2 mb-4">
+      <PVENodeTable
+        nodes={nodes()}
+        vms={props.filteredVms !== undefined ? props.filteredVms : state.vms}
+        containers={props.filteredContainers !== undefined ? props.filteredContainers : state.containers}
+        storage={props.filteredStorage !== undefined ? props.filteredStorage : state.storage}
+        backupCounts={backupCounts()}
+        currentTab={props.currentTab}
+        selectedNode={selectedNode()}
+        onNodeClick={handlePVENodeClick}
+        searchTerm={props.searchTerm}
+        filteredBackups={props.filteredBackups}
+      />
+      <Show when={props.currentTab === 'backups' && state.pbs && state.pbs.length > 0}>
+        <PBSNodeTable
+          pbsInstances={state.pbs!}
+          backupCounts={backupCounts()}
+          selectedNode={selectedNode()}
+          onNodeClick={handlePBSNodeClick}
+          currentTab={props.currentTab}
+          filteredBackups={props.filteredBackups}
+        />
+      </Show>
+    </div>
   );
 };

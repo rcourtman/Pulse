@@ -343,6 +343,7 @@ export function Dashboard(props: DashboardProps) {
       <UnifiedNodeSelector 
         currentTab="dashboard"
         onNodeSelect={handleNodeSelect}
+        nodes={props.nodes}
         filteredVms={filteredGuests().filter(g => g.type === 'qemu')}
         filteredContainers={filteredGuests().filter(g => g.type === 'lxc')}
         searchTerm={search()}
@@ -545,7 +546,7 @@ export function Dashboard(props: DashboardProps) {
       </Show>
 
       {/* Table View */}
-      <Show when={connected() && initialDataReceived() && (props.nodes.length > 0 || props.vms.length > 0 || props.containers.length > 0)}>
+      <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <ScrollableTable 
             class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
@@ -680,12 +681,19 @@ export function Dashboard(props: DashboardProps) {
         </ComponentErrorBoundary>
       </Show>
 
-      <Show when={connected() && initialDataReceived() && filteredGuests().length === 0 && props.nodes.filter(n => n.type === 'pve').length > 0}>
-        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-          <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p class="mt-2">No guests found matching your filters</p>
+      <Show when={connected() && initialDataReceived() && filteredGuests().length === 0 && (props.vms.length > 0 || props.containers.length > 0)}>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 mb-4">
+          <div class="text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No guests found</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400">
+              {search() && search().trim() !== '' 
+                ? `No guests match your search "${search()}"` 
+                : 'No guests match your current filters'}
+            </p>
+          </div>
         </div>
       </Show>
       
