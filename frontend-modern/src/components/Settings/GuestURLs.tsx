@@ -217,12 +217,12 @@ export function GuestURLs(props: GuestURLsProps) {
                           
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
-                              <td class="px-3 py-1.5">
+                              <td class="p-1 px-2">
                                 <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {guest.name}
                                 </div>
                               </td>
-                              <td class="px-3 py-1.5">
+                              <td class="p-1 px-2">
                                 <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                                   guest.type === 'qemu' 
                                     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
@@ -231,10 +231,10 @@ export function GuestURLs(props: GuestURLsProps) {
                                   {guest.type === 'qemu' ? 'VM' : 'LXC'}
                                 </span>
                               </td>
-                              <td class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                              <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
                                 {guest.vmid}
                               </td>
-                              <td class="px-3 py-1.5">
+                              <td class="p-1 px-2">
                                 <input
                                   type="text"
                                   placeholder="https://192.168.1.100:8006"
@@ -245,7 +245,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                          focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                               </td>
-                              <td class="px-3 py-1.5">
+                              <td class="p-1 px-2">
                                 <div class="flex items-center gap-2">
                                   <Show when={url}>
                                     <a
