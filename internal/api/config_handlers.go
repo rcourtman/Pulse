@@ -16,6 +16,7 @@ import (
 
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
@@ -272,6 +273,114 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 
 // HandleGetNodes returns all configured nodes
 func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) {
+	// Check if mock mode is enabled
+	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+		// Return mock nodes for settings page
+		mockNodes := []NodeResponse{}
+		
+		// Get mock state to extract node information
+		state := h.monitor.GetState()
+		
+		// Get all cluster nodes and standalone nodes
+		var clusterNodes []models.Node
+		var standaloneNodes []models.Node
+		
+		for _, node := range state.Nodes {
+			if node.Instance == "mock-cluster" {
+				clusterNodes = append(clusterNodes, node)
+			} else {
+				standaloneNodes = append(standaloneNodes, node)
+			}
+		}
+		
+		// If we have cluster nodes, create ONE config entry for the cluster
+		if len(clusterNodes) > 0 {
+			// Build cluster endpoints for cluster nodes only
+			var clusterEndpoints []config.ClusterEndpoint
+			for i, n := range clusterNodes {
+				clusterEndpoints = append(clusterEndpoints, config.ClusterEndpoint{
+					NodeName: n.Name,
+					Host:     fmt.Sprintf("192.168.0.%d:8006", 100+i),
+				})
+			}
+			
+			// Create a single cluster entry (representing the cluster config)
+			clusterNode := NodeResponse{
+				ID:                generateNodeID("pve", 0),
+				Type:              "pve",
+				Name:              "mock-cluster", // The cluster name
+				Host:              "192.168.0.100:8006", // Primary entry point
+				User:              "root@pam",
+				HasPassword:       true,
+				TokenName:         "pulse",
+				HasToken:          true,
+				Fingerprint:       "",
+				VerifySSL:         false,
+				MonitorVMs:        true,
+				MonitorContainers: true,
+				MonitorStorage:    true,
+				MonitorBackups:    true,
+				Status:            "connected",
+				IsCluster:         true,
+				ClusterName:       "mock-cluster",
+				ClusterEndpoints:  clusterEndpoints, // All cluster nodes
+			}
+			mockNodes = append(mockNodes, clusterNode)
+		}
+		
+		// Add standalone nodes as individual entries
+		for i, node := range standaloneNodes {
+			standaloneNode := NodeResponse{
+				ID:                generateNodeID("pve", len(mockNodes)+i),
+				Type:              "pve",
+				Name:              node.Name, // Use the actual node name
+				Host:              fmt.Sprintf("192.168.0.%d:8006", 150+i), // Different IP range for standalone
+				User:              "root@pam",
+				HasPassword:       true,
+				TokenName:         "pulse",
+				HasToken:          true,
+				Fingerprint:       "",
+				VerifySSL:         false,
+				MonitorVMs:        true,
+				MonitorContainers: true,
+				MonitorStorage:    true,
+				MonitorBackups:    true,
+				Status:            "connected",
+				IsCluster:         false, // Not part of a cluster
+				ClusterName:       "",
+				ClusterEndpoints:  []config.ClusterEndpoint{},
+			}
+			mockNodes = append(mockNodes, standaloneNode)
+		}
+		
+		// Add mock PBS instances
+		for i, pbs := range state.PBSInstances {
+			pbsNode := NodeResponse{
+				ID:                generateNodeID("pbs", i),
+				Type:              "pbs",
+				Name:              pbs.Name,
+				Host:              pbs.Host,
+				User:              "pulse@pbs",
+				HasPassword:       false,
+				TokenName:         "pulse",
+				HasToken:          true,
+				Fingerprint:       "",
+				VerifySSL:         false,
+				MonitorDatastores: true,
+				MonitorSyncJobs:   true,
+				MonitorVerifyJobs: true,
+				MonitorPruneJobs:  true,
+				MonitorGarbageJobs: true,
+				Status:            "connected", // Always connected in mock mode
+			}
+			mockNodes = append(mockNodes, pbsNode)
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockNodes)
+		return
+	}
+	
 	nodes := h.GetAllNodesForAPI()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -280,6 +389,12 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 
 // HandleAddNode adds a new node
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
+	// Prevent node modifications in mock mode
+	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+	
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode add node request")
@@ -734,6 +849,12 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 
 // HandleUpdateNode updates an existing node
 func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request) {
+	// Prevent node modifications in mock mode
+	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+	
 	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
 	if nodeID == "" {
 		http.Error(w, "Node ID required", http.StatusBadRequest)
@@ -902,6 +1023,12 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 
 // HandleDeleteNode deletes a node
 func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request) {
+	// Prevent node modifications in mock mode
+	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+	
 	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
 	if nodeID == "" {
 		http.Error(w, "Node ID required", http.StatusBadRequest)

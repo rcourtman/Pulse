@@ -34,6 +34,8 @@ export interface Node {
   cpuInfo: CPUInfo;
   lastSeen: string;
   connectionHealth: string;
+  isClusterMember?: boolean;  // True if part of a cluster
+  clusterName?: string;        // Name of cluster (empty if standalone)
 }
 
 export interface VM {
