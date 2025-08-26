@@ -88,24 +88,24 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full min-w-[900px]">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CPU</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memory</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[180px]">CPU</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[180px]">Memory</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[180px]">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{header}</th>
+                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">{header}</th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Uptime</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Uptime</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -177,7 +177,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           {item.data.name}
                         </a>
                         <Show when={isPVE && node!.isClusterMember !== undefined}>
-                          <span class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium ${
+                          <span class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium whitespace-nowrap ${
                             node!.isClusterMember 
                               ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
                               : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
@@ -207,7 +207,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </span>
                       </div>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5 min-w-[180px]">
                       <MetricBar 
                         value={cpuPercent()} 
                         label={`${cpuPercent()}%`}
@@ -215,7 +215,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="cpu"
                       />
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5 min-w-[180px]">
                       <MetricBar 
                         value={memPercent()} 
                         label={`${memPercent()}%`}
@@ -227,7 +227,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="memory"
                       />
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5 min-w-[180px]">
                       <MetricBar 
                         value={diskPercent()} 
                         label={`${diskPercent()}%`}
