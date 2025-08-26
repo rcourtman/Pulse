@@ -1436,7 +1436,8 @@ const UnifiedBackups: Component = () => {
       />
 
       {/* Table */}
-      <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="overflow-x-auto">
         <style>{`
           .backup-table {
             table-layout: fixed;
@@ -1544,35 +1545,35 @@ const UnifiedBackups: Component = () => {
           </div>
           
           {/* Desktop Table View */}
-          <table class="backup-table text-xs sm:text-sm hidden lg:table">
-            <thead class="bg-gray-100 dark:bg-gray-800">
-              <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                <th class="p-1 px-2" style="width: 150px;">
+          <table class="backup-table hidden lg:table">
+            <thead>
+              <tr class="border-b border-gray-200 dark:border-gray-700">
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 150px;">
                   Name
                 </th>
                 <th
-                  class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('type')}
                   style="width: 60px;"
                 >
                   Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('vmid')}
                   style="width: 60px;"
                 >
                   VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('node')}
                   style="width: 100px;"
                 >
                   Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupTime')}
                   style="width: 140px;"
                 >
@@ -1588,7 +1589,7 @@ const UnifiedBackups: Component = () => {
                   </th>
                 </Show>
                 <th
-                  class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupType')}
                   style="width: 80px;"
                 >
@@ -1609,12 +1610,12 @@ const UnifiedBackups: Component = () => {
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <For each={groupedData()}>
                 {(group) => (
                   <>
-                    <tr class="bg-gray-50 dark:bg-gray-700/30">
-                      <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                      <td class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
                         {group.label} ({group.items.length})
                       </td>
                       <td colspan={(() => {
@@ -1755,6 +1756,7 @@ const UnifiedBackups: Component = () => {
           </table>
           </Show>
         </Show>
+        </div>
       </div>
 
       {/* Tooltip */}

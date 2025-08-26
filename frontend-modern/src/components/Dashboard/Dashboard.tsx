@@ -549,14 +549,14 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <ScrollableTable 
-            class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden"
+            class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
             minWidth="900px"
           >
-          <table class="w-full min-w-[900px] text-xs sm:text-sm table-fixed">
+          <table class="w-full min-w-[900px] table-fixed">
             <thead>
-              <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+              <tr class="border-b border-gray-200 dark:border-gray-700">
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                   onClick={() => handleSort('name')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                   tabindex="0"
@@ -566,61 +566,61 @@ export function Dashboard(props: DashboardProps) {
                   Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[60px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[60px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('type')}
                 >
                   Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[70px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[70px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('vmid')}
                 >
                   VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[100px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[100px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('uptime')}
                 >
                   Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('cpu')}
                 >
                   CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('memory')}
                 >
                   Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('disk')}
                 >
                   Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('diskRead')}
                 >
                   Disk Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('diskWrite')}
                 >
                   Disk Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('networkIn')}
                 >
                   Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('networkOut')}
                 >
                   Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
@@ -632,28 +632,19 @@ export function Dashboard(props: DashboardProps) {
                 {([node, guests]) => (
                   <>
                     <Show when={node}>
-                      <tr class="node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[200px]">
+                      <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                        <td class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                           <a 
                             href={nodeHostMap()[node] || (node.includes(':') ? `https://${node}` : `https://${node}:8006`)} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+                            class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
                             title={`Open ${node} web interface`}
                           >
                             {node}
                           </a>
                         </td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[60px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[70px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[100px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[140px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[140px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[140px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[90px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[90px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[90px]"></td>
-                        <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 w-[90px]"></td>
+                        <td colspan="10" class="px-2 py-0.5"></td>
                       </tr>
                     </Show>
                     <For each={guests} fallback={<></>}>
