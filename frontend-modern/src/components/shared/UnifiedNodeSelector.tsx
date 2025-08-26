@@ -6,6 +6,7 @@ import { PBSNodeTable } from './PBSNodeTable';
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
+  onNamespaceSelect?: (namespace: string) => void;
   nodes?: any[];
   filteredVms?: any[];
   filteredContainers?: any[];
@@ -104,6 +105,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
           backupCounts={backupCounts()}
           selectedNode={selectedNode()}
           onNodeClick={handlePBSNodeClick}
+          onNamespaceClick={(instanceName, datastoreName, namespace) => {
+            // Build a search string that filters for this specific namespace
+            const searchStr = `pbs:${instanceName}:${datastoreName}:${namespace}`;
+            if (props.onNamespaceSelect) {
+              props.onNamespaceSelect(searchStr);
+            }
+          }}
           currentTab={props.currentTab}
           filteredBackups={props.filteredBackups}
         />

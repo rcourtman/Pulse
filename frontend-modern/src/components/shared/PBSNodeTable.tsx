@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { PBSInstance } from '@/types/api';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { formatBytes, formatUptime } from '@/utils/format';
@@ -8,11 +8,27 @@ interface PBSNodeTableProps {
   backupCounts?: Record<string, number>;
   selectedNode: string | null;
   onNodeClick: (nodeId: string) => void;
+  onNamespaceClick?: (instanceName: string, datastoreName: string, namespace: string) => void;
   currentTab?: 'dashboard' | 'storage' | 'backups';
   filteredBackups?: any[];
 }
 
 export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
+  // Track which PBS instances are expanded to show datastores/namespaces
+  const [expandedInstances, setExpandedInstances] = createSignal<Set<string>>(new Set());
+  
+  const toggleExpanded = (instanceName: string) => {
+    const expanded = new Set(expandedInstances());
+    if (expanded.has(instanceName)) {
+      expanded.delete(instanceName);
+    } else {
+      expanded.add(instanceName);
+    }
+    setExpandedInstances(expanded);
+  };
+  
+  const isExpanded = (instanceName: string) => expandedInstances().has(instanceName);
+  
   // Filter and sort PBS instances
   const sortedInstances = createMemo(() => {
     if (!props.pbsInstances) return [];
@@ -115,7 +131,12 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                 const isSelected = () => props.selectedNode === pbs.name;
                 const isClickable = props.currentTab === 'backups';
                 
+                const hasDatastoresWithNamespaces = () => {
+                  return pbs.datastores?.some(ds => ds.namespaces && ds.namespaces.length > 0);
+                };
+                
                 return (
+                  <>
                   <tr 
                     class={`
                       border-b border-gray-100 dark:border-gray-700/50 
@@ -124,10 +145,42 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                       ${!isOnline() ? 'opacity-60' : ''}
                       ${isSelected() && isClickable ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 scale-[1.005] shadow-sm border-l-4 border-l-blue-600 dark:border-l-blue-500' : ''}
                     `}
-                    onClick={() => isClickable && props.onNodeClick(pbs.name)}
+                    onClick={(e) => {
+                      // If clicking the expand button, don't trigger node click
+                      if ((e.target as HTMLElement).closest('.expand-button')) {
+                        return;
+                      }
+                      isClickable && props.onNodeClick(pbs.name);
+                    }}
                   >
                     <td class="px-2 py-0.5">
                       <div class="flex items-center gap-2">
+                        <Show when={hasDatastoresWithNamespaces()}>
+                          <button
+                            class="expand-button p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpanded(pbs.name);
+                            }}
+                            title={isExpanded(pbs.name) ? "Collapse" : "Expand"}
+                          >
+                            <svg
+                              class={`w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform ${
+                                isExpanded(pbs.name) ? 'rotate-90' : ''
+                              }`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 5l7 7-7 7"
+                              />
+                            </svg>
+                          </button>
+                        </Show>
                         <span class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {pbs.name}
@@ -186,6 +239,84 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                       </span>
                     </td>
                   </tr>
+                  
+                  {/* Expandable rows for datastores and namespaces */}
+                  <Show when={isExpanded(pbs.name) && pbs.datastores}>
+                    <For each={pbs.datastores}>
+                      {(datastore) => (
+                        <>
+                          {/* Datastore row */}
+                          <tr class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700/30">
+                            <td colspan="8" class="px-8 py-1">
+                              <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                                  </svg>
+                                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {datastore.name}
+                                  </span>
+                                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    ({datastore.namespaces?.length || 0} namespaces)
+                                  </span>
+                                </div>
+                                <div class="flex items-center gap-4 text-xs">
+                                  <div class="flex items-center gap-1">
+                                    <span class="text-gray-500">Used:</span>
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">
+                                      {formatBytes(datastore.used || 0)}
+                                    </span>
+                                  </div>
+                                  <div class="flex items-center gap-1">
+                                    <span class="text-gray-500">Total:</span>
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">
+                                      {formatBytes(datastore.total || 0)}
+                                    </span>
+                                  </div>
+                                  <Show when={datastore.deduplicationFactor && datastore.deduplicationFactor > 0}>
+                                    <div class="flex items-center gap-1">
+                                      <span class="text-gray-500">Dedup:</span>
+                                      <span class="font-medium text-green-600 dark:text-green-400">
+                                        {datastore.deduplicationFactor!.toFixed(1)}:1
+                                      </span>
+                                    </div>
+                                  </Show>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                          
+                          {/* Namespace rows */}
+                          <Show when={datastore.namespaces && datastore.namespaces.length > 0}>
+                            <For each={datastore.namespaces}>
+                              {(namespace) => (
+                                <tr 
+                                  class="bg-gray-25 dark:bg-gray-850 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors border-b border-gray-50 dark:border-gray-800"
+                                  onClick={() => {
+                                    if (props.onNamespaceClick) {
+                                      props.onNamespaceClick(pbs.name, datastore.name, namespace.path || '/');
+                                    }
+                                  }}
+                                >
+                                  <td colspan="8" class="px-12 py-0.5">
+                                    <div class="flex items-center gap-2">
+                                      <svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 12h10m-7 5h4" />
+                                      </svg>
+                                      <span class="text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                                        {namespace.path || '/ (root)'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </For>
+                          </Show>
+                        </>
+                      )}
+                    </For>
+                  </Show>
+                  </>
                 );
               }}
             </For>
