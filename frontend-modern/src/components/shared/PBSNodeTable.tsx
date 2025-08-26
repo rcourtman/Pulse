@@ -131,9 +131,6 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         <span class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {pbs.name}
-                          <span class="ml-2 text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded">
-                            PBS
-                          </span>
                         </span>
                       </div>
                     </td>
