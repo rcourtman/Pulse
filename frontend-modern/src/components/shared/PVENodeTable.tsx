@@ -210,9 +210,12 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                 return (
                   <tr 
                     class={`
-                      border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer h-8
+                      border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 
+                      transition-all duration-150 ease-in-out cursor-pointer h-8
+                      hover:scale-[1.01] hover:shadow-md hover:z-10 relative
+                      hover:border-l-4 hover:border-l-blue-500 dark:hover:border-l-blue-400
                       ${!isOnline() ? 'opacity-60' : ''}
-                      ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' : ''}
+                      ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 scale-[1.005] shadow-sm border-l-4 border-l-blue-600 dark:border-l-blue-500' : ''}
                     `}
                     onClick={() => props.onNodeClick(node.name)}
                   >
