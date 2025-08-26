@@ -86,7 +86,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
   return (
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div class="overflow-x-auto" style="overflow-x: auto;">
-        <table style="width: 1100px; table-layout: fixed;">
+        <table style="width: 1000px; table-layout: fixed;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
