@@ -53,8 +53,13 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
           props.storage?.forEach(s => nodesWithItems.add(s.node));
           break;
         case 'backups':
-          // Filter based on backups
-          props.filteredBackups?.forEach(b => nodesWithItems.add(b.node));
+          // Filter based on backups - only add PVE node names, not PBS instance names
+          props.filteredBackups?.forEach(b => {
+            // Only add if it's a node that exists in our PVE nodes list
+            if (props.nodes.some(n => n.name === b.node)) {
+              nodesWithItems.add(b.node);
+            }
+          });
           break;
       }
       

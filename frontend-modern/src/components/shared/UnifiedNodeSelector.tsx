@@ -104,6 +104,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
             selectedNode={selectedNode()}
             onNodeClick={handlePBSNodeClick}
             currentTab={props.currentTab}
+            filteredBackups={props.filteredBackups}
           />
         </Show>
       </div>

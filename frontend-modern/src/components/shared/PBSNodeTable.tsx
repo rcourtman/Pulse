@@ -9,14 +9,46 @@ interface PBSNodeTableProps {
   selectedNode: string | null;
   onNodeClick: (nodeId: string) => void;
   currentTab?: 'dashboard' | 'storage' | 'backups';
+  filteredBackups?: any[];
 }
 
 export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
-  // Sort PBS instances by status then by name
+  // Filter and sort PBS instances
   const sortedInstances = createMemo(() => {
     if (!props.pbsInstances) return [];
     
-    return [...props.pbsInstances].sort((a, b) => {
+    let instances = [...props.pbsInstances];
+    
+    // If we have filtered backups in backups tab, only show PBS instances with matching backups
+    if (props.currentTab === 'backups' && props.filteredBackups !== undefined) {
+      const pbsWithBackups = new Set<string>();
+      props.filteredBackups.forEach(b => {
+        // Check if the backup node matches any PBS instance name
+        if (props.pbsInstances?.some(pbs => pbs.name === b.node || b.node === 'PBS')) {
+          // If node is 'PBS' or matches a PBS instance name, add it
+          if (b.node === 'PBS' && b.datastore) {
+            // For generic PBS backups, try to match by instance if possible
+            // Otherwise include all PBS instances
+            props.pbsInstances.forEach(pbs => pbsWithBackups.add(pbs.name));
+          } else if (b.node !== 'PBS') {
+            pbsWithBackups.add(b.node);
+          }
+        }
+      });
+      
+      // Only show PBS instances that have filtered backups
+      if (pbsWithBackups.size > 0 || props.filteredBackups.length === 0) {
+        instances = instances.filter(pbs => pbsWithBackups.has(pbs.name));
+      } else if (props.filteredBackups.some(b => b.node === 'PBS')) {
+        // If we have PBS backups but can't match specific instances, show all
+        // This handles the case where backups are marked as 'PBS' generically
+      } else {
+        // No PBS backups in filtered results, hide all PBS instances
+        instances = [];
+      }
+    }
+    
+    return instances.sort((a, b) => {
       // Healthy/online instances first
       const aOnline = a.status === 'healthy' || a.status === 'online';
       const bOnline = b.status === 'healthy' || b.status === 'online';
