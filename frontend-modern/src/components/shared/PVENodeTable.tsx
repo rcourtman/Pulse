@@ -151,7 +151,10 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
   return (
     <Show when={showTable()}>
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div class="overflow-x-auto" style="overflow-x: auto;">
+        <div class="overflow-x-auto" style="overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;">
+          <style>{`
+            .overflow-x-auto::-webkit-scrollbar { display: none; }
+          `}</style>
           <table class="w-full" style="min-width: 1000px;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
