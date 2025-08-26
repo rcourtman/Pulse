@@ -425,82 +425,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
   
-  const batchToggleDisabled = (resourceIds: string[], targetState: boolean) => {
-    const currentOverrides = [...props.overrides()];
-    const newRawConfig = { ...props.rawOverridesConfig() };
-    const allGuests = Object.values(guestsGroupedByNode()).flat();
-    const allResources = [...allGuests, ...storageWithOverrides()];
-    
-    resourceIds.forEach(resourceId => {
-      const resource = allResources.find(r => r.id === resourceId);
-      if (!resource || (resource.type !== 'guest' && resource.type !== 'storage')) return;
-      
-      const existingOverrideIndex = currentOverrides.findIndex(o => o.id === resourceId);
-      const existingOverride = existingOverrideIndex >= 0 ? currentOverrides[existingOverrideIndex] : undefined;
-      
-      // Clean the thresholds
-      const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
-      delete cleanThresholds.disabled;
-      
-      // If enabling (targetState = false) and no custom thresholds exist, remove the override
-      if (!targetState && Object.keys(cleanThresholds).length === 0) {
-        // Remove from overrides array
-        if (existingOverrideIndex >= 0) {
-          currentOverrides.splice(existingOverrideIndex, 1);
-        }
-        // Remove from raw config
-        delete newRawConfig[resourceId];
-      } else {
-        // Create or update the override
-        const override: Override = {
-          id: resourceId,
-          name: resource.name,
-          type: resource.type,
-          resourceType: resource.resourceType,
-          vmid: 'vmid' in resource ? resource.vmid : undefined,
-          node: 'node' in resource ? resource.node : undefined,
-          instance: 'instance' in resource ? resource.instance : undefined,
-          disabled: targetState,
-          thresholds: cleanThresholds
-        };
-        
-        if (existingOverrideIndex >= 0) {
-          currentOverrides[existingOverrideIndex] = override;
-        } else {
-          currentOverrides.push(override);
-        }
-        
-        // Update raw config
-        const hysteresisThresholds: Record<string, any> = {};
-        Object.entries(cleanThresholds).forEach(([metric, value]) => {
-          if (value !== undefined && value !== null) {
-            hysteresisThresholds[metric] = { 
-              trigger: value, 
-              clear: Math.max(0, (value as number) - 5) 
-            };
-          }
-        });
-        
-        if (targetState) {
-          hysteresisThresholds.disabled = true;
-        }
-        
-        newRawConfig[resourceId] = hysteresisThresholds;
-      }
-    });
-    
-    // Apply all changes at once
-    props.setOverrides(currentOverrides);
-    props.setRawOverridesConfig(newRawConfig);
-    props.setHasUnsavedChanges(true);
-  };
   
   const toggleDisabled = (resourceId: string, forceState?: boolean) => {
     // Flatten grouped guests to find the resource
     const allGuests = Object.values(guestsGroupedByNode()).flat();
-    const allResources = [...allGuests, ...storageWithOverrides()];
+    const allResources = [...allGuests, ...storageWithOverrides(), ...pbsServersWithOverrides()];
     const resource = allResources.find(r => r.id === resourceId);
-    if (!resource || (resource.type !== 'guest' && resource.type !== 'storage')) return;
+    if (!resource || (resource.type !== 'guest' && resource.type !== 'storage' && resource.type !== 'pbs')) return;
     
     // Get existing override if it exists
     const existingOverride = props.overrides().find(o => o.id === resourceId);
@@ -570,72 +501,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
   
-  const batchToggleNodeConnectivity = (nodeIds: string[], targetState: boolean) => {
-    const currentOverrides = [...props.overrides()];
-    const newRawConfig = { ...props.rawOverridesConfig() };
-    const nodes = nodesWithOverrides();
-    
-    nodeIds.forEach(nodeId => {
-      const node = nodes.find(r => r.id === nodeId);
-      if (!node || node.type !== 'node') return;
-      
-      const existingOverrideIndex = currentOverrides.findIndex(o => o.id === nodeId);
-      const existingOverride = existingOverrideIndex >= 0 ? currentOverrides[existingOverrideIndex] : undefined;
-      
-      // Clean the thresholds
-      const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
-      delete cleanThresholds.disabled;
-      delete cleanThresholds.disableConnectivity;
-      
-      // If enabling connectivity alerts (targetState = false) and no custom thresholds exist, remove the override
-      if (!targetState && Object.keys(cleanThresholds).length === 0) {
-        // Remove from overrides array
-        if (existingOverrideIndex >= 0) {
-          currentOverrides.splice(existingOverrideIndex, 1);
-        }
-        // Remove from raw config
-        delete newRawConfig[nodeId];
-      } else {
-        // Create or update the override
-        const override: Override = {
-          id: nodeId,
-          name: node.name,
-          type: node.type,
-          resourceType: node.resourceType,
-          disableConnectivity: targetState,
-          thresholds: cleanThresholds
-        };
-        
-        if (existingOverrideIndex >= 0) {
-          currentOverrides[existingOverrideIndex] = override;
-        } else {
-          currentOverrides.push(override);
-        }
-        
-        // Update raw config
-        const hysteresisThresholds: Record<string, any> = {};
-        Object.entries(cleanThresholds).forEach(([metric, value]) => {
-          if (value !== undefined && value !== null) {
-            hysteresisThresholds[metric] = { 
-              trigger: value, 
-              clear: Math.max(0, (value as number) - 5) 
-            };
-          }
-        });
-        
-        if (targetState) {
-          hysteresisThresholds.disableConnectivity = true;
-        }
-        
-        newRawConfig[nodeId] = hysteresisThresholds;
-      }
-    });
-    
-    // Apply all changes at once
-    props.setOverrides(currentOverrides);
-    props.setRawOverridesConfig(newRawConfig);
-    props.setHasUnsavedChanges(true);
-  };
   
   const toggleNodeConnectivity = (nodeId: string, forceState?: boolean) => {
     const node = nodesWithOverrides().find(r => r.id === nodeId);
@@ -1031,7 +896,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
           onToggleNodeConnectivity={toggleNodeConnectivity}
-          onBatchToggleNodeConnectivity={batchToggleNodeConnectivity}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
@@ -1051,6 +915,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onSaveEdit={saveEdit}
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
+          onToggleDisabled={toggleDisabled}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
@@ -1071,7 +936,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
           onToggleDisabled={toggleDisabled}
-          onBatchToggleDisabled={batchToggleDisabled}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
@@ -1092,7 +956,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
           onToggleDisabled={toggleDisabled}
-          onBatchToggleDisabled={batchToggleDisabled}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}

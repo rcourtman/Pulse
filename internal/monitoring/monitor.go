@@ -2085,6 +2085,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		Int("datastores", len(pbsInst.Datastores)).
 		Msg("PBS instance updated in state")
 
+	// Check PBS metrics against alert thresholds
+	if m.alertManager != nil {
+		m.alertManager.CheckPBS(pbsInst)
+	}
+
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
 		log.Info().
