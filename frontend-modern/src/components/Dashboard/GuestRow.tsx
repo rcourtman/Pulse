@@ -97,7 +97,7 @@ export function GuestRow(props: GuestRowProps) {
         <div class="flex items-center gap-2">
           {/* Status indicator */}
           <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
-            isRunning() ? 'bg-green-500' : 'bg-gray-400'
+            isRunning() ? 'bg-green-500' : 'bg-red-500'
           }`} title={props.guest.status}></span>
           
           {/* Name - clickable if custom URL is set */}

@@ -409,7 +409,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
-			state := m.state.GetSnapshot()
+			// Use GetState() instead of m.state.GetSnapshot() to respect mock mode
+			state := m.GetState()
 			log.Info().
 				Int("nodes", len(state.Nodes)).
 				Int("vms", len(state.VMs)).
@@ -620,13 +621,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	var modelNodes []models.Node
 	for _, node := range nodes {
 		modelNode := models.Node{
-			ID:       instanceName + "-" + node.Node,
-			Name:     node.Node,
-			Instance: instanceName,
-			Host:     instanceCfg.Host,  // Add the actual host URL
-			Status:   node.Status,
-			Type:     "node",
-			CPU:      safeFloat(node.CPU), // Already in percentage
+			ID:               instanceName + "-" + node.Node,
+			Name:             node.Node,
+			Instance:         instanceName,
+			Host:             instanceCfg.Host,  // Add the actual host URL
+			Status:           node.Status,
+			Type:             "node",
+			CPU:              safeFloat(node.CPU), // Already in percentage
 			Memory: models.Memory{
 				Total: int64(node.MaxMem),
 				Used:  int64(node.Mem),
@@ -643,6 +644,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			LoadAverage:      []float64{},
 			LastSeen:         time.Now(),
 			ConnectionHealth: "healthy",
+			IsClusterMember:  instanceCfg.IsCluster,
+			ClusterName:      instanceCfg.ClusterName,
 		}
 
 		// Debug logging for disk metrics - note that these values can fluctuate
@@ -2101,8 +2104,14 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	if mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"; mockEnabled {
 		// Import is handled at package level, use fully qualified name
 		if mockState := getMockState(); mockState != nil {
+			log.Debug().
+				Int("nodes", len(mockState.Nodes)).
+				Int("vms", len(mockState.VMs)).
+				Int("containers", len(mockState.Containers)).
+				Msg("Returning mock state")
 			return *mockState
 		}
+		log.Warn().Msg("Mock mode enabled but getMockState returned nil")
 	}
 	return m.state.GetSnapshot()
 }

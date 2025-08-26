@@ -1,9 +1,11 @@
 import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
-import { formatBytes, formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
-import PBSCard from '@/components/Dashboard/PBSCard';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
+import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { BackupsFilter } from './BackupsFilter';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
@@ -40,6 +42,22 @@ const UnifiedBackups: Component = () => {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [typeFilter, setTypeFilter] = createSignal<'all' | GuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
+  const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
+  
+  // Convert between UI filter and internal filter for BackupsFilter component
+  const uiBackupTypeFilter = createMemo(() => {
+    const filter = backupTypeFilter();
+    if (filter === 'all') return 'all';
+    if (filter === 'local' || filter === 'snapshot') return 'pve';
+    if (filter === 'remote') return 'pbs';
+    return 'all';
+  });
+  
+  const setUiBackupTypeFilter = (value: 'all' | 'pve' | 'pbs') => {
+    if (value === 'all') setBackupTypeFilter('all');
+    else if (value === 'pve') setBackupTypeFilter('local');
+    else if (value === 'pbs') setBackupTypeFilter('remote');
+  };
   const [sortKey, setSortKey] = createSignal<keyof UnifiedBackup>('backupTime');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
   const [selectedDateRange, setSelectedDateRange] = createSignal<{ start: number; end: number } | null>(null);
@@ -67,14 +85,12 @@ const UnifiedBackups: Component = () => {
     }
   });
   
-  const [showFilters, setShowFilters] = createLocalStorageBooleanSignal(
-    STORAGE_KEYS.BACKUPS_SHOW_FILTERS,
-    false // Default to collapsed
-  );
-  const [useRelativeTime, setUseRelativeTime] = createLocalStorageBooleanSignal(
+  const [useRelativeTime] = createLocalStorageBooleanSignal(
     STORAGE_KEYS.BACKUPS_USE_RELATIVE_TIME,
     false // Default to absolute time
   );
+  // TODO: Add time format toggle to BackupsFilter component
+  // const setUseRelativeTime = ...; 
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -523,6 +539,7 @@ const UnifiedBackups: Component = () => {
     setIsSearchLocked(false);
     setTypeFilter('all');
     setBackupTypeFilter('all');
+    setGroupByMode('date');
     setSortKey('backupTime');
     setSortDirection('desc');
     setSelectedDateRange(null);
@@ -545,31 +562,21 @@ const UnifiedBackups: Component = () => {
       
       // Escape key behavior
       if (e.key === 'Escape') {
-        // First check if we have search/filters to clear
+        // Clear search and reset filters
         if (searchTerm().trim() || typeFilter() !== 'all' || backupTypeFilter() !== 'all' || 
             selectedDateRange() !== null || sortKey() !== 'backupTime' || sortDirection() !== 'desc') {
-          // Clear search and reset filters
           resetFilters();
           
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
             searchInputRef.blur();
           }
-        } else if (showFilters()) {
-          // No search/filters active, so collapse the filters section
-          setShowFilters(false);
         }
-        // If filters are already collapsed, do nothing
       } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // If it's a printable character and user is not in an input field
-        // Expand filters section if collapsed
-        if (!showFilters()) {
-          setShowFilters(true);
-        }
         // Focus the search input and let the character be typed
         if (searchInputRef) {
           searchInputRef.focus();
-          // Don't prevent default - let the character be typed
         }
       }
     };
@@ -733,6 +740,18 @@ const UnifiedBackups: Component = () => {
     return { data: dataArray, maxValue };
   });
 
+  // Sort PBS instances by status then by name
+  const sortedPBSInstances = createMemo(() => {
+    if (!state.pbs) return [];
+    return [...state.pbs].sort((a, b) => {
+      // Online instances first
+      const aOnline = a.status === 'healthy' || a.status === 'online';
+      const bOnline = b.status === 'healthy' || b.status === 'online';
+      if (aOnline !== bOnline) return aOnline ? -1 : 1;
+      // Then by name
+      return a.name.localeCompare(b.name);
+    });
+  });
 
   return (
     <div class="space-y-4">
@@ -757,44 +776,160 @@ const UnifiedBackups: Component = () => {
           </div>
         </div>
       </Show>
-      
-      {/* PBS Status Summary - show regardless of PVE nodes */}
-      <Show when={state.pbs && state.pbs.length > 0}>
-        <div class="flex flex-wrap gap-2">
-          <For each={state.pbs}>
-            {(instance) => (
-              <div 
-                class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
-                onClick={() => {
-                  const currentSearch = searchTerm();
-                  const nodeFilter = `node:${instance.name}`;
-                  
-                  // Check if this PBS filter is already in the search
-                  if (currentSearch.includes(nodeFilter)) {
-                    // Remove the PBS filter
-                    setSearchTerm(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
-                    setIsSearchLocked(false);
-                  } else {
-                    // Clear any existing node: filters and add the new one
-                    const cleanedSearch = currentSearch.replace(/node:\S+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
-                    const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
-                    setSearchTerm(newSearch);
-                    setIsSearchLocked(true);
+
+      {/* Unified Node Selector */}
+      <UnifiedNodeSelector 
+        currentTab="backups"
+        onNodeSelect={(nodeId) => {
+          if (nodeId) {
+            const nodeFilter = `node:${nodeId}`;
+            setSearchTerm(nodeFilter);
+            setIsSearchLocked(true);
+          } else {
+            setSearchTerm('');
+            setIsSearchLocked(false);
+          }
+        }}
+      />
+
+      {/* Removed old PBS table */}
+      <Show when={false && sortedPBSInstances().length > 0}>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">PBS Instance</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CPU</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memory</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Storage</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Datastores</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Backups</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Uptime</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <For each={sortedPBSInstances()}>
+                  {(pbs) => {
+                    const isOnline = () => pbs.status === 'healthy' || pbs.status === 'online';
+                    const cpuPercent = () => Math.round(pbs.cpu || 0);
+                    const memPercent = () => pbs.memoryTotal ? Math.round((pbs.memoryUsed / pbs.memoryTotal) * 100) : 0;
                     
-                    // Expand filters if collapsed
-                    if (!showFilters()) {
-                      setShowFilters(true);
-                    }
-                  }
-                }}
-              >
-                <PBSCard 
-                  instance={instance} 
-                  isSelected={selectedPBSInstance() === instance.name}
-                />
-              </div>
-            )}
-          </For>
+                    // Calculate total storage across all datastores
+                    const totalStorage = () => {
+                      if (!pbs.datastores) return { used: 0, total: 0, percent: 0 };
+                      const totals = pbs.datastores.reduce((acc, ds) => {
+                        acc.used += ds.used || 0;
+                        acc.total += ds.total || 0;
+                        return acc;
+                      }, { used: 0, total: 0 });
+                      return {
+                        ...totals,
+                        percent: totals.total > 0 ? Math.round((totals.used / totals.total) * 100) : 0
+                      };
+                    };
+                    
+                    const storage = totalStorage();
+                    
+                    // Count backups for this PBS instance
+                    const pbsBackups = () => state.pbsBackups?.filter(b => b.instance === pbs.name).length || 0;
+                    
+                    const isSelected = () => selectedPBSInstance() === pbs.name;
+                    
+                    return (
+                      <tr 
+                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                          isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                        onClick={() => {
+                          const currentSearch = searchTerm();
+                          const nodeFilter = `node:${pbs.name}`;
+                          
+                          if (currentSearch.includes(nodeFilter)) {
+                            setSearchTerm(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                            setIsSearchLocked(false);
+                          } else {
+                            const cleanedSearch = currentSearch.replace(/node:\S+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                            const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                            setSearchTerm(newSearch);
+                            setIsSearchLocked(true);
+                            
+                          }
+                        }}
+                      >
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <div class="flex items-center gap-1">
+                            <a 
+                              href={pbs.host || `https://${pbs.name}:8007`}
+                              target="_blank"
+                              onClick={(e) => e.stopPropagation()}
+                              class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              {pbs.name}
+                            </a>
+                            <Show when={pbs.version}>
+                              <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                                v{pbs.version}
+                              </span>
+                            </Show>
+                          </div>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <div class="flex items-center gap-1">
+                            <span class={`h-2 w-2 rounded-full ${
+                              isOnline() ? 'bg-green-500' : 'bg-red-500'
+                            }`} />
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              {isOnline() ? 'Online' : 'Offline'}
+                            </span>
+                          </div>
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={cpuPercent()} 
+                            label={`${cpuPercent()}%`}
+                            type="cpu"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={memPercent()} 
+                            label={`${memPercent()}%`}
+                            sublabel={pbs.memoryTotal ? `${formatBytes(pbs.memoryUsed)}/${formatBytes(pbs.memoryTotal)}` : undefined}
+                            type="memory"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={storage.percent} 
+                            label={`${storage.percent}%`}
+                            sublabel={`${formatBytes(storage.used)}/${formatBytes(storage.total)}`}
+                            type="disk"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                          <span class="text-xs text-gray-700 dark:text-gray-300">
+                            {pbs.datastores?.length || 0}
+                          </span>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                          <span class="text-xs text-gray-700 dark:text-gray-300">{pbsBackups()}</span>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                            <Show when={isOnline() && pbs.uptime} fallback="-">
+                              {formatUptime(pbs.uptime)}
+                            </Show>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                </For>
+              </tbody>
+            </table>
+          </div>
         </div>
       </Show>
 
@@ -1183,236 +1318,16 @@ const UnifiedBackups: Component = () => {
         </div>
       </div>
 
-      {/* Filter Controls */}
-      <div class="filter-controls bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-        {/* Filter toggle - visible on all screen sizes */}
-        <button type="button"
-          onClick={() => setShowFilters(!showFilters())}
-          class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
-        >
-          <span class="flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="4" y1="21" x2="4" y2="14"></line>
-              <line x1="4" y1="10" x2="4" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12" y2="3"></line>
-              <line x1="20" y1="21" x2="20" y2="16"></line>
-              <line x1="20" y1="12" x2="20" y2="3"></line>
-              <line x1="1" y1="14" x2="7" y2="14"></line>
-              <line x1="9" y1="8" x2="15" y2="8"></line>
-              <line x1="17" y1="16" x2="23" y2="16"></line>
-            </svg>
-            Filters & Search
-            <Show when={searchTerm() || typeFilter() !== 'all' || backupTypeFilter() !== 'all' || selectedDateRange()}>
-              <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                Active
-              </span>
-            </Show>
-          </span>
-          <svg 
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            stroke-width="2"
-            class={`transform transition-transform ${showFilters() ? 'rotate-180' : ''}`}
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-        
-        <div class={`filter-controls-wrapper ${showFilters() ? 'block' : 'hidden'} p-3 border-t border-gray-200 dark:border-gray-700`}>
-          <div class="flex flex-col gap-3">
-            {/* Search Row */}
-            <div class="flex gap-2">
-              <div class="relative flex-1">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search: name, vmid:104, node:pbs1, namespace:prod, size>1GB, type:VM"
-                  value={searchTerm()}
-                  onInput={(e) => {
-                    if (!isSearchLocked()) {
-                      setSearchTerm(e.currentTarget.value);
-                    }
-                  }}
-                  disabled={isSearchLocked()}
-                  class={`w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                         bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all
-                         ${isSearchLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                />
-                <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                
-                {/* Help tooltip button */}
-                <button type="button"
-                  class="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  onClick={(e) => e.preventDefault()}
-                  aria-label="Search help"
-                  title="Search Examples:
-• jellyfin - Find backups with 'jellyfin' in name
-• plex,media - Find backups with 'plex' OR 'media'
-• vmid:104 - Find backups for specific VM/container
-• node:pve1 - Backups from specific node
-• node:pbs-docker - Backups from specific PBS
-• size>1000000000 - Backups larger than 1GB
-• type:VM - Only VM backups
-• type:LXC - Only LXC backups
-• storage:local - Backups on specific storage
-• datastore:default - PBS backups in specific datastore
-• namespace:production - PBS backups in namespace
-• verified:true - Only verified PBS backups
-• protected:true - Only protected backups
-
-Combine searches:
-• media,size>5000000000 - 'media' AND >5GB
-• node:pbs1,type:VM - PBS1 backups AND VMs only"
-                >
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              </div>
-              
-              <button type="button"
-                onClick={resetFilters}
-                title="Reset all filters (Esc)"
-                class="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 
-                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                       rounded-lg transition-colors"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                  <path d="M21 3v5h-5"/>
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                  <path d="M8 16H3v5"/>
-                </svg>
-                <span class="ml-1.5 hidden sm:inline">Reset</span>
-              </button>
-            </div>
-            
-            {/* Filters Row */}
-            <div class="flex flex-col sm:flex-row gap-2">
-            {/* Time Format Toggle */}
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button type="button"
-                onClick={() => setUseRelativeTime(false)}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  !useRelativeTime()
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                Absolute
-              </button>
-              <button type="button"
-                onClick={() => setUseRelativeTime(true)}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  useRelativeTime()
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                Relative
-              </button>
-            </div>
-            
-            <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-            
-            {/* Backup Type Filter */}
-            <div class={`inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 ${selectedPBSInstance() ? 'opacity-50' : ''}`}>
-              <button type="button"
-                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('all')}
-                disabled={!!selectedPBSInstance()}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  backupTypeFilter() === 'all'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400'
-                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
-              >
-                All Backups
-              </button>
-              <button type="button"
-                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('snapshot')}
-                disabled={!!selectedPBSInstance()}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  backupTypeFilter() === 'snapshot'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400'
-                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
-              >
-                Snapshots
-              </button>
-              <button type="button"
-                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('local')}
-                disabled={!!selectedPBSInstance()}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  backupTypeFilter() === 'local'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400'
-                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title={selectedPBSInstance() ? 'Disabled when PBS instance is selected' : ''}
-              >
-                PVE
-              </button>
-              <button type="button"
-                onClick={() => !selectedPBSInstance() && setBackupTypeFilter('remote')}
-                disabled={!!selectedPBSInstance()}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  backupTypeFilter() === 'remote'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400'
-                } ${selectedPBSInstance() ? 'cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title={selectedPBSInstance() ? 'PBS filter locked when instance selected' : ''}
-              >
-                PBS
-              </button>
-            </div>
-            
-            <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-            
-            {/* Type Filter */}
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <button type="button"
-                onClick={() => setTypeFilter('all')}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  typeFilter() === 'all'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                All Types
-              </button>
-              <button type="button"
-                onClick={() => setTypeFilter('VM')}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  typeFilter() === 'VM'
-                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                VMs
-              </button>
-              <button type="button"
-                onClick={() => setTypeFilter('LXC')}
-                class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  typeFilter() === 'LXC'
-                    ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                LXCs
-              </button>
-            </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Backups Filter */}
+      <BackupsFilter
+        search={searchTerm}
+        setSearch={setSearchTerm}
+        viewMode={uiBackupTypeFilter}
+        setViewMode={setUiBackupTypeFilter}
+        groupBy={groupByMode}
+        setGroupBy={setGroupByMode}
+        searchInputRef={(el) => searchInputRef = el}
+      />
 
       {/* Table */}
       <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden">

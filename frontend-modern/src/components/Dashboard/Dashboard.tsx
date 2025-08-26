@@ -1,14 +1,16 @@
 import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
-import NodeCard from './NodeCard';
-import CompactNodeCard from './CompactNodeCard';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
-import { createTooltipSystem, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { createTooltipSystem } from '@/components/shared/Tooltip';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
+import { MetricBar } from './MetricBar';
+import { formatBytes, formatUptime } from '@/utils/format';
+import { DashboardFilter } from './DashboardFilter';
 
 interface DashboardProps {
   vms: VM[];
@@ -30,6 +32,24 @@ export function Dashboard(props: DashboardProps) {
   const [viewMode, setViewMode] = createSignal<ViewMode>(
     (storedViewMode === 'all' || storedViewMode === 'vm' || storedViewMode === 'lxc') ? storedViewMode : 'all'
   );
+  
+  // Sort nodes by cluster membership and name
+  const sortedNodes = createMemo(() => {
+    const nodes = [...props.nodes];
+    return nodes.sort((a, b) => {
+      // First, group by cluster membership (clustered first, then standalone)
+      if (a.isClusterMember && !b.isClusterMember) return -1;
+      if (!a.isClusterMember && b.isClusterMember) return 1;
+      
+      // Then sort by cluster name (if both are clustered)
+      if (a.isClusterMember && b.isClusterMember && a.clusterName !== b.clusterName) {
+        return (a.clusterName || '').localeCompare(b.clusterName || '');
+      }
+      
+      // Finally, sort by node name
+      return a.name.localeCompare(b.name);
+    });
+  });
   
   const storedStatusMode = localStorage.getItem('dashboardStatusMode');
   const [statusMode, setStatusMode] = createSignal<StatusMode>(
@@ -301,336 +321,176 @@ export function Dashboard(props: DashboardProps) {
   });
 
 
+  const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => {
+    if (nodeId && nodeType === 'pve') {
+      // Set search to filter by node
+      const nodeFilter = `node:${nodeId}`;
+      setSearch(nodeFilter);
+      setIsSearchLocked(true);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+    } else {
+      // Clear node filter
+      setSearch('');
+      setIsSearchLocked(false);
+    }
+  };
+
   return (
     <div>
-      {/* Node Summary Cards - Adaptive Layout */}
-      <div id="node-summary-cards-container" class="mb-3">
-        <div>
-        <Show when={props.nodes.length > 0}>
-          {/* Regular cards for 1-4 nodes */}
-          <Show when={props.nodes.length <= 4}>
-            <div class="flex flex-wrap gap-2">
-              <For each={props.nodes}>
-                {(node) => (
-                  <div 
-                    class="flex-1 min-w-[250px] cursor-pointer transition-transform hover:scale-[1.02]"
-                    onClick={() => {
-                      const currentSearch = search();
-                      const nodeFilter = `node:${node.name}`;
-                      
-                      // Check if this node filter is already in the search
-                      if (currentSearch.includes(nodeFilter)) {
-                        // Remove the node filter
-                        setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
-                        setIsSearchLocked(false);
-                      } else {
-                        // Clear any existing node: filters and add the new one
-                        const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
-                        const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
-                        setSearch(newSearch);
-                        setIsSearchLocked(true);
-                        
-                        // Expand filters if collapsed
-                        if (!showFilters()) {
-                          setShowFilters(true);
-                        }
-                      }
-                    }}
-                  >
-                    <ComponentErrorBoundary name="NodeCard">
-                      <NodeCard 
-                        node={node} 
-                        isSelected={search().includes(`node:${node.name}`)}
-                      />
-                    </ComponentErrorBoundary>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          {/* Compact cards for 5-9 nodes */}
-          <Show when={props.nodes.length > 4 && props.nodes.length <= 9}>
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
-              <For each={props.nodes}>
-                {(node) => (
-                  <ComponentErrorBoundary name="CompactNodeCard">
-                    <CompactNodeCard 
-                      node={node} 
-                      variant="compact"
-                      isSelected={search().includes(`node:${node.name}`)}
-                      onClick={() => {
-                        const currentSearch = search();
-                        const nodeFilter = `node:${node.name}`;
-                        
-                        // Check if this node filter is already in the search
-                        if (currentSearch.includes(nodeFilter)) {
-                          // Remove the node filter
-                          setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
-                          setIsSearchLocked(false);
-                        } else {
-                          // Clear any existing node: filters and add the new one
-                          const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
-                          const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
-                          setSearch(newSearch);
-                          setIsSearchLocked(true);
-                          
-                          // Expand filters if collapsed
-                          if (!showFilters()) {
-                            setShowFilters(true);
-                          }
-                        }
-                      }}
-                    />
-                  </ComponentErrorBoundary>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          {/* Ultra-compact list for 10+ nodes */}
-          <Show when={props.nodes.length >= 10}>
-            <div class="space-y-1">
-              <For each={props.nodes}>
-                {(node) => (
-                  <ComponentErrorBoundary name="CompactNodeCard">
-                    <CompactNodeCard 
-                      node={node} 
-                      variant="ultra-compact"
-                      isSelected={search().includes(`node:${node.name}`)}
-                      onClick={() => {
-                        const currentSearch = search();
-                        const nodeFilter = `node:${node.name}`;
-                        
-                        // Check if this node filter is already in the search
-                        if (currentSearch.includes(nodeFilter)) {
-                          // Remove the node filter
-                          setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
-                          setIsSearchLocked(false);
-                        } else {
-                          // Clear any existing node: filters and add the new one
-                          const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
-                          const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
-                          setSearch(newSearch);
-                          setIsSearchLocked(true);
-                          
-                          // Expand filters if collapsed
-                          if (!showFilters()) {
-                            setShowFilters(true);
-                          }
-                        }
-                      }}
-                    />
-                  </ComponentErrorBoundary>
-                )}
-              </For>
-            </div>
-          </Show>
-        </Show>
-        </div>
-      </div>
+      {/* Unified Node Selector */}
+      <UnifiedNodeSelector 
+        currentTab="dashboard"
+        onNodeSelect={handleNodeSelect}
+        filteredVms={filteredGuests().filter(g => g.type === 'qemu')}
+        filteredContainers={filteredGuests().filter(g => g.type === 'lxc')}
+      />
       
-      {/* Dashboard Filter */}
-      <div class="dashboard-filter mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-        {/* Filter toggle - now visible on all screen sizes */}
-        <button type="button"
-          onClick={() => setShowFilters(!showFilters())}
-          class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
-        >
-          <span class="flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="4" y1="21" x2="4" y2="14"></line>
-              <line x1="4" y1="10" x2="4" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12" y2="3"></line>
-              <line x1="20" y1="21" x2="20" y2="16"></line>
-              <line x1="20" y1="12" x2="20" y2="3"></line>
-              <line x1="1" y1="14" x2="7" y2="14"></line>
-              <line x1="9" y1="8" x2="15" y2="8"></line>
-              <line x1="17" y1="16" x2="23" y2="16"></line>
-            </svg>
-            Filters & Search
-            <Show when={search() || viewMode() !== 'all' || statusMode() !== 'all'}>
-              <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                Active
-              </span>
-            </Show>
-          </span>
-          <svg 
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            stroke-width="2"
-            class={`transform transition-transform ${showFilters() ? 'rotate-180' : ''}`}
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-        
-        <div class={`filter-controls-wrapper ${showFilters() ? 'block' : 'hidden'} p-3 lg:p-4 border-t border-gray-200 dark:border-gray-700`}>
-          <div class="flex flex-col gap-3">
-            {/* Search Bar Row */}
-            <div class="flex gap-2">
-              <div class="relative flex-1">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search: name, jellyfin,plex, or cpu>80"
-                  value={search()}
-                  onInput={(e) => {
-                    if (!isSearchLocked()) {
-                      setSearch(e.currentTarget.value);
-                    }
+      {/* Removed old node table - keeping the rest unchanged */}
+      <Show when={false}>
+        <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Node</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CPU</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memory</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Disk</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">VMs</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Containers</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Uptime</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <For each={sortedNodes()}>
+                  {(node) => {
+                    const isOnline = () => node.status === 'online' && node.uptime > 0;
+                    const cpuPercent = () => Math.round(node.cpu * 100);
+                    const memPercent = () => Math.round(node.memory?.usage || 0);
+                    const diskPercent = () => node.disk ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
+                    
+                    // Count VMs and containers for this node
+                    const nodeVMs = () => props.vms.filter(vm => vm.node === node.name).length;
+                    const nodeContainers = () => props.containers.filter(ct => ct.node === node.name).length;
+                    
+                    const isSelected = () => search().includes(`node:${node.name}`);
+                    
+                    return (
+                      <tr 
+                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                          isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                        onClick={() => {
+                          const currentSearch = search();
+                          const nodeFilter = `node:${node.name}`;
+                          
+                          if (currentSearch.includes(nodeFilter)) {
+                            setSearch(currentSearch.replace(nodeFilter, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, ''));
+                            setIsSearchLocked(false);
+                          } else {
+                            const cleanedSearch = currentSearch.replace(/node:\w+/g, '').trim().replace(/,\s*,/g, ',').replace(/^,|,$/g, '');
+                            const newSearch = cleanedSearch ? `${cleanedSearch}, ${nodeFilter}` : nodeFilter;
+                            setSearch(newSearch);
+                            setIsSearchLocked(true);
+                            
+                            if (!showFilters()) {
+                              setShowFilters(true);
+                            }
+                          }
+                        }}
+                      >
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <div class="flex items-center gap-1">
+                            <a 
+                              href={node.host || `https://${node.name}:8006`}
+                              target="_blank"
+                              onClick={(e) => e.stopPropagation()}
+                              class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              {node.name}
+                            </a>
+                            <Show when={node.isClusterMember !== undefined}>
+                              <span class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium ${
+                                node.isClusterMember 
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+                              }`}>
+                                {node.isClusterMember ? node.clusterName : 'Standalone'}
+                              </span>
+                            </Show>
+                          </div>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <div class="flex items-center gap-1">
+                            <span class={`h-2 w-2 rounded-full ${
+                              isOnline() ? 'bg-green-500' : 'bg-red-500'
+                            }`} />
+                            <span class="text-xs text-gray-600 dark:text-gray-400">
+                              {isOnline() ? 'Online' : 'Offline'}
+                            </span>
+                          </div>
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={cpuPercent()} 
+                            label={`${cpuPercent()}%`}
+                            sublabel={node.cpuInfo?.cores ? `${node.cpuInfo.cores} cores` : undefined}
+                            type="cpu"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={memPercent()} 
+                            label={`${memPercent()}%`}
+                            sublabel={node.memory ? `${formatBytes(node.memory.used)}/${formatBytes(node.memory.total)}` : undefined}
+                            type="memory"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 w-[180px]">
+                          <MetricBar 
+                            value={diskPercent()} 
+                            label={`${diskPercent()}%`}
+                            sublabel={node.disk ? `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}` : undefined}
+                            type="disk"
+                          />
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                          <span class="text-xs text-gray-700 dark:text-gray-300">{nodeVMs()}</span>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                          <span class="text-xs text-gray-700 dark:text-gray-300">{nodeContainers()}</span>
+                        </td>
+                        <td class="px-2 py-0.5 whitespace-nowrap">
+                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                            {formatUptime(node.uptime)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
                   }}
-                  disabled={isSearchLocked()}
-                  class={`w-full pl-9 pr-9 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                         bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all
-                         ${isSearchLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  title="Search guests or use filters like cpu>80"
-                />
-                <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <button type="button"
-                  class="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const tooltipContent = `
-                      <div class="space-y-2 p-1">
-                        <div class="font-semibold mb-2">Search Examples:</div>
-                        <div class="space-y-1">
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">jellyfin</span> - Find guests with "jellyfin" in name</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">plex,media</span> - Find guests with "plex" OR "media"</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">cpu>80</span> - Guests using >80% CPU</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">memory<20</span> - Guests using <20% memory</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">disk>90</span> - Guests using >90% disk</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">node:pve1</span> - Guests on specific node</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">vmid:104</span> - Find specific VM/container</div>
-                        </div>
-                        <div class="mt-2 pt-2 border-t border-gray-600">
-                          <div class="font-semibold mb-1">Combine searches:</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">media,cpu>50</span> - "media" in name AND >50% CPU</div>
-                          <div><span class="font-mono bg-gray-700 px-1 rounded">plex,jellyfin,disk>80</span> - Multiple names AND disk filter</div>
-                        </div>
-                      </div>
-                    `;
-                    showTooltip(tooltipContent, rect.left, rect.top);
-                  }}
-                  onMouseLeave={() => hideTooltip()}
-                  onClick={(e) => e.preventDefault()}
-                  aria-label="Search help"
-                >
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              </div>
-              
-              {/* Reset Button */}
-              <button 
-                onClick={() => {
-                  setSearch('');
-                  setIsSearchLocked(false);
-                  setSortKey('vmid');
-                  setSortDirection('asc');
-                  setViewMode('all');
-                  setStatusMode('all');
-                }}
-                title="Reset all filters (Esc)"
-                class="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 
-                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                       rounded-lg transition-colors"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                  <path d="M21 3v5h-5"/>
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                  <path d="M8 16H3v5"/>
-                </svg>
-                <span class="ml-1.5 hidden sm:inline">Reset</span>
-              </button>
-            </div>
-            
-
-            {/* Filters Row */}
-            <div class="flex flex-col sm:flex-row gap-2">
-
-              {/* Type Filter */}
-              <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <button type="button"
-                  onClick={() => setViewMode('all')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    viewMode() === 'all'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  All
-                </button>
-                <button type="button"
-                  onClick={() => setViewMode('vm')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    viewMode() === 'vm'
-                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  VMs
-                </button>
-                <button type="button"
-                  onClick={() => setViewMode('lxc')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    viewMode() === 'lxc'
-                      ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  LXCs
-                </button>
-              </div>
-
-              <div class="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
-              {/* Status Filter */}
-              <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <button type="button"
-                  onClick={() => setStatusMode('all')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    statusMode() === 'all'
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  All
-                </button>
-                <button type="button"
-                  onClick={() => setStatusMode('running')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    statusMode() === 'running'
-                      ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  Running
-                </button>
-                <button type="button"
-                  onClick={() => setStatusMode('stopped')}
-                  class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    statusMode() === 'stopped'
-                      ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                >
-                  Stopped
-                </button>
-              </div>
-            </div>
+                </For>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      </Show>
+      
+      {/* Dashboard Filter */}
+      <DashboardFilter
+        search={search}
+        setSearch={setSearch}
+        isSearchLocked={isSearchLocked}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        statusMode={statusMode}
+        setStatusMode={setStatusMode}
+        setSortKey={setSortKey}
+        setSortDirection={setSortDirection}
+        searchInputRef={(el) => searchInputRef = el}
+      />
 
 
 

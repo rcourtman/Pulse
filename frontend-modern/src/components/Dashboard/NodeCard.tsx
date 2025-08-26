@@ -1,6 +1,6 @@
 import { Component, Show, createMemo, createEffect } from 'solid-js';
 import type { Node } from '@/types/api';
-import { formatUptime, formatBytes } from '@/utils/format';
+import { formatUptime } from '@/utils/format';
 import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
@@ -15,7 +15,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   // Early return if node data is incomplete
   if (!props.node || !props.node.memory || !props.node.disk) {
     return (
-      <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 min-w-[250px]">
+      <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 min-w-[160px] max-w-[200px]">
         <div class="text-sm text-gray-500">Loading node data...</div>
       </div>
     );
@@ -58,21 +58,25 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     return 'N/A';
   };
 
-  // Helper function to create progress bar with text overlay (matching original)
-  const createProgressBar = (percentage: number, text: string, colorClass: string) => {
+  // Helper function to create compact progress bar
+  const createProgressBar = (percentage: number, label: string, colorClass: string) => {
     const bgColorClass = 'bg-gray-200 dark:bg-gray-600';
     const progressColorClass = {
-      'red': 'bg-red-500/60 dark:bg-red-500/50',
-      'yellow': 'bg-yellow-500/60 dark:bg-yellow-500/50',
-      'green': 'bg-green-500/60 dark:bg-green-500/50'
-    }[colorClass] || 'bg-gray-500/60 dark:bg-gray-500/50';
+      'red': 'bg-red-500/70 dark:bg-red-500/60',
+      'yellow': 'bg-yellow-500/70 dark:bg-yellow-500/60',
+      'green': 'bg-green-500/70 dark:bg-green-500/60'
+    }[colorClass] || 'bg-gray-500/70 dark:bg-gray-500/60';
     
     return (
-      <div class={`relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}`}>
-        <div class={`absolute top-0 left-0 h-full ${progressColorClass}`} style={{ width: `${percentage}%` }} />
-        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-          <span class="truncate px-1">{text}</span>
-        </span>
+      <div class="w-full">
+        <div class="flex justify-between items-center mb-0.5">
+          <span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">{label}</span>
+          <span class="text-[10px] font-medium text-gray-700 dark:text-gray-300">{percentage}%</span>
+        </div>
+        <div class={`relative w-full h-2 rounded-full overflow-hidden ${bgColorClass}`}>
+          <div class={`absolute top-0 left-0 h-full transition-all duration-300 ${progressColorClass}`} 
+               style={{ width: `${percentage}%` }} />
+        </div>
       </div>
     );
   };
@@ -95,26 +99,6 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     return 'green';
   };
 
-  // Format CPU text with cores info
-  const cpuText = () => {
-    const cores = props.node.cpuInfo?.cores;
-    const cpuUsed = cores ? (props.node.cpu * cores).toFixed(1) : '0';
-    return cores && cores > 0 
-      ? `${cpuPercent()}% (${cpuUsed}/${cores} cores)`
-      : `${cpuPercent()}%`;
-  };
-
-  // Format memory text with size info  
-  const memoryText = () => {
-    if (!props.node.memory) return '0%';
-    return `${memPercent()}% (${formatBytes(props.node.memory.used)}/${formatBytes(props.node.memory.total)})`;
-  };
-
-  // Format disk text with size info
-  const diskText = () => {
-    if (!props.node.disk) return '0%';
-    return `${diskPercent()}% (${formatBytes(props.node.disk.used)}/${formatBytes(props.node.disk.total)})`;
-  };
 
   const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
   const nodeAlerts = createMemo(() => getResourceAlerts(props.node.id || props.node.name, activeAlerts));
@@ -147,10 +131,10 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   };
   
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 flex flex-col gap-1 min-w-[250px] ${getBorderClass()} ${getBackgroundClass()}`}>
+    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 flex flex-col gap-2 min-w-[160px] max-w-[200px] ${getBorderClass()} ${getBackgroundClass()}`}>
       {/* Header */}
       <div class="flex justify-between items-center">
-        <h3 class="text-sm font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-2">
+        <h3 class="text-xs font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-1">
           <a 
             href={props.node.host || (props.node.name.includes(':') ? `https://${props.node.name}` : `https://${props.node.name}:8006`)} 
             target="_blank" 
@@ -160,6 +144,16 @@ const NodeCard: Component<NodeCardProps> = (props) => {
           >
             {props.node.name}
           </a>
+          {/* Cluster/Standalone indicator - more compact */}
+          <Show when={props.node.isClusterMember !== undefined}>
+            <span class={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
+              props.node.isClusterMember 
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+            }`} title={props.node.isClusterMember ? props.node.clusterName : 'Standalone'}>
+              {props.node.isClusterMember ? 'C' : 'S'}
+            </span>
+          </Show>
           <Show when={alertStyles.hasAlert}>
             <div class="flex items-center gap-1">
               <AlertIndicator severity={alertStyles.severity} alerts={nodeAlerts()} />
@@ -169,38 +163,22 @@ const NodeCard: Component<NodeCardProps> = (props) => {
             </div>
           </Show>
         </h3>
-        <div class="flex items-center">
-          <span class={`h-2.5 w-2.5 rounded-full mr-1.5 flex-shrink-0 ${
-            isOnline() ? 'bg-green-500' : 'bg-red-500'
-          }`} />
-          <span class="text-xs capitalize text-gray-600 dark:text-gray-400">
-            {isOnline() ? 'online' : props.node.status || 'unknown'}
-          </span>
-        </div>
+        <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
+          isOnline() ? 'bg-green-500' : 'bg-red-500'
+        }`} title={isOnline() ? 'Online' : 'Offline'} />
       </div>
 
-      {/* CPU */}
-      <div class="text-[11px] text-gray-600 dark:text-gray-400">
-        <span class="font-medium">CPU:</span>
-        {createProgressBar(cpuPercent(), cpuText(), getColor(cpuPercent(), 'cpu'))}
+      {/* Metrics - Compact */}
+      <div class="space-y-1.5">
+        {createProgressBar(cpuPercent(), 'CPU', getColor(cpuPercent(), 'cpu'))}
+        {createProgressBar(memPercent(), 'Memory', getColor(memPercent(), 'memory'))}
+        {createProgressBar(diskPercent(), 'Disk', getColor(diskPercent(), 'disk'))}
       </div>
 
-      {/* Memory */}
-      <div class="text-[11px] text-gray-600 dark:text-gray-400">
-        <span class="font-medium">Mem:</span>
-        {createProgressBar(memPercent(), memoryText(), getColor(memPercent(), 'memory'))}
-      </div>
-
-      {/* Disk */}
-      <div class="text-[11px] text-gray-600 dark:text-gray-400">
-        <span class="font-medium">Disk:</span>
-        {createProgressBar(diskPercent(), diskText(), getColor(diskPercent(), 'disk'))}
-      </div>
-
-      {/* Footer Info */}
-      <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
-        <span>Uptime: {formatUptime(props.node.uptime)}</span>
-        <span>Load: {normalizedLoad()}</span>
+      {/* Footer Info - More compact */}
+      <div class="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 mt-1">
+        <span title={`Uptime: ${formatUptime(props.node.uptime)}`}>↑{formatUptime(props.node.uptime)}</span>
+        <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
       </div>
     </div>
   );
