@@ -53,11 +53,26 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
           props.storage?.forEach(s => nodesWithItems.add(s.node));
           break;
         case 'backups':
-          // Filter based on backups - only add PVE node names, not PBS instance names
+          // Smart filtering for backups:
+          // - If we have any local/snapshot backups, only show nodes with those
+          // - If we only have PBS backups, show nodes that can access them
+          const hasLocalBackups = props.filteredBackups?.some(b => 
+            b.backupType === 'snapshot' || b.backupType === 'local'
+          );
+          
           props.filteredBackups?.forEach(b => {
-            // Only add if it's a node that exists in our PVE nodes list
-            if (props.nodes.some(n => n.name === b.node)) {
-              nodesWithItems.add(b.node);
+            // If we have local backups, only show nodes with local/snapshot backups
+            if (hasLocalBackups) {
+              if (b.backupType === 'snapshot' || b.backupType === 'local') {
+                if (props.nodes.some(n => n.name === b.node)) {
+                  nodesWithItems.add(b.node);
+                }
+              }
+            } else {
+              // Only PBS backups - show nodes that have access to them
+              if (props.nodes.some(n => n.name === b.node)) {
+                nodesWithItems.add(b.node);
+              }
             }
           });
           break;
@@ -100,8 +115,10 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
         const storageCount = props.storage?.filter(s => s.node === node.name).length || 0;
         return [storageCount];
       case 'backups':
-        // If we have filtered backups, count those; otherwise use the provided counts
+        // If we have filtered backups, count all types for display
+        // but remember that PBS backups are shared across nodes
         if (props.filteredBackups !== undefined) {
+          // Count all backups that match this node (including PBS for display purposes)
           const backupCount = props.filteredBackups.filter(b => b.node === node.name).length;
           return [backupCount];
         }
