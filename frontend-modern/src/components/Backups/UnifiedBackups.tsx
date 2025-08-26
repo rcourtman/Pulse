@@ -48,13 +48,15 @@ const UnifiedBackups: Component = () => {
   const uiBackupTypeFilter = createMemo(() => {
     const filter = backupTypeFilter();
     if (filter === 'all') return 'all';
-    if (filter === 'local' || filter === 'snapshot') return 'pve';
+    if (filter === 'snapshot') return 'snapshot';
+    if (filter === 'local') return 'pve';
     if (filter === 'remote') return 'pbs';
     return 'all';
   });
   
-  const setUiBackupTypeFilter = (value: 'all' | 'pve' | 'pbs') => {
+  const setUiBackupTypeFilter = (value: 'all' | 'snapshot' | 'pve' | 'pbs') => {
     if (value === 'all') setBackupTypeFilter('all');
+    else if (value === 'snapshot') setBackupTypeFilter('snapshot');
     else if (value === 'pve') setBackupTypeFilter('local');
     else if (value === 'pbs') setBackupTypeFilter('remote');
   };

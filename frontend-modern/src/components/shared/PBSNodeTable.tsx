@@ -22,30 +22,29 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
     // If we have filtered backups in backups tab, only show PBS instances with matching backups
     if (props.currentTab === 'backups' && props.filteredBackups !== undefined) {
       const pbsWithBackups = new Set<string>();
+      
       props.filteredBackups.forEach(b => {
-        // Check if the backup node matches any PBS instance name
-        if (props.pbsInstances?.some(pbs => pbs.name === b.node || b.node === 'PBS')) {
-          // If node is 'PBS' or matches a PBS instance name, add it
-          if (b.node === 'PBS' && b.datastore) {
-            // For generic PBS backups, try to match by instance if possible
-            // Otherwise include all PBS instances
-            props.pbsInstances.forEach(pbs => pbsWithBackups.add(pbs.name));
-          } else if (b.node !== 'PBS') {
+        // PBS backups can have node as the PBS instance name or 'PBS' generic
+        // Check if it's a PBS backup (has datastore or node is PBS instance)
+        if (b.datastore || b.node === 'PBS' || b.backupType === 'remote') {
+          if (b.node === 'PBS' || !b.node) {
+            // Generic PBS backup, show all PBS instances
+            props.pbsInstances?.forEach(pbs => pbsWithBackups.add(pbs.name));
+          } else if (props.pbsInstances?.some(pbs => pbs.name === b.node)) {
+            // Specific PBS instance
             pbsWithBackups.add(b.node);
           }
         }
       });
       
-      // Only show PBS instances that have filtered backups
-      if (pbsWithBackups.size > 0 || props.filteredBackups.length === 0) {
+      // If we have any PBS backups, filter to matching instances
+      if (pbsWithBackups.size > 0) {
         instances = instances.filter(pbs => pbsWithBackups.has(pbs.name));
-      } else if (props.filteredBackups.some(b => b.node === 'PBS')) {
-        // If we have PBS backups but can't match specific instances, show all
-        // This handles the case where backups are marked as 'PBS' generically
-      } else {
-        // No PBS backups in filtered results, hide all PBS instances
+      } else if (props.filteredBackups.length > 0) {
+        // We have filtered backups but none are PBS backups, hide PBS table
         instances = [];
       }
+      // If no filtered backups at all (empty search), show all PBS instances
     }
     
     return instances.sort((a, b) => {
