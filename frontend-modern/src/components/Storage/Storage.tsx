@@ -109,12 +109,10 @@ const Storage: Component = () => {
   });
   
   const getProgressBarColor = (usage: number) => {
-    // Match MetricBar component styling - use the same disk/generic logic
+    // Match MetricBar component styling exactly - disk type thresholds
     if (usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
     if (usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-    if (usage >= 70) return 'bg-amber-500/60 dark:bg-amber-500/50';
-    if (usage >= 60) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
-    return 'bg-emerald-500/60 dark:bg-emerald-500/50';
+    return 'bg-green-500/60 dark:bg-green-500/50';
   };
   
   const resetFilters = () => {
@@ -266,20 +264,20 @@ const Storage: Component = () => {
               `}</style>
             <table class="w-full">
               <thead>
-                <tr class="border-b border-gray-200 dark:border-gray-700">
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Storage</th>
+                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
                   <Show when={viewMode() === 'node'}>
-                    <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Node</th>
+                    <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Node</th>
                   </Show>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Type</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">Content</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Content</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Status</th>
                   <Show when={viewMode() === 'node'}>
-                    <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">Shared</th>
+                    <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Shared</th>
                   </Show>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px] sm:min-w-[150px] md:min-w-[200px]">Usage</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Free</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[100px] sm:min-w-[150px] md:min-w-[200px]">Usage</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Free</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -289,7 +287,7 @@ const Storage: Component = () => {
                       {/* Group Header */}
                       <Show when={viewMode() === 'node'}>
                         <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                          <td class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                          <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
                             <a 
                               href={nodeHostMap()[groupName] || (groupName.includes(':') ? `https://${groupName}` : `https://${groupName}:8006`)} 
                               target="_blank" 
@@ -300,7 +298,7 @@ const Storage: Component = () => {
                               {groupName}
                             </a>
                           </td>
-                          <td class="px-2 py-0.5 text-[10px] text-gray-500 dark:text-gray-400" colspan="8">
+                          <td class="p-0.5 px-1.5 text-[10px] text-gray-500 dark:text-gray-400" colspan="8">
                             {getTotalByNode(storages).total > 0 && (
                               <span>
                                 {formatBytes(getTotalByNode(storages).used)} / {formatBytes(getTotalByNode(storages).total)} ({calculateOverallUsage(storages).toFixed(1)}%)
@@ -321,9 +319,9 @@ const Storage: Component = () => {
                           
                           return (
                             <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}>
-                              <td class="px-2 py-0.5">
+                              <td class="p-0.5 px-1.5">
                                 <div class="flex items-center gap-2">
-                                  <span class="font-medium text-gray-900 dark:text-gray-100">
+                                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
                                   </span>
                                   <Show when={alertStyles.hasAlert}>
@@ -337,9 +335,9 @@ const Storage: Component = () => {
                                 </div>
                               </td>
                               <Show when={viewMode() === 'node'}>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400 hidden sm:table-cell">{storage.node}</td>
+                                <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden sm:table-cell">{storage.node}</td>
                               </Show>
-                              <td class="p-1 px-2 hidden md:table-cell">
+                              <td class="p-0.5 px-1.5 hidden md:table-cell">
                                 <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${
                                   storage.type === 'dir' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' :
                                   storage.type === 'pbs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
@@ -348,10 +346,10 @@ const Storage: Component = () => {
                                   {storage.type}
                                 </span>
                               </td>
-                              <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
+                              <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
                                 {storage.content || '-'}
                               </td>
-                              <td class="p-1 px-2 text-xs hidden sm:table-cell">
+                              <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
                                 <span class={`${
                                   storage.status === 'available' ? 'text-green-600 dark:text-green-400' : 
                                   'text-red-600 dark:text-red-400'
@@ -360,27 +358,26 @@ const Storage: Component = () => {
                                 </span>
                               </td>
                               <Show when={viewMode() === 'node'}>
-                                <td class="p-1 px-2 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
+                                <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
                                   {storage.shared ? '✓' : '-'}
                                 </td>
                               </Show>
                               
-                              <td class="px-2 py-0.5">
+                              <td class="p-0.5 px-1.5">
                                 <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
                                   <div 
                                     class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
                                     style={{ width: `${usagePercent}%` }}
                                   />
                                   <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                    <span class="truncate px-1">
-                                      <span class="sm:hidden">{usagePercent.toFixed(0)}%</span>
-                                      <span class="hidden sm:inline">{formatBytes(storage.used || 0)} / {formatBytes(storage.total || 0)} ({usagePercent.toFixed(1)}%)</span>
+                                    <span class="whitespace-nowrap px-0.5">
+                                      {usagePercent.toFixed(0)}% ({formatBytes(storage.used || 0)}/{formatBytes(storage.total || 0)})
                                     </span>
                                   </span>
                                 </div>
                               </td>
-                              <td class="p-1 px-2 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
-                              <td class="p-1 px-2 text-xs">{formatBytes(storage.total || 0)}</td>
+                              <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
+                              <td class="p-0.5 px-1.5 text-xs">{formatBytes(storage.total || 0)}</td>
                             </tr>
                           );
                         }}

@@ -90,22 +90,22 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
       <div class="overflow-x-auto" style="overflow-x: auto;">
         <table style="width: 1000px; table-layout: fixed;">
           <thead>
-            <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
+            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">Status</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">CPU</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">Memory</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">Status</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">CPU</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">Memory</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">{header}</th>
+                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">{header}</th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -172,7 +172,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
                           target="_blank"
                           onClick={(e) => e.stopPropagation()}
-                          class="font-medium text-xs text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
+                          class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
                         >
                           {item.data.name}
                         </a>
