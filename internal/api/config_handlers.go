@@ -2288,54 +2288,16 @@ fi
 
 if [ "$HAS_VM_MONITOR" = true ]; then
     # PVE 8 or below - VM.Monitor exists
-    echo "Detected Proxmox 8 or below - adding VM.Monitor permission"
+    echo "Setting up additional permissions..."
     pveum role delete PulseMonitor 2>/dev/null || true
-    pveum role add PulseMonitor -privs VM.Monitor
+    pveum role add PulseMonitor -privs VM.Monitor 2>/dev/null
     pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
-    
-    echo ""
-    echo "ℹ️  Note for Proxmox 8 VM Disk Monitoring:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "VM disk monitoring requires:"
-    echo "  1. qemu-guest-agent installed and running in the VM"
-    echo "  2. VM.Monitor permission (just added above)"
-    echo ""
-    echo "If you previously added this node before Pulse v4.7,"
-    echo "you needed to re-run this script to add VM.Monitor permission."
-    echo ""
 else
-    # PVE 9+ - VM.Monitor was removed
-    echo "Detected Proxmox 9+ - VM.Monitor was removed"
-    
-    # For PVE 9, the PVEAuditor role should be sufficient as it includes VM.GuestAgent.Audit
-    # However, some users report issues even with these permissions
-    # This appears to be a Proxmox 9 limitation/bug with guest agent API access
-    
-    # Try to add Sys.Audit which replaced VM.Monitor for basic KVM access
+    # PVE 9+ - VM.Monitor was removed, try to add Sys.Audit as replacement
+    echo "Setting up additional permissions..."
     pveum role delete PulseMonitor 2>/dev/null || true
-    if pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null; then
-        echo "Added Sys.Audit permission (replacement for VM.Monitor)"
-        pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
-    fi
-    
-    echo ""
-    echo "⚠ VM Disk Monitoring on Proxmox 9 - Known Limitation"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "VM disk monitoring does NOT work on Proxmox 9 with API tokens"
-    echo "due to an upstream Proxmox limitation."
-    echo ""
-    echo "This is a known Proxmox 9 issue:"
-    echo "  • PVE 9 removed VM.Monitor permission"
-    echo "  • API tokens cannot access guest agent data (get-fsinfo)"
-    echo "  • Even with VM.GuestAgent.Audit permission, tokens are blocked"
-    echo "  • Proxmox's own web UI also shows 0% for VMs (bug #1373)"
-    echo ""
-    echo "Workarounds:"
-    echo "  • Use root@pam credentials instead of API tokens (if security allows)"
-    echo "  • Container (LXC) disk usage works fine with tokens"
-    echo "  • Wait for Proxmox to fix this upstream limitation"
-    echo ""
-    echo "For more details, see: https://github.com/rcourtman/Pulse/issues/348"
+    pveum role add PulseMonitor -privs "Sys.Audit" 2>/dev/null
+    pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
 fi
 
 echo ""
