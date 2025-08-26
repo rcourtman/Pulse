@@ -345,6 +345,7 @@ export function Dashboard(props: DashboardProps) {
         onNodeSelect={handleNodeSelect}
         filteredVms={filteredGuests().filter(g => g.type === 'qemu')}
         filteredContainers={filteredGuests().filter(g => g.type === 'lxc')}
+        searchTerm={search()}
       />
       
       {/* Removed old node table - keeping the rest unchanged */}
