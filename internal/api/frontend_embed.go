@@ -62,8 +62,11 @@ func serveFrontendHandler() http.HandlerFunc {
 				return
 			}
 			
-			// Serve the content
+			// Serve the content with cache-busting headers
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			w.Write(content)
 			return
 		}
@@ -90,6 +93,10 @@ func serveFrontendHandler() http.HandlerFunc {
 						contentType = "text/css; charset=utf-8"
 					} else if strings.HasSuffix(lookupPath, ".js") {
 						contentType = "application/javascript; charset=utf-8"
+						// Add cache-busting headers for JS files to force reload
+						w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+						w.Header().Set("Pragma", "no-cache")
+						w.Header().Set("Expires", "0")
 					} else if strings.HasSuffix(lookupPath, ".json") {
 						contentType = "application/json"
 					} else if strings.HasSuffix(lookupPath, ".svg") {
@@ -114,6 +121,9 @@ func serveFrontendHandler() http.HandlerFunc {
 				content, err := io.ReadAll(indexFile)
 				if err == nil {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+					w.Header().Set("Pragma", "no-cache")
+					w.Header().Set("Expires", "0")
 					w.Write(content)
 					return
 				}

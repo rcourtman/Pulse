@@ -17,6 +17,7 @@ interface PVENodeTableProps {
 }
 
 export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
+  
   // Check if we have active filtering
   const hasActiveFilter = createMemo(() => {
     // Check based on current tab
@@ -26,7 +27,9 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
       case 'storage':
         return props.storage !== undefined;
       case 'backups':
-        return props.filteredBackups !== undefined;
+        // For backups, only consider it filtered if there's a search term or filtered backups is explicitly set and different from all backups
+        // We can't easily detect if it's filtered, so we'll rely on search term
+        return false; // Let the filtering logic handle it based on filteredBackups content
       default:
         return false;
     }
@@ -38,8 +41,37 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     
     let nodes = [...props.nodes];
     
-    // Filter nodes based on the current tab and filtered data
-    if (hasActiveFilter()) {
+    // Special handling for backups tab since it uses different filtering logic
+    if (props.currentTab === 'backups') {
+      // Only filter if filteredBackups is provided AND not empty
+      // undefined means no filtering, empty array means filter applied but no matches
+      if (props.filteredBackups !== undefined) {
+        const nodesWithItems = new Set<string>();
+        
+        // Filtering is active, only show nodes with matching backups
+        props.filteredBackups.forEach(b => {
+          // Only count snapshots and local backups that actually belong to PVE nodes
+          if (b.backupType === 'snapshot' || b.backupType === 'local') {
+            // Make sure it's actually a PVE node (not a PBS instance name)
+            if (props.nodes.some(n => n.name === b.node)) {
+              nodesWithItems.add(b.node);
+            }
+          }
+          // PBS/remote backups have node set to PBS instance name, not PVE node
+          // so we don't add them to PVE node filter
+        });
+        
+        // Only show nodes that have matching items
+        if (nodesWithItems.size > 0) {
+          nodes = nodes.filter(node => nodesWithItems.has(node.name));
+        } else {
+          // If we have active filtering but no nodes have matching items, hide all nodes
+          nodes = [];
+        }
+      }
+      // If filteredBackups is undefined, show all nodes (no filtering)
+    } else if (hasActiveFilter()) {
+      // Handle other tabs with normal filtering logic
       const nodesWithItems = new Set<string>();
       
       switch (props.currentTab) {
@@ -52,35 +84,14 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
           // Filter based on storage
           props.storage?.forEach(s => nodesWithItems.add(s.node));
           break;
-        case 'backups':
-          // Smart filtering for backups:
-          // - If we have any local/snapshot backups, only show nodes with those
-          // - If we only have PBS backups, show nodes that can access them
-          const hasLocalBackups = props.filteredBackups?.some(b => 
-            b.backupType === 'snapshot' || b.backupType === 'local'
-          );
-          
-          props.filteredBackups?.forEach(b => {
-            // If we have local backups, only show nodes with local/snapshot backups
-            if (hasLocalBackups) {
-              if (b.backupType === 'snapshot' || b.backupType === 'local') {
-                if (props.nodes.some(n => n.name === b.node)) {
-                  nodesWithItems.add(b.node);
-                }
-              }
-            } else {
-              // Only PBS backups - show nodes that have access to them
-              if (props.nodes.some(n => n.name === b.node)) {
-                nodesWithItems.add(b.node);
-              }
-            }
-          });
-          break;
       }
       
       // Only show nodes that have filtered items
       if (nodesWithItems.size > 0) {
         nodes = nodes.filter(node => nodesWithItems.has(node.name));
+      } else if (hasActiveFilter()) {
+        // If we have active filtering but no nodes have matching items, hide all nodes
+        nodes = [];
       }
     }
     
@@ -128,40 +139,46 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     }
   };
 
-  if (sortedNodes().length === 0) return null;
-
+  // Create a reactive memo for whether to show the table
+  // Check sortedNodes to hide table when filtering results in no nodes
+  const showTable = createMemo(() => {
+    const nodes = sortedNodes();
+    return nodes && nodes.length > 0;
+  });
+  
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto">
-        <table class="w-full">
+    <Show when={showTable()}>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="overflow-x-auto">
+          <table class="w-full">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 PVE Nodes
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 Status
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 Cluster
               </th>
               <For each={getCountHeaders()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                     {header}
                   </th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
                 CPU
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
                 Memory
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
                 Storage
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 Uptime
               </th>
             </tr>
@@ -171,51 +188,21 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
               {(node) => {
                 const isOnline = () => node.status === 'online';
                 
-                // Calculate metrics based on filtered guests if on dashboard with active filter
-                const getFilteredMetrics = () => {
+                // Get filtered guest count for display
+                const getFilteredGuestCount = () => {
                   if (props.currentTab === 'dashboard' && hasActiveFilter()) {
                     const nodeVms = props.vms?.filter(vm => vm.node === node.name) || [];
                     const nodeContainers = props.containers?.filter(ct => ct.node === node.name) || [];
-                    
-                    // Calculate total CPU usage from filtered guests
-                    let totalCpuUsage = 0;
-                    let totalMemUsed = 0;
-                    let totalDiskUsed = 0;
-                    
-                    nodeVms.forEach(vm => {
-                      if (vm.cpu) totalCpuUsage += vm.cpu * (vm.cpus || 1);
-                      if (vm.mem) totalMemUsed += vm.mem;
-                      if (vm.disk) totalDiskUsed += vm.disk;
-                    });
-                    
-                    nodeContainers.forEach(ct => {
-                      if (ct.cpu) totalCpuUsage += ct.cpu * (ct.cpus || 1);
-                      if (ct.mem) totalMemUsed += ct.mem;
-                      if (ct.disk) totalDiskUsed += ct.disk;
-                    });
-                    
-                    // Convert to percentages relative to node capacity
-                    const cpuPercent = node.cpuInfo?.cores ? Math.round((totalCpuUsage / node.cpuInfo.cores) * 100) : 0;
-                    const memPercent = node.memory?.total ? Math.round((totalMemUsed / node.memory.total) * 100) : 0;
-                    const diskPercent = node.disk?.total ? Math.round((totalDiskUsed / node.disk.total) * 100) : 0;
-                    
-                    return { cpuPercent, memPercent, diskPercent, guestCount: nodeVms.length + nodeContainers.length };
+                    return nodeVms.length + nodeContainers.length;
                   }
-                  
-                  // Default: show node's actual metrics
-                  return {
-                    cpuPercent: Math.round(node.cpu || 0),
-                    memPercent: node.memory?.total > 0 ? Math.round((node.memory.used / node.memory.total) * 100) : 0,
-                    diskPercent: node.disk?.total > 0 ? Math.round((node.disk.used / node.disk.total) * 100) : 0,
-                    guestCount: null
-                  };
+                  return null;
                 };
                 
-                const metrics = createMemo(() => getFilteredMetrics());
-                const cpuPercent = () => metrics().cpuPercent;
-                const memPercent = () => metrics().memPercent;
-                const storagePercent = () => metrics().diskPercent;
-                const filteredGuestCount = () => metrics().guestCount;
+                // Always show actual node metrics, not calculated from filtered guests
+                const cpuPercent = () => Math.round(node.cpu || 0);
+                const memPercent = () => node.memory?.total > 0 ? Math.round((node.memory.used / node.memory.total) * 100) : 0;
+                const storagePercent = () => node.disk?.total > 0 ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
+                const filteredGuestCount = createMemo(() => getFilteredGuestCount());
                 
                 const counts = getNodeCounts(node);
                 const isSelected = () => props.selectedNode === node.name;
@@ -223,37 +210,37 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                 return (
                   <tr 
                     class={`
-                      border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer
+                      border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer h-8
                       ${!isOnline() ? 'opacity-60' : ''}
                       ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' : ''}
                     `}
                     onClick={() => props.onNodeClick(node.name)}
                   >
                     <td class="px-2 py-0.5">
-                      <div class="flex items-center gap-2">
-                        <span class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={node.name}>{node.name}</span>
                         <Show when={filteredGuestCount() !== null && props.searchTerm && props.searchTerm.trim()}>
-                          <span class="text-xs text-gray-500 dark:text-gray-400">
+                          <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                             ({filteredGuestCount()} matched)
                           </span>
                         </Show>
                       </div>
                     </td>
                     <td class="px-2 py-0.5">
-                      <span class={`text-xs ${isOnline() ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <span class={`text-xs whitespace-nowrap ${isOnline() ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {node.status}
                       </span>
                     </td>
                     <td class="px-2 py-0.5">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                      <span class="text-xs text-gray-600 dark:text-gray-400 block truncate" title={node.clusterName || ''}>
                         {node.clusterName || '-'}
                       </span>
                     </td>
                     <For each={counts}>
                       {(count) => (
                         <td class="px-2 py-0.5 text-center">
-                          <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          <span class="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {count}
                           </span>
                         </td>
@@ -290,7 +277,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                       </Show>
                     </td>
                     <td class="px-2 py-0.5">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                      <span class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
                         <Show when={isOnline() && node.uptime} fallback="-">
                           {formatUptime(node.uptime)}
                         </Show>
@@ -304,5 +291,6 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
         </table>
       </div>
     </div>
+    </Show>
   );
 };
