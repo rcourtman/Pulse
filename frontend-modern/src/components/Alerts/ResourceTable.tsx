@@ -13,8 +13,6 @@ interface ResourceTableProps {
   onRemoveOverride: (resourceId: string) => void;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
-  onBatchToggleNodeConnectivity?: (nodeIds: string[], targetState: boolean) => void;
-  onBatchToggleDisabled?: (resourceIds: string[], targetState: boolean) => void;
   editingId: () => string | null;
   editingThresholds: () => Record<string, any>;
   setEditingThresholds: (value: Record<string, any>) => void;
@@ -23,27 +21,6 @@ interface ResourceTableProps {
 }
 
 export function ResourceTable(props: ResourceTableProps) {
-  // Get all resource IDs for batch operations
-  const getAllResourceIds = () => {
-    if (props.groupedResources) {
-      return Object.values(props.groupedResources).flat().map(r => r.id);
-    }
-    return props.resources?.map(r => r.id) || [];
-  };
-  
-  // Check if all alerts are disabled
-  const areAllAlertsDisabled = () => {
-    const resources = props.groupedResources ? Object.values(props.groupedResources).flat() : (props.resources || []);
-    if (resources.length === 0) return false;
-    
-    // For nodes, check disableConnectivity instead of disabled
-    if (props.title === 'Proxmox Nodes') {
-      return resources.every(r => r.disableConnectivity === true);
-    }
-    
-    // For guests and storage, check disabled flag
-    return resources.every(r => r.disabled === true);
-  };
   
   const MetricValueWithHeat = (metricProps: { 
     resourceId: string; 
@@ -97,47 +74,7 @@ export function ResourceTable(props: ResourceTableProps) {
                 )}
               </For>
               <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                <div class="flex items-center justify-center gap-1">
-                  <span>Alerts</span>
-                  <Show when={(props.title === 'VMs & Containers' || props.title === 'Storage Devices' || props.title === 'Proxmox Nodes') && getAllResourceIds().length > 0}>
-                    <button type="button"
-                      onClick={() => {
-                        const allDisabled = areAllAlertsDisabled();
-                        const resourceIds = getAllResourceIds();
-                        if (props.title === 'Proxmox Nodes' && props.onBatchToggleNodeConnectivity) {
-                          // For nodes, toggle connectivity alerts
-                          // If all are disabled, enable all. If any are enabled, disable all.
-                          const targetState = !allDisabled; // true = disable alerts, false = enable alerts
-                          
-                          // Use batch toggle to update all at once
-                          props.onBatchToggleNodeConnectivity(resourceIds, targetState);
-                        } else if (props.onBatchToggleDisabled) {
-                          // For guests and storage, toggle disabled flag
-                          // If all are disabled, enable all. If any are enabled, disable all.
-                          const targetState = !allDisabled; // true = disable alerts, false = enable alerts
-                          
-                          // Use batch toggle to update all at once
-                          props.onBatchToggleDisabled(resourceIds, targetState);
-                        }
-                      }}
-                      class={`p-0.5 rounded transition-colors ${
-                        areAllAlertsDisabled()
-                          ? 'text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50'
-                          : 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50'
-                      }`}
-                      title={areAllAlertsDisabled() ? 'Enable all alerts' : 'Disable all alerts'}
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <Show when={areAllAlertsDisabled()} fallback={
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                        }>
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </Show>
-                      </svg>
-                    </button>
-                  </Show>
-                </div>
+                Alerts
               </th>
               <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
@@ -288,6 +225,18 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </button>
                               </Show>
                               <Show when={resource.type === 'storage'}>
+                                <button type="button"
+                                  onClick={() => props.onToggleDisabled!(resource.id)}
+                                  class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                    resource.disabled
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                      : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                  }`}
+                                >
+                                  {resource.disabled ? 'Disabled' : 'Enabled'}
+                                </button>
+                              </Show>
+                              <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
                                 <button type="button"
                                   onClick={() => props.onToggleDisabled!(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
@@ -497,6 +446,18 @@ export function ResourceTable(props: ResourceTableProps) {
                           </button>
                         </Show>
                         <Show when={resource.type === 'storage'}>
+                          <button type="button"
+                            onClick={() => props.onToggleDisabled!(resource.id)}
+                            class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                              resource.disabled
+                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                            }`}
+                          >
+                            {resource.disabled ? 'Disabled' : 'Enabled'}
+                          </button>
+                        </Show>
+                        <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
                           <button type="button"
                             onClick={() => props.onToggleDisabled!(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
