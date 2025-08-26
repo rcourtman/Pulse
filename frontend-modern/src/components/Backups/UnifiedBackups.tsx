@@ -645,32 +645,6 @@ const UnifiedBackups: Component = () => {
   };
 
 
-  // Calculate deduplication factor for PBS backups
-  const dedupFactor = createMemo(() => {
-    // Get all PBS instances with datastores
-    if (!state.pbs || state.pbs.length === 0) return null;
-    
-    // Collect all deduplication factors from all datastores
-    const dedupFactors: number[] = [];
-    state.pbs.forEach(instance => {
-      if (instance.datastores) {
-        instance.datastores.forEach(ds => {
-          if (ds.deduplicationFactor && ds.deduplicationFactor > 0) {
-            dedupFactors.push(ds.deduplicationFactor);
-          }
-        });
-      }
-    });
-    
-    if (dedupFactors.length === 0) return null;
-    
-    // Calculate average deduplication factor across all datastores
-    const avgFactor = dedupFactors.reduce((sum, f) => sum + f, 0) / dedupFactors.length;
-    
-    // Format as ratio
-    return avgFactor.toFixed(1) + ':1';
-  });
-
   // Calculate backup frequency data for chart
   const chartData = createMemo(() => {
     const days = chartTimeRange();
@@ -1006,15 +980,7 @@ const UnifiedBackups: Component = () => {
       <Show when={filteredData().length > 0}>
       <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="flex justify-between items-center mb-3">
-          <div class="flex items-center gap-4">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
-            <Show when={dedupFactor()}>
-              <div class="flex items-center gap-1 text-xs">
-                <span class="text-gray-500 dark:text-gray-400">Deduplication:</span>
-                <span class="font-medium text-green-600 dark:text-green-400">{dedupFactor()}</span>
-              </div>
-            </Show>
-          </div>
+          <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
           <div class="flex items-center gap-2 text-xs">
             <div class="flex items-center gap-1">
               <button type="button"
