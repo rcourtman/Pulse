@@ -170,6 +170,7 @@ type PBSDatastore struct {
 	Status     string         `json:"status"`
 	Error      string         `json:"error,omitempty"`
 	Namespaces []PBSNamespace `json:"namespaces,omitempty"`
+	DeduplicationFactor float64 `json:"deduplicationFactor,omitempty"`
 }
 
 // PBSNamespace represents a PBS namespace
