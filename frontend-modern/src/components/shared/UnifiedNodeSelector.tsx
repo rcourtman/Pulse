@@ -108,12 +108,22 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
           onNamespaceClick={(instanceName, datastoreName, namespace) => {
             // Build a search string that filters for this specific namespace
             const searchStr = `pbs:${instanceName}:${datastoreName}:${namespace}`;
-            if (props.onNamespaceSelect) {
-              props.onNamespaceSelect(searchStr);
+            // If already selected, clear the filter, otherwise set it
+            if (props.searchTerm === searchStr) {
+              // Clear the filter
+              if (props.onNamespaceSelect) {
+                props.onNamespaceSelect('');
+              }
+            } else {
+              // Set the filter
+              if (props.onNamespaceSelect) {
+                props.onNamespaceSelect(searchStr);
+              }
             }
           }}
           currentTab={props.currentTab}
           filteredBackups={props.filteredBackups}
+          searchTerm={props.searchTerm}
         />
       </Show>
     </div>
