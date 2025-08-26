@@ -73,7 +73,10 @@ export function ResourceTable(props: ResourceTableProps) {
       <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">{props.title}</h3>
       </div>
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+        <style>{`
+          .overflow-x-auto::-webkit-scrollbar { display: none; }
+        `}</style>
         <table class="w-full">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
