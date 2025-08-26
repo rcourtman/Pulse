@@ -12,6 +12,7 @@ interface PVENodeTableProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
   selectedNode: string | null;
   onNodeClick: (nodeId: string) => void;
+  searchTerm?: string;
 }
 
 export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
@@ -181,7 +182,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                       <div class="flex items-center gap-2">
                         <span class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{node.name}</span>
-                        <Show when={filteredGuestCount() !== null}>
+                        <Show when={filteredGuestCount() !== null && props.searchTerm && props.searchTerm.trim()}>
                           <span class="text-xs text-gray-500 dark:text-gray-400">
                             ({filteredGuestCount()} matched)
                           </span>
