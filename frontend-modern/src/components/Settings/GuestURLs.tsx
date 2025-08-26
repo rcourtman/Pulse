@@ -173,7 +173,10 @@ export function GuestURLs(props: GuestURLsProps) {
             <div class="text-gray-500 dark:text-gray-400">Loading guest URLs...</div>
           </div>
         }>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+            <style>{`
+              .overflow-x-auto::-webkit-scrollbar { display: none; }
+            `}</style>
             <table class="w-full">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">

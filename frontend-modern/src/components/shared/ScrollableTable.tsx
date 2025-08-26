@@ -42,8 +42,12 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
       {/* Scrollable container */}
       <div 
         ref={scrollContainer}
-        class="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600"
+        class="overflow-x-auto"
+        style="scrollbar-width: none; -ms-overflow-style: none;"
       >
+        <style>{`
+          .overflow-x-auto::-webkit-scrollbar { display: none; }
+        `}</style>
         <div style={{ "min-width": props.minWidth || 'auto' }}>
           {props.children}
         </div>
