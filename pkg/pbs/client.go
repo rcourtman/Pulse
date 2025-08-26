@@ -403,6 +403,27 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	// Now get status for each datastore
 	var datastores []Datastore
 	for _, ds := range datastoreList.Data {
+		// Try to get RRD data first which has more statistics
+		rrdResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/rrd", ds.Store))
+		var dedupFactor float64
+		if err == nil {
+			defer rrdResp.Body.Close()
+			rrdBody, _ := io.ReadAll(rrdResp.Body)
+			
+			var rrdResult struct {
+				Data []struct {
+					Time float64 `json:"time"`
+					DedupFactor float64 `json:"dedup_factor"`
+				} `json:"data"`
+			}
+			
+			if json.Unmarshal(rrdBody, &rrdResult) == nil && len(rrdResult.Data) > 0 {
+				// Get the most recent deduplication factor
+				dedupFactor = rrdResult.Data[len(rrdResult.Data)-1].DedupFactor
+				log.Info().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
+			}
+		}
+		
 		// Get individual datastore status
 		statusResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/status", ds.Store))
 		if err != nil {
@@ -427,11 +448,7 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		}
 
 		var statusResult struct {
-			Data struct {
-				Total            int64   `json:"total"`
-				Used             int64   `json:"used"`
-				Avail            int64   `json:"avail"`
-			} `json:"data"`
+			Data map[string]interface{} `json:"data"`
 		}
 
 		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
@@ -447,23 +464,63 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			continue
 		}
 
+		// Extract fields from the map
+		total, _ := statusResult.Data["total"].(float64)
+		used, _ := statusResult.Data["used"].(float64)
+		avail, _ := statusResult.Data["avail"].(float64)
+		
+		// Check for deduplication_factor in status response  
+		if df, ok := statusResult.Data["deduplication-factor"].(float64); ok {
+			dedupFactor = df
+		} else if df, ok := statusResult.Data["deduplication_factor"].(float64); ok {
+			dedupFactor = df
+		}
+		
+		// If still no dedup factor, try gc-status endpoint
+		if dedupFactor == 0 {
+			gcResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/gc", ds.Store))
+			if err == nil {
+				defer gcResp.Body.Close()
+				gcBody, _ := io.ReadAll(gcResp.Body)
+				var gcResult struct {
+					Data struct {
+						IndexDataBytes float64 `json:"index-data-bytes"`
+						DiskBytes float64 `json:"disk-bytes"`
+					} `json:"data"`
+				}
+				if json.Unmarshal(gcBody, &gcResult) == nil {
+					// Calculate deduplication factor from index-data-bytes / disk-bytes
+					if gcResult.Data.DiskBytes > 0 && gcResult.Data.IndexDataBytes > 0 {
+						dedupFactor = gcResult.Data.IndexDataBytes / gcResult.Data.DiskBytes
+						log.Info().
+							Float64("index_bytes", gcResult.Data.IndexDataBytes).
+							Float64("disk_bytes", gcResult.Data.DiskBytes).
+							Float64("dedup_factor", dedupFactor).
+							Str("store", ds.Store).
+							Msg("Calculated dedup factor from gc endpoint")
+					}
+				}
+			}
+		}
+
 		// Create datastore with status info
 		datastore := Datastore{
 			Store: ds.Store,
-			Total: statusResult.Data.Total,
-			Used:  statusResult.Data.Used,
-			Avail: statusResult.Data.Avail,
-			// Note: PBS doesn't provide deduplication factor in the status API
-			// This would need to be calculated from chunk store statistics
-			DeduplicationFactor: 0,
+			Total: int64(total),
+			Used:  int64(used),
+			Avail: int64(avail),
+			DeduplicationFactor: dedupFactor,
 		}
 
-		log.Debug().
+		// Log all fields to see what's available
+		log.Info().
 			Str("store", datastore.Store).
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
-			Msg("PBS datastore status retrieved")
+			Float64("dedup_factor", datastore.DeduplicationFactor).
+			Interface("all_fields", statusResult.Data).
+			Msg("PBS datastore status - ALL FIELDS")
 
 		datastores = append(datastores, datastore)
 	}

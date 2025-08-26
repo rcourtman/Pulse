@@ -11,6 +11,7 @@ interface PBSNodeTableProps {
   onNamespaceClick?: (instanceName: string, datastoreName: string, namespace: string) => void;
   currentTab?: 'dashboard' | 'storage' | 'backups';
   filteredBackups?: any[];
+  searchTerm?: string;
 }
 
 export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
@@ -28,6 +29,13 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
   };
   
   const isExpanded = (instanceName: string) => expandedInstances().has(instanceName);
+  
+  // Check if a namespace is currently selected/filtered
+  const isNamespaceSelected = (instanceName: string, datastoreName: string, namespace: string) => {
+    if (!props.searchTerm) return false;
+    const expectedFilter = `pbs:${instanceName}:${datastoreName}:${namespace}`;
+    return props.searchTerm === expectedFilter;
+  };
   
   // Filter and sort PBS instances
   const sortedInstances = createMemo(() => {
@@ -281,27 +289,50 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                           {/* Namespace rows */}
                           <Show when={datastore.namespaces && datastore.namespaces.length > 0}>
                             <For each={datastore.namespaces}>
-                              {(namespace) => (
-                                <tr 
-                                  class="bg-gray-25 dark:bg-gray-850 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors border-b border-gray-50 dark:border-gray-800"
-                                  onClick={() => {
-                                    if (props.onNamespaceClick) {
-                                      props.onNamespaceClick(pbs.name, datastore.name, namespace.path || '/');
-                                    }
-                                  }}
-                                >
-                                  <td colspan="8" class="px-12 py-0.5">
-                                    <div class="flex items-center gap-2">
-                                      <svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 12h10m-7 5h4" />
-                                      </svg>
-                                      <span class="text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
-                                        {namespace.path || '/ (root)'}
-                                      </span>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
+                              {(namespace) => {
+                                const isSelected = () => isNamespaceSelected(pbs.name, datastore.name, namespace.path || '/');
+                                
+                                return (
+                                  <tr 
+                                    class={`
+                                      cursor-pointer transition-all duration-150 border-b border-gray-50 dark:border-gray-800
+                                      ${isSelected() 
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-150 dark:hover:bg-blue-900/50 font-medium' 
+                                        : 'bg-gray-25 dark:bg-gray-850 hover:bg-blue-50 dark:hover:bg-blue-900/20'}
+                                    `}
+                                    onClick={() => {
+                                      if (props.onNamespaceClick) {
+                                        props.onNamespaceClick(pbs.name, datastore.name, namespace.path || '/');
+                                      }
+                                    }}
+                                  >
+                                    <td colspan="8" class="px-12 py-0.5">
+                                      <div class="flex items-center gap-2">
+                                        <svg 
+                                          class={`w-3 h-3 ${isSelected() ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} 
+                                          fill="none" 
+                                          viewBox="0 0 24 24" 
+                                          stroke="currentColor"
+                                        >
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 12h10m-7 5h4" />
+                                        </svg>
+                                        <span class={`text-xs ${
+                                          isSelected() 
+                                            ? 'text-blue-700 dark:text-blue-300' 
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+                                        }`}>
+                                          {namespace.path || '/ (root)'}
+                                        </span>
+                                        <Show when={isSelected()}>
+                                          <span class="text-xs text-blue-600 dark:text-blue-400 ml-auto mr-2">
+                                            (filtering)
+                                          </span>
+                                        </Show>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              }}
                             </For>
                           </Show>
                         </>
