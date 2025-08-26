@@ -259,51 +259,50 @@ const Storage: Component = () => {
       {/* Storage Table - shows for both PVE and PBS storage */}
       <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
         <ComponentErrorBoundary name="Storage Table">
-          <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
-            <table class="w-full text-xs">
+          <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="overflow-x-auto">
+            <table class="w-full">
               <thead>
-                <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Storage</th>
                   <Show when={viewMode() === 'node'}>
-                    <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Node</th>
+                    <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Node</th>
                   </Show>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Content</th>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Status</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Type</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">Content</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
                   <Show when={viewMode() === 'node'}>
-                    <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Shared</th>
+                    <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell">Shared</th>
                   </Show>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider min-w-[100px] sm:min-w-[150px] md:min-w-[200px]">Usage</th>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Free</th>
-                  <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px] sm:min-w-[150px] md:min-w-[200px]">Usage</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Free</th>
+                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                 <For each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))}>
                   {([groupName, storages]) => (
                     <>
                       {/* Group Header */}
                       <Show when={viewMode() === 'node'}>
-                        <tr class="bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
-                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                          <td class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400">
                             <a 
                               href={nodeHostMap()[groupName] || (groupName.includes(':') ? `https://${groupName}` : `https://${groupName}:8006`)} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+                              class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
                               title={`Open ${groupName} web interface`}
                             >
                               {groupName}
                             </a>
                           </td>
-                          <td class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400" colspan="8">
-                            <span class="text-[10px]">
-                              {getTotalByNode(storages).total > 0 && (
-                                <span>
-                                  {formatBytes(getTotalByNode(storages).used)} / {formatBytes(getTotalByNode(storages).total)} ({calculateOverallUsage(storages).toFixed(1)}%)
-                                </span>
-                              )}
-                            </span>
+                          <td class="px-2 py-0.5 text-[10px] text-gray-500 dark:text-gray-400" colspan="8">
+                            {getTotalByNode(storages).total > 0 && (
+                              <span>
+                                {formatBytes(getTotalByNode(storages).used)} / {formatBytes(getTotalByNode(storages).total)} ({calculateOverallUsage(storages).toFixed(1)}%)
+                              </span>
+                            )}
                           </td>
                         </tr>
                       </Show>
@@ -318,8 +317,8 @@ const Storage: Component = () => {
                           const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertStyles.rowClass} hover:shadow-sm transition-all duration-200`;
                           
                           return (
-                            <tr class={rowClass}>
-                              <td class="p-1 px-2">
+                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}>
+                              <td class="px-2 py-0.5">
                                 <div class="flex items-center gap-2">
                                   <span class="font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
@@ -363,7 +362,7 @@ const Storage: Component = () => {
                                 </td>
                               </Show>
                               
-                              <td class="p-1 px-2">
+                              <td class="px-2 py-0.5">
                                 <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
                                   <div 
                                     class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
@@ -388,6 +387,7 @@ const Storage: Component = () => {
                 </For>
               </tbody>
             </table>
+            </div>
           </div>
         </ComponentErrorBoundary>
       </Show>
