@@ -4,8 +4,6 @@ import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 interface StorageFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
-  viewMode: () => 'all' | 'vm' | 'container';
-  setViewMode: (value: 'all' | 'vm' | 'container') => void;
   groupBy?: () => 'node' | 'storage';
   setGroupBy?: (value: 'node' | 'storage') => void;
   setSortKey: (value: string) => void;
@@ -63,42 +61,6 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
         {/* Filters */}
         <div class="flex flex-wrap items-center gap-2">
-          {/* Type Filter */}
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-            <button type="button"
-              onClick={() => props.setViewMode('all')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'all'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
-            >
-              All
-            </button>
-            <button type="button"
-              onClick={() => props.setViewMode('vm')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'vm'
-                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
-            >
-              VM Disks
-            </button>
-            <button type="button"
-              onClick={() => props.setViewMode('container')}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-                props.viewMode() === 'container'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-              }`}
-            >
-              CT Volumes
-            </button>
-          </div>
-
-          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
           {/* Group By Filter */}
           <Show when={props.groupBy && props.setGroupBy}>
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
@@ -132,7 +94,6 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               props.setSearch('');
               props.setSortKey('name');
               props.setSortDirection('asc');
-              props.setViewMode('all');
               if (props.setGroupBy) props.setGroupBy('node');
             }}
             title="Reset all filters"
@@ -150,7 +111,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           </button>
 
           {/* Active Indicator */}
-          <Show when={props.search() || props.viewMode() !== 'all'}>
+          <Show when={props.search()}>
             <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
               Active
             </span>
