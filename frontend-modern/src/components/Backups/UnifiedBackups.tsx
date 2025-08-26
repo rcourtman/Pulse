@@ -893,14 +893,14 @@ const UnifiedBackups: Component = () => {
             <table class="w-full">
               <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700">
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">PBS Instance</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CPU</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memory</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Storage</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Datastores</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Backups</th>
-                  <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Uptime</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">PBS Instance</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">CPU</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Memory</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Datastores</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Backups</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Uptime</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -952,7 +952,7 @@ const UnifiedBackups: Component = () => {
                           }
                         }}
                       >
-                        <td class="px-2 py-0.5 whitespace-nowrap">
+                        <td class="p-0.5 px-1.5 whitespace-nowrap">
                           <div class="flex items-center gap-1">
                             <a 
                               href={pbs.host || `https://${pbs.name}:8007`}
@@ -969,7 +969,7 @@ const UnifiedBackups: Component = () => {
                             </Show>
                           </div>
                         </td>
-                        <td class="px-2 py-0.5 whitespace-nowrap">
+                        <td class="p-0.5 px-1.5 whitespace-nowrap">
                           <div class="flex items-center gap-1">
                             <span class={`h-2 w-2 rounded-full ${
                               isOnline() ? 'bg-green-500' : 'bg-red-500'
@@ -979,14 +979,14 @@ const UnifiedBackups: Component = () => {
                             </span>
                           </div>
                         </td>
-                        <td class="px-2 py-0.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 w-[180px]">
                           <MetricBar 
                             value={cpuPercent()} 
                             label={`${cpuPercent()}%`}
                             type="cpu"
                           />
                         </td>
-                        <td class="px-2 py-0.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 w-[180px]">
                           <MetricBar 
                             value={memPercent()} 
                             label={`${memPercent()}%`}
@@ -994,7 +994,7 @@ const UnifiedBackups: Component = () => {
                             type="memory"
                           />
                         </td>
-                        <td class="px-2 py-0.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 w-[180px]">
                           <MetricBar 
                             value={storage.percent} 
                             label={`${storage.percent}%`}
@@ -1002,15 +1002,15 @@ const UnifiedBackups: Component = () => {
                             type="disk"
                           />
                         </td>
-                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                        <td class="p-0.5 px-1.5 whitespace-nowrap text-center">
                           <span class="text-xs text-gray-700 dark:text-gray-300">
                             {pbs.datastores?.length || 0}
                           </span>
                         </td>
-                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                        <td class="p-0.5 px-1.5 whitespace-nowrap text-center">
                           <span class="text-xs text-gray-700 dark:text-gray-300">{pbsBackups()}</span>
                         </td>
-                        <td class="px-2 py-0.5 whitespace-nowrap">
+                        <td class="p-0.5 px-1.5 whitespace-nowrap">
                           <span class="text-xs text-gray-600 dark:text-gray-400">
                             <Show when={isOnline() && pbs.uptime} fallback="-">
                               {formatUptime(pbs.uptime)}
@@ -1040,7 +1040,7 @@ const UnifiedBackups: Component = () => {
             <div class="flex items-center gap-1">
               <button type="button"
                 onClick={() => setChartTimeRange(7)}
-                class={`px-2 py-0.5 text-xs border rounded transition-colors ${
+                class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 7
                     ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -1050,7 +1050,7 @@ const UnifiedBackups: Component = () => {
               </button>
               <button type="button"
                 onClick={() => setChartTimeRange(30)}
-                class={`px-2 py-0.5 text-xs border rounded transition-colors ${
+                class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 30
                     ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -1060,7 +1060,7 @@ const UnifiedBackups: Component = () => {
               </button>
               <button type="button"
                 onClick={() => setChartTimeRange(90)}
-                class={`px-2 py-0.5 text-xs border rounded transition-colors ${
+                class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 90
                     ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -1070,7 +1070,7 @@ const UnifiedBackups: Component = () => {
               </button>
               <button type="button"
                 onClick={() => setChartTimeRange(365)}
-                class={`px-2 py-0.5 text-xs border rounded transition-colors ${
+                class={`p-0.5 px-1.5 text-xs border rounded transition-colors ${
                   chartTimeRange() === 365
                     ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -1086,7 +1086,7 @@ const UnifiedBackups: Component = () => {
             <Show when={selectedDateRange()}>
               <button type="button"
                 onClick={() => setSelectedDateRange(null)}
-                class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                class="p-0.5 px-1.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
               >
                 Clear filter
               </button>
@@ -1551,33 +1551,37 @@ const UnifiedBackups: Component = () => {
           {/* Desktop Table View */}
           <table class="backup-table hidden lg:table">
             <thead>
-              <tr class="border-b border-gray-200 dark:border-gray-700">
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 150px;">
-                  Name
+              <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                <th 
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  onClick={() => handleSort('name')}
+                  style="width: 150px;"
+                >
+                  Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('type')}
                   style="width: 60px;"
                 >
                   Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('vmid')}
                   style="width: 60px;"
                 >
                   VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('node')}
                   style="width: 100px;"
                 >
                   Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupTime')}
                   style="width: 140px;"
                 >
@@ -1585,7 +1589,7 @@ const UnifiedBackups: Component = () => {
                 </th>
                 <Show when={backupTypeFilter() !== 'snapshot'}>
                   <th
-                    class="sortable p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                     onClick={() => handleSort('size')}
                     style="width: 80px;"
                   >
@@ -1593,23 +1597,31 @@ const UnifiedBackups: Component = () => {
                   </th>
                 </Show>
                 <th
-                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupType')}
                   style="width: 80px;"
                 >
                   Backup {sortKey() === 'backupType' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                  <th class="p-1 px-2 text-center" style="width: 60px;">
-                    Verified
+                  <th 
+                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('verified')}
+                    style="width: 60px;"
+                  >
+                    Verified {sortKey() === 'verified' && (sortDirection() === 'asc' ? '▲' : '▼')}
                   </th>
                 </Show>
                 <Show when={backupTypeFilter() !== 'snapshot'}>
-                  <th class="p-1 px-2" style="width: 150px;">
-                    Location
+                  <th 
+                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('storage')}
+                    style="width: 150px;"
+                  >
+                    Location {sortKey() === 'storage' && (sortDirection() === 'asc' ? '▲' : '▼')}
                   </th>
                 </Show>
-                <th class="p-1 px-2" style="width: 200px;">
+                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px;">
                   Details
                 </th>
               </tr>
@@ -1619,7 +1631,7 @@ const UnifiedBackups: Component = () => {
                 {(group) => (
                   <>
                     <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                      <td class="px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
                         {group.label} ({group.items.length})
                       </td>
                       <td colspan={(() => {
@@ -1628,16 +1640,16 @@ const UnifiedBackups: Component = () => {
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Verified column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
                         return cols;
-                      })()} class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
+                      })()} class="p-0.5 px-1.5 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
                     </tr>
                     <For each={group.items}>
                       {(item) => (
                         <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td class="p-1 px-2">
+                          <td class="p-0.5 px-1.5 text-sm">
                             {item.name || '-'}
                           </td>
-                          <td class="p-1 px-2">
-                            <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          <td class="p-0.5 px-1.5">
+                            <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                               item.type === 'VM'
                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                                 : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
@@ -1645,20 +1657,20 @@ const UnifiedBackups: Component = () => {
                               {item.type}
                             </span>
                           </td>
-                          <td class="p-1 px-2 font-medium">{item.vmid}</td>
-                          <td class="p-1 px-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
+                          <td class="p-0.5 px-1.5 text-sm">{item.vmid}</td>
+                          <td class="p-0.5 px-1.5 text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
                             {item.node}
                           </td>
-                          <td class={`p-1 px-2 text-xs ${getAgeColorClass(item.backupTime)}`}>
+                          <td class={`p-0.5 px-1.5 text-xs ${getAgeColorClass(item.backupTime)}`}>
                             {formatTime(item.backupTime * 1000)}
                           </td>
                           <Show when={backupTypeFilter() !== 'snapshot'}>
-                            <td class={`p-1 px-2 ${getSizeColor(item.size)}`}>
+                            <td class={`p-0.5 px-1.5 ${getSizeColor(item.size)}`}>
                               {item.size ? formatBytes(item.size) : '-'}
                             </td>
                           </Show>
-                          <td class="p-1 px-2">
-                            <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          <td class="p-0.5 px-1.5">
+                            <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                               item.backupType === 'snapshot'
                                 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
                                 : item.backupType === 'local'
@@ -1669,7 +1681,7 @@ const UnifiedBackups: Component = () => {
                             </span>
                           </td>
                           <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                            <td class="p-1 px-2 text-center">
+                            <td class="p-0.5 px-1.5 text-center">
                               {item.backupType === 'remote' ? (
                                 item.verified ? (
                                   <span title="PBS backup verified" class="text-green-500 dark:text-green-400">✓</span>
@@ -1682,7 +1694,7 @@ const UnifiedBackups: Component = () => {
                             </td>
                           </Show>
                           <Show when={backupTypeFilter() !== 'snapshot'}>
-                            <td class="p-1 px-2">
+                            <td class="p-0.5 px-1.5 text-sm">
                               {item.storage || (item.datastore && (
                                 item.namespace && item.namespace !== 'root'
                                   ? `${item.datastore}/${item.namespace}`
@@ -1691,7 +1703,7 @@ const UnifiedBackups: Component = () => {
                             </td>
                           </Show>
                           <td 
-                            class="p-1 px-2 cursor-help"
+                            class="p-0.5 px-1.5 cursor-help"
                             onMouseEnter={(e) => {
                               const details = [];
                               

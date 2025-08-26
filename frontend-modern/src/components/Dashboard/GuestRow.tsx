@@ -97,12 +97,12 @@ export function GuestRow(props: GuestRowProps) {
         <div class="flex items-center gap-2">
           {/* Status indicator */}
           <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
-            isRunning() ? 'bg-green-500' : 'bg-red-500'
+            isRunning() ? 'bg-green-500' : 'bg-gray-400'
           }`} title={props.guest.status}></span>
           
           {/* Name - clickable if custom URL is set */}
           <Show when={customUrl()} fallback={
-            <span class="font-medium text-gray-900 dark:text-gray-100 truncate" title={props.guest.name}>
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={props.guest.name}>
               {props.guest.name}
             </span>
           }>
@@ -110,7 +110,7 @@ export function GuestRow(props: GuestRowProps) {
               href={customUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              class="font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
+              class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
               title={`${props.guest.name} - Click to open custom URL`}
             >
               {props.guest.name}

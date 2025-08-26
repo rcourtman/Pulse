@@ -88,7 +88,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   <>
                     {/* Node group header */}
                     <tr class="bg-gray-50 dark:bg-gray-700/50">
-                      <td colspan={props.columns.length + 5} class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                      <td colspan={props.columns.length + 5} class="p-1 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">
                         {nodeName}
                       </td>
                     </tr>
@@ -107,7 +107,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         
                         return (
                           <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
-                            <td class="px-3 py-1.5">
+                            <td class="p-1 px-2">
                               <div class="flex items-center gap-2">
                                 <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                                   {resource.name}
@@ -122,7 +122,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </Show>
                               </div>
                             </td>
-                            <td class="px-3 py-1.5">
+                            <td class="p-1 px-2">
                               <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                                 resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                                 resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
@@ -133,7 +133,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 {resource.resourceType}
                               </span>
                             </td>
-                            <td class="px-3 py-1.5">
+                            <td class="p-1 px-2">
                               <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                                 resource.status === 'online' || resource.status === 'running' ?
                                   'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
@@ -166,7 +166,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 };
                                 
                                 return (
-                                  <td class="px-3 py-1.5 text-center">
+                                  <td class="p-1 px-2 text-center">
                                     <Show when={showMetric()} fallback={
                                       <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
                                     }>
@@ -198,7 +198,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             </For>
                             
                             {/* Alerts column */}
-                            <td class="px-3 py-1.5 text-center">
+                            <td class="p-1 px-2 text-center">
                               <Show when={resource.type === 'guest' && props.onToggleDisabled}>
                                 <button type="button"
                                   onClick={() => props.onToggleDisabled!(resource.id)}
@@ -251,7 +251,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             </td>
                             
                             {/* Actions column */}
-                            <td class="px-3 py-1.5">
+                            <td class="p-1 px-2">
                               <div class="flex items-center justify-center gap-1">
                                 <Show when={!isEditing()} fallback={
                                   <>
@@ -322,7 +322,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   
                   return (
                     <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
-                      <td class="px-3 py-1.5">
+                      <td class="p-1 px-2">
                         <div class="flex items-center gap-2">
                           <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                             {resource.name}
@@ -343,7 +343,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           </Show>
                         </div>
                       </td>
-                      <td class="px-3 py-1.5">
+                      <td class="p-1 px-2">
                         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                           resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
                           resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
@@ -354,7 +354,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           {resource.resourceType}
                         </span>
                       </td>
-                      <td class="px-3 py-1.5">
+                      <td class="p-1 px-2">
                         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
                           resource.status === 'online' || resource.status === 'running' ?
                             'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
@@ -387,7 +387,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           };
                           
                           return (
-                            <td class="px-3 py-1.5 text-center">
+                            <td class="p-1 px-2 text-center">
                               <Show when={showMetric()} fallback={
                                 <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
                               }>
@@ -419,7 +419,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       </For>
                       
                       {/* Alerts column */}
-                      <td class="px-3 py-1.5 text-center">
+                      <td class="p-1 px-2 text-center">
                         <Show when={resource.type === 'guest' && props.onToggleDisabled}>
                           <button type="button"
                             onClick={() => props.onToggleDisabled!(resource.id)}
@@ -472,7 +472,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       </td>
                       
                       {/* Actions column */}
-                      <td class="px-3 py-1.5">
+                      <td class="p-1 px-2">
                         <div class="flex items-center justify-center gap-1">
                           <Show when={!isEditing()} fallback={
                             <>

@@ -621,8 +621,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   </thead>
                   <tbody>
                     <tr class="border-b border-gray-100 dark:border-gray-700/50">
-                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">VMs & Containers</td>
-                      <td class="text-center px-3 py-3">
+                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">VMs & Containers</td>
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -636,7 +636,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -650,7 +650,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -664,8 +664,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -679,7 +679,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -693,7 +693,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -707,7 +707,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -723,8 +723,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       </td>
                     </tr>
                     <tr class="border-b border-gray-100 dark:border-gray-700/50">
-                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">Proxmox Nodes</td>
-                      <td class="text-center px-3 py-3">
+                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">Proxmox Nodes</td>
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -738,7 +738,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -752,7 +752,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3">
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -766,18 +766,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
                     </tr>
                     <tr>
-                      <td class="py-3 px-3 font-medium text-gray-700 dark:text-gray-300 text-sm">Storage</td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3">
+                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">Storage</td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -791,10 +791,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center px-3 py-3"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
+                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
                     </tr>
                   </tbody>
                 </table>
