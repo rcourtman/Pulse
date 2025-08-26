@@ -343,49 +343,72 @@ const UnifiedBackups: Component = () => {
 
     // Search filter - with advanced filtering support like Dashboard
     if (search) {
-      // Split by commas first
-      const searchParts = search.split(',').map(t => t.trim()).filter(t => t);
-      
-      // Separate filters from text searches
-      const filters: string[] = [];
-      const textSearches: string[] = [];
-      
-      searchParts.forEach(part => {
-        if (part.includes('>') || part.includes('<') || part.includes(':')) {
-          filters.push(part);
-        } else {
-          textSearches.push(part.toLowerCase());
+      // Check for special PBS namespace filter format first
+      if (search.startsWith('pbs:')) {
+        const parts = search.split(':');
+        if (parts.length >= 4) {
+          // Format: pbs:instanceName:datastoreName:namespace
+          const [, instanceName, datastoreName, ...namespaceParts] = parts;
+          const namespace = namespaceParts.join(':'); // Handle namespaces with colons
+          
+          data = data.filter(item => {
+            // Only PBS backups
+            if (item.backupType !== 'remote') return false;
+            // Match instance
+            if (item.node !== instanceName) return false;
+            // Match datastore
+            if (item.datastore !== datastoreName) return false;
+            // Match namespace (root namespace is represented as '/' or empty)
+            const itemNamespace = item.namespace || '/';
+            const searchNamespace = namespace || '/';
+            return itemNamespace === searchNamespace;
+          });
         }
-      });
-      
-      // Apply filters if any
-      if (filters.length > 0) {
-        // Join filters with AND operator
-        const filterString = filters.join(' AND ');
-        const stack = parseFilterStack(filterString);
-        if (stack.filters.length > 0) {
-          data = data.filter(item => evaluateFilterStack(item, stack));
+      } else {
+        // Split by commas first
+        const searchParts = search.split(',').map(t => t.trim()).filter(t => t);
+        
+        // Separate filters from text searches
+        const filters: string[] = [];
+        const textSearches: string[] = [];
+        
+        searchParts.forEach(part => {
+          if (part.includes('>') || part.includes('<') || part.includes(':')) {
+            filters.push(part);
+          } else {
+            textSearches.push(part.toLowerCase());
+          }
+        });
+        
+        // Apply filters if any
+        if (filters.length > 0) {
+          // Join filters with AND operator
+          const filterString = filters.join(' AND ');
+          const stack = parseFilterStack(filterString);
+          if (stack.filters.length > 0) {
+            data = data.filter(item => evaluateFilterStack(item, stack));
+          }
         }
-      }
       
-      // Apply text search if any
-      if (textSearches.length > 0) {
-        data = data.filter(item => 
-          textSearches.some(term => {
-            const searchFields = [
-              item.vmid?.toString(),
-              item.name,
-              item.node,
-              item.backupName,
-              item.description,
-              item.storage,
-              item.datastore,
-              item.namespace
-            ].filter(Boolean).map(field => field!.toString().toLowerCase());
-            
-            return searchFields.some(field => field.includes(term));
-          })
-        );
+        // Apply text search if any
+        if (textSearches.length > 0) {
+          data = data.filter(item => 
+            textSearches.some(term => {
+              const searchFields = [
+                item.vmid?.toString(),
+                item.name,
+                item.node,
+                item.backupName,
+                item.description,
+                item.storage,
+                item.datastore,
+                item.namespace
+              ].filter(Boolean).map(field => field!.toString().toLowerCase());
+              
+              return searchFields.some(field => field.includes(term));
+            })
+          );
+        }
       }
     }
 
@@ -827,6 +850,10 @@ const UnifiedBackups: Component = () => {
             setSearchTerm('');
             setIsSearchLocked(false);
           }
+        }}
+        onNamespaceSelect={(namespaceFilter) => {
+          setSearchTerm(namespaceFilter);
+          setIsSearchLocked(true);
         }}
         filteredBackups={(searchTerm() || backupTypeFilter() !== 'all') ? filteredData() : undefined}
         searchTerm={searchTerm()}
