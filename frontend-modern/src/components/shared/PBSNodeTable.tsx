@@ -118,10 +118,11 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                 return (
                   <tr 
                     class={`
-                      border-b border-gray-100 dark:border-gray-700/50 transition-colors
-                      ${isClickable ? 'hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer' : ''}
+                      border-b border-gray-100 dark:border-gray-700/50 
+                      transition-all duration-150 ease-in-out h-8 relative
+                      ${isClickable ? 'hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer hover:scale-[1.01] hover:shadow-md hover:z-10 hover:border-l-4 hover:border-l-blue-500 dark:hover:border-l-blue-400' : ''}
                       ${!isOnline() ? 'opacity-60' : ''}
-                      ${isSelected() && isClickable ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' : ''}
+                      ${isSelected() && isClickable ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 scale-[1.005] shadow-sm border-l-4 border-l-blue-600 dark:border-l-blue-500' : ''}
                     `}
                     onClick={() => isClickable && props.onNodeClick(pbs.name)}
                   >
