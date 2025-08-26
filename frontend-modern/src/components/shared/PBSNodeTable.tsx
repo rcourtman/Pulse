@@ -273,14 +273,6 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                                       {formatBytes(datastore.total || 0)}
                                     </span>
                                   </div>
-                                  <Show when={datastore.deduplicationFactor && datastore.deduplicationFactor > 0}>
-                                    <div class="flex items-center gap-1">
-                                      <span class="text-gray-500">Dedup:</span>
-                                      <span class="font-medium text-green-600 dark:text-green-400">
-                                        {datastore.deduplicationFactor!.toFixed(1)}:1
-                                      </span>
-                                    </div>
-                                  </Show>
                                 </div>
                               </div>
                             </td>
