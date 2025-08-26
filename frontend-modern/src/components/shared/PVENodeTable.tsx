@@ -149,36 +149,36 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
   return (
     <Show when={showTable()}>
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div class="overflow-x-auto">
-          <table class="w-full">
+        <div class="overflow-x-auto" style="overflow-x: auto;">
+          <table style="width: 1100px; table-layout: fixed;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 PVE Nodes
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">
                 Status
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">
                 Cluster
               </th>
               <For each={getCountHeaders()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">
                     {header}
                   </th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 CPU
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 Memory
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px] whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 Storage
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">
                 Uptime
               </th>
             </tr>
@@ -219,8 +219,8 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                     `}
                     onClick={() => props.onNodeClick(node.name)}
                   >
-                    <td class="px-2 py-0.5">
-                      <div class="flex items-center gap-2 min-w-0">
+                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                      <div class="flex items-center gap-2" style="white-space: nowrap;">
                         <span class={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={node.name}>{node.name}</span>
                         <Show when={filteredGuestCount() !== null && props.searchTerm && props.searchTerm.trim()}>
@@ -249,7 +249,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                         </td>
                       )}
                     </For>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline()} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={cpuPercent()} 
@@ -259,7 +259,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline()} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={memPercent()} 
@@ -269,7 +269,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline()} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={storagePercent()} 

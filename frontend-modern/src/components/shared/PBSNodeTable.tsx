@@ -85,32 +85,32 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
 
   return (
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto">
-        <table class="w-full">
+      <div class="overflow-x-auto" style="overflow-x: auto;">
+        <table style="width: 1100px; table-layout: fixed;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 PBS Instances
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">
                 Status
               </th>
-              <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">
                 Datastores
               </th>
-              <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">
                 Backups
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 CPU
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 Memory
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[180px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 Storage Used
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">
                 Uptime
               </th>
             </tr>
@@ -161,8 +161,8 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                       isClickable && props.onNodeClick(pbs.name);
                     }}
                   >
-                    <td class="px-2 py-0.5">
-                      <div class="flex items-center gap-2">
+                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                      <div class="flex items-center gap-2" style="white-space: nowrap;">
                         <Show when={hasDatastoresWithNamespaces()}>
                           <button
                             class="expand-button p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
@@ -190,7 +190,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                           </button>
                         </Show>
                         <span class={`h-2 w-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100" style="white-space: nowrap;">
                           {pbs.name}
                         </span>
                       </div>
@@ -210,7 +210,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         {props.backupCounts?.[pbs.name] || 0}
                       </span>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline()} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={cpuPercent()} 
@@ -219,7 +219,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline()} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={memPercent()} 
@@ -229,7 +229,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         />
                       </Show>
                     </td>
-                    <td class="px-2 py-0.5 w-[180px]">
+                    <td class="px-2 py-0.5" style="width: 180px;">
                       <Show when={isOnline() && totalStorage().total > 0} fallback={<span class="text-xs text-gray-400">-</span>}>
                         <MetricBar 
                           value={totalStorage().percent} 
