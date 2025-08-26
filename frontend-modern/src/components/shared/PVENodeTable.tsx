@@ -15,11 +15,10 @@ interface PVENodeTableProps {
 }
 
 export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
-  // Check if we have active filtering (fewer guests than total)
+  // Check if we have active filtering (receiving filtered guests)
   const hasActiveFilter = createMemo(() => {
-    const vmsCount = props.vms?.length || 0;
-    const containersCount = props.containers?.length || 0;
-    return vmsCount > 0 || containersCount > 0;
+    // If vms or containers props are explicitly passed, we're filtering
+    return props.vms !== undefined || props.containers !== undefined;
   });
 
   // Filter and sort nodes - only show nodes with matching guests when filtering
