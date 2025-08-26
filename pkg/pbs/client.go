@@ -431,7 +431,6 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 				Total            int64   `json:"total"`
 				Used             int64   `json:"used"`
 				Avail            int64   `json:"avail"`
-				DeduplicationFactor float64 `json:"deduplication_factor,omitempty"`
 			} `json:"data"`
 		}
 
@@ -454,7 +453,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			Total: statusResult.Data.Total,
 			Used:  statusResult.Data.Used,
 			Avail: statusResult.Data.Avail,
-			DeduplicationFactor: statusResult.Data.DeduplicationFactor,
+			// Note: PBS doesn't provide deduplication factor in the status API
+			// This would need to be calculated from chunk store statistics
+			DeduplicationFactor: 0,
 		}
 
 		log.Debug().
@@ -462,7 +463,6 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
-			Float64("dedup_factor", datastore.DeduplicationFactor).
 			Msg("PBS datastore status retrieved")
 
 		datastores = append(datastores, datastore)
