@@ -146,18 +146,13 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     return nodes && nodes.length > 0;
   });
   
-  // Calculate table width based on number of count columns
-  const tableWidth = createMemo(() => {
-    const countColumns = getCountHeaders().length;
-    // Base: 200 + 80 + 100 + (countColumns * 80) + 180 + 180 + 180 + 100
-    return 1020 + (countColumns * 80);
-  });
+  // Table uses 100% width with fixed layout
   
   return (
     <Show when={showTable()}>
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="overflow-x-auto" style="overflow-x: auto;">
-          <table style={`width: ${tableWidth()}px; table-layout: fixed;`}>
+          <table style="table-layout: fixed; min-width: 100%; width: 100%;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
@@ -185,7 +180,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
               <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 180px; white-space: nowrap;">
                 Storage
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="white-space: nowrap;">
                 Uptime
               </th>
             </tr>
