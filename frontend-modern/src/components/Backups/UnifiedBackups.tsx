@@ -790,6 +790,8 @@ const UnifiedBackups: Component = () => {
             setIsSearchLocked(false);
           }
         }}
+        filteredBackups={filteredData()}
+        searchTerm={searchTerm()}
       />
 
       {/* Removed old PBS table */}

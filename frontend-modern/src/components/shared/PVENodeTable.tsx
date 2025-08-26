@@ -13,30 +13,54 @@ interface PVENodeTableProps {
   selectedNode: string | null;
   onNodeClick: (nodeId: string) => void;
   searchTerm?: string;
+  filteredBackups?: any[];
 }
 
 export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
-  // Check if we have active filtering (receiving filtered guests)
+  // Check if we have active filtering
   const hasActiveFilter = createMemo(() => {
-    // If vms or containers props are explicitly passed, we're filtering
-    return props.vms !== undefined || props.containers !== undefined;
+    // Check based on current tab
+    switch (props.currentTab) {
+      case 'dashboard':
+        return props.vms !== undefined || props.containers !== undefined;
+      case 'storage':
+        return props.storage !== undefined;
+      case 'backups':
+        return props.filteredBackups !== undefined;
+      default:
+        return false;
+    }
   });
 
-  // Filter and sort nodes - only show nodes with matching guests when filtering
+  // Filter and sort nodes based on current tab
   const sortedNodes = createMemo(() => {
     if (!props.nodes) return [];
     
     let nodes = [...props.nodes];
     
-    // If we have filtered guests, only show nodes that have at least one matching guest
-    if (hasActiveFilter() && props.currentTab === 'dashboard') {
-      const nodesWithGuests = new Set<string>();
-      props.vms?.forEach(vm => nodesWithGuests.add(vm.node));
-      props.containers?.forEach(ct => nodesWithGuests.add(ct.node));
+    // Filter nodes based on the current tab and filtered data
+    if (hasActiveFilter()) {
+      const nodesWithItems = new Set<string>();
       
-      // Only show nodes that have filtered guests
-      if (nodesWithGuests.size > 0) {
-        nodes = nodes.filter(node => nodesWithGuests.has(node.name));
+      switch (props.currentTab) {
+        case 'dashboard':
+          // Filter based on VMs and containers
+          props.vms?.forEach(vm => nodesWithItems.add(vm.node));
+          props.containers?.forEach(ct => nodesWithItems.add(ct.node));
+          break;
+        case 'storage':
+          // Filter based on storage
+          props.storage?.forEach(s => nodesWithItems.add(s.node));
+          break;
+        case 'backups':
+          // Filter based on backups
+          props.filteredBackups?.forEach(b => nodesWithItems.add(b.node));
+          break;
+      }
+      
+      // Only show nodes that have filtered items
+      if (nodesWithItems.size > 0) {
+        nodes = nodes.filter(node => nodesWithItems.has(node.name));
       }
     }
     
@@ -71,6 +95,11 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
         const storageCount = props.storage?.filter(s => s.node === node.name).length || 0;
         return [storageCount];
       case 'backups':
+        // If we have filtered backups, count those; otherwise use the provided counts
+        if (props.filteredBackups !== undefined) {
+          const backupCount = props.filteredBackups.filter(b => b.node === node.name).length;
+          return [backupCount];
+        }
         return [props.backupCounts?.[node.name] || 0];
       default:
         return [];
