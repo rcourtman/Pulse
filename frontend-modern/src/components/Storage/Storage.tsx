@@ -14,7 +14,6 @@ const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [contentFilter, setContentFilter] = createSignal<'all' | 'vm' | 'container'>('all');
   // TODO: Implement sorting in sortedStorage function
   // const [sortKey, setSortKey] = createSignal('name');
   // const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -121,7 +120,6 @@ const Storage: Component = () => {
   const resetFilters = () => {
     setSearchTerm('');
     setViewMode('node');
-    setContentFilter('all');
     // setSortKey('name');
     // setSortDirection('asc');
   };
@@ -156,7 +154,7 @@ const Storage: Component = () => {
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
-        if (searchTerm().trim() || viewMode() !== 'node' || contentFilter() !== 'all') {
+        if (searchTerm().trim() || viewMode() !== 'node') {
           resetFilters();
           
           // Blur the search input if it's focused
@@ -202,8 +200,6 @@ const Storage: Component = () => {
       <StorageFilter
         search={searchTerm}
         setSearch={setSearchTerm}
-        viewMode={contentFilter}
-        setViewMode={setContentFilter}
         groupBy={viewMode}
         setGroupBy={setViewMode}
         setSortKey={() => {}}
