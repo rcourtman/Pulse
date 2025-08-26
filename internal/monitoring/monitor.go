@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -179,9 +180,15 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("Failed to load webhook configuration")
 	}
 
-	// Initialize PVE clients
-	log.Info().Int("count", len(cfg.PVEInstances)).Msg("Initializing PVE clients")
-	for _, pve := range cfg.PVEInstances {
+	// Check if mock mode is enabled before initializing clients
+	mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
+	
+	if mockEnabled {
+		log.Info().Msg("Mock mode enabled - skipping PVE/PBS client initialization")
+	} else {
+		// Initialize PVE clients
+		log.Info().Int("count", len(cfg.PVEInstances)).Msg("Initializing PVE clients")
+		for _, pve := range cfg.PVEInstances {
 		log.Info().
 			Str("name", pve.Name).
 			Str("host", pve.Host).
@@ -284,6 +291,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.pbsClients[pbsInst.Name] = client
 		log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
 	}
+	} // End of else block for mock mode check
 
 	// Initialize state stats
 	m.state.Stats = models.Stats{
@@ -381,14 +389,23 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
-	// Do an immediate poll on start
-	go m.poll(ctx, wsHub)
+	// Check if mock mode is enabled
+	mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
+	
+	// Do an immediate poll on start (only if not in mock mode)
+	if !mockEnabled {
+		go m.poll(ctx, wsHub)
+	} else {
+		log.Info().Msg("Mock mode enabled - skipping real node polling")
+	}
 
 	for {
 		select {
 		case <-pollTicker.C:
-			// Start polling in a goroutine so it doesn't block the ticker
-			go m.poll(ctx, wsHub)
+			// Start polling in a goroutine so it doesn't block the ticker (only if not in mock mode)
+			if !mockEnabled {
+				go m.poll(ctx, wsHub)
+			}
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
@@ -2080,6 +2097,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 // GetState returns the current state
 func (m *Monitor) GetState() models.StateSnapshot {
+	// Check if mock mode is enabled
+	if mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"; mockEnabled {
+		// Import is handled at package level, use fully qualified name
+		if mockState := getMockState(); mockState != nil {
+			return *mockState
+		}
+	}
 	return m.state.GetSnapshot()
 }
 

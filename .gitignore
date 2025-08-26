@@ -89,3 +89,10 @@ test-config.json
 scripts/test-*.sh
 scripts/run-tests.sh
 scripts/TEST_*.md
+
+# Mock mode files (local development only)
+mock.env
+internal/mock/
+internal/monitoring/mock_integration.go
+scripts/mock-dev.sh
+MOCK_MODE_GUIDE.md
