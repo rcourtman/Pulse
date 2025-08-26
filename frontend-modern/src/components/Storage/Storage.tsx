@@ -194,6 +194,8 @@ const Storage: Component = () => {
       <UnifiedNodeSelector 
         currentTab="storage" 
         onNodeSelect={handleNodeSelect}
+        filteredStorage={sortedStorage()}
+        searchTerm={searchTerm()}
       />
       
       {/* Storage Filter */}
