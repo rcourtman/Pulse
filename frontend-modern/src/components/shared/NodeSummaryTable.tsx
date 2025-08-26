@@ -87,25 +87,25 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto">
-        <table class="w-[1000px] table-fixed">
+      <div class="overflow-x-auto" style="overflow-x: auto;">
+        <table style="width: 1000px; table-layout: fixed;">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[80px]">Status</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">CPU</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">Memory</th>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[200px]">
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">Status</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">CPU</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">Memory</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[80px]">{header}</th>
+                  <th class="px-2 py-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 80px; white-space: nowrap;">{header}</th>
                 )}
               </For>
-              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-[100px]">Uptime</th>
+              <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -166,8 +166,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
-                    <td class="px-2 py-0.5">
-                      <div class="flex items-center gap-1 whitespace-nowrap">
+                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                      <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
                         <a 
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
                           target="_blank"
@@ -197,8 +197,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-0.5">
-                      <div class="flex items-center gap-1 whitespace-nowrap">
+                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                      <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
                         <span class={`h-2 w-2 flex-shrink-0 rounded-full ${
                           isOnline() ? 'bg-green-500' : 'bg-red-500'
                         }`} />
@@ -207,7 +207,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </span>
                       </div>
                     </td>
-                    <td class="px-2 py-0.5 w-[200px]">
+                    <td class="px-2 py-0.5" style="width: 200px;">
                       <MetricBar 
                         value={cpuPercent()} 
                         label={`${cpuPercent()}%`}
@@ -215,7 +215,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="cpu"
                       />
                     </td>
-                    <td class="px-2 py-0.5 w-[200px]">
+                    <td class="px-2 py-0.5" style="width: 200px;">
                       <MetricBar 
                         value={memPercent()} 
                         label={`${memPercent()}%`}
@@ -227,7 +227,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="memory"
                       />
                     </td>
-                    <td class="px-2 py-0.5 w-[200px]">
+                    <td class="px-2 py-0.5" style="width: 200px;">
                       <MetricBar 
                         value={diskPercent()} 
                         label={`${diskPercent()}%`}
