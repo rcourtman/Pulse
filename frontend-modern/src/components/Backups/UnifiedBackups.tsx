@@ -886,7 +886,10 @@ const UnifiedBackups: Component = () => {
       {/* Removed old PBS table */}
       <Show when={false && sortedPBSInstances().length > 0}>
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+            <style>{`
+              .overflow-x-auto::-webkit-scrollbar { display: none; }
+            `}</style>
             <table class="w-full">
               <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700">
@@ -1437,8 +1440,9 @@ const UnifiedBackups: Component = () => {
 
       {/* Table */}
       <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
         <style>{`
+          .overflow-x-auto::-webkit-scrollbar { display: none; }
           .backup-table {
             table-layout: fixed;
             width: 100%;
