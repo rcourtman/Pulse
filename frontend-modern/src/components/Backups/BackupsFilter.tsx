@@ -4,8 +4,8 @@ import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 interface BackupsFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
-  viewMode: () => 'all' | 'pve' | 'pbs';
-  setViewMode: (value: 'all' | 'pve' | 'pbs') => void;
+  viewMode: () => 'all' | 'snapshot' | 'pve' | 'pbs';
+  setViewMode: (value: 'all' | 'snapshot' | 'pve' | 'pbs') => void;
   groupBy: () => 'date' | 'guest';
   setGroupBy: (value: 'date' | 'guest') => void;
   searchInputRef?: (el: HTMLInputElement) => void;
@@ -74,10 +74,20 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               All
             </button>
             <button type="button"
+              onClick={() => props.setViewMode('snapshot')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                props.viewMode() === 'snapshot'
+                  ? 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+            >
+              Snapshots
+            </button>
+            <button type="button"
               onClick={() => props.setViewMode('pve')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'pve'
-                  ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' 
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm' 
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
               }`}
             >
@@ -87,7 +97,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               onClick={() => props.setViewMode('pbs')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'pbs'
-                  ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm' 
+                  ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm' 
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
               }`}
             >
