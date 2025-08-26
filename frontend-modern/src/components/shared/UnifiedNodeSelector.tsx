@@ -8,6 +8,8 @@ interface UnifiedNodeSelectorProps {
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   filteredVms?: any[];
   filteredContainers?: any[];
+  filteredStorage?: any[];
+  filteredBackups?: any[];
   searchTerm?: string;
 }
 
@@ -86,12 +88,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
             nodes={state.nodes}
             vms={props.filteredVms !== undefined ? props.filteredVms : state.vms}
             containers={props.filteredContainers !== undefined ? props.filteredContainers : state.containers}
-            storage={state.storage}
+            storage={props.filteredStorage !== undefined ? props.filteredStorage : state.storage}
             backupCounts={backupCounts()}
             currentTab={props.currentTab}
             selectedNode={selectedNode()}
             onNodeClick={handlePVENodeClick}
             searchTerm={props.searchTerm}
+            filteredBackups={props.filteredBackups}
           />
         </Show>
         <Show when={props.currentTab === 'backups' && state.pbs && state.pbs.length > 0}>
