@@ -60,7 +60,7 @@ export function MetricBar(props: MetricBarProps) {
           style={{ width: `${width()}%` }}
         />
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-          <span class="truncate px-1">{displayText()}</span>
+          <span class="truncate px-0.5">{displayText()}</span>
         </span>
       </div>
     </div>

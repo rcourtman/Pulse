@@ -66,6 +66,8 @@ type Node struct {
 	CPUInfo          CPUInfo   `json:"cpuInfo"`
 	LastSeen         time.Time `json:"lastSeen"`
 	ConnectionHealth string    `json:"connectionHealth"`
+	IsClusterMember  bool      `json:"isClusterMember"`  // True if part of a cluster
+	ClusterName      string    `json:"clusterName"`      // Name of cluster (empty if standalone)
 }
 
 // VM represents a virtual machine
