@@ -133,6 +133,7 @@ export interface PBSDatastore {
   status: string;
   error: string;
   namespaces: PBSNamespace[];
+  deduplicationFactor?: number;
 }
 
 export interface PBSNamespace {
