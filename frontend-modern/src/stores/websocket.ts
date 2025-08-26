@@ -95,7 +95,10 @@ export function createWebSocketStore(url: string) {
               }
               
               // Only update if we have actual data, don't overwrite with empty arrays
-              if (message.data.nodes !== undefined) setState('nodes', message.data.nodes);
+              if (message.data.nodes !== undefined) {
+                console.log('[WebSocket] Updating nodes:', message.data.nodes?.length || 0);
+                setState('nodes', message.data.nodes);
+              }
               if (message.data.vms !== undefined) setState('vms', message.data.vms);
               if (message.data.containers !== undefined) setState('containers', message.data.containers);
               if (message.data.storage !== undefined) setState('storage', message.data.storage);

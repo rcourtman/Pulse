@@ -134,14 +134,24 @@ const UnifiedBackups: Component = () => {
 
     // Normalize snapshots
     state.pveBackups?.guestSnapshots?.forEach((snapshot) => {
+      // Try to find the guest name by matching VMID
+      let guestName = '';
+      const vm = state.vms?.find(v => v.vmid === snapshot.vmid && v.node === snapshot.node);
+      const ct = state.containers?.find(c => c.vmid === snapshot.vmid && c.node === snapshot.node);
+      if (vm) {
+        guestName = vm.name || '';
+      } else if (ct) {
+        guestName = ct.name || '';
+      }
+      
       unified.push({
         backupType: 'snapshot',
         vmid: snapshot.vmid,
-        name: snapshot.name || '',
+        name: guestName || `VM ${snapshot.vmid}`, // Use guest name if found, otherwise fallback to VMID
         type: snapshot.type === 'qemu' ? 'VM' : 'LXC',
         node: snapshot.node,
         backupTime: snapshot.time ? new Date(snapshot.time).getTime() / 1000 : 0,
-        backupName: snapshot.name,
+        backupName: snapshot.name, // This is the snapshot name like "current", "pre-upgrade"
         description: snapshot.description || '',
         status: 'ok',
         size: null,
@@ -792,7 +802,7 @@ const UnifiedBackups: Component = () => {
             setIsSearchLocked(false);
           }
         }}
-        filteredBackups={filteredData()}
+        filteredBackups={(searchTerm() || backupTypeFilter() !== 'all') ? filteredData() : undefined}
         searchTerm={searchTerm()}
       />
 
@@ -939,7 +949,8 @@ const UnifiedBackups: Component = () => {
 
       {/* Main Content - show when any nodes or PBS are configured */}
       <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
-      {/* Backup Frequency Chart */}
+      {/* Backup Frequency Chart - hide when no backups match the filter */}
+      <Show when={filteredData().length > 0}>
       <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
@@ -1321,6 +1332,7 @@ const UnifiedBackups: Component = () => {
           </span>
         </div>
       </div>
+      </Show>
 
       {/* Backups Filter */}
       <BackupsFilter
