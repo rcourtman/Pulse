@@ -194,6 +194,7 @@ type PBSBackup struct {
 	Verified     bool      `json:"verified"`    
 	Comment      string    `json:"comment,omitempty"`
 	Files        []string  `json:"files,omitempty"`
+	Owner        string    `json:"owner,omitempty"`     // User who created the backup
 }
 
 // PBSBackupJob represents a PBS backup job

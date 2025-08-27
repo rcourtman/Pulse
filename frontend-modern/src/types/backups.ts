@@ -21,6 +21,7 @@ export interface UnifiedBackup {
   
   // Common flags
   protected: boolean;
+  encrypted?: boolean;
   
   // UI specific
   instance?: string;

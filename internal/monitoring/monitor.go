@@ -2668,6 +2668,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					Verified:   verified,
 					Comment:    snapshot.Comment,
 					Files:      fileNames,
+					Owner:      snapshot.Owner,
 				}
 
 				allBackups = append(allBackups, backup)

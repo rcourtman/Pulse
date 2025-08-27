@@ -26,6 +26,8 @@ interface UnifiedBackup {
   namespace: string | null;
   verified: boolean | null;
   protected: boolean;
+  encrypted?: boolean;
+  owner?: string;
 }
 
 // Types for PBS backups - temporarily disabled to avoid unused warnings
@@ -186,6 +188,13 @@ const UnifiedBackups: Component = () => {
         console.log(`PBS backup: vmid=${backup.vmid}, time=${backupTimeSeconds}, key=${backupKey}, verified=${backup.verified}`);
       }
       
+      // Check if any files have encryption
+      const isEncrypted = backup.files && Array.isArray(backup.files) && 
+        backup.files.some((file: any) => {
+          if (typeof file === 'string') return false;
+          return file.crypt || file.encrypted || (file.filename && file.filename.includes('.enc'));
+        });
+      
       unified.push({
         backupType: 'remote',
         vmid: parseInt(backup.vmid) || 0,
@@ -201,7 +210,9 @@ const UnifiedBackups: Component = () => {
         datastore: backup.datastore || null,
         namespace: backup.namespace || 'root',
         verified: backup.verified || false,
-        protected: backup.protected || false
+        protected: backup.protected || false,
+        encrypted: isEncrypted,
+        owner: backup.owner
       });
     });
 
@@ -254,7 +265,8 @@ const UnifiedBackups: Component = () => {
         datastore: backup.isPBS ? backup.storage : null,
         namespace: backup.isPBS ? 'root' : null,
         verified: backup.verified || false,
-        protected: backup.protected || false
+        protected: backup.protected || false,
+        encrypted: backup.encryption ? true : false  // Check encryption field from Proxmox API
       });
     });
 
@@ -667,9 +679,11 @@ const UnifiedBackups: Component = () => {
     // Calculate average deduplication factor across all datastores
     const avgFactor = dedupFactors.reduce((sum, f) => sum + f, 0) / dedupFactors.length;
     
-    // Format as ratio
-    return avgFactor.toFixed(1) + ':1';
+    // Format as multiplication factor
+    return avgFactor.toFixed(1) + 'x';
   });
+
+
 
   // Calculate backup frequency data for chart
   const chartData = createMemo(() => {
@@ -1580,6 +1594,15 @@ const UnifiedBackups: Component = () => {
                 >
                   Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
+                <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                  <th
+                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('owner')}
+                    style="width: 80px;"
+                  >
+                    Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </th>
+                </Show>
                 <th
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupTime')}
@@ -1636,6 +1659,7 @@ const UnifiedBackups: Component = () => {
                       </td>
                       <td colspan={(() => {
                         let cols = 6; // Base columns: Type, VMID, Node, Time, Backup, Details
+                        if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Owner column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Size column
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Verified column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
@@ -1645,10 +1669,10 @@ const UnifiedBackups: Component = () => {
                     <For each={group.items}>
                       {(item) => (
                         <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td class="p-0.5 px-1.5 text-sm">
+                          <td class="p-0.5 px-1.5 text-sm align-middle">
                             {item.name || '-'}
                           </td>
-                          <td class="p-0.5 px-1.5">
+                          <td class="p-0.5 px-1.5 align-middle">
                             <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                               item.type === 'VM'
                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
@@ -1657,31 +1681,52 @@ const UnifiedBackups: Component = () => {
                               {item.type}
                             </span>
                           </td>
-                          <td class="p-0.5 px-1.5 text-sm">{item.vmid}</td>
-                          <td class="p-0.5 px-1.5 text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
+                          <td class="p-0.5 px-1.5 text-sm align-middle">{item.vmid}</td>
+                          <td class="p-0.5 px-1.5 text-sm align-middle cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
                             {item.node}
                           </td>
-                          <td class={`p-0.5 px-1.5 text-xs ${getAgeColorClass(item.backupTime)}`}>
+                          <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                            <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
+                              {item.owner ? item.owner.split('@')[0] : '-'}
+                            </td>
+                          </Show>
+                          <td class={`p-0.5 px-1.5 text-xs align-middle ${getAgeColorClass(item.backupTime)}`}>
                             {formatTime(item.backupTime * 1000)}
                           </td>
                           <Show when={backupTypeFilter() !== 'snapshot'}>
-                            <td class={`p-0.5 px-1.5 ${getSizeColor(item.size)}`}>
+                            <td class={`p-0.5 px-1.5 align-middle ${getSizeColor(item.size)}`}>
                               {item.size ? formatBytes(item.size) : '-'}
                             </td>
                           </Show>
-                          <td class="p-0.5 px-1.5">
-                            <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                              item.backupType === 'snapshot'
-                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
-                                : item.backupType === 'local'
-                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
-                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                            }`}>
-                              {item.backupType === 'snapshot' ? 'Snapshot' : item.backupType === 'local' ? 'PVE' : 'PBS'}
-                            </span>
+                          <td class="p-0.5 px-1.5 align-middle">
+                            <div class="flex items-center gap-1">
+                              <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                item.backupType === 'snapshot'
+                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
+                                  : item.backupType === 'local'
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
+                                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                              }`}>
+                                {item.backupType === 'snapshot' ? 'Snapshot' : item.backupType === 'local' ? 'PVE' : 'PBS'}
+                              </span>
+                              <Show when={item.encrypted}>
+                                <span title="Encrypted backup" class="text-green-600 dark:text-green-400">
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                              </Show>
+                              <Show when={item.protected}>
+                                <span title="Protected backup" class="text-blue-600 dark:text-blue-400">
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                  </svg>
+                                </span>
+                              </Show>
+                            </div>
                           </td>
                           <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                            <td class="p-0.5 px-1.5 text-center">
+                            <td class="p-0.5 px-1.5 text-center align-middle">
                               {item.backupType === 'remote' ? (
                                 item.verified ? (
                                   <span title="PBS backup verified" class="text-green-500 dark:text-green-400">✓</span>
@@ -1694,7 +1739,7 @@ const UnifiedBackups: Component = () => {
                             </td>
                           </Show>
                           <Show when={backupTypeFilter() !== 'snapshot'}>
-                            <td class="p-0.5 px-1.5 text-sm">
+                            <td class="p-0.5 px-1.5 text-sm align-middle">
                               {item.storage || (item.datastore && (
                                 item.namespace && item.namespace !== 'root'
                                   ? `${item.datastore}/${item.namespace}`
@@ -1703,7 +1748,7 @@ const UnifiedBackups: Component = () => {
                             </td>
                           </Show>
                           <td 
-                            class="p-0.5 px-1.5 cursor-help"
+                            class="p-0.5 px-1.5 cursor-help align-middle"
                             onMouseEnter={(e) => {
                               const details = [];
                               
