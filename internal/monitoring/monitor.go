@@ -2254,7 +2254,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 				// Determine type from content type and volid
 				backupType := "unknown"
-				if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
+				// Check for PMG host backups (VMID=0 and contains pmgbackup)
+				if content.VMID == 0 && strings.Contains(content.Volid, "pmgbackup") {
+					backupType = "host"
+				} else if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
 					backupType = "qemu"
 				} else if strings.Contains(content.Volid, "/ct/") || strings.Contains(content.Volid, "lxc") {
 					backupType = "lxc"
@@ -2264,6 +2267,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				} else if strings.Contains(content.Format, "pbs-vm") {
 					// PBS format check as fallback
 					backupType = "qemu"
+				} else if content.VMID == 0 {
+					// Any other VMID=0 backup is likely a host backup
+					backupType = "host"
 				}
 
 				// For shared storage (like PBS), use the storage name as node
