@@ -97,12 +97,6 @@ const UnifiedBackups: Component = () => {
   // TODO: Add time format toggle to BackupsFilter component
   // const setUseRelativeTime = ...; 
 
-  // Check if there are any Host type backups
-  const hasHostBackups = createMemo(() => {
-    const data = normalizedData();
-    return data.some(backup => backup.type === 'Host');
-  });
-
   // Helper functions
   const getDaySuffix = (day: number) => {
     if (day >= 11 && day <= 13) return 'th';
@@ -345,6 +339,12 @@ const UnifiedBackups: Component = () => {
     */
 
     return unified;
+  });
+
+  // Check if there are any Host type backups
+  const hasHostBackups = createMemo(() => {
+    const data = normalizedData();
+    return data.some(backup => backup.type === 'Host');
   });
 
   // Apply filters
