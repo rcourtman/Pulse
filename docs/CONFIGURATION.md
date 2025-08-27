@@ -72,9 +72,9 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 {
   "pollingInterval": 10,          // Fixed at 10 seconds to match Proxmox update cycle
   "connectionTimeout": 10,        // Seconds before node connection timeout
-  "autoUpdateEnabled": false,     // Enable automatic updates
-  "updateChannel": "stable",      // Update channel: stable, rc, beta
-  "autoUpdateTime": "03:00",      // Time for automatic updates (24hr format)
+  "autoUpdateEnabled": false,     // Enable automatic stable updates via systemd timer
+  "updateChannel": "stable",      // Update channel: stable or rc (UI updates only)
+  "autoUpdateTime": "03:00",      // Reserved for future use (currently 2-6 AM random)
   "allowedOrigins": "",           // CORS allowed origins (empty = same-origin only)
   "backendPort": 7655,            // Backend API port
   "frontendPort": 7655,           // Frontend UI port (same as backend in embedded mode)
@@ -126,6 +126,42 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - Credentials never exposed in UI (only "•••••" shown)
 - Export/import requires authentication
 - Automatic re-encryption on each save
+
+---
+
+## 🔄 Automatic Updates
+
+Pulse can automatically install stable updates to keep your installation secure and current.
+
+### How It Works
+- **Systemd Timer**: Runs daily at 2 AM with 4-hour random delay
+- **Stable Only**: Never installs release candidates automatically
+- **Safe Rollback**: Creates backup before updating, restores on failure
+- **Respects Config**: Checks `autoUpdateEnabled` in system.json
+
+### Enable/Disable
+```bash
+# Enable during installation
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --enable-auto-updates
+
+# Enable after installation
+systemctl enable --now pulse-update.timer
+
+# Disable auto-updates
+systemctl disable --now pulse-update.timer
+
+# Check status
+systemctl status pulse-update.timer
+systemctl list-timers pulse-update
+
+# View logs
+journalctl -u pulse-update
+```
+
+### Configuration
+Set `autoUpdateEnabled: true` in system.json or toggle in Settings UI.
+
+**Note**: Docker installations do not support automatic updates (use Docker's update mechanisms instead).
 
 ---
 
