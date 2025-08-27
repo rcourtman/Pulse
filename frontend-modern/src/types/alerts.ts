@@ -58,6 +58,25 @@ export interface AlertConfig {
   suppressionWindow?: number;
   hysteresisMargin?: number;
   timeThreshold?: number;
+  aggregation?: {
+    enabled: boolean;
+    timeWindow: number;
+    countThreshold: number;
+    similarityWindow: number;
+  };
+  flapping?: {
+    enabled: boolean;
+    threshold: number;
+    window: number;
+    suppressionTime: number;
+    minStability: number;
+  };
+  ioNormalization?: {
+    enabled: boolean;
+    vmDiskMax: number;
+    containerDiskMax: number;
+    networkMax: number;
+  };
   notifications?: {
     email?: {
       server: string;
@@ -75,15 +94,26 @@ export interface AlertConfig {
     }>;
   };
   schedule?: {
-    enabled?: boolean;
     quietHours?: {
       enabled: boolean;
       start: string;
       end: string;
+      timezone?: string;
       days: number[] | Record<string, boolean>;
     };
     cooldown?: number;
     groupingWindow?: number;
+    maxAlertsHour?: number;
+    grouping?: {
+      enabled: boolean;
+      window: number;
+      byNode?: boolean;
+      byGuest?: boolean;
+    };
+    escalation?: {
+      enabled: boolean;
+      levels?: Array<{ after: number; notify: string }>;
+    };
   };
 }
 
