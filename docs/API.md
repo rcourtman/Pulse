@@ -60,7 +60,7 @@ When authentication is enabled, Pulse provides enterprise-grade security:
 
 - **CSRF Protection**: All state-changing requests require a CSRF token
 - **Rate Limiting**: 500 req/min general, 10 attempts/min for authentication
-- **Account Lockout**: Locks after 5 failed attempts (15 minute cooldown)
+- **Account Lockout**: Locks after 5 failed attempts (15 minute cooldown) with clear feedback
 - **Secure Sessions**: HttpOnly cookies, 24-hour expiry
 - **Security Headers**: CSP, X-Frame-Options, X-Content-Type-Options, etc.
 - **Audit Logging**: All security events are logged
@@ -294,6 +294,49 @@ POST /api/security/regenerate-token   # Generate or regenerate API token
 ```
 
 Note: The old `/api/system/api-token` endpoints have been deprecated in favor of the simplified regenerate-token endpoint.
+
+#### Login
+Enhanced login endpoint with lockout feedback.
+
+```bash
+POST /api/login
+```
+
+Request body:
+```json
+{
+  "username": "admin",
+  "password": "your-password"
+}
+```
+
+Response includes:
+- Remaining attempts after failed login
+- Lockout status and duration when locked
+- Clear error messages with recovery guidance
+
+#### Logout
+End the current session.
+
+```bash
+POST /api/logout
+```
+
+#### Account Lockout Recovery
+Reset account lockouts (requires authentication).
+
+```bash
+POST /api/security/reset-lockout
+```
+
+Request body:
+```json
+{
+  "identifier": "username-or-ip"  // Can be username or IP address
+}
+```
+
+This endpoint allows administrators to manually reset lockouts before the 15-minute automatic expiration.
 
 ### Export/Import Configuration
 Backup and restore Pulse configuration with encryption.
