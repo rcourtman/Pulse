@@ -9,6 +9,9 @@ interface BackupsFilterProps {
   groupBy: () => 'date' | 'guest';
   setGroupBy: (value: 'date' | 'guest') => void;
   searchInputRef?: (el: HTMLInputElement) => void;
+  typeFilter?: () => 'all' | 'VM' | 'LXC' | 'Host';
+  setTypeFilter?: (value: 'all' | 'VM' | 'LXC' | 'Host') => void;
+  hasHostBackups?: () => boolean;
 }
 
 export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
@@ -106,6 +109,53 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
           </div>
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
+          {/* Type Filter - Only show when there are Host backups */}
+          <Show when={props.hasHostBackups && props.hasHostBackups() && props.typeFilter && props.setTypeFilter}>
+            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <button type="button"
+                onClick={() => props.setTypeFilter!('all')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.typeFilter!() === 'all'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                All Types
+              </button>
+              <button type="button"
+                onClick={() => props.setTypeFilter!('VM')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.typeFilter!() === 'VM'
+                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                VM
+              </button>
+              <button type="button"
+                onClick={() => props.setTypeFilter!('LXC')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.typeFilter!() === 'LXC'
+                    ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                LXC
+              </button>
+              <button type="button"
+                onClick={() => props.setTypeFilter!('Host')}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  props.typeFilter!() === 'Host'
+                    ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                PMG
+              </button>
+            </div>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+          </Show>
 
           {/* Group By Filter */}
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
