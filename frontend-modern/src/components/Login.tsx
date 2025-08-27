@@ -66,30 +66,79 @@ export const Login: Component<LoginProps> = (props) => {
     setLoading(true);
 
     try {
-      // Test the credentials directly first
-      const response = await fetch('/api/state', {
+      // Use the new login endpoint for better feedback
+      const response = await fetch('/api/login', {
+        method: 'POST',
         headers: {
-          'Authorization': `Basic ${btoa(`${username()}:${password()}`)}`,
-          'X-Requested-With': 'XMLHttpRequest', // Prevent browser auth popup
+          'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
+        body: JSON.stringify({
+          username: username(),
+          password: password()
+        }),
         credentials: 'include' // Important for session cookie
       });
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         // Credentials are valid, save them and notify parent
         setBasicAuth(username(), password());
         props.onLogin();
+      } else if (response.status === 403) {
+        // Account is locked
+        if (data.remainingMinutes) {
+          setError(`Account locked. Please try again in ${data.remainingMinutes} ${data.remainingMinutes === 1 ? 'minute' : 'minutes'}.`);
+        } else {
+          setError(data.message || 'Account temporarily locked due to too many failed attempts.');
+        }
+        // Clear the input fields
+        setUsername('');
+        setPassword('');
+      } else if (response.status === 429) {
+        // Rate limited
+        setError(data.message || 'Too many requests. Please wait a moment and try again.');
       } else if (response.status === 401) {
-        setError('Invalid username or password');
+        // Invalid credentials with attempt information
+        if (data.remaining !== undefined && data.remaining > 0) {
+          setError(`${data.message || 'Invalid username or password.'} (${data.remaining} ${data.remaining === 1 ? 'attempt' : 'attempts'} remaining)`);
+        } else if (data.locked) {
+          setError(data.message || 'Invalid username or password. Account is now locked.');
+        } else {
+          setError(data.message || 'Invalid username or password');
+        }
         // Clear the input fields
         setUsername('');
         setPassword('');
       } else {
-        setError('Server error. Please try again.');
+        setError(data.message || 'Server error. Please try again.');
       }
     } catch (err) {
-      setError('Failed to connect to server');
+      // Try the old method as fallback
+      try {
+        const response = await fetch('/api/state', {
+          headers: {
+            'Authorization': `Basic ${btoa(`${username()}:${password()}`)}`,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          setBasicAuth(username(), password());
+          props.onLogin();
+        } else if (response.status === 401) {
+          setError('Invalid username or password');
+          setUsername('');
+          setPassword('');
+        } else {
+          setError('Server error. Please try again.');
+        }
+      } catch (fallbackErr) {
+        setError('Failed to connect to server');
+      }
     } finally {
       setLoading(false);
     }
@@ -210,15 +259,33 @@ const LoginForm: Component<{
           </div>
 
           <Show when={error()}>
-            <div class="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div class={`rounded-md p-4 ${
+              error().includes('locked') ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-red-50 dark:bg-red-900/20'
+            }`}>
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                  </svg>
+                  <Show 
+                    when={error().includes('locked')}
+                    fallback={
+                      <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                      </svg>
+                    }
+                  >
+                    <svg class="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                    </svg>
+                  </Show>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-red-800 dark:text-red-200">{error()}</p>
+                  <p class={`text-sm ${
+                    error().includes('locked') ? 'text-orange-800 dark:text-orange-200' : 'text-red-800 dark:text-red-200'
+                  }`}>{error()}</p>
+                  <Show when={error().includes('locked') && error().includes('minute')}>
+                    <p class="text-xs mt-1 text-orange-700 dark:text-orange-300">
+                      Lockouts automatically expire after the specified time. If you need immediate access, contact your administrator.
+                    </p>
+                  </Show>
                 </div>
               </div>
             </div>
