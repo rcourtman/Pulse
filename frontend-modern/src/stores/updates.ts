@@ -77,6 +77,14 @@ const checkForUpdates = async (force = false): Promise<void> => {
       setUpdateAvailable(false);
       return;
     }
+    
+    // Skip dev builds unless forcing (contains -dirty or commit hash after version)
+    const isDirtyBuild = version.version.includes('-dirty') || 
+                         /v\d+\.\d+\.\d+.*-g[0-9a-f]+/.test(version.version);
+    if (isDirtyBuild && !force) {
+      setUpdateAvailable(false);
+      return;
+    }
 
     // Get the saved update channel from system settings
     const info = await UpdatesAPI.checkForUpdates();
