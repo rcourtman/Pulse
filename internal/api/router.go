@@ -187,6 +187,8 @@ func (r *Router) setupRoutes() {
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
+	r.mux.HandleFunc("/api/login", r.handleLogin)
+	r.mux.HandleFunc("/api/security/reset-lockout", r.handleResetLockout)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -1195,6 +1197,215 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Successfully logged out",
+	})
+}
+
+// handleLogin handles login requests and provides detailed feedback about lockouts
+func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only POST method is allowed", nil)
+		return
+	}
+	
+	// Parse request
+	var loginReq struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	
+	if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+			"Invalid request body", nil)
+		return
+	}
+	
+	clientIP := GetClientIP(req)
+	
+	// Check if account is locked out before attempting login
+	_, userLockedUntil, userLocked := GetLockoutInfo(loginReq.Username)
+	_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
+	
+	if userLocked || ipLocked {
+		lockedUntil := userLockedUntil
+		if ipLocked && ipLockedUntil.After(lockedUntil) {
+			lockedUntil = ipLockedUntil
+		}
+		
+		remainingMinutes := int(time.Until(lockedUntil).Minutes())
+		if remainingMinutes < 1 {
+			remainingMinutes = 1
+		}
+		
+		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
+		
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "account_locked",
+			"message": fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
+			"lockedUntil": lockedUntil.Format(time.RFC3339),
+			"remainingMinutes": remainingMinutes,
+		})
+		return
+	}
+	
+	// Check rate limiting
+	if !authLimiter.Allow(clientIP) {
+		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Rate limited")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "rate_limit",
+			"message": "Too many requests. Please wait before trying again.",
+		})
+		return
+	}
+	
+	// Verify credentials
+	if loginReq.Username == r.config.AuthUser && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
+		// Clear failed login attempts
+		ClearFailedLogins(loginReq.Username)
+		ClearFailedLogins(clientIP)
+		
+		// Create session
+		token := generateSessionToken()
+		if token == "" {
+			writeErrorResponse(w, http.StatusInternalServerError, "session_error", 
+				"Failed to create session", nil)
+			return
+		}
+		
+		// Store session persistently
+		userAgent := req.Header.Get("User-Agent")
+		GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
+		
+		// Track session for user
+		TrackUserSession(loginReq.Username, token)
+		
+		// Generate CSRF token
+		csrfToken := generateCSRFToken(token)
+		
+		// Get appropriate cookie settings based on proxy detection
+		isSecure, sameSitePolicy := getCookieSettings(req)
+		
+		// Set session cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "pulse_session",
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+			MaxAge:   86400, // 24 hours
+		})
+		
+		// Set CSRF cookie (not HttpOnly so JS can read it)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "pulse_csrf",
+			Value:    csrfToken,
+			Path:     "/",
+			Secure:   isSecure,
+			SameSite: sameSitePolicy,
+			MaxAge:   86400, // 24 hours
+		})
+		
+		// Audit log successful login
+		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, true, "Successful login")
+		
+		// Return success
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Successfully logged in",
+		})
+	} else {
+		// Failed login
+		RecordFailedLogin(loginReq.Username)
+		RecordFailedLogin(clientIP)
+		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
+		
+		// Get updated attempt counts
+		newUserAttempts, _, _ := GetLockoutInfo(loginReq.Username)
+		newIPAttempts, _, _ := GetLockoutInfo(clientIP)
+		
+		// Use the higher count for warning
+		attempts := newUserAttempts
+		if newIPAttempts > attempts {
+			attempts = newIPAttempts
+		}
+		
+		// Prepare response with attempt information
+		remaining := maxFailedAttempts - attempts
+		
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		
+		if remaining > 0 {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid_credentials",
+				"message": fmt.Sprintf("Invalid username or password. You have %d attempts remaining.", remaining),
+				"attempts": attempts,
+				"remaining": remaining,
+				"maxAttempts": maxFailedAttempts,
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid_credentials",
+				"message": "Invalid username or password. Account is now locked for 15 minutes.",
+				"locked": true,
+				"lockoutDuration": "15 minutes",
+			})
+		}
+	}
+}
+
+// handleResetLockout allows administrators to manually reset account lockouts
+func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+			"Only POST method is allowed", nil)
+		return
+	}
+	
+	// Parse request
+	var resetReq struct {
+		Identifier string `json:"identifier"` // Can be username or IP
+	}
+	
+	if err := json.NewDecoder(req.Body).Decode(&resetReq); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+			"Invalid request body", nil)
+		return
+	}
+	
+	if resetReq.Identifier == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_identifier", 
+			"Identifier (username or IP) is required", nil)
+		return
+	}
+	
+	// Reset the lockout
+	ResetLockout(resetReq.Identifier)
+	
+	// Also clear failed login attempts
+	ClearFailedLogins(resetReq.Identifier)
+	
+	// Audit log the reset
+	LogAuditEvent("lockout_reset", "admin", GetClientIP(req), req.URL.Path, true, 
+		fmt.Sprintf("Lockout reset for: %s", resetReq.Identifier))
+	
+	log.Info().
+		Str("identifier", resetReq.Identifier).
+		Str("reset_by", "admin").
+		Str("ip", GetClientIP(req)).
+		Msg("Account lockout manually reset")
+	
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Lockout reset for %s", resetReq.Identifier),
 	})
 }
 

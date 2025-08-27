@@ -4,6 +4,7 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -327,11 +328,27 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 						}
 						
 						// Check if account is locked out
-						if IsLockedOut(parts[0]) || IsLockedOut(clientIP) {
+						_, userLockedUntil, userLocked := GetLockoutInfo(parts[0])
+						_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
+						
+						if userLocked || ipLocked {
+							lockedUntil := userLockedUntil
+							if ipLocked && ipLockedUntil.After(lockedUntil) {
+								lockedUntil = ipLockedUntil
+							}
+							
+							remainingMinutes := int(time.Until(lockedUntil).Minutes())
+							if remainingMinutes < 1 {
+								remainingMinutes = 1
+							}
+							
 							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
 							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Account locked")
 							if w != nil {
-								http.Error(w, "Account temporarily locked due to failed attempts", http.StatusForbidden)
+								w.Header().Set("Content-Type", "application/json")
+								w.WriteHeader(http.StatusForbidden)
+								w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`, 
+									remainingMinutes, lockedUntil.Format(time.RFC3339))))
 							}
 							return false
 						}
@@ -421,8 +438,32 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 						} else {
 							// Failed login
 							RecordFailedLogin(parts[0])
-							RecordFailedLogin(GetClientIP(r))
-							LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, false, "Invalid credentials")
+							RecordFailedLogin(clientIP)
+							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
+							
+							// Get updated attempt counts
+							newUserAttempts, _, _ := GetLockoutInfo(parts[0])
+							newIPAttempts, _, _ := GetLockoutInfo(clientIP)
+							
+							// Use the higher count for warning
+							attempts := newUserAttempts
+							if newIPAttempts > attempts {
+								attempts = newIPAttempts
+							}
+							
+							if r.URL.Path == "/api/login" && w != nil {
+								// For login endpoint, provide detailed error response
+								w.Header().Set("Content-Type", "application/json")
+								w.WriteHeader(http.StatusUnauthorized)
+								remaining := maxFailedAttempts - attempts
+								if remaining > 0 {
+									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","attempts":%d,"remaining":%d,"maxAttempts":%d}`, 
+										attempts, remaining, maxFailedAttempts)))
+								} else {
+									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","locked":true,"message":"Account locked for 15 minutes"}`,)))
+								}
+								return false
+							}
 						}
 					}
 				}
