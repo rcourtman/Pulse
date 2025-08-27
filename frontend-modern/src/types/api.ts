@@ -155,6 +155,7 @@ export interface PBSBackup {
   verified: boolean;
   comment: string;
   files: string[];
+  owner?: string;
 }
 
 export interface PBSBackupJob {
@@ -262,6 +263,7 @@ export interface StorageBackup {
   isPBS: boolean;
   verified: boolean;
   verification?: string;
+  encryption?: string;
 }
 
 export interface PVEBackups {
