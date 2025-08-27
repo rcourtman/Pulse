@@ -115,9 +115,11 @@ export function createWebSocketStore(url: string) {
                 
                 // Update alerts atomically to prevent race conditions
                 const newAlerts: Record<string, Alert> = {};
-                message.data.activeAlerts.forEach((alert: Alert) => {
-                  newAlerts[alert.id] = alert;
-                });
+                if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
+                  message.data.activeAlerts.forEach((alert: Alert) => {
+                    newAlerts[alert.id] = alert;
+                  });
+                }
                 
                 // Clear existing alerts and set new ones
                 const currentAlertIds = Object.keys(activeAlerts);
@@ -140,9 +142,11 @@ export function createWebSocketStore(url: string) {
                 
                 // Update resolved alerts atomically to prevent race conditions
                 const newResolvedAlerts: Record<string, ResolvedAlert> = {};
-                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
-                  newResolvedAlerts[alert.id] = alert;
-                });
+                if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
+                  message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+                    newResolvedAlerts[alert.id] = alert;
+                  });
+                }
                 
                 // Clear existing resolved alerts and set new ones
                 const currentResolvedIds = Object.keys(recentlyResolved);
