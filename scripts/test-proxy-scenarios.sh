@@ -27,10 +27,10 @@ test_scenario() {
     echo -n "$test_name: "
     if eval "$command" > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC}"
-        ((PASSED++))
+        ((PASSED++)) || true
     else
         echo -e "${RED}✗${NC}"
-        ((FAILED++))
+        ((FAILED++)) || true
     fi
 }
 
@@ -140,7 +140,7 @@ echo "8. CONTENT-TYPE PRESERVATION"
 echo "============================="
 
 test_scenario "JSON content-type preserved" \
-    "curl -s -I $PULSE_URL/api/health | grep -q 'Content-Type: application/json'"
+    "curl -s -I $PULSE_URL/api/version | grep -q 'Content-Type: application/json'"
 
 test_scenario "HTML content-type for UI" \
     "curl -s -I $PULSE_URL/ | grep -q 'Content-Type: text/html'"
