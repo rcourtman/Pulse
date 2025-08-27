@@ -130,6 +130,12 @@ docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
   - Authentication endpoints: 10 attempts/minute per IP
   - General API: 500 requests/minute per IP
   - Real-time endpoints exempt for functionality
+- **Account Lockout Protection**:
+  - Locks after 5 failed login attempts
+  - 15-minute automatic lockout duration
+  - Clear feedback showing remaining attempts
+  - Time remaining displayed when locked
+  - Manual reset available via API for administrators
 - **Session Management**: 
   - Secure HttpOnly cookies
   - 24-hour session expiry
@@ -310,8 +316,39 @@ This checks:
 - Secure file permissions
 - No credential leaks in API responses
 
+## Account Lockout and Recovery
+
+### Lockout Behavior
+- After **5 failed login attempts**, the account is locked for **15 minutes**
+- Lockout applies to both username and IP address
+- Login form shows remaining attempts after each failure
+- Clear message when locked with time remaining
+
+### Automatic Recovery
+- Lockouts automatically expire after 15 minutes
+- No action needed - just wait for the timer to expire
+- Successful login clears all failed attempt counters
+
+### Manual Recovery (Admin)
+Administrators with API access can manually reset lockouts:
+
+```bash
+# Reset lockout for a specific username
+curl -X POST http://localhost:7655/api/security/reset-lockout \
+  -H "X-API-Token: your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"username"}'
+
+# Reset lockout for an IP address
+curl -X POST http://localhost:7655/api/security/reset-lockout \
+  -H "X-API-Token: your-api-token" \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"192.168.1.100"}'
+```
+
 ## Troubleshooting
 
+**Account locked?** Wait 15 minutes or contact admin for manual reset
 **Export blocked?** You're on a public network - login with password, set API_TOKEN, or set ALLOW_UNPROTECTED_EXPORT=true
 **Rate limited?** Wait 1 minute and try again
 **Can't login?** Check PULSE_AUTH_USER and PULSE_AUTH_PASS environment variables
