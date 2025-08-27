@@ -18,6 +18,15 @@ echo "================================================"
 echo "Pulse Release Test Suite v${VERSION}"
 echo "================================================"
 
+# Detect if auth is disabled
+AUTH_DISABLED=false
+security_status=$(curl -s "$PULSE_URL/api/security/status" 2>/dev/null || echo "{}")
+if echo "$security_status" | grep -q '"disabled":true'; then
+    AUTH_DISABLED=true
+    echo ""
+    echo -e "${YELLOW}Note: Authentication is DISABLED (DISABLE_AUTH mode)${NC}"
+fi
+
 # Track test results
 FAILED_TESTS=()
 PASSED_TESTS=()
@@ -91,8 +100,13 @@ fi
 run_test "Empty path handling" \
     "curl -s -o /dev/null -w '%{http_code}' ${PULSE_URL} | grep -q '200'"
 
-run_test "SPA routes require authentication" \
-    "curl -s ${PULSE_URL}/settings | grep -q 'Authentication required'"
+if [ "$AUTH_DISABLED" != true ]; then
+    run_test "SPA routes require authentication" \
+        "curl -s ${PULSE_URL}/settings | grep -q 'Authentication required'"
+else
+    run_test "SPA routes accessible (auth disabled)" \
+        "curl -s ${PULSE_URL}/settings | grep -q '<div id=\"root\">'"
+fi
 
 echo ""
 echo "2. API ENDPOINT TESTS"
@@ -192,8 +206,11 @@ echo ""
 echo "7. UPDATE MECHANISM TEST"
 echo "======================="
 
-# Update check requires auth now
-if [ -n "$API_TOKEN" ]; then
+# Update check
+if [ "$AUTH_DISABLED" = true ]; then
+    run_test "Update check endpoint (auth disabled)" \
+        "curl -s ${PULSE_URL}/api/updates/check | jq -e '.currentVersion'"
+elif [ -n "$API_TOKEN" ]; then
     run_test "Update check endpoint with auth" \
         "curl -s -H 'X-API-Token: $API_TOKEN' ${PULSE_URL}/api/updates/check | jq -e '.currentVersion'"
 else
@@ -220,7 +237,10 @@ echo "9. ERROR HANDLING TESTS"
 echo "======================"
 
 # 401 is returned before 404 when not authenticated (auth checked first)
-if [ -n "$API_TOKEN" ]; then
+if [ "$AUTH_DISABLED" = true ]; then
+    run_test "404 for non-existent endpoint" \
+        "curl -s -o /dev/null -w '%{http_code}' ${PULSE_URL}/api/nonexistent | grep -q '404'"
+elif [ -n "$API_TOKEN" ]; then
     run_test "404 for non-existent API endpoint" \
         "curl -s -o /dev/null -w '%{http_code}' -H 'X-API-Token: $API_TOKEN' ${PULSE_URL}/api/nonexistent | grep -q '404'"
 else
