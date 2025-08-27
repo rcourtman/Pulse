@@ -9,6 +9,7 @@ import { BackupsFilter } from './BackupsFilter';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
+type FilterableGuestType = 'VM' | 'LXC' | 'Host';
 
 interface UnifiedBackup {
   backupType: BackupType;
@@ -42,7 +43,7 @@ interface DateGroup {
 const UnifiedBackups: Component = () => {
   const { state } = useWebSocket();
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [typeFilter, setTypeFilter] = createSignal<'all' | GuestType>('all');
+  const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
   const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
   
@@ -95,6 +96,12 @@ const UnifiedBackups: Component = () => {
   );
   // TODO: Add time format toggle to BackupsFilter component
   // const setUseRelativeTime = ...; 
+
+  // Check if there are any Host type backups
+  const hasHostBackups = createMemo(() => {
+    const data = normalizedData();
+    return data.some(backup => backup.type === 'Host');
+  });
 
   // Helper functions
   const getDaySuffix = (day: number) => {
@@ -1452,6 +1459,9 @@ const UnifiedBackups: Component = () => {
         groupBy={groupByMode}
         setGroupBy={setGroupByMode}
         searchInputRef={(el) => searchInputRef = el}
+        typeFilter={typeFilter}
+        setTypeFilter={setTypeFilter}
+        hasHostBackups={hasHostBackups}
       />
 
       {/* Table */}
