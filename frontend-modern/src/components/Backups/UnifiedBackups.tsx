@@ -1553,7 +1553,9 @@ const UnifiedBackups: Component = () => {
                               </span>
                             </Show>
                             <Show when={item.backupType === 'remote' && item.verified}>
-                              <span class="text-green-600 dark:text-green-400">✓</span>
+                              <svg class="w-4 h-4 text-green-600 dark:text-green-400 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                              </svg>
                             </Show>
                           </div>
                           <Show when={(item.storage || item.datastore) && item.backupType !== 'snapshot'}>
@@ -1743,9 +1745,17 @@ const UnifiedBackups: Component = () => {
                             <td class="p-0.5 px-1.5 text-center align-middle">
                               {item.backupType === 'remote' ? (
                                 item.verified ? (
-                                  <span title="PBS backup verified" class="text-green-500 dark:text-green-400">✓</span>
+                                  <span title="PBS backup verified">
+                                    <svg class="w-4 h-4 text-green-500 dark:text-green-400 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </span>
                                 ) : (
-                                  <span title="PBS backup not yet verified" class="text-yellow-500 dark:text-yellow-400">⏱</span>
+                                  <span title="PBS backup not yet verified">
+                                    <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </span>
                                 )
                               ) : (
                                 <span class="text-gray-400 dark:text-gray-500" title="Verification only available for PBS backups">-</span>
