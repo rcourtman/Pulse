@@ -11,26 +11,26 @@ export function UpdateBanner() {
     
     switch (deploymentType) {
       case 'proxmoxve':
-        return "Type 'update' in the ProxmoxVE console";
+        return "ProxmoxVE users: type 'update' in console";
       case 'docker':
-        return 'Pull the latest Docker image and recreate container';
+        return 'Docker: pull latest image';
       case 'source':
-        return 'Pull latest changes and rebuild';
+        return 'Source: pull and rebuild';
       default:
-        return 'Run the install script to update';
+        return '';  // No message, just the version info
     }
   };
   
   const getShortMessage = () => {
     const info = updateStore.updateInfo();
     if (!info) return '';
-    return `Update available: ${info.latestVersion}`;
+    return `New version available: ${info.latestVersion}`;
   };
   
   return (
     <Show when={updateStore.isUpdateVisible()}>
-      <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white relative animate-slideDown">
-        <div class="px-4 py-2">
+      <div class="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown">
+        <div class="px-4 py-1.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               {/* Update icon */}
@@ -41,11 +41,21 @@ export function UpdateBanner() {
               
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium">{getShortMessage()}</span>
-                {!isExpanded() && (
+                {!isExpanded() && getUpdateInstructions() && (
                   <>
-                    <span class="text-white/80 text-sm hidden sm:inline">•</span>
-                    <span class="text-white/80 text-sm hidden sm:inline">{getUpdateInstructions()}</span>
+                    <span class="text-blue-600 dark:text-blue-400 text-sm hidden sm:inline">•</span>
+                    <span class="text-blue-600 dark:text-blue-400 text-sm hidden sm:inline">{getUpdateInstructions()}</span>
                   </>
+                )}
+                {!isExpanded() && (
+                  <a 
+                    href={`https://github.com/rcourtman/Pulse/releases/tag/${updateStore.updateInfo()?.latestVersion}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-blue-600 dark:text-blue-400 underline text-sm hidden sm:inline hover:text-blue-700 dark:hover:text-blue-300"
+                  >
+                    View details →
+                  </a>
                 )}
               </div>
             </div>
@@ -54,7 +64,7 @@ export function UpdateBanner() {
               {/* Expand/Collapse button */}
               <button
                 onClick={() => setIsExpanded(!isExpanded())}
-                class="p-1 hover:bg-white/10 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
                 title={isExpanded() ? 'Show less' : 'Show more'}
               >
                 <svg 
@@ -71,7 +81,7 @@ export function UpdateBanner() {
               {/* Dismiss button */}
               <button
                 onClick={() => updateStore.dismissUpdate()}
-                class="p-1 hover:bg-white/10 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
                 title="Dismiss this update"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -84,30 +94,32 @@ export function UpdateBanner() {
           
           {/* Expanded content */}
           <Show when={isExpanded()}>
-            <div class="mt-3 pb-1">
-              <div class="text-sm text-white/90 space-y-1">
+            <div class="mt-2 pb-1">
+              <div class="text-sm text-blue-700 dark:text-blue-300 space-y-1">
                 <p>
                   <span class="font-medium">Current:</span> {updateStore.versionInfo()?.version || 'Unknown'} → 
                   <span class="font-medium ml-1">Latest:</span> {updateStore.updateInfo()?.latestVersion}
                 </p>
-                <p>
-                  <span class="font-medium">How to update:</span> {getUpdateInstructions()}
-                </p>
+                {getUpdateInstructions() && (
+                  <p>
+                    <span class="font-medium">Quick upgrade:</span> {getUpdateInstructions()}
+                  </p>
+                )}
                 <Show when={updateStore.updateInfo()?.isPrerelease}>
-                  <p class="text-yellow-200 text-xs">This is a pre-release version</p>
+                  <p class="text-orange-600 dark:text-orange-400 text-xs">This is a pre-release version</p>
                 </Show>
                 <div class="flex gap-3 mt-2">
                   <a 
                     href={`https://github.com/rcourtman/Pulse/releases/tag/${updateStore.updateInfo()?.latestVersion}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="text-white/90 underline hover:text-white text-xs"
+                    class="text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 text-xs"
                   >
                     View release notes
                   </a>
                   <button
                     onClick={() => updateStore.dismissUpdate()}
-                    class="text-white/70 hover:text-white text-xs underline"
+                    class="text-blue-600/70 dark:text-blue-400/70 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
                   >
                     Don't show again for this version
                   </button>
