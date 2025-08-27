@@ -2406,38 +2406,21 @@ if [ "$EUID" -ne 0 ]; then
    exit 1
 fi
 
-# Check if running inside a container (LXC/Docker)
-if [ -f /run/systemd/container ] || [ -f /.dockerenv ] || [ ! -z "${container:-}" ]; then
+# Check if proxmox-backup-manager command exists
+if ! command -v proxmox-backup-manager &> /dev/null; then
    echo ""
-   echo "❌ ERROR: This script is running inside a container!"
+   echo "❌ ERROR: 'proxmox-backup-manager' command not found!"
    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
    echo ""
-   echo "This setup script must be run on the Proxmox VE host itself,"
-   echo "not inside an LXC container or Docker container."
-   echo ""
-   echo "Please:"
-   echo "  1. Exit this container (type 'exit')"
-   echo "  2. Run the script directly on your Proxmox host"
-   echo ""
-   echo "The script needs access to 'pveum' commands which are only"
-   echo "available on the Proxmox VE host system."
-   echo ""
-   exit 1
-fi
-
-# Check if pveum command exists
-if ! command -v pveum &> /dev/null; then
-   echo ""
-   echo "❌ ERROR: 'pveum' command not found!"
-   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-   echo ""
-   echo "This script must be run on a Proxmox VE host."
-   echo "The 'pveum' command is required to create users and tokens."
+   echo "This script must be run on a Proxmox Backup Server."
+   echo "The 'proxmox-backup-manager' command is required to create users and tokens."
    echo ""
    echo "If you're seeing this error, you might be:"
-   echo "  • Running on a non-Proxmox system"
-   echo "  • Inside an LXC container (exit and run on the host)"
-   echo "  • On a PBS server (use the PBS setup script instead)"
+   echo "  • Running on a non-PBS system"
+   echo "  • On a PVE server (use the PVE setup script instead)"
+   echo "  • Missing PBS installation or in wrong environment"
+   echo ""
+   echo "If PBS is running in Docker, ensure you're inside the PBS container."
    echo ""
    exit 1
 fi
