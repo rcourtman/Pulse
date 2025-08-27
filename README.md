@@ -43,6 +43,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Example: "VM 'database' is back online"
 - Unified view of PBS backups, PVE backups, and snapshots
 - Config export/import with encryption and authentication
+- Automatic stable updates with safe rollback (opt-in)
 - Dark/light themes, responsive design
 - Built with Go for minimal resource usage
 
@@ -77,6 +78,7 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 
 ### Updating
 
+**Automatic Updates (New!):** Enable during installation or via Settings UI to stay current automatically  
 **LXC Container:** `pct exec <container-id> -- update`  
 **Standard Install:** Re-run the installer  
 **Docker:** `docker pull rcourtman/pulse:latest` then recreate container

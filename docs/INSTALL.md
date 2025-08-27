@@ -54,17 +54,57 @@ See [Docker Guide](DOCKER.md) for advanced options.
 
 ## Updating
 
-### For LXC Containers
+### Automatic Updates (Recommended)
+
+Pulse can automatically install stable updates to ensure you're always running the latest secure version:
+
+#### Enable During Installation
+```bash
+# Interactive prompt during fresh install
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+
+# Or force enable with flag
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --enable-auto-updates
+```
+
+#### Enable/Disable After Installation
+```bash
+# Via systemctl
+systemctl enable --now pulse-update.timer   # Enable auto-updates
+systemctl disable --now pulse-update.timer  # Disable auto-updates
+systemctl status pulse-update.timer         # Check status
+
+# Via Settings UI
+# Navigate to Settings → System → Enable "Automatic Updates"
+```
+
+#### How It Works
+- Checks daily between 2-6 AM (randomized to avoid server load)
+- Only installs stable releases (never release candidates)
+- Creates backup before updating
+- Automatically rolls back if update fails
+- Logs all activity to systemd journal
+
+#### View Update Logs
+```bash
+journalctl -u pulse-update      # View all update logs
+journalctl -u pulse-update -f   # Follow logs in real-time
+systemctl list-timers pulse-update  # See next scheduled check
+```
+
+### Manual Updates
+
+#### For LXC Containers
 ```bash
 pct exec <container-id> -- update
 ```
 
-### For Standard Installations
+#### For Standard Installations
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
-### For Docker
+#### For Docker
 ```bash
 docker pull rcourtman/pulse:latest
 docker stop pulse
