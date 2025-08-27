@@ -12,6 +12,7 @@ import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
+import { updateStore } from '@/stores/updates';
 
 // Type definitions
 interface DiscoveredServer {
@@ -390,6 +391,8 @@ const Settings: Component = () => {
       try {
         const version = await UpdatesAPI.getVersion();
         setVersionInfo(version);
+        // Also set it in the store so it's available globally
+        updateStore.checkForUpdates(); // This will load version info too
         if (version.channel) {
           setUpdateChannel(version.channel as 'stable' | 'rc');
         }
@@ -465,10 +468,17 @@ const Settings: Component = () => {
   const checkForUpdates = async () => {
     setCheckingForUpdates(true);
     try {
-      // Pass the current channel selection (from UI, not saved config)
-      const info = await UpdatesAPI.checkForUpdates(updateChannel());
+      // Force check with current channel selection
+      await updateStore.checkForUpdates(true);
+      const info = updateStore.updateInfo();
       setUpdateInfo(info);
-      if (!info.available) {
+      
+      // If update was dismissed, clear it so user can see it again
+      if (info?.available && updateStore.isDismissed()) {
+        updateStore.clearDismissed();
+      }
+      
+      if (!info?.available) {
         showSuccess('You are running the latest version');
       }
     } catch (error) {
