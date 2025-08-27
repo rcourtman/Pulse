@@ -1752,8 +1752,8 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			storageID := fmt.Sprintf("%s-%s-%s", instanceName, nodeID, storage.Storage)
 			if shared {
 				nodeID = "shared"
-				// Use a consistent ID for shared storage across all instances
-				storageID = fmt.Sprintf("shared-%s", storage.Storage)
+				// Use instance-specific ID for shared storage to prevent conflicts between clusters
+				storageID = fmt.Sprintf("%s-shared-%s", instanceName, storage.Storage)
 			}
 
 			modelStorage := models.Storage{
