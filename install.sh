@@ -1064,10 +1064,10 @@ print_completion() {
         echo
         echo -e "${YELLOW}Auto-updates:${NC}"
         if systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
-            echo "  Status:     ${GREEN}Enabled${NC} (daily check between 2-6 AM)"
+            echo -e "  Status:     ${GREEN}Enabled${NC} (daily check between 2-6 AM)"
             echo "  Disable:    systemctl disable --now pulse-update.timer"
         else
-            echo "  Status:     Disabled"
+            echo -e "  Status:     ${YELLOW}Disabled${NC}"
             echo "  Enable:     systemctl enable --now pulse-update.timer"
         fi
     fi
