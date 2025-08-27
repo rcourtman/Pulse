@@ -1249,21 +1249,66 @@ main() {
                 fi
                 print_info "${action_word} $target_version..."
                 LATEST_RELEASE="$target_version"
+                
+                # Check if auto-updates are not installed yet (upgrading from older version)
+                # and prompt the user to enable them (unless already forced by flag)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        echo
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        echo "This keeps your installation secure and up-to-date."
+                        safe_read "Enable auto-updates? [Y/n]: " enable_updates
+                        # Default to yes for this prompt since they're already updating
+                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                            ENABLE_AUTO_UPDATES=true
+                        fi
+                    fi
+                fi
+                
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
                 create_user
                 download_pulse
+                
+                # Setup auto-updates if requested during update
+                if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                    setup_auto_updates
+                fi
+                
                 start_pulse
                 print_completion
                 exit 0
                 ;;
             reinstall)
+                # Check if auto-updates are not installed yet
+                # and prompt the user to enable them (unless already forced by flag)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        echo
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        echo "This keeps your installation secure and up-to-date."
+                        safe_read "Enable auto-updates? [Y/n]: " enable_updates
+                        # Default to yes for this prompt
+                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                            ENABLE_AUTO_UPDATES=true
+                        fi
+                    fi
+                fi
+                
                 backup_existing
                 systemctl stop $SERVICE_NAME || true
                 create_user
                 download_pulse
                 setup_directories
                 install_systemd_service
+                
+                # Setup auto-updates if requested during reinstall
+                if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                    setup_auto_updates
+                fi
+                
                 start_pulse
                 print_completion
                 exit 0
