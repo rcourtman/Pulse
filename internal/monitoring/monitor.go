@@ -12,16 +12,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rcourtman/Pulse/internal/alerts"
-	"github.com/rcourtman/Pulse/internal/config"
-	"github.com/rcourtman/Pulse/internal/discovery"
-	"github.com/rcourtman/Pulse/internal/errors"
-	"github.com/rcourtman/Pulse/internal/mock"
-	"github.com/rcourtman/Pulse/internal/models"
-	"github.com/rcourtman/Pulse/internal/notifications"
-	"github.com/rcourtman/Pulse/internal/websocket"
-	"github.com/rcourtman/Pulse/pkg/pbs"
-	"github.com/rcourtman/Pulse/pkg/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -2107,10 +2106,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 // getMockState returns mock data when mock mode is enabled
 func getMockState() *models.StateSnapshot {
-	if mock.IsMockEnabled() {
-		state := mock.GetMockState()
-		return &state
-	}
+	// Mock support removed from production builds
 	return nil
 }
 
