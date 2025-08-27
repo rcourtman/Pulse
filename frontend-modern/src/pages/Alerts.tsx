@@ -18,8 +18,9 @@ interface DestinationsRef {
   emailConfig?: () => EmailConfig;
 }
 
+// ScheduleConfig interface - used for loading schedule configuration
+// @ts-ignore - used in type annotations
 interface ScheduleConfig {
-  enabled?: boolean;
   quietHours?: {
     enabled: boolean;
     start: string;
@@ -38,13 +39,10 @@ interface ScheduleConfig {
   maxAlertsHour?: number;
   escalation?: {
     enabled: boolean;
+    levels?: Array<{ after: number; notify: string }>;
   };
 }
 
-interface ScheduleRef {
-  setScheduleConfig?: (config: ScheduleConfig) => void;
-  getScheduleConfig?: () => ScheduleConfig | undefined;
-}
 
 // Override interface for both guests and nodes
 interface Override {
@@ -105,7 +103,6 @@ export function Alerts() {
   
   // Store references to child component data
   let destinationsRef: DestinationsRef = {};
-  let scheduleRef: ScheduleRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
   const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, any>>({});  // Store raw config
@@ -126,6 +123,41 @@ export function Alerts() {
     maxRetries: 3,
     retryDelay: 5,
     rateLimit: 60
+  });
+
+  // Schedule configuration state moved to parent to persist across tab changes
+  const [scheduleQuietHours, setScheduleQuietHours] = createSignal({
+    enabled: false,
+    start: '22:00',
+    end: '08:00',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    days: {
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false
+    } as Record<string, boolean>
+  });
+  
+  const [scheduleCooldown, setScheduleCooldown] = createSignal({
+    enabled: true,
+    minutes: 30,
+    maxAlerts: 3
+  });
+  
+  const [scheduleGrouping, setScheduleGrouping] = createSignal({
+    enabled: true,
+    window: 5,
+    byNode: true,
+    byGuest: false
+  });
+  
+  const [scheduleEscalation, setScheduleEscalation] = createSignal({
+    enabled: false,
+    levels: [] as Array<{ after: number; notify: string }>
   });
   
   // Set up destinationsRef.emailConfig function immediately
@@ -254,27 +286,74 @@ export function Alerts() {
           // Store raw config to be processed when state is available
           setRawOverridesConfig(config.overrides);
         }
-        // Pass schedule config to schedule tab if it exists
-        if (config.schedule && scheduleRef.setScheduleConfig) {
-          // Convert days array to Record if needed
-          const scheduleConfig: ScheduleConfig = {
-            ...config.schedule,
-            quietHours: config.schedule.quietHours ? {
-              ...config.schedule.quietHours,
-              days: Array.isArray(config.schedule.quietHours.days) 
-                ? {
-                    '0': config.schedule.quietHours.days.includes(0),
-                    '1': config.schedule.quietHours.days.includes(1),
-                    '2': config.schedule.quietHours.days.includes(2),
-                    '3': config.schedule.quietHours.days.includes(3),
-                    '4': config.schedule.quietHours.days.includes(4),
-                    '5': config.schedule.quietHours.days.includes(5),
-                    '6': config.schedule.quietHours.days.includes(6),
-                  }
-                : config.schedule.quietHours.days
-            } : undefined
-          };
-          scheduleRef.setScheduleConfig(scheduleConfig);
+        // Load schedule config into parent state
+        if (config.schedule) {
+          if (config.schedule.quietHours) {
+            const qh = config.schedule.quietHours;
+            // Convert days array to object if needed
+            let days: Record<string, boolean>;
+            if (Array.isArray(qh.days)) {
+              days = {
+                sunday: qh.days.includes(0),
+                monday: qh.days.includes(1),
+                tuesday: qh.days.includes(2),
+                wednesday: qh.days.includes(3),
+                thursday: qh.days.includes(4),
+                friday: qh.days.includes(5),
+                saturday: qh.days.includes(6)
+              };
+            } else {
+              days = qh.days as Record<string, boolean> || {
+                monday: true,
+                tuesday: true,
+                wednesday: true,
+                thursday: true,
+                friday: true,
+                saturday: false,
+                sunday: false
+              };
+            }
+            
+            setScheduleQuietHours({
+              enabled: qh.enabled || false,
+              start: qh.start || '22:00',
+              end: qh.end || '08:00',
+              timezone: qh.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+              days
+            });
+          }
+          
+          if (config.schedule.cooldown !== undefined) {
+            setScheduleCooldown({
+              enabled: config.schedule.cooldown > 0,
+              minutes: config.schedule.cooldown,
+              maxAlerts: config.schedule.maxAlertsHour || 3
+            });
+          }
+          
+          if (config.schedule.grouping) {
+            setScheduleGrouping({
+              enabled: config.schedule.grouping.enabled || false,
+              window: Math.floor((config.schedule.grouping.window || 300) / 60), // Convert seconds to minutes
+              byNode: config.schedule.grouping.byNode !== undefined ? config.schedule.grouping.byNode : true,
+              byGuest: config.schedule.grouping.byGuest !== undefined ? config.schedule.grouping.byGuest : false
+            });
+          } else if (config.schedule.groupingWindow !== undefined) {
+            // Handle legacy groupingWindow field
+            setScheduleGrouping({
+              enabled: config.schedule.groupingWindow > 0,
+              window: Math.floor(config.schedule.groupingWindow / 60),
+              byNode: true,
+              byGuest: false
+            });
+          }
+          
+          if (config.schedule.escalation) {
+            setScheduleEscalation({
+              enabled: config.schedule.escalation.enabled || false,
+              levels: config.schedule.escalation.levels || []
+            });
+          }
         }
         
         // Load email configuration
@@ -470,24 +549,18 @@ export function Alerts() {
                       timeThreshold: timeThreshold() || 0,
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
                       overrides: rawOverridesConfig(),
-                      schedule: scheduleRef.getScheduleConfig ? scheduleRef.getScheduleConfig() : {
-                        quietHours: {
-                          enabled: false,
-                          start: "22:00",
-                          end: "08:00",
-                          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                          days: {
-                            monday: true,
-                            tuesday: true,
-                            wednesday: true,
-                            thursday: true,
-                            friday: true,
-                            saturday: false,
-                            sunday: false
-                          }
-                        },
-                        cooldown: 5,
-                        groupingWindow: 30
+                      schedule: {
+                        quietHours: scheduleQuietHours(),
+                        cooldown: scheduleCooldown().enabled ? scheduleCooldown().minutes : 0,
+                        groupingWindow: scheduleGrouping().enabled && scheduleGrouping().window ? scheduleGrouping().window * 60 : 30, // Convert minutes to seconds
+                        maxAlertsHour: scheduleCooldown().maxAlerts || 10,
+                        escalation: scheduleEscalation(),
+                        grouping: {
+                          enabled: scheduleGrouping().enabled,
+                          window: scheduleGrouping().window * 60, // Convert minutes to seconds
+                          byNode: scheduleGrouping().byNode,
+                          byGuest: scheduleGrouping().byGuest
+                        }
                       },
                       // Add missing required fields
                       aggregation: {
@@ -609,9 +682,16 @@ export function Alerts() {
           
           <Show when={activeTab() === 'schedule'}>
             <ScheduleTab 
-              ref={scheduleRef} 
               hasUnsavedChanges={hasUnsavedChanges}
               setHasUnsavedChanges={setHasUnsavedChanges}
+              quietHours={scheduleQuietHours}
+              setQuietHours={setScheduleQuietHours}
+              cooldown={scheduleCooldown}
+              setCooldown={setScheduleCooldown}
+              grouping={scheduleGrouping}
+              setGrouping={setScheduleGrouping}
+              escalation={scheduleEscalation}
+              setEscalation={setScheduleEscalation}
             />
           </Show>
           
@@ -1161,49 +1241,28 @@ function DestinationsTab(props: DestinationsTabProps) {
 // History Tab - Alert history
 // Schedule Tab - Quiet hours, cooldown, and grouping
 interface ScheduleTabProps {
-  ref: ScheduleRef;
   hasUnsavedChanges: () => boolean;
   setHasUnsavedChanges: (value: boolean) => void;
+  quietHours: () => any;
+  setQuietHours: (value: any) => void;
+  cooldown: () => any;
+  setCooldown: (value: any) => void;
+  grouping: () => any;
+  setGrouping: (value: any) => void;
+  escalation: () => any;
+  setEscalation: (value: any) => void;
 }
 
 function ScheduleTab(props: ScheduleTabProps) {
-  const [quietHours, setQuietHours] = createSignal({
-    enabled: false,
-    start: '22:00',
-    end: '08:00',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    days: {
-      monday: true,
-      tuesday: true,
-      wednesday: true,
-      thursday: true,
-      friday: true,
-      saturday: false,
-      sunday: false
-    } as Record<string, boolean>
-  });
-  
-  const [cooldown, setCooldown] = createSignal({
-    enabled: true,
-    minutes: 30,
-    maxAlerts: 3
-  });
-  
-  const [grouping, setGrouping] = createSignal({
-    enabled: true,
-    window: 5,
-    byNode: true,
-    byGuest: false
-  });
-  
-  const [escalation, setEscalation] = createSignal({
-    enabled: false,
-    levels: [
-      { after: 15, notify: 'email' },
-      { after: 30, notify: 'webhook' },
-      { after: 60, notify: 'all' }
-    ]
-  });
+  // Use props instead of local state
+  const quietHours = props.quietHours;
+  const setQuietHours = props.setQuietHours;
+  const cooldown = props.cooldown;
+  const setCooldown = props.setCooldown;
+  const grouping = props.grouping;
+  const setGrouping = props.setGrouping;
+  const escalation = props.escalation;
+  const setEscalation = props.setEscalation;
   
   const timezones = [
     'UTC',
@@ -1229,65 +1288,7 @@ function ScheduleTab(props: ScheduleTabProps) {
     { id: 'sunday', label: 'S', fullLabel: 'Sunday' }
   ];
   
-  // Expose schedule config via ref
-  if (props.ref) {
-    props.ref.getScheduleConfig = () => ({
-      quietHours: quietHours(),
-      cooldown: cooldown().enabled ? cooldown().minutes : 5,
-      groupingWindow: grouping().enabled && grouping().window ? grouping().window * 60 : 30, // Convert minutes to seconds
-      maxAlertsHour: cooldown().enabled && cooldown().maxAlerts ? cooldown().maxAlerts : 10,
-      escalation: escalation(),
-      grouping: grouping()
-    });
-    
-    props.ref.setScheduleConfig = (config: ScheduleConfig) => {
-      if (config.quietHours) {
-        const qh = config.quietHours;
-        setQuietHours(prev => ({
-          ...prev,
-          ...qh,
-          // Ensure timezone is preserved if not provided
-          timezone: qh.timezone || prev.timezone
-        }));
-      }
-      if (config.cooldown !== undefined) {
-        setCooldown({
-          enabled: config.cooldown > 0,
-          minutes: config.cooldown,
-          maxAlerts: 3
-        });
-      }
-      if (config.groupingWindow !== undefined) {
-        const gw = config.groupingWindow;
-        setGrouping(prev => ({
-          ...prev,
-          enabled: gw > 0,
-          window: Math.floor(gw / 60), // Convert seconds to minutes
-          // Preserve existing grouping preferences
-          byNode: config.grouping?.byNode !== undefined ? config.grouping.byNode : prev.byNode,
-          byGuest: config.grouping?.byGuest !== undefined ? config.grouping.byGuest : prev.byGuest
-        }));
-      }
-      if (config.maxAlertsHour !== undefined) {
-        setCooldown(prev => ({ ...prev, maxAlerts: config.maxAlertsHour! }));
-      }
-      if (config.escalation !== undefined) {
-        setEscalation(prev => ({
-          ...prev,
-          enabled: config.escalation!.enabled
-        }));
-      }
-      if (config.grouping !== undefined) {
-        setGrouping(prev => ({
-          ...prev,
-          enabled: config.grouping!.enabled,
-          window: config.grouping!.window,
-          byNode: config.grouping!.byNode ?? prev.byNode,
-          byGuest: config.grouping!.byGuest ?? prev.byGuest
-        }));
-      }
-    };
-  }
+  // No longer need ref logic since we're using parent state
   
   return (
     <div class="space-y-4">
@@ -1683,7 +1684,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </div>
                   <button type="button"
                     onClick={() => {
-                      const newLevels = escalation().levels.filter((_, i) => i !== index());
+                      const newLevels = escalation().levels.filter((_: any, i: number) => i !== index());
                       setEscalation({ ...escalation(), levels: newLevels });
                       props.setHasUnsavedChanges(true);
                     }}
