@@ -1,0 +1,35 @@
+[Unit]
+Description=Automatic Pulse update check and install
+Documentation=https://github.com/rcourtman/Pulse
+After=network-online.target
+Wants=network-online.target
+# Don't run if pulse service is not running
+Requisite=pulse.service
+
+[Service]
+Type=oneshot
+# Run as root to allow service restart
+User=root
+Group=root
+# Use the update script
+ExecStart=/opt/pulse/scripts/pulse-auto-update.sh
+# Restart policy for the update service itself
+Restart=no
+# Timeout for the update process (10 minutes should be plenty)
+TimeoutStartSec=600
+# Log to journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pulse-update
+# Security hardening
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/pulse /etc/pulse /tmp
+# Network access needed for GitHub
+PrivateNetwork=no
+# Nice level to run updates at lower priority
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily check for Pulse updates
+Documentation=https://github.com/rcourtman/Pulse
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+# Run daily at 2 AM with a random delay up to 4 hours
+# This spreads the load on GitHub and prevents all instances updating at once
+OnCalendar=daily
+OnCalendar=02:00
+RandomizedDelaySec=4h
+# Persist the last trigger time during downtime
+Persistent=true
+# Ensure we run if the system was off when scheduled
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
