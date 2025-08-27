@@ -870,6 +870,99 @@ setup_directories() {
     chmod 700 "$CONFIG_DIR"
 }
 
+setup_auto_updates() {
+    print_info "Setting up automatic updates..."
+    
+    # Copy auto-update script if it exists in the release
+    if [[ -f "$INSTALL_DIR/scripts/pulse-auto-update.sh" ]]; then
+        cp "$INSTALL_DIR/scripts/pulse-auto-update.sh" /usr/local/bin/pulse-auto-update.sh
+        chmod +x /usr/local/bin/pulse-auto-update.sh
+    else
+        # Download from GitHub if not in release
+        print_info "Downloading auto-update script..."
+        if ! curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
+            print_error "Failed to download auto-update script"
+            return 1
+        fi
+        chmod +x /usr/local/bin/pulse-auto-update.sh
+    fi
+    
+    # Install systemd timer and service
+    cat > /etc/systemd/system/pulse-update.service << 'EOF'
+[Unit]
+Description=Automatic Pulse update check and install
+Documentation=https://github.com/rcourtman/Pulse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/bin/pulse-auto-update.sh
+Restart=no
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pulse-update
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/pulse /etc/pulse /tmp
+PrivateNetwork=no
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > /etc/systemd/system/pulse-update.timer << 'EOF'
+[Unit]
+Description=Daily check for Pulse updates
+Documentation=https://github.com/rcourtman/Pulse
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+OnCalendar=daily
+OnCalendar=02:00
+RandomizedDelaySec=4h
+Persistent=true
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload >/dev/null 2>&1
+    
+    # Enable timer but don't start it yet
+    systemctl enable pulse-update.timer >/dev/null 2>&1
+    
+    # Update system.json to enable auto-updates
+    if [[ -f "$CONFIG_DIR/system.json" ]]; then
+        # Update existing file
+        local temp_file="/tmp/system_$$.json"
+        if command -v jq &> /dev/null; then
+            jq '.autoUpdateEnabled = true' "$CONFIG_DIR/system.json" > "$temp_file" && mv "$temp_file" "$CONFIG_DIR/system.json"
+        else
+            # Fallback to sed if jq not available
+            sed -i 's/"pollingInterval"/"autoUpdateEnabled":true,"pollingInterval"/' "$CONFIG_DIR/system.json" 2>/dev/null || \
+            sed -i 's/^{/{"autoUpdateEnabled":true,/' "$CONFIG_DIR/system.json" 2>/dev/null || true
+        fi
+    else
+        # Create new file with auto-updates enabled
+        echo '{"autoUpdateEnabled":true,"pollingInterval":5}' > "$CONFIG_DIR/system.json"
+    fi
+    
+    chown pulse:pulse "$CONFIG_DIR/system.json" 2>/dev/null || true
+    
+    # Start the timer
+    systemctl start pulse-update.timer >/dev/null 2>&1
+    
+    print_success "Automatic updates enabled (daily check with 2-6 hour random delay)"
+}
+
 install_systemd_service() {
     print_info "Installing systemd service..."
     
@@ -965,6 +1058,20 @@ print_completion() {
     echo "  Update:     curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash"
     echo "  Reset:      curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --reset"
     echo "  Uninstall:  curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --uninstall"
+    
+    # Show auto-update status if timer exists
+    if systemctl list-unit-files --no-legend | grep -q "^pulse-update.timer"; then
+        echo
+        echo -e "${YELLOW}Auto-updates:${NC}"
+        if systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
+            echo "  Status:     ${GREEN}Enabled${NC} (daily check between 2-6 AM)"
+            echo "  Disable:    systemctl disable --now pulse-update.timer"
+        else
+            echo "  Status:     Disabled"
+            echo "  Enable:     systemctl enable --now pulse-update.timer"
+        fi
+    fi
+    
     echo
 }
 
@@ -1222,7 +1329,7 @@ main() {
             # This is an update/reinstall, don't prompt for port
             FRONTEND_PORT=${FRONTEND_PORT:-7655}
         else
-            # Fresh installation - ask for port configuration
+            # Fresh installation - ask for port configuration and auto-updates
             FRONTEND_PORT=${FRONTEND_PORT:-}
             if [[ -z "$FRONTEND_PORT" ]]; then
                 if [[ "$IN_CONTAINER" == "true" ]]; then
@@ -1238,6 +1345,17 @@ main() {
                     fi
                 fi
             fi
+            
+            # Ask about auto-updates for fresh installation (unless forced by flag)
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                echo
+                echo "Enable automatic updates?"
+                echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+                safe_read "Enable auto-updates? [y/N]: " enable_updates
+                if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                    ENABLE_AUTO_UPDATES=true
+                fi
+            fi
         fi
         
         install_dependencies
@@ -1245,6 +1363,12 @@ main() {
         setup_directories
         download_pulse
         install_systemd_service
+        
+        # Setup auto-updates if requested
+        if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+            setup_auto_updates
+        fi
+        
         start_pulse
         print_completion
     fi
@@ -1271,13 +1395,22 @@ uninstall_pulse() {
         systemctl disable $SERVICE_NAME
     fi
     
+    # Stop and disable auto-update timer if it exists
+    if systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
+        echo "Disabling auto-update timer..."
+        systemctl disable --now pulse-update.timer
+    fi
+    
     # Remove files
     echo "Removing Pulse files..."
     rm -rf /opt/pulse
     rm -rf /etc/pulse
     rm -f /etc/systemd/system/pulse.service
     rm -f /etc/systemd/system/pulse-backend.service
+    rm -f /etc/systemd/system/pulse-update.service
+    rm -f /etc/systemd/system/pulse-update.timer
     rm -f /usr/local/bin/pulse
+    rm -f /usr/local/bin/pulse-auto-update.sh
     
     # Remove user (if it exists and isn't being used by other services)
     if id "pulse" &>/dev/null; then
@@ -1327,6 +1460,7 @@ reset_pulse() {
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 IN_CONTAINER=false
+ENABLE_AUTO_UPDATES=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -1352,6 +1486,10 @@ while [[ $# -gt 0 ]]; do
             IN_CONTAINER=true
             shift
             ;;
+        --enable-auto-updates)
+            ENABLE_AUTO_UPDATES=true
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -1359,6 +1497,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --rc, --pre        Install latest RC/pre-release version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
+            echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"
