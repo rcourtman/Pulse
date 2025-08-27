@@ -8,7 +8,7 @@ import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { BackupsFilter } from './BackupsFilter';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
-type GuestType = 'VM' | 'LXC' | 'Template' | 'ISO';
+type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
 
 interface UnifiedBackup {
   backupType: BackupType;
@@ -246,6 +246,8 @@ const UnifiedBackups: Component = () => {
         displayType = 'VM';
       } else if (backup.type === 'lxc') {
         displayType = 'LXC';
+      } else if (backup.type === 'host') {
+        displayType = 'Host'; // PMG host config backups
       } else {
         displayType = 'LXC'; // Default fallback (most people have more containers than VMs)
       }
@@ -1676,6 +1678,8 @@ const UnifiedBackups: Component = () => {
                             <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                               item.type === 'VM'
                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                                : item.type === 'Host'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
                                 : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
                             }`}>
                               {item.type}
