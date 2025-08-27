@@ -147,7 +147,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
                 onClick={() => props.setTypeFilter!('Host')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   props.typeFilter!() === 'Host'
-                    ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm' 
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm' 
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
