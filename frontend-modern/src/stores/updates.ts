@@ -1,0 +1,169 @@
+import { createSignal } from 'solid-js';
+import { UpdatesAPI } from '@/api/updates';
+import type { UpdateInfo, VersionInfo } from '@/api/updates';
+
+const STORAGE_KEY = 'pulse-updates';
+const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+interface UpdateState {
+  lastCheck: number;
+  dismissedVersion?: string;
+  updateInfo?: UpdateInfo;
+}
+
+// Load state from localStorage
+const loadState = (): UpdateState => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Failed to load update state:', e);
+  }
+  return { lastCheck: 0 };
+};
+
+// Save state to localStorage
+const saveState = (state: UpdateState) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save update state:', e);
+  }
+};
+
+// Create signals
+const [updateAvailable, setUpdateAvailable] = createSignal(false);
+const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
+const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+const [isChecking, setIsChecking] = createSignal(false);
+const [isDismissed, setIsDismissed] = createSignal(false);
+const [lastError, setLastError] = createSignal<string | null>(null);
+
+// Check for updates
+const checkForUpdates = async (force = false): Promise<void> => {
+  // Don't check if already checking
+  if (isChecking()) return;
+
+  const state = loadState();
+  const now = Date.now();
+
+  // Skip if checked recently (unless forced)
+  if (!force && state.lastCheck && (now - state.lastCheck) < CHECK_INTERVAL) {
+    // Use cached data if available
+    if (state.updateInfo) {
+      setUpdateInfo(state.updateInfo);
+      setUpdateAvailable(state.updateInfo.available);
+      
+      // Check if this version was dismissed
+      if (state.dismissedVersion === state.updateInfo.latestVersion) {
+        setIsDismissed(true);
+      }
+    }
+    return;
+  }
+
+  setIsChecking(true);
+  setLastError(null);
+
+  try {
+    // First get version info to check deployment type
+    const version = await UpdatesAPI.getVersion();
+    setVersionInfo(version);
+
+    // Don't check for updates in Docker
+    if (version.isDocker) {
+      setUpdateAvailable(false);
+      return;
+    }
+
+    // Get the saved update channel from system settings
+    const info = await UpdatesAPI.checkForUpdates();
+    
+    setUpdateInfo(info);
+    setUpdateAvailable(info.available);
+
+    // Check if this version was dismissed
+    if (state.dismissedVersion === info.latestVersion) {
+      setIsDismissed(true);
+    } else {
+      setIsDismissed(false);
+    }
+
+    // Save to cache
+    saveState({
+      ...state,
+      lastCheck: now,
+      updateInfo: info
+    });
+  } catch (error) {
+    console.error('Failed to check for updates:', error);
+    setLastError(error instanceof Error ? error.message : 'Failed to check for updates');
+    setUpdateAvailable(false);
+  } finally {
+    setIsChecking(false);
+  }
+};
+
+// Dismiss current update
+const dismissUpdate = () => {
+  const info = updateInfo();
+  if (!info) return;
+
+  const state = loadState();
+  saveState({
+    ...state,
+    dismissedVersion: info.latestVersion
+  });
+
+  setIsDismissed(true);
+};
+
+// Clear dismissed version (useful when user wants to see the update again)
+const clearDismissed = () => {
+  const state = loadState();
+  delete state.dismissedVersion;
+  saveState(state);
+  setIsDismissed(false);
+};
+
+// Check if update is visible (available and not dismissed)
+const isUpdateVisible = () => updateAvailable() && !isDismissed();
+
+// Export store
+export const updateStore = {
+  // State
+  updateAvailable,
+  updateInfo,
+  versionInfo,
+  isChecking,
+  isDismissed,
+  lastError,
+  isUpdateVisible,
+  
+  // Actions
+  checkForUpdates,
+  dismissUpdate,
+  clearDismissed,
+  
+  // Manual testing helpers
+  simulateUpdate: (version: string = 'v5.0.0') => {
+    setUpdateInfo({
+      available: true,
+      currentVersion: versionInfo()?.version || 'v4.9.0',
+      latestVersion: version,
+      releaseNotes: 'Test update notification',
+      releaseDate: new Date().toISOString(),
+      downloadUrl: '#',
+      isPrerelease: false
+    });
+    setUpdateAvailable(true);
+    setIsDismissed(false);
+  }
+};
+
+// Expose for testing in development
+if (import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
+  (window as any).updateStore = updateStore;
+}

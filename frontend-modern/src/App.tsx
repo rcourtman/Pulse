@@ -17,6 +17,8 @@ import type { VersionInfo } from './api/updates';
 import { apiFetch } from './utils/apiClient';
 import { SettingsAPI } from './api/settings';
 import { eventBus } from './stores/events';
+import { updateStore } from './stores/updates';
+import { UpdateBanner } from './components/UpdateBanner';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -176,7 +178,11 @@ function App() {
         
         // Load version info even when auth is disabled
         UpdatesAPI.getVersion()
-          .then(version => setVersionInfo(version))
+          .then(version => {
+            setVersionInfo(version);
+            // Check for updates after loading version info (non-blocking)
+            updateStore.checkForUpdates();
+          })
           .catch(error => console.error('Failed to load version:', error));
         
         setIsLoading(false);
@@ -211,7 +217,11 @@ function App() {
         
         // Load version info
         UpdatesAPI.getVersion()
-          .then(version => setVersionInfo(version))
+          .then(version => {
+            setVersionInfo(version);
+            // Check for updates after loading version info (non-blocking)
+            updateStore.checkForUpdates();
+          })
           .catch(error => console.error('Failed to load version:', error));
         
         setIsLoading(false);
@@ -303,7 +313,11 @@ function App() {
     
     // Load version info
     UpdatesAPI.getVersion()
-      .then(version => setVersionInfo(version))
+      .then(version => {
+        setVersionInfo(version);
+        // Check for updates after loading version info (non-blocking)
+        updateStore.checkForUpdates();
+      })
       .catch(error => console.error('Failed to load version:', error));
   });
   
@@ -379,6 +393,7 @@ function App() {
       <Show when={enhancedStore()} fallback={<div>Initializing...</div>}>
       <WebSocketContext.Provider value={enhancedStore()!}>
         <SecurityWarning />
+        <UpdateBanner />
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
         <div class="container w-[95%] max-w-screen-xl mx-auto">
           {/* Header */}
@@ -525,7 +540,7 @@ function App() {
               <span>Alerts</span>
             </div>
             <div 
-              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+              class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors relative ${
                 activeTab() === 'settings' 
                   ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
@@ -538,6 +553,9 @@ function App() {
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
               <span>Settings</span>
+              <Show when={updateStore.isUpdateVisible()}>
+                <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              </Show>
             </div>
           </div>
           
