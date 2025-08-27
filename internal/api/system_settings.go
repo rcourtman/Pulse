@@ -117,6 +117,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	// Validate polling intervals (must be positive or zero to use default)
+	if updates.PollingInterval < 0 || updates.PVEPollingInterval < 0 || updates.PBSPollingInterval < 0 {
+		http.Error(w, "Polling intervals must be positive", http.StatusBadRequest)
+		return
+	}
+
 	// Start with existing settings
 	settings := *existingSettings
 	
