@@ -415,7 +415,7 @@ create_lxc_container() {
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo "Available OS templates:"
         # Use pveam to list templates properly
-        local TEMPLATES=$(pveam list local 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/local:vztmpl\///' | nl -w2 -s') ')
+        local TEMPLATES=$(pveam list "$DEFAULT_STORAGE" 2>/dev/null | tail -n +2 | awk '{print $1}' | sed "s/${DEFAULT_STORAGE}:vztmpl\///" | nl -w2 -s') ')
         if [[ -n "$TEMPLATES" ]]; then
             echo "$TEMPLATES"
             echo
@@ -429,59 +429,58 @@ create_lxc_container() {
                 case "$template_choice" in
                     d|D)
                         print_info "Downloading Debian 12..."
-                        pveam download local debian-12-standard_12.7-1_amd64.tar.zst
-                        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                        pveam download "$DEFAULT_STORAGE" debian-12-standard_12.7-1_amd64.tar.zst
+                        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
                         ;;
                     u|U)
                         print_info "Downloading Ubuntu 22.04..."
-                        pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst
-                        TEMPLATE="/var/lib/vz/template/cache/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+                        pveam download "$DEFAULT_STORAGE" ubuntu-22.04-standard_22.04-1_amd64.tar.zst
+                        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst 2>/dev/null)
                         ;;
                     a|A)
                         print_info "Downloading Alpine Linux..."
-                        pveam download local alpine-3.18-default_20230607_amd64.tar.xz
-                        TEMPLATE="/var/lib/vz/template/cache/alpine-3.18-default_20230607_amd64.tar.xz"
+                        pveam download "$DEFAULT_STORAGE" alpine-3.18-default_20230607_amd64.tar.xz
+                        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/alpine-3.18-default_20230607_amd64.tar.xz 2>/dev/null)
                         ;;
                     [0-9]*)
-                        TEMPLATE_NAME=$(pveam list local 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/local:vztmpl\///' | sed -n "${template_choice}p")
+                        TEMPLATE_NAME=$(pveam list "$DEFAULT_STORAGE" 2>/dev/null | tail -n +2 | awk '{print $1}' | sed "s/${DEFAULT_STORAGE}:vztmpl\///" | sed -n "${template_choice}p")
                         if [[ -n "$TEMPLATE_NAME" ]]; then
-                            TEMPLATE="/var/lib/vz/template/cache/$TEMPLATE_NAME"
+                            TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/$TEMPLATE_NAME 2>/dev/null)
                             print_info "Using template: $TEMPLATE_NAME"
                         else
-                            TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                            TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
                             print_info "Invalid selection, using Debian 12"
                         fi
                         ;;
                     *)
-                        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
                         ;;
                 esac
             else
-                TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+                TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
             fi
         else
-            TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+            TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
         fi
     else
         # Quick mode - use Debian 12
-        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
     fi
-    
+
     # Download template if it doesn't exist
     if [[ ! -f "$TEMPLATE" ]]; then
         print_info "Template not found, downloading Debian 12..."
-        if ! pveam download local debian-12-standard_12.7-1_amd64.tar.zst; then
+        if ! pveam download "$DEFAULT_STORAGE" debian-12-standard_12.7-1_amd64.tar.zst; then
             print_error "Failed to download template. Please check your internet connection and try again."
-            print_info "You can manually download with: pveam download local debian-12-standard_12.7-1_amd64.tar.zst"
+            print_info "You can manually download with: pveam download \"$DEFAULT_STORAGE\" debian-12-standard_12.7-1_amd64.tar.zst"
             exit 1
         fi
-        TEMPLATE="/var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst"
+        TEMPLATE=$(pvesm path ${DEFAULT_STORAGE}:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst 2>/dev/null)
         if [[ ! -f "$TEMPLATE" ]]; then
             print_error "Template download succeeded but file not found at expected location"
             exit 1
         fi
-    fi
-    
+    fi    
     print_info "Creating container..."
     
     # Build network configuration
