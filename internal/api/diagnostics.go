@@ -156,29 +156,39 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 				nodeDiag.Connected = false
 				nodeDiag.Error = err.Error()
 			} else {
-				// Try to get cluster status
-				if clusterStatus, err := client.GetClusterStatus(ctx); err != nil {
+				// Try to get nodes first (this should work for both clustered and standalone)
+				nodes, err := client.GetNodes(ctx)
+				if err != nil {
 					nodeDiag.Connected = false
-					nodeDiag.Error = "Connection established but cluster status failed: " + err.Error()
+					nodeDiag.Error = "Failed to connect to Proxmox API: " + err.Error()
 				} else {
 					nodeDiag.Connected = true
-					nodeDiag.ClusterInfo = &ClusterInfo{
-						Nodes: len(clusterStatus),
-					}
 					
-					// Get node details
-					if nodes, err := client.GetNodes(ctx); err == nil && len(nodes) > 0 {
+					// Set node details
+					if len(nodes) > 0 {
 						nodeDiag.Details = &NodeDetails{
 							NodeCount: len(nodes),
 						}
 						
 						// Get version from first node
-						if len(nodes) > 0 {
-							if status, err := client.GetNodeStatus(ctx, nodes[0].Node); err == nil && status != nil {
-								if status.PVEVersion != "" {
-									nodeDiag.Details.Version = status.PVEVersion
-								}
+						if status, err := client.GetNodeStatus(ctx, nodes[0].Node); err == nil && status != nil {
+							if status.PVEVersion != "" {
+								nodeDiag.Details.Version = status.PVEVersion
 							}
+						}
+					}
+					
+					// Try to get cluster status (this may fail for standalone nodes, which is OK)
+					if clusterStatus, err := client.GetClusterStatus(ctx); err == nil {
+						nodeDiag.ClusterInfo = &ClusterInfo{
+							Nodes: len(clusterStatus),
+						}
+					} else {
+						// Standalone node or cluster status not available
+						// This is not an error - standalone nodes don't have cluster status
+						log.Debug().Str("node", node.Name).Msg("Cluster status not available (likely standalone node)")
+						nodeDiag.ClusterInfo = &ClusterInfo{
+							Nodes: 1, // Standalone node
 						}
 					}
 					

@@ -1444,7 +1444,11 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Return appropriate HTTP status based on test result
 	w.Header().Set("Content-Type", "application/json")
+	if testResult["status"] == "error" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 	json.NewEncoder(w).Encode(testResult)
 }
 
@@ -1561,7 +1565,11 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// Return appropriate HTTP status based on test result
 	w.Header().Set("Content-Type", "application/json")
+	if testResult["status"] == "error" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 	json.NewEncoder(w).Encode(testResult)
 }
 
