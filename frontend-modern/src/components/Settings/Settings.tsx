@@ -344,11 +344,18 @@ const Settings: Component = () => {
     });
     
     try {
-      // Load security status
+      // Load data with small delays to prevent rate limit bursts
+      // Load security status first as it's lightweight
       await loadSecurityStatus();
+      
+      // Small delay to prevent burst
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // Load nodes
       await loadNodes();
+      
+      // Another small delay
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // Load discovered nodes
       await loadDiscoveredNodes();
