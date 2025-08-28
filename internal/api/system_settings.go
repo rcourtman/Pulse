@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -36,6 +37,135 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 		wsHub: wsHub,
 		monitor: monitor,
 	}
+}
+
+// validateSystemSettings validates settings before applying them
+func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
+	// Validate polling intervals (min 1 second, max 1 hour)
+	if val, ok := rawRequest["pollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval <= 0 {
+				return fmt.Errorf("polling interval must be positive (minimum 1 second)")
+			}
+			if interval < 1 {
+				return fmt.Errorf("polling interval must be at least 1 second")
+			}
+			if interval > 3600 {
+				return fmt.Errorf("polling interval cannot exceed 3600 seconds (1 hour)")
+			}
+		} else {
+			return fmt.Errorf("polling interval must be a number")
+		}
+	}
+	
+	if val, ok := rawRequest["pvePollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval <= 0 {
+				return fmt.Errorf("PVE polling interval must be positive (minimum 1 second)")
+			}
+			if interval < 1 {
+				return fmt.Errorf("PVE polling interval must be at least 1 second")
+			}
+			if interval > 3600 {
+				return fmt.Errorf("PVE polling interval cannot exceed 3600 seconds (1 hour)")
+			}
+		} else {
+			return fmt.Errorf("PVE polling interval must be a number")
+		}
+	}
+	
+	if val, ok := rawRequest["pbsPollingInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval <= 0 {
+				return fmt.Errorf("PBS polling interval must be positive (minimum 10 seconds)")
+			}
+			if interval < 10 {
+				return fmt.Errorf("PBS polling interval must be at least 10 seconds")
+			}
+			if interval > 3600 {
+				return fmt.Errorf("PBS polling interval cannot exceed 3600 seconds (1 hour)")
+			}
+		} else {
+			return fmt.Errorf("PBS polling interval must be a number")
+		}
+	}
+	
+	// Validate boolean fields have correct type
+	if val, ok := rawRequest["autoUpdateEnabled"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("autoUpdateEnabled must be a boolean")
+		}
+	}
+	
+	if val, ok := rawRequest["discoveryEnabled"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("discoveryEnabled must be a boolean")
+		}
+	}
+	
+	if val, ok := rawRequest["allowEmbedding"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("allowEmbedding must be a boolean")
+		}
+	}
+	
+	// Validate auto-update check interval (min 1 hour, max 7 days)
+	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
+		if interval, ok := val.(float64); ok {
+			if interval < 0 {
+				return fmt.Errorf("auto-update check interval cannot be negative")
+			}
+			if interval > 0 && interval < 1 {
+				return fmt.Errorf("auto-update check interval must be at least 1 hour")
+			}
+			if interval > 168 {
+				return fmt.Errorf("auto-update check interval cannot exceed 168 hours (7 days)")
+			}
+		} else {
+			return fmt.Errorf("auto-update check interval must be a number")
+		}
+	}
+	
+	// Validate connection timeout (min 1 second, max 5 minutes)
+	if val, ok := rawRequest["connectionTimeout"]; ok {
+		if timeout, ok := val.(float64); ok {
+			if timeout < 0 {
+				return fmt.Errorf("connection timeout cannot be negative")
+			}
+			if timeout > 0 && timeout < 1 {
+				return fmt.Errorf("connection timeout must be at least 1 second")
+			}
+			if timeout > 300 {
+				return fmt.Errorf("connection timeout cannot exceed 300 seconds (5 minutes)")
+			}
+		} else {
+			return fmt.Errorf("connection timeout must be a number")
+		}
+	}
+	
+	// Validate theme
+	if val, ok := rawRequest["theme"]; ok {
+		if theme, ok := val.(string); ok {
+			if theme != "" && theme != "light" && theme != "dark" {
+				return fmt.Errorf("theme must be 'light', 'dark', or empty")
+			}
+		} else {
+			return fmt.Errorf("theme must be a string")
+		}
+	}
+	
+	// Validate update channel
+	if val, ok := rawRequest["updateChannel"]; ok {
+		if channel, ok := val.(string); ok {
+			if channel != "" && channel != "stable" && channel != "rc" {
+				return fmt.Errorf("update channel must be 'stable' or 'rc'")
+			}
+		} else {
+			return fmt.Errorf("update channel must be a string")
+		}
+	}
+	
+	return nil
 }
 
 // HandleGetSystemSettings returns the current system settings
@@ -117,9 +247,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	// Validate polling intervals (must be positive or zero to use default)
-	if updates.PollingInterval < 0 || updates.PVEPollingInterval < 0 || updates.PBSPollingInterval < 0 {
-		http.Error(w, "Polling intervals must be positive", http.StatusBadRequest)
+	// Validate the settings
+	if err := validateSystemSettings(&updates, rawRequest); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -127,25 +257,26 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	settings := *existingSettings
 	
 	// Only update fields that were provided in the request
-	if updates.PollingInterval > 0 {
+	// Use rawRequest to check if field was provided (allows setting to 0 to clear)
+	if _, ok := rawRequest["pollingInterval"]; ok {
 		settings.PollingInterval = updates.PollingInterval
 	}
-	if updates.PVEPollingInterval > 0 {
+	if _, ok := rawRequest["pvePollingInterval"]; ok {
 		settings.PVEPollingInterval = updates.PVEPollingInterval
 	}
-	if updates.PBSPollingInterval > 0 {
+	if _, ok := rawRequest["pbsPollingInterval"]; ok {
 		settings.PBSPollingInterval = updates.PBSPollingInterval
 	}
 	if updates.AllowedOrigins != "" {
 		settings.AllowedOrigins = updates.AllowedOrigins
 	}
-	if updates.ConnectionTimeout > 0 {
+	if _, ok := rawRequest["connectionTimeout"]; ok {
 		settings.ConnectionTimeout = updates.ConnectionTimeout
 	}
 	if updates.UpdateChannel != "" {
 		settings.UpdateChannel = updates.UpdateChannel
 	}
-	if updates.AutoUpdateCheckInterval > 0 {
+	if _, ok := rawRequest["autoUpdateCheckInterval"]; ok {
 		settings.AutoUpdateCheckInterval = updates.AutoUpdateCheckInterval
 	}
 	if updates.AutoUpdateTime != "" {

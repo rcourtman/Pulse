@@ -1604,7 +1604,12 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		AutoUpdateEnabled:       h.config.AutoUpdateEnabled,
 		AutoUpdateCheckInterval: int(h.config.AutoUpdateCheckInterval.Hours()),
 		AutoUpdateTime:          h.config.AutoUpdateTime,
+		LogLevel:                h.config.LogLevel, // Include log level
 		Theme:                   persistedSettings.Theme, // Include theme from persisted settings
+		AllowEmbedding:          persistedSettings.AllowEmbedding, // Include allowEmbedding from persisted settings
+		AllowedEmbedOrigins:     persistedSettings.AllowedEmbedOrigins, // Include allowedEmbedOrigins from persisted settings
+		DiscoveryEnabled:        persistedSettings.DiscoveryEnabled, // Include discoveryEnabled from persisted settings
+		DiscoverySubnet:         persistedSettings.DiscoverySubnet, // Include discoverySubnet from persisted settings
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
