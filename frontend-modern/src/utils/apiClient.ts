@@ -147,9 +147,23 @@ class ApiClient {
       }
     }
 
-    // Handle rate limiting
+    // Handle rate limiting with automatic retry
     if (response.status === 429) {
-      console.error('Rate limit exceeded - please wait before retrying');
+      const retryAfter = response.headers.get('Retry-After');
+      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
+      
+      console.warn(`Rate limit hit, retrying after ${waitTime}ms`);
+      
+      // Wait and retry once
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      const retryResponse = await fetch(url, {
+        ...fetchOptions,
+        headers: finalHeaders,
+        credentials: 'include'
+      });
+      
+      return retryResponse;
     }
 
     return response;
