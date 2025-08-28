@@ -205,9 +205,15 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
             message: result.message || 'Connection successful'
           });
         } catch (error) {
+          console.error('Test existing node error:', error);
+          let errorMessage = 'Connection failed';
+          if (error instanceof Error) {
+            // Remove "API request failed: XXX " prefix if present
+            errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
+          }
           setTestResult({
             status: 'error',
-            message: error instanceof Error ? error.message : 'Connection failed'
+            message: errorMessage
           });
         } finally {
           setIsTesting(false);
@@ -261,9 +267,15 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         isCluster: result.isCluster
       });
     } catch (error) {
+      console.error('Test connection error:', error);
+      let errorMessage = 'Connection failed';
+      if (error instanceof Error) {
+        // Remove "API request failed: XXX " prefix if present
+        errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
+      }
       setTestResult({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Connection failed'
+        message: errorMessage
       });
     } finally {
       setIsTesting(false);
@@ -1256,6 +1268,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 
                 {/* Test Result */}
                 <Show when={testResult()}>
+                  {(() => {
+                    const result = testResult();
+                    console.log('Test result display:', { status: result?.status, message: result?.message });
+                    return null;
+                  })()}
                   <div class={`mx-6 p-3 rounded-lg text-sm ${
                     testResult()?.status === 'success' 
                       ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
