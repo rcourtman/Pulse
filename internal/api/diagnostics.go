@@ -49,14 +49,32 @@ type NodeDetails struct {
 
 // VMDiskCheckResult contains VM disk monitoring diagnostic results
 type VMDiskCheckResult struct {
-	VMsFound         int      `json:"vmsFound"`
-	VMsWithAgent     int      `json:"vmsWithAgent"`
-	VMsWithDiskData  int      `json:"vmsWithDiskData"`
-	TestVMID         int      `json:"testVMID,omitempty"`
-	TestVMName       string   `json:"testVMName,omitempty"`
-	TestResult       string   `json:"testResult,omitempty"`
-	Permissions      []string `json:"permissions,omitempty"`
-	Recommendations  []string `json:"recommendations,omitempty"`
+	VMsFound         int                `json:"vmsFound"`
+	VMsWithAgent     int                `json:"vmsWithAgent"`
+	VMsWithDiskData  int                `json:"vmsWithDiskData"`
+	TestVMID         int                `json:"testVMID,omitempty"`
+	TestVMName       string             `json:"testVMName,omitempty"`
+	TestResult       string             `json:"testResult,omitempty"`
+	Permissions      []string           `json:"permissions,omitempty"`
+	Recommendations  []string           `json:"recommendations,omitempty"`
+	ProblematicVMs   []VMDiskIssue      `json:"problematicVMs,omitempty"`
+	FilesystemsFound []FilesystemDetail `json:"filesystemsFound,omitempty"`
+}
+
+type VMDiskIssue struct {
+	VMID   int    `json:"vmid"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Issue  string `json:"issue"`
+}
+
+type FilesystemDetail struct {
+	Mountpoint string `json:"mountpoint"`
+	Type       string `json:"type"`
+	Total      uint64 `json:"total"`
+	Used       uint64 `json:"used"`
+	Filtered   bool   `json:"filtered"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // ClusterInfo contains cluster information
@@ -291,6 +309,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	// Check VMs for agent and disk data
 	var testVM *proxmox.VM
 	var testVMNode string
+	result.ProblematicVMs = []VMDiskIssue{}
 	for _, vm := range vms {
 		if vm.Template == 0 && vm.Status == "running" {
 			// Find which node this VM is on
@@ -314,22 +333,78 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			
 			// Check if agent is configured
 			vmStatus, err := client.GetVMStatus(ctx, vmNode, vm.VMID)
-			if err == nil && vmStatus != nil && vmStatus.Agent > 0 {
+			if err != nil {
+				result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
+					VMID:   vm.VMID,
+					Name:   vm.Name,
+					Status: vm.Status,
+					Issue:  "Failed to get VM status: " + err.Error(),
+				})
+			} else if vmStatus != nil && vmStatus.Agent > 0 {
 				result.VMsWithAgent++
 				
 				// Try to get filesystem info
 				fsInfo, err := client.GetVMFSInfo(ctx, vmNode, vm.VMID)
-				if err == nil && len(fsInfo) > 0 {
-					result.VMsWithDiskData++
+				if err != nil {
+					result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
+						VMID:   vm.VMID,
+						Name:   vm.Name,
+						Status: vm.Status,
+						Issue:  "Agent enabled but failed to get filesystem info: " + err.Error(),
+					})
 					if testVM == nil {
 						testVM = &vm
 						testVMNode = vmNode
 					}
-				} else if testVM == nil {
-					// Keep this as a test candidate if we haven't found a working one
-					testVM = &vm
-					testVMNode = vmNode
+				} else if len(fsInfo) == 0 {
+					result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
+						VMID:   vm.VMID,
+						Name:   vm.Name,
+						Status: vm.Status,
+						Issue:  "Agent returned no filesystem info",
+					})
+					if testVM == nil {
+						testVM = &vm
+						testVMNode = vmNode
+					}
+				} else {
+					// Check if we get usable disk data
+					hasUsableFS := false
+					for _, fs := range fsInfo {
+						if fs.Type != "tmpfs" && fs.Type != "devtmpfs" && 
+						   !strings.HasPrefix(fs.Mountpoint, "/dev") &&
+						   !strings.HasPrefix(fs.Mountpoint, "/proc") &&
+						   !strings.HasPrefix(fs.Mountpoint, "/sys") &&
+						   fs.TotalBytes > 0 {
+							hasUsableFS = true
+							break
+						}
+					}
+					
+					if hasUsableFS {
+						result.VMsWithDiskData++
+					} else {
+						result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
+							VMID:   vm.VMID,
+							Name:   vm.Name,
+							Status: vm.Status,
+							Issue:  fmt.Sprintf("Agent returned %d filesystems but none are usable for disk metrics", len(fsInfo)),
+						})
+					}
+					
+					if testVM == nil {
+						testVM = &vm
+						testVMNode = vmNode
+					}
 				}
+			} else if vmStatus != nil {
+				// Agent not enabled
+				result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
+					VMID:   vm.VMID,
+					Name:   vm.Name,
+					Status: vm.Status,
+					Issue:  "Guest agent not enabled in VM configuration",
+				})
 			}
 		}
 	}
@@ -377,14 +452,37 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			} else {
 				// Calculate disk usage from filesystem info
 				var totalBytes, usedBytes uint64
+				result.FilesystemsFound = []FilesystemDetail{}
+				
 				for _, fs := range fsInfo {
-					if fs.Type != "tmpfs" && fs.Type != "devtmpfs" && 
-					   !strings.HasPrefix(fs.Mountpoint, "/dev") &&
-					   !strings.HasPrefix(fs.Mountpoint, "/proc") &&
-					   !strings.HasPrefix(fs.Mountpoint, "/sys") {
+					fsDetail := FilesystemDetail{
+						Mountpoint: fs.Mountpoint,
+						Type:       fs.Type,
+						Total:      fs.TotalBytes,
+						Used:       fs.UsedBytes,
+					}
+					
+					// Check if this filesystem should be filtered
+					if fs.Type == "tmpfs" || fs.Type == "devtmpfs" {
+						fsDetail.Filtered = true
+						fsDetail.Reason = "Special filesystem type"
+					} else if strings.HasPrefix(fs.Mountpoint, "/dev") ||
+					          strings.HasPrefix(fs.Mountpoint, "/proc") ||
+					          strings.HasPrefix(fs.Mountpoint, "/sys") ||
+					          strings.HasPrefix(fs.Mountpoint, "/run") ||
+					          fs.Mountpoint == "/boot/efi" {
+						fsDetail.Filtered = true
+						fsDetail.Reason = "System mount point"
+					} else if fs.TotalBytes == 0 {
+						fsDetail.Filtered = true
+						fsDetail.Reason = "Zero total bytes"
+					} else {
+						// This filesystem counts toward disk usage
 						totalBytes += fs.TotalBytes
 						usedBytes += fs.UsedBytes
 					}
+					
+					result.FilesystemsFound = append(result.FilesystemsFound, fsDetail)
 				}
 				
 				if totalBytes > 0 {
@@ -392,7 +490,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					result.TestResult = fmt.Sprintf("SUCCESS: Guest agent working! Disk usage: %.1f%% (%d/%d bytes)", 
 						percent, usedBytes, totalBytes)
 				} else {
-					result.TestResult = "Guest agent returned filesystems but no usable disk data"
+					result.TestResult = fmt.Sprintf("Guest agent returned %d filesystems but no usable disk data (all filtered out)", len(fsInfo))
 				}
 			}
 		}
