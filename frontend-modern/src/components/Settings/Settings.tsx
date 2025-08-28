@@ -95,6 +95,7 @@ const Settings: Component = () => {
   const [currentNodeType, setCurrentNodeType] = createSignal<'pve' | 'pbs'>('pve');
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+  const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
   
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
@@ -193,6 +194,11 @@ const Settings: Component = () => {
       setNodes(nodesWithStatus);
     } catch (error) {
       console.error('Failed to load nodes:', error);
+      // If we get a 429 or network error, retry after a delay
+      if (error instanceof Error && (error.message.includes('429') || error.message.includes('fetch'))) {
+        console.log('Retrying node load after delay...');
+        setTimeout(() => loadNodes(), 3000);
+      }
     }
   };
   
@@ -408,6 +414,9 @@ const Settings: Component = () => {
       }
     } catch (error) {
       console.error('Failed to load configuration:', error);
+    } finally {
+      // Mark initial load as complete even if there were errors
+      setInitialLoadComplete(true);
     }
   });
 
@@ -774,6 +783,12 @@ const Settings: Component = () => {
           {/* PVE Nodes Tab */}
           <Show when={activeTab() === 'pve'}>
             <div class="space-y-4">
+              <Show when={!initialLoadComplete()}>
+                <div class="flex items-center justify-center py-8">
+                  <span class="text-gray-500">Loading configuration...</span>
+                </div>
+              </Show>
+              <Show when={initialLoadComplete()}>
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
                 <div class="flex gap-2 items-center">
@@ -1030,12 +1045,19 @@ const Settings: Component = () => {
                 </For>
                 </Show>
               </div>
+              </Show>
             </div>
           </Show>
           
           {/* PBS Nodes Tab */}
           <Show when={activeTab() === 'pbs'}>
             <div class="space-y-4">
+              <Show when={!initialLoadComplete()}>
+                <div class="flex items-center justify-center py-8">
+                  <span class="text-gray-500">Loading configuration...</span>
+                </div>
+              </Show>
+              <Show when={initialLoadComplete()}>
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
                 <div class="flex gap-2 items-center">
@@ -1254,6 +1276,7 @@ const Settings: Component = () => {
                 </For>
                 </Show>
               </div>
+              </Show>
             </div>
           </Show>
           
