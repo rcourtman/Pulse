@@ -958,6 +958,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			diskFree := diskTotal - diskUsed
 			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
 			
+			// If VM shows 0 disk usage but has allocated disk, it's likely guest agent issue
+			// Set to -1 to indicate "unknown" rather than showing misleading 0%
+			if res.Type == "qemu" && diskUsed == 0 && diskTotal > 0 && res.Status == "running" {
+				diskUsage = -1
+			}
+			
 			// For running VMs, try to get filesystem info from guest agent
 			if res.Status == "running" {
 				// First check if agent is enabled by getting VM status
@@ -1354,6 +1360,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			diskTotal := uint64(vm.MaxDisk)
 			diskFree := diskTotal - diskUsed
 			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+			
+			// If VM shows 0 disk usage but has allocated disk, it's likely guest agent issue
+			// Set to -1 to indicate "unknown" rather than showing misleading 0%
+			if diskUsed == 0 && diskTotal > 0 && vm.Status == "running" {
+				diskUsage = -1
+			}
 			
 			// If VM has guest agent enabled and is running, try to get filesystem info
 			if vm.Agent > 0 && vm.Status == "running" {
