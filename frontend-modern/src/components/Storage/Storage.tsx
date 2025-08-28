@@ -1,7 +1,6 @@
 import { Component, For, Show, createSignal, createMemo, createEffect } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
-import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes } from '@/utils/format';
 import { createTooltipSystem } from '@/components/shared/Tooltip';
 import type { Storage as StorageType } from '@/types/api';
@@ -315,23 +314,26 @@ const Storage: Component = () => {
                           const isDisabled = storage.status !== 'available';
                           
                           const alertStyles = getAlertStyles(storage.id || `${storage.instance}-${storage.name}`, activeAlerts);
-                          const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertStyles.rowClass} hover:shadow-sm transition-all duration-200`;
+                          const alertBg = alertStyles.hasAlert 
+                            ? (alertStyles.severity === 'critical' 
+                              ? 'bg-red-50 dark:bg-red-950/30' 
+                              : 'bg-yellow-50 dark:bg-yellow-950/20')
+                            : '';
+                          const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
+                          
+                          const firstCellClass = alertStyles.hasAlert
+                            ? (alertStyles.severity === 'critical'
+                              ? 'p-0.5 px-1.5 border-l-4 border-l-red-500 dark:border-l-red-400'
+                              : 'p-0.5 px-1.5 border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
+                            : 'p-0.5 px-1.5';
                           
                           return (
                             <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}>
-                              <td class="p-0.5 px-1.5">
+                              <td class={firstCellClass}>
                                 <div class="flex items-center gap-2">
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
                                   </span>
-                                  <Show when={alertStyles.hasAlert}>
-                                    <div class="flex items-center gap-1">
-                                      <AlertIndicator severity={alertStyles.severity} alerts={[]} />
-                                      <Show when={alertStyles.alertCount > 1}>
-                                        <AlertCountBadge count={alertStyles.alertCount} severity={alertStyles.severity!} alerts={[]} />
-                                      </Show>
-                                    </div>
-                                  </Show>
                                 </div>
                               </td>
                               <Show when={viewMode() === 'node'}>
