@@ -69,6 +69,8 @@ export function GuestRow(props: GuestRowProps) {
   });
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
+    // Check if usage is -1 (unknown/no guest agent)
+    if (props.guest.disk.usage === -1) return -1;
     return (props.guest.disk.used / props.guest.disk.total) * 100;
   });
 
@@ -185,7 +187,7 @@ export function GuestRow(props: GuestRowProps) {
       {/* Disk */}
       <td class="p-1 px-2 w-[140px]">
         <Show 
-          when={props.guest.disk && props.guest.disk.total > 0}
+          when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
           fallback={<span class="text-gray-400 text-sm">-</span>}
         >
           <MetricBar 
