@@ -41,24 +41,28 @@ print_header() {
 safe_read() {
     local prompt="$1"
     local var_name="$2"
+    shift 2
+    local read_args="$@"  # Allow passing additional args like -n 1
     
     # When script is piped (curl | bash), stdin is the pipe, not the terminal
     # We need to read from /dev/tty for user input
     if [[ -t 0 ]]; then
         # stdin is a terminal, read normally
         echo -n "$prompt"
-        IFS= read -r "$var_name"
+        IFS= read -r $read_args "$var_name"
+        return 0
     else
         # stdin is not a terminal (piped), try /dev/tty if available
         if { exec 3< /dev/tty; } 2>/dev/null; then
             # /dev/tty is available and usable
             echo -n "$prompt"
-            IFS= read -r "$var_name" <&3
+            IFS= read -r $read_args "$var_name" <&3
             exec 3<&-
+            return 0
         else
-            # No TTY available, read from stdin (which may be piped)
-            echo -n "$prompt"
-            IFS= read -r "$var_name"
+            # No TTY available at all - truly non-interactive
+            # Don't try to read from piped stdin as it will hang
+            return 1
         fi
     fi
 }
@@ -1167,17 +1171,27 @@ main() {
         echo "${menu_option}) Cancel"
         local max_option=$menu_option
         
-        # In non-interactive mode (Docker, automated scripts), auto-select update
-        if [[ "$IN_DOCKER" == "true" ]] || (! test -t 0); then
-            print_info "Non-interactive mode detected. Auto-selecting update option."
-            # Select stable update by default, or RC if configured
+        # Try to read user choice interactively
+        # safe_read handles both normal and piped input (via /dev/tty)
+        if [[ "$IN_DOCKER" == "true" ]]; then
+            # In Docker, always auto-select
+            print_info "Docker environment detected. Auto-selecting update option."
             if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
                 choice=2  # RC version
             else
                 choice=1  # Stable version
             fi
+        elif safe_read "Select option [1-${max_option}]: " choice; then
+            # Successfully read user choice (either from stdin or /dev/tty)
+            : # Do nothing, choice was set
         else
-            safe_read "Select option [1-${max_option}]: " choice
+            # safe_read failed - truly non-interactive
+            print_info "Non-interactive mode detected. Auto-selecting update option."
+            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+                choice=2  # RC version
+            else
+                choice=1  # Stable version
+            fi
         fi
         
         # Debug: Check if choice was read correctly
