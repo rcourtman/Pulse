@@ -1167,8 +1167,8 @@ main() {
         echo "${menu_option}) Cancel"
         local max_option=$menu_option
         
-        # In non-interactive container mode, auto-select update
-        if [[ "$IN_CONTAINER" == "true" ]] && ! test -t 0; then
+        # In non-interactive mode (Docker, automated scripts), auto-select update
+        if [[ "$IN_DOCKER" == "true" ]] || (! test -t 0); then
             print_info "Non-interactive mode detected. Auto-selecting update option."
             # Select stable update by default, or RC if configured
             if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
@@ -1251,8 +1251,8 @@ main() {
                 LATEST_RELEASE="$target_version"
                 
                 # Check if auto-updates are not installed yet (upgrading from older version)
-                # and prompt the user to enable them (unless already forced by flag)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1282,8 +1282,8 @@ main() {
                 ;;
             reinstall)
                 # Check if auto-updates are not installed yet
-                # and prompt the user to enable them (unless already forced by flag)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1377,8 +1377,8 @@ main() {
             # Fresh installation - ask for port configuration and auto-updates
             FRONTEND_PORT=${FRONTEND_PORT:-}
             if [[ -z "$FRONTEND_PORT" ]]; then
-                if [[ "$IN_CONTAINER" == "true" ]]; then
-                    # In container mode, use default port without prompting
+                if [[ "$IN_DOCKER" == "true" ]]; then
+                    # In Docker mode, use default port without prompting
                     FRONTEND_PORT=7655
                 else
                     echo
@@ -1391,8 +1391,8 @@ main() {
                 fi
             fi
             
-            # Ask about auto-updates for fresh installation (unless forced by flag)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+            # Ask about auto-updates for fresh installation (unless forced by flag or in Docker)
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
@@ -1505,6 +1505,7 @@ reset_pulse() {
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 IN_CONTAINER=false
+IN_DOCKER=false
 ENABLE_AUTO_UPDATES=false
 
 while [[ $# -gt 0 ]]; do
@@ -1529,6 +1530,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --in-container)
             IN_CONTAINER=true
+            # Check if this is a Docker container
+            if [[ -f /.dockerenv ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+                IN_DOCKER=true
+            fi
             shift
             ;;
         --enable-auto-updates)
