@@ -43,8 +43,14 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     
     // Special handling for backups tab since it uses different filtering logic
     if (props.currentTab === 'backups') {
-      // Only filter if filteredBackups is provided AND not empty
-      // undefined means no filtering, empty array means filter applied but no matches
+      // Filter nodes to only show those with backups
+      // First, check if nodes have any backups at all (from backupCounts)
+      nodes = nodes.filter(node => {
+        const backupCount = props.backupCounts?.[node.name] || 0;
+        return backupCount > 0;
+      });
+      
+      // Then apply additional filtering if filteredBackups is provided
       if (props.filteredBackups !== undefined) {
         const nodesWithItems = new Set<string>();
         
@@ -69,7 +75,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
           nodes = [];
         }
       }
-      // If filteredBackups is undefined, show all nodes (no filtering)
+      // If filteredBackups is undefined, still filter by backupCounts
     } else if (hasActiveFilter()) {
       // Handle other tabs with normal filtering logic
       const nodesWithItems = new Set<string>();
