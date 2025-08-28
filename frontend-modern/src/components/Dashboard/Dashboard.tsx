@@ -402,6 +402,56 @@ export function Dashboard(props: DashboardProps) {
     }
   };
 
+  const handleTagClick = (tag: string) => {
+    const currentSearch = search().trim();
+    const tagFilter = `tags:${tag}`;
+    
+    // Check if this tag filter already exists
+    if (currentSearch.includes(tagFilter)) {
+      // Remove the tag filter
+      let newSearch = currentSearch;
+      
+      // Handle different cases of where the tag filter might be
+      if (currentSearch === tagFilter) {
+        // It's the only filter
+        newSearch = '';
+      } else if (currentSearch.startsWith(tagFilter + ',')) {
+        // It's at the beginning
+        newSearch = currentSearch.replace(tagFilter + ',', '').trim();
+      } else if (currentSearch.endsWith(', ' + tagFilter)) {
+        // It's at the end
+        newSearch = currentSearch.replace(', ' + tagFilter, '').trim();
+      } else if (currentSearch.includes(', ' + tagFilter + ',')) {
+        // It's in the middle
+        newSearch = currentSearch.replace(', ' + tagFilter + ',', ',').trim();
+      } else if (currentSearch.includes(tagFilter + ', ')) {
+        // It's at the beginning with space after comma
+        newSearch = currentSearch.replace(tagFilter + ', ', '').trim();
+      }
+      
+      setSearch(newSearch);
+      if (!newSearch) {
+        setIsSearchLocked(false);
+      }
+    } else {
+      // Add the tag filter
+      if (!currentSearch || isSearchLocked()) {
+        setSearch(tagFilter);
+        setIsSearchLocked(false);
+      } else {
+        // Add tag filter to existing search with comma separator
+        setSearch(`${currentSearch}, ${tagFilter}`);
+      }
+      
+      // Make sure filters are visible
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+    }
+  };
+
+
+
   return (
     <div>
       {/* Unified Node Selector */}
@@ -724,6 +774,8 @@ export function Dashboard(props: DashboardProps) {
                                 guest={guest} 
                                 showNode={groupingMode() === 'flat'} 
                                 alertStyles={getAlertStyles(guestId, activeAlerts)}
+                                onTagClick={handleTagClick}
+                                activeSearch={search()}
                               />
                             );
                           })()}

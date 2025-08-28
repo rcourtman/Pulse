@@ -4,13 +4,13 @@ export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '=' | '==';
 export type LogicalOperator = 'AND' | 'OR';
 
 export interface MetricCondition {
-  field: 'cpu' | 'memory' | 'disk' | 'diskRead' | 'diskWrite' | 'networkIn' | 'networkOut';
+  field: 'cpu' | 'memory' | 'disk' | 'diskRead' | 'diskWrite' | 'networkIn' | 'networkOut' | 'uptime';
   operator: ComparisonOperator;
   value: number;
 }
 
 export interface TextCondition {
-  field: 'name' | 'node' | 'vmid';
+  field: 'name' | 'node' | 'vmid' | 'tags';
   value: string;
 }
 
@@ -62,7 +62,7 @@ export function parseFilter(term: string): ParsedFilter {
     };
   }
 
-  // Try to parse text condition (e.g., "name:prod", "storage:local", "type:VM")
+  // Try to parse text condition (e.g., "name:prod", "tags:production", "storage:local", "type:VM")
   const textMatch = term.match(/^(\w+)\s*:\s*(.+)$/i);
   if (textMatch) {
     const [, field, value] = textMatch;
@@ -129,12 +129,12 @@ function parseCondition(conditionStr: string): Condition | null {
     } as MetricCondition;
   }
 
-  // Try to parse text condition (e.g., "name:prod", "storage:local", etc.)
+  // Try to parse text condition (e.g., "name:prod", "tags:production", "storage:local", etc.)
   const textMatch = conditionStr.match(/^(\w+)\s*:\s*(.+)$/i);
   if (textMatch) {
     const [, field, value] = textMatch;
     return {
-      field: field.toLowerCase() as 'name' | 'node' | 'vmid',
+      field: field.toLowerCase() as 'name' | 'node' | 'vmid' | 'tags',
       value: value.trim()
     } as TextCondition;
   }
@@ -200,6 +200,10 @@ function evaluateMetricCondition(guest: VM | Container | any, condition: MetricC
     case 'disk':
       value = guest.disk ? guest.disk.usage : 0;
       break;
+    case 'uptime':
+      // Uptime in seconds (only for running VMs/containers)
+      value = guest.status === 'running' ? (guest.uptime || 0) : 0;
+      break;
     default:
       // For backup-specific numeric fields like 'size'
       if (guest[condition.field] !== undefined) {
@@ -236,6 +240,17 @@ function evaluateTextCondition(guest: VM | Container | any, condition: TextCondi
       return guest.node?.toLowerCase().includes(searchValue) || false;
     case 'vmid':
       return guest.vmid?.toString().includes(searchValue) || false;
+    case 'tags':
+      // Check if guest has any tags that match the search value
+      if (!guest.tags || !Array.isArray(guest.tags) || guest.tags.length === 0) return false;
+      // Support comma-separated tag searches (OR logic)
+      const searchTags = searchValue.split(',').map(t => t.trim()).filter(t => t.length > 0);
+      return searchTags.some(searchTag => 
+        guest.tags.some((tag: string) => {
+          if (typeof tag !== 'string') return false;
+          return tag.toLowerCase().includes(searchTag.toLowerCase());
+        })
+      );
     default:
       // For backup-specific fields
       if (guest[condition.field]) {
@@ -301,6 +316,14 @@ export function evaluateFilterStack(guest: VM | Container | any, stack: FilterSt
       };
       return evaluateMetricCondition(guest, condition);
     } else if (filter.type === 'text' && filter.field && filter.value) {
+      // Handle tags field specifically since it might not be in the type union
+      if (filter.field === 'tags') {
+        const condition: TextCondition = {
+          field: 'tags',
+          value: filter.value as string
+        };
+        return evaluateTextCondition(guest, condition);
+      }
       const condition: TextCondition = {
         field: filter.field as TextCondition['field'],
         value: filter.value as string
@@ -308,10 +331,17 @@ export function evaluateFilterStack(guest: VM | Container | any, stack: FilterSt
       return evaluateTextCondition(guest, condition);
     } else if (filter.type === 'raw' && filter.rawText) {
       const term = filter.rawText.toLowerCase();
-      return guest.name.toLowerCase().includes(term) ||
-             guest.vmid.toString().includes(term) ||
-             guest.node.toLowerCase().includes(term) ||
-             guest.status.toLowerCase().includes(term);
+      // Check name, vmid, node, status, and tags for raw text matches
+      const basicMatch = guest.name.toLowerCase().includes(term) ||
+                        guest.vmid.toString().includes(term) ||
+                        guest.node.toLowerCase().includes(term) ||
+                        guest.status.toLowerCase().includes(term);
+      
+      // Also check if any tags contain the search term
+      const tagMatch = guest.tags && Array.isArray(guest.tags) && 
+                      guest.tags.some((tag: string) => tag.toLowerCase().includes(term));
+      
+      return basicMatch || tagMatch;
     }
     return true;
   });

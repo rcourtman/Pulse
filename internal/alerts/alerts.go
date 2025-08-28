@@ -652,8 +652,10 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		return
 	}
 
-	// Only check usage if storage is active
-	if storage.Active {
+	// Check usage if storage has valid data (even if not currently active on this node)
+	// In clusters, storage may show as inactive on nodes where it's not currently mounted
+	// but we still want to alert on high usage
+	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
 		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 	}
 }
