@@ -1369,8 +1369,9 @@ main() {
         esac
     else
         # Check if this is truly a fresh installation or an update
-        # If binary exists OR config exists OR --version was specified, it's likely an update
-        if [[ -f "$INSTALL_DIR/bin/pulse" ]] || [[ -f "$INSTALL_DIR/pulse" ]] || [[ -d "$CONFIG_DIR" ]] || [[ -n "${FORCE_VERSION}" ]]; then
+        # Check for existing installation BEFORE we create directories
+        # If binary exists OR system.json exists OR --version was specified, it's likely an update
+        if [[ -f "$INSTALL_DIR/bin/pulse" ]] || [[ -f "$INSTALL_DIR/pulse" ]] || [[ -f "$CONFIG_DIR/system.json" ]] || [[ -n "${FORCE_VERSION}" ]]; then
             # This is an update/reinstall, don't prompt for port
             FRONTEND_PORT=${FRONTEND_PORT:-7655}
         else
