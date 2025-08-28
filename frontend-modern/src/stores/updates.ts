@@ -53,15 +53,34 @@ const checkForUpdates = async (force = false): Promise<void> => {
   if (!force && state.lastCheck && (now - state.lastCheck) < CHECK_INTERVAL) {
     // Use cached data if available
     if (state.updateInfo) {
-      setUpdateInfo(state.updateInfo);
-      setUpdateAvailable(state.updateInfo.available);
-      
-      // Check if this version was dismissed
-      if (state.dismissedVersion === state.updateInfo.latestVersion) {
-        setIsDismissed(true);
+      // First check if version matches (in case user updated)
+      try {
+        const currentVersion = await UpdatesAPI.getVersion();
+        if (state.updateInfo.currentVersion !== currentVersion.version) {
+          // Version changed, invalidate cache and check again
+          state.updateInfo = undefined;
+          state.dismissedVersion = undefined;
+          state.lastCheck = 0;
+          saveState(state);
+          // Continue to check for updates
+        } else {
+          // Version matches, use cached data
+          setUpdateInfo(state.updateInfo);
+          setUpdateAvailable(state.updateInfo.available);
+          
+          // Check if this version was dismissed
+          if (state.dismissedVersion === state.updateInfo.latestVersion) {
+            setIsDismissed(true);
+          }
+          return;
+        }
+      } catch (e) {
+        // If we can't get version, continue with normal check
+        console.error('Failed to verify version for cache:', e);
       }
+    } else {
+      return;
     }
-    return;
   }
 
   setIsChecking(true);
@@ -71,6 +90,14 @@ const checkForUpdates = async (force = false): Promise<void> => {
     // First get version info to check deployment type
     const version = await UpdatesAPI.getVersion();
     setVersionInfo(version);
+    
+    // Clear cache if version has changed (user updated)
+    if (state.updateInfo && state.updateInfo.currentVersion !== version.version) {
+      // Version changed, clear the cache
+      state.updateInfo = undefined;
+      state.dismissedVersion = undefined;
+      saveState(state);
+    }
 
     // Don't check for updates in Docker
     if (version.isDocker) {
