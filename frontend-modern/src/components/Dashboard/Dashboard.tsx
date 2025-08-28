@@ -20,6 +20,7 @@ interface DashboardProps {
 
 type ViewMode = 'all' | 'vm' | 'lxc';
 type StatusMode = 'all' | 'running' | 'stopped';
+type GroupingMode = 'grouped' | 'flat';
 
 
 export function Dashboard(props: DashboardProps) {
@@ -56,6 +57,12 @@ export function Dashboard(props: DashboardProps) {
     (storedStatusMode === 'all' || storedStatusMode === 'running' || storedStatusMode === 'stopped') ? storedStatusMode : 'all'
   );
   
+  // Grouping mode - grouped by node or flat list
+  const storedGroupingMode = localStorage.getItem('dashboardGroupingMode');
+  const [groupingMode, setGroupingMode] = createSignal<GroupingMode>(
+    (storedGroupingMode === 'grouped' || storedGroupingMode === 'flat') ? storedGroupingMode : 'grouped'
+  );
+  
   const [showFilters, setShowFilters] = createSignal(
     localStorage.getItem('dashboardShowFilters') !== null 
       ? localStorage.getItem('dashboardShowFilters') === 'true'
@@ -89,6 +96,10 @@ export function Dashboard(props: DashboardProps) {
   
   createEffect(() => {
     localStorage.setItem('dashboardStatusMode', statusMode());
+  });
+  
+  createEffect(() => {
+    localStorage.setItem('dashboardGroupingMode', groupingMode());
   });
   
   
@@ -241,10 +252,64 @@ export function Dashboard(props: DashboardProps) {
     return guests;
   });
 
-  // Group by node
+  // Group by node or return flat list based on grouping mode
   const groupedGuests = createMemo(() => {
     const guests = filteredGuests();
     
+    // If flat mode, return all guests in a single group
+    if (groupingMode() === 'flat') {
+      const groups: Record<string, (VM | Container)[]> = { '': guests };
+      // Sort the flat list
+      const key = sortKey();
+      const dir = sortDirection();
+      if (key) {
+        groups[''] = groups[''].sort((a, b) => {
+          let aVal: string | number | boolean | null | undefined = a[key] as string | number | boolean | null | undefined;
+          let bVal: string | number | boolean | null | undefined = b[key] as string | number | boolean | null | undefined;
+          
+          // Special handling for percentage-based columns
+          if (key === 'cpu') {
+            // CPU is displayed as percentage
+            aVal = a.cpu * 100;
+            bVal = b.cpu * 100;
+          } else if (key === 'memory') {
+            // Memory is displayed as percentage (use pre-calculated usage)
+            aVal = a.memory ? (a.memory.usage || 0) : 0;
+            bVal = b.memory ? (b.memory.usage || 0) : 0;
+          } else if (key === 'disk') {
+            // Disk is displayed as percentage
+            aVal = a.disk.total > 0 ? (a.disk.used / a.disk.total) * 100 : 0;
+            bVal = b.disk.total > 0 ? (b.disk.used / b.disk.total) * 100 : 0;
+          }
+          
+          // Handle null/undefined/empty values - put at end for both asc and desc
+          const aIsEmpty = aVal === null || aVal === undefined || aVal === '';
+          const bIsEmpty = bVal === null || bVal === undefined || bVal === '';
+          
+          if (aIsEmpty && bIsEmpty) return 0;
+          if (aIsEmpty) return 1;
+          if (bIsEmpty) return -1;
+          
+          // Type-specific value preparation
+          if (typeof aVal === 'number' && typeof bVal === 'number') {
+            // Numeric comparison
+            const comparison = aVal < bVal ? -1 : 1;
+            return dir === 'asc' ? comparison : -comparison;
+          } else {
+            // String comparison (case-insensitive)
+            const aStr = String(aVal).toLowerCase();
+            const bStr = String(bVal).toLowerCase();
+            
+            if (aStr === bStr) return 0;
+            const comparison = aStr < bStr ? -1 : 1;
+            return dir === 'asc' ? comparison : -comparison;
+          }
+        });
+      }
+      return groups;
+    }
+    
+    // Original grouped by node logic
     const groups: Record<string, (VM | Container)[]> = {};
     guests.forEach(guest => {
       if (!groups[guest.node]) {
@@ -489,6 +554,8 @@ export function Dashboard(props: DashboardProps) {
         setViewMode={setViewMode}
         statusMode={statusMode}
         setStatusMode={setStatusMode}
+        groupingMode={groupingMode}
+        setGroupingMode={setGroupingMode}
         setSortKey={setSortKey}
         setSortDirection={setSortDirection}
         searchInputRef={(el) => searchInputRef = el}
@@ -631,7 +698,7 @@ export function Dashboard(props: DashboardProps) {
               <For each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))} fallback={<></>}>
                 {([node, guests]) => (
                   <>
-                    <Show when={node}>
+                    <Show when={node && groupingMode() === 'grouped'}>
                       <tr class="bg-gray-50/50 dark:bg-gray-700/30">
                         <td class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                           <a 
@@ -655,7 +722,7 @@ export function Dashboard(props: DashboardProps) {
                             return (
                               <GuestRow 
                                 guest={guest} 
-                                showNode={false} 
+                                showNode={groupingMode() === 'flat'} 
                                 alertStyles={getAlertStyles(guestId, activeAlerts)}
                               />
                             );
