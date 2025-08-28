@@ -85,6 +85,13 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		return globalRateLimitConfig.ConfigEndpoints
 	}
 	
+	// Configuration read endpoints get higher limits to prevent UI issues
+	if method == "GET" && (strings.Contains(path, "/api/config/") ||
+		strings.Contains(path, "/api/discover") ||
+		strings.Contains(path, "/api/security/status")) {
+		return globalRateLimitConfig.PublicEndpoints // Use higher limit for reads
+	}
+	
 	// Update endpoints
 	if strings.Contains(path, "/api/updates") {
 		return globalRateLimitConfig.UpdateEndpoints
