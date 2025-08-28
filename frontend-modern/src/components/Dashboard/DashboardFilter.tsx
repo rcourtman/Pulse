@@ -9,6 +9,8 @@ interface DashboardFilterProps {
   setViewMode: (value: 'all' | 'vm' | 'lxc') => void;
   statusMode: () => 'all' | 'running' | 'stopped';
   setStatusMode: (value: 'all' | 'running' | 'stopped') => void;
+  groupingMode: () => 'grouped' | 'flat';
+  setGroupingMode: (value: 'grouped' | 'flat') => void;
   setSortKey: (value: string) => void;
   setSortDirection: (value: string) => void;
   searchInputRef?: (el: HTMLInputElement) => void;
@@ -146,6 +148,34 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
+          {/* Grouping Mode Toggle */}
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <button type="button"
+              onClick={() => props.setGroupingMode('grouped')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                props.groupingMode() === 'grouped'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+              title="Group by node"
+            >
+              Grouped
+            </button>
+            <button type="button"
+              onClick={() => props.setGroupingMode('flat')}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                props.groupingMode() === 'flat'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+              title="Flat list view"
+            >
+              List
+            </button>
+          </div>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
           {/* Reset Button */}
           <button 
             onClick={() => {
@@ -154,6 +184,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               props.setSortDirection('asc');
               props.setViewMode('all');
               props.setStatusMode('all');
+              props.setGroupingMode('grouped');
             }}
             title="Reset all filters"
             class="flex items-center justify-center px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 
@@ -170,7 +201,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           </button>
 
           {/* Active Indicator */}
-          <Show when={props.search() || props.viewMode() !== 'all' || props.statusMode() !== 'all'}>
+          <Show when={props.search() || props.viewMode() !== 'all' || props.statusMode() !== 'all' || props.groupingMode() !== 'grouped'}>
             <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
               Active
             </span>
