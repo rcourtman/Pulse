@@ -261,16 +261,11 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Configure clickjacking protection based on embedding settings
 		if allowEmbedding {
-			if allowedOrigins != "" {
-				// Use ALLOW-FROM for specific origins (legacy browsers)
-				// Note: Most modern browsers ignore this in favor of CSP frame-ancestors
-				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-			} else {
-				// Allow same-origin embedding
-				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-			}
+			// When embedding is allowed, don't set X-Frame-Options header
+			// This allows embedding from any origin
+			// Security note: User explicitly enabled this for iframe embedding
 		} else {
-			// Deny all embedding
+			// Deny all embedding when not explicitly allowed
 			w.Header().Set("X-Frame-Options", "DENY")
 		}
 		
@@ -304,8 +299,8 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 				}
 				cspDirectives = append(cspDirectives, frameAncestors)
 			} else {
-				// Allow same-origin embedding
-				cspDirectives = append(cspDirectives, "frame-ancestors 'self'")
+				// Allow embedding from any origin (user explicitly enabled this)
+				cspDirectives = append(cspDirectives, "frame-ancestors *")
 			}
 		} else {
 			// Deny all embedding
