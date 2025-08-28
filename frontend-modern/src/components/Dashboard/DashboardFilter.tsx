@@ -1,5 +1,4 @@
 import { Component, Show } from 'solid-js';
-import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
 interface DashboardFilterProps {
   search: () => string;
@@ -26,7 +25,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <input
               ref={props.searchInputRef}
               type="text"
-              placeholder="Search: name, jellyfin, or cpu>80"
+              placeholder="Search by name, cpu>80, memory<20, tags:prod, node:pve1"
               value={props.search()}
               onInput={(e) => {
                 if (!props.isSearchLocked()) {
@@ -43,34 +42,18 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <svg class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <button type="button"
-              class="absolute right-3 top-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const tooltipContent = `
-                  <div class="space-y-2 p-1">
-                    <div class="font-semibold mb-2">Search Examples:</div>
-                    <div class="space-y-1">
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">jellyfin</span> - Find guests with "jellyfin" in name</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">plex,media</span> - Find guests with "plex" OR "media"</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">cpu>80</span> - Guests using >80% CPU</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">memory<20</span> - Guests using <20% memory</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">disk>90</span> - Guests using >90% disk</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">node:pve1</span> - Guests on specific node</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">vmid:104</span> - Find specific VM/container</div>
-                    </div>
-                  </div>
-                `;
-                showTooltip(tooltipContent, rect.left, rect.top);
-              }}
-              onMouseLeave={() => hideTooltip()}
-              onClick={(e) => e.preventDefault()}
-              aria-label="Search help"
-            >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
+            <Show when={props.search()}>
+              <button type="button"
+                class="absolute right-3 top-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={() => props.setSearch('')}
+                aria-label="Clear search"
+                title="Clear search"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </Show>
           </div>
         </div>
 

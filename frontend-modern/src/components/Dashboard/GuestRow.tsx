@@ -1,11 +1,9 @@
 import { Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import type { VM, Container } from '@/types/api';
-import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
-import { getResourceAlerts } from '@/utils/alerts';
-import { useWebSocket } from '@/App';
+import { TagBadges } from './TagBadges';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
@@ -28,10 +26,11 @@ interface GuestRowProps {
     severity: 'critical' | 'warning' | null;
   };
   customUrl?: string;
+  onTagClick?: (tag: string) => void;
+  activeSearch?: string;
 }
 
 export function GuestRow(props: GuestRowProps) {
-  const { activeAlerts } = useWebSocket();
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   
   // Create guest ID for metadata
@@ -76,26 +75,37 @@ export function GuestRow(props: GuestRowProps) {
 
   const isRunning = createMemo(() => props.guest.status === 'running');
   
-  // Get alerts for this guest
-  const guestAlerts = createMemo(() => {
-    const guestId = props.guest.id || `${props.guest.instance}-${props.guest.name}-${props.guest.vmid}`;
-    return getResourceAlerts(guestId, activeAlerts);
-  });
   
 
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200';
     const hover = 'hover:shadow-sm';
-    const alertClass = props.alertStyles?.rowClass || '';
-    const defaultHover = alertClass ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700';
-    return `${base} ${hover} ${defaultHover} ${alertClass}`;
+    // Extract only the background color from alert styles, not the border
+    const alertBg = props.alertStyles?.hasAlert 
+      ? (props.alertStyles.severity === 'critical' 
+        ? 'bg-red-50 dark:bg-red-950/30' 
+        : 'bg-yellow-50 dark:bg-yellow-950/20')
+      : '';
+    const defaultHover = props.alertStyles?.hasAlert ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700';
+    return `${base} ${hover} ${defaultHover} ${alertBg}`;
+  });
+
+  // Get first cell styling with left border for alerts
+  const firstCellClass = createMemo(() => {
+    const base = 'p-1 px-2 whitespace-nowrap relative';
+    const alertBorder = props.alertStyles?.hasAlert
+      ? (props.alertStyles.severity === 'critical'
+        ? 'border-l-4 border-l-red-500 dark:border-l-red-400'
+        : 'border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
+      : '';
+    return `${base} ${alertBorder}`;
   });
 
   return (
     <tr class={rowClass()}>
       {/* Name - Sticky column */}
-      <td class="p-1 px-2 whitespace-nowrap">
+      <td class={firstCellClass()}>
         <div class="flex items-center gap-2">
           {/* Status indicator */}
           <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
@@ -119,15 +129,13 @@ export function GuestRow(props: GuestRowProps) {
             </a>
           </Show>
           
-          {/* Alert indicators */}
-          <Show when={props.alertStyles?.hasAlert}>
-            <div class="flex items-center gap-1">
-              <AlertIndicator severity={props.alertStyles?.severity || null} alerts={guestAlerts()} />
-              <Show when={props.alertStyles?.alertCount && props.alertStyles.alertCount > 1}>
-                <AlertCountBadge count={props.alertStyles!.alertCount} severity={props.alertStyles!.severity || 'warning'} alerts={guestAlerts()} />
-              </Show>
-            </div>
-          </Show>
+          {/* Tag badges */}
+          <TagBadges 
+            tags={props.guest.tags} 
+            maxVisible={3} 
+            onTagClick={props.onTagClick}
+            activeSearch={props.activeSearch}
+          />
         </div>
       </td>
 
