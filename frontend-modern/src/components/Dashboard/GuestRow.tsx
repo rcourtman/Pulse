@@ -33,6 +33,11 @@ interface GuestRowProps {
 export function GuestRow(props: GuestRowProps) {
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   
+  // Debug logging
+  createEffect(() => {
+    console.log('[GuestRow] showNode:', props.showNode, 'node:', props.guest.node, 'name:', props.guest.name);
+  });
+  
   // Create guest ID for metadata
   const guestId = createMemo(() => {
     return props.guest.id || `${props.guest.node}-${props.guest.vmid}`;
@@ -155,12 +160,6 @@ export function GuestRow(props: GuestRowProps) {
         {props.guest.vmid}
       </td>
 
-      {/* Node (optional) */}
-      <Show when={props.showNode}>
-        <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
-          {props.guest.node}
-        </td>
-      </Show>
 
       {/* Uptime */}
       <td class={`p-1 px-2 text-sm whitespace-nowrap ${
