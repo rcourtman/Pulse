@@ -137,7 +137,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                 const isOnline = () => node.status === 'online';
                 
                 // Always show actual node metrics, not calculated from filtered guests
-                const cpuPercent = () => Math.round(node.cpu || 0);
+                const cpuPercent = () => Math.round((node.cpu || 0) * 100);
                 const memPercent = () => node.memory?.total > 0 ? Math.round((node.memory.used / node.memory.total) * 100) : 0;
                 const storagePercent = () => node.disk?.total > 0 ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
                 
