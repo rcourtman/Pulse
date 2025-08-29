@@ -1668,17 +1668,16 @@ const UnifiedBackups: Component = () => {
                 {(group) => (
                   <>
                     <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                      <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        {group.label} ({group.items.length})
-                      </td>
                       <td colspan={(() => {
-                        let cols = 6; // Base columns: Type, VMID, Node, Time, Backup, Details
+                        let cols = 7; // Base columns: Name, Type, VMID, Node, Time, Backup, Details
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Owner column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Size column
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Verified column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
                         return cols;
-                      })()} class="p-0.5 px-1.5 text-xs font-medium text-gray-500 dark:text-gray-400"></td>
+                      })()} class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        {group.label} ({group.items.length})
+                      </td>
                     </tr>
                     <For each={group.items}>
                       {(item) => (
