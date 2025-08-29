@@ -13,6 +13,7 @@ const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   // TODO: Implement sorting in sortedStorage function
   // const [sortKey, setSortKey] = createSignal('name');
   // const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -59,23 +60,23 @@ const Storage: Component = () => {
   const sortedStorage = createMemo(() => {
     let storage = [...filteredStorage()];
     
+    // Apply node selection filter
+    const nodeFilter = selectedNode();
+    if (nodeFilter) {
+      storage = storage.filter(s => s.node.toLowerCase() === nodeFilter.toLowerCase());
+    }
+    
     // Apply search filter
     const search = searchTerm().toLowerCase();
     if (search) {
-      // Check if it's a node filter
-      if (search.startsWith('node:')) {
-        const nodeName = search.substring(5).trim();
-        storage = storage.filter(s => s.node.toLowerCase() === nodeName.toLowerCase());
-      } else {
-        // Regular search
-        storage = storage.filter(s => 
-          s.name.toLowerCase().includes(search) ||
-          s.node.toLowerCase().includes(search) ||
-          s.type.toLowerCase().includes(search) ||
-          s.content?.toLowerCase().includes(search) ||
-          (s.status && s.status.toLowerCase().includes(search))
-        );
-      }
+      // Regular search
+      storage = storage.filter(s => 
+        s.name.toLowerCase().includes(search) ||
+        s.node.toLowerCase().includes(search) ||
+        s.type.toLowerCase().includes(search) ||
+        s.content?.toLowerCase().includes(search) ||
+        (s.status && s.status.toLowerCase().includes(search))
+      );
     }
     
     // Always sort by name alphabetically for consistent order
@@ -116,6 +117,7 @@ const Storage: Component = () => {
   
   const resetFilters = () => {
     setSearchTerm('');
+    setSelectedNode(null);
     setViewMode('node');
     // setSortKey('name');
     // setSortDirection('asc');
@@ -151,7 +153,7 @@ const Storage: Component = () => {
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
-        if (searchTerm().trim() || viewMode() !== 'node') {
+        if (searchTerm().trim() || selectedNode() || viewMode() !== 'node') {
           resetFilters();
           
           // Blur the search input if it's focused
@@ -173,14 +175,7 @@ const Storage: Component = () => {
   });
   
   const handleNodeSelect = (nodeId: string | null) => {
-    if (nodeId) {
-      // Set search to filter by node
-      const nodeFilter = `node:${nodeId}`;
-      setSearchTerm(nodeFilter);
-    } else {
-      // Clear node filter from search
-      setSearchTerm('');
-    }
+    setSelectedNode(nodeId);
   };
 
   return (

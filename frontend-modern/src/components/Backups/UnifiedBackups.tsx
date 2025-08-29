@@ -43,6 +43,7 @@ interface DateGroup {
 const UnifiedBackups: Component = () => {
   const { state } = useWebSocket();
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [typeFilter, setTypeFilter] = createSignal<'all' | FilterableGuestType>('all');
   const [backupTypeFilter, setBackupTypeFilter] = createSignal<'all' | BackupType>('all');
   const [groupByMode, setGroupByMode] = createSignal<'date' | 'guest'>('date');
@@ -354,12 +355,18 @@ const UnifiedBackups: Component = () => {
     const type = typeFilter();
     const backupType = backupTypeFilter();
     const dateRange = selectedDateRange();
+    const nodeFilter = selectedNode();
 
     // Date range filter
     if (dateRange) {
       data = data.filter(item => 
         item.backupTime >= dateRange.start && item.backupTime <= dateRange.end
       );
+    }
+
+    // Node selection filter
+    if (nodeFilter) {
+      data = data.filter(item => item.node.toLowerCase() === nodeFilter.toLowerCase());
     }
 
     // Search filter - with advanced filtering support like Dashboard
@@ -592,6 +599,7 @@ const UnifiedBackups: Component = () => {
   // Reset filters
   const resetFilters = () => {
     setSearchTerm('');
+    setSelectedNode(null);
     setIsSearchLocked(false);
     setTypeFilter('all');
     setBackupTypeFilter('all');
@@ -619,7 +627,7 @@ const UnifiedBackups: Component = () => {
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
-        if (searchTerm().trim() || typeFilter() !== 'all' || backupTypeFilter() !== 'all' || 
+        if (searchTerm().trim() || selectedNode() || typeFilter() !== 'all' || backupTypeFilter() !== 'all' || 
             selectedDateRange() !== null || sortKey() !== 'backupTime' || sortDirection() !== 'desc') {
           resetFilters();
           
@@ -888,14 +896,8 @@ const UnifiedBackups: Component = () => {
       <UnifiedNodeSelector 
         currentTab="backups"
         onNodeSelect={(nodeId) => {
-          if (nodeId) {
-            const nodeFilter = `node:${nodeId}`;
-            setSearchTerm(nodeFilter);
-            setIsSearchLocked(true);
-          } else {
-            setSearchTerm('');
-            setIsSearchLocked(false);
-          }
+          setSelectedNode(nodeId);
+          setIsSearchLocked(!!nodeId);
         }}
         onNamespaceSelect={(namespaceFilter) => {
           setSearchTerm(namespaceFilter);
