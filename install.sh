@@ -582,6 +582,16 @@ echo 'Updating Pulse...'
 curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 EOF
         chmod +x /usr/local/bin/update
+        
+        # Ensure /usr/local/bin is in PATH for all users
+        if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
+            echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/profile
+        fi
+        
+        # Also add to bash profile if it exists
+        if [[ -f /etc/bash.bashrc ]] && ! grep -q '/usr/local/bin' /etc/bash.bashrc 2>/dev/null; then
+            echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/bash.bashrc
+        fi
     "; then
         print_error "Failed to install dependencies in container"
         cleanup_on_error
