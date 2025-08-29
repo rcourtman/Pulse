@@ -18,23 +18,6 @@ interface PVENodeTableProps {
 
 export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
   
-  // Check if we have active filtering
-  const hasActiveFilter = createMemo(() => {
-    // Check based on current tab
-    switch (props.currentTab) {
-      case 'dashboard':
-        return props.vms !== undefined || props.containers !== undefined;
-      case 'storage':
-        return props.storage !== undefined;
-      case 'backups':
-        // For backups, only consider it filtered if there's a search term or filtered backups is explicitly set and different from all backups
-        // We can't easily detect if it's filtered, so we'll rely on search term
-        return false; // Let the filtering logic handle it based on filteredBackups content
-      default:
-        return false;
-    }
-  });
-
   // Filter and sort nodes based on current tab
   const sortedNodes = createMemo(() => {
     if (!props.nodes) return [];
@@ -153,21 +136,10 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
               {(node) => {
                 const isOnline = () => node.status === 'online';
                 
-                // Get filtered guest count for display
-                const getFilteredGuestCount = () => {
-                  if (props.currentTab === 'dashboard' && hasActiveFilter()) {
-                    const nodeVms = props.vms?.filter(vm => vm.node === node.name) || [];
-                    const nodeContainers = props.containers?.filter(ct => ct.node === node.name) || [];
-                    return nodeVms.length + nodeContainers.length;
-                  }
-                  return null;
-                };
-                
                 // Always show actual node metrics, not calculated from filtered guests
                 const cpuPercent = () => Math.round(node.cpu || 0);
                 const memPercent = () => node.memory?.total > 0 ? Math.round((node.memory.used / node.memory.total) * 100) : 0;
                 const storagePercent = () => node.disk?.total > 0 ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
-                const filteredGuestCount = createMemo(() => getFilteredGuestCount());
                 
                 const counts = getNodeCounts(node);
                 // Check if this node is selected
