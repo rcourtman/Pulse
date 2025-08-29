@@ -2703,11 +2703,15 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	// Build the URL with the token included
 	host := r.Host
 	
-	// Simple dev environment fix: if we detect localhost from vite proxy, use the actual IP
+	// Dev environment fix: if we detect localhost from vite proxy AND we're in dev mode, use the actual IP
 	if host == "127.0.0.1:7656" {
-		// This is the dev backend being proxied through vite
-		// Use the actual development machine IP
-		host = "192.168.0.123:7656"
+		// Check if we're in development mode
+		if _, err := os.Stat("/opt/pulse/.dev-mode"); err == nil {
+			// This is the dev backend being proxied through vite on the dev machine
+			// Use the actual development machine IP
+			host = "192.168.0.123:7656"
+		}
+		// For production, keep the original host (users will need proper proxy config)
 	}
 	
 	pulseURL := fmt.Sprintf("%s://%s", "http", host)
