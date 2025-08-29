@@ -693,16 +693,36 @@ EOF
         rm -f "$script_source"
     fi
     
-    # Run installation quietly (suppress verbose output) with port configuration
+    # Run installation with timeout and better error handling
     local install_cmd="bash /tmp/install.sh --in-container"
     if [[ "$frontend_port" != "7655" ]]; then
         install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
     fi
-    local install_output=$(pct exec $CTID -- bash -c "$install_cmd" 2>&1)
-    local install_status=$?
+    
+    # Run with timeout (5 minutes should be enough for download and install)
+    local install_output
+    if command -v timeout >/dev/null 2>&1; then
+        install_output=$(timeout 300 pct exec $CTID -- bash -c "$install_cmd" 2>&1)
+        local install_status=$?
+        if [[ $install_status -eq 124 ]]; then
+            print_error "Installation timed out after 5 minutes"
+            print_info "This usually happens due to network issues or GitHub rate limiting"
+            print_info "You can enter the container and run 'bash /tmp/install.sh' manually:"
+            print_info "  pct enter $CTID"
+            cleanup_on_error
+        fi
+    else
+        install_output=$(pct exec $CTID -- bash -c "$install_cmd" 2>&1)
+        local install_status=$?
+    fi
     
     if [[ $install_status -ne 0 ]]; then
         print_error "Failed to install Pulse inside container"
+        # Show last few lines of output for debugging
+        if [[ -n "$install_output" ]]; then
+            echo "Last output from installation:" >&2
+            echo "$install_output" | tail -10 >&2
+        fi
         cleanup_on_error
     fi
     
@@ -837,8 +857,8 @@ download_pulse() {
         LATEST_RELEASE="${FORCE_VERSION}"
         print_info "Installing specific version: $LATEST_RELEASE"
         
-        # Verify the version exists
-        if ! curl -fsS "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+        # Verify the version exists (with timeout)
+        if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
             print_error "Version $LATEST_RELEASE not found"
             exit 1
         fi
@@ -860,13 +880,13 @@ download_pulse() {
             fi
         fi
         
-        # Get appropriate release based on channel
+        # Get appropriate release based on channel (with timeout)
         if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
             # Get all releases and find the latest (including pre-releases)
-            LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+            LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
         else
             # Get latest stable release only
-            LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         fi
         
         if [[ -z "$LATEST_RELEASE" ]]; then
@@ -910,8 +930,11 @@ download_pulse() {
     fi
     
     cd /tmp
-    if ! wget -q -O pulse.tar.gz "$DOWNLOAD_URL"; then
+    # Download with timeout (60 seconds should be enough for ~5MB file)
+    if ! wget -q --timeout=60 --tries=2 -O pulse.tar.gz "$DOWNLOAD_URL"; then
         print_error "Failed to download Pulse release"
+        print_info "This can happen due to network issues or GitHub rate limiting"
+        print_info "You can try downloading manually from: $DOWNLOAD_URL"
         exit 1
     fi
     
