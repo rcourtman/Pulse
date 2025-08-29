@@ -1536,11 +1536,16 @@ main() {
                     FRONTEND_PORT=7655
                 else
                     echo
-                    safe_read "Frontend port [7655]: " FRONTEND_PORT
-                    FRONTEND_PORT=${FRONTEND_PORT:-7655}
-                    if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
-                        print_error "Invalid port number. Using default port 7655."
+                    if safe_read "Frontend port [7655]: " FRONTEND_PORT; then
+                        FRONTEND_PORT=${FRONTEND_PORT:-7655}
+                        if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                            print_error "Invalid port number. Using default port 7655."
+                            FRONTEND_PORT=7655
+                        fi
+                    else
+                        # safe_read failed - non-interactive container install
                         FRONTEND_PORT=7655
+                        print_info "Using default port 7655"
                     fi
                 fi
             fi
@@ -1550,9 +1555,13 @@ main() {
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                safe_read "Enable auto-updates? [y/N]: " enable_updates
-                if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
-                    ENABLE_AUTO_UPDATES=true
+                if safe_read "Enable auto-updates? [y/N]: " enable_updates; then
+                    if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                        ENABLE_AUTO_UPDATES=true
+                    fi
+                else
+                    # Non-interactive - skip auto-updates
+                    ENABLE_AUTO_UPDATES=false
                 fi
             fi
         fi
