@@ -48,7 +48,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               >
                 {/* Colored dot indicator */}
                 <div 
-                  class="w-2 h-2 rounded-full hover:scale-125 transition-transform duration-200 ease-out cursor-pointer"
+                  class="w-2 h-2 rounded-full hover:scale-150 transition-transform duration-200 ease-out cursor-pointer"
                   style={{
                     'background-color': colors.bg,
                     'box-shadow': isActive() 
@@ -77,7 +77,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               setTooltipPos(null);
             }}
           >
-            <div class="text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 hover:scale-110 transition-transform duration-200 ease-out">
+            <div class="text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 hover:scale-125 transition-transform duration-200 ease-out">
               +{hiddenTags().length}
             </div>
           </div>
