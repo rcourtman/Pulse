@@ -62,8 +62,20 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   // Get count values for a node
   const getNodeCounts = (item: { type: 'pve' | 'pbs'; data: Node | PBSInstance }) => {
     if (item.type === 'pbs') {
-      // PBS instances only show backup count
-      return [props.backupCounts?.[item.data.name] || 0];
+      // PBS instances show different counts based on tab
+      switch (props.currentTab) {
+        case 'dashboard':
+          // PBS doesn't have VMs/Containers, return dashes
+          return ['-', '-'];
+        case 'storage':
+          // PBS doesn't have storage count
+          return ['-'];
+        case 'backups':
+          // PBS shows backup count
+          return [props.backupCounts?.[item.data.name] || 0];
+        default:
+          return [];
+      }
     }
     
     const node = item.data as Node;
@@ -82,13 +94,25 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
   };
 
+  // Calculate table width based on tab
+  const tableWidth = () => {
+    // Base columns: Node(200) + Status(80) + Uptime(100) + CPU(200) + Memory(200) + Disk(200) = 980px
+    const baseWidth = 980;
+    switch (props.currentTab) {
+      case 'dashboard': return baseWidth + 160; // + VMs(80) + Containers(80)
+      case 'storage': return baseWidth + 80;     // + Storage(80)
+      case 'backups': return baseWidth + 80;     // + Backups(80)
+      default: return baseWidth;
+    }
+  };
+
   // Don't return null - let the table render even if empty
   // This prevents the table from disappearing on refresh while data loads
 
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div class="overflow-x-auto" style="overflow-x: auto;">
-        <table style="width: 1000px; table-layout: fixed;">
+        <table style={`width: ${tableWidth()}px; table-layout: fixed;`}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
@@ -162,7 +186,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 return (
                   <tr 
                     class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${
-                      isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                      isSelected() 
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500 dark:border-l-blue-400' 
+                        : ''
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
