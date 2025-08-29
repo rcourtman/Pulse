@@ -120,7 +120,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   : (pbs!.status === 'healthy' || pbs!.status === 'online');
                 
                 const cpuPercent = () => isPVE 
-                  ? Math.round(node!.cpu * 100)
+                  ? Math.round(node!.cpu || 0)
                   : Math.round(pbs!.cpu || 0);
                 
                 const memPercent = () => isPVE 
