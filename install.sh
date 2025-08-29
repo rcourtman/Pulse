@@ -1536,7 +1536,13 @@ main() {
                     FRONTEND_PORT=7655
                 else
                     echo
-                    if safe_read "Frontend port [7655]: " FRONTEND_PORT; then
+                    # Temporarily disable errexit for safe_read
+                    set +e
+                    safe_read "Frontend port [7655]: " FRONTEND_PORT
+                    local read_result=$?
+                    set -e
+                    
+                    if [[ $read_result -eq 0 ]]; then
                         FRONTEND_PORT=${FRONTEND_PORT:-7655}
                         if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
                             print_error "Invalid port number. Using default port 7655."
@@ -1555,7 +1561,12 @@ main() {
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                if safe_read "Enable auto-updates? [y/N]: " enable_updates; then
+                set +e
+                safe_read "Enable auto-updates? [y/N]: " enable_updates
+                local read_result=$?
+                set -e
+                
+                if [[ $read_result -eq 0 ]]; then
                     if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
                         ENABLE_AUTO_UPDATES=true
                     fi
