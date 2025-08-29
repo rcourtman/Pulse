@@ -5,7 +5,7 @@
 
 MODE="${1:-status}"
 MOCK_ENV="/opt/pulse/mock.env"
-SERVICE_DIR="/etc/systemd/system/pulse-backend.service.d"
+SERVICE_DIR="/etc/systemd/system/pulse-dev.service.d"
 MOCK_CONF="$SERVICE_DIR/mock.conf"
 
 # Colors for output
@@ -51,7 +51,7 @@ EOF
         
         # Reload and restart
         sudo systemctl daemon-reload
-        sudo systemctl restart pulse-backend
+        sudo systemctl restart pulse-dev
         
         echo -e "${GREEN}✓ PURE mock mode enabled!${RESET}"
         echo -e "Real nodes are completely disabled."
@@ -76,7 +76,7 @@ EOF
         
         # Reload and restart
         sudo systemctl daemon-reload
-        sudo systemctl restart pulse-backend
+        sudo systemctl restart pulse-dev
         
         echo -e "${GREEN}✓ Mock mode disabled!${RESET}"
         echo -e "Real nodes are now active."

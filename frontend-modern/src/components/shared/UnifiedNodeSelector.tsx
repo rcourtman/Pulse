@@ -1,7 +1,6 @@
-import { Component, createSignal, createEffect, createMemo, Show } from 'solid-js';
+import { Component, createSignal, createEffect, createMemo } from 'solid-js';
 import { useWebSocket } from '@/App';
-import { PVENodeTable } from './PVENodeTable';
-import { PBSNodeTable } from './PBSNodeTable';
+import { NodeSummaryTable } from './NodeSummaryTable';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
@@ -63,25 +62,14 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     return counts;
   });
   
-  const handlePVENodeClick = (nodeId: string) => {
+  const handleNodeClick = (nodeId: string, nodeType: 'pve' | 'pbs') => {
     // Toggle selection
     if (selectedNode() === nodeId) {
       setSelectedNode(null);
       props.onNodeSelect?.(null, null);
     } else {
       setSelectedNode(nodeId);
-      props.onNodeSelect?.(nodeId, 'pve');
-    }
-  };
-
-  const handlePBSNodeClick = (nodeId: string) => {
-    // Toggle selection  
-    if (selectedNode() === nodeId) {
-      setSelectedNode(null);
-      props.onNodeSelect?.(null, null);
-    } else {
-      setSelectedNode(nodeId);
-      props.onNodeSelect?.(nodeId, 'pbs');
+      props.onNodeSelect?.(nodeId, nodeType);
     }
   };
   
@@ -90,45 +78,17 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   
   return (
     <div class="space-y-2 mb-4">
-      <PVENodeTable
+      <NodeSummaryTable
         nodes={nodes()}
+        pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
         vms={props.filteredVms !== undefined ? props.filteredVms : state.vms}
         containers={props.filteredContainers !== undefined ? props.filteredContainers : state.containers}
         storage={props.filteredStorage !== undefined ? props.filteredStorage : state.storage}
         backupCounts={backupCounts()}
         currentTab={props.currentTab}
         selectedNode={selectedNode()}
-        onNodeClick={handlePVENodeClick}
-        searchTerm={props.searchTerm}
-        filteredBackups={props.filteredBackups}
+        onNodeClick={handleNodeClick}
       />
-      <Show when={props.currentTab === 'backups' && state.pbs && state.pbs.length > 0}>
-        <PBSNodeTable
-          pbsInstances={state.pbs!}
-          backupCounts={backupCounts()}
-          selectedNode={selectedNode()}
-          onNodeClick={handlePBSNodeClick}
-          onNamespaceClick={(instanceName, datastoreName, namespace) => {
-            // Build a search string that filters for this specific namespace
-            const searchStr = `pbs:${instanceName}:${datastoreName}:${namespace}`;
-            // If already selected, clear the filter, otherwise set it
-            if (props.searchTerm === searchStr) {
-              // Clear the filter
-              if (props.onNamespaceSelect) {
-                props.onNamespaceSelect('');
-              }
-            } else {
-              // Set the filter
-              if (props.onNamespaceSelect) {
-                props.onNamespaceSelect(searchStr);
-              }
-            }
-          }}
-          currentTab={props.currentTab}
-          filteredBackups={props.filteredBackups}
-          searchTerm={props.searchTerm}
-        />
-      </Show>
     </div>
   );
 };
