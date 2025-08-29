@@ -156,9 +156,11 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Node (optional) */}
-      <td class={`p-1 px-2 text-sm text-gray-600 dark:text-gray-400 ${props.showNode ? '' : 'hidden'}`}>
-        {props.guest.node}
-      </td>
+      {props.showNode && (
+        <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
+          {props.guest.node}
+        </td>
+      )}
 
       {/* Uptime */}
       <td class={`p-1 px-2 text-sm whitespace-nowrap ${
