@@ -94,40 +94,28 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     }
   };
 
-  // Calculate table width based on tab
-  const tableWidth = () => {
-    // Base columns: Node(200) + Status(80) + Uptime(100) + CPU(200) + Memory(200) + Disk(200) = 980px
-    const baseWidth = 980;
-    switch (props.currentTab) {
-      case 'dashboard': return baseWidth + 160; // + VMs(80) + Containers(80)
-      case 'storage': return baseWidth + 80;     // + Storage(80)
-      case 'backups': return baseWidth + 80;     // + Backups(80)
-      default: return baseWidth;
-    }
-  };
-
   // Don't return null - let the table render even if empty
   // This prevents the table from disappearing on refresh while data loads
 
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto" style="overflow-x: auto;">
-        <table style={`width: ${tableWidth()}px; table-layout: fixed;`}>
+      <div class="overflow-x-auto">
+        <table class="w-full table-fixed">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 20%;">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">Status</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">CPU</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">Memory</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 8%;">Status</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 10%;">Uptime</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">CPU</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">Memory</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">{header}</th>
+                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 8%;">{header}</th>
                 )}
               </For>
             </tr>
@@ -192,7 +180,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
-                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                    <td class="px-2 py-0.5 whitespace-nowrap">
                       <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
                         <a 
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
@@ -223,7 +211,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </Show>
                       </div>
                     </td>
-                    <td class="px-2 py-0.5" style="white-space: nowrap;">
+                    <td class="px-2 py-0.5 whitespace-nowrap">
                       <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
                         <span class={`h-2 w-2 flex-shrink-0 rounded-full ${
                           isOnline() ? 'bg-green-500' : 'bg-red-500'
@@ -242,7 +230,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </Show>
                       </span>
                     </td>
-                    <td class="px-2 py-0.5" style="width: 200px;">
+                    <td class="px-2 py-0.5">
                       <MetricBar 
                         value={cpuPercent()} 
                         label={`${cpuPercent()}%`}
@@ -250,7 +238,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="cpu"
                       />
                     </td>
-                    <td class="px-2 py-0.5" style="width: 200px;">
+                    <td class="px-2 py-0.5">
                       <MetricBar 
                         value={memPercent()} 
                         label={`${memPercent()}%`}
@@ -262,7 +250,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         type="memory"
                       />
                     </td>
-                    <td class="px-2 py-0.5" style="width: 200px;">
+                    <td class="px-2 py-0.5">
                       <MetricBar 
                         value={diskPercent()} 
                         label={`${diskPercent()}%`}
