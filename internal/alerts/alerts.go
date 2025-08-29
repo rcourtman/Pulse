@@ -933,6 +933,9 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	now := time.Now()
 	alert.AckTime = &now
 	alert.AckUser = user
+	
+	// Write the modified alert back to the map
+	m.activeAlerts[alertID] = alert
 
 	return nil
 }
