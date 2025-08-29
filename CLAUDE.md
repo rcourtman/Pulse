@@ -587,7 +587,9 @@ When writing comments on GitHub PRs or issues:
 - **NO EXCLAMATION MARKS** - Avoid using ! in comments, keep it casual without fake enthusiasm
 - **BAD**: "thanks!", "fixed it!", "works now!"
 - **GOOD**: "thanks", "fixed it", "works now"
-- **Acknowledge when users are right** - "You're right that..." shows respect and humility
+- **STOP ACKNOWLEDGING USERS ARE RIGHT** - Never write "You're right", "good catch", "absolutely right", etc.
+- **BAD**: "good catch", "you're absolutely right", "you're correct that..."
+- **GOOD**: Just explain what was fixed without validation-seeking language
 - **Don't oversell improvements** - Let the changes speak for themselves
 
 ## Docker Build Process
