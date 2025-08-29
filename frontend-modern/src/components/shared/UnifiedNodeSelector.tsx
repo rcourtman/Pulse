@@ -53,9 +53,11 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       nodes.forEach((node: any) => {
         let count = 0;
         
-        // Count storage backups
+        // Count storage backups (excluding PBS backups which are counted separately)
         if (state.pveBackups?.storageBackups) {
-          count += state.pveBackups.storageBackups.filter(b => b.node === node.name).length;
+          count += state.pveBackups.storageBackups.filter(b => 
+            b.node === node.name && !b.isPBS
+          ).length;
         }
         
         // Count snapshots
