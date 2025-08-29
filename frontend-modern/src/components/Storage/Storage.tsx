@@ -311,19 +311,21 @@ const Storage: Component = () => {
                                 </div>
                               </td>
                               <Show when={viewMode() === 'node'}>
-                                <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden sm:table-cell">{storage.node}</td>
+                                <td class="p-0.5 px-1.5 hidden sm:table-cell">
+                                  <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
+                                    {storage.node}
+                                  </span>
+                                </td>
                               </Show>
                               <td class="p-0.5 px-1.5 hidden md:table-cell">
-                                <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                                  storage.type === 'dir' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' :
-                                  storage.type === 'pbs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
-                                  'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                                }`}>
+                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                                   {storage.type}
                                 </span>
                               </td>
-                              <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
-                                {storage.content || '-'}
+                              <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                <span class="text-xs text-gray-600 dark:text-gray-400">
+                                  {storage.content || '-'}
+                                </span>
                               </td>
                               <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
                                 <span class={`${
@@ -334,8 +336,10 @@ const Storage: Component = () => {
                                 </span>
                               </td>
                               <Show when={viewMode() === 'node'}>
-                                <td class="p-0.5 px-1.5 text-xs text-gray-600 dark:text-gray-400 hidden lg:table-cell">
-                                  {storage.shared ? '✓' : '-'}
+                                <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                  <span class="text-xs text-gray-600 dark:text-gray-400">
+                                    {storage.shared ? '✓' : '-'}
+                                  </span>
                                 </td>
                               </Show>
                               
