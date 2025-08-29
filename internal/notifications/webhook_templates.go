@@ -22,11 +22,9 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
-				"avatar_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/logo.svg",
 				"embeds": [{
 					"title": "Pulse Alert: {{.Level | title}}",
 					"description": "{{.Message}}",
-					"url": "{{.Instance}}",
 					"color": {{if eq .Level "critical"}}15158332{{else if eq .Level "warning"}}15105570{{else}}3447003{{end}},
 					"fields": [
 						{"name": "Resource", "value": "{{.ResourceName}}", "inline": true},
@@ -38,8 +36,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					],
 					"timestamp": "{{.Timestamp}}",
 					"footer": {
-						"text": "Pulse Monitoring",
-						"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/logo.svg"
+						"text": "Pulse Monitoring"
 					}
 				}]
 			}`,
