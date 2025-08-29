@@ -350,6 +350,28 @@ create_lxc_container() {
         
         safe_read "Static IP (leave empty for DHCP): " static_ip
         
+        # If static IP is provided, we need gateway
+        if [[ -n "$static_ip" ]]; then
+            # Validate IP format
+            if [[ ! "$static_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
+                print_error "Invalid IP format. Please use CIDR notation (e.g., 192.168.1.100/24)"
+                print_info "Using DHCP instead"
+                static_ip=""
+            else
+                safe_read "Gateway IP address: " gateway_ip
+                if [[ -z "$gateway_ip" ]]; then
+                    # Try to guess gateway from the IP (use .1 of the subnet)
+                    local ip_base="${static_ip%.*}"
+                    gateway_ip="${ip_base}.1"
+                    print_info "No gateway specified, using $gateway_ip"
+                elif [[ ! "$gateway_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                    print_error "Invalid gateway format. Using DHCP instead"
+                    static_ip=""
+                    gateway_ip=""
+                fi
+            fi
+        fi
+        
         safe_read "DNS servers (comma-separated, empty for host settings): " nameserver
         
         safe_read "Startup order [99]: " startup
@@ -406,6 +428,7 @@ create_lxc_container() {
         fi
         
         static_ip=""
+        gateway_ip=""
         nameserver=""
         startup=99
     fi
@@ -537,7 +560,13 @@ create_lxc_container() {
     
     # Build network configuration
     if [[ -n "$static_ip" ]]; then
-        NET_CONFIG="name=eth0,bridge=${bridge},ip=${static_ip},firewall=${firewall}"
+        # Include gateway in network config for static IP
+        if [[ -n "$gateway_ip" ]]; then
+            NET_CONFIG="name=eth0,bridge=${bridge},ip=${static_ip},gw=${gateway_ip},firewall=${firewall}"
+        else
+            # This shouldn't happen but handle it gracefully
+            NET_CONFIG="name=eth0,bridge=${bridge},ip=${static_ip},firewall=${firewall}"
+        fi
     else
         NET_CONFIG="name=eth0,bridge=${bridge},ip=dhcp,firewall=${firewall}"
     fi
