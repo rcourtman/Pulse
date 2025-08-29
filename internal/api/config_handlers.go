@@ -2701,9 +2701,18 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Msg("Generated temporary auth token")
 	
 	// Build the URL with the token included
-	pulseURL := fmt.Sprintf("%s://%s", "http", r.Host)
+	host := r.Host
+	
+	// Simple dev environment fix: if we detect localhost from vite proxy, use the actual IP
+	if host == "127.0.0.1:7656" {
+		// This is the dev backend being proxied through vite
+		// Use the actual development machine IP
+		host = "192.168.0.123:7656"
+	}
+	
+	pulseURL := fmt.Sprintf("%s://%s", "http", host)
 	if r.TLS != nil {
-		pulseURL = fmt.Sprintf("%s://%s", "https", r.Host)
+		pulseURL = fmt.Sprintf("%s://%s", "https", host)
 	}
 	
 	encodedHost := ""
