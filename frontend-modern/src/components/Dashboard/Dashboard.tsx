@@ -561,7 +561,7 @@ export function Dashboard(props: DashboardProps) {
                             </span>
                           </div>
                         </td>
-                        <td class="p-1 px-2 w-[180px]">
+                        <td class="p-1 px-2 min-w-[180px]">
                           <MetricBar 
                             value={cpuPercent()} 
                             label={`${cpuPercent()}%`}
@@ -569,7 +569,7 @@ export function Dashboard(props: DashboardProps) {
                             type="cpu"
                           />
                         </td>
-                        <td class="p-1 px-2 w-[180px]">
+                        <td class="p-1 px-2 min-w-[180px]">
                           <MetricBar 
                             value={memPercent()} 
                             label={`${memPercent()}%`}
@@ -577,7 +577,7 @@ export function Dashboard(props: DashboardProps) {
                             type="memory"
                           />
                         </td>
-                        <td class="p-1 px-2 w-[180px]">
+                        <td class="p-1 px-2 min-w-[180px]">
                           <MetricBar 
                             value={diskPercent()} 
                             label={`${diskPercent()}%`}
