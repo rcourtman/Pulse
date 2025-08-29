@@ -590,6 +590,9 @@ When writing comments on GitHub PRs or issues:
 - **STOP ACKNOWLEDGING USERS ARE RIGHT** - Never write "You're right", "good catch", "absolutely right", etc.
 - **BAD**: "good catch", "you're absolutely right", "you're correct that..."
 - **GOOD**: Just explain what was fixed without validation-seeking language
+- **STOP THANKING FOR REPORTS** - Never write "thanks for the detailed report", "thanks for reporting", etc.
+- **BAD**: "thanks for the detailed report", "thanks for reporting this", "thank you for bringing this up"
+- **GOOD**: Just acknowledge the issue exists and explain the fix
 - **Don't oversell improvements** - Let the changes speak for themselves
 
 ## Docker Build Process

@@ -1582,20 +1582,6 @@ const UnifiedBackups: Component = () => {
           <table class="backup-table hidden lg:table">
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                  onClick={() => handleSort('name')}
-                  style="width: 150px;"
-                >
-                  Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                </th>
-                <th
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                  onClick={() => handleSort('type')}
-                  style="width: 60px;"
-                >
-                  Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                </th>
                 <th
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('vmid')}
@@ -1605,20 +1591,18 @@ const UnifiedBackups: Component = () => {
                 </th>
                 <th
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                  onClick={() => handleSort('node')}
-                  style="width: 100px;"
+                  onClick={() => handleSort('type')}
+                  style="width: 60px;"
                 >
-                  Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
-                <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                  <th
-                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                    onClick={() => handleSort('owner')}
-                    style="width: 80px;"
-                  >
-                    Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </th>
-                </Show>
+                <th 
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  onClick={() => handleSort('name')}
+                  style="width: 150px;"
+                >
+                  Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
                 <th
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupTime')}
@@ -1642,15 +1626,6 @@ const UnifiedBackups: Component = () => {
                 >
                   Backup {sortKey() === 'backupType' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
-                <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                  <th 
-                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                    onClick={() => handleSort('verified')}
-                    style="width: 60px;"
-                  >
-                    Verified {sortKey() === 'verified' && (sortDirection() === 'asc' ? '▲' : '▼')}
-                  </th>
-                </Show>
                 <Show when={backupTypeFilter() !== 'snapshot'}>
                   <th 
                     class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -1658,6 +1633,15 @@ const UnifiedBackups: Component = () => {
                     style="width: 150px;"
                   >
                     Location {sortKey() === 'storage' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </th>
+                </Show>
+                <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                  <th 
+                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('verified')}
+                    style="width: 60px;"
+                  >
+                    Verified {sortKey() === 'verified' && (sortDirection() === 'asc' ? '▲' : '▼')}
                   </th>
                 </Show>
                 <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px;">
@@ -1671,8 +1655,7 @@ const UnifiedBackups: Component = () => {
                   <>
                     <tr class="bg-gray-50/50 dark:bg-gray-700/30">
                       <td colspan={(() => {
-                        let cols = 7; // Base columns: Name, Type, VMID, Node, Time, Backup, Details
-                        if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Owner column
+                        let cols = 6; // Base columns: Name, Type, VMID, Time, Backup, Details
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Size column
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Verified column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
@@ -1684,9 +1667,7 @@ const UnifiedBackups: Component = () => {
                     <For each={group.items}>
                       {(item) => (
                         <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                          <td class="p-0.5 px-1.5 text-sm align-middle">
-                            {item.name || '-'}
-                          </td>
+                          <td class="p-0.5 px-1.5 text-sm align-middle">{item.vmid}</td>
                           <td class="p-0.5 px-1.5 align-middle">
                             <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                               item.type === 'VM'
@@ -1698,15 +1679,9 @@ const UnifiedBackups: Component = () => {
                               {item.type}
                             </span>
                           </td>
-                          <td class="p-0.5 px-1.5 text-sm align-middle">{item.vmid}</td>
-                          <td class="p-0.5 px-1.5 text-sm align-middle cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
-                            {item.node}
+                          <td class="p-0.5 px-1.5 text-sm align-middle">
+                            {item.name || '-'}
                           </td>
-                          <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
-                            <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
-                              {item.owner ? item.owner.split('@')[0] : '-'}
-                            </td>
-                          </Show>
                           <td class={`p-0.5 px-1.5 text-xs align-middle ${getAgeColorClass(item.backupTime)}`}>
                             {formatTime(item.backupTime * 1000)}
                           </td>
@@ -1742,6 +1717,23 @@ const UnifiedBackups: Component = () => {
                               </Show>
                             </div>
                           </td>
+                          <Show when={backupTypeFilter() !== 'snapshot'}>
+                            <td class="p-0.5 px-1.5 text-sm align-middle">
+                              {(() => {
+                                let location = item.storage || (item.datastore && (
+                                  item.namespace && item.namespace !== 'root'
+                                    ? `${item.datastore}/${item.namespace}`
+                                    : item.datastore
+                                )) || '-';
+                                
+                                // Prepend node name for clarity (unless it's already part of the location)
+                                if (item.node && location !== '-' && !location.includes(item.node)) {
+                                  return `${item.node}:${location}`;
+                                }
+                                return location;
+                              })()}
+                            </td>
+                          </Show>
                           <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
                             <td class="p-0.5 px-1.5 text-center align-middle">
                               {item.backupType === 'remote' ? (
@@ -1761,15 +1753,6 @@ const UnifiedBackups: Component = () => {
                               ) : (
                                 <span class="text-gray-400 dark:text-gray-500" title="Verification only available for PBS backups">-</span>
                               )}
-                            </td>
-                          </Show>
-                          <Show when={backupTypeFilter() !== 'snapshot'}>
-                            <td class="p-0.5 px-1.5 text-sm align-middle">
-                              {item.storage || (item.datastore && (
-                                item.namespace && item.namespace !== 'root'
-                                  ? `${item.datastore}/${item.namespace}`
-                                  : item.datastore
-                              )) || '-'}
                             </td>
                           </Show>
                           <td 
