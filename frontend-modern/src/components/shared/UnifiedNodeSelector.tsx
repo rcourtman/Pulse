@@ -81,9 +81,9 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       <NodeSummaryTable
         nodes={nodes()}
         pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
-        vms={props.filteredVms !== undefined ? props.filteredVms : state.vms}
-        containers={props.filteredContainers !== undefined ? props.filteredContainers : state.containers}
-        storage={props.filteredStorage !== undefined ? props.filteredStorage : state.storage}
+        vms={state.vms}  // Always use unfiltered data for counts
+        containers={state.containers}  // Always use unfiltered data for counts
+        storage={state.storage}  // Always use unfiltered data for counts
         backupCounts={backupCounts()}
         currentTab={props.currentTab}
         selectedNode={selectedNode()}
