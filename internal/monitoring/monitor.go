@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -2118,7 +2119,10 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 // GetState returns the current state
 func (m *Monitor) GetState() models.StateSnapshot {
-	// Mock mode is handled at build time with build tags, not runtime
+	// Check if mock mode is enabled
+	if mock.IsMockEnabled() {
+		return mock.GetMockState()
+	}
 	return m.state.GetSnapshot()
 }
 
