@@ -48,14 +48,14 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               >
                 {/* Colored dot indicator */}
                 <div 
-                  class="w-1.5 h-1.5 rounded-full hover:scale-110 transition-all cursor-pointer"
+                  class="w-2 h-2 rounded-full hover:scale-110 transition-all cursor-pointer"
                   style={{
                     'background-color': colors.bg,
                     'box-shadow': isActive() 
                       ? isDark() 
-                        ? `0 0 0 1px ${colors.border}, 0 0 0 2.5px rgba(255, 255, 255, 0.9)` // White ring in dark mode
-                        : `0 0 0 1px ${colors.border}, 0 0 0 2.5px rgba(0, 0, 0, 0.8)` // Black ring in light mode
-                      : `0 0 0 1px ${colors.border}`,
+                        ? `0 0 0 2.5px rgba(255, 255, 255, 0.9)` // White ring in dark mode when active
+                        : `0 0 0 2.5px rgba(0, 0, 0, 0.8)` // Black ring in light mode when active
+                      : 'none', // No box-shadow when not active - just flat circle
                   }}
                 />
               </div>
