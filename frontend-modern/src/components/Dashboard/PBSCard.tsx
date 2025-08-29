@@ -70,7 +70,7 @@ const PBSCard: Component<PBSCardProps> = (props) => {
     }[colorClass] || 'bg-gray-500/60 dark:bg-gray-500/50';
     
     return (
-      <div class={`relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}`}>
+      <div class={`relative w-[180px] h-3.5 rounded overflow-hidden ${bgColorClass}`}>
         <div class={`absolute top-0 left-0 h-full ${progressColorClass}`} style={{ width: `${percentage}%` }} />
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
           <span class="truncate px-1">{text}</span>
@@ -125,7 +125,7 @@ const PBSCard: Component<PBSCardProps> = (props) => {
   };
 
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 flex flex-col gap-1 min-w-[250px] ${getBorderClass()}`}>
+    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 flex flex-col gap-1 w-[250px] ${getBorderClass()}`}>
       {/* Header */}
       <div class="flex justify-between items-center">
         <h3 class="text-sm font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-2">

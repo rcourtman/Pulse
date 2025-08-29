@@ -583,7 +583,8 @@ create_lxc_container() {
         # Collect templates from ALL template-capable storages
         local ALL_TEMPLATES=""
         for tmpl_storage in $TEMPLATE_STORAGES; do
-            local STORAGE_TEMPLATES=$(pveam list "$tmpl_storage" 2>/dev/null | tail -n +2 | awk -v storage="$tmpl_storage" '{print storage ":" $1}' || true)
+            # pveam list output already includes the storage prefix in the path
+            local STORAGE_TEMPLATES=$(pveam list "$tmpl_storage" 2>/dev/null | tail -n +2 | awk '{print $1}' || true)
             if [[ -n "$STORAGE_TEMPLATES" ]]; then
                 if [[ -n "$ALL_TEMPLATES" ]]; then
                     ALL_TEMPLATES="${ALL_TEMPLATES}\n${STORAGE_TEMPLATES}"
@@ -671,11 +672,12 @@ create_lxc_container() {
     fi
     
     # Download template if it doesn't exist
-    # For storage:vztmpl format, we need to check if template exists using pveam
+    # Check if template exists - pveam list shows full paths like storage:vztmpl/file.tar.zst
     local TEMPLATE_EXISTS=false
     if [[ "$TEMPLATE" =~ ^([^:]+):vztmpl/(.+)$ ]]; then
         local STORAGE_NAME="${BASH_REMATCH[1]}"
         local TEMPLATE_FILE="${BASH_REMATCH[2]}"
+        # Check if this exact template exists in pveam list
         if pveam list "$STORAGE_NAME" 2>/dev/null | grep -q "$TEMPLATE_FILE"; then
             TEMPLATE_EXISTS=true
         fi

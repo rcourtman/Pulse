@@ -15,7 +15,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   // Early return if node data is incomplete
   if (!props.node || !props.node.memory || !props.node.disk) {
     return (
-      <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 min-w-[160px] max-w-[200px]">
+      <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 w-[180px]">
         <div class="text-sm text-gray-500">Loading node data...</div>
       </div>
     );
@@ -68,7 +68,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     }[colorClass] || 'bg-gray-500/70 dark:bg-gray-500/60';
     
     return (
-      <div class="w-full">
+      <div class="w-[140px]">
         <div class="flex justify-between items-center mb-0.5">
           <span class="text-[10px] font-medium text-gray-600 dark:text-gray-400">{label}</span>
           <span class="text-[10px] font-medium text-gray-700 dark:text-gray-300">{percentage}%</span>
@@ -131,7 +131,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   };
   
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 flex flex-col gap-2 min-w-[160px] max-w-[200px] ${getBorderClass()} ${getBackgroundClass()}`}>
+    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 flex flex-col gap-2 w-[180px] ${getBorderClass()} ${getBackgroundClass()}`}>
       {/* Header */}
       <div class="flex justify-between items-center">
         <h3 class="text-xs font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-1">

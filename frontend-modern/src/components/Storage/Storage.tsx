@@ -269,7 +269,7 @@ const Storage: Component = () => {
                   <Show when={viewMode() === 'node'}>
                     <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Shared</th>
                   </Show>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[100px] sm:min-w-[150px] md:min-w-[200px]">Usage</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px]">Usage</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Free</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
                 </tr>
@@ -361,7 +361,7 @@ const Storage: Component = () => {
                               </Show>
                               
                               <td class="p-0.5 px-1.5">
-                                <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                <div class="relative w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
                                   <div 
                                     class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
                                     style={{ width: `${usagePercent}%` }}

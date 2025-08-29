@@ -54,7 +54,7 @@ export function MetricBar(props: MetricBarProps) {
 
   return (
     <div class="metric-text">
-      <div class="relative w-full h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+      <div class="relative w-[120px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
         <div 
           class={`absolute top-0 left-0 h-full ${progressColorClass()}`}
           style={{ width: `${width()}%` }}
