@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     port: 7655,
     host: '0.0.0.0',
+    strictPort: true,  // FAIL if port 7655 is not available
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:7656',

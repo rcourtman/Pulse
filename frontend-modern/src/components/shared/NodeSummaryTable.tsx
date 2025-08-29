@@ -95,6 +95,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">Status</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">CPU</th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">Memory</th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 200px; white-space: nowrap;">
@@ -105,7 +106,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 80px; white-space: nowrap;">{header}</th>
                 )}
               </For>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider" style="width: 100px; white-space: nowrap;">Uptime</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -207,6 +207,15 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </span>
                       </div>
                     </td>
+                    <td class="px-2 py-0.5 whitespace-nowrap">
+                      <span class={`text-xs ${
+                        isPVE && node!.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
+                      }`}>
+                        <Show when={isOnline() && (isPVE ? node!.uptime : pbs!.uptime)} fallback="-">
+                          {formatUptime(isPVE ? node!.uptime : pbs!.uptime)}
+                        </Show>
+                      </span>
+                    </td>
                     <td class="px-2 py-0.5" style="width: 200px;">
                       <MetricBar 
                         value={cpuPercent()} 
@@ -242,15 +251,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </td>
                       )}
                     </For>
-                    <td class="px-2 py-0.5 whitespace-nowrap">
-                      <span class={`text-xs ${
-                        isPVE && node!.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
-                      }`}>
-                        <Show when={isOnline() && (isPVE ? node!.uptime : pbs!.uptime)} fallback="-">
-                          {formatUptime(isPVE ? node!.uptime : pbs!.uptime)}
-                        </Show>
-                      </span>
-                    </td>
                   </tr>
                 );
               }}
