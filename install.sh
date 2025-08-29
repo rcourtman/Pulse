@@ -460,7 +460,7 @@ create_lxc_container() {
             fi
         fi
         
-        safe_read_with_default "DNS servers (comma-separated, empty for host settings): " nameserver ""
+        safe_read_with_default "DNS servers (space-separated, empty for host settings): " nameserver ""
         
         safe_read_with_default "Startup order [99]: " startup "99"
     else
@@ -734,8 +734,6 @@ create_lxc_container() {
     CREATE_CMD="$CREATE_CMD --swap $swap"
     
     if [[ -n "$nameserver" ]]; then
-        # Convert comma-separated to space-separated for Proxmox
-        nameserver="${nameserver//,/ }"
         CREATE_CMD="$CREATE_CMD --nameserver '$nameserver'"
     fi
     
