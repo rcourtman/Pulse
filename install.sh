@@ -693,17 +693,19 @@ EOF
         rm -f "$script_source"
     fi
     
-    # Run installation with timeout and better error handling
+    # Run installation with visible progress
     local install_cmd="bash /tmp/install.sh --in-container"
     if [[ "$frontend_port" != "7655" ]]; then
         install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
     fi
     
-    # Run with timeout (5 minutes should be enough for download and install)
-    local install_output
+    # Run installation showing output in real-time so users can see progress/errors
+    # Use timeout wrapper if available
+    local install_status
     if command -v timeout >/dev/null 2>&1; then
-        install_output=$(timeout 300 pct exec $CTID -- bash -c "$install_cmd" 2>&1)
-        local install_status=$?
+        # Show output in real-time with timeout
+        timeout 300 pct exec $CTID -- bash -c "$install_cmd"
+        install_status=$?
         if [[ $install_status -eq 124 ]]; then
             print_error "Installation timed out after 5 minutes"
             print_info "This usually happens due to network issues or GitHub rate limiting"
@@ -712,17 +714,16 @@ EOF
             cleanup_on_error
         fi
     else
-        install_output=$(pct exec $CTID -- bash -c "$install_cmd" 2>&1)
-        local install_status=$?
+        # Show output in real-time without timeout
+        pct exec $CTID -- bash -c "$install_cmd"
+        install_status=$?
     fi
     
     if [[ $install_status -ne 0 ]]; then
         print_error "Failed to install Pulse inside container"
-        # Show last few lines of output for debugging
-        if [[ -n "$install_output" ]]; then
-            echo "Last output from installation:" >&2
-            echo "$install_output" | tail -10 >&2
-        fi
+        print_info "You can enter the container to investigate:"
+        print_info "  pct enter $CTID"
+        print_info "  bash /tmp/install.sh"
         cleanup_on_error
     fi
     
