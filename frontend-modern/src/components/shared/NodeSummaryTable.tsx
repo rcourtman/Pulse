@@ -169,14 +169,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 };
                 
                 const nodeId = isPVE ? node!.name : pbs!.name;
-                const isSelected = props.selectedNode === nodeId;
+                const isSelected = () => props.selectedNode === nodeId;
                 
                 return (
                   <tr 
-                    class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors`}
-                    classList={{
-                      'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500': isSelected
-                    }}
+                    class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                      isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
                     <td class="px-2 py-0.5 whitespace-nowrap">
