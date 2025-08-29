@@ -37,38 +37,15 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
     return props.searchTerm === expectedFilter;
   };
   
-  // Filter and sort PBS instances
+  // Filter and sort PBS instances - but don't hide them when filtering, similar to PVE nodes
   const sortedInstances = createMemo(() => {
     if (!props.pbsInstances) return [];
     
     let instances = [...props.pbsInstances];
     
-    // If we have filtered backups in backups tab, only show PBS instances with matching backups
-    if (props.currentTab === 'backups' && props.filteredBackups !== undefined) {
-      const pbsWithBackups = new Set<string>();
-      
-      props.filteredBackups.forEach(b => {
-        // PBS backups can have node as the PBS instance name or 'PBS' generic
-        // Check if it's a PBS backup (has datastore or node is PBS instance)
-        if (b.datastore || b.node === 'PBS' || b.backupType === 'remote') {
-          if (b.node === 'PBS' || !b.node) {
-            // Generic PBS backup, show all PBS instances
-            props.pbsInstances?.forEach(pbs => pbsWithBackups.add(pbs.name));
-          } else if (props.pbsInstances?.some(pbs => pbs.name === b.node)) {
-            // Specific PBS instance
-            pbsWithBackups.add(b.node);
-          }
-        }
-      });
-      
-      // If we have any PBS backups, filter to matching instances
-      if (pbsWithBackups.size > 0) {
-        instances = instances.filter(pbs => pbsWithBackups.has(pbs.name));
-      } else {
-        // No PBS backups found in the filtered results, hide PBS table
-        instances = [];
-      }
-    }
+    // For PBS instances, always show all of them
+    // The selection/highlighting will indicate which one is filtered
+    // This keeps the PBS cards as a stable navigation element
     
     return instances.sort((a, b) => {
       // Healthy/online instances first

@@ -328,7 +328,7 @@ const Storage: Component = () => {
                             : 'p-0.5 px-1.5';
                           
                           return (
-                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}>
+                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`}>
                               <td class={firstCellClass}>
                                 <div class="flex items-center gap-2">
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">

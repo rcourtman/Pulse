@@ -27,6 +27,7 @@ export function Dashboard(props: DashboardProps) {
   const { connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -191,6 +192,14 @@ export function Dashboard(props: DashboardProps) {
   // Filter guests based on current settings
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
+
+    // Filter by selected node
+    const node = selectedNode();
+    console.log('Filtering guests - selected node:', node, 'total guests:', guests.length);
+    if (node) {
+      guests = guests.filter(g => g.node === node);
+      console.log('After node filter:', guests.length);
+    }
 
     // Filter by type
     if (viewMode() === 'vm') {
@@ -388,18 +397,15 @@ export function Dashboard(props: DashboardProps) {
 
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => {
-    if (nodeId && nodeType === 'pve') {
-      // Set search to filter by node
-      const nodeFilter = `node:${nodeId}`;
-      setSearch(nodeFilter);
-      setIsSearchLocked(true);
-      if (!showFilters()) {
+    console.log('handleNodeSelect called:', nodeId, nodeType);
+    // Track selected node for filtering
+    if (nodeType === 'pve' || nodeType === null) {
+      setSelectedNode(nodeId);
+      console.log('Set selected node to:', nodeId);
+      // Show filters if a node is selected
+      if (nodeId && !showFilters()) {
         setShowFilters(true);
       }
-    } else {
-      // Clear node filter
-      setSearch('');
-      setIsSearchLocked(false);
     }
   };
 
@@ -498,7 +504,7 @@ export function Dashboard(props: DashboardProps) {
                     
                     return (
                       <tr 
-                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                        class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${
                           isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}
                         onClick={() => {
@@ -817,7 +823,7 @@ export function Dashboard(props: DashboardProps) {
           </span>
           <span class="text-gray-400">|</span>
           <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-            <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+            <span class="h-2 w-2 bg-red-500 rounded-full"></span>
             {totalStats().stopped} stopped
           </span>
         </div>

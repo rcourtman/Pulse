@@ -27,16 +27,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               type="text"
               placeholder="Search by name, cpu>80, memory<20, tags:prod, node:pve1"
               value={props.search()}
-              onInput={(e) => {
-                if (!props.isSearchLocked()) {
-                  props.setSearch(e.currentTarget.value);
-                }
-              }}
-              disabled={props.isSearchLocked()}
+              onInput={(e) => props.setSearch(e.currentTarget.value)}
               class={`w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                     focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all
-                     ${props.isSearchLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                     focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
               title="Search guests or use filters like cpu>80"
             />
             <svg class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
