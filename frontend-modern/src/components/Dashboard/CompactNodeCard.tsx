@@ -42,7 +42,7 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
 
   // Mini progress bar for compact mode
   const MiniProgressBar = (props: { value: number; type: 'cpu' | 'mem' | 'disk' }) => (
-    <div class="w-20 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+    <div class="w-[80px] h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
       <div 
         class={`h-full transition-all ${
           props.value >= 90 ? 'bg-red-500' :
