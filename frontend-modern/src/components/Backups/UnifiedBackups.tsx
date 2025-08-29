@@ -493,14 +493,48 @@ const UnifiedBackups: Component = () => {
     return data;
   });
 
-  // Group by date
+  // Group by date or guest
   const groupedData = createMemo(() => {
-    // If sorting by time, show date groups
-    // Otherwise, show all items in a single group to preserve sort order
+    const mode = groupByMode();
+    const data = filteredData();
+    
+    // Group by guest mode
+    if (mode === 'guest') {
+      const groups: DateGroup[] = [];
+      const groupMap = new Map<string, UnifiedBackup[]>();
+      
+      // Group by VMID and name combination
+      data.forEach(item => {
+        // Create a unique key for each guest
+        const guestKey = `${item.type} ${item.vmid}${item.name ? ` - ${item.name}` : ''}`;
+        
+        if (!groupMap.has(guestKey)) {
+          groupMap.set(guestKey, []);
+        }
+        groupMap.get(guestKey)!.push(item);
+      });
+      
+      // Convert to array and sort by VMID
+      groupMap.forEach((items, label) => {
+        groups.push({ label, items });
+      });
+      
+      // Sort groups by VMID (extract from label)
+      groups.sort((a, b) => {
+        const vmidA = parseInt(a.label.match(/\d+/)?.[0] || '0');
+        const vmidB = parseInt(b.label.match(/\d+/)?.[0] || '0');
+        return vmidA - vmidB;
+      });
+      
+      return groups;
+    }
+    
+    // Group by date mode (default)
+    // If not sorting by time, show all items in a single group to preserve sort order
     if (sortKey() !== 'backupTime') {
       return [{
         label: 'All Backups',
-        items: filteredData()
+        items: data
       }];
     }
 
@@ -514,7 +548,7 @@ const UnifiedBackups: Component = () => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'];
 
-    filteredData().forEach(item => {
+    data.forEach(item => {
       const date = new Date(item.backupTime * 1000);
       const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       
