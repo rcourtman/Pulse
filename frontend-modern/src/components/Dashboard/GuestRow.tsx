@@ -155,7 +155,6 @@ export function GuestRow(props: GuestRowProps) {
         {props.guest.vmid}
       </td>
 
-
       {/* Node (optional) */}
       <Show when={props.showNode}>
         <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
