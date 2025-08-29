@@ -167,8 +167,7 @@ create_lxc_container() {
         echo "  1) Quick (recommended)"
         echo "  2) Advanced"  
         echo "  3) Cancel"
-        safe_read "Select [1-3]: " mode -n 1 -r
-        echo
+        safe_read_with_default "Select [1-3]: " mode "1"
     else
         # No terminal access - truly non-interactive
         echo "Non-interactive mode detected. Using Quick installation."
