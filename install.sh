@@ -895,6 +895,28 @@ setup_directories() {
     chmod 700 "$CONFIG_DIR"
 }
 
+setup_update_command() {
+    # Create or update the convenient update script
+    if [[ ! -f /usr/local/bin/update ]]; then
+        cat > /usr/local/bin/update << 'EOF'
+#!/bin/bash
+echo 'Updating Pulse...'
+curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+EOF
+        chmod +x /usr/local/bin/update
+    fi
+    
+    # Ensure /usr/local/bin is in PATH for all users
+    if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
+        echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/profile
+    fi
+    
+    # Also add to bash profile if it exists
+    if [[ -f /etc/bash.bashrc ]] && ! grep -q '/usr/local/bin' /etc/bash.bashrc 2>/dev/null; then
+        echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/bash.bashrc
+    fi
+}
+
 setup_auto_updates() {
     print_info "Setting up automatic updates..."
     
@@ -1138,6 +1160,7 @@ main() {
             systemctl stop $SERVICE_NAME || true
             create_user
             download_pulse
+            setup_update_command
             start_pulse
             print_completion
             return 0
@@ -1305,6 +1328,7 @@ main() {
                 systemctl stop $SERVICE_NAME || true
                 create_user
                 download_pulse
+                setup_update_command
                 
                 # Setup auto-updates if requested during update
                 if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
@@ -1337,6 +1361,7 @@ main() {
                 create_user
                 download_pulse
                 setup_directories
+                setup_update_command
                 install_systemd_service
                 
                 # Setup auto-updates if requested during reinstall
@@ -1443,6 +1468,7 @@ main() {
         create_user
         setup_directories
         download_pulse
+        setup_update_command
         install_systemd_service
         
         # Setup auto-updates if requested
@@ -1492,6 +1518,7 @@ uninstall_pulse() {
     rm -f /etc/systemd/system/pulse-update.timer
     rm -f /usr/local/bin/pulse
     rm -f /usr/local/bin/pulse-auto-update.sh
+    rm -f /usr/local/bin/update
     
     # Remove user (if it exists and isn't being used by other services)
     if id "pulse" &>/dev/null; then
