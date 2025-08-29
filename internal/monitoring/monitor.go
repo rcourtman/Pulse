@@ -2116,18 +2116,12 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 }
 
-// getMockState returns mock data when mock mode is enabled
-func getMockState() *models.StateSnapshot {
-	// Mock support removed from production builds
-	return nil
-}
-
 // GetState returns the current state
 func (m *Monitor) GetState() models.StateSnapshot {
 	// Check if mock mode is enabled
 	if os.Getenv("PULSE_MOCK_MODE") == "true" {
-		// Import mock package and return mock data
-		if mockData := getMockState(); mockData != nil {
+		// Try to get mock data if compiled with mock support
+		if mockData := tryGetMockState(); mockData != nil {
 			return *mockData
 		}
 	}

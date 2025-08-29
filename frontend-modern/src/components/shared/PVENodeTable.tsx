@@ -124,6 +124,9 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 100px;">
                 Cluster
               </th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                Version
+              </th>
               <For each={getCountHeaders()}>
                 {(header) => (
                   <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 80px;">
@@ -193,6 +196,13 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                     <td class="p-1 px-2">
                       <span class="text-xs text-gray-600 dark:text-gray-400 block truncate" title={node.clusterName || ''}>
                         {node.clusterName || '-'}
+                      </span>
+                    </td>
+                    <td class="p-1 px-2">
+                      <span class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap" title={node.pveVersion || ''}>
+                        <Show when={node.pveVersion} fallback="-">
+                          {node.pveVersion.split('/')[1] || node.pveVersion}
+                        </Show>
                       </span>
                     </td>
                     <For each={counts}>

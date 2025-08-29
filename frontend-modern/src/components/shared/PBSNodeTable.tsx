@@ -75,6 +75,9 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 80px;">
                 Status
               </th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                Version
+              </th>
               <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 100px;">
                 Datastores
               </th>
@@ -180,6 +183,13 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         {pbs.status}
                       </span>
                     </td>
+                    <td class="p-1 px-2">
+                      <span class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        <Show when={pbs.version} fallback="-">
+                          {pbs.version}
+                        </Show>
+                      </span>
+                    </td>
                     <td class="p-1 px-2 text-center">
                       <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
                         {pbs.datastores?.length || 0}
@@ -235,7 +245,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                         <>
                           {/* Datastore row */}
                           <tr class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700/30">
-                            <td colspan="8" class="px-8 py-1">
+                            <td colspan="9" class="px-8 py-1">
                               <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                   <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -286,7 +296,7 @@ export const PBSNodeTable: Component<PBSNodeTableProps> = (props) => {
                                       }
                                     }}
                                   >
-                                    <td colspan="8" class="px-12 py-0.5">
+                                    <td colspan="9" class="px-12 py-0.5">
                                       <div class="flex items-center gap-2">
                                         <svg 
                                           class={`w-3 h-3 ${isSelected() ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} 
