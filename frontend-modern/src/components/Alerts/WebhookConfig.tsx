@@ -220,7 +220,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       class={`p-3 text-left rounded-lg border transition-all ${
                         formData().service === service
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30'
                       }`}
                     >
                       <div class="font-medium text-sm text-gray-800 dark:text-gray-200">

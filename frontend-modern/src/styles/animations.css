@@ -191,3 +191,20 @@
     transform: translate(-50%, -50%) scale(1.5);
   }
 }
+/* Node row click animation */
+@keyframes nodeClick {
+  0% { 
+    transform: scale(1);
+  }
+  50% { 
+    transform: scale(0.98);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  100% { 
+    transform: scale(1);
+  }
+}
+
+.node-click {
+  animation: nodeClick 0.15s ease-out;
+}

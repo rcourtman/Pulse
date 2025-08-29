@@ -161,7 +161,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 return (
                   <tr 
-                    class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                    class={`hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors ${
                       isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}

@@ -325,7 +325,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                         <For each={discoveryResult()!.servers}>
                           {(server) => (
                             <div
-                              class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 group"
+                              class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700/30 group"
                               onClick={() => handleAddServer(server)}
                             >
                               <div class="flex items-start justify-between">

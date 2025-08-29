@@ -36,10 +36,10 @@ const Tooltip: Component<TooltipProps> = (props) => {
       
       // Calculate position to keep tooltip on screen
       const rect = tooltipRef.getBoundingClientRect();
-      const padding = 10;
+      const padding = 20; // Increased padding for better separation
       
       let x = props.x + padding;
-      let y = props.y - rect.height - padding;
+      let y = props.y - rect.height - padding - 10; // Extra 10px vertical separation
       
       // Keep within viewport
       if (x + rect.width > window.innerWidth) {
