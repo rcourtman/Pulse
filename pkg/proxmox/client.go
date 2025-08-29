@@ -262,8 +262,19 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		
-		// Create base error
-		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		// Create base error with helpful guidance for common issues
+		var err error
+		if resp.StatusCode == 403 && c.config.TokenName != "" {
+			// Special case for 403 with API token - this is usually a permission issue
+			err = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
+		} else if resp.StatusCode == 595 {
+			// 595 is Proxmox "no ticket" error - usually means authentication failed
+			err = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
+		} else if resp.StatusCode == 401 {
+			err = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
+		} else {
+			err = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		}
 		
 		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
 		if resp.StatusCode == 595 || resp.StatusCode == 401 || resp.StatusCode == 403 {
