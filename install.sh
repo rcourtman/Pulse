@@ -18,6 +18,23 @@ CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
 SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
 
+# Wrapper for systemctl commands that might hang in unprivileged containers
+safe_systemctl() {
+    local action="$1"
+    shift
+    timeout 5 systemctl "$action" "$@" 2>/dev/null || {
+        if [[ "$action" == "daemon-reload" ]]; then
+            # daemon-reload hanging is common in unprivileged containers, silent fail is OK
+            return 0
+        elif [[ "$action" == "start" || "$action" == "enable" ]]; then
+            print_info "Note: systemctl $action failed (may be in unprivileged container)"
+            return 1
+        else
+            return 1
+        fi
+    }
+}
+
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
     if systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
@@ -1067,9 +1084,9 @@ download_pulse() {
     
     # Detect and stop existing service BEFORE downloading (to free the binary)
     EXISTING_SERVICE=$(detect_service_name)
-    if systemctl is-active --quiet $EXISTING_SERVICE; then
+    if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
         print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-        systemctl stop $EXISTING_SERVICE
+        safe_systemctl stop $EXISTING_SERVICE || true
         sleep 2  # Give the process time to fully stop and release the binary
     fi
     
@@ -1217,10 +1234,11 @@ AccuracySec=1h
 WantedBy=timers.target
 EOF
 
-    systemctl daemon-reload >/dev/null 2>&1
+    # Reload systemd daemon
+    safe_systemctl daemon-reload
     
-    # Enable timer but don't start it yet
-    systemctl enable pulse-update.timer >/dev/null 2>&1
+    # Enable timer but don't start it yet  
+    safe_systemctl enable pulse-update.timer || true
     
     # Update system.json to enable auto-updates
     if [[ -f "$CONFIG_DIR/system.json" ]]; then
@@ -1241,7 +1259,7 @@ EOF
     chown pulse:pulse "$CONFIG_DIR/system.json" 2>/dev/null || true
     
     # Start the timer
-    systemctl start pulse-update.timer >/dev/null 2>&1
+    safe_systemctl start pulse-update.timer || true
     
     print_success "Automatic updates enabled (daily check with 2-6 hour random delay)"
 }
@@ -1296,23 +1314,34 @@ ReadWritePaths=$INSTALL_DIR $CONFIG_DIR
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload >/dev/null 2>&1
+    # Reload systemd daemon
+    safe_systemctl daemon-reload
 }
 
 start_pulse() {
     print_info "Starting Pulse..."
-    systemctl enable $SERVICE_NAME >/dev/null 2>&1
-    systemctl start $SERVICE_NAME
+    
+    # Try to enable/start service (may fail in unprivileged containers)
+    if ! safe_systemctl enable $SERVICE_NAME; then
+        print_info "Note: systemctl enable failed (common in unprivileged containers)"
+    fi
+    
+    if ! safe_systemctl start $SERVICE_NAME; then
+        print_info "Note: systemctl start failed (common in unprivileged containers)"
+        print_info "The service will start automatically when the container starts"
+        return 0
+    fi
     
     # Wait for service to start
     sleep 3
     
-    if systemctl is-active --quiet $SERVICE_NAME; then
+    if timeout 5 systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
         print_success "Pulse started successfully"
     else
         print_error "Failed to start Pulse"
-        journalctl -u $SERVICE_NAME -n 20
-        exit 1
+        journalctl -u $SERVICE_NAME -n 20 2>/dev/null || true
+        # Don't exit, just warn
+        print_info "Service may not be running. You might need to start it manually."
     fi
 }
 
@@ -1618,7 +1647,8 @@ main() {
                 rm -f /etc/systemd/system/$SERVICE_NAME.service
                 rm -f /etc/systemd/system/pulse.service
                 rm -f /etc/systemd/system/pulse-backend.service
-                systemctl daemon-reload >/dev/null 2>&1
+                # Reload systemd daemon
+    safe_systemctl daemon-reload
                 
                 # Remove installation directory
                 rm -rf "$INSTALL_DIR"
@@ -2125,7 +2155,8 @@ mainmain() {
                 rm -f /etc/systemd/system/$SERVICE_NAME.service
                 rm -f /etc/systemd/system/pulse.service
                 rm -f /etc/systemd/system/pulse-backend.service
-                systemctl daemon-reload >/dev/null 2>&1
+                # Reload systemd daemon
+    safe_systemctl daemon-reload
                 
                 # Remove installation directory
                 rm -rf "$INSTALL_DIR"
