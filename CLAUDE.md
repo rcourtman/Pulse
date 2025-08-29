@@ -520,6 +520,18 @@ When fixing security-related issues:
 - Systemd services cannot restart without privileges
 This design is intentional and should not be "fixed" - it ensures proper security boundaries.
 
+## CRITICAL: Remove Redundant Code
+**ALWAYS remove old/redundant code when refactoring or consolidating:**
+- **Check for duplicate components** - If you update one component, check if there are others doing the same thing
+- **Delete unused files immediately** - Don't leave old versions lying around
+- **Search for imports** - Before deleting, ensure no other files import it
+- **Common patterns to watch for**:
+  - Multiple components with similar names (e.g., PVENodeTable vs NodeSummaryTable)
+  - Old implementations left behind after refactoring
+  - Duplicate utility functions in different files
+- **Why this matters**: Leaving redundant code causes bugs where you update one file but the app uses another
+- **Example**: We just had PVENodeTable, PBSNodeTable, and NodeSummaryTable all doing the same thing
+
 ## Important Instructions
 - **NEVER create documentation files** (*.md) unless explicitly requested by the user
 - **NEVER create README files** or other docs to explain changes - just explain in the response
