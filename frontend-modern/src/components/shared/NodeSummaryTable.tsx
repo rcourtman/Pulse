@@ -173,7 +173,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 return (
                   <tr 
-                    class={`cursor-pointer transition-colors ${
+                    class={`cursor-pointer transition-all duration-150 hover:-translate-y-px hover:shadow-md ${
                       isSelected() 
                         ? 'bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
