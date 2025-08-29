@@ -21,7 +21,6 @@ export function IOMetric(props: IOMetricProps) {
     const newValue = getValue() || 0;
     const oldValue = currentValue();
     if (newValue !== oldValue) {
-      console.log('[IOMetric] Value change detected:', oldValue, '->', newValue, formatSpeed(newValue, 0));
       setCurrentValue(newValue);
     }
   });
