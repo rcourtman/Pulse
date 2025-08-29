@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, createMemo } from 'solid-js';
+import { Component, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
 
@@ -18,6 +18,21 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   const { state } = useWebSocket();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   
+  // Handle ESC key to deselect node
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && selectedNode()) {
+      setSelectedNode(null);
+      props.onNodeSelect?.(null, null);
+    }
+  };
+  
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+  
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
   
   // Reset selection when tab changes
   createEffect(() => {
