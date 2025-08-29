@@ -734,7 +734,9 @@ create_lxc_container() {
     CREATE_CMD="$CREATE_CMD --swap $swap"
     
     if [[ -n "$nameserver" ]]; then
-        CREATE_CMD="$CREATE_CMD --nameserver $nameserver"
+        # Convert comma-separated to space-separated for Proxmox
+        nameserver="${nameserver//,/ }"
+        CREATE_CMD="$CREATE_CMD --nameserver '$nameserver'"
     fi
     
     # Execute container creation (suppress verbose output)
