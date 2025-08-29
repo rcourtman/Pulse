@@ -320,33 +320,95 @@ create_lxc_container() {
         # Show available bridges
         echo
         if [[ -n "$BRIDGES" ]]; then
-            echo "Available network bridges: $BRIDGES"
+            echo "Available network bridges:"
+            local bridge_array=($BRIDGES)
+            local default_idx=0
+            for i in "${!bridge_array[@]}"; do
+                local idx=$((i+1))
+                echo "  $idx) ${bridge_array[$i]}"
+                if [[ "${bridge_array[$i]}" == "$DEFAULT_BRIDGE" ]]; then
+                    default_idx=$idx
+                fi
+            done
+            
+            set +e
+            safe_read "Select network bridge [${default_idx}]: " bridge_choice
+            local read_result=$?
+            set -e
+            
+            if [[ $read_result -eq 0 ]]; then
+                bridge_choice=${bridge_choice:-$default_idx}
+                if [[ "$bridge_choice" =~ ^[0-9]+$ ]] && [[ "$bridge_choice" -ge 1 ]] && [[ "$bridge_choice" -le ${#bridge_array[@]} ]]; then
+                    bridge="${bridge_array[$((bridge_choice-1))]}"
+                elif [[ -n "$bridge_choice" ]]; then
+                    # User typed a bridge name directly
+                    bridge="$bridge_choice"
+                else
+                    bridge="$DEFAULT_BRIDGE"
+                fi
+            else
+                # Non-interactive, use default
+                bridge="$DEFAULT_BRIDGE"
+            fi
         else
             echo "No network bridges detected"
-            echo "You may need to create a bridge first (e.g., vmbr0) or use the host's network interface"
-        fi
-        
-        # If no valid default bridge, warn the user
-        if [[ "$DEFAULT_BRIDGE" == "vmbr0" && ! -z "$BRIDGES" && ! "$BRIDGES" =~ vmbr0 ]]; then
-            print_info "Warning: vmbr0 does not exist on this system"
-            print_info "Please enter one of the available bridges: $BRIDGES"
-            safe_read "Network bridge: " bridge
-        else
-            safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
-            bridge=${bridge:-$DEFAULT_BRIDGE}
+            echo "You may need to create a bridge first (e.g., vmbr0)"
+            set +e
+            safe_read "Enter network bridge name: " bridge
+            set -e
         fi
         
         # Show available storage with usage details
         echo
-        echo "Available storage pools:"
-        echo "$STORAGE_INFO" | awk '{
-            # Convert KB to GB for readability
-            avail_gb = $6 / 1048576
-            total_gb = $4 / 1048576
-            printf "  %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n", $1, $2, avail_gb, total_gb, $7
-        }' || echo "  No storage pools found"
-        safe_read "Storage [$DEFAULT_STORAGE]: " storage
-        storage=${storage:-$DEFAULT_STORAGE}
+        if [[ -n "$STORAGE_INFO" ]]; then
+            echo "Available storage pools:"
+            local storage_names=()
+            local default_idx=0
+            local idx=1
+            
+            while IFS= read -r line; do
+                local storage_name=$(echo "$line" | awk '{print $1}')
+                local storage_type=$(echo "$line" | awk '{print $2}')
+                local avail_gb=$(echo "$line" | awk '{print $6/1048576}')
+                local total_gb=$(echo "$line" | awk '{print $4/1048576}')
+                local used_pct=$(echo "$line" | awk '{print $7}')
+                
+                storage_names+=("$storage_name")
+                printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
+                    "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
+                
+                if [[ "$storage_name" == "$DEFAULT_STORAGE" ]]; then
+                    default_idx=$idx
+                fi
+                ((idx++))
+            done <<< "$STORAGE_INFO"
+            
+            set +e
+            safe_read "Select storage pool [${default_idx}]: " storage_choice
+            local read_result=$?
+            set -e
+            
+            if [[ $read_result -eq 0 ]]; then
+                storage_choice=${storage_choice:-$default_idx}
+                if [[ "$storage_choice" =~ ^[0-9]+$ ]] && [[ "$storage_choice" -ge 1 ]] && [[ "$storage_choice" -le ${#storage_names[@]} ]]; then
+                    storage="${storage_names[$((storage_choice-1))]}"
+                elif [[ -n "$storage_choice" ]]; then
+                    # User typed a storage name directly
+                    storage="$storage_choice"
+                else
+                    storage="$DEFAULT_STORAGE"
+                fi
+            else
+                # Non-interactive, use default
+                storage="$DEFAULT_STORAGE"
+            fi
+        else
+            echo "  No storage pools found"
+            set +e
+            safe_read "Enter storage pool name [$DEFAULT_STORAGE]: " storage
+            set -e
+            storage=${storage:-$DEFAULT_STORAGE}
+        fi
         
         safe_read "Static IP (leave empty for DHCP): " static_ip
         
@@ -382,49 +444,103 @@ create_lxc_container() {
         # Network bridge selection
         echo
         if [[ -n "$BRIDGES" ]]; then
-            echo "Available network bridges: $BRIDGES"
+            echo "Available network bridges:"
+            local bridge_array=($BRIDGES)
+            local default_idx=0
+            for i in "${!bridge_array[@]}"; do
+                local idx=$((i+1))
+                echo "  $idx) ${bridge_array[$i]}"
+                if [[ "${bridge_array[$i]}" == "$DEFAULT_BRIDGE" ]]; then
+                    default_idx=$idx
+                fi
+            done
+            
+            if [[ ${#bridge_array[@]} -eq 1 ]]; then
+                # Only one bridge available, use it
+                bridge="${bridge_array[0]}"
+                print_info "Using network bridge: $bridge"
+            else
+                set +e
+                safe_read "Select network bridge [${default_idx}]: " bridge_choice
+                local read_result=$?
+                set -e
+                
+                if [[ $read_result -eq 0 ]]; then
+                    bridge_choice=${bridge_choice:-$default_idx}
+                    if [[ "$bridge_choice" =~ ^[0-9]+$ ]] && [[ "$bridge_choice" -ge 1 ]] && [[ "$bridge_choice" -le ${#bridge_array[@]} ]]; then
+                        bridge="${bridge_array[$((bridge_choice-1))]}"
+                    else
+                        bridge="$DEFAULT_BRIDGE"
+                        print_info "Invalid selection, using default: $bridge"
+                    fi
+                else
+                    # Non-interactive, use default
+                    bridge="$DEFAULT_BRIDGE"
+                fi
+            fi
         else
-            echo "No network bridges detected"
-        fi
-        
-        # Always ask if default doesn't exist or no bridges found
-        if [[ "$DEFAULT_BRIDGE" == "vmbr0" && -n "$BRIDGES" && ! "$BRIDGES" =~ vmbr0 ]]; then
-            print_info "Default bridge vmbr0 not found"
-            safe_read "Select network bridge: " bridge
-        elif [[ -z "$BRIDGES" ]]; then
             print_error "No network bridges detected on this system"
             print_info "You may need to create a bridge first (e.g., vmbr0)"
+            set +e
             safe_read "Enter network bridge name to use: " bridge
-        else
-            safe_read "Network bridge [$DEFAULT_BRIDGE]: " bridge
-            bridge=${bridge:-$DEFAULT_BRIDGE}
+            set -e
         fi
         
         # Storage selection
         echo
         if [[ -n "$STORAGE_INFO" ]]; then
             echo "Available storage pools:"
-            echo "$STORAGE_INFO" | awk '{
-                # Convert KB to GB for readability
-                avail_gb = $6 / 1048576
-                total_gb = $4 / 1048576
-                printf "  %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n", $1, $2, avail_gb, total_gb, $7
-            }'
+            # Create arrays for storage info
+            local storage_names=()
+            local storage_info_lines=()
+            local default_idx=0
+            local idx=1
+            
+            while IFS= read -r line; do
+                local storage_name=$(echo "$line" | awk '{print $1}')
+                local storage_type=$(echo "$line" | awk '{print $2}')
+                local avail_gb=$(echo "$line" | awk '{print $6/1048576}')
+                local total_gb=$(echo "$line" | awk '{print $4/1048576}')
+                local used_pct=$(echo "$line" | awk '{print $7}')
+                
+                storage_names+=("$storage_name")
+                printf "  %d) %-15s %-8s %6.1f GB free of %6.1f GB (%s used)\n" \
+                    "$idx" "$storage_name" "$storage_type" "$avail_gb" "$total_gb" "$used_pct"
+                
+                if [[ "$storage_name" == "$DEFAULT_STORAGE" ]]; then
+                    default_idx=$idx
+                fi
+                ((idx++))
+            done <<< "$STORAGE_INFO"
+            
+            if [[ ${#storage_names[@]} -eq 1 ]]; then
+                # Only one storage available, use it
+                storage="${storage_names[0]}"
+                print_info "Using storage pool: $storage"
+            else
+                set +e
+                safe_read "Select storage pool [${default_idx}]: " storage_choice
+                local read_result=$?
+                set -e
+                
+                if [[ $read_result -eq 0 ]]; then
+                    storage_choice=${storage_choice:-$default_idx}
+                    if [[ "$storage_choice" =~ ^[0-9]+$ ]] && [[ "$storage_choice" -ge 1 ]] && [[ "$storage_choice" -le ${#storage_names[@]} ]]; then
+                        storage="${storage_names[$((storage_choice-1))]}"
+                    else
+                        storage="$DEFAULT_STORAGE"
+                        print_info "Invalid selection, using default: $storage"
+                    fi
+                else
+                    # Non-interactive, use default
+                    storage="$DEFAULT_STORAGE"
+                fi
+            fi
         else
-            echo "No storage pools detected"
-        fi
-        
-        # Always ask if default doesn't exist
-        local STORAGE_LIST=$(echo "$STORAGE_INFO" | awk '{print $1}' | paste -sd',' -)
-        if [[ "$DEFAULT_STORAGE" == "local-lvm" && -n "$STORAGE_LIST" && ! "$STORAGE_LIST" =~ local-lvm ]]; then
-            print_info "Default storage local-lvm not found"
-            safe_read "Select storage pool: " storage
-        elif [[ -z "$STORAGE_INFO" ]]; then
             print_error "No storage pools detected"
+            set +e
             safe_read "Enter storage pool name to use: " storage
-        else
-            safe_read "Storage [$DEFAULT_STORAGE]: " storage
-            storage=${storage:-$DEFAULT_STORAGE}
+            set -e
         fi
         
         static_ip=""
