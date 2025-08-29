@@ -16,7 +16,6 @@ const isVM = (guest: Guest): guest is VM => {
 
 interface GuestRowProps {
   guest: Guest;
-  showNode?: boolean;
   alertStyles?: {
     rowClass: string;
     indicatorClass: string;
@@ -155,12 +154,6 @@ export function GuestRow(props: GuestRowProps) {
         {props.guest.vmid}
       </td>
 
-      {/* Node (only in list view) */}
-      <Show when={props.showNode}>
-        <td class="p-1 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-          {props.guest.node}
-        </td>
-      </Show>
 
       {/* Uptime */}
       <td class={`p-1 px-2 text-sm whitespace-nowrap ${
