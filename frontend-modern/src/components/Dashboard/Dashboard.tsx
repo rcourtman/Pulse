@@ -144,9 +144,13 @@ export function Dashboard(props: DashboardProps) {
       
       // Escape key behavior
       if (e.key === 'Escape') {
-        // First check if we have search/filters to clear
-        if (search().trim() || sortKey() !== 'vmid' || sortDirection() !== 'asc') {
-          // Clear search and reset filters
+        // First check if we have search/filters to clear (including tag filters)
+        const hasActiveFilters = search().trim() || 
+                                sortKey() !== 'vmid' || 
+                                sortDirection() !== 'asc';
+        
+        if (hasActiveFilters) {
+          // Clear ALL filters including search text and tag filters
           setSearch('');
           setIsSearchLocked(false);
           setSortKey('vmid');
