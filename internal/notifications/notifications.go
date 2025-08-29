@@ -1125,7 +1125,7 @@ func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 		ResourceID:   "webhook-test",
 		ResourceName: "Test Alert",
 		Node:         "test-node",
-		Instance:     "pulse-monitoring",
+		Instance:     "http://your-pulse-instance:7655", // Placeholder URL for test webhooks
 		Message:      fmt.Sprintf("This is a test alert from Pulse to verify your %s webhook is working correctly", webhook.Name),
 		Value:        85.5,
 		Threshold:    80.0,
