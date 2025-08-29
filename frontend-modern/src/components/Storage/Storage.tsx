@@ -123,20 +123,6 @@ const Storage: Component = () => {
     // setSortDirection('asc');
   };
   
-  const getTotalByNode = (storages: StorageType[]) => {
-    const totals = { used: 0, total: 0, free: 0 };
-    storages.forEach(s => {
-      totals.used += s.used || 0;
-      totals.total += s.total || 0;
-      totals.free += s.free || 0;
-    });
-    return totals;
-  };
-  
-  const calculateOverallUsage = (storages: StorageType[]) => {
-    const totals = getTotalByNode(storages);
-    return totals.total > 0 ? (totals.used / totals.total * 100) : 0;
-  };
   
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;
@@ -281,7 +267,7 @@ const Storage: Component = () => {
                       {/* Group Header */}
                       <Show when={viewMode() === 'node'}>
                         <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                          <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                          <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400" colspan="9">
                             <a 
                               href={nodeHostMap()[groupName] || (groupName.includes(':') ? `https://${groupName}` : `https://${groupName}:8006`)} 
                               target="_blank" 
@@ -291,13 +277,6 @@ const Storage: Component = () => {
                             >
                               {groupName}
                             </a>
-                          </td>
-                          <td class="p-0.5 px-1.5 text-[10px] text-gray-500 dark:text-gray-400" colspan="8">
-                            {getTotalByNode(storages).total > 0 && (
-                              <span>
-                                {formatBytes(getTotalByNode(storages).used)} / {formatBytes(getTotalByNode(storages).total)} ({calculateOverallUsage(storages).toFixed(1)}%)
-                              </span>
-                            )}
                           </td>
                         </tr>
                       </Show>
