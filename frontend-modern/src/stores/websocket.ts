@@ -326,6 +326,13 @@ export function createWebSocketStore(url: string) {
       window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0; // Reset attempts for manual reconnect
       connect();
+    },
+    // Method to update an alert locally (e.g., after acknowledgment)
+    updateAlert: (alertId: string, updates: Partial<Alert>) => {
+      const existingAlert = activeAlerts[alertId];
+      if (existingAlert) {
+        setActiveAlerts(alertId, { ...existingAlert, ...updates });
+      }
     }
   };
 }

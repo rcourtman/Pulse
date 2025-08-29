@@ -87,7 +87,7 @@ interface UIEmailConfig {
 }
 
 export function Alerts() {
-  const { state, activeAlerts } = useWebSocket();
+  const { state, activeAlerts, updateAlert } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   
@@ -644,6 +644,7 @@ export function Alerts() {
             <OverviewTab 
               overrides={overrides()} 
               activeAlerts={activeAlerts}
+              updateAlert={updateAlert}
               showQuickTip={showQuickTip}
               dismissQuickTip={dismissQuickTip}
             />
@@ -718,6 +719,7 @@ export function Alerts() {
 function OverviewTab(props: { 
   overrides: Override[]; 
   activeAlerts: Record<string, Alert>;
+  updateAlert: (alertId: string, updates: Partial<Alert>) => void;
   showQuickTip: () => boolean;
   dismissQuickTip: () => void;
 }) {
@@ -778,6 +780,13 @@ function OverviewTab(props: {
       const response = await AlertsAPI.bulkAcknowledge(selected);
       const successCount = response.results.filter(r => r.success).length;
       const errorCount = response.results.filter(r => !r.success).length;
+      
+      // Update local state for successfully acknowledged alerts
+      response.results.forEach((result: any) => {
+        if (result.success) {
+          props.updateAlert(result.id, { acknowledged: true });
+        }
+      });
       
       if (successCount > 0) {
         showSuccess(`Acknowledged ${successCount} alert${successCount > 1 ? 's' : ''}`);
@@ -984,6 +993,8 @@ function OverviewTab(props: {
                             setProcessingAlerts(prev => new Set(prev).add(alert.id));
                             try {
                               await AlertsAPI.acknowledge(alert.id);
+                              // Update the local state immediately
+                              props.updateAlert(alert.id, { acknowledged: true });
                               showSuccess('Alert acknowledged');
                             } catch (err) {
                               console.error('Failed to acknowledge alert:', err);
