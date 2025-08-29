@@ -224,6 +224,16 @@ create_lxc_container() {
         fi
         
         echo
+        # Ask about auto-updates
+        echo "Enable automatic updates?"
+        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+        safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+        local auto_updates_flag=""
+        if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+            auto_updates_flag="--enable-auto-updates"
+        fi
+        
+        echo
         # Try to get cluster-wide IDs, fall back to local
         local USED_IDS=""
         if command -v pvesh &>/dev/null; then
@@ -319,6 +329,7 @@ create_lxc_container() {
         firewall=1
         unprivileged=1
         frontend_port=7655
+        auto_updates_flag=""  # Quick mode defaults to no auto-updates
     fi
     
     # Get available network bridges
@@ -855,6 +866,9 @@ EOF
     
     # Run installation with visible progress
     local install_cmd="bash /tmp/install.sh --in-container"
+    if [[ -n "$auto_updates_flag" ]]; then
+        install_cmd="$install_cmd $auto_updates_flag"
+    fi
     if [[ "$frontend_port" != "7655" ]]; then
         install_cmd="FRONTEND_PORT=$frontend_port $install_cmd"
     fi
@@ -1575,7 +1589,7 @@ main() {
                 
                 # Check if auto-updates are not installed yet (upgrading from older version)
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1607,7 +1621,7 @@ main() {
             reinstall)
                 # Check if auto-updates are not installed yet
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1718,7 +1732,7 @@ main() {
             fi
             
             # Ask about auto-updates for fresh installation (unless forced by flag or in Docker/container)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
@@ -2083,7 +2097,7 @@ mainmain() {
                 
                 # Check if auto-updates are not installed yet (upgrading from older version)
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -2115,7 +2129,7 @@ mainmain() {
             reinstall)
                 # Check if auto-updates are not installed yet
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -2226,7 +2240,7 @@ mainmain() {
             fi
             
             # Ask about auto-updates for fresh installation (unless forced by flag or in Docker)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
