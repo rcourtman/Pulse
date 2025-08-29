@@ -228,7 +228,7 @@ create_lxc_container() {
         echo "Enable automatic updates?"
         echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
         safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
-        local auto_updates_flag=""
+        auto_updates_flag=""
         if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
             auto_updates_flag="--enable-auto-updates"
         fi
@@ -329,7 +329,15 @@ create_lxc_container() {
         firewall=1
         unprivileged=1
         frontend_port=7655
-        auto_updates_flag=""  # Quick mode defaults to no auto-updates
+        # Quick mode should ask about auto-updates too
+        echo
+        echo "Enable automatic updates?"
+        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+        safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+        auto_updates_flag=""
+        if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+            auto_updates_flag="--enable-auto-updates"
+        fi
     fi
     
     # Get available network bridges
