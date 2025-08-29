@@ -39,6 +39,20 @@ var appNames = []string{
 	"syncthing", "seafile", "owncloud", "minio", "sftp",
 }
 
+// Common tags used for VMs and containers
+var commonTags = []string{
+	"production", "staging", "development", "testing",
+	"web", "database", "cache", "queue", "storage",
+	"frontend", "backend", "api", "microservice",
+	"docker", "kubernetes", "monitoring", "logging",
+	"backup", "critical", "important", "experimental",
+	"media", "gaming", "home", "automation",
+	"public", "private", "dmz", "internal",
+	"linux", "windows", "debian", "ubuntu", "alpine",
+	"managed", "unmanaged", "legacy", "deprecated",
+	"team-a", "team-b", "customer-1", "project-x",
+}
+
 func GenerateMockData(config MockConfig) models.StateSnapshot {
 	rand.Seed(time.Now().UnixNano())
 	
@@ -392,6 +406,7 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 		NetworkOut: generateRealisticIO("network-out"),
 		Uptime:     uptime,
 		ID:         fmt.Sprintf("%s:qemu/%d", nodeName, vmid),
+		Tags:       generateTags(),
 	}
 }
 
@@ -444,11 +459,36 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 		NetworkOut: generateRealisticIO("network-out-ct"),
 		Uptime:     uptime,
 		ID:         fmt.Sprintf("%s:lxc/%d", nodeName, vmid),
+		Tags:       generateTags(),
 	}
 }
 
 func generateGuestName(prefix string) string {
 	return fmt.Sprintf("%s-%s-%d", prefix, appNames[rand.Intn(len(appNames))], rand.Intn(100))
+}
+
+// generateTags generates random tags for a guest
+func generateTags() []string {
+	// 30% chance of no tags
+	if rand.Float64() < 0.3 {
+		return []string{}
+	}
+	
+	// Generate 1-4 tags
+	numTags := 1 + rand.Intn(4)
+	tags := make([]string, 0, numTags)
+	usedTags := make(map[string]bool)
+	
+	for len(tags) < numTags {
+		tag := commonTags[rand.Intn(len(commonTags))]
+		// Avoid duplicate tags
+		if !usedTags[tag] {
+			tags = append(tags, tag)
+			usedTags[tag] = true
+		}
+	}
+	
+	return tags
 }
 
 // GenerateAlerts generates random alerts for testing
