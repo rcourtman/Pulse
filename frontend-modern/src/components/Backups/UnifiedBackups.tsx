@@ -1006,14 +1006,14 @@ const UnifiedBackups: Component = () => {
                             </span>
                           </div>
                         </td>
-                        <td class="p-0.5 px-1.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 min-w-[180px]">
                           <MetricBar 
                             value={cpuPercent()} 
                             label={`${cpuPercent()}%`}
                             type="cpu"
                           />
                         </td>
-                        <td class="p-0.5 px-1.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 min-w-[180px]">
                           <MetricBar 
                             value={memPercent()} 
                             label={`${memPercent()}%`}
@@ -1021,7 +1021,7 @@ const UnifiedBackups: Component = () => {
                             type="memory"
                           />
                         </td>
-                        <td class="p-0.5 px-1.5 w-[180px]">
+                        <td class="p-0.5 px-1.5 min-w-[180px]">
                           <MetricBar 
                             value={storage.percent} 
                             label={`${storage.percent}%`}

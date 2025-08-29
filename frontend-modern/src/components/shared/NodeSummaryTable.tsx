@@ -106,16 +106,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-20">Status</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-24">Uptime</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">CPU</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">Memory</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20">Status</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24">Uptime</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">CPU</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">Memory</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-16">{header}</th>
+                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-16">{header}</th>
                 )}
               </For>
             </tr>
