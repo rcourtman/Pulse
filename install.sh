@@ -67,6 +67,39 @@ safe_read() {
     fi
 }
 
+# Wrapper that handles safe_read with automatic error handling
+safe_read_with_default() {
+    local prompt="$1"
+    local var_name="$2"
+    local default_value="$3"
+    shift 3
+    local read_args="$@"
+    
+    # Temporarily disable errexit
+    set +e
+    safe_read "$prompt" "$var_name" $read_args
+    local read_result=$?
+    set -e
+    
+    if [[ $read_result -ne 0 ]]; then
+        # Failed to read - use default
+        eval "$var_name='$default_value'"
+        if [[ -n "$default_value" ]]; then
+            print_info "Using default: $default_value"
+        fi
+        return 1
+    fi
+    
+    # Check if empty and use default
+    local current_value
+    eval "current_value=\$$var_name"
+    if [[ -z "$current_value" ]]; then
+        eval "$var_name='$default_value'"
+    fi
+    
+    return 0
+}
+
 print_error() {
     echo -e "${RED}[ERROR] $1${NC}" >&2
 }
@@ -167,8 +200,7 @@ create_lxc_container() {
     if [[ "$ADVANCED_MODE" == "true" ]]; then
         echo
         # Ask for port configuration
-        safe_read "Frontend port [7655]: " frontend_port
-        frontend_port=${frontend_port:-7655}
+        safe_read_with_default "Frontend port [7655]: " frontend_port "7655"
         if [[ ! "$frontend_port" =~ ^[0-9]+$ ]] || [[ "$frontend_port" -lt 1 ]] || [[ "$frontend_port" -gt 65535 ]]; then
             print_error "Invalid port number. Using default port 7655."
             frontend_port=7655
@@ -194,8 +226,8 @@ create_lxc_container() {
         fi
         
         echo "Container/VM IDs in use: ${USED_IDS:-none}"
-        safe_read "Container ID [$CTID]: " custom_ctid
-        if [[ -n "$custom_ctid" ]] && [[ "$custom_ctid" =~ ^[0-9]+$ ]]; then
+        safe_read_with_default "Container ID [$CTID]: " custom_ctid "$CTID"
+        if [[ "$custom_ctid" != "$CTID" ]] && [[ "$custom_ctid" =~ ^[0-9]+$ ]]; then
             # Check if ID is in use
             if pct status $custom_ctid &>/dev/null 2>&1 || qm status $custom_ctid &>/dev/null 2>&1; then
                 print_error "Container/VM ID $custom_ctid is already in use"
@@ -221,25 +253,19 @@ create_lxc_container() {
         echo
         
         # Container settings
-        safe_read "Container hostname [pulse]: " hostname
-        hostname=${hostname:-pulse}
+        safe_read_with_default "Container hostname [pulse]: " hostname "pulse"
         
-        safe_read "Memory (MB) [1024]: " memory
-        memory=${memory:-1024}
+        safe_read_with_default "Memory (MB) [1024]: " memory "1024"
         
-        safe_read "Disk size (GB) [4]: " disk
-        disk=${disk:-4}
+        safe_read_with_default "Disk size (GB) [4]: " disk "4"
         
-        safe_read "CPU cores [2]: " cores
-        cores=${cores:-2}
+        safe_read_with_default "CPU cores [2]: " cores "2"
         
-        safe_read "CPU limit (0=unlimited) [2]: " cpulimit
-        cpulimit=${cpulimit:-2}
+        safe_read_with_default "CPU limit (0=unlimited) [2]: " cpulimit "2"
         
-        safe_read "Swap (MB) [256]: " swap
-        swap=${swap:-256}
+        safe_read_with_default "Swap (MB) [256]: " swap "256"
         
-        safe_read "Start on boot? [Y/n]: " onboot -n 1 -r
+        safe_read_with_default "Start on boot? [Y/n]: " onboot "Y" -n 1 -r
         echo
         if [[ "$onboot" =~ ^[Nn]$ ]]; then
             onboot=0
@@ -247,7 +273,7 @@ create_lxc_container() {
             onboot=1
         fi
         
-        safe_read "Enable firewall? [Y/n]: " firewall -n 1 -r
+        safe_read_with_default "Enable firewall? [Y/n]: " firewall "Y" -n 1 -r
         echo
         if [[ "$firewall" =~ ^[Nn]$ ]]; then
             firewall=0
@@ -255,7 +281,7 @@ create_lxc_container() {
             firewall=1
         fi
         
-        safe_read "Unprivileged container? [Y/n]: " unprivileged -n 1 -r
+        safe_read_with_default "Unprivileged container? [Y/n]: " unprivileged "Y" -n 1 -r
         echo
         if [[ "$unprivileged" =~ ^[Nn]$ ]]; then
             unprivileged=0
@@ -410,7 +436,7 @@ create_lxc_container() {
             storage=${storage:-$DEFAULT_STORAGE}
         fi
         
-        safe_read "Static IP (leave empty for DHCP): " static_ip
+        safe_read_with_default "Static IP (leave empty for DHCP): " static_ip ""
         
         # If static IP is provided, we need gateway
         if [[ -n "$static_ip" ]]; then
@@ -420,7 +446,7 @@ create_lxc_container() {
                 print_info "Using DHCP instead"
                 static_ip=""
             else
-                safe_read "Gateway IP address: " gateway_ip
+                safe_read_with_default "Gateway IP address: " gateway_ip ""
                 if [[ -z "$gateway_ip" ]]; then
                     # Try to guess gateway from the IP (use .1 of the subnet)
                     local ip_base="${static_ip%.*}"
@@ -434,10 +460,9 @@ create_lxc_container() {
             fi
         fi
         
-        safe_read "DNS servers (comma-separated, empty for host settings): " nameserver
+        safe_read_with_default "DNS servers (comma-separated, empty for host settings): " nameserver ""
         
-        safe_read "Startup order [99]: " startup
-        startup=${startup:-99}
+        safe_read_with_default "Startup order [99]: " startup "99"
     else
         # Quick mode - but still need to verify critical settings
         
@@ -579,7 +604,7 @@ create_lxc_container() {
             echo "  u) Download Ubuntu 22.04 LTS"
             echo "  a) Download Alpine Linux (minimal)"
             echo
-            safe_read "Select template number or option [Enter for Debian 12]: " template_choice
+            safe_read_with_default "Select template number or option [Enter for Debian 12]: " template_choice ""
             if [[ -n "$template_choice" ]]; then
                 case "$template_choice" in
                     d|D)
@@ -1525,7 +1550,7 @@ main() {
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
                         echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
-                        safe_read "Enable auto-updates? [Y/n]: " enable_updates
+                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt since they're already updating
                         if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
                             ENABLE_AUTO_UPDATES=true
@@ -1557,7 +1582,7 @@ main() {
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
                         echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
-                        safe_read "Enable auto-updates? [Y/n]: " enable_updates
+                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt
                         if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
                             ENABLE_AUTO_UPDATES=true
@@ -1602,7 +1627,7 @@ main() {
                 # Ask about config/data removal
                 echo
                 print_info "Config and data files exist in $CONFIG_DIR"
-                safe_read "Remove all configuration and data? (y/N): " remove_config
+                safe_read_with_default "Remove all configuration and data? (y/N): " remove_config "n"
                 if [[ "$remove_config" =~ ^[Yy]$ ]]; then
                     rm -rf "$CONFIG_DIR"
                     print_success "Configuration and data removed"
@@ -1612,7 +1637,7 @@ main() {
                 
                 # Ask about user removal
                 if id "pulse" &>/dev/null; then
-                    safe_read "Remove pulse user account? (y/N): " remove_user
+                    safe_read_with_default "Remove pulse user account? (y/N): " remove_user "n"
                     if [[ "$remove_user" =~ ^[Yy]$ ]]; then
                         userdel pulse 2>/dev/null || true
                         print_success "User account removed"
@@ -1652,22 +1677,10 @@ main() {
                     FRONTEND_PORT=7655
                 else
                     echo
-                    # Temporarily disable errexit for safe_read
-                    set +e
-                    safe_read "Frontend port [7655]: " FRONTEND_PORT
-                    local read_result=$?
-                    set -e
-                    
-                    if [[ $read_result -eq 0 ]]; then
-                        FRONTEND_PORT=${FRONTEND_PORT:-7655}
-                        if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
-                            print_error "Invalid port number. Using default port 7655."
-                            FRONTEND_PORT=7655
-                        fi
-                    else
-                        # safe_read failed - non-interactive container install
+                    safe_read_with_default "Frontend port [7655]: " FRONTEND_PORT "7655"
+                    if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                        print_error "Invalid port number. Using default port 7655."
                         FRONTEND_PORT=7655
-                        print_info "Using default port 7655"
                     fi
                 fi
             fi
@@ -1677,18 +1690,9 @@ main() {
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                set +e
-                safe_read "Enable auto-updates? [y/N]: " enable_updates
-                local read_result=$?
-                set -e
-                
-                if [[ $read_result -eq 0 ]]; then
-                    if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
-                        ENABLE_AUTO_UPDATES=true
-                    fi
-                else
-                    # Non-interactive - skip auto-updates
-                    ENABLE_AUTO_UPDATES=false
+                safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+                if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                    ENABLE_AUTO_UPDATES=true
                 fi
             fi
         fi
