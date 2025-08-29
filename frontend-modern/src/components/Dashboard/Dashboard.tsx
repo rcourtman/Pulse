@@ -63,10 +63,6 @@ export function Dashboard(props: DashboardProps) {
     (storedGroupingMode === 'grouped' || storedGroupingMode === 'flat') ? storedGroupingMode : 'grouped'
   );
   
-  // Debug logging
-  createEffect(() => {
-    console.log('[Dashboard] Grouping mode:', groupingMode());
-  });
   
   const [showFilters, setShowFilters] = createSignal(
     localStorage.getItem('dashboardShowFilters') !== null 
@@ -699,6 +695,14 @@ export function Dashboard(props: DashboardProps) {
                 >
                   VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
+                <Show when={groupingMode() === 'flat'}>
+                  <th 
+                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[80px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('node')}
+                  >
+                    Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </th>
+                </Show>
                 <th 
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('uptime')}
@@ -777,7 +781,7 @@ export function Dashboard(props: DashboardProps) {
                             return (
                               <GuestRow 
                                 guest={guest} 
-                                showNode={false} 
+                                showNode={groupingMode() === 'flat'} 
                                 alertStyles={getAlertStyles(guestId, activeAlerts)}
                                 onTagClick={handleTagClick}
                                 activeSearch={search()}
