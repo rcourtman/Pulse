@@ -228,13 +228,25 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 	coreCounts := []int{4, 8, 12, 16, 24, 32, 48, 64}
 	cores := coreCounts[rand.Intn(len(coreCounts))]
 	
+	// Generate realistic version information
+	pveVersions := []string{"8.2.4", "8.2.2", "8.1.10", "8.0.12", "7.4-18"}
+	kernelVersions := []string{
+		"6.8.12-1-pve", 
+		"6.8.8-2-pve", 
+		"6.5.13-5-pve", 
+		"6.2.16-20-pve",
+		"5.15.143-1-pve",
+	}
+	
 	return models.Node{
-		Name:     name,
-		Instance: "", // Set by generateNodes based on cluster/standalone
-		Type:     "pve",
-		Status:   "online",
-		Uptime:   int64(86400 * (1 + rand.Intn(30))), // 1-30 days
-		CPU:      cpu,
+		Name:          name,
+		Instance:      "", // Set by generateNodes based on cluster/standalone
+		Type:          "pve",
+		Status:        "online",
+		Uptime:        int64(86400 * (1 + rand.Intn(30))), // 1-30 days
+		CPU:           cpu,
+		PVEVersion:    pveVersions[rand.Intn(len(pveVersions))],
+		KernelVersion: kernelVersions[rand.Intn(len(kernelVersions))],
 		Memory: models.Memory{
 			Total: totalMem * 1024 * 1024 * 1024, // Convert to bytes
 			Used:  usedMem * 1024 * 1024 * 1024,
