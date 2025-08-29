@@ -84,10 +84,11 @@ safe_read_with_default() {
     if [[ $read_result -ne 0 ]]; then
         # Failed to read - use default
         eval "$var_name='$default_value'"
-        if [[ -n "$default_value" ]]; then
+        # Only print default message in truly non-interactive mode
+        if [[ ! -t 0 ]] && [[ -n "$default_value" ]]; then
             print_info "Using default: $default_value"
         fi
-        return 1
+        return 0  # Return success since we handled it with a default
     fi
     
     # Check if empty and use default
@@ -309,7 +310,7 @@ create_lxc_container() {
     print_info "Detecting available resources..."
     
     # Get available bridges
-    local BRIDGES=$(ip link show type bridge | grep -E '^[0-9]+:' | cut -d: -f2 | tr -d ' ' | paste -sd',' -)
+    local BRIDGES=$(ip link show type bridge | grep -E '^[0-9]+:' | cut -d: -f2 | tr -d ' ' | grep -E '^(vmbr|vnet)' | paste -sd' ' -)
     
     # First try to find the default network interface (could be bridge or regular interface)
     local DEFAULT_INTERFACE=$(ip route | grep default | head -1 | grep -oP 'dev \K\S+')
@@ -325,7 +326,7 @@ create_lxc_container() {
     
     # If no default bridge found, try to use the first available bridge
     if [[ -z "$DEFAULT_BRIDGE" && -n "$BRIDGES" ]]; then
-        DEFAULT_BRIDGE=$(echo "$BRIDGES" | cut -d',' -f1)
+        DEFAULT_BRIDGE=$(echo "$BRIDGES" | cut -d' ' -f1)
     fi
     
     # If still no bridge found, we'll need to ask the user
@@ -1544,7 +1545,7 @@ main() {
                 
                 # Check if auto-updates are not installed yet (upgrading from older version)
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1576,7 +1577,7 @@ main() {
             reinstall)
                 # Check if auto-updates are not installed yet
                 # and prompt the user to enable them (unless already forced by flag or in Docker)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
                         echo
                         echo -e "${YELLOW}New feature: Automatic updates!${NC}"
@@ -1672,8 +1673,8 @@ main() {
             # Fresh installation - ask for port configuration and auto-updates
             FRONTEND_PORT=${FRONTEND_PORT:-}
             if [[ -z "$FRONTEND_PORT" ]]; then
-                if [[ "$IN_DOCKER" == "true" ]]; then
-                    # In Docker mode, use default port without prompting
+                if [[ "$IN_DOCKER" == "true" ]] || [[ "$IN_CONTAINER" == "true" ]]; then
+                    # In Docker/container mode, use default port without prompting
                     FRONTEND_PORT=7655
                 else
                     echo
@@ -1685,8 +1686,8 @@ main() {
                 fi
             fi
             
-            # Ask about auto-updates for fresh installation (unless forced by flag or in Docker)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+            # Ask about auto-updates for fresh installation (unless forced by flag or in Docker/container)
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
@@ -1862,6 +1863,364 @@ done
 
 # Export for use in download_pulse function
 export FORCE_VERSION FORCE_CHANNEL
+
+# Run main function
+mainmain() {
+    # Skip Proxmox host check if we're already inside a container
+    if [[ "$IN_CONTAINER" != "true" ]] && check_proxmox_host; then
+        create_lxc_container
+        exit 0
+    fi
+    
+    print_header
+    check_root
+    detect_os
+    check_docker_environment
+    
+    # Check for existing installation FIRST before asking for configuration
+    if check_existing_installation; then
+        # If a specific version was requested, just update to it
+        if [[ -n "${FORCE_VERSION}" ]]; then
+            # Determine if this is an upgrade, downgrade, or reinstall
+            local action_word="Installing"
+            if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
+                local compare_result
+                compare_versions "$FORCE_VERSION" "$CURRENT_VERSION" && compare_result=$? || compare_result=$?
+                case $compare_result in
+                    0) action_word="Reinstalling" ;;
+                    1) action_word="Updating to" ;;
+                    2) action_word="Downgrading to" ;;
+                esac
+            fi
+            print_info "${action_word} version ${FORCE_VERSION}..."
+            LATEST_RELEASE="${FORCE_VERSION}"
+            
+            # Detect the actual service name before trying to stop it
+            SERVICE_NAME=$(detect_service_name)
+            
+            backup_existing
+            systemctl stop $SERVICE_NAME || true
+            create_user
+            download_pulse
+            setup_update_command
+            start_pulse
+            print_completion
+            return 0
+        fi
+        
+        # Get both stable and RC versions
+        # Try GitHub API first, but have a fallback
+        local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
+        
+        # If rate limited or failed, try direct GitHub latest URL
+        if [[ -z "$STABLE_VERSION" ]] || [[ "$STABLE_VERSION" == *"rate limit"* ]]; then
+            # Use the GitHub latest release redirect to get version
+            STABLE_VERSION=$(curl -sI https://github.com/$GITHUB_REPO/releases/latest | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+        fi
+        
+        # For RC, we need the API, so if it fails just use empty
+        local RC_VERSION=""
+        RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        
+        # Determine default update channel
+        UPDATE_CHANNEL="stable"
+        
+        # Allow override via command line
+        if [[ -n "${FORCE_CHANNEL}" ]]; then
+            UPDATE_CHANNEL="${FORCE_CHANNEL}"
+        elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
+            if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
+                UPDATE_CHANNEL="rc"
+            fi
+        fi
+        
+        echo
+        echo "What would you like to do?"
+        
+        # Show update options based on available versions
+        local menu_option=1
+        if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
+            echo "${menu_option}) Update to $STABLE_VERSION (stable)"
+            ((menu_option++))
+        fi
+        
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
+            echo "${menu_option}) Update to $RC_VERSION (release candidate)"
+            ((menu_option++))
+        fi
+        
+        echo "${menu_option}) Reinstall current version"
+        ((menu_option++))
+        echo "${menu_option}) Remove Pulse"
+        ((menu_option++))
+        echo "${menu_option}) Cancel"
+        local max_option=$menu_option
+        
+        # Try to read user choice interactively
+        # safe_read handles both normal and piped input (via /dev/tty)
+        if [[ "$IN_DOCKER" == "true" ]]; then
+            # In Docker, always auto-select
+            print_info "Docker environment detected. Auto-selecting update option."
+            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+                choice=2  # RC version
+            else
+                choice=1  # Stable version
+            fi
+        elif safe_read "Select option [1-${max_option}]: " choice; then
+            # Successfully read user choice (either from stdin or /dev/tty)
+            : # Do nothing, choice was set
+        else
+            # safe_read failed - truly non-interactive
+            print_info "Non-interactive mode detected. Auto-selecting update option."
+            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
+                choice=2  # RC version
+            else
+                choice=1  # Stable version
+            fi
+        fi
+        
+        # Debug: Check if choice was read correctly
+        if [[ -z "$choice" ]]; then
+            print_error "No option selected. Exiting."
+            exit 1
+        fi
+        
+        # Debug output to see what's happening
+        # print_info "DEBUG: You selected option $choice"
+        
+        # Determine what action to take based on the dynamic menu
+        local action=""
+        local target_version=""
+        local current_choice=1
+        
+        # Check if user selected stable update
+        if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
+            if [[ "$choice" == "$current_choice" ]]; then
+                action="update"
+                target_version="$STABLE_VERSION"
+                UPDATE_CHANNEL="stable"
+            fi
+            ((current_choice++))
+        fi
+        
+        # Check if user selected RC update
+        if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
+            if [[ "$choice" == "$current_choice" ]]; then
+                action="update"
+                target_version="$RC_VERSION"
+                UPDATE_CHANNEL="rc"
+            fi
+            ((current_choice++))
+        fi
+        
+        # Check if user selected reinstall
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="reinstall"
+        fi
+        ((current_choice++))
+        
+        # Check if user selected remove
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="remove"
+        fi
+        ((current_choice++))
+        
+        # Check if user selected cancel
+        if [[ "$choice" == "$current_choice" ]]; then
+            action="cancel"
+        fi
+        
+        # Debug: Show what action was determined
+        # print_info "DEBUG: Action determined: ${action:-'none'}"
+        
+        case $action in
+            update)
+                # Determine if this is an upgrade or downgrade
+                local action_word="Installing"
+                if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "unknown" ]]; then
+                    local cmp_result=0
+                    compare_versions "$target_version" "$CURRENT_VERSION" || cmp_result=$?
+                    case $cmp_result in
+                        0) action_word="Reinstalling" ;;
+                        1) action_word="Updating to" ;;
+                        2) action_word="Downgrading to" ;;
+                    esac
+                fi
+                print_info "${action_word} $target_version..."
+                LATEST_RELEASE="$target_version"
+                
+                # Check if auto-updates are not installed yet (upgrading from older version)
+                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        echo
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        echo "This keeps your installation secure and up-to-date."
+                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
+                        # Default to yes for this prompt since they're already updating
+                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                            ENABLE_AUTO_UPDATES=true
+                        fi
+                    fi
+                fi
+                
+                backup_existing
+                systemctl stop $SERVICE_NAME || true
+                create_user
+                download_pulse
+                setup_update_command
+                
+                # Setup auto-updates if requested during update
+                if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                    setup_auto_updates
+                fi
+                
+                start_pulse
+                print_completion
+                exit 0
+                ;;
+            reinstall)
+                # Check if auto-updates are not installed yet
+                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        echo
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        echo "This keeps your installation secure and up-to-date."
+                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
+                        # Default to yes for this prompt
+                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                            ENABLE_AUTO_UPDATES=true
+                        fi
+                    fi
+                fi
+                
+                backup_existing
+                systemctl stop $SERVICE_NAME || true
+                create_user
+                download_pulse
+                setup_directories
+                setup_update_command
+                install_systemd_service
+                
+                # Setup auto-updates if requested during reinstall
+                if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                    setup_auto_updates
+                fi
+                
+                start_pulse
+                print_completion
+                exit 0
+                ;;
+            remove)
+                # Stop and disable service
+                systemctl stop $SERVICE_NAME 2>/dev/null || true
+                systemctl disable $SERVICE_NAME 2>/dev/null || true
+                
+                # Remove service files
+                rm -f /etc/systemd/system/$SERVICE_NAME.service
+                rm -f /etc/systemd/system/pulse.service
+                rm -f /etc/systemd/system/pulse-backend.service
+                systemctl daemon-reload >/dev/null 2>&1
+                
+                # Remove installation directory
+                rm -rf "$INSTALL_DIR"
+                
+                # Remove symlink
+                rm -f /usr/local/bin/pulse
+                
+                # Ask about config/data removal
+                echo
+                print_info "Config and data files exist in $CONFIG_DIR"
+                safe_read_with_default "Remove all configuration and data? (y/N): " remove_config "n"
+                if [[ "$remove_config" =~ ^[Yy]$ ]]; then
+                    rm -rf "$CONFIG_DIR"
+                    print_success "Configuration and data removed"
+                else
+                    print_info "Configuration preserved in $CONFIG_DIR"
+                fi
+                
+                # Ask about user removal
+                if id "pulse" &>/dev/null; then
+                    safe_read_with_default "Remove pulse user account? (y/N): " remove_user "n"
+                    if [[ "$remove_user" =~ ^[Yy]$ ]]; then
+                        userdel pulse 2>/dev/null || true
+                        print_success "User account removed"
+                    else
+                        print_info "User account preserved"
+                    fi
+                fi
+                
+                # Remove any log files
+                rm -f /var/log/pulse*.log 2>/dev/null || true
+                rm -f /opt/pulse.log 2>/dev/null || true
+                
+                print_success "Pulse removed successfully"
+                ;;
+            cancel)
+                print_info "Installation cancelled"
+                exit 0
+                ;;
+            *)
+                print_error "Invalid option"
+                exit 1
+                ;;
+        esac
+    else
+        # Check if this is truly a fresh installation or an update
+        # Check for existing installation BEFORE we create directories
+        # If binary exists OR system.json exists OR --version was specified, it's likely an update
+        if [[ -f "$INSTALL_DIR/bin/pulse" ]] || [[ -f "$INSTALL_DIR/pulse" ]] || [[ -f "$CONFIG_DIR/system.json" ]] || [[ -n "${FORCE_VERSION}" ]]; then
+            # This is an update/reinstall, don't prompt for port
+            FRONTEND_PORT=${FRONTEND_PORT:-7655}
+        else
+            # Fresh installation - ask for port configuration and auto-updates
+            FRONTEND_PORT=${FRONTEND_PORT:-}
+            if [[ -z "$FRONTEND_PORT" ]]; then
+                if [[ "$IN_DOCKER" == "true" ]] || [[ "$IN_CONTAINER" == "true" ]]; then
+                    # In Docker/container mode, use default port without prompting
+                    FRONTEND_PORT=7655
+                else
+                    echo
+                    safe_read_with_default "Frontend port [7655]: " FRONTEND_PORT "7655"
+                    if [[ ! "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [[ "$FRONTEND_PORT" -lt 1 ]] || [[ "$FRONTEND_PORT" -gt 65535 ]]; then
+                        print_error "Invalid port number. Using default port 7655."
+                        FRONTEND_PORT=7655
+                    fi
+                fi
+            fi
+            
+            # Ask about auto-updates for fresh installation (unless forced by flag or in Docker)
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+                echo
+                echo "Enable automatic updates?"
+                echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+                safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+                if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
+                    ENABLE_AUTO_UPDATES=true
+                fi
+            fi
+        fi
+        
+        install_dependencies
+        create_user
+        setup_directories
+        download_pulse
+        setup_update_command
+        install_systemd_service
+        
+        # Setup auto-updates if requested
+        if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+            setup_auto_updates
+        fi
+        
+        start_pulse
+        print_completion
+    fi
+}
 
 # Run main function
 main
