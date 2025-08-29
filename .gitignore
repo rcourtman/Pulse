@@ -94,5 +94,8 @@ scripts/TEST_*.md
 mock.env
 internal/mock/
 internal/monitoring/mock_integration.go
+internal/monitoring/mock_stub.go
 scripts/mock-dev.sh
+scripts/toggle-mock.sh
+scripts/toggle-mock-pure.sh
 MOCK_MODE_GUIDE.md
