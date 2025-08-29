@@ -100,22 +100,22 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div class="overflow-x-auto">
-        <table class="w-full table-fixed">
+        <table class="w-full min-w-[600px]">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 20%;">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 8%;">Status</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 10%;">Uptime</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">CPU</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">Memory</th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 15%;">
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-20">Status</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-24">Uptime</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">CPU</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">Memory</th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-32">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
-                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="width: 8%;">{header}</th>
+                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider w-16">{header}</th>
                 )}
               </For>
             </tr>
@@ -173,20 +173,20 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 return (
                   <tr 
-                    class={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
+                    class={`cursor-pointer transition-colors ${
                       isSelected() 
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' 
-                        : 'border-l-4 border-l-transparent'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     }`}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
                     <td class="px-2 py-0.5 whitespace-nowrap">
-                      <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
+                      <div class="flex items-center gap-1">
                         <a 
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
                           target="_blank"
                           onClick={(e) => e.stopPropagation()}
-                          class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
+                          class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
                         >
                           {item.data.name}
                         </a>
@@ -212,7 +212,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       </div>
                     </td>
                     <td class="px-2 py-0.5 whitespace-nowrap">
-                      <div class="flex items-center gap-1" style="display: flex; white-space: nowrap;">
+                      <div class="flex items-center gap-1">
                         <span class={`h-2 w-2 flex-shrink-0 rounded-full ${
                           isOnline() ? 'bg-green-500' : 'bg-red-500'
                         }`} />
