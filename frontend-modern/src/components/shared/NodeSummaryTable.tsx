@@ -190,6 +190,16 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         >
                           {item.data.name}
                         </a>
+                        <Show when={isPVE}>
+                          <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                            PVE
+                          </span>
+                        </Show>
+                        <Show when={isPVE && node!.pveVersion}>
+                          <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                            v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+                          </span>
+                        </Show>
                         <Show when={isPVE && node!.isClusterMember !== undefined}>
                           <span class={`text-[9px] px-1 py-0 rounded text-[8px] font-medium whitespace-nowrap ${
                             node!.isClusterMember 
