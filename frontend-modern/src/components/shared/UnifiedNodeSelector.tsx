@@ -26,6 +26,9 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     setSelectedNode(null);
   });
   
+  // No longer syncing with search term - selection is independent
+  // This allows users to select a node AND search within it
+  
   // Calculate backup counts for nodes and PBS instances
   const backupCounts = createMemo(() => {
     const counts: Record<string, number> = {};

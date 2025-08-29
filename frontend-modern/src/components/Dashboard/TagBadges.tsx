@@ -93,7 +93,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               class="fixed px-2 py-1 bg-gray-800 dark:bg-gray-700 text-white text-xs rounded shadow-lg pointer-events-none"
               style={{
                 left: `${tooltipPos()!.x}px`,
-                top: `${tooltipPos()!.y - 28}px`,
+                top: `${tooltipPos()!.y - 40}px`,
                 transform: 'translateX(-50%)',
                 'z-index': '999999',
               }}
@@ -114,7 +114,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
                   class="fixed px-2 py-1 text-xs rounded shadow-lg pointer-events-none"
                   style={{
                     left: `${tooltipPos()!.x}px`,
-                    top: `${tooltipPos()!.y - 24}px`,
+                    top: `${tooltipPos()!.y - 35}px`,
                     transform: 'translateX(-50%)',
                     'background-color': colors.bg,
                     'color': colors.text,

@@ -86,8 +86,9 @@ export function GuestRow(props: GuestRowProps) {
         ? 'bg-red-50 dark:bg-red-950/30' 
         : 'bg-yellow-50 dark:bg-yellow-950/20')
       : '';
-    const defaultHover = props.alertStyles?.hasAlert ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700';
-    return `${base} ${hover} ${defaultHover} ${alertBg}`;
+    const defaultHover = props.alertStyles?.hasAlert ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+    const stoppedDimming = !isRunning() ? 'opacity-60' : '';
+    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
 
   // Get first cell styling with left border for alerts
@@ -108,7 +109,7 @@ export function GuestRow(props: GuestRowProps) {
         <div class="flex items-center gap-2">
           {/* Status indicator */}
           <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
-            isRunning() ? 'bg-green-500' : 'bg-gray-400'
+            isRunning() ? 'bg-green-500' : 'bg-red-500'
           }`} title={props.guest.status}></span>
           
           {/* Name - clickable if custom URL is set */}

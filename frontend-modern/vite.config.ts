@@ -14,12 +14,12 @@ export default defineConfig({
     host: '0.0.0.0', // Listen on all interfaces for remote access
     proxy: {
       '/ws': {
-        target: 'ws://127.0.0.1:3000',
+        target: 'ws://127.0.0.1:7656',
         ws: true,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:7656',
         changeOrigin: true,
       },
     },

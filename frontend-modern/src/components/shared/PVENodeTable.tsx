@@ -41,7 +41,7 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
     
     let nodes = [...props.nodes];
     
-    // Special handling for backups tab since it uses different filtering logic
+    // Special handling for backups tab - only hide nodes that have no backups at all
     if (props.currentTab === 'backups') {
       // Filter nodes to only show those with backups
       // First, check if nodes have any backups at all (from backupCounts)
@@ -49,57 +49,11 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
         const backupCount = props.backupCounts?.[node.name] || 0;
         return backupCount > 0;
       });
-      
-      // Then apply additional filtering if filteredBackups is provided
-      if (props.filteredBackups !== undefined) {
-        const nodesWithItems = new Set<string>();
-        
-        // Filtering is active, only show nodes with matching backups
-        props.filteredBackups.forEach(b => {
-          // Only count snapshots and local backups that actually belong to PVE nodes
-          if (b.backupType === 'snapshot' || b.backupType === 'local') {
-            // Make sure it's actually a PVE node (not a PBS instance name)
-            if (props.nodes.some(n => n.name === b.node)) {
-              nodesWithItems.add(b.node);
-            }
-          }
-          // PBS/remote backups have node set to PBS instance name, not PVE node
-          // so we don't add them to PVE node filter
-        });
-        
-        // Only show nodes that have matching items
-        if (nodesWithItems.size > 0) {
-          nodes = nodes.filter(node => nodesWithItems.has(node.name));
-        } else {
-          // If we have active filtering but no nodes have matching items, hide all nodes
-          nodes = [];
-        }
-      }
-      // If filteredBackups is undefined, still filter by backupCounts
-    } else if (hasActiveFilter()) {
-      // Handle other tabs with normal filtering logic
-      const nodesWithItems = new Set<string>();
-      
-      switch (props.currentTab) {
-        case 'dashboard':
-          // Filter based on VMs and containers
-          props.vms?.forEach(vm => nodesWithItems.add(vm.node));
-          props.containers?.forEach(ct => nodesWithItems.add(ct.node));
-          break;
-        case 'storage':
-          // Filter based on storage
-          props.storage?.forEach(s => nodesWithItems.add(s.node));
-          break;
-      }
-      
-      // Only show nodes that have filtered items
-      if (nodesWithItems.size > 0) {
-        nodes = nodes.filter(node => nodesWithItems.has(node.name));
-      } else if (hasActiveFilter()) {
-        // If we have active filtering but no nodes have matching items, hide all nodes
-        nodes = [];
-      }
+      // Don't further filter based on search - let highlighting handle that
     }
+    // For other tabs, ALWAYS show all nodes - don't filter them out
+    // The node cards should remain as a stable navigation element
+    // Only the data below gets filtered
     
     return nodes.sort((a, b) => {
       // Online nodes first
@@ -167,9 +121,6 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 200px;">
                 PVE Nodes
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 80px;">
-                Status
-              </th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap" style="min-width: 100px;">
                 Cluster
               </th>
@@ -216,35 +167,28 @@ export const PVENodeTable: Component<PVENodeTableProps> = (props) => {
                 const filteredGuestCount = createMemo(() => getFilteredGuestCount());
                 
                 const counts = getNodeCounts(node);
+                // Check if this node is selected
                 const isSelected = () => props.selectedNode === node.name;
                 
                 return (
                   <tr 
                     class={`
-                      border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 
-                      transition-all duration-150 ease-in-out cursor-pointer h-8
-                      hover:scale-[1.01] hover:shadow-md hover:z-10 relative
-                      hover:border-l-4 hover:border-l-blue-500 dark:hover:border-l-blue-400
+                      border-b border-gray-100 dark:border-gray-700/50
+                      transition-all duration-200 ease-out cursor-pointer h-8
+                      hover:bg-gray-50 dark:hover:bg-gray-700/30
                       ${!isOnline() ? 'opacity-60' : ''}
-                      ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 scale-[1.005] shadow-sm border-l-4 border-l-blue-600 dark:border-l-blue-500' : ''}
+                      ${isSelected() 
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500 dark:border-l-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
+                        : ''
+                      }
                     `}
                     onClick={() => props.onNodeClick(node.name)}
                   >
                     <td class="p-1 px-2 whitespace-nowrap">
                       <div class="flex items-center gap-2">
                         <span class={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={node.name}>{node.name}</span>
-                        <Show when={filteredGuestCount() !== null && props.searchTerm && props.searchTerm.trim()}>
-                          <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            ({filteredGuestCount()} matched)
-                          </span>
-                        </Show>
+                        <span class={`text-sm truncate ${isSelected() ? 'font-semibold text-blue-700 dark:text-blue-300' : 'font-medium text-gray-900 dark:text-gray-100'}`} title={node.name}>{node.name}</span>
                       </div>
-                    </td>
-                    <td class="p-1 px-2">
-                      <span class={`text-xs whitespace-nowrap ${isOnline() ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {node.status}
-                      </span>
                     </td>
                     <td class="p-1 px-2">
                       <span class="text-xs text-gray-600 dark:text-gray-400 block truncate" title={node.clusterName || ''}>
