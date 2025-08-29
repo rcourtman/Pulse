@@ -2289,13 +2289,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					backupType = "host"
 				}
 
-				// For shared storage (like PBS), use the storage name as node
-				// to avoid confusion about which node the backup is on
+				// Always use the actual node name
 				backupNode := node.Node
 				isPBSStorage := strings.HasPrefix(storage.Storage, "pbs-") || storage.Type == "pbs"
-				if isPBSStorage || storage.Shared == 1 {
-					backupNode = storage.Storage // Use storage name for shared storage
-				}
 
 				// Check verification status for PBS backups
 				verified := false

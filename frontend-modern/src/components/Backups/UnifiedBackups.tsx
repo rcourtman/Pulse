@@ -254,20 +254,22 @@ const UnifiedBackups: Component = () => {
         displayType = 'LXC'; // Default fallback (most people have more containers than VMs)
       }
       
+      // For PBS backups through storage: show Proxmox node in Node column, PBS storage in Location
+      // For regular backups: show Proxmox node in Node column, local storage in Location
       unified.push({
         backupType: backupType,
         vmid: backup.vmid || 0,
         name: backup.notes || backup.volid?.split('/').pop() || '',
         type: displayType,
-        node: backup.node || '',
+        node: backup.node || '',  // Proxmox node that has access to this backup
         backupTime: backup.ctime || 0,
         backupName: backup.volid?.split('/').pop() || '',
         description: backup.notes || '', // Use notes field for PBS backup descriptions
         status: backup.verified ? 'verified' : 'unverified',
         size: backup.size || null,
-        storage: backup.storage || null,
-        datastore: backup.isPBS ? backup.storage : null,
-        namespace: backup.isPBS ? 'root' : null,
+        storage: backup.storage || null,  // Storage name (PBS storage or local storage)
+        datastore: null,  // Only set for direct PBS API backups
+        namespace: null,  // Only set for direct PBS API backups
         verified: backup.verified || false,
         protected: backup.protected || false,
         encrypted: backup.encryption ? true : false  // Check encryption field from Proxmox API
@@ -1605,6 +1607,22 @@ const UnifiedBackups: Component = () => {
                 </th>
                 <th
                   class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  onClick={() => handleSort('node')}
+                  style="width: 100px;"
+                >
+                  Node {sortKey() === 'node' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                </th>
+                <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                  <th
+                    class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort('owner')}
+                    style="width: 80px;"
+                  >
+                    Owner {sortKey() === 'owner' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                  </th>
+                </Show>
+                <th
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('backupTime')}
                   style="width: 140px;"
                 >
@@ -1655,7 +1673,8 @@ const UnifiedBackups: Component = () => {
                   <>
                     <tr class="bg-gray-50/50 dark:bg-gray-700/30">
                       <td colspan={(() => {
-                        let cols = 6; // Base columns: Name, Type, VMID, Time, Backup, Details
+                        let cols = 7; // Base columns: VMID, Type, Name, Node, Time, Backup, Details
+                        if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Owner column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Size column
                         if (backupTypeFilter() === 'all' || backupTypeFilter() === 'remote') cols++; // Add Verified column
                         if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
@@ -1682,6 +1701,14 @@ const UnifiedBackups: Component = () => {
                           <td class="p-0.5 px-1.5 text-sm align-middle">
                             {item.name || '-'}
                           </td>
+                          <td class="p-0.5 px-1.5 text-sm align-middle">
+                            {item.node}
+                          </td>
+                          <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
+                            <td class="p-0.5 px-1.5 text-xs align-middle text-gray-500 dark:text-gray-400">
+                              {item.owner ? item.owner.split('@')[0] : '-'}
+                            </td>
+                          </Show>
                           <td class={`p-0.5 px-1.5 text-xs align-middle ${getAgeColorClass(item.backupTime)}`}>
                             {formatTime(item.backupTime * 1000)}
                           </td>
@@ -1719,19 +1746,11 @@ const UnifiedBackups: Component = () => {
                           </td>
                           <Show when={backupTypeFilter() !== 'snapshot'}>
                             <td class="p-0.5 px-1.5 text-sm align-middle">
-                              {(() => {
-                                let location = item.storage || (item.datastore && (
-                                  item.namespace && item.namespace !== 'root'
-                                    ? `${item.datastore}/${item.namespace}`
-                                    : item.datastore
-                                )) || '-';
-                                
-                                // Prepend node name for clarity (unless it's already part of the location)
-                                if (item.node && location !== '-' && !location.includes(item.node)) {
-                                  return `${item.node}:${location}`;
-                                }
-                                return location;
-                              })()}
+                              {item.storage || (item.datastore && (
+                                item.namespace && item.namespace !== 'root'
+                                  ? `${item.datastore}/${item.namespace}`
+                                  : item.datastore
+                              )) || '-'}
                             </td>
                           </Show>
                           <Show when={backupTypeFilter() === 'all' || backupTypeFilter() === 'remote'}>
