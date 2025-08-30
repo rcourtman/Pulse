@@ -732,7 +732,9 @@ function OverviewTab(props: {
   
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
-    const alerts = Object.values(props.activeAlerts);
+    // Access the store properly for reactivity
+    const alertIds = Object.keys(props.activeAlerts);
+    const alerts = alertIds.map(id => props.activeAlerts[id]);
     return {
       active: alerts.filter(a => !a.acknowledged).length,
       acknowledged: alerts.filter(a => a.acknowledged).length,
