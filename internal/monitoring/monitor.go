@@ -1268,6 +1268,15 @@ func (m *Monitor) pollVMs(ctx context.Context, instanceName string, client PVECl
 func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	var allVMs []models.VM
 	for _, node := range nodes {
+		// Skip offline nodes to avoid 595 errors when trying to access their resources
+		if node.Status != "online" {
+			log.Debug().
+				Str("node", node.Node).
+				Str("status", node.Status).
+				Msg("Skipping offline node for VM polling")
+			continue
+		}
+		
 		vms, err := client.GetVMs(ctx, node.Node)
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vms", instanceName, err).WithNode(node.Node)
@@ -1579,6 +1588,15 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 
 	var allContainers []models.Container
 	for _, node := range nodes {
+		// Skip offline nodes to avoid 595 errors when trying to access their resources
+		if node.Status != "online" {
+			log.Debug().
+				Str("node", node.Node).
+				Str("status", node.Status).
+				Msg("Skipping offline node for container polling")
+			continue
+		}
+		
 		containers, err := client.GetContainers(ctx, node.Node)
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_containers", instanceName, err).WithNode(node.Node)
