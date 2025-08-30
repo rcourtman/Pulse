@@ -164,7 +164,7 @@ check_docker_environment() {
        grep -q docker /proc/1/cgroup 2>/dev/null || \
        grep -q docker /proc/self/cgroup 2>/dev/null || \
        [[ -f /run/.containerenv ]] || \
-       [[ "$container" == "docker" ]]; then
+       [[ "${container:-}" == "docker" ]]; then
         print_error "Docker environment detected"
         echo "Please use the Docker image directly: docker run -d -p 7655:7655 rcourtman/pulse:latest"
         echo "See: https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER.md"
@@ -1985,7 +1985,7 @@ while [[ $# -gt 0 ]]; do
                grep -q docker /proc/1/cgroup 2>/dev/null || \
                grep -q docker /proc/self/cgroup 2>/dev/null || \
                [[ -f /run/.containerenv ]] || \
-               [[ "$container" == "docker" ]]; then
+               [[ "${container:-}" == "docker" ]]; then
                 IN_DOCKER=true
             fi
             shift
