@@ -1450,6 +1450,42 @@ main() {
             print_info "${action_word} version ${FORCE_VERSION}..."
             LATEST_RELEASE="${FORCE_VERSION}"
             
+            # Check if auto-updates should be offered when using --version
+            # Same logic as update/reinstall paths
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                local should_ask_about_updates=false
+                local prompt_reason=""
+                
+                if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                    # Timer doesn't exist - new feature
+                    should_ask_about_updates=true
+                    prompt_reason="new"
+                elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                    # Timer exists, check if it's properly configured
+                    if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                        should_ask_about_updates=true
+                        prompt_reason="disabled"
+                    fi
+                fi
+                
+                if [[ "$should_ask_about_updates" == "true" ]]; then
+                    echo
+                    if [[ "$prompt_reason" == "disabled" ]]; then
+                        echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                        echo "Would you like to enable automatic updates?"
+                    else
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                    fi
+                    echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+                    echo "This keeps your installation secure and up-to-date."
+                    safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
+                    # Default to yes for this prompt since they're already updating
+                    if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                        ENABLE_AUTO_UPDATES=true
+                    fi
+                fi
+            fi
+            
             # Detect the actual service name before trying to stop it
             SERVICE_NAME=$(detect_service_name)
             
@@ -1458,6 +1494,12 @@ main() {
             create_user
             download_pulse
             setup_update_command
+            
+            # Setup auto-updates if requested
+            if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                setup_auto_updates
+            fi
+            
             start_pulse
             print_completion
             return 0
@@ -1605,13 +1647,35 @@ main() {
                 print_info "${action_word} $target_version..."
                 LATEST_RELEASE="$target_version"
                 
-                # Check if auto-updates are not installed yet (upgrading from older version)
-                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                # Check if auto-updates should be offered to the user
+                # Offer if: not already forced by flag, not in Docker, and either:
+                # 1. Timer doesn't exist (new feature), OR
+                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
                 if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                    local should_ask_about_updates=false
+                    local prompt_reason=""
+                    
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        # Timer doesn't exist - new feature
+                        should_ask_about_updates=true
+                        prompt_reason="new"
+                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                        # Timer exists, check if it's properly configured
+                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                            should_ask_about_updates=true
+                            prompt_reason="disabled"
+                        fi
+                    fi
+                    
+                    if [[ "$should_ask_about_updates" == "true" ]]; then
                         echo
-                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        if [[ "$prompt_reason" == "disabled" ]]; then
+                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                            echo "Would you like to enable automatic updates?"
+                        else
+                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        fi
+                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
                         safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt since they're already updating
@@ -1637,13 +1701,35 @@ main() {
                 exit 0
                 ;;
             reinstall)
-                # Check if auto-updates are not installed yet
-                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                # Check if auto-updates should be offered to the user
+                # Offer if: not already forced by flag, not in Docker, and either:
+                # 1. Timer doesn't exist (new feature), OR
+                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
                 if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                    local should_ask_about_updates=false
+                    local prompt_reason=""
+                    
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        # Timer doesn't exist - new feature
+                        should_ask_about_updates=true
+                        prompt_reason="new"
+                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                        # Timer exists, check if it's properly configured
+                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                            should_ask_about_updates=true
+                            prompt_reason="disabled"
+                        fi
+                    fi
+                    
+                    if [[ "$should_ask_about_updates" == "true" ]]; then
                         echo
-                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        if [[ "$prompt_reason" == "disabled" ]]; then
+                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                            echo "Would you like to enable automatic updates?"
+                        else
+                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        fi
+                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
                         safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt
@@ -1962,6 +2048,42 @@ mainmain() {
             print_info "${action_word} version ${FORCE_VERSION}..."
             LATEST_RELEASE="${FORCE_VERSION}"
             
+            # Check if auto-updates should be offered when using --version
+            # Same logic as update/reinstall paths
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                local should_ask_about_updates=false
+                local prompt_reason=""
+                
+                if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                    # Timer doesn't exist - new feature
+                    should_ask_about_updates=true
+                    prompt_reason="new"
+                elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                    # Timer exists, check if it's properly configured
+                    if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                        should_ask_about_updates=true
+                        prompt_reason="disabled"
+                    fi
+                fi
+                
+                if [[ "$should_ask_about_updates" == "true" ]]; then
+                    echo
+                    if [[ "$prompt_reason" == "disabled" ]]; then
+                        echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                        echo "Would you like to enable automatic updates?"
+                    else
+                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                    fi
+                    echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+                    echo "This keeps your installation secure and up-to-date."
+                    safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
+                    # Default to yes for this prompt since they're already updating
+                    if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
+                        ENABLE_AUTO_UPDATES=true
+                    fi
+                fi
+            fi
+            
             # Detect the actual service name before trying to stop it
             SERVICE_NAME=$(detect_service_name)
             
@@ -1970,6 +2092,12 @@ mainmain() {
             create_user
             download_pulse
             setup_update_command
+            
+            # Setup auto-updates if requested
+            if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                setup_auto_updates
+            fi
+            
             start_pulse
             print_completion
             return 0
@@ -2117,13 +2245,35 @@ mainmain() {
                 print_info "${action_word} $target_version..."
                 LATEST_RELEASE="$target_version"
                 
-                # Check if auto-updates are not installed yet (upgrading from older version)
-                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                # Check if auto-updates should be offered to the user
+                # Offer if: not already forced by flag, not in Docker, and either:
+                # 1. Timer doesn't exist (new feature), OR
+                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
                 if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                    local should_ask_about_updates=false
+                    local prompt_reason=""
+                    
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        # Timer doesn't exist - new feature
+                        should_ask_about_updates=true
+                        prompt_reason="new"
+                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                        # Timer exists, check if it's properly configured
+                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                            should_ask_about_updates=true
+                            prompt_reason="disabled"
+                        fi
+                    fi
+                    
+                    if [[ "$should_ask_about_updates" == "true" ]]; then
                         echo
-                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        if [[ "$prompt_reason" == "disabled" ]]; then
+                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                            echo "Would you like to enable automatic updates?"
+                        else
+                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        fi
+                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
                         safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt since they're already updating
@@ -2149,13 +2299,35 @@ mainmain() {
                 exit 0
                 ;;
             reinstall)
-                # Check if auto-updates are not installed yet
-                # and prompt the user to enable them (unless already forced by flag or in Docker)
+                # Check if auto-updates should be offered to the user
+                # Offer if: not already forced by flag, not in Docker, and either:
+                # 1. Timer doesn't exist (new feature), OR
+                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
                 if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                    local should_ask_about_updates=false
+                    local prompt_reason=""
+                    
                     if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                        # Timer doesn't exist - new feature
+                        should_ask_about_updates=true
+                        prompt_reason="new"
+                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
+                        # Timer exists, check if it's properly configured
+                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
+                            should_ask_about_updates=true
+                            prompt_reason="disabled"
+                        fi
+                    fi
+                    
+                    if [[ "$should_ask_about_updates" == "true" ]]; then
                         echo
-                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        echo "Pulse can now automatically install stable updates daily (between 2-6 AM)"
+                        if [[ "$prompt_reason" == "disabled" ]]; then
+                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+                            echo "Would you like to enable automatic updates?"
+                        else
+                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
+                        fi
+                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
                         echo "This keeps your installation secure and up-to-date."
                         safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
                         # Default to yes for this prompt
