@@ -173,12 +173,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 return (
                   <tr 
-                    class={`cursor-pointer transition-all duration-200 hover:-translate-y-px ${
+                    class={`cursor-pointer transition-all duration-200 ${
                       isSelected() 
                         ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 relative z-10' 
                         : props.selectedNode 
-                          ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-md' 
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-md'
+                          ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm' 
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
                     }`}
                     style={{
                       'box-shadow': isSelected() 
