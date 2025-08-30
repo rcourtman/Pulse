@@ -332,7 +332,13 @@ create_lxc_container() {
         onboot=1
         firewall=1
         unprivileged=1
-        frontend_port=7655
+        # Ask for port even in quick mode
+        echo
+        safe_read_with_default "Port [7655]: " frontend_port "7655"
+        if [[ ! "$frontend_port" =~ ^[0-9]+$ ]] || [[ "$frontend_port" -lt 1 ]] || [[ "$frontend_port" -gt 65535 ]]; then
+            print_info "Using default: 7655"
+            frontend_port=7655
+        fi
         # Quick mode should ask about auto-updates too
         echo
         echo "Enable automatic updates?"
