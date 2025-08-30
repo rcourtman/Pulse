@@ -535,6 +535,15 @@ go build -o pulse ./cmd/pulse
 make dev
 ```
 
+## Visual Tour
+
+See Pulse in action with our [complete screenshot gallery →](docs/SCREENSHOTS.md)
+
+| Dashboard | Alert History | Mobile View |
+|-----------|---------------|-------------|
+| ![Dashboard](docs/images/01-dashboard.png) | ![Alerts](docs/images/05-alert-history.png) | ![Mobile](docs/images/08-mobile.png) |
+| *Monitor all nodes, VMs, and containers* | *Track and analyze alert patterns* | *Full mobile responsiveness* |
+
 ## Links
 
 - [Releases](https://github.com/rcourtman/Pulse/releases)
