@@ -897,29 +897,31 @@ function OverviewTab(props: {
       
       {/* Recent Alerts */}
       <div>
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Active Alerts</h3>
-          <Show when={Object.keys(props.activeAlerts).length > 0}>
-            <div class="flex items-center gap-2">
-              <Show when={selectedAlerts().size > 0}>
-                <span class="text-xs text-gray-600 dark:text-gray-400">
-                  {selectedAlerts().size} selected
-                </span>
-                <button
-                  class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={processingBulk()}
-                  onClick={bulkAcknowledge}
-                >
-                  {processingBulk() ? 'Processing...' : 'Acknowledge Selected'}
-                </button>
-                <button
-                  class="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={processingBulk()}
-                  onClick={bulkClear}
-                >
-                  {processingBulk() ? 'Processing...' : 'Clear Selected'}
-                </button>
-              </Show>
+        <div class="flex flex-col gap-2 mb-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Active Alerts</h3>
+            <Show when={Object.keys(props.activeAlerts).length > 0 && selectedAlerts().size > 0}>
+              <span class="text-xs text-gray-600 dark:text-gray-400">
+                {selectedAlerts().size} selected
+              </span>
+            </Show>
+          </div>
+          <Show when={Object.keys(props.activeAlerts).length > 0 && selectedAlerts().size > 0}>
+            <div class="flex gap-1 justify-start sm:justify-end max-w-full">
+              <button
+                class="flex-shrink px-2 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={processingBulk()}
+                onClick={bulkAcknowledge}
+              >
+                Ack
+              </button>
+              <button
+                class="flex-shrink px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={processingBulk()}
+                onClick={bulkClear}
+              >
+                Clear
+              </button>
             </div>
           </Show>
         </div>
@@ -954,37 +956,39 @@ function OverviewTab(props: {
                 } ${
                   selectedAlerts().has(alert.id) ? 'ring-2 ring-blue-500' : ''
                 }`}>
-                  <div class="flex items-start">
-                    <input
-                      type="checkbox"
-                      class="mt-1 mr-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-                      checked={selectedAlerts().has(alert.id)}
-                      onChange={() => toggleAlertSelection(alert.id)}
-                    />
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2">
-                        <span class={`text-sm font-medium ${
-                          alert.level === 'critical' ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'
-                        }`}>
-                          {alert.resourceName}
-                        </span>
-                        <span class="text-xs text-gray-600 dark:text-gray-400">
-                          ({alert.type})
-                        </span>
-                        <Show when={alert.acknowledged}>
-                          <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
-                            Acknowledged
+                  <div class="flex flex-col sm:flex-row sm:items-start">
+                    <div class="flex items-start flex-1">
+                      <input
+                        type="checkbox"
+                        class="mt-1 mr-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
+                        checked={selectedAlerts().has(alert.id)}
+                        onChange={() => toggleAlertSelection(alert.id)}
+                      />
+                      <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class={`text-sm font-medium truncate ${
+                            alert.level === 'critical' ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'
+                          }`}>
+                            {alert.resourceName}
                           </span>
-                        </Show>
+                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                            ({alert.type})
+                          </span>
+                          <Show when={alert.acknowledged}>
+                            <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                              Acknowledged
+                            </span>
+                          </Show>
+                        </div>
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
+                          {alert.message}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Started: {new Date(alert.startTime).toLocaleString()}
+                        </p>
                       </div>
-                      <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                        {alert.message}
-                      </p>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        Started: {new Date(alert.startTime).toLocaleString()}
-                      </p>
                     </div>
-                    <div class="flex gap-2 ml-4">
+                    <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
                       <Show when={!alert.acknowledged}>
                         <button 
                           class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
