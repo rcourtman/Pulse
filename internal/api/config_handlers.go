@@ -2714,10 +2714,12 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		// For production, keep the original host (users will need proper proxy config)
 	}
 	
-	pulseURL := fmt.Sprintf("%s://%s", "http", host)
-	if r.TLS != nil {
-		pulseURL = fmt.Sprintf("%s://%s", "https", host)
+	// Detect protocol - check both TLS and proxy headers
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
 	}
+	pulseURL := fmt.Sprintf("%s://%s", scheme, host)
 	
 	encodedHost := ""
 	if req.Host != "" {
