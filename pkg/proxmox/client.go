@@ -268,8 +268,14 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 			// Special case for 403 with API token - this is usually a permission issue
 			err = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
 		} else if resp.StatusCode == 595 {
-			// 595 is Proxmox "no ticket" error - usually means authentication failed
-			err = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
+			// 595 can mean authentication failed OR trying to access an offline node in a cluster
+			// Check if this is a node-specific endpoint
+			if strings.Contains(req.URL.Path, "/nodes/") && strings.Count(req.URL.Path, "/") > 3 {
+				// This looks like a node-specific resource request
+				err = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
+			} else {
+				err = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
+			}
 		} else if resp.StatusCode == 401 {
 			err = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
 		} else {
