@@ -4,12 +4,15 @@ Pulse supports sending alert notifications to various webhook services including
 
 ## Quick Start
 
-1. Navigate to **Settings** → **Alerts** → **Webhooks**
-2. Click **Add Webhook**
-3. Select your service type or choose "Generic" for custom webhooks
+1. Navigate to **Alerts** → **Notifications** tab
+2. Configure email settings or add webhooks
+3. Select your service type (Discord, Slack, Teams, Telegram, etc.)
 4. Enter the webhook URL and configure settings
 5. Test the webhook to ensure it's working
 6. Save your configuration
+
+![Alert Configuration](images/04-alerts.png)
+*Alert configuration interface showing notification settings*
 
 ## Supported Services
 

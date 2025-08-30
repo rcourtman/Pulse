@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -82,10 +83,23 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	
-	history := h.monitor.GetAlertManager().GetAlertHistory(limit)
+	// Check if mock mode is enabled
+	mockEnabled := mock.IsMockEnabled()
+	log.Info().Bool("mockEnabled", mockEnabled).Msg("GetAlertHistory: checking mock mode")
+	
+	if mockEnabled {
+		history := mock.GetMockAlertHistory(limit)
+		log.Info().Int("mockHistoryCount", len(history)).Msg("Returning mock alert history")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(history)
+		return
+	}
+	
+	// Get real alert history
+	alertHistory := h.monitor.GetAlertManager().GetAlertHistory(limit)
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(history)
+	json.NewEncoder(w).Encode(alertHistory)
 }
 
 // ClearAlertHistory clears all alert history

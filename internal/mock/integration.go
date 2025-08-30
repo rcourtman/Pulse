@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	mockData       models.StateSnapshot
-	mockAlerts     []models.Alert
-	mockEnabled    bool
-	lastUpdate     time.Time
-	updateInterval = 2 * time.Second
+	mockData         models.StateSnapshot
+	mockAlerts       []models.Alert
+	mockAlertHistory []models.Alert
+	mockEnabled      bool
+	lastUpdate       time.Time
+	updateInterval   = 2 * time.Second
 )
 
 func init() {
@@ -30,6 +31,7 @@ func init() {
 		// Generate initial mock data
 		mockData = GenerateMockData(config)
 		mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
+		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 		lastUpdate = time.Now()
 		
 		// Start update ticker
@@ -116,7 +118,10 @@ func ToggleMockMode(enable bool) {
 		config := LoadMockConfig()
 		mockData = GenerateMockData(config)
 		mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
-		log.Info().Msg("Mock mode enabled dynamically")
+		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
+		log.Info().
+			Int("history_count", len(mockAlertHistory)).
+			Msg("Mock mode enabled dynamically with alert history")
 	} else if !enable && mockEnabled {
 		mockEnabled = false
 		log.Info().Msg("Mock mode disabled dynamically")
@@ -139,10 +144,23 @@ func SetMockConfig(nodeCount, vmsPerNode, lxcsPerNode int) {
 	
 	mockData = GenerateMockData(config)
 	mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
+	mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 	
 	log.Info().
 		Int("nodes", nodeCount).
 		Int("vms", vmsPerNode).
 		Int("lxcs", lxcsPerNode).
 		Msg("Mock configuration updated")
+}
+
+// GetMockAlertHistory returns mock alert history
+func GetMockAlertHistory(limit int) []models.Alert {
+	if !mockEnabled {
+		return []models.Alert{}
+	}
+	
+	if limit > 0 && limit < len(mockAlertHistory) {
+		return mockAlertHistory[:limit]
+	}
+	return mockAlertHistory
 }
