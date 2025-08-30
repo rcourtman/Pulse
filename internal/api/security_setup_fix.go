@@ -347,6 +347,27 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		return
 	}
 	
+	// Check if using proxy auth and if so, verify admin status
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, rq); valid {
+			if !isAdmin {
+				// User is authenticated but not an admin
+				log.Warn().
+					Str("ip", rq.RemoteAddr).
+					Str("path", rq.URL.Path).
+					Str("method", rq.Method).
+					Str("username", username).
+					Msg("Non-admin user attempted to regenerate API token")
+				
+				// Return forbidden error
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`{"error":"Admin privileges required"}`))
+				return
+			}
+		}
+	}
+	
 	if rq.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
