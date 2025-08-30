@@ -215,6 +215,27 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if !CheckAuth(h.config, w, r) {
 		return
 	}
+	
+	// Check if using proxy auth and if so, verify admin status
+	if h.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(h.config, r); valid {
+			if !isAdmin {
+				// User is authenticated but not an admin
+				log.Warn().
+					Str("ip", r.RemoteAddr).
+					Str("path", r.URL.Path).
+					Str("method", r.Method).
+					Str("username", username).
+					Msg("Non-admin user attempted to update system settings")
+				
+				// Return forbidden error
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(`{"error":"Admin privileges required"}`))
+				return
+			}
+		}
+	}
 
 	// Load existing settings first to preserve fields not in the request
 	existingSettings, err := h.persistence.LoadSystemSettings()

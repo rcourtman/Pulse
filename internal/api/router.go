@@ -128,7 +128,7 @@ func (r *Router) setupRoutes() {
 		case http.MethodGet:
 			configHandlers.HandleGetNodes(w, r)
 		case http.MethodPost:
-			configHandlers.HandleAddNode(w, r)
+			RequireAdmin(configHandlers.config, configHandlers.HandleAddNode)(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -154,9 +154,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
-			configHandlers.HandleUpdateNode(w, r)
+			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateNode)(w, r)
 		case http.MethodDelete:
-			configHandlers.HandleDeleteNode(w, r)
+			RequireAdmin(configHandlers.config, configHandlers.HandleDeleteNode)(w, r)
 		case http.MethodPost:
 			// Handle test endpoint
 			if strings.HasSuffix(r.URL.Path, "/test") {
@@ -176,7 +176,7 @@ func (r *Router) setupRoutes() {
 			configHandlers.HandleGetSystemSettings(w, r)
 		case http.MethodPut:
 			// DEPRECATED - use /api/system/settings/update instead
-			configHandlers.HandleUpdateSystemSettingsOLD(w, r)
+			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateSystemSettingsOLD)(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -484,9 +484,11 @@ func (r *Router) setupRoutes() {
 		if req.Method == http.MethodPost {
 			// Check proxy auth first
 			hasValidProxyAuth := false
+			proxyAuthIsAdmin := false
 			if r.config.ProxyAuthSecret != "" {
-				if valid, _, _ := CheckProxyAuth(r.config, req); valid {
+				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
 					hasValidProxyAuth = true
+					proxyAuthIsAdmin = isAdmin
 				}
 			}
 			
@@ -516,6 +518,16 @@ func (r *Router) setupRoutes() {
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
 				r.config.APIToken != "" || 
 				r.config.ProxyAuthSecret != ""
+			
+			// Check admin privileges for proxy auth users
+			if hasValidProxyAuth && !proxyAuthIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Msg("Non-admin proxy auth user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
 			
 			if authRequired && !hasValidAuth {
 				log.Warn().
@@ -571,9 +583,11 @@ func (r *Router) setupRoutes() {
 		if req.Method == http.MethodPost {
 			// Check proxy auth first
 			hasValidProxyAuth := false
+			proxyAuthIsAdmin := false
 			if r.config.ProxyAuthSecret != "" {
-				if valid, _, _ := CheckProxyAuth(r.config, req); valid {
+				if valid, _, isAdmin := CheckProxyAuth(r.config, req); valid {
 					hasValidProxyAuth = true
+					proxyAuthIsAdmin = isAdmin
 				}
 			}
 			
@@ -603,6 +617,16 @@ func (r *Router) setupRoutes() {
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
 				r.config.APIToken != "" || 
 				r.config.ProxyAuthSecret != ""
+			
+			// Check admin privileges for proxy auth users
+			if hasValidProxyAuth && !proxyAuthIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Msg("Non-admin proxy auth user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
 			
 			if authRequired && !hasValidAuth {
 				log.Warn().
@@ -967,6 +991,26 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
 			"Only POST method is allowed", nil)
 		return
+	}
+	
+	// Check if using proxy auth and if so, verify admin status
+	if r.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
+			if !isAdmin {
+				// User is authenticated but not an admin
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Str("method", req.Method).
+					Str("username", username).
+					Msg("Non-admin user attempted to change password")
+				
+				// Return forbidden error
+				writeErrorResponse(w, http.StatusForbidden, "forbidden", 
+					"Admin privileges required", nil)
+				return
+			}
+		}
 	}
 
 	// Parse request

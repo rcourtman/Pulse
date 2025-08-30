@@ -501,3 +501,58 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 		}
 	}
 }
+
+// RequireAdmin middleware checks for authentication and admin privileges
+// For proxy auth users, it ensures they have the admin role
+// For other auth methods, all authenticated users are considered admins
+func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// First check if user is authenticated
+		if !CheckAuth(cfg, w, r) {
+			// Log the failed attempt
+			log.Warn().
+				Str("ip", r.RemoteAddr).
+				Str("path", r.URL.Path).
+				Str("method", r.Method).
+				Msg("Unauthorized access attempt")
+			
+			// Return authentication error
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"Authentication required"}`))
+			} else {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			}
+			return
+		}
+		
+		// Check if using proxy auth and if so, verify admin status
+		if cfg.ProxyAuthSecret != "" {
+			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
+				if !isAdmin {
+					// User is authenticated but not an admin
+					log.Warn().
+						Str("ip", r.RemoteAddr).
+						Str("path", r.URL.Path).
+						Str("method", r.Method).
+						Str("username", username).
+						Msg("Non-admin user attempted to access admin endpoint")
+					
+					// Return forbidden error
+					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusForbidden)
+						w.Write([]byte(`{"error":"Admin privileges required"}`))
+					} else {
+						http.Error(w, "Admin privileges required", http.StatusForbidden)
+					}
+					return
+				}
+			}
+		}
+		
+		// User is authenticated and has admin privileges (or not using proxy auth)
+		handler(w, r)
+	}
+}
