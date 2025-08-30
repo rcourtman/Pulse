@@ -348,6 +348,18 @@ create_lxc_container() {
         if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
             auto_updates_flag="--enable-auto-updates"
         fi
+        
+        # Optional VLAN configuration - defaults to empty (no VLAN) for regular users
+        echo
+        safe_read_with_default "VLAN ID (press Enter for no VLAN): " vlan_id ""
+        if [[ -n "$vlan_id" ]]; then
+            # Validate VLAN ID (1-4094)
+            if [[ ! "$vlan_id" =~ ^[0-9]+$ ]] || [[ "$vlan_id" -lt 1 ]] || [[ "$vlan_id" -gt 4094 ]]; then
+                print_error "Invalid VLAN ID. Must be between 1 and 4094"
+                print_info "Proceeding without VLAN"
+                vlan_id=""
+            fi
+        fi
     fi
     
     # Get available network bridges
@@ -507,6 +519,17 @@ create_lxc_container() {
         fi
         
         safe_read_with_default "DNS servers (space-separated, empty for host settings): " nameserver ""
+        
+        # VLAN configuration
+        safe_read_with_default "VLAN ID (leave empty for no VLAN): " vlan_id ""
+        if [[ -n "$vlan_id" ]]; then
+            # Validate VLAN ID (1-4094)
+            if [[ ! "$vlan_id" =~ ^[0-9]+$ ]] || [[ "$vlan_id" -lt 1 ]] || [[ "$vlan_id" -gt 4094 ]]; then
+                print_error "Invalid VLAN ID. Must be between 1 and 4094"
+                print_info "Proceeding without VLAN"
+                vlan_id=""
+            fi
+        fi
         
         safe_read_with_default "Startup order [99]: " startup "99"
     else
@@ -758,6 +781,11 @@ create_lxc_container() {
         fi
     else
         NET_CONFIG="name=eth0,bridge=${bridge},ip=dhcp,firewall=${firewall}"
+    fi
+    
+    # Add VLAN tag if specified
+    if [[ -n "$vlan_id" ]]; then
+        NET_CONFIG="${NET_CONFIG},tag=${vlan_id}"
     fi
     
     # Build container create command
