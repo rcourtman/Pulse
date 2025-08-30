@@ -32,13 +32,13 @@ async function main() {
   
   console.log('Starting simple Puppeteer screenshot capture...\n');
   
-  // Launch browser with high-quality rendering options
+  // Launch browser with MacBook Air-like display settings
   const browser = await puppeteer.launch({
     headless: 'new',  // Use new headless mode
     defaultViewport: null,  // Don't override viewport
     args: [
-      '--window-size=1920,1080',
-      '--force-device-scale-factor=3',  // Force 3x DPI rendering at browser level
+      '--window-size=1280,800',  // MacBook Air effective resolution
+      '--force-device-scale-factor=2',  // Retina display (2x)
       '--disable-dev-shm-usage',  // Better memory handling
       '--enable-font-antialiasing',  // Smooth fonts
       '--font-render-hinting=none'  // Disable hinting for sharper text
@@ -49,10 +49,11 @@ async function main() {
   
   // CRITICAL: Set viewport BEFORE navigating for sharp rendering!
   // This must happen before page.goto() or text will be blurry
+  // MacBook Air 13" display dimensions
   await page.setViewport({
-    width: 1920,
-    height: 1080,
-    deviceScaleFactor: 3  // Use 3x for ultra-sharp text (better than 2x)
+    width: 1280,
+    height: 800,
+    deviceScaleFactor: 2  // Retina display
   });
   
   try {
@@ -115,7 +116,7 @@ async function main() {
         }
       }
       
-      // Take screenshot
+      // Take screenshot - MacBook Air resolution should fit content perfectly
       await page.screenshot({
         path: path.join(OUTPUT_DIR, `${view.file}.png`),
         type: 'png'
@@ -123,6 +124,9 @@ async function main() {
       
       console.log(`Saved ${view.file}.png`);
     }
+    
+    // Note: Active alerts are shown on the main Alerts tab (04-alerts.png)
+    // The tab has Config and History sub-tabs, no separate Active tab
     
     // Take alert history screenshot - need to click on History sub-tab
     console.log('Capturing alert history...');
@@ -142,31 +146,53 @@ async function main() {
       if (historyTab) historyTab.click();
     });
     
-    // Wait for history to load naturally from the mock API
-    await wait(5000);
+    // Wait for alert history to load with retry logic
+    console.log('Waiting for alert history to load...');
+    let retries = 0;
+    const maxRetries = 15; // 15 seconds max
     
-    // Take the screenshot
+    while (retries < maxRetries) {
+      await wait(1000);
+      
+      // Check if data has loaded by looking for alert rows in the DOM
+      const hasData = await page.evaluate(() => {
+        // Look for alert history rows or the "No alerts" message
+        const rows = document.querySelectorAll('tbody tr, [data-testid="alert-row"], .alert-history-row');
+        const noDataMsg = Array.from(document.querySelectorAll('*')).find(
+          el => el.textContent && el.textContent.includes('No alerts in selected time range')
+        );
+        return rows.length > 0 || noDataMsg;
+      });
+      
+      if (hasData) {
+        console.log('Alert history loaded after', retries + 1, 'seconds');
+        break;
+      }
+      
+      retries++;
+    }
+    
+    // Extra wait for any animations
+    await wait(1000);
+    
+    // Take the screenshot - MacBook Air resolution
     await page.screenshot({
       path: path.join(OUTPUT_DIR, '05-alert-history.png'),
       type: 'png'
     });
     console.log('Saved 05-alert-history.png');
     
-    // Copy dashboard as dark mode showcase
-    await fs.copyFile(
-      path.join(OUTPUT_DIR, '01-dashboard.png'),
-      path.join(OUTPUT_DIR, '07-dark-mode.png')
-    );
+    // Note: Dashboard is already in dark mode, no need for duplicate or light mode
     
     // Mobile view
     console.log('\nCapturing mobile view...');
     
     // Set mobile viewport BEFORE reload for sharp rendering
     await page.setViewport({
-      width: 390,
-      height: 844,
+      width: 375,  // iPhone standard width
+      height: 667,  // iPhone standard height
       isMobile: true,
-      deviceScaleFactor: 3  // 3x for ultra-sharp mobile screenshots
+      deviceScaleFactor: 2  // 2x for standard retina
     });
     
     // Now reload with the new viewport already set

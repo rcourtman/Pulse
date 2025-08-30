@@ -539,10 +539,26 @@ make dev
 
 See Pulse in action with our [complete screenshot gallery →](docs/SCREENSHOTS.md)
 
-| Dashboard | Alert History | Mobile View |
-|-----------|---------------|-------------|
-| ![Dashboard](docs/images/01-dashboard.png) | ![Alerts](docs/images/05-alert-history.png) | ![Mobile](docs/images/08-mobile.png) |
-| *Monitor all nodes, VMs, and containers* | *Track and analyze alert patterns* | *Full mobile responsiveness* |
+### Core Features
+
+| Dashboard | Storage | Backups |
+|-----------|---------|---------|
+| ![Dashboard](docs/images/01-dashboard.png) | ![Storage](docs/images/02-storage.png) | ![Backups](docs/images/03-backups.png) |
+| *Real-time monitoring of nodes, VMs & containers* | *Storage pool usage across all nodes* | *Unified backup management & PBS integration* |
+
+### Alerts & Configuration
+
+| Alert Configuration | Alert History | Settings |
+|---------------------|---------------|----------|
+| ![Alerts](docs/images/04-alerts.png) | ![Alert History](docs/images/05-alert-history.png) | ![Settings](docs/images/06-settings.png) |
+| *Configure thresholds & notifications* | *Track patterns with visual timeline* | *Manage nodes & authentication* |
+
+### Mobile Experience
+
+| Mobile Dashboard |
+|------------------|
+| ![Mobile](docs/images/08-mobile.png) |
+| *Fully responsive interface for monitoring on the go* |
 
 ## Links
 
