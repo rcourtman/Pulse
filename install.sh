@@ -159,8 +159,12 @@ check_proxmox_host() {
 }
 
 check_docker_environment() {
-    # Detect if we're running inside Docker
-    if [[ -f /.dockerenv ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+    # Detect if we're running inside Docker (multiple detection methods)
+    if [[ -f /.dockerenv ]] || \
+       grep -q docker /proc/1/cgroup 2>/dev/null || \
+       grep -q docker /proc/self/cgroup 2>/dev/null || \
+       [[ -f /run/.containerenv ]] || \
+       [[ "$container" == "docker" ]]; then
         print_error "Docker environment detected"
         echo "Please use the Docker image directly: docker run -d -p 7655:7655 rcourtman/pulse:latest"
         echo "See: https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER.md"
@@ -1270,8 +1274,14 @@ EOF
             jq '.autoUpdateEnabled = true' "$CONFIG_DIR/system.json" > "$temp_file" && mv "$temp_file" "$CONFIG_DIR/system.json"
         else
             # Fallback to sed if jq not available
-            sed -i 's/"pollingInterval"/"autoUpdateEnabled":true,"pollingInterval"/' "$CONFIG_DIR/system.json" 2>/dev/null || \
-            sed -i 's/^{/{"autoUpdateEnabled":true,/' "$CONFIG_DIR/system.json" 2>/dev/null || true
+            # First check if autoUpdateEnabled already exists in the file
+            if grep -q '"autoUpdateEnabled"' "$CONFIG_DIR/system.json"; then
+                # Field exists, update its value
+                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$CONFIG_DIR/system.json"
+            else
+                # Field doesn't exist, add it after the opening brace
+                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$CONFIG_DIR/system.json"
+            fi
         fi
     else
         # Create new file with auto-updates enabled
@@ -1880,8 +1890,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --in-container)
             IN_CONTAINER=true
-            # Check if this is a Docker container
-            if [[ -f /.dockerenv ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+            # Check if this is a Docker container (multiple detection methods)
+            if [[ -f /.dockerenv ]] || \
+               grep -q docker /proc/1/cgroup 2>/dev/null || \
+               grep -q docker /proc/self/cgroup 2>/dev/null || \
+               [[ -f /run/.containerenv ]] || \
+               [[ "$container" == "docker" ]]; then
                 IN_DOCKER=true
             fi
             shift
