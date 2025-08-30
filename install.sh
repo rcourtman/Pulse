@@ -496,7 +496,7 @@ create_lxc_container() {
             storage=${storage:-$DEFAULT_STORAGE}
         fi
         
-        safe_read_with_default "Static IP (leave empty for DHCP): " static_ip ""
+        safe_read_with_default "Static IP with CIDR (e.g. 192.168.1.100/24, leave empty for DHCP): " static_ip ""
         
         # If static IP is provided, we need gateway
         if [[ -n "$static_ip" ]]; then
