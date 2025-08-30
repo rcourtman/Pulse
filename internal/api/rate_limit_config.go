@@ -127,11 +127,17 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		
-		// Get appropriate rate limiter for this endpoint
-		limiter := GetRateLimiterForEndpoint(r.URL.Path, r.Method)
-		
 		// Extract client IP
 		ip := GetClientIP(r)
+		
+		// Skip rate limiting for localhost/development
+		if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
+		// Get appropriate rate limiter for this endpoint
+		limiter := GetRateLimiterForEndpoint(r.URL.Path, r.Method)
 		
 		// Check rate limit
 		if !limiter.Allow(ip) {
