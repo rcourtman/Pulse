@@ -17,6 +17,8 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 **Auto-discovery (Easiest)**: Settings → Nodes → Click "Setup Script" on discovered node → Run on Proxmox
 **Manual**: Settings → Nodes → Add Node → Enter credentials → Save
 
+![Node Configuration](images/06-settings.png)
+
 ### How do I disable network discovery?
 Settings → System → Network Settings → Toggle "Enable Discovery" off → Save
 Or set environment variable `DISCOVERY_ENABLED=false`
