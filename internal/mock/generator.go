@@ -181,6 +181,16 @@ func generateNodes(config MockConfig) []models.Node {
 		node.Instance = "mock-cluster" // Part of cluster
 		node.IsClusterMember = true
 		node.ClusterName = "mock-cluster"
+		
+		// Make pve3 offline to test offline node handling
+		if nodeName == "pve3" {
+			node.Status = "offline"
+			node.CPU = 0
+			node.Memory.Used = 0
+			node.Memory.Usage = 0
+			node.ConnectionHealth = "offline"
+		}
+		
 		nodes = append(nodes, node)
 	}
 	

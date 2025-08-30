@@ -658,19 +658,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			Float64("diskUsage", safePercentage(float64(node.Disk), float64(node.MaxDisk))).
 			Msg("Node disk metrics (raw from Proxmox)")
 
-		// Get detailed node info if available
-		nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
-		if nodeErr != nil {
-			// If we can't get node status, it might be offline
-			log.Debug().
-				Str("instance", instanceName).
-				Str("node", node.Node).
-				Err(nodeErr).
-				Msg("Could not get node status - node may be offline")
-			// Continue with basic info we have
-		} else if nodeInfo != nil {
-			// Convert LoadAvg from interface{} to float64
-			loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
+		// Get detailed node info if available (skip for offline nodes)
+		if node.Status == "online" {
+			nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
+			if nodeErr != nil {
+				// If we can't get node status, log it
+				log.Debug().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Err(nodeErr).
+					Msg("Could not get node status")
+			} else if nodeInfo != nil {
+				// Convert LoadAvg from interface{} to float64
+				loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
 			for _, val := range nodeInfo.LoadAvg {
 				switch v := val.(type) {
 				case float64:
@@ -725,8 +725,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					MHz:     mhzStr,
 				}
 			}
-		} else {
-			log.Debug().Err(err).Str("node", node.Node).Msg("Failed to get node status")
+			}
 		}
 
 		modelNodes = append(modelNodes, modelNode)
@@ -741,6 +740,11 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		_, err := client.GetAllStorage(ctx)
 		if err == nil {
 			for _, node := range nodes {
+				// Skip offline nodes to avoid 595 errors
+				if node.Status != "online" {
+					continue
+				}
+				
 				nodeStorages, err := client.GetStorage(ctx, node.Node)
 				if err == nil {
 					// Look for local or local-lvm storage as most stable disk metric
@@ -1755,6 +1759,15 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Get storage from each node (this includes capacity info)
 	for _, node := range nodes {
+		// Skip offline nodes to avoid 595 errors when trying to access their resources
+		if node.Status != "online" {
+			log.Debug().
+				Str("node", node.Node).
+				Str("status", node.Status).
+				Msg("Skipping offline node for storage polling")
+			continue
+		}
+		
 		nodeStorage, err := client.GetStorage(ctx, node.Node)
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_node_storage", instanceName, err).WithNode(node.Node)
