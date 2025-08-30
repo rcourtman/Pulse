@@ -235,6 +235,7 @@ create_lxc_container() {
         auto_updates_flag=""
         if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
             auto_updates_flag="--enable-auto-updates"
+            ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
         fi
         
         echo
@@ -347,6 +348,7 @@ create_lxc_container() {
         auto_updates_flag=""
         if [[ "$enable_updates" =~ ^[Yy]$ ]]; then
             auto_updates_flag="--enable-auto-updates"
+            ENABLE_AUTO_UPDATES=true  # Set the global variable for host installations
         fi
         
         # Optional VLAN configuration - defaults to empty (no VLAN) for regular users
@@ -1873,8 +1875,9 @@ main() {
                 fi
             fi
             
-            # Ask about auto-updates for fresh installation (unless forced by flag or in Docker/container)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+            # Ask about auto-updates for fresh installation
+            # Skip if: already set by flag, in Docker, or being installed from host (IN_CONTAINER=true)
+            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
