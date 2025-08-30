@@ -99,7 +99,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   return (
     <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto p-1">
         <table class="w-full min-w-[600px]">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
@@ -173,11 +173,18 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 return (
                   <tr 
-                    class={`cursor-pointer transition-all duration-150 hover:-translate-y-px hover:shadow-md ${
+                    class={`cursor-pointer transition-all duration-200 hover:-translate-y-px ${
                       isSelected() 
-                        ? 'bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 relative z-10' 
+                        : props.selectedNode 
+                          ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-md' 
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-md'
                     }`}
+                    style={{
+                      'box-shadow': isSelected() 
+                        ? '0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)' 
+                        : undefined
+                    }}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
                     <td class="px-2 py-0.5 whitespace-nowrap">
