@@ -758,18 +758,18 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 			backupSize := int64(ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10)) // 5-15% of disk size
 			
 			backup := models.StorageBackup{
-				ID:        fmt.Sprintf("backup-%s-ct-%d-%d", ct.Node, ct.VMID, i),
+				ID:        fmt.Sprintf("backup-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
 				Storage:   "local",
 				Node:      ct.Node,
 				Type:      "lxc",
-				VMID:      ct.VMID,
+				VMID:      int(ct.VMID),
 				Time:      backupTime,
 				CTime:     backupTime.Unix(),
 				Size:      backupSize,
 				Format:    "tar.zst",
 				Notes:     fmt.Sprintf("Backup of %s", ct.Name),
 				Protected: rand.Float64() > 0.9, // 10% protected
-				Volid:     fmt.Sprintf("local:backup/vzdump-lxc-%d-%s.tar.zst", ct.VMID, backupTime.Format("2006_01_02-15_04_05")),
+				Volid:     fmt.Sprintf("local:backup/vzdump-lxc-%d-%s.tar.zst", int(ct.VMID), backupTime.Format("2006_01_02-15_04_05")),
 				IsPBS:     false,
 				Verified:  rand.Float64() > 0.2, // 80% verified
 			}
@@ -945,12 +945,12 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(45*24)) * time.Hour)
 			
 			backup := models.PBSBackup{
-				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", ct.VMID, i),
+				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", int(ct.VMID), i),
 				Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
 				Datastore:  datastores[rand.Intn(len(datastores))],
 				Namespace:  "root",
 				BackupType: "ct",
-				VMID:       fmt.Sprintf("%d", ct.VMID),
+				VMID:       fmt.Sprintf("%d", int(ct.VMID)),
 				BackupTime: backupTime,
 				Size:       int64(ct.Disk.Total/15 + rand.Int63n(ct.Disk.Total/8)),
 				Protected:  rand.Float64() > 0.9, // 10% protected
@@ -1019,11 +1019,11 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
 			
 			snapshot := models.GuestSnapshot{
-				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, ct.VMID, i),
+				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
 				Name:        snapshotNames[rand.Intn(len(snapshotNames))],
 				Node:        ct.Node,
 				Type:        "lxc",
-				VMID:        ct.VMID,
+				VMID:        int(ct.VMID),
 				Time:        snapshotTime,
 				Description: fmt.Sprintf("Container snapshot for %s", ct.Name),
 				VMState:     false, // Containers don't have VM state

@@ -449,7 +449,7 @@ type VM struct {
 
 // Container represents a Proxmox VE LXC container
 type Container struct {
-	VMID       int     `json:"vmid"`
+	VMID       FlexInt `json:"vmid"`  // Changed to FlexInt to handle string VMIDs from some Proxmox versions
 	Name       string  `json:"name"`
 	Node       string  `json:"node"`
 	Status     string  `json:"status"`
