@@ -1019,7 +1019,11 @@ install_dependencies() {
     print_info "Installing dependencies..."
     
     apt-get update -qq >/dev/null 2>&1
-    apt-get install -y -qq curl wget >/dev/null 2>&1
+    # Install essential dependencies plus jq for reliable JSON handling
+    apt-get install -y -qq curl wget jq >/dev/null 2>&1 || {
+        # If jq fails to install, just install the essentials
+        apt-get install -y -qq curl wget >/dev/null 2>&1
+    }
 }
 
 create_user() {
