@@ -1614,9 +1614,9 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			// Avoid duplicating node name in ID when instance name equals node name
 			var guestID string
 			if instanceName == node.Node {
-				guestID = fmt.Sprintf("%s-%d", node.Node, ct.VMID)
+				guestID = fmt.Sprintf("%s-%d", node.Node, int(ct.VMID))
 			} else {
-				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, ct.VMID)
+				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, int(ct.VMID))
 			}
 			currentMetrics := IOMetrics{
 				DiskRead:   int64(ct.DiskRead),
@@ -1648,7 +1648,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			// We'll use -1 to indicate "no data" which will be converted to null for the frontend
 			modelCT := models.Container{
 				ID:       guestID,
-				VMID:     ct.VMID,
+				VMID:     int(ct.VMID),
 				Name:     ct.Name,
 				Node:     node.Node,
 				Instance: instanceName,
