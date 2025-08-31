@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1040,13 +1041,30 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	
-	// Verify the current password is correct
-	username, password, ok := parseBasicAuth(authHeader)
-	if !ok {
+	// Parse Basic auth header
+	const basicPrefix = "Basic "
+	if !strings.HasPrefix(authHeader, basicPrefix) {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
 			"Invalid authorization format", nil)
 		return
 	}
+	
+	decoded, err := base64.StdEncoding.DecodeString(authHeader[len(basicPrefix):])
+	if err != nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Invalid authorization encoding", nil)
+		return
+	}
+	
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Invalid authorization format", nil)
+		return
+	}
+	
+	username := parts[0]
+	password := parts[1]
 	
 	// Check if username matches configured user
 	if username != r.config.AuthUser {
