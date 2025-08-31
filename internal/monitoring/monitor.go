@@ -1170,6 +1170,26 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			
 			allVMs = append(allVMs, vm)
 			
+			// For non-running VMs, zero out resource usage metrics to prevent false alerts
+			// Proxmox may report stale or residual metrics for stopped VMs
+			if vm.Status != "running" {
+				log.Debug().
+					Str("vm", vm.Name).
+					Str("status", vm.Status).
+					Float64("originalCpu", vm.CPU).
+					Float64("originalMemUsage", vm.Memory.Usage).
+					Msg("Non-running VM detected - zeroing metrics")
+				
+				// Zero out all usage metrics for stopped/paused/suspended VMs
+				vm.CPU = 0
+				vm.Memory.Usage = 0
+				vm.Disk.Usage = 0
+				vm.NetworkIn = 0
+				vm.NetworkOut = 0
+				vm.DiskRead = 0
+				vm.DiskWrite = 0
+			}
+			
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(vm, instanceName)
 			
@@ -1228,6 +1248,26 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			}
 			
 			allContainers = append(allContainers, container)
+			
+			// For non-running containers, zero out resource usage metrics to prevent false alerts
+			// Proxmox may report stale or residual metrics for stopped containers
+			if container.Status != "running" {
+				log.Debug().
+					Str("container", container.Name).
+					Str("status", container.Status).
+					Float64("originalCpu", container.CPU).
+					Float64("originalMemUsage", container.Memory.Usage).
+					Msg("Non-running container detected - zeroing metrics")
+				
+				// Zero out all usage metrics for stopped/paused containers
+				container.CPU = 0
+				container.Memory.Usage = 0
+				container.Disk.Usage = 0
+				container.NetworkIn = 0
+				container.NetworkOut = 0
+				container.DiskRead = 0
+				container.DiskWrite = 0
+			}
 			
 			// Check thresholds for alerts
 			m.alertManager.CheckGuest(container, instanceName)
