@@ -119,16 +119,21 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 // AcknowledgeAlert acknowledges an alert
 func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
+	// The path comes in as /api/alerts/{id}/acknowledge, and HandleAlerts strips the /api/alerts prefix
+	// So we get /{id}/acknowledge here
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
+	path = strings.TrimPrefix(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[1] != "acknowledge" {
 		log.Error().
 			Str("path", r.URL.Path).
+			Str("trimmedPath", path).
 			Int("parts", len(parts)).
 			Msg("Invalid acknowledge URL format")
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
-	alertID := parts[3]
+	alertID := parts[0]
 	
 	// Log the acknowledge attempt
 	log.Debug().
@@ -167,12 +172,16 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 // ClearAlert manually clears an alert
 func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/clear
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
+	// The path comes in as /api/alerts/{id}/clear, and HandleAlerts strips the /api/alerts prefix
+	// So we get /{id}/clear here
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
+	path = strings.TrimPrefix(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[1] != "clear" {
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
-	alertID := parts[3]
+	alertID := parts[0]
 	
 	h.monitor.GetAlertManager().ClearAlert(alertID)
 	
@@ -286,6 +295,12 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 // HandleAlerts routes alert requests to appropriate handlers
 func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
+	
+	log.Debug().
+		Str("originalPath", r.URL.Path).
+		Str("trimmedPath", path).
+		Str("method", r.Method).
+		Msg("HandleAlerts routing request")
 	
 	switch {
 	case path == "/config" && r.Method == http.MethodGet:
