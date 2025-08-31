@@ -2147,7 +2147,7 @@ const Settings: Component = () => {
                         
                         // Sanitize active alerts
                         if (sanitized.activeAlerts) {
-                          sanitized.activeAlerts = sanitized.activeAlerts.map((alert: any, index: number) => ({
+                          sanitized.activeAlerts = sanitized.activeAlerts.map((alert: any) => ({
                             ...alert,
                             node: sanitizeHostname(alert.node),
                             details: alert.details ? alert.details.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, 'xxx.xxx.xxx.xxx') : alert.details
