@@ -32,11 +32,13 @@ Method: POST
 Headers: Content-Type: application/json
 
 Template should be a JSON payload like:
+```json
 {
   "chat_id": "YOUR_CHAT_ID",
   "text": "{{.Message}} on {{.Node}}",
   "parse_mode": "Markdown"
 }
+```
 
 1. Create a bot with @BotFather on Telegram
 2. Get your bot token from BotFather
