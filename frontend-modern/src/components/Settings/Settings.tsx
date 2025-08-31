@@ -2113,7 +2113,7 @@ const Settings: Component = () => {
                       };
                       
                       const exportDiagnostics = (sanitize: boolean) => {
-                        let diagnostics = {
+                        let diagnostics: any = {
                           timestamp: new Date().toISOString(),
                           version: '2.0.0',
                           environment: {
@@ -2133,8 +2133,41 @@ const Settings: Component = () => {
                             nodesCount: state.nodes?.length || 0,
                             vmsCount: state.vms?.length || 0,
                             containersCount: state.containers?.length || 0,
-                            storageCount: state.storage?.length || 0
+                            storageCount: state.storage?.length || 0,
+                            pbsCount: state.pbs?.length || 0,
+                            pbsBackupsCount: state.pbsBackups?.length || 0,
+                            pveBackups: {
+                              backupTasksCount: state.pveBackups?.backupTasks?.length || 0,
+                              storageBackupsCount: state.pveBackups?.storageBackups?.length || 0,
+                              guestSnapshotsCount: state.pveBackups?.guestSnapshots?.length || 0
+                            }
                           },
+                          storage: state.storage?.map(s => ({
+                            id: s.id,
+                            node: s.node,
+                            name: s.name,
+                            type: s.type,
+                            status: s.status,
+                            enabled: s.enabled,
+                            content: s.content,
+                            shared: s.shared,
+                            used: s.used,
+                            total: s.total,
+                            hasBackups: (state.pveBackups?.storageBackups?.filter((b: any) => b.storage === s.name).length || 0) > 0
+                          })) || [],
+                          backups: {
+                            pveBackupTasks: state.pveBackups?.backupTasks?.slice(0, 10) || [],
+                            pveStorageBackups: state.pveBackups?.storageBackups?.slice(0, 10) || [],
+                            pbsBackups: state.pbsBackups?.slice(0, 10) || []
+                          },
+                          connectionHealth: state.connectionHealth || {},
+                          performance: {
+                            lastPollDuration: state.performance?.lastPollDuration || 0,
+                            totalApiCalls: state.performance?.totalApiCalls || 0,
+                            failedApiCalls: state.performance?.failedApiCalls || 0,
+                            apiCallDuration: state.performance?.apiCallDuration || {}
+                          },
+                          activeAlerts: state.activeAlerts?.slice(0, 10) || [],
                           settings: {
                           }
                         };
