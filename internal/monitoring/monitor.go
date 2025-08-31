@@ -700,23 +700,37 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 		// Debug logging for disk metrics - note that these values can fluctuate
 		// due to thin provisioning and dynamic allocation
-		log.Debug().
-			Str("node", node.Node).
-			Uint64("disk", node.Disk).
-			Uint64("maxDisk", node.MaxDisk).
-			Float64("diskUsage", safePercentage(float64(node.Disk), float64(node.MaxDisk))).
-			Msg("Node disk metrics (raw from Proxmox)")
+		if node.Disk > 0 && node.MaxDisk > 0 {
+			log.Debug().
+				Str("node", node.Node).
+				Uint64("disk", node.Disk).
+				Uint64("maxDisk", node.MaxDisk).
+				Float64("diskUsage", safePercentage(float64(node.Disk), float64(node.MaxDisk))).
+				Msg("Node disk metrics from /nodes endpoint")
+		}
 
 		// Get detailed node info if available (skip for offline nodes)
 		if node.Status == "online" {
 			nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
 			if nodeErr != nil {
-				// If we can't get node status, log it
-				log.Debug().
-					Str("instance", instanceName).
-					Str("node", node.Node).
-					Err(nodeErr).
-					Msg("Could not get node status")
+				// If we can't get node status, log but continue with data from /nodes endpoint
+				if node.Disk > 0 && node.MaxDisk > 0 {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("node", node.Node).
+						Err(nodeErr).
+						Uint64("usingDisk", node.Disk).
+						Uint64("usingMaxDisk", node.MaxDisk).
+						Msg("Could not get node status - using disk metrics from /nodes endpoint")
+				} else {
+					log.Warn().
+						Str("instance", instanceName).
+						Str("node", node.Node).
+						Err(nodeErr).
+						Uint64("disk", node.Disk).
+						Uint64("maxDisk", node.MaxDisk).
+						Msg("Could not get node status and no valid disk metrics from /nodes endpoint")
+				}
 			} else if nodeInfo != nil {
 				// Convert LoadAvg from interface{} to float64
 				loadAvg := make([]float64, 0, len(nodeInfo.LoadAvg))
@@ -734,7 +748,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			modelNode.KernelVersion = nodeInfo.KernelVersion
 			modelNode.PVEVersion = nodeInfo.PVEVersion
 
-			// Use rootfs data if available for more stable disk metrics
+			// Prefer rootfs data for more accurate disk metrics, but ensure we have valid fallback
 			if nodeInfo.RootFS != nil && nodeInfo.RootFS.Total > 0 {
 				modelNode.Disk = models.Disk{
 					Total: int64(nodeInfo.RootFS.Total),
@@ -748,6 +762,23 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Uint64("rootfsTotal", nodeInfo.RootFS.Total).
 					Float64("rootfsUsage", modelNode.Disk.Usage).
 					Msg("Using rootfs for disk metrics")
+			} else if node.Disk > 0 && node.MaxDisk > 0 {
+				// RootFS unavailable but we have valid disk data from /nodes endpoint
+				// Keep the values we already set from the nodes list
+				log.Debug().
+					Str("node", node.Node).
+					Bool("rootfsNil", nodeInfo.RootFS == nil).
+					Uint64("fallbackDisk", node.Disk).
+					Uint64("fallbackMaxDisk", node.MaxDisk).
+					Msg("RootFS data unavailable - using /nodes endpoint disk metrics")
+			} else {
+				// Neither rootfs nor valid node disk data available
+				log.Warn().
+					Str("node", node.Node).
+					Bool("rootfsNil", nodeInfo.RootFS == nil).
+					Uint64("nodeDisk", node.Disk).
+					Uint64("nodeMaxDisk", node.MaxDisk).
+					Msg("No valid disk metrics available for node")
 			}
 
 			if nodeInfo.CPUInfo != nil {
