@@ -406,6 +406,9 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			// Start polling in a goroutine so it doesn't block the ticker (only if not in mock mode)
 			if !mockEnabled {
 				go m.poll(ctx, wsHub)
+			} else {
+				// In mock mode, still check alerts for mock data
+				go m.checkMockAlerts()
 			}
 
 		case <-broadcastTicker.C:
@@ -2799,4 +2802,39 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
+}
+
+// checkMockAlerts checks alerts for mock data
+func (m *Monitor) checkMockAlerts() {
+	if !mock.IsMockEnabled() {
+		return
+	}
+	
+	// Get mock state
+	state := mock.GetMockState()
+	
+	log.Info().
+		Int("vms", len(state.VMs)).
+		Int("containers", len(state.Containers)).
+		Msg("Checking alerts for mock data")
+	
+	// Check alerts for each VM
+	for _, vm := range state.VMs {
+		m.alertManager.CheckGuest(vm, "mock")
+	}
+	
+	// Check alerts for each container
+	for _, container := range state.Containers {
+		m.alertManager.CheckGuest(container, "mock")
+	}
+	
+	// Check alerts for each node
+	for _, node := range state.Nodes {
+		m.alertManager.CheckNode(node)
+	}
+	
+	// Check alerts for storage
+	for _, storage := range state.Storage {
+		m.alertManager.CheckStorage(storage)
+	}
 }
