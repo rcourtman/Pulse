@@ -1039,6 +1039,32 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 			"Current password required", nil)
 		return
 	}
+	
+	// Verify the current password is correct
+	username, password, ok := parseBasicAuth(authHeader)
+	if !ok {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Invalid authorization format", nil)
+		return
+	}
+	
+	// Check if username matches configured user
+	if username != r.config.AuthUser {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Invalid username", nil)
+		return
+	}
+	
+	// Verify current password
+	if !auth.CheckPasswordHash(password, r.config.AuthPass) {
+		log.Warn().
+			Str("ip", req.RemoteAddr).
+			Str("username", username).
+			Msg("Failed password change attempt - incorrect current password")
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			"Current password is incorrect", nil)
+		return
+	}
 
 	// Hash the new password before storing
 	hashedPassword, err := auth.HashPassword(changeReq.NewPassword)
