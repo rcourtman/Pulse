@@ -463,7 +463,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			// The template already has the chat_id embedded
 		}
 		
-		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 		if err != nil {
 			log.Error().
 				Err(err).
@@ -539,7 +539,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				}
 			}
 			
-			jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -711,7 +711,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			}
 		}
 		
-		jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 		if err != nil {
 			log.Error().
 				Err(err).
@@ -775,7 +775,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 				}
 			}
 			
-			jsonData, err = n.generatePayloadFromTemplate(enhanced.PayloadTemplate, data)
+			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -841,6 +841,11 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 
 // generatePayloadFromTemplate renders the payload using Go templates
 func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, data WebhookPayloadData) ([]byte, error) {
+	return n.generatePayloadFromTemplateWithService(templateStr, data, "")
+}
+
+// generatePayloadFromTemplateWithService renders the payload using Go templates with service-specific handling
+func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr string, data WebhookPayloadData, service string) ([]byte, error) {
 	// Create template with helper functions
 	funcMap := template.FuncMap{
 		"title": func(s string) string {
@@ -865,7 +870,13 @@ func (n *NotificationManager) generatePayloadFromTemplate(templateStr string, da
 		return nil, fmt.Errorf("template execution failed: %w", err)
 	}
 
-	// Validate that the generated payload is valid JSON
+	// Skip JSON validation for services that use plain text payloads
+	if service == "ntfy" {
+		// ntfy uses plain text, not JSON
+		return buf.Bytes(), nil
+	}
+
+	// Validate that the generated payload is valid JSON for other services
 	var jsonCheck interface{}
 	if err := json.Unmarshal(buf.Bytes(), &jsonCheck); err != nil {
 		log.Error().
