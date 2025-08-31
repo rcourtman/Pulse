@@ -260,6 +260,30 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In Gotify, create a new application\n2. Copy the application token\n3. URL format: https://your-gotify-server/message?token=YOUR_APP_TOKEN\n4. The token must be included in the URL as a parameter",
 		},
 		{
+			Service:    "ntfy",
+			Name:       "ntfy.sh",
+			URLPattern: "https://ntfy.sh/{topic}",
+			Method:     "POST",
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			PayloadTemplate: `{
+				"topic": "{{.CustomFields.topic}}",
+				"message": "{{.Message}}",
+				"title": "Pulse Alert: {{.Level | title}}",
+				"priority": {{if eq .Level "critical"}}5{{else if eq .Level "warning"}}4{{else}}3{{end}},
+				"tags": ["{{.Level}}", "{{.Type}}", "pulse"],
+				"click": "{{.Instance}}",
+				"actions": [
+					{
+						"action": "view",
+						"label": "View in Pulse",
+						"url": "{{.Instance}}"
+					}
+				],
+				"markdown": true
+			}`,
+			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. Optional: Add authentication token in headers if required\n4. Subscribe to the topic in your ntfy app using the same topic name",
+		},
+		{
 			Service:    "generic",
 			Name:       "Generic JSON Webhook",
 			URLPattern: "",
