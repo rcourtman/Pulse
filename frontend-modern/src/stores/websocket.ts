@@ -99,8 +99,58 @@ export function createWebSocketStore(url: string) {
                 console.log('[WebSocket] Updating nodes:', message.data.nodes?.length || 0);
                 setState('nodes', message.data.nodes);
               }
-              if (message.data.vms !== undefined) setState('vms', message.data.vms);
-              if (message.data.containers !== undefined) setState('containers', message.data.containers);
+              if (message.data.vms !== undefined) {
+                // Transform tags from comma-separated strings to arrays
+                const transformedVMs = message.data.vms.map((vm: any) => {
+                  const originalTags = vm.tags;
+                  let transformedTags;
+                  
+                  if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
+                    // String with content - split into array
+                    transformedTags = originalTags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+                  } else if (Array.isArray(originalTags)) {
+                    // Already an array - filter out empty/whitespace-only tags
+                    transformedTags = originalTags.filter((tag: any) => 
+                      typeof tag === 'string' && tag.trim().length > 0
+                    );
+                  } else {
+                    // null, undefined, empty string, or other - convert to empty array
+                    transformedTags = [];
+                  }
+                  
+                  return {
+                    ...vm,
+                    tags: transformedTags
+                  };
+                });
+                setState('vms', transformedVMs);
+              }
+              if (message.data.containers !== undefined) {
+                // Transform tags from comma-separated strings to arrays
+                const transformedContainers = message.data.containers.map((container: any) => {
+                  const originalTags = container.tags;
+                  let transformedTags;
+                  
+                  if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
+                    // String with content - split into array
+                    transformedTags = originalTags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+                  } else if (Array.isArray(originalTags)) {
+                    // Already an array - filter out empty/whitespace-only tags
+                    transformedTags = originalTags.filter((tag: any) => 
+                      typeof tag === 'string' && tag.trim().length > 0
+                    );
+                  } else {
+                    // null, undefined, empty string, or other - convert to empty array
+                    transformedTags = [];
+                  }
+                  
+                  return {
+                    ...container,
+                    tags: transformedTags
+                  };
+                });
+                setState('containers', transformedContainers);
+              }
               if (message.data.storage !== undefined) setState('storage', message.data.storage);
               if (message.data.pbs !== undefined) setState('pbs', message.data.pbs);
               if (message.data.pbsBackups !== undefined) setState('pbsBackups', message.data.pbsBackups);
