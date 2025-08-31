@@ -70,7 +70,7 @@ type Config struct {
 	PVEPollingInterval   time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // Deprecated - ignored, always 10s
 	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
-	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"30s"`
+	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
 	MetricsRetentionDays int           `envconfig:"METRICS_RETENTION_DAYS" default:"7"`
 	BackupPollingCycles  int           `envconfig:"BACKUP_POLLING_CYCLES" default:"10"`
 	WebhookBatchDelay    time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
@@ -205,7 +205,7 @@ func Load() (*Config, error) {
 		ConfigPath:           dataDir,
 		DataPath:             dataDir,
 		ConcurrentPolling:    true,
-		ConnectionTimeout:    30 * time.Second,
+		ConnectionTimeout:    45 * time.Second,
 		MetricsRetentionDays: 7,
 		BackupPollingCycles:  10,
 		WebhookBatchDelay:    10 * time.Second,
