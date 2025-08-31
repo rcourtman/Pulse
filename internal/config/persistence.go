@@ -421,6 +421,13 @@ type SystemSettings struct {
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)
 func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
+	// CRITICAL: Prevent saving empty nodes when in mock mode
+	// Mock mode should NEVER modify real node configuration
+	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+		log.Warn().Msg("Skipping nodes save - mock mode is enabled")
+		return nil // Silently succeed to prevent errors but don't save
+	}
+	
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
