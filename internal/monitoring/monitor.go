@@ -109,16 +109,38 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 
 	statuses := make(map[string]bool)
 
-	// Check PVE clients
-	for name, client := range m.pveClients {
-		// Simple check - if we have a client, consider it connected
-		// In reality, you'd want to check if recent API calls succeeded
-		statuses["pve-"+name] = client != nil
+	// Check all configured PVE nodes (not just ones with clients)
+	for _, pve := range m.config.PVEInstances {
+		key := "pve-" + pve.Name
+		// Check if we have a client for this node
+		if client, exists := m.pveClients[pve.Name]; exists && client != nil {
+			// We have a client, check actual connection health from state
+			if m.state != nil && m.state.ConnectionHealth != nil {
+				statuses[key] = m.state.ConnectionHealth[pve.Name]
+			} else {
+				statuses[key] = true // Assume connected if we have a client
+			}
+		} else {
+			// No client means disconnected
+			statuses[key] = false
+		}
 	}
 
-	// Check PBS clients
-	for name, client := range m.pbsClients {
-		statuses["pbs-"+name] = client != nil
+	// Check all configured PBS nodes (not just ones with clients)
+	for _, pbs := range m.config.PBSInstances {
+		key := "pbs-" + pbs.Name
+		// Check if we have a client for this node
+		if client, exists := m.pbsClients[pbs.Name]; exists && client != nil {
+			// We have a client, check actual connection health from state
+			if m.state != nil && m.state.ConnectionHealth != nil {
+				statuses[key] = m.state.ConnectionHealth["pbs-"+pbs.Name]
+			} else {
+				statuses[key] = true // Assume connected if we have a client
+			}
+		} else {
+			// No client means disconnected
+			statuses[key] = false
+		}
 	}
 
 	return statuses
@@ -256,6 +278,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 				Str("cluster", pve.ClusterName).
 				Int("endpoints", len(endpoints)).
 				Msg("Cluster client created successfully")
+			// Set initial connection health to true for cluster
+			m.state.SetConnectionHealth(pve.Name, true)
 		} else {
 			// Create regular client
 			clientConfig := config.CreateProxmoxConfig(&pve)
@@ -263,11 +287,22 @@ func New(cfg *config.Config) (*Monitor, error) {
 			client, err := proxmox.NewClient(clientConfig)
 			if err != nil {
 				monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
-				log.Error().Err(monErr).Str("instance", pve.Name).Msg("Failed to create PVE client")
+				log.Error().
+					Err(monErr).
+					Str("instance", pve.Name).
+					Str("host", pve.Host).
+					Str("user", pve.User).
+					Bool("hasPassword", pve.Password != "").
+					Bool("hasToken", pve.TokenValue != "").
+					Msg("Failed to create PVE client - node will show as disconnected")
+				// Set initial connection health to false for this node
+				m.state.SetConnectionHealth(pve.Name, false)
 				continue
 			}
 			m.pveClients[pve.Name] = client
 			log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
+			// Set initial connection health to true
+			m.state.SetConnectionHealth(pve.Name, true)
 		}
 	}
 
@@ -286,11 +321,22 @@ func New(cfg *config.Config) (*Monitor, error) {
 		client, err := pbs.NewClient(clientConfig)
 		if err != nil {
 			monErr := errors.WrapConnectionError("create_pbs_client", pbsInst.Name, err)
-			log.Error().Err(monErr).Str("instance", pbsInst.Name).Msg("Failed to create PBS client")
+			log.Error().
+				Err(monErr).
+				Str("instance", pbsInst.Name).
+				Str("host", pbsInst.Host).
+				Str("user", pbsInst.User).
+				Bool("hasPassword", pbsInst.Password != "").
+				Bool("hasToken", pbsInst.TokenValue != "").
+				Msg("Failed to create PBS client - node will show as disconnected")
+			// Set initial connection health to false for this node
+			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, false)
 			continue
 		}
 		m.pbsClients[pbsInst.Name] = client
 		log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
+		// Set initial connection health to true
+		m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
 	}
 	} // End of else block for mock mode check
 
