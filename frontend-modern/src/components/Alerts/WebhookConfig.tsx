@@ -115,7 +115,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
         service: template.service,
         method: template.method,
         headers: { ...template.headers },
-        name: formData().name || template.name
+        name: formData().name || template.name,
+        // Clear the payload template when switching services
+        // Only generic service should have custom payloads
+        payloadTemplate: service === 'generic' ? formData().payloadTemplate : ''
       });
     }
     setShowServiceDropdown(false);
