@@ -1513,8 +1513,9 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	}
 
 	state := r.monitor.GetState()
+	frontendState := state.ToFrontend()
 	
-	if err := utils.WriteJSONResponse(w, state); err != nil {
+	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
 			"Failed to encode state data", nil)

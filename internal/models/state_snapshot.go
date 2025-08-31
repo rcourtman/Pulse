@@ -54,3 +54,44 @@ func (s *State) GetSnapshot() StateSnapshot {
 	
 	return snapshot
 }
+
+// ToFrontend converts a StateSnapshot to frontend format with proper tag handling
+func (s StateSnapshot) ToFrontend() StateFrontend {
+	// Convert nodes
+	nodes := make([]NodeFrontend, len(s.Nodes))
+	for i, n := range s.Nodes {
+		nodes[i] = n.ToFrontend()
+	}
+
+	// Convert VMs
+	vms := make([]VMFrontend, len(s.VMs))
+	for i, v := range s.VMs {
+		vms[i] = v.ToFrontend()
+	}
+
+	// Convert containers
+	containers := make([]ContainerFrontend, len(s.Containers))
+	for i, c := range s.Containers {
+		containers[i] = c.ToFrontend()
+	}
+
+	// Convert storage
+	storage := make([]StorageFrontend, len(s.Storage))
+	for i, st := range s.Storage {
+		storage[i] = st.ToFrontend()
+	}
+
+	return StateFrontend{
+		Nodes:            nodes,
+		VMs:              vms,
+		Containers:       containers,
+		Storage:          storage,
+		PBS:              s.PBSInstances,
+		Metrics:          make(map[string]any),
+		PVEBackups:       s.PVEBackups,
+		Performance:      make(map[string]any),
+		ConnectionHealth: s.ConnectionHealth,
+		Stats:            make(map[string]any),
+		LastUpdate:       s.LastUpdate.Unix() * 1000, // JavaScript timestamp
+	}
+}
