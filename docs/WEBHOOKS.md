@@ -39,9 +39,18 @@ Template should be a JSON payload like:
 }
 
 1. Create a bot with @BotFather on Telegram
-2. Get your bot token
+2. Get your bot token from BotFather
 3. Get your chat ID by messaging the bot and visiting: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
-4. Use the URL format above (Pulse will handle chat_id correctly)
+4. In Pulse, select "Telegram Bot" as the service type
+5. Use the URL format: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/sendMessage`
+6. Add a custom payload template:
+```json
+{
+  "chat_id": "YOUR_CHAT_ID",
+  "text": "{{.Message}} on {{.Node}}",
+  "parse_mode": "Markdown"
+}
+```
 
 ### Slack
 ```
