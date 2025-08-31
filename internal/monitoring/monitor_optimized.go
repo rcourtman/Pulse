@@ -489,16 +489,6 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			
 			// Process each storage
 			for _, storage := range nodeStorage {
-				// Skip if disabled at cluster level
-				if clusterCfg, exists := clusterStorageMap[storage.Storage]; exists {
-					if clusterCfg.Enabled == 0 {
-						log.Debug().
-							Str("storage", storage.Storage).
-							Str("node", n.Node).
-							Msg("Skipping disabled storage")
-						continue
-					}
-				}
 				
 				// Create storage ID
 				var storageID string
@@ -508,11 +498,11 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					storageID = fmt.Sprintf("%s-%s-%s", instanceName, n.Node, storage.Storage)
 				}
 				
+				// Get cluster config for this storage
+				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
+				
 				// Determine if shared
-				shared := false
-				if clusterCfg, exists := clusterStorageMap[storage.Storage]; exists {
-					shared = clusterCfg.Shared == 1
-				}
+				shared := hasClusterConfig && clusterConfig.Shared == 1
 				
 				// Create storage model
 				modelStorage := models.Storage{
@@ -521,14 +511,30 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					Node:     n.Node,
 					Instance: instanceName,
 					Type:     storage.Type,
-					Enabled:  storage.Enabled == 1,
-					Active:   storage.Active == 1,
-					Shared:   shared,
-					Content:  sortContent(storage.Content),
+					Status:   "available",
 					Total:    int64(storage.Total),
 					Used:     int64(storage.Used),
 					Free:     int64(storage.Available),
 					Usage:    safePercentage(float64(storage.Used), float64(storage.Total)),
+					Content:  sortContent(storage.Content),
+					Shared:   shared,
+					Enabled:  true,
+					Active:   true,
+				}
+				
+				// Override with cluster config if available
+				if hasClusterConfig {
+					modelStorage.Enabled = clusterConfig.Enabled == 1
+					modelStorage.Active = clusterConfig.Active == 1
+				}
+				
+				// Determine status based on active/enabled flags
+				if storage.Active == 1 || modelStorage.Active {
+					modelStorage.Status = "available"
+				} else if modelStorage.Enabled {
+					modelStorage.Status = "inactive"
+				} else {
+					modelStorage.Status = "disabled"
 				}
 				
 				nodeStorageList = append(nodeStorageList, modelStorage)
