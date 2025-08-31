@@ -80,7 +80,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
 	// Create handlers
-	alertHandlers := NewAlertHandlers(r.monitor)
+	alertHandlers := NewAlertHandlers(r.monitor, r.wsHub)
 	notificationHandlers := NewNotificationHandlers(r.monitor)
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)

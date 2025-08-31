@@ -10,18 +10,21 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
 	monitor *monitoring.Monitor
+	wsHub   *websocket.Hub
 }
 
 // NewAlertHandlers creates new alert handlers
-func NewAlertHandlers(monitor *monitoring.Monitor) *AlertHandlers {
+func NewAlertHandlers(monitor *monitoring.Monitor, wsHub *websocket.Hub) *AlertHandlers {
 	return &AlertHandlers{
 		monitor: monitor,
+		wsHub:   wsHub,
 	}
 }
 
@@ -150,6 +153,13 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		Str("user", user).
 		Msg("Alert acknowledged successfully")
 	
+	// Broadcast updated state to all WebSocket clients
+	if h.wsHub != nil {
+		state := h.monitor.GetState()
+		h.wsHub.BroadcastState(state)
+		log.Debug().Msg("Broadcasted state after alert acknowledgment")
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
@@ -165,6 +175,13 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	alertID := parts[3]
 	
 	h.monitor.GetAlertManager().ClearAlert(alertID)
+	
+	// Broadcast updated state to all WebSocket clients
+	if h.wsHub != nil {
+		state := h.monitor.GetState()
+		h.wsHub.BroadcastState(state)
+		log.Debug().Msg("Broadcasted state after alert clear")
+	}
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
@@ -205,6 +222,22 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		results = append(results, result)
 	}
 
+	// Broadcast updated state to all WebSocket clients if any alerts were acknowledged
+	if h.wsHub != nil {
+		hasSuccess := false
+		for _, result := range results {
+			if success, ok := result["success"].(bool); ok && success {
+				hasSuccess = true
+				break
+			}
+		}
+		if hasSuccess {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state)
+			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"results": results,
@@ -235,6 +268,13 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 		}
 		h.monitor.GetAlertManager().ClearAlert(alertID)
 		results = append(results, result)
+	}
+
+	// Broadcast updated state to all WebSocket clients
+	if h.wsHub != nil && len(results) > 0 {
+		state := h.monitor.GetState()
+		h.wsHub.BroadcastState(state)
+		log.Debug().Msg("Broadcasted state after bulk alert clear")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
