@@ -119,21 +119,28 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 // AcknowledgeAlert acknowledges an alert
 func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
-	// The path comes in as /api/alerts/{id}/acknowledge, and HandleAlerts strips the /api/alerts prefix
-	// So we get /{id}/acknowledge here
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
-	path = strings.TrimPrefix(path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 || parts[1] != "acknowledge" {
+	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
+	// So we need to find the /acknowledge suffix and extract everything before it
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
+	
+	const suffix = "/acknowledge"
+	if !strings.HasSuffix(path, suffix) {
 		log.Error().
 			Str("path", r.URL.Path).
-			Str("trimmedPath", path).
-			Int("parts", len(parts)).
-			Msg("Invalid acknowledge URL format")
+			Msg("Path does not end with /acknowledge")
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
-	alertID := parts[0]
+	
+	// Extract alert ID by removing the suffix
+	alertID := strings.TrimSuffix(path, suffix)
+	if alertID == "" {
+		log.Error().
+			Str("path", r.URL.Path).
+			Msg("Empty alert ID")
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
 	
 	// Log the acknowledge attempt
 	log.Debug().
@@ -172,16 +179,28 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 // ClearAlert manually clears an alert
 func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/clear
-	// The path comes in as /api/alerts/{id}/clear, and HandleAlerts strips the /api/alerts prefix
-	// So we get /{id}/clear here
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
-	path = strings.TrimPrefix(path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 || parts[1] != "clear" {
+	// Alert IDs can contain slashes (e.g., "pve1:qemu/101-cpu")
+	// So we need to find the /clear suffix and extract everything before it
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
+	
+	const suffix = "/clear"
+	if !strings.HasSuffix(path, suffix) {
+		log.Error().
+			Str("path", r.URL.Path).
+			Msg("Path does not end with /clear")
 		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
-	alertID := parts[0]
+	
+	// Extract alert ID by removing the suffix
+	alertID := strings.TrimSuffix(path, suffix)
+	if alertID == "" {
+		log.Error().
+			Str("path", r.URL.Path).
+			Msg("Empty alert ID")
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
 	
 	h.monitor.GetAlertManager().ClearAlert(alertID)
 	
