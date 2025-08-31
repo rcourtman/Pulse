@@ -264,23 +264,24 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Name:       "ntfy.sh",
 			URLPattern: "https://ntfy.sh/{topic}",
 			Method:     "POST",
-			Headers:    map[string]string{"Content-Type": "application/json"},
-			PayloadTemplate: `{
-				"topic": "{{.CustomFields.topic}}",
-				"message": "{{.Message}}",
-				"title": "Pulse Alert: {{.Level | title}}",
-				"priority": {{if eq .Level "critical"}}5{{else if eq .Level "warning"}}4{{else}}3{{end}},
-				"tags": ["{{.Level}}", "{{.Type}}", "pulse"],
-				"click": "{{.Instance}}",
-				"actions": [
-					{
-						"action": "view",
-						"label": "View in Pulse",
-						"url": "{{.Instance}}"
-					}
-				],
-				"markdown": true
-			}`,
+			Headers: map[string]string{
+				"Content-Type": "text/plain",
+				"Title": "Pulse Alert",
+				"Priority": "urgent",
+				"Tags": "pulse,monitoring",
+			},
+			PayloadTemplate: `🚨 {{.Level | title}} Alert: {{.ResourceName}}
+
+{{.Message}}
+
+📊 Details:
+• Node: {{.Node}}
+• Type: {{.Type | title}}
+• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}
+• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}
+• Duration: {{.Duration}}
+
+View in Pulse: {{.Instance}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. Optional: Add authentication token in headers if required\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
