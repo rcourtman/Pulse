@@ -26,8 +26,18 @@ URL Format: https://discord.com/api/webhooks/{webhook_id}/{webhook_token}
 
 ### Telegram
 ```
-URL Format: https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}
+URL Format: https://api.telegram.org/bot{bot_token}/sendMessage
 ```
+Method: POST
+Headers: Content-Type: application/json
+
+Template should be a JSON payload like:
+{
+  "chat_id": "YOUR_CHAT_ID",
+  "text": "{{.Message}} on {{.Node}}",
+  "parse_mode": "Markdown"
+}
+
 1. Create a bot with @BotFather on Telegram
 2. Get your bot token
 3. Get your chat ID by messaging the bot and visiting: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
