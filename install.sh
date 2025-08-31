@@ -892,9 +892,17 @@ EOF
     local script_source="/tmp/pulse_install_$$.sh"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
         # We're being piped, download the script
-        if ! curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
-            print_error "Failed to download install script"
-            cleanup_on_error
+        # Use timeout to prevent hanging
+        if command -v timeout >/dev/null 2>&1; then
+            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
+                print_error "Failed to download install script"
+                cleanup_on_error
+            fi
+        else
+            if ! curl -fsSL --connect-timeout 5 --max-time 15 https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh > "$script_source" 2>/dev/null; then
+                print_error "Failed to download install script"
+                cleanup_on_error
+            fi
         fi
     else
         # We have a local script file
@@ -1085,9 +1093,14 @@ download_pulse() {
         print_info "Installing specific version: $LATEST_RELEASE"
         
         # Verify the version exists (with timeout)
-        if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
-            print_error "Version $LATEST_RELEASE not found"
-            exit 1
+        if command -v timeout >/dev/null 2>&1; then
+            if ! timeout 15 curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+                print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
+            fi
+        else
+            if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+                print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
+            fi
         fi
     else
         # UPDATE_CHANNEL should already be set by main(), but set default if not
@@ -1110,15 +1123,36 @@ download_pulse() {
         # Get appropriate release based on channel (with timeout)
         if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
             # Get all releases and find the latest (including pre-releases)
-            LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+            # Use timeout command for extra protection against hanging
+            if command -v timeout >/dev/null 2>&1; then
+                LATEST_RELEASE=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            else
+                LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            fi
         else
             # Get latest stable release only
-            LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            # Use timeout command for extra protection against hanging
+            if command -v timeout >/dev/null 2>&1; then
+                LATEST_RELEASE=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            else
+                LATEST_RELEASE=$(curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            fi
         fi
         
+        # Fallback: Try direct GitHub redirect if API fails
         if [[ -z "$LATEST_RELEASE" ]]; then
-            print_error "Could not determine latest release"
-            exit 1
+            print_info "GitHub API unavailable, trying alternative method..."
+            if command -v timeout >/dev/null 2>&1; then
+                LATEST_RELEASE=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            else
+                LATEST_RELEASE=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            fi
+        fi
+        
+        # Final fallback: Use a known good version
+        if [[ -z "$LATEST_RELEASE" ]]; then
+            print_warn "Could not determine latest release from GitHub, using fallback version"
+            LATEST_RELEASE="v4.5.1"  # Known stable version as fallback
         fi
         
         print_info "Latest version: $LATEST_RELEASE"
@@ -1246,9 +1280,17 @@ setup_auto_updates() {
     else
         # Download from GitHub if not in release
         print_info "Downloading auto-update script..."
-        if ! curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
-            print_error "Failed to download auto-update script"
-            return 1
+        # Use timeout to prevent hanging
+        if command -v timeout >/dev/null 2>&1; then
+            if ! timeout 15 curl -fsSL --connect-timeout 5 --max-time 15 "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
+                print_error "Failed to download auto-update script"
+                return 1
+            fi
+        else
+            if ! curl -fsSL --connect-timeout 5 --max-time 15 "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/pulse-auto-update.sh" -o /usr/local/bin/pulse-auto-update.sh; then
+                print_error "Failed to download auto-update script"
+                return 1
+            fi
         fi
         chmod +x /usr/local/bin/pulse-auto-update.sh
     fi
@@ -1546,18 +1588,31 @@ main() {
         fi
         
         # Get both stable and RC versions
-        # Try GitHub API first, but have a fallback
-        local STABLE_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
+        # Try GitHub API first, but have a fallback - with timeout protection
+        local STABLE_VERSION=""
+        if command -v timeout >/dev/null 2>&1; then
+            STABLE_VERSION=$(timeout 10 curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        else
+            STABLE_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        fi
         
         # If rate limited or failed, try direct GitHub latest URL
         if [[ -z "$STABLE_VERSION" ]] || [[ "$STABLE_VERSION" == *"rate limit"* ]]; then
             # Use the GitHub latest release redirect to get version
-            STABLE_VERSION=$(curl -sI https://github.com/$GITHUB_REPO/releases/latest | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            if command -v timeout >/dev/null 2>&1; then
+                STABLE_VERSION=$(timeout 10 curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            else
+                STABLE_VERSION=$(curl -sI --connect-timeout 5 --max-time 10 https://github.com/$GITHUB_REPO/releases/latest 2>/dev/null | grep -i '^location:' | sed -E 's|.*tag/([^[:space:]]+).*|\1|' | tr -d '\r' || true)
+            fi
         fi
         
         # For RC, we need the API, so if it fails just use empty
         local RC_VERSION=""
-        RC_VERSION=$(curl -s https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        if command -v timeout >/dev/null 2>&1; then
+            RC_VERSION=$(timeout 10 curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        else
+            RC_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        fi
         
         # Determine default update channel
         UPDATE_CHANNEL="stable"
