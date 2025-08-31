@@ -902,12 +902,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			
 			if !useClusterEndpoint {
 				// Use traditional polling for non-clusters or if cluster endpoint fails
-				// Use WithNodes versions to avoid duplicate GetNodes calls
+				// Use optimized parallel versions for better performance
 				if instanceCfg.MonitorVMs {
-					m.pollVMsWithNodes(ctx, instanceName, client, nodes)
+					m.pollVMsWithNodesOptimized(ctx, instanceName, client, nodes)
 				}
 				if instanceCfg.MonitorContainers {
-					m.pollContainersWithNodes(ctx, instanceName, client, nodes)
+					m.pollContainersWithNodesOptimized(ctx, instanceName, client, nodes)
 				}
 			}
 		}
@@ -919,7 +919,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		case <-ctx.Done():
 			return
 		default:
-			m.pollStorageWithNodes(ctx, instanceName, client, nodes)
+			m.pollStorageWithNodesOptimized(ctx, instanceName, client, nodes)
 		}
 	}
 
