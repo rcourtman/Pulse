@@ -435,20 +435,33 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	}
 	
 
-	// Clear any alerts for stopped guests and skip threshold checks
-	if status == "stopped" {
-		// Clear all alerts for this guest if it's stopped
+	// Clear any alerts for non-running guests and skip threshold checks
+	// Proxmox VM states: running, stopped, paused, suspended
+	// We should only check thresholds for running VMs
+	if status != "running" {
+		// Clear all alerts for this guest if it's not running
 		m.mu.Lock()
+		alertsCleared := 0
 		for alertID, alert := range m.activeAlerts {
 			if alert.ResourceID == guestID {
 				delete(m.activeAlerts, alertID)
-				log.Info().
+				alertsCleared++
+				log.Debug().
 					Str("alertID", alertID).
 					Str("guest", name).
-					Msg("Cleared alert for stopped guest")
+					Str("status", status).
+					Msg("Cleared alert for non-running guest")
 			}
 		}
 		m.mu.Unlock()
+		
+		if alertsCleared > 0 {
+			log.Info().
+				Str("guest", name).
+				Str("status", status).
+				Int("alertsCleared", alertsCleared).
+				Msg("Cleared alerts for non-running guest")
+		}
 		return
 	}
 
