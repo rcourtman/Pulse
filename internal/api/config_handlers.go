@@ -439,7 +439,7 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
 	if os.Getenv("PULSE_MOCK_MODE") == "true" {
-		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		http.Error(w, "Cannot modify nodes in mock mode. Please disable mock mode first: /opt/pulse/scripts/toggle-mock.sh off", http.StatusForbidden)
 		return
 	}
 	
