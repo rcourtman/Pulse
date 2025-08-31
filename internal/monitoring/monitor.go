@@ -972,8 +972,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				diskUsage = -1
 			}
 			
-			// For running VMs, try to get filesystem info from guest agent
-			if res.Status == "running" {
+			// For running VMs, always try to get filesystem info from guest agent if disk is 0
+			// The cluster/resources endpoint often returns 0 for disk even when data is available
+			if res.Status == "running" && res.Type == "qemu" && diskUsed == 0 && diskTotal > 0 {
 				// First check if agent is enabled by getting VM status
 				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
 				if err != nil {
@@ -984,13 +985,16 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						Int("vmid", res.VMID).
 						Msg("Could not get VM status to check guest agent availability")
 				} else if vmStatus != nil {
-					if vmStatus.Agent > 0 {
+					// Always try to get filesystem info if VM is running and disk shows 0
+					// Even if agent flag is 0, the agent might still be available
+					if vmStatus.Agent > 0 || (diskUsed == 0 && diskTotal > 0) {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
 							Int("agent", vmStatus.Agent).
-							Msg("VM has agent enabled in config, attempting to get filesystem info")
+							Bool("diskIsZero", diskUsed == 0).
+							Msg("Attempting to get filesystem info from guest agent")
 						
 						fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
 						if err != nil {
@@ -1097,13 +1101,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								diskFree = totalBytes - usedBytes
 								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
 								
-								log.Debug().
+								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Uint64("totalBytes", totalBytes).
 									Uint64("usedBytes", usedBytes).
 									Float64("usage", diskUsage).
-									Msg("Using disk usage from guest agent")
+									Msg("Successfully retrieved disk usage from guest agent (cluster/resources showed 0)")
 							} else {
 								log.Info().
 									Str("instance", instanceName).
@@ -1424,14 +1428,16 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				diskUsage = -1
 			}
 			
-			// If VM has guest agent enabled and is running, try to get filesystem info
-			if vm.Agent > 0 && vm.Status == "running" {
+			// For running VMs with 0 disk usage, always try guest agent (even if agent flag is 0)
+			// The agent flag might not be reliable or the API might return 0 incorrectly
+			if vm.Status == "running" && (vm.Agent > 0 || (diskUsed == 0 && diskTotal > 0)) {
 				log.Debug().
 					Str("instance", instanceName).
 					Str("vm", vm.Name).
 					Int("vmid", vm.VMID).
 					Int("agent", vm.Agent).
-					Msg("VM has agent enabled in config, attempting to get filesystem info (legacy API)")
+					Bool("diskIsZero", diskUsed == 0).
+					Msg("Attempting to get filesystem info from guest agent (legacy API)")
 				
 				fsInfo, err := client.GetVMFSInfo(ctx, node.Node, vm.VMID)
 				if err != nil {
@@ -1534,14 +1540,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						diskFree = totalBytes - usedBytes
 						diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
 						
-						log.Debug().
+						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
 							Uint64("totalBytes", totalBytes).
 							Uint64("usedBytes", usedBytes).
 							Float64("usage", diskUsage).
-							Msg("Got disk usage from guest agent (legacy API)")
+							Msg("Successfully retrieved disk usage from guest agent (node API showed 0)")
 					} else {
 						log.Info().
 							Str("instance", instanceName).
