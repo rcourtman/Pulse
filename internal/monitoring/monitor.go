@@ -1743,21 +1743,26 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Get cluster storage configuration for shared/enabled status
 	clusterStorages, err := client.GetAllStorage(ctx)
+	clusterStorageAvailable := err == nil
 	if err != nil {
 		monErr := errors.WrapAPIError("get_cluster_storage", instanceName, err, 0)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get cluster storage")
+		log.Warn().Err(monErr).Str("instance", instanceName).Msg("Failed to get cluster storage config - will continue with node storage only")
 	}
 
 	// Create a map for quick lookup of cluster storage config
 	clusterStorageMap := make(map[string]proxmox.Storage)
-	for _, cs := range clusterStorages {
-		clusterStorageMap[cs.Storage] = cs
+	if clusterStorageAvailable {
+		for _, cs := range clusterStorages {
+			clusterStorageMap[cs.Storage] = cs
+		}
 	}
 
 	var allStorage []models.Storage
 	seenStorage := make(map[string]bool)
 
 	// Get storage from each node (this includes capacity info)
+	log.Debug().Str("instance", instanceName).Int("nodeCount", len(nodes)).Msg("Starting storage polling for nodes")
+	
 	for _, node := range nodes {
 		// Skip offline nodes to avoid 595 errors when trying to access their resources
 		if node.Status != "online" {
@@ -1768,12 +1773,15 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			continue
 		}
 		
+		log.Debug().Str("node", node.Node).Msg("Getting storage for node")
 		nodeStorage, err := client.GetStorage(ctx, node.Node)
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_node_storage", instanceName, err).WithNode(node.Node)
-			log.Error().Err(monErr).Str("node", node.Node).Msg("Failed to get node storage")
+			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get node storage - continuing with other nodes")
 			continue
 		}
+		
+		log.Debug().Str("node", node.Node).Int("storageCount", len(nodeStorage)).Msg("Retrieved storage for node")
 
 		for _, storage := range nodeStorage {
 			// Get cluster config for this storage
@@ -1865,6 +1873,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		st.Instance = instanceName
 		instanceStorage = append(instanceStorage, st)
 	}
+	
+	log.Info().
+		Str("instance", instanceName).
+		Int("storageCount", len(instanceStorage)).
+		Bool("clusterConfigAvailable", clusterStorageAvailable).
+		Msg("Updating storage for instance")
+		
 	m.state.UpdateStorageForInstance(instanceName, instanceStorage)
 }
 
