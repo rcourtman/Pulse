@@ -2276,11 +2276,35 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			continue
 		}
 
-		// Get storage for this node
-		storages, err := client.GetStorage(ctx, node.Node)
+		// Get storage for this node - retry once on timeout
+		var storages []proxmox.Storage
+		var err error
+		
+		for attempt := 1; attempt <= 2; attempt++ {
+			storages, err = client.GetStorage(ctx, node.Node)
+			if err == nil {
+				break // Success
+			}
+			
+			// Check if it's a timeout error
+			if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+				if attempt == 1 {
+					log.Warn().
+						Str("node", node.Node).
+						Str("instance", instanceName).
+						Msg("Storage query timed out, retrying with extended timeout...")
+					// Give it a bit more time on retry
+					time.Sleep(2 * time.Second)
+					continue
+				}
+			}
+			// Non-timeout error or second attempt failed
+			break
+		}
+		
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
-			log.Error().Err(monErr).Str("node", node.Node).Msg("Failed to get storage")
+			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get storage for backups - skipping node")
 			continue
 		}
 
