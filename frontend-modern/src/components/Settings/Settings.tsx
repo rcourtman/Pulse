@@ -2101,6 +2101,59 @@ const Settings: Component = () => {
                           }));
                         }
                         
+                        // Sanitize storage
+                        if (sanitized.storage) {
+                          sanitized.storage = sanitized.storage.map((s: any, index: number) => ({
+                            ...s,
+                            id: `storage-${index}`,
+                            node: sanitizeHostname(s.node),
+                            name: `storage-${index}`
+                          }));
+                        }
+                        
+                        // Sanitize backups
+                        if (sanitized.backups) {
+                          // Sanitize PVE backup tasks
+                          if (sanitized.backups.pveBackupTasks) {
+                            sanitized.backups.pveBackupTasks = sanitized.backups.pveBackupTasks.map((b: any, index: number) => ({
+                              ...b,
+                              node: sanitizeHostname(b.node),
+                              storage: `storage-${index}`,
+                              vmid: b.vmid ? `vm-${b.vmid}` : b.vmid
+                            }));
+                          }
+                          
+                          // Sanitize PVE storage backups
+                          if (sanitized.backups.pveStorageBackups) {
+                            sanitized.backups.pveStorageBackups = sanitized.backups.pveStorageBackups.map((b: any, index: number) => ({
+                              ...b,
+                              node: sanitizeHostname(b.node),
+                              storage: `storage-${index}`,
+                              vmid: b.vmid ? `vm-${b.vmid}` : b.vmid,
+                              volid: b.volid ? `vol-REDACTED` : b.volid
+                            }));
+                          }
+                          
+                          // Sanitize PBS backups
+                          if (sanitized.backups.pbsBackups) {
+                            sanitized.backups.pbsBackups = sanitized.backups.pbsBackups.map((b: any, index: number) => ({
+                              ...b,
+                              datastore: `datastore-${index}`,
+                              backupId: b.backupId ? `backup-${index}` : b.backupId,
+                              vmName: b.vmName ? `vm-REDACTED` : b.vmName
+                            }));
+                          }
+                        }
+                        
+                        // Sanitize active alerts
+                        if (sanitized.activeAlerts) {
+                          sanitized.activeAlerts = sanitized.activeAlerts.map((alert: any, index: number) => ({
+                            ...alert,
+                            node: sanitizeHostname(alert.node),
+                            details: alert.details ? alert.details.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, 'xxx.xxx.xxx.xxx') : alert.details
+                          }));
+                        }
+                        
                         // Sanitize websocket URL
                         if (sanitized.websocket?.url) {
                           sanitized.websocket.url = sanitized.websocket.url.replace(/\/\/[^\/]+/, '//REDACTED');
