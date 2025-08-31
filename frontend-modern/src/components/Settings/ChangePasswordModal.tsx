@@ -43,9 +43,11 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
         .find(row => row.startsWith('pulse_csrf='))
         ?.split('=')[1];
 
+      // Get the actual username from localStorage or use 'admin' as fallback
+      const authUser = localStorage.getItem('authUser') || 'admin';
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${btoa(`admin:${currentPassword()}`)}`,
+        'Authorization': `Basic ${btoa(`${authUser}:${currentPassword()}`)}`,
       };
       
       // Add CSRF token if available
