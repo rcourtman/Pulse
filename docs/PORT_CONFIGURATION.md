@@ -78,11 +78,3 @@ Keeping application configuration separate from authentication credentials:
    sudo lsof -i :8080
    ```
 
-### ProxmoxVE Community Script Users
-The ProxmoxVE script uses service name `pulse` (not `pulse-backend`). 
-Always use: `sudo systemctl restart pulse`
-
-For issues, consider switching to the official installer:
-```bash
-curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-```
