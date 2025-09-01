@@ -122,6 +122,18 @@ Mock mode shows both real and mock data mixed. If user needs PURE mock:
 ## CRITICAL: GitHub Comment Policy
 **DEFAULT BEHAVIOR: Reference issues in commit messages, don't comment on issues.**
 
+**MANDATORY BEFORE ANY GITHUB COMMENT:**
+1. **NEVER post a comment without showing the draft to the user first**
+2. **ALWAYS understand the issue completely before suggesting any comment:**
+   - Read ALL comments in the thread
+   - Review all attached screenshots/images
+   - Check the code for the actual problem
+   - Understand what's already been tried
+   - Look at any linked issues or PRs
+3. **Draft the comment and show it to the user**
+4. **WAIT for explicit approval** - User must say "yes", "post it", "send it", or similar
+5. **Only then post the comment**
+
 **Issue Reference Workflow (PREFERRED):**
 1. **Fix the issue in code**
 2. **Reference in commit message** - Use "addresses #XXX" or "potential fix for #XXX"
@@ -131,11 +143,11 @@ Mock mode shows both real and mock data mixed. If user needs PURE mock:
 **Only comment on issues when EXPLICITLY requested:**
 - User will say "comment on the issue", "post a comment", or similar
 - When asked to comment:
-  1. **ALWAYS verify the issue author's username FIRST** - Use `gh issue view <number> --json author`
-  2. **NEVER guess usernames** - If you can't find the author, ASK
-  3. **ALWAYS show the proposed comment to the user first**
-  4. **WAIT for explicit approval before posting**
-  5. **NEVER post comments without user approval**
+  1. **FIRST thoroughly understand the issue** - Read everything, check code, review all comments
+  2. **DRAFT the comment** - Show it to the user
+  3. **GET APPROVAL** - User must explicitly approve
+  4. **ONLY THEN post the comment**
+  5. **NEVER post comments without showing the draft first**
   
 **CRITICAL USERNAME VERIFICATION** (when commenting):
 - **Getting usernames wrong is COMPLETELY UNACCEPTABLE** - It makes the repo owner look incompetent
@@ -151,6 +163,11 @@ Mock mode shows both real and mock data mixed. If user needs PURE mock:
 3. Present findings to the user clearly
 4. Fix the issue and reference it in commit message
 5. Only comment if user explicitly asks you to
+
+**NEVER SKIP THESE STEPS:**
+- **Never post without showing draft first**
+- **Never suggest a comment without fully understanding the issue**
+- **Never assume - always verify by reading everything**
 
 ## CRITICAL: Issue Management Policy
 **NEVER close issues without user confirmation of the fix:**
