@@ -103,11 +103,12 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 
 	// Create HTTP client with proper TLS configuration
-	httpClient := tlsutil.CreateHTTPClient(cfg.VerifySSL, cfg.Fingerprint)
-	// Override timeout if specified
-	if cfg.Timeout > 0 {
-		httpClient.Timeout = cfg.Timeout
+	// Use configured timeout or default to 60 seconds
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 60 * time.Second
 	}
+	httpClient := tlsutil.CreateHTTPClientWithTimeout(cfg.VerifySSL, cfg.Fingerprint, timeout)
 
 	client := &Client{
 		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
