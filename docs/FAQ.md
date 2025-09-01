@@ -4,7 +4,7 @@
 
 ### What's the easiest way to install?
 ```bash
-bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
 ```
 
 ### System requirements?
@@ -144,7 +144,6 @@ Yes, ensure WebSocket support is enabled
 ## Updates
 
 ### How to update?
-- **ProxmoxVE LXC**: Type `update` in the LXC console
 - **Docker**: Pull latest image, recreate container  
 - **Manual/systemd**: Run the install script again: `curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash`
 

@@ -79,7 +79,6 @@ docker run -d -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
 ### Updating
 
 **Automatic Updates (New!):** Enable during installation or via Settings UI to stay current automatically  
-**LXC Container:** `pct exec <container-id> -- update`  
 **Standard Install:** Re-run the installer  
 **Docker:** `docker pull rcourtman/pulse:latest` then recreate container
 
@@ -261,14 +260,6 @@ See [Security Documentation](docs/SECURITY.md) for details.
 ### Update Notifications
 Pulse checks for updates and displays notifications in the UI when new versions are available. For security reasons, updates must be installed manually using the appropriate method for your deployment.
 
-### ProxmoxVE LXC Container
-If you installed Pulse using the ProxmoxVE Helper Script:
-```bash
-# Simply type 'update' in the LXC console
-update
-```
-The ProxmoxVE script handles everything automatically.
-
 ### Manual Installation (systemd)
 ```bash
 # Update to latest stable
@@ -396,9 +387,6 @@ pulse config import -i backup.enc
 ## Updates
 
 Pulse shows when updates are available and provides deployment-specific instructions:
-
-### ProxmoxVE LXC Container
-Type `update` in the LXC console - the script handles everything automatically
 
 ### Docker
 ```bash
