@@ -134,7 +134,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
       teams: 'Microsoft Teams',
       'teams-adaptive': 'Teams (Adaptive)',
       pagerduty: 'PagerDuty',
-      gotify: 'Gotify'
+      gotify: 'Gotify',
+      ntfy: 'ntfy'
     };
     return names[service] || service;
   };
@@ -216,7 +217,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             
             <Show when={showServiceDropdown()}>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg mb-4">
-                <For each={['generic', 'discord', 'slack', 'telegram', 'teams', 'teams-adaptive', 'pagerduty', 'gotify']}>
+                <For each={['generic', 'discord', 'slack', 'telegram', 'teams', 'teams-adaptive', 'pagerduty', 'gotify', 'ntfy']}>
                   {(service) => (
                     <button type="button"
                       onClick={() => selectService(service)}
@@ -237,6 +238,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                          service === 'teams' ? 'Microsoft Teams webhook' :
                          service === 'teams-adaptive' ? 'Teams with Adaptive Cards' :
                          service === 'gotify' ? 'Self-hosted push notifications' :
+                         service === 'ntfy' ? 'Push notifications via ntfy.sh' :
                          'PagerDuty Events API v2'}
                       </div>
                     </button>
