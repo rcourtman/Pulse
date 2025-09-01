@@ -1498,21 +1498,25 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			diskTotal := uint64(vm.MaxDisk)
 			diskFree := diskTotal - diskUsed
 			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+			var diskStatusReason string
 			
 			// If VM shows 0 disk usage but has allocated disk, it's likely guest agent issue
 			// Set to -1 to indicate "unknown" rather than showing misleading 0%
 			if diskUsed == 0 && diskTotal > 0 && vm.Status == "running" {
 				diskUsage = -1
+				diskStatusReason = "no-data"
 			}
 			
 			// For running VMs with 0 disk usage, always try guest agent (even if agent flag is 0)
 			// The agent flag might not be reliable or the API might return 0 incorrectly
 			if vm.Status == "running" && (vm.Agent > 0 || (diskUsed == 0 && diskTotal > 0)) {
-				log.Debug().
+				log.Info().
 					Str("instance", instanceName).
 					Str("vm", vm.Name).
 					Int("vmid", vm.VMID).
 					Int("agent", vm.Agent).
+					Uint64("diskUsed", diskUsed).
+					Uint64("diskTotal", diskTotal).
 					Bool("diskIsZero", diskUsed == 0).
 					Msg("Attempting to get filesystem info from guest agent (legacy API)")
 				
@@ -1521,12 +1525,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					// Log more helpful error messages based on the error type
 					errMsg := err.Error()
 					if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
+						diskStatusReason = "agent-not-running"
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
 							Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM (legacy API)")
 					} else if strings.Contains(errMsg, "timeout") {
+						diskStatusReason = "agent-timeout"
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
@@ -1534,6 +1540,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
 					} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
 						// Permission error - check if it's the known PVE 9 limitation
+						diskStatusReason = "permission-denied"
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
@@ -1552,6 +1559,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Str("vm", vm.Name).
 							Msg("• Verify guest agent is installed and running inside the VM")
 					} else {
+						diskStatusReason = "agent-error"
 						log.Debug().
 							Err(err).
 							Str("instance", instanceName).
@@ -1560,13 +1568,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Msg("Failed to get filesystem info from guest agent (legacy API)")
 					}
 				} else if len(fsInfo) == 0 {
+					diskStatusReason = "no-filesystems"
 					log.Info().
 						Str("instance", instanceName).
 						Str("vm", vm.Name).
 						Int("vmid", vm.VMID).
 						Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems (legacy API)")
 				} else {
-					log.Debug().
+					log.Info().
 						Str("instance", instanceName).
 						Str("vm", vm.Name).
 						Int("filesystems", len(fsInfo)).
@@ -1616,6 +1625,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						diskUsed = usedBytes
 						diskFree = totalBytes - usedBytes
 						diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+						diskStatusReason = "" // Clear reason - we got data!
 						
 						log.Info().
 							Str("instance", instanceName).
@@ -1626,6 +1636,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Float64("usage", diskUsage).
 							Msg("Successfully retrieved disk usage from guest agent (node API showed 0)")
 					} else {
+						diskStatusReason = "special-filesystems-only"
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
@@ -1634,7 +1645,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					}
 				}
 			} else {
-				if vm.Agent == 0 {
+				if vm.Agent == 0 && diskUsed == 0 && diskTotal > 0 {
+					diskStatusReason = "agent-disabled"
 					log.Debug().
 						Str("instance", instanceName).
 						Str("vm", vm.Name).
@@ -1666,6 +1678,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Free:  int64(diskFree),
 					Usage: diskUsage,
 				},
+				DiskStatusReason: diskStatusReason,
 				NetworkIn:  maxInt64(0, int64(netInRate)),
 				NetworkOut: maxInt64(0, int64(netOutRate)),
 				DiskRead:   maxInt64(0, int64(diskReadRate)),

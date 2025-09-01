@@ -456,6 +456,12 @@ See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy,
 - If you provide credentials via environment variables, they take precedence
 - To use Quick Security Setup: Start container WITHOUT auth environment variables
 
+### VM Disk Stats Show 0% or Dash
+- **Known Proxmox 9 limitation**: API tokens cannot access guest agent data
+- See [VM Disk Stats Troubleshooting Guide](docs/VM_DISK_STATS_TROUBLESHOOTING.md) for details
+- Container (LXC) disk stats work normally
+- This is a Proxmox API limitation, not a Pulse bug
+
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)
 - Verify credentials have PVEAuditor role minimum
