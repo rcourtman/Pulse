@@ -205,7 +205,7 @@ func Load() (*Config, error) {
 		ConfigPath:           dataDir,
 		DataPath:             dataDir,
 		ConcurrentPolling:    true,
-		ConnectionTimeout:    45 * time.Second,
+		ConnectionTimeout:    60 * time.Second,
 		MetricsRetentionDays: 7,
 		BackupPollingCycles:  10,
 		WebhookBatchDelay:    10 * time.Second,
