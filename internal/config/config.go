@@ -365,9 +365,6 @@ func Load() (*Config, error) {
 		}
 	}
 	
-	// TEMPORARY: Force auth enabled for testing
-	cfg.DisableAuth = false
-	
 	// Load proxy authentication settings
 	if proxyAuthSecret := os.Getenv("PROXY_AUTH_SECRET"); proxyAuthSecret != "" {
 		cfg.ProxyAuthSecret = proxyAuthSecret
