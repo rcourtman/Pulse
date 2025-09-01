@@ -210,7 +210,10 @@ const Settings: Component = () => {
       const response = await apiFetch('/api/security/status');
       if (response.ok) {
         const status = await response.json();
+        console.log('Security status loaded:', status);
         setSecurityStatus(status);
+      } else {
+        console.error('Failed to fetch security status:', response.status);
       }
     } catch (err) {
       console.error('Failed to fetch security status:', err);
@@ -1739,7 +1742,7 @@ const Settings: Component = () => {
               </Show>
               
               {/* Authentication */}
-              <Show when={securityStatus()?.hasAuthentication}>
+              <Show when={!securityStatusLoading() && (securityStatus()?.hasAuthentication || securityStatus()?.configured)}>
                 <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   {/* Header */}
                   <div class="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-900/20 dark:to-gray-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -1760,8 +1763,14 @@ const Settings: Component = () => {
                   <div class="p-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <button type="button"
-                        onClick={() => setShowPasswordModal(true)}
-                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Change password button clicked, current modal state:', showPasswordModal());
+                          setShowPasswordModal(true);
+                          console.log('Modal state after setting:', showPasswordModal());
+                        }}
+                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group cursor-pointer"
                       >
                         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
                           <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
