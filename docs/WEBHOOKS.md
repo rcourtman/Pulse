@@ -1,6 +1,6 @@
 # Webhook Configuration Guide
 
-Pulse supports sending alert notifications to various webhook services including Discord, Slack, Microsoft Teams, Telegram, PagerDuty, and any custom webhook endpoint.
+Pulse supports sending alert notifications to various webhook services including Discord, Slack, Microsoft Teams, Telegram, Gotify, ntfy, PagerDuty, and any custom webhook endpoint.
 
 ## Quick Start
 
@@ -26,33 +26,15 @@ URL Format: https://discord.com/api/webhooks/{webhook_id}/{webhook_token}
 
 ### Telegram
 ```
-URL Format: https://api.telegram.org/bot{bot_token}/sendMessage
+URL Format: https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}
 ```
-Method: POST
-Headers: Content-Type: application/json
-
-Template should be a JSON payload like:
-```json
-{
-  "chat_id": "YOUR_CHAT_ID",
-  "text": "{{.Message}} on {{.Node}}",
-  "parse_mode": "Markdown"
-}
-```
-
 1. Create a bot with @BotFather on Telegram
 2. Get your bot token from BotFather
 3. Get your chat ID by messaging the bot and visiting: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
 4. In Pulse, select "Telegram Bot" as the service type
-5. Use the URL format: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/sendMessage`
-6. Add a custom payload template:
-```json
-{
-  "chat_id": "YOUR_CHAT_ID",
-  "text": "{{.Message}} on {{.Node}}",
-  "parse_mode": "Markdown"
-}
-```
+5. Use the URL format: `https://api.telegram.org/bot<BOT_TOKEN>/sendMessage?chat_id=<CHAT_ID>`
+6. **IMPORTANT**: The chat_id MUST be included in the URL as a parameter
+7. Pulse automatically sends rich formatted messages with emojis and full alert details
 
 ### Slack
 ```
@@ -69,6 +51,27 @@ URL Format: https://{tenant}.webhook.office.com/webhookb2/{webhook_path}
 1. In Teams channel, click ... → Connectors
 2. Configure Incoming Webhook
 3. Copy the URL
+
+### Gotify
+```
+URL Format: https://your-gotify-server/message?token={your-app-token}
+```
+1. In Gotify, create a new application
+2. Copy the application token
+3. Use the URL format: `https://your-gotify-server/message?token=YOUR_APP_TOKEN`
+4. The token MUST be included as a URL parameter
+5. Pulse will send rich markdown-formatted notifications with emojis and full alert details
+
+### ntfy
+```
+URL Format: https://ntfy.sh/{topic} or https://your-ntfy-server/{topic}
+```
+1. Choose a topic name (e.g., 'pulse-alerts')
+2. For ntfy.sh: Use `https://ntfy.sh/YOUR_TOPIC`
+3. For self-hosted: Use `https://your-ntfy-server/YOUR_TOPIC`
+4. Subscribe to the same topic in your ntfy mobile/desktop app
+5. Optional: Add authentication headers if your ntfy server requires them
+6. Notifications include dynamic priority levels and emoji tags based on alert severity
 
 ### PagerDuty
 ```
