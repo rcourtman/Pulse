@@ -1208,18 +1208,54 @@ download_pulse() {
     mkdir -p "$INSTALL_DIR/bin"
     
     # Copy Pulse binary to the correct location (/opt/pulse/bin/pulse)
+    # First, backup the old binary if it exists
+    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
+    fi
+    
     if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
-        cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/bin/pulse"
+        if ! cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/bin/pulse"; then
+            print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
+            # Try to restore old binary
+            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+            fi
+            exit 1
+        fi
     elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
         # Fallback for old archives (pre-v4.3.1)
-        cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"
+        if ! cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"; then
+            print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
+            # Try to restore old binary
+            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+            fi
+            exit 1
+        fi
     else
         print_error "Pulse binary not found in archive"
+        # Try to restore old binary
+        if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+            mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+        fi
+        exit 1
+    fi
+    
+    # Verify the new binary was copied and is executable
+    if [[ ! -f "$INSTALL_DIR/bin/pulse" ]]; then
+        print_error "Binary installation failed - file not found after copy"
+        # Try to restore old binary
+        if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+            mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+        fi
         exit 1
     fi
     
     chmod +x "$INSTALL_DIR/bin/pulse"
     chown -R pulse:pulse "$INSTALL_DIR"
+    
+    # Clean up old binary backup if everything succeeded
+    rm -f "$INSTALL_DIR/bin/pulse.old"
     
     # Create symlink in /usr/local/bin for PATH convenience
     ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
@@ -1230,6 +1266,42 @@ download_pulse() {
     if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
         cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
         chown pulse:pulse "$INSTALL_DIR/VERSION"
+    fi
+    
+    # Verify the installed version matches what we expected
+    INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+    if [[ "$INSTALLED_VERSION" != "$LATEST_RELEASE" ]]; then
+        print_warn "Version verification issue: Expected $LATEST_RELEASE but binary reports $INSTALLED_VERSION"
+        print_info "This can happen if the binary wasn't properly replaced. Trying to fix..."
+        
+        # Force remove and recopy
+        rm -f "$INSTALL_DIR/bin/pulse"
+        if [[ -f "/tmp/pulse.tar.gz" ]]; then
+            # Re-extract and try again
+            TEMP_EXTRACT2="/tmp/pulse-extract2-$$"
+            mkdir -p "$TEMP_EXTRACT2"
+            tar -xzf /tmp/pulse.tar.gz -C "$TEMP_EXTRACT2"
+            
+            if [[ -f "$TEMP_EXTRACT2/bin/pulse" ]]; then
+                cp -f "$TEMP_EXTRACT2/bin/pulse" "$INSTALL_DIR/bin/pulse"
+            elif [[ -f "$TEMP_EXTRACT2/pulse" ]]; then
+                cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
+            fi
+            
+            chmod +x "$INSTALL_DIR/bin/pulse"
+            chown -R pulse:pulse "$INSTALL_DIR"
+            rm -rf "$TEMP_EXTRACT2"
+            
+            # Check version again
+            INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+            if [[ "$INSTALLED_VERSION" == "$LATEST_RELEASE" ]]; then
+                print_success "Version issue resolved - now running $INSTALLED_VERSION"
+            else
+                print_warn "Version mismatch persists. You may need to restart the service or reboot."
+            fi
+        fi
+    else
+        print_success "Version verified: $INSTALLED_VERSION"
     fi
     
     # Cleanup
