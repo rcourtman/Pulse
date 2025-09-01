@@ -39,6 +39,11 @@ func FingerprintVerifier(fingerprint string) *tls.Config {
 
 // CreateHTTPClient creates an HTTP client with appropriate TLS configuration
 func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
+	return CreateHTTPClientWithTimeout(verifySSL, fingerprint, 60*time.Second)
+}
+
+// CreateHTTPClientWithTimeout creates an HTTP client with appropriate TLS configuration and custom timeout
+func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		// Performance optimizations for concurrent requests
@@ -58,8 +63,13 @@ func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 	}
 	// else: default secure mode with system CA verification
 	
+	// Use provided timeout, or default to 60 seconds if not specified
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	
 	return &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		Timeout:   timeout,
 	}
 }
