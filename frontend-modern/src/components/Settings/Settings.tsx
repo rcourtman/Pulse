@@ -1542,9 +1542,9 @@ const Settings: Component = () => {
                         
                         <div class="flex items-center justify-between">
                           <div>
-                            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Auto-Update</label>
+                            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Checks</label>
                             <p class="text-xs text-gray-600 dark:text-gray-400">
-                              Automatically install updates when available
+                              Automatically check for updates (installation is manual)
                             </p>
                           </div>
                           <label class="relative inline-flex items-center cursor-pointer">
@@ -1588,9 +1588,9 @@ const Settings: Component = () => {
                             
                             <div class="flex items-center justify-between">
                               <div>
-                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Time</label>
+                                <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Check Time</label>
                                 <p class="text-xs text-gray-600 dark:text-gray-400">
-                                  Preferred time for automatic updates
+                                  Preferred time to check for updates
                                 </p>
                               </div>
                               <input
