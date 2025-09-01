@@ -206,77 +206,29 @@ Mock mode shows both real and mock data mixed. If user needs PURE mock:
    - Use "addresses #XXX" or "related to #XXX" not "fixes #XXX" (which auto-closes)
 8. **AVOID certainty in comments** - Don't say "found the issue" or "fixed it", say "looks like" or "should address this"
 
-## CRITICAL: ProxmoxVE Community Script Requirements
-**NEVER change these without coordinating with the ProxmoxVE team:**
+## Binary and Service Naming Consistency
+**Important for compatibility with various installation methods:**
 
 ### Binary Location
-- **MUST be at**: `/opt/pulse/bin/pulse`
-- **NOT**: `/opt/pulse/pulse` (v4.3.7 bug that broke everything)
-- **NOT**: `/usr/local/bin/pulse` (that's just a symlink)
-- The ProxmoxVE script expects this exact path - changing it breaks their deployment
+- **Standard location**: `/opt/pulse/bin/pulse`
+- **Symlink**: `/usr/local/bin/pulse` → `/opt/pulse/bin/pulse`
+- Keep consistent across releases to avoid breaking existing installations
 
 ### Service Name
-- **ProxmoxVE uses**: `pulse` (NOT pulse-backend)
 - **Our install.sh uses**: `pulse`
-- **Manual installs might use**: `pulse-backend`
+- **Legacy installs might use**: `pulse-backend`
 - **Code MUST detect both** and handle either service name
 
 ### Configuration Location
 - **Config directory**: `/etc/pulse/`
 - **Data directory**: `/etc/pulse/`
-- **NOT**: `/opt/pulse/` for config (that's just for the binary)
+- **Binary location**: `/opt/pulse/`
 
 ### User and Permissions
 - **Service runs as**: `pulse` user (non-root)
 - **NO sudo access** - the pulse user has no sudo privileges
-- **Shell access**: Removed (`/bin/false`)
+- **Shell access**: Limited or removed for security
 - **NEVER attempt sudo** in any code paths
-
-### Authentication Setup
-- ProxmoxVE script may pre-configure API_TOKEN in the service file
-- If API_TOKEN is already set, Quick Security Setup should be skipped
-- They handle auth setup their own way - respect their configuration
-
-### What Breaks ProxmoxVE Script
-1. **Changing binary path** from `/opt/pulse/bin/pulse`
-2. **Hardcoding service name** as `pulse-backend`
-3. **Requiring sudo** for any operations
-4. **Forcing Quick Security Setup** when API_TOKEN exists
-5. **Changing config directory** from `/etc/pulse`
-
-### ProxmoxVE Script Installation Method
-They use their own installation approach:
-1. Downloads our release tarball from GitHub
-2. Extracts to `/opt/pulse/`
-3. Creates systemd service named `pulse` (NOT pulse-backend)
-4. Creates `pulse` user with no shell access
-5. May pre-configure API_TOKEN in the service
-6. Expects binary at `/opt/pulse/bin/pulse`
-
-### Recent Issues They've Had
-- **v4.3.2**: Binary path changed from `/opt/pulse/pulse` to `/opt/pulse/bin/pulse`
-- **v4.3.7**: We broke it again by installing to wrong path
-- **Multiple versions**: Service name confusion (pulse vs pulse-backend)
-- **Authentication**: They want to set API_TOKEN themselves, not use our UI
-
-### Testing ProxmoxVE Compatibility
-Before ANY release that changes paths or service handling:
-```bash
-# Create fresh ProxmoxVE container and test their script
-ssh root@delly "pct create <id> /var/lib/vz/template/cache/debian-12-standard_12.7-1_amd64.tar.zst --hostname pulse-test --memory 1024 --cores 2 --rootfs local-zfs:4 --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features nesting=1 && pct start <id>"
-
-# Install via their script (bash -c $(...) pulse)
-# Verify:
-# - Binary is at /opt/pulse/bin/pulse
-# - Service name is 'pulse'
-# - Can start without sudo errors
-```
-
-### GitHub Issue History
-- **#6833**: Main complaint about constant binary path changes
-- **#6859**: Their PR to update for v4.3.2+
-- They've had to update their script MULTIPLE times due to our changes
-- They're understandably frustrated with the instability
 
 ## CRITICAL: Security Model Understanding
 **Pulse v4 Security Architecture:**

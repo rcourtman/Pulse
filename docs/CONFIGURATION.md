@@ -298,15 +298,6 @@ echo "Pulse deployed! Use API token: $API_TOKEN"
 curl -H "X-API-Token: $API_TOKEN" http://localhost:7655/api/nodes
 ```
 
-### ProxmoxVE Helper Script
-
-The ProxmoxVE community scripts already use this approach:
-
-```bash
-# They generate a token and set it directly
-API_TOKEN=generated-token-here /opt/pulse/bin/pulse
-```
-
 ---
 
 ## Security Best Practices
