@@ -87,6 +87,12 @@ if [ -f /opt/pulse/mock.env ]; then
     fi
 fi
 
+# Load auth environment if it exists
+if [ -f /etc/pulse/.env ]; then
+    source /etc/pulse/.env
+    echo "Auth configuration loaded from /etc/pulse/.env"
+fi
+
 # Start backend on port 7656 (one port up from normal)
 echo "Starting backend on port 7656..."
 cd /opt/pulse
@@ -95,6 +101,8 @@ echo "Building backend (API-only mode for development)..."
 go build -tags "dev" -o pulse ./cmd/pulse
 # Export all PULSE_MOCK_* variables for the backend
 export PULSE_MOCK_MODE PULSE_MOCK_NODES PULSE_MOCK_VMS_PER_NODE PULSE_MOCK_LXCS_PER_NODE PULSE_MOCK_RANDOM_METRICS PULSE_MOCK_STOPPED_PERCENT
+# Export auth variables if set
+export PULSE_AUTH_USER PULSE_AUTH_PASS
 PORT=7656 ./pulse &
 BACKEND_PID=$!
 
