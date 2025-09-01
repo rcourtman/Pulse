@@ -237,8 +237,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"message": "{{.Message}}",
-				"title": "Pulse Alert: {{.Level | title}}",
+				"message": "**{{.ResourceName}}** on node **{{.Node}}**\n\n{{.Message}}\n\n📊 **Details:**\n- Type: {{.Type | title}}\n- Current: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- Duration: {{.Duration}}\n\n[View in Pulse]({{.Instance}})",
+				"title": "{{.Level | title}}: {{.ResourceName}}",
 				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
 				"extras": {
 					"client::display": {
