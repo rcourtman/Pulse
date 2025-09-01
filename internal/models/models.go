@@ -83,6 +83,7 @@ type VM struct {
 	CPUs             int       `json:"cpus"`
 	Memory           Memory    `json:"memory"`
 	Disk             Disk      `json:"disk"`
+	DiskStatusReason string    `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	NetworkIn        int64     `json:"networkIn"`
 	NetworkOut       int64     `json:"networkOut"`
 	DiskRead         int64     `json:"diskRead"`

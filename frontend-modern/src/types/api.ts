@@ -50,6 +50,7 @@ export interface VM {
   cpus: number;
   memory: Memory;
   disk: Disk;
+  diskStatusReason?: string;
   networkIn: number;
   networkOut: number;
   diskRead: number;
