@@ -762,11 +762,11 @@ const Settings: Component = () => {
       {/* Tab Navigation - modern style */}
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="p-1">
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
+          <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto scrollbar-hide" style="-webkit-overflow-scrolling: touch;">
             <For each={tabs}>
               {(tab) => (
                 <button type="button"
-                  class={`flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                  class={`flex-shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                     activeTab() === tab.id
                       ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
@@ -792,12 +792,12 @@ const Settings: Component = () => {
                 </div>
               </Show>
               <Show when={initialLoadComplete()}>
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
-                <div class="flex gap-2 items-center">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
+                <div class="flex flex-wrap gap-2 items-center justify-end">
                   {/* Discovery toggle */}
-                  <label class="flex items-center gap-2 cursor-pointer" title="Enable automatic discovery of Proxmox servers on your network">
-                    <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
+                  <label class="flex items-center gap-1 sm:gap-2 cursor-pointer" title="Enable automatic discovery of Proxmox servers on your network">
+                    <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Discovery</span>
                     <div class="relative inline-flex items-center">
                       <input
                         type="checkbox"
@@ -842,7 +842,7 @@ const Settings: Component = () => {
                         loadDiscoveredNodes();
                         notificationStore.info('Refreshing discovery...', 2000);
                       }}
-                      class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
                       title="Refresh discovered servers"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -850,7 +850,7 @@ const Settings: Component = () => {
                         <polyline points="1 20 1 14 7 14"></polyline>
                         <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
                       </svg>
-                      Refresh
+                      <span class="hidden sm:inline">Refresh</span>
                     </button>
                   </Show>
                   
@@ -861,13 +861,14 @@ const Settings: Component = () => {
                       setModalResetKey(prev => prev + 1);
                       setShowNodeModal(true);
                     }}
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="12" y1="5" x2="12" y2="19"></line>
                       <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Add PVE Node
+                    <span class="sm:hidden">Add</span>
+                    <span class="hidden sm:inline">Add PVE Node</span>
                   </button>
                 </div>
               </div>
@@ -876,10 +877,11 @@ const Settings: Component = () => {
                 <For each={nodes().filter(n => n.type === 'pve')}>
                   {(node) => (
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                      <div class="flex items-start justify-between">
-                        <div class="flex items-start gap-3">
-                          <div class="relative">
-                            <div class={`w-3 h-3 rounded-full mt-1.5 ${
+                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-start gap-3">
+                            <div class="relative flex-shrink-0">
+                              <div class={`w-3 h-3 rounded-full mt-1.5 ${
                             (() => {
                               // Find the corresponding node in the WebSocket state
                               const stateNode = state.nodes.find(n => n.instance === node.name);
@@ -894,12 +896,12 @@ const Settings: Component = () => {
                               // Default to red if no state data (node is offline/unreachable)
                               return 'bg-red-500';
                             })()
-                          }`}></div>
-                          </div>
-                          <div class="flex-1">
-                            <h4 class="font-medium text-gray-900 dark:text-gray-100">{node.name}</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{node.host}</p>
-                            <div class="flex flex-wrap gap-2 mt-2">
+                            }`}></div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                              <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">{node.name}</h4>
+                              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">{node.host}</p>
+                              <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
                               <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
                                 {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                               </span>
@@ -944,9 +946,10 @@ const Settings: Component = () => {
                                 </p>
                               </div>
                             </Show>
+                            </div>
                           </div>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                           <button type="button"
                             onClick={() => testNodeConnection(node.id)}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
@@ -1017,8 +1020,8 @@ const Settings: Component = () => {
                         setShowNodeModal(true);
                       }}
                     >
-                      <div class="flex items-start justify-between">
-                        <div class="flex items-start gap-3">
+                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div class="flex-1 min-w-0">
                           <div class="relative">
                             <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
                           </div>
@@ -1061,9 +1064,9 @@ const Settings: Component = () => {
                 </div>
               </Show>
               <Show when={initialLoadComplete()}>
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
-                <div class="flex gap-2 items-center">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
+                <div class="flex flex-wrap gap-2 items-center justify-end">
                   {/* Discovery toggle */}
                   <label class="flex items-center gap-2 cursor-pointer" title="Enable automatic discovery of PBS servers on your network">
                     <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
@@ -1111,7 +1114,7 @@ const Settings: Component = () => {
                         loadDiscoveredNodes();
                         notificationStore.info('Refreshing discovery...', 2000);
                       }}
-                      class="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
                       title="Refresh discovered servers"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1119,7 +1122,7 @@ const Settings: Component = () => {
                         <polyline points="1 20 1 14 7 14"></polyline>
                         <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
                       </svg>
-                      Refresh
+                      <span class="hidden sm:inline">Refresh</span>
                     </button>
                   </Show>
                   
@@ -1130,13 +1133,14 @@ const Settings: Component = () => {
                       setModalResetKey(prev => prev + 1);
                       setShowNodeModal(true);
                     }}
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="12" y1="5" x2="12" y2="19"></line>
                       <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Add PBS Node
+                    <span class="sm:hidden">Add</span>
+                    <span class="hidden sm:inline">Add PBS Node</span>
                   </button>
                 </div>
               </div>
@@ -1145,8 +1149,8 @@ const Settings: Component = () => {
                 <For each={nodes().filter(n => n.type === 'pbs')}>
                   {(node) => (
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
-                      <div class="flex items-start justify-between">
-                        <div class="flex items-start gap-3">
+                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div class="flex-1 min-w-0">
                           <div class={`w-3 h-3 rounded-full mt-1.5 ${
                             (() => {
                               // Find the corresponding PBS instance in the WebSocket state
@@ -1164,9 +1168,9 @@ const Settings: Component = () => {
                             })()
                           }`}></div>
                           <div>
-                            <h4 class="font-medium text-gray-900 dark:text-gray-100">{node.name}</h4>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{node.host}</p>
-                            <div class="flex flex-wrap gap-2 mt-2">
+                              <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">{node.name}</h4>
+                              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">{node.host}</p>
+                              <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
                               <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
                                 {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                               </span>
@@ -1177,7 +1181,7 @@ const Settings: Component = () => {
                             </div>
                           </div>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                           <button type="button"
                             onClick={() => testNodeConnection(node.id)}
                             class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
@@ -1248,8 +1252,8 @@ const Settings: Component = () => {
                         setShowNodeModal(true);
                       }}
                     >
-                      <div class="flex items-start justify-between">
-                        <div class="flex items-start gap-3">
+                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div class="flex-1 min-w-0">
                           <div class="relative">
                             <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
                           </div>
@@ -1359,7 +1363,7 @@ const Settings: Component = () => {
                       <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)</p>
                       
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                           <input
                             type="checkbox"
                             id="allowEmbedding"
