@@ -557,6 +557,23 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 	
 	// Generate some node alerts
 	for _, node := range nodes {
+		// Add offline alert for offline nodes
+		if node.Status == "offline" {
+			alerts = append(alerts, models.Alert{
+				ID:           fmt.Sprintf("node-offline-%s", node.ID),
+				Type:         "connectivity",
+				Level:        "critical",
+				ResourceID:   node.ID,
+				ResourceName: node.Name,
+				Node:         node.Name,
+				Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
+				Value:        0,
+				Threshold:    0,
+				StartTime:    time.Now().Add(-time.Minute * 5), // Offline for 5 minutes
+			})
+			continue // Skip other checks for offline nodes
+		}
+		
 		if node.CPU > 0.8 {
 			alerts = append(alerts, models.Alert{
 				ID:           fmt.Sprintf("alert-%s-cpu", node.Name),
