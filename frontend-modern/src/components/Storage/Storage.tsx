@@ -246,9 +246,6 @@ const Storage: Component = () => {
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
-                  <Show when={viewMode() === 'node'}>
-                    <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Node</th>
-                  </Show>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Content</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Status</th>
@@ -308,15 +305,13 @@ const Storage: Component = () => {
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
                                   </span>
+                                  <Show when={viewMode() === 'storage'}>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      ({storage.node})
+                                    </span>
+                                  </Show>
                                 </div>
                               </td>
-                              <Show when={viewMode() === 'node'}>
-                                <td class="p-0.5 px-1.5 hidden sm:table-cell">
-                                  <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
-                                    {storage.node}
-                                  </span>
-                                </td>
-                              </Show>
                               <td class="p-0.5 px-1.5 hidden md:table-cell">
                                 <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
                                   {storage.type}
