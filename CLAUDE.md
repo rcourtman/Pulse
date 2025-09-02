@@ -368,10 +368,28 @@ sudo systemctl start pulse-dev
 # This is only needed at release time, not during development
 ```
 
-### IMPORTANT: Frontend Embed Location (for production builds only)
-**The Go binary embeds frontend files from `/opt/pulse/internal/api/frontend-modern/dist`**
-- The build-release.sh script handles this automatically at release time
-- Never manually copy files unless debugging
+### IMPORTANT: Frontend Directory Structure (CLAUDE READ THIS FIRST!)
+**⚠️ CLAUDE: The duplicate frontend directory is INTENTIONAL and REQUIRED ⚠️**
+
+**When you see `/opt/pulse/internal/api/frontend-modern/`:**
+- **DO NOT try to "fix" it** - It's supposed to exist
+- **DO NOT remove it** - Builds will fail
+- **DO NOT edit files there** - Only edit in `/opt/pulse/frontend-modern`
+- **DO NOT worry about it** - It's a build artifact like .o files
+
+**The ONLY frontend source**: `/opt/pulse/frontend-modern`
+- Edit all frontend code here
+- Vite dev server runs from here
+- This is the source of truth
+
+**Why the duplicate exists**:
+- Go's `//go:embed` CANNOT access files outside the module (no `../` or symlinks)
+- The Makefile copies the built frontend for embedding
+- It's in .gitignore so it won't pollute git
+- It gets recreated on every build (that's normal!)
+
+**What to tell users who ask about it**:
+"That's a build artifact required by Go's embed limitations. Only edit files in `/opt/pulse/frontend-modern`. The duplicate is automatically managed by the build process."
 
 ## Development Environment (Current Machine - debian-go)
 - **Development Port**: 7655 (frontend with hot-reload)

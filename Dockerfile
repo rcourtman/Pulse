@@ -32,7 +32,8 @@ COPY pkg/ ./pkg/
 COPY VERSION ./
 
 # Copy built frontend from frontend-builder stage for embedding
-COPY --from=frontend-builder /app/frontend-modern ./internal/api/frontend-modern
+# Must be at internal/api/frontend-modern for Go embed
+COPY --from=frontend-builder /app/frontend-modern/dist ./internal/api/frontend-modern/dist
 
 # Build the binary with embedded frontend
 RUN CGO_ENABLED=0 GOOS=linux go build \

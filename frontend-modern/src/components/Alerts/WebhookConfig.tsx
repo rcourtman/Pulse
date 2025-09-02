@@ -140,11 +140,40 @@ export function WebhookConfig(props: WebhookConfigProps) {
     return names[service] || service;
   };
   
+  const toggleAllWebhooks = (enabled: boolean) => {
+    props.webhooks.forEach(webhook => {
+      props.onUpdate({ ...webhook, enabled });
+    });
+  };
+
+  const allEnabled = () => props.webhooks.every(w => w.enabled);
+  const someEnabled = () => props.webhooks.some(w => w.enabled);
+
   return (
     <div class="space-y-6">
       {/* Existing Webhooks List */}
       <Show when={props.webhooks.length > 0}>
         <div class="space-y-3">
+          {/* Quick Actions Bar */}
+          <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+              {props.webhooks.filter(w => w.enabled).length} of {props.webhooks.length} webhooks enabled
+            </div>
+            <div class="flex gap-2">
+              <button
+                onClick={() => toggleAllWebhooks(false)}
+                disabled={!someEnabled()}
+                class="px-3 py-1 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                Disable All
+              </button>
+              <button
+                onClick={() => toggleAllWebhooks(true)}
+                disabled={allEnabled()}
+                class="px-3 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                Enable All
+              </button>
+            </div>
+          </div>
           <For each={props.webhooks}>
             {(webhook) => (
               <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -160,11 +189,6 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       <span class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
                         {webhook.method}
                       </span>
-                      {!webhook.enabled && (
-                        <span class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
-                          Disabled
-                        </span>
-                      )}
                     </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">
                       {webhook.url}
@@ -172,8 +196,18 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   </div>
                   <div class="flex items-center gap-2 ml-4">
                     <button 
+                      onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
+                      class={`px-3 py-1 text-xs rounded transition-colors ${
+                        webhook.enabled 
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {webhook.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                    <button 
                       onClick={() => props.onTest(webhook.id!)}
-                      disabled={props.testing === webhook.id}
+                      disabled={props.testing === webhook.id || !webhook.enabled}
                       class="px-3 py-1 text-xs text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 disabled:opacity-50"
                     >
                       {props.testing === webhook.id ? 'Testing...' : 'Test'}

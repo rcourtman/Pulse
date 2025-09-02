@@ -325,7 +325,10 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 	
 	m.config = config
-	log.Info().Msg("Alert configuration updated")
+	log.Info().
+		Bool("enabled", config.Enabled).
+		Interface("guestDefaults", config.GuestDefaults).
+		Msg("Alert configuration updated")
 }
 
 // isInQuietHours checks if the current time is within quiet hours
@@ -394,6 +397,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	m.mu.RLock()
 	if !m.config.Enabled {
 		m.mu.RUnlock()
+		log.Debug().Msg("CheckGuest: alerts disabled globally")
 		return
 	}
 	m.mu.RUnlock()
@@ -417,6 +421,15 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
+		
+		// Debug logging for high memory VMs
+		if memUsage > 85 {
+			log.Info().
+				Str("vm", name).
+				Float64("memUsage", memUsage).
+				Str("status", status).
+				Msg("VM with high memory detected in CheckGuest")
+		}
 	case models.Container:
 		guestID = g.ID
 		name = g.Name
@@ -431,6 +444,9 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
 	default:
+		log.Debug().
+			Str("type", fmt.Sprintf("%T", guest)).
+			Msg("CheckGuest: unsupported guest type")
 		return
 	}
 	
@@ -953,11 +969,36 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	return nil
 }
 
+// UnacknowledgeAlert removes the acknowledged status from an alert
+func (m *Manager) UnacknowledgeAlert(alertID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return fmt.Errorf("alert not found: %s", alertID)
+	}
+
+	alert.Acknowledged = false
+	alert.AckTime = nil
+	alert.AckUser = ""
+	
+	// Write the modified alert back to the map
+	m.activeAlerts[alertID] = alert
+
+	log.Info().
+		Str("alertID", alertID).
+		Msg("Alert unacknowledged")
+
+	return nil
+}
+
 // GetActiveAlerts returns all active alerts
 func (m *Manager) GetActiveAlerts() []Alert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	log.Debug().Int("count", len(m.activeAlerts)).Msg("GetActiveAlerts called")
 	alerts := make([]Alert, 0, len(m.activeAlerts))
 	for _, alert := range m.activeAlerts {
 		alerts = append(alerts, *alert)
@@ -1361,11 +1402,12 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 		Msg("Storage is back online")
 }
 
-// ClearAlert manually clears an alert
+// ClearAlert removes an alert from active alerts (but keeps in history)
 func (m *Manager) ClearAlert(alertID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Remove from active alerts only
 	delete(m.activeAlerts, alertID)
 	
 	if m.onResolved != nil {
@@ -1919,6 +1961,64 @@ func (m *Manager) LoadActiveAlerts() error {
 	
 	log.Info().Int("restored", restoredCount).Int("total", len(alerts)).Msg("Restored active alerts from disk")
 	return nil
+}
+
+// CleanupAlertsForNodes removes alerts for nodes that no longer exist
+func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	log.Info().
+		Int("totalAlerts", len(m.activeAlerts)).
+		Int("existingNodes", len(existingNodes)).
+		Interface("nodes", existingNodes).
+		Msg("Starting alert cleanup for non-existent nodes")
+	
+	removedCount := 0
+	for alertID := range m.activeAlerts {
+		var node string
+		
+		// Extract node from alert ID 
+		// Format can be either "node:type/id-metric" or "node-storage-name-usage"
+		if strings.Contains(alertID, ":") {
+			// Guest alert format: "node:type/id-metric"
+			parts := strings.Split(alertID, ":")
+			if len(parts) >= 2 {
+				node = parts[0]
+			}
+		} else if strings.Contains(alertID, "-storage-") {
+			// Storage alert format: "node-storage-name-usage"
+			parts := strings.Split(alertID, "-storage-")
+			if len(parts) >= 1 {
+				node = parts[0]
+			}
+		} else if strings.HasPrefix(alertID, "node-offline-") {
+			// Node offline alert format: "node-offline-node/nodename"
+			// Extract the node name after the last slash
+			if idx := strings.LastIndex(alertID, "/"); idx != -1 {
+				node = alertID[idx+1:]
+			}
+		}
+		
+		// If we couldn't extract a node or the node doesn't exist, remove the alert
+		if node == "" || !existingNodes[node] {
+			delete(m.activeAlerts, alertID)
+			removedCount++
+			log.Debug().Str("alertID", alertID).Str("node", node).Msg("Removed alert for non-existent node")
+		}
+	}
+	
+	if removedCount > 0 {
+		log.Info().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
+		// Save the cleaned up state
+		go func() {
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save alerts after cleanup")
+			}
+		}()
+	} else {
+		log.Info().Msg("No alerts needed cleanup")
+	}
 }
 
 // periodicSaveAlerts saves active alerts to disk periodically
