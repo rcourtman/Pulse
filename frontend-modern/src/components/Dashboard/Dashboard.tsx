@@ -676,15 +676,15 @@ export function Dashboard(props: DashboardProps) {
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
+          <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <ScrollableTable 
-            class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
             minWidth="900px"
           >
-          <table class="w-full min-w-[900px] table-fixed">
+          <table class="w-full min-w-[900px] table-fixed border-collapse">
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                  class="pl-6 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                   onClick={() => handleSort('name')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                   tabindex="0"
@@ -761,7 +761,7 @@ export function Dashboard(props: DashboardProps) {
                   <>
                     <Show when={node && groupingMode() === 'grouped'}>
                       <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                        <td class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
+                        <td class="p-1 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                           <a 
                             href={nodeHostMap()[node] || (node.includes(':') ? `https://${node}` : `https://${node}:8006`)} 
                             target="_blank" 
@@ -798,6 +798,7 @@ export function Dashboard(props: DashboardProps) {
             </tbody>
           </table>
         </ScrollableTable>
+        </div>
         </ComponentErrorBoundary>
       </Show>
 
