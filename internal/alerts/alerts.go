@@ -232,7 +232,7 @@ func NewManager() *Manager {
 			Overrides: make(map[string]ThresholdConfig),
 			Schedule: ScheduleConfig{
 				QuietHours: QuietHours{
-					Enabled:  false,
+					Enabled:  false,  // OFF - users should opt-in to quiet hours
 					Start:    "22:00",
 					End:      "08:00",
 					Timezone: "America/New_York",
@@ -246,11 +246,11 @@ func NewManager() *Manager {
 						"sunday":    false,
 					},
 				},
-				Cooldown:       5,  // 5 minutes default
-				GroupingWindow: 30, // 30 seconds default
-				MaxAlertsHour:  10, // 10 alerts per hour default
+				Cooldown:       5,  // ON - 5 minutes prevents spam
+				GroupingWindow: 30, // ON - 30 seconds groups related alerts
+				MaxAlertsHour:  10, // ON - 10 alerts/hour prevents flooding
 				Escalation: EscalationConfig{
-					Enabled: false,
+					Enabled: false,  // OFF - requires user configuration
 					Levels: []EscalationLevel{
 						{After: 15, Notify: "email"},
 						{After: 30, Notify: "webhook"},
@@ -258,10 +258,10 @@ func NewManager() *Manager {
 					},
 				},
 				Grouping: GroupingConfig{
-					Enabled: true,
-					Window:  30,
-					ByNode:  true,
-					ByGuest: false,
+					Enabled: true,   // ON - reduces notification noise
+					Window:  30,     // 30 second window for grouping
+					ByNode:  true,   // Group by node for mass node issues
+					ByGuest: false,  // Don't group by guest by default
 				},
 			},
 		},
