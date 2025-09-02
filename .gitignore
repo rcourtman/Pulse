@@ -44,6 +44,8 @@ build/
 pulse-fixes*.tar.gz
 
 # Frontend copy for embedding (generated during build)
+# Frontend build artifact for Go embedding
+# This is auto-generated, DO NOT EDIT
 internal/api/frontend-modern/
 
 # Claude-specific files

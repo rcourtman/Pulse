@@ -877,6 +877,15 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Update state again with corrected disk metrics
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
 	
+	// Clean up alerts for nodes that no longer exist
+	// Get all nodes from the global state (includes all instances)
+	existingNodes := make(map[string]bool)
+	allState := m.state.GetSnapshot()
+	for _, node := range allState.Nodes {
+		existingNodes[node.Name] = true
+	}
+	m.alertManager.CleanupAlertsForNodes(existingNodes)
+	
 	// Update cluster endpoint online status if this is a cluster
 	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
 		// Create a map of online nodes from our polling results
@@ -2306,7 +2315,29 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 func (m *Monitor) GetState() models.StateSnapshot {
 	// Check if mock mode is enabled
 	if mock.IsMockEnabled() {
-		return mock.GetMockState()
+		mockState := mock.GetMockState()
+		// Include real alerts from the alert manager
+		activeAlerts := m.alertManager.GetActiveAlerts()
+		log.Debug().Int("alertCount", len(activeAlerts)).Msg("GetState: fetching alerts for mock state")
+		modelAlerts := make([]models.Alert, 0, len(activeAlerts))
+		for _, alert := range activeAlerts {
+			modelAlerts = append(modelAlerts, models.Alert{
+				ID:           alert.ID,
+				Type:         alert.Type,
+				Level:        string(alert.Level),
+				ResourceID:   alert.ResourceID,
+				ResourceName: alert.ResourceName,
+				Node:         alert.Node,
+				Instance:     alert.Instance,
+				Message:      alert.Message,
+				Value:        alert.Value,
+				Threshold:    alert.Threshold,
+				StartTime:    alert.StartTime,
+				Acknowledged: alert.Acknowledged,
+			})
+		}
+		mockState.ActiveAlerts = modelAlerts
+		return mockState
 	}
 	return m.state.GetSnapshot()
 }
@@ -2902,7 +2933,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 // checkMockAlerts checks alerts for mock data
 func (m *Monitor) checkMockAlerts() {
+	log.Info().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
+		log.Info().Msg("Mock mode not enabled, skipping mock alert check")
 		return
 	}
 	
@@ -2912,7 +2945,26 @@ func (m *Monitor) checkMockAlerts() {
 	log.Info().
 		Int("vms", len(state.VMs)).
 		Int("containers", len(state.Containers)).
+		Int("nodes", len(state.Nodes)).
 		Msg("Checking alerts for mock data")
+	
+	// Clean up alerts for nodes that no longer exist
+	// Use the mock state nodes since we haven't updated global state yet
+	existingNodes := make(map[string]bool)
+	for _, node := range state.Nodes {
+		existingNodes[node.Name] = true
+	}
+	// Also add any real nodes from the global state
+	allState := m.state.GetSnapshot()
+	for _, node := range allState.Nodes {
+		existingNodes[node.Name] = true
+	}
+	log.Info().
+		Int("mockNodes", len(state.Nodes)).
+		Int("stateNodes", len(allState.Nodes)).
+		Int("totalNodes", len(existingNodes)).
+		Msg("Collecting nodes for alert cleanup")
+	m.alertManager.CleanupAlertsForNodes(existingNodes)
 	
 	// Check alerts for each VM
 	for _, vm := range state.VMs {

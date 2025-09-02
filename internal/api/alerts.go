@@ -116,6 +116,60 @@ func (h *AlertHandlers) ClearAlertHistory(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Alert history cleared"})
 }
 
+// UnacknowledgeAlert removes acknowledged status from an alert
+func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Request) {
+	// Extract alert ID from URL path: /api/alerts/{id}/unacknowledge
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
+	
+	const suffix = "/unacknowledge"
+	if !strings.HasSuffix(path, suffix) {
+		log.Error().
+			Str("path", r.URL.Path).
+			Msg("Path does not end with /unacknowledge")
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
+	
+	// Extract alert ID by removing the suffix
+	alertID := strings.TrimSuffix(path, suffix)
+	if alertID == "" {
+		log.Error().
+			Str("path", r.URL.Path).
+			Msg("Empty alert ID")
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+		return
+	}
+	
+	// Log the unacknowledge attempt
+	log.Debug().
+		Str("alertID", alertID).
+		Str("path", r.URL.Path).
+		Msg("Attempting to unacknowledge alert")
+	
+	if err := h.monitor.GetAlertManager().UnacknowledgeAlert(alertID); err != nil {
+		log.Error().
+			Err(err).
+			Str("alertID", alertID).
+			Msg("Failed to unacknowledge alert")
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	
+	log.Info().
+		Str("alertID", alertID).
+		Msg("Alert unacknowledged successfully")
+	
+	// Broadcast updated state to all WebSocket clients
+	if h.wsHub != nil {
+		state := h.monitor.GetState()
+		h.wsHub.BroadcastState(state)
+		log.Debug().Msg("Broadcasted state after alert unacknowledgment")
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
 // AcknowledgeAlert acknowledges an alert
 func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) {
 	// Extract alert ID from URL path: /api/alerts/{id}/acknowledge
@@ -338,6 +392,8 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 		h.BulkClearAlerts(w, r)
 	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
 		h.AcknowledgeAlert(w, r)
+	case strings.HasSuffix(path, "/unacknowledge") && r.Method == http.MethodPost:
+		h.UnacknowledgeAlert(w, r)
 	case strings.HasSuffix(path, "/clear") && r.Method == http.MethodPost:
 		h.ClearAlert(w, r)
 	default:

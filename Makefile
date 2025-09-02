@@ -8,8 +8,14 @@ all: frontend backend
 # Build frontend only
 frontend:
 	cd frontend-modern && npm run build
-	rm -rf internal/api/frontend-modern/dist
+	@echo "================================================"
+	@echo "Copying frontend to internal/api/ for Go embed"
+	@echo "This is REQUIRED - Go cannot embed external paths"
+	@echo "================================================"
+	rm -rf internal/api/frontend-modern
+	mkdir -p internal/api/frontend-modern
 	cp -r frontend-modern/dist internal/api/frontend-modern/
+	@echo "✓ Frontend copied for embedding"
 
 # Build backend only (includes embedded frontend)
 backend:
@@ -30,7 +36,6 @@ dev: frontend backend
 clean:
 	rm -f pulse
 	rm -rf frontend-modern/dist
-	rm -rf internal/api/frontend-modern/dist
 
 # Quick rebuild and restart for development
 restart: frontend backend

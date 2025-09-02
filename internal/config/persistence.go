@@ -138,7 +138,11 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		return nil, err
 	}
 	
-	// Ensure critical defaults are set if missing
+	// For empty config files ({}), enable alerts by default
+	// This handles the case where the file exists but is empty
+	if string(data) == "{}" {
+		config.Enabled = true
+	}
 	if config.StorageDefault.Trigger <= 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
@@ -168,7 +172,10 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		config.GuestDefaults.NetworkOut = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
 	}
 	
-	log.Info().Str("file", c.alertFile).Msg("Alert configuration loaded")
+	log.Info().
+		Str("file", c.alertFile).
+		Bool("enabled", config.Enabled).
+		Msg("Alert configuration loaded")
 	return &config, nil
 }
 

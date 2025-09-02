@@ -27,11 +27,11 @@ npm ci
 npm run build
 cd ..
 
-# Copy frontend to api directory for embedding
-echo "Copying frontend for embedding..."
-sudo rm -rf internal/api/frontend-modern
-sleep 1  # Give filesystem time to sync
-cp -r frontend-modern internal/api/
+# Copy frontend dist for embedding (required for Go embed)
+echo "Copying frontend dist for embedding..."
+rm -rf internal/api/frontend-modern
+mkdir -p internal/api/frontend-modern
+cp -r frontend-modern/dist internal/api/frontend-modern/
 
 # Build for different architectures
 declare -A builds=(

@@ -11,7 +11,7 @@ import (
 
 var (
 	mockData         models.StateSnapshot
-	mockAlerts       []models.Alert
+	// Removed mockAlerts - using real alert manager instead
 	mockAlertHistory []models.Alert
 	mockEnabled      bool
 	lastUpdate       time.Time
@@ -30,7 +30,7 @@ func init() {
 		
 		// Generate initial mock data
 		mockData = GenerateMockData(config)
-		mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
+		// Removed fake alert generation - real alert manager will handle this
 		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 		lastUpdate = time.Now()
 		
@@ -42,10 +42,7 @@ func init() {
 			for range ticker.C {
 				if mockEnabled {
 					UpdateMetrics(&mockData, config)
-					// Occasionally regenerate alerts
-					if time.Now().Unix()%30 == 0 {
-						mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
-					}
+					// Removed fake alert regeneration
 				}
 			}
 		}()
@@ -106,8 +103,9 @@ func GetMockState() models.StateSnapshot {
 		return models.StateSnapshot{}
 	}
 	
-	// Return the current mock data with alerts
-	mockData.ActiveAlerts = mockAlerts
+	// Return the current mock data
+	// Don't override alerts - let the real alert manager handle them
+	// mockData.ActiveAlerts = mockAlerts
 	return mockData
 }
 
@@ -117,7 +115,7 @@ func ToggleMockMode(enable bool) {
 		mockEnabled = true
 		config := LoadMockConfig()
 		mockData = GenerateMockData(config)
-		mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
+		// Removed fake alert generation
 		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 		log.Info().
 			Int("history_count", len(mockAlertHistory)).
@@ -143,7 +141,7 @@ func SetMockConfig(nodeCount, vmsPerNode, lxcsPerNode int) {
 	}
 	
 	mockData = GenerateMockData(config)
-	mockAlerts = GenerateAlerts(mockData.Nodes, mockData.VMs, mockData.Containers)
+	// Removed fake alert generation
 	mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 	
 	log.Info().

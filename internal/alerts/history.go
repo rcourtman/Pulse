@@ -257,6 +257,28 @@ func (hm *HistoryManager) cleanOldEntries() {
 	}
 }
 
+// RemoveAlert removes a specific alert from history by ID
+func (hm *HistoryManager) RemoveAlert(alertID string) {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+
+	newHistory := make([]HistoryEntry, 0, len(hm.history))
+	removed := false
+	
+	for _, entry := range hm.history {
+		if entry.Alert.ID != alertID {
+			newHistory = append(newHistory, entry)
+		} else {
+			removed = true
+		}
+	}
+	
+	if removed {
+		hm.history = newHistory
+		log.Debug().Str("alertID", alertID).Msg("Removed alert from history")
+	}
+}
+
 // ClearAllHistory clears all alert history
 func (hm *HistoryManager) ClearAllHistory() error {
 	hm.mu.Lock()
