@@ -106,6 +106,7 @@ type StateFrontend struct {
 	Containers       []ContainerFrontend `json:"containers"`
 	Storage          []StorageFrontend   `json:"storage"`
 	PBS              []PBSInstance       `json:"pbs"`              // Keep as is
+	ActiveAlerts     []Alert             `json:"activeAlerts"`     // Active alerts
 	Metrics          map[string]any      `json:"metrics"`          // Empty object for now
 	PVEBackups       PVEBackups          `json:"pveBackups"`       // Keep as is
 	Performance      map[string]any      `json:"performance"`      // Empty object for now

@@ -40,6 +40,12 @@ export class AlertsAPI {
     });
   }
 
+  static async unacknowledge(alertId: string): Promise<{ success: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/${alertId}/unacknowledge`, {
+      method: 'POST',
+    });
+  }
+
   // Alert configuration methods
   static async getConfig(): Promise<AlertConfig> {
     return apiFetchJSON(`${this.baseUrl}/config`);

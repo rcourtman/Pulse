@@ -90,6 +90,7 @@ export function Alerts() {
   const { state, activeAlerts, updateAlert } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
+  const [showAcknowledged, setShowAcknowledged] = createSignal(true);
   
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
@@ -647,6 +648,8 @@ export function Alerts() {
               updateAlert={updateAlert}
               showQuickTip={showQuickTip}
               dismissQuickTip={dismissQuickTip}
+              showAcknowledged={showAcknowledged}
+              setShowAcknowledged={setShowAcknowledged}
             />
           </Show>
           
@@ -722,13 +725,11 @@ function OverviewTab(props: {
   updateAlert: (alertId: string, updates: Partial<Alert>) => void;
   showQuickTip: () => boolean;
   dismissQuickTip: () => void;
+  showAcknowledged: () => boolean;
+  setShowAcknowledged: (value: boolean) => void;
 }) {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  
-  // Selection state for bulk operations
-  const [selectedAlerts, setSelectedAlerts] = createSignal<Set<string>>(new Set());
-  const [processingBulk, setProcessingBulk] = createSignal(false);
   
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
@@ -742,95 +743,23 @@ function OverviewTab(props: {
       overrides: props.overrides.length
     };
   });
-  
-  // Check if all alerts are selected
-  const allSelected = createMemo(() => {
-    const alertIds = Object.keys(props.activeAlerts);
-    return alertIds.length > 0 && alertIds.every(id => selectedAlerts().has(id));
+
+  const filteredAlerts = createMemo(() => {
+    const alerts = Object.values(props.activeAlerts);
+    // Sort: unacknowledged first, then by start time (newest first)
+    return alerts
+      .filter(alert => props.showAcknowledged() || !alert.acknowledged)
+      .sort((a, b) => {
+        // Acknowledged status comparison first
+        if (a.acknowledged !== b.acknowledged) {
+          return a.acknowledged ? 1 : -1; // Unacknowledged first
+        }
+        // Then by time
+        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+      });
   });
   
-  // Toggle select all
-  const toggleSelectAll = () => {
-    if (allSelected()) {
-      setSelectedAlerts(new Set<string>());
-    } else {
-      setSelectedAlerts(new Set(Object.keys(props.activeAlerts)));
-    }
-  };
   
-  // Toggle individual alert selection
-  const toggleAlertSelection = (alertId: string) => {
-    setSelectedAlerts(prev => {
-      const next = new Set(prev);
-      if (next.has(alertId)) {
-        next.delete(alertId);
-      } else {
-        next.add(alertId);
-      }
-      return next;
-    });
-  };
-  
-  // Bulk acknowledge
-  const bulkAcknowledge = async () => {
-    if (selectedAlerts().size === 0) return;
-    
-    setProcessingBulk(true);
-    const selected = Array.from(selectedAlerts());
-    
-    try {
-      const response = await AlertsAPI.bulkAcknowledge(selected);
-      const successCount = response.results.filter(r => r.success).length;
-      const errorCount = response.results.filter(r => !r.success).length;
-      
-      // Update local state for successfully acknowledged alerts
-      response.results.forEach((result: any) => {
-        if (result.success) {
-          props.updateAlert(result.id, { acknowledged: true });
-        }
-      });
-      
-      if (successCount > 0) {
-        showSuccess(`Acknowledged ${successCount} alert${successCount > 1 ? 's' : ''}`);
-      }
-      if (errorCount > 0) {
-        showError(`Failed to acknowledge ${errorCount} alert${errorCount > 1 ? 's' : ''}`);
-      }
-    } catch (err) {
-      console.error('Failed to bulk acknowledge alerts:', err);
-      showError('Failed to acknowledge alerts');
-    }
-    
-    setSelectedAlerts(new Set<string>());
-    setProcessingBulk(false);
-  };
-  
-  // Bulk clear
-  const bulkClear = async () => {
-    if (selectedAlerts().size === 0) return;
-    
-    setProcessingBulk(true);
-    const selected = Array.from(selectedAlerts());
-    
-    try {
-      const response = await AlertsAPI.bulkClear(selected);
-      const successCount = response.results.filter(r => r.success).length;
-      const errorCount = response.results.filter(r => !r.success).length;
-      
-      if (successCount > 0) {
-        showSuccess(`Cleared ${successCount} alert${successCount > 1 ? 's' : ''}`);
-      }
-      if (errorCount > 0) {
-        showError(`Failed to clear ${errorCount} alert${errorCount > 1 ? 's' : ''}`);
-      }
-    } catch (err) {
-      console.error('Failed to bulk clear alerts:', err);
-      showError('Failed to clear alerts');
-    }
-    
-    setSelectedAlerts(new Set<string>());
-    setProcessingBulk(false);
-  };
   
   return (
     <div class="space-y-6">
@@ -899,33 +828,8 @@ function OverviewTab(props: {
       
       {/* Recent Alerts */}
       <div>
-        <div class="flex flex-col gap-2 mb-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Active Alerts</h3>
-            <Show when={Object.keys(props.activeAlerts).length > 0 && selectedAlerts().size > 0}>
-              <span class="text-xs text-gray-600 dark:text-gray-400">
-                {selectedAlerts().size} selected
-              </span>
-            </Show>
-          </div>
-          <Show when={Object.keys(props.activeAlerts).length > 0 && selectedAlerts().size > 0}>
-            <div class="flex gap-1 justify-start sm:justify-end max-w-full">
-              <button
-                class="flex-shrink px-2 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={processingBulk()}
-                onClick={bulkAcknowledge}
-              >
-                Ack
-              </button>
-              <button
-                class="flex-shrink px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={processingBulk()}
-                onClick={bulkClear}
-              >
-                Clear
-              </button>
-            </div>
-          </Show>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Active Alerts</h3>
         </div>
         <Show 
           when={Object.keys(props.activeAlerts).length > 0}
@@ -936,36 +840,86 @@ function OverviewTab(props: {
             </div>
           }
         >
-          {/* Select All Checkbox */}
-          <div class="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
-            <input
-              type="checkbox"
-              class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-              checked={allSelected()}
-              onChange={toggleSelectAll}
-            />
-            <label class="text-xs text-gray-600 dark:text-gray-400 select-none cursor-pointer" onClick={toggleSelectAll}>
-              Select All
-            </label>
-          </div>
+          {/* Simple View Toggle - only show if there are acknowledged alerts */}
+          <Show when={alertStats().acknowledged > 0}>
+            <div class="flex justify-end p-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
+                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              >
+                {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
+              </button>
+            </div>
+          </Show>
           <div class="space-y-2">
-            <For each={Object.values(props.activeAlerts)}>
+            <Show when={filteredAlerts().length === 0}>
+              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
+              </div>
+            </Show>
+            <For each={filteredAlerts()}>
               {(alert) => (
-                <div class={`border rounded-lg p-4 ${
-                  alert.level === 'critical' 
-                    ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20' 
-                    : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                } ${
-                  selectedAlerts().has(alert.id) ? 'ring-2 ring-blue-500' : ''
-                }`}>
+                <div 
+                  onClick={async () => {
+                    // Clicking always toggles acknowledge state
+                    if (processingAlerts().has(alert.id)) return; // Prevent double-clicks
+                    
+                    setProcessingAlerts(prev => new Set(prev).add(alert.id));
+                    try {
+                      if (alert.acknowledged) {
+                        // Un-acknowledge
+                        await AlertsAPI.unacknowledge(alert.id);
+                        props.updateAlert(alert.id, { acknowledged: false });
+                        showSuccess('Alert restored');
+                      } else {
+                        // Acknowledge
+                        await AlertsAPI.acknowledge(alert.id);
+                        props.updateAlert(alert.id, { acknowledged: true });
+                        showSuccess('Alert acknowledged');
+                      }
+                    } catch (err) {
+                      console.error('Failed to toggle alert state:', err);
+                      showError('Failed to update alert');
+                    } finally {
+                      setProcessingAlerts(prev => {
+                        const next = new Set(prev);
+                        next.delete(alert.id);
+                        return next;
+                      });
+                    }
+                  }}
+                  class={`border rounded-lg p-4 transition-all cursor-pointer hover:shadow-md ${
+                    processingAlerts().has(alert.id) ? 'opacity-50 cursor-wait' : ''
+                  } ${
+                    alert.acknowledged 
+                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 hover:opacity-80' 
+                      : alert.level === 'critical' 
+                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20' 
+                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                  }`}
+                  title={alert.acknowledged ? 'Click to restore this alert' : 'Click to acknowledge'}>
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
-                      <input
-                        type="checkbox"
-                        class="mt-1 mr-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-                        checked={selectedAlerts().has(alert.id)}
-                        onChange={() => toggleAlertSelection(alert.id)}
-                      />
+                      {/* Status icon */}
+                      <div class={`mr-3 mt-0.5 transition-all ${
+                        alert.acknowledged 
+                          ? 'text-green-600 dark:text-green-400'
+                          : alert.level === 'critical'
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-yellow-600 dark:text-yellow-400'
+                      }`}>
+                        {alert.acknowledged ? (
+                          // Checkmark for acknowledged
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        ) : (
+                          // Warning/Alert icon
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        )}
+                      </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                           <span class={`text-sm font-medium truncate ${
@@ -993,9 +947,10 @@ function OverviewTab(props: {
                     <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
                       <Show when={!alert.acknowledged}>
                         <button 
-                          class="px-3 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           disabled={processingAlerts().has(alert.id)}
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
                             setProcessingAlerts(prev => new Set(prev).add(alert.id));
                             try {
                               await AlertsAPI.acknowledge(alert.id);
@@ -1017,28 +972,6 @@ function OverviewTab(props: {
                           {processingAlerts().has(alert.id) ? 'Processing...' : 'Acknowledge'}
                         </button>
                       </Show>
-                      <button 
-                        class="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={processingAlerts().has(alert.id)}
-                        onClick={async () => {
-                          setProcessingAlerts(prev => new Set(prev).add(alert.id));
-                          try {
-                            await AlertsAPI.clearAlert(alert.id);
-                            showSuccess('Alert cleared');
-                          } catch (err) {
-                            console.error('Failed to clear alert:', err);
-                            showError('Failed to clear alert');
-                          } finally {
-                            setProcessingAlerts(prev => {
-                              const next = new Set(prev);
-                              next.delete(alert.id);
-                              return next;
-                            });
-                          }
-                        }}
-                      >
-                        {processingAlerts().has(alert.id) ? 'Processing...' : 'Clear'}
-                      </button>
                     </div>
                   </div>
                 </div>

@@ -391,14 +391,33 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 	uptime := int64(0)
 	
 	if status == "running" {
-		cpu = rand.Float64() * 0.95 // 0-95% CPU
+		// More realistic CPU usage: mostly low with occasional spikes
+		cpuRand := rand.Float64()
+		if cpuRand < 0.7 { // 70% of VMs have low CPU
+			cpu = rand.Float64() * 0.3 // 0-30%
+		} else if cpuRand < 0.9 { // 20% moderate CPU (0.7-0.9 range)
+			cpu = 0.3 + rand.Float64()*0.4 // 30-70%
+		} else { // 10% high CPU (0.9-1.0 range)
+			cpu = 0.7 + rand.Float64()*0.3 // 70-100% (can trigger alerts at 80%)
+		}
+		
 		totalMem := int64((4 + rand.Intn(28)) * 1024 * 1024 * 1024) // 4-32 GB
-		usedMem := int64(float64(totalMem) * rand.Float64())
+		// More realistic memory usage: most VMs use 20-60% memory
+		var memUsage float64
+		memRand := rand.Float64()
+		if memRand < 0.7 { // 70% typical usage
+			memUsage = 0.2 + rand.Float64()*0.4 // 20-60%
+		} else if memRand < 0.9 { // 20% moderate usage
+			memUsage = 0.6 + rand.Float64()*0.2 // 60-80%
+		} else { // 10% high memory (can trigger alerts at 85%)
+			memUsage = 0.8 + rand.Float64()*0.2 // 80-100%
+		}
+		usedMem := int64(float64(totalMem) * memUsage)
 		mem = models.Memory{
 			Total: totalMem,
 			Used:  usedMem,
 			Free:  totalMem - usedMem,
-			Usage: float64(usedMem) / float64(totalMem) * 100,
+			Usage: memUsage * 100,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
 	}
@@ -444,14 +463,33 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 	uptime := int64(0)
 	
 	if status == "running" {
-		cpu = rand.Float64() * 0.5 // Containers typically use less CPU
+		// More realistic CPU for containers: mostly very low
+		cpuRand := rand.Float64()
+		if cpuRand < 0.8 { // 80% of containers have minimal CPU
+			cpu = rand.Float64() * 0.15 // 0-15%
+		} else if cpuRand < 0.95 { // 15% moderate CPU (0.8-0.95 range)
+			cpu = 0.15 + rand.Float64()*0.25 // 15-40%
+		} else { // 5% higher CPU (0.95-1.0 range)
+			cpu = 0.4 + rand.Float64()*0.5 // 40-90% (can trigger alerts at 80%)
+		}
+		
 		totalMem := int64((512 + rand.Intn(7680)) * 1024 * 1024) // 512 MB - 8 GB
-		usedMem := int64(float64(totalMem) * rand.Float64())
+		// More realistic memory for containers
+		var memUsage float64
+		memRand := rand.Float64()
+		if memRand < 0.8 { // 80% typical usage
+			memUsage = 0.3 + rand.Float64()*0.4 // 30-70%
+		} else if memRand < 0.95 { // 15% moderate usage
+			memUsage = 0.7 + rand.Float64()*0.15 // 70-85%
+		} else { // 5% high memory (can trigger alerts at 85%)
+			memUsage = 0.85 + rand.Float64()*0.15 // 85-100%
+		}
+		usedMem := int64(float64(totalMem) * memUsage)
 		mem = models.Memory{
 			Total: totalMem,
 			Used:  usedMem,
 			Free:  totalMem - usedMem,
-			Usage: float64(usedMem) / float64(totalMem) * 100,
+			Usage: memUsage * 100,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
 	}
@@ -1083,6 +1121,22 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 		vm.CPU += (rand.Float64() - 0.5) * 0.15
 		vm.CPU = math.Max(0.01, math.Min(0.99, vm.CPU))
 		
+		// Update memory with realistic fluctuations
+		memChange := (rand.Float64() - 0.5) * 0.08 // 8% swing
+		vm.Memory.Usage += memChange * 100
+		vm.Memory.Usage = math.Max(10, math.Min(99, vm.Memory.Usage))
+		vm.Memory.Used = int64(float64(vm.Memory.Total) * (vm.Memory.Usage / 100))
+		vm.Memory.Free = vm.Memory.Total - vm.Memory.Used
+		
+		// Update disk usage very slowly (disks fill up gradually)
+		if rand.Float64() < 0.1 { // 10% chance to change disk usage
+			diskChange := (rand.Float64() - 0.4) * 0.5 // Slight bias toward filling
+			vm.Disk.Usage += diskChange
+			vm.Disk.Usage = math.Max(10, math.Min(95, vm.Disk.Usage))
+			vm.Disk.Used = int64(float64(vm.Disk.Total) * (vm.Disk.Usage / 100))
+			vm.Disk.Free = vm.Disk.Total - vm.Disk.Used
+		}
+		
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.2 { // 20% chance of I/O change
 			vm.NetworkIn = generateRealisticIO("network-in")
@@ -1105,6 +1159,22 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 		// Random walk for CPU (smaller changes for containers)
 		ct.CPU += (rand.Float64() - 0.5) * 0.05
 		ct.CPU = math.Max(0.01, math.Min(0.50, ct.CPU))
+		
+		// Update memory (containers are generally more stable)
+		memChange := (rand.Float64() - 0.5) * 0.05 // 5% swing
+		ct.Memory.Usage += memChange * 100
+		ct.Memory.Usage = math.Max(5, math.Min(98, ct.Memory.Usage))
+		ct.Memory.Used = int64(float64(ct.Memory.Total) * (ct.Memory.Usage / 100))
+		ct.Memory.Free = ct.Memory.Total - ct.Memory.Used
+		
+		// Update disk usage very slowly
+		if rand.Float64() < 0.05 { // 5% chance (containers change disk less)
+			diskChange := (rand.Float64() - 0.45) * 0.3 // Very slight bias toward filling
+			ct.Disk.Usage += diskChange
+			ct.Disk.Usage = math.Max(5, math.Min(90, ct.Disk.Usage))
+			ct.Disk.Used = int64(float64(ct.Disk.Total) * (ct.Disk.Usage / 100))
+			ct.Disk.Free = ct.Disk.Total - ct.Disk.Used
+		}
 		
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.15 { // 15% chance of I/O change (containers change less often)

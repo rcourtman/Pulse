@@ -36,6 +36,7 @@ func (s *State) ToFrontend() StateFrontend {
 		Containers:       containers,
 		Storage:          storage,
 		PBS:              s.PBSInstances,
+		ActiveAlerts:     s.ActiveAlerts,
 		Metrics:          make(map[string]any),
 		PVEBackups:       s.PVEBackups,
 		Performance:      make(map[string]any),
