@@ -105,7 +105,7 @@ export function GuestRow(props: GuestRowProps) {
 
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
-    const base = 'transition-all duration-200';
+    const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
     // Extract only the background color from alert styles, not the border
     const alertBg = props.alertStyles?.hasAlert 
@@ -118,19 +118,25 @@ export function GuestRow(props: GuestRowProps) {
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
 
-  // Get first cell styling with left border for alerts
+  // Get first cell styling
   const firstCellClass = createMemo(() => {
     const base = 'p-1 px-2 whitespace-nowrap relative';
-    const alertBorder = props.alertStyles?.hasAlert
-      ? (props.alertStyles.severity === 'critical'
-        ? 'border-l-4 border-l-red-500 dark:border-l-red-400'
-        : 'border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
-      : '';
-    return `${base} ${alertBorder}`;
+    // Add extra padding when alert is present for visual spacing
+    const padding = props.alertStyles?.hasAlert ? 'pl-4' : '';
+    return `${base} ${padding}`;
+  });
+
+  // Get row styles including box-shadow for alert border
+  const rowStyle = createMemo(() => {
+    if (!props.alertStyles?.hasAlert) return {};
+    const color = props.alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+    return {
+      'box-shadow': `inset 4px 0 0 0 ${color}`
+    };
   });
 
   return (
-    <tr class={rowClass()}>
+    <tr class={rowClass()} style={rowStyle()}>
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
         <div class="flex items-center gap-2">

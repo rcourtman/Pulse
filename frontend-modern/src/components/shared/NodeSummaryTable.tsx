@@ -2,6 +2,8 @@ import { Component, For, Show, createMemo } from 'solid-js';
 import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
+import { useWebSocket } from '@/App';
+import { getAlertStyles } from '@/utils/alerts';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -16,6 +18,7 @@ interface NodeSummaryTableProps {
 }
 
 export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
+  const { activeAlerts } = useWebSocket();
   // Combine and sort nodes based on tab
   const sortedItems = createMemo(() => {
     const items: Array<{ type: 'pve' | 'pbs'; data: Node | PBSInstance }> = [];
@@ -98,12 +101,12 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   // This prevents the table from disappearing on refresh while data loads
 
   return (
-    <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div class="overflow-x-auto p-1">
-        <table class="w-full min-w-[600px]">
+    <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[600px] border-collapse">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4">
+              <th class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4">
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
               </th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20">Status</th>
@@ -170,24 +173,40 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 const nodeId = isPVE ? node!.name : pbs!.name;
                 const isSelected = () => props.selectedNode === nodeId;
+                // Use the full resource ID for alert matching
+                const resourceId = isPVE ? (node!.id || node!.name) : (pbs!.id || pbs!.name);
+                const alertStyles = getAlertStyles(resourceId, activeAlerts);
+                
+                // Get row styles including box-shadow for alert border
+                const rowStyle = createMemo(() => {
+                  const styles: any = {};
+                  if (isSelected()) {
+                    styles['box-shadow'] = '0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
+                  }
+                  if (alertStyles.hasAlert) {
+                    const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                    styles['box-shadow'] = `inset 4px 0 0 0 ${color}${isSelected() ? ', 0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)' : ''}`;
+                  }
+                  return styles;
+                });
                 
                 return (
                   <tr 
-                    class={`cursor-pointer transition-all duration-200 ${
+                    class={`cursor-pointer transition-all duration-200 relative ${
                       isSelected() 
-                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 relative z-10' 
-                        : props.selectedNode 
-                          ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm' 
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
+                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 z-10' 
+                        : alertStyles.hasAlert
+                          ? (alertStyles.severity === 'critical' 
+                            ? 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40'
+                            : 'bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30')
+                          : props.selectedNode 
+                            ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm' 
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
                     }`}
-                    style={{
-                      'box-shadow': isSelected() 
-                        ? '0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)' 
-                        : undefined
-                    }}
+                    style={rowStyle()}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
-                    <td class="px-2 py-0.5 whitespace-nowrap">
+                    <td class={`pr-2 py-0.5 whitespace-nowrap ${alertStyles.hasAlert ? 'pl-4' : 'pl-3'}`}>
                       <div class="flex items-center gap-1">
                         <a 
                           href={isPVE ? (node!.host || `https://${node!.name}:8006`) : (pbs!.host || `https://${pbs!.name}:8007`)}
