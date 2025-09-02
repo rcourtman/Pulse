@@ -177,22 +177,22 @@ export function GuestURLs(props: GuestURLsProps) {
             <style>{`
               .overflow-x-auto::-webkit-scrollbar { display: none; }
             `}</style>
-            <table class="w-full">
+            <table class="min-w-full" style="min-width: 768px;">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
                     Name
                   </th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
                     Type
                   </th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
                     VMID
                   </th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="min-width: 350px;">
                     Custom URL
                   </th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20">
                     Actions
                   </th>
                 </tr>
@@ -240,9 +240,10 @@ export function GuestURLs(props: GuestURLsProps) {
                                   placeholder="https://192.168.1.100:8006"
                                   value={meta?.customUrl || ''}
                                   onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
-                                  class="w-full px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-600 rounded
+                                  class="w-full min-w-[300px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
                                          bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                          focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  style="min-width: 300px;"
                                 />
                               </td>
                               <td class="p-1 px-2">
