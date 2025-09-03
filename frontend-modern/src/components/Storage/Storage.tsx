@@ -292,15 +292,19 @@ const Storage: Component = () => {
                             : '';
                           const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
                           
-                          const firstCellClass = alertStyles.hasAlert
-                            ? (alertStyles.severity === 'critical'
-                              ? 'p-0.5 pr-1.5 pl-2 border-l-4 border-l-red-500 dark:border-l-red-400'
-                              : 'p-0.5 pr-1.5 pl-2 border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
-                            : 'p-0.5 px-1.5';
+                          // Create row style with inset box-shadow for alert border
+                          const rowStyle = createMemo(() => {
+                            const styles: any = {};
+                            if (alertStyles.hasAlert) {
+                              const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                              styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
+                            }
+                            return styles;
+                          });
                           
                           return (
-                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`}>
-                              <td class={firstCellClass}>
+                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} style={rowStyle()}>
+                              <td class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}>
                                 <div class="flex items-center gap-2">
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
