@@ -684,6 +684,16 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	// Check usage if storage has valid data (even if not currently active on this node)
 	// In clusters, storage may show as inactive on nodes where it's not currently mounted
 	// but we still want to alert on high usage
+	log.Info().
+		Str("storage", storage.Name).
+		Str("id", storage.ID).
+		Float64("usage", storage.Usage).
+		Str("status", storage.Status).
+		Float64("trigger", threshold.Trigger).
+		Float64("clear", threshold.Clear).
+		Bool("hasOverride", hasOverride).
+		Msg("Checking storage thresholds")
+	
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
 		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 	}
@@ -1975,32 +1985,11 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		Msg("Starting alert cleanup for non-existent nodes")
 	
 	removedCount := 0
-	for alertID := range m.activeAlerts {
-		var node string
+	for alertID, alert := range m.activeAlerts {
+		// Use the Node field from the alert itself, which is more reliable
+		node := alert.Node
 		
-		// Extract node from alert ID 
-		// Format can be either "node:type/id-metric" or "node-storage-name-usage"
-		if strings.Contains(alertID, ":") {
-			// Guest alert format: "node:type/id-metric"
-			parts := strings.Split(alertID, ":")
-			if len(parts) >= 2 {
-				node = parts[0]
-			}
-		} else if strings.Contains(alertID, "-storage-") {
-			// Storage alert format: "node-storage-name-usage"
-			parts := strings.Split(alertID, "-storage-")
-			if len(parts) >= 1 {
-				node = parts[0]
-			}
-		} else if strings.HasPrefix(alertID, "node-offline-") {
-			// Node offline alert format: "node-offline-node/nodename"
-			// Extract the node name after the last slash
-			if idx := strings.LastIndex(alertID, "/"); idx != -1 {
-				node = alertID[idx+1:]
-			}
-		}
-		
-		// If we couldn't extract a node or the node doesn't exist, remove the alert
+		// If we couldn't get a node or the node doesn't exist, remove the alert
 		if node == "" || !existingNodes[node] {
 			delete(m.activeAlerts, alertID)
 			removedCount++
