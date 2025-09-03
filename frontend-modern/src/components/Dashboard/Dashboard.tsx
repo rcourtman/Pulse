@@ -3,6 +3,7 @@ import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
+import { getNodeColor } from '@/utils/nodeColors';
 import { createTooltipSystem } from '@/components/shared/Tooltip';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
