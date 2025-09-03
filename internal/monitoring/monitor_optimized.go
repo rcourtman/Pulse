@@ -480,7 +480,12 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			// Fetch storage for this node
 			nodeStorage, err := client.GetStorage(ctx, n.Node)
 			if err != nil {
-				log.Warn().Err(err).Str("node", n.Node).Msg("Failed to get node storage")
+				// Log more details about the failure
+				log.Error().
+					Err(err).
+					Str("node", n.Node).
+					Str("instance", instanceName).
+					Msg("Failed to get node storage - check API permissions")
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
@@ -559,7 +564,7 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 	
 	// Collect results from all nodes
 	var allStorage []models.Storage
-	seenStorage := make(map[string]bool)
+	sharedStorageMap := make(map[string]models.Storage) // Map to keep best shared storage entry
 	successfulNodes := 0
 	failedNodes := 0
 	
@@ -569,17 +574,29 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		} else {
 			successfulNodes++
 			for _, storage := range result.storage {
-				// Deduplicate shared storage
-				key := fmt.Sprintf("%s-%s", storage.Instance, storage.Name)
 				if storage.Shared {
-					if seenStorage[key] {
-						continue
+					// For shared storage, use just the storage name as key
+					// This ensures consistent deduplication regardless of which node reports first
+					key := storage.Name
+					
+					// Keep the entry with the most complete data (highest usage)
+					// or the first one if all are equal
+					if existing, exists := sharedStorageMap[key]; !exists || storage.Used > existing.Used {
+						// Update the Node field to indicate it's shared across cluster
+						storage.Node = "cluster"
+						sharedStorageMap[key] = storage
 					}
-					seenStorage[key] = true
+				} else {
+					// Non-shared storage goes directly to results
+					allStorage = append(allStorage, storage)
 				}
-				allStorage = append(allStorage, storage)
 			}
 		}
+	}
+	
+	// Add deduplicated shared storage to results
+	for _, storage := range sharedStorageMap {
+		allStorage = append(allStorage, storage)
 	}
 	
 	// Check alerts for all storage devices
@@ -591,11 +608,20 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 	m.state.UpdateStorageForInstance(instanceName, allStorage)
 	
 	duration := time.Since(startTime)
-	log.Info().
-		Str("instance", instanceName).
-		Int("totalStorage", len(allStorage)).
-		Int("successfulNodes", successfulNodes).
-		Int("failedNodes", failedNodes).
-		Dur("duration", duration).
-		Msg("Parallel storage polling completed")
+	
+	// Warn if all nodes failed to get storage
+	if successfulNodes == 0 && failedNodes > 0 {
+		log.Error().
+			Str("instance", instanceName).
+			Int("failedNodes", failedNodes).
+			Msg("All nodes failed to retrieve storage - check Proxmox API permissions for Datastore.Audit on all storage")
+	} else {
+		log.Info().
+			Str("instance", instanceName).
+			Int("totalStorage", len(allStorage)).
+			Int("successfulNodes", successfulNodes).
+			Int("failedNodes", failedNodes).
+			Dur("duration", duration).
+			Msg("Parallel storage polling completed")
+	}
 }
