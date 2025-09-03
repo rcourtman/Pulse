@@ -36,12 +36,14 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string) *Clu
 	}
 	
 	// Initialize all endpoints as unknown (will be tested on first use)
-	// Don't assume they're healthy until proven
+	// Start optimistically - assume healthy until proven otherwise
+	// This allows operations to be attempted even if initial health check fails
 	for _, endpoint := range endpoints {
-		cc.nodeHealth[endpoint] = false  // Start pessimistic, will test immediately
+		cc.nodeHealth[endpoint] = true  // Start optimistic, will be marked unhealthy if operations fail
 	}
 	
 	// Do a quick parallel health check on initialization (synchronous to avoid race)
+	// This will mark unhealthy nodes but won't prevent trying them later
 	cc.initialHealthCheck()
 	
 	return cc
