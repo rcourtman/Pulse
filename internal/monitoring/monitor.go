@@ -2011,6 +2011,12 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			m.metricsHistory.AddStorageMetric(modelStorage.ID, "avail", float64(modelStorage.Free), now)
 
 			// Check thresholds for alerts
+			log.Info().
+				Str("storage", modelStorage.Name).
+				Str("id", modelStorage.ID).
+				Float64("usage", modelStorage.Usage).
+				Str("status", modelStorage.Status).
+				Msg("Calling CheckStorage for storage device")
 			m.alertManager.CheckStorage(modelStorage)
 		}
 	}
@@ -2982,7 +2988,12 @@ func (m *Monitor) checkMockAlerts() {
 	}
 	
 	// Check alerts for storage
+	log.Info().Int("storageCount", len(state.Storage)).Msg("Checking storage alerts")
 	for _, storage := range state.Storage {
+		log.Debug().
+			Str("name", storage.Name).
+			Float64("usage", storage.Usage).
+			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorage(storage)
 	}
 }
