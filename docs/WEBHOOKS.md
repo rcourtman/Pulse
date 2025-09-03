@@ -66,11 +66,16 @@ URL Format: https://your-gotify-server/message?token={your-app-token}
 ```
 URL Format: https://ntfy.sh/{topic} or https://your-ntfy-server/{topic}
 ```
-1. Choose a topic name (e.g., 'pulse-alerts')
+1. Choose a unique topic name (e.g., 'pulse-alerts-x7k9m2')
+   - **Important**: Anyone who knows your topic name can send you notifications
+   - Use a unique/random suffix for privacy
 2. For ntfy.sh: Use `https://ntfy.sh/YOUR_TOPIC`
 3. For self-hosted: Use `https://your-ntfy-server/YOUR_TOPIC`
 4. Subscribe to the same topic in your ntfy mobile/desktop app
-5. Optional: Add authentication headers if your ntfy server requires them
+5. For authentication (optional):
+   - Click "Custom Headers" section in webhook config
+   - Add header: `Authorization`
+   - Value: `Bearer YOUR_TOKEN` or `Basic base64_encoded_credentials`
 6. Notifications include dynamic priority levels and emoji tags based on alert severity
 
 ### PagerDuty
@@ -81,6 +86,28 @@ URL: https://events.pagerduty.com/v2/enqueue
 2. Add an integration → Events API V2
 3. Copy the Integration Key
 4. Add the key as a header: `routing_key: YOUR_KEY`
+
+## Custom Headers
+
+For webhooks that require authentication or custom headers:
+
+1. In the webhook configuration, expand the **Custom Headers** section
+2. Click **+ Add Header** to add a new header
+3. Enter the header name (e.g., `Authorization`, `X-API-Key`, `X-Auth-Token`)
+4. Enter the header value (e.g., `Bearer YOUR_TOKEN`, your API key, etc.)
+5. Add multiple headers as needed
+6. Headers are sent with every webhook request
+
+### Common Header Examples
+
+| Service | Header Name | Header Value Format |
+|---------|-------------|-------------------|
+| Bearer Token | `Authorization` | `Bearer YOUR_TOKEN_HERE` |
+| Basic Auth | `Authorization` | `Basic base64_encoded_user:pass` |
+| API Key | `X-API-Key` | `your-api-key-here` |
+| Custom Token | `X-Auth-Token` | `your-auth-token` |
+| ntfy Auth | `Authorization` | `Bearer tk_your_ntfy_token` |
+| Custom Service | `X-Service-Key` | `service-specific-key` |
 
 ## Custom Payload Templates
 
