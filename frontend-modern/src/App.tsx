@@ -35,6 +35,16 @@ export const useWebSocket = () => {
   return context;
 };
 
+// Dark mode context for reactive theme switching
+export const DarkModeContext = createContext<() => boolean>(() => false);
+export const useDarkMode = () => {
+  const context = useContext(DarkModeContext);
+  if (!context) {
+    throw new Error('useDarkMode must be used within DarkModeContext.Provider');
+  }
+  return context;
+};
+
 function App() {
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);
@@ -392,9 +402,10 @@ function App() {
         <ErrorBoundary>
       <Show when={enhancedStore()} fallback={<div>Initializing...</div>}>
       <WebSocketContext.Provider value={enhancedStore()!}>
-        <SecurityWarning />
-        <UpdateBanner />
-        <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
+        <DarkModeContext.Provider value={darkMode}>
+          <SecurityWarning />
+          <UpdateBanner />
+          <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
         <div class="container w-[95%] max-w-screen-xl mx-auto">
           {/* Header */}
           <div class="header flex flex-row justify-between items-center mb-2">
@@ -606,6 +617,7 @@ function App() {
         </div>
         <ToastContainer />
         <NotificationContainer />
+        </DarkModeContext.Provider>
       </WebSocketContext.Provider>
       </Show>
     </ErrorBoundary>
