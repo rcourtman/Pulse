@@ -284,7 +284,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 • 🆔 Alert ID: {{.ID}}
 
 🔗 View in Pulse: {{.Instance}}`,
-			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. Optional: Add authentication token in headers if required\n4. Subscribe to the topic in your ntfy app using the same topic name",
+			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
 			Service:    "generic",
