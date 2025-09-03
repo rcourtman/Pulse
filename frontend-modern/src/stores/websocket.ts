@@ -48,6 +48,9 @@ export function createWebSocketStore(url: string) {
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<any>(null);
+  
+  // Track alerts with pending acknowledgment changes to prevent race conditions
+  const pendingAckChanges = new Set<string>();
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
@@ -179,8 +182,13 @@ export function createWebSocketStore(url: string) {
                   }
                 });
                 
-                // Add new alerts
+                // Add new alerts (skip those with pending ack changes)
                 Object.entries(newAlerts).forEach(([id, alert]) => {
+                  // Skip updating if this alert has a pending acknowledgment change
+                  if (pendingAckChanges.has(id)) {
+                    logger.debug(`Skipping update for alert ${id} - has pending ack change`);
+                    return;
+                  }
                   setActiveAlerts(id, alert);
                 });
                 
@@ -381,6 +389,14 @@ export function createWebSocketStore(url: string) {
     updateAlert: (alertId: string, updates: Partial<Alert>) => {
       const existingAlert = activeAlerts[alertId];
       if (existingAlert) {
+        // Track this alert as having pending changes if acknowledgment is changing
+        if ('acknowledged' in updates) {
+          pendingAckChanges.add(alertId);
+          // Clear the pending flag after a delay to allow server sync
+          setTimeout(() => {
+            pendingAckChanges.delete(alertId);
+          }, 2000); // 2 seconds should be enough for server to sync
+        }
         setActiveAlerts(alertId, { ...existingAlert, ...updates });
       }
     }

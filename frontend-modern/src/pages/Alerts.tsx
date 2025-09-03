@@ -620,7 +620,7 @@ export function Alerts() {
       {/* Tab Navigation - modern style */}
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
         <div class="p-1">
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
+          <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
             <For each={tabs}>
               {(tab) => (
                 <button type="button"
@@ -860,44 +860,15 @@ function OverviewTab(props: {
             <For each={filteredAlerts()}>
               {(alert) => (
                 <div 
-                  onClick={async () => {
-                    // Clicking always toggles acknowledge state
-                    if (processingAlerts().has(alert.id)) return; // Prevent double-clicks
-                    
-                    setProcessingAlerts(prev => new Set(prev).add(alert.id));
-                    try {
-                      if (alert.acknowledged) {
-                        // Un-acknowledge
-                        await AlertsAPI.unacknowledge(alert.id);
-                        props.updateAlert(alert.id, { acknowledged: false });
-                        showSuccess('Alert restored');
-                      } else {
-                        // Acknowledge
-                        await AlertsAPI.acknowledge(alert.id);
-                        props.updateAlert(alert.id, { acknowledged: true });
-                        showSuccess('Alert acknowledged');
-                      }
-                    } catch (err) {
-                      console.error('Failed to toggle alert state:', err);
-                      showError('Failed to update alert');
-                    } finally {
-                      setProcessingAlerts(prev => {
-                        const next = new Set(prev);
-                        next.delete(alert.id);
-                        return next;
-                      });
-                    }
-                  }}
-                  class={`border rounded-lg p-4 transition-all cursor-pointer hover:shadow-md ${
-                    processingAlerts().has(alert.id) ? 'opacity-50 cursor-wait' : ''
+                  class={`border rounded-lg p-4 transition-all ${
+                    processingAlerts().has(alert.id) ? 'opacity-50' : ''
                   } ${
                     alert.acknowledged 
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 hover:opacity-80' 
+                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20' 
                       : alert.level === 'critical' 
                         ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20' 
                         : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                  }`}
-                  title={alert.acknowledged ? 'Click to restore this alert' : 'Click to acknowledge'}>
+                  }`}>
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
@@ -945,33 +916,56 @@ function OverviewTab(props: {
                       </div>
                     </div>
                     <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
-                      <Show when={!alert.acknowledged}>
-                        <button 
-                          class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={processingAlerts().has(alert.id)}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setProcessingAlerts(prev => new Set(prev).add(alert.id));
-                            try {
+                      <button 
+                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                          alert.acknowledged
+                            ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                        }`}
+                        disabled={processingAlerts().has(alert.id)}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          // Prevent double-clicks
+                          if (processingAlerts().has(alert.id)) return;
+                          
+                          setProcessingAlerts(prev => new Set(prev).add(alert.id));
+                          
+                          // Store current state to avoid race conditions
+                          const wasAcknowledged = alert.acknowledged;
+                          
+                          try {
+                            if (wasAcknowledged) {
+                              await AlertsAPI.unacknowledge(alert.id);
+                              props.updateAlert(alert.id, { acknowledged: false });
+                              showSuccess('Alert restored');
+                            } else {
                               await AlertsAPI.acknowledge(alert.id);
-                              // Update the local state immediately
                               props.updateAlert(alert.id, { acknowledged: true });
                               showSuccess('Alert acknowledged');
-                            } catch (err) {
-                              console.error('Failed to acknowledge alert:', err);
-                              showError('Failed to acknowledge alert');
-                            } finally {
+                            }
+                          } catch (err) {
+                            console.error(`Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`, err);
+                            showError(`Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`);
+                          } finally {
+                            // Delay removing from processing to prevent race conditions
+                            setTimeout(() => {
                               setProcessingAlerts(prev => {
                                 const next = new Set(prev);
                                 next.delete(alert.id);
                                 return next;
                               });
-                            }
-                          }}
-                        >
-                          {processingAlerts().has(alert.id) ? 'Processing...' : 'Acknowledge'}
-                        </button>
-                      </Show>
+                            }, 100);
+                          }
+                        }}
+                      >
+                        {processingAlerts().has(alert.id) 
+                          ? 'Processing...' 
+                          : alert.acknowledged 
+                            ? 'Unacknowledge' 
+                            : 'Acknowledge'}
+                      </button>
                     </div>
                   </div>
                 </div>

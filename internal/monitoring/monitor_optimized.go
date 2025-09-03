@@ -582,6 +582,11 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		}
 	}
 	
+	// Check alerts for all storage devices
+	for _, storage := range allStorage {
+		m.alertManager.CheckStorage(storage)
+	}
+	
 	// Update state with all storage
 	m.state.UpdateStorageForInstance(instanceName, allStorage)
 	
