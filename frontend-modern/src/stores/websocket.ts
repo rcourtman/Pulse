@@ -186,8 +186,14 @@ export function createWebSocketStore(url: string) {
                 Object.entries(newAlerts).forEach(([id, alert]) => {
                   // Skip updating if this alert has a pending acknowledgment change
                   if (pendingAckChanges.has(id)) {
-                    logger.debug(`Skipping update for alert ${id} - has pending ack change`);
-                    return;
+                    // Check if the acknowledgment state from server matches our pending change
+                    const currentAlert = activeAlerts[id];
+                    if (currentAlert && currentAlert.acknowledged !== alert.acknowledged) {
+                      logger.debug(`Skipping update for alert ${id} - has pending ack change (local: ${currentAlert.acknowledged}, server: ${alert.acknowledged})`);
+                      return;
+                    }
+                    // If the server has caught up with our change, we can clear the pending flag
+                    pendingAckChanges.delete(id);
                   }
                   setActiveAlerts(id, alert);
                 });
@@ -392,10 +398,18 @@ export function createWebSocketStore(url: string) {
         // Track this alert as having pending changes if acknowledgment is changing
         if ('acknowledged' in updates) {
           pendingAckChanges.add(alertId);
-          // Clear the pending flag after a delay to allow server sync
+          // Clear the pending flag after a longer delay to ensure server has time to sync
+          // This prevents race conditions with slow network or server processing
           setTimeout(() => {
-            pendingAckChanges.delete(alertId);
-          }, 2000); // 2 seconds should be enough for server to sync
+            // Only clear if the alert still exists and matches our expected state
+            const currentAlert = activeAlerts[alertId];
+            if (!currentAlert || currentAlert.acknowledged === updates.acknowledged) {
+              pendingAckChanges.delete(alertId);
+            } else {
+              // State doesn't match, keep protection for a bit longer
+              setTimeout(() => pendingAckChanges.delete(alertId), 3000);
+            }
+          }, 5000); // 5 seconds initial wait
         }
         setActiveAlerts(alertId, { ...existingAlert, ...updates });
       }
