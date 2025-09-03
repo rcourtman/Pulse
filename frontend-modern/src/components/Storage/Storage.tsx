@@ -294,8 +294,8 @@ const Storage: Component = () => {
                           
                           const firstCellClass = alertStyles.hasAlert
                             ? (alertStyles.severity === 'critical'
-                              ? 'p-0.5 px-1.5 border-l-4 border-l-red-500 dark:border-l-red-400'
-                              : 'p-0.5 px-1.5 border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
+                              ? 'p-0.5 pr-1.5 pl-2 border-l-4 border-l-red-500 dark:border-l-red-400'
+                              : 'p-0.5 pr-1.5 pl-2 border-l-4 border-l-yellow-500 dark:border-l-yellow-400')
                             : 'p-0.5 px-1.5';
                           
                           return (
