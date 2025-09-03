@@ -937,26 +937,31 @@ function OverviewTab(props: {
                           
                           try {
                             if (wasAcknowledged) {
+                              // Call API first, only update local state if successful
                               await AlertsAPI.unacknowledge(alert.id);
+                              // Only update local state after successful API call
                               props.updateAlert(alert.id, { acknowledged: false });
                               showSuccess('Alert restored');
                             } else {
+                              // Call API first, only update local state if successful
                               await AlertsAPI.acknowledge(alert.id);
+                              // Only update local state after successful API call
                               props.updateAlert(alert.id, { acknowledged: true });
                               showSuccess('Alert acknowledged');
                             }
                           } catch (err) {
                             console.error(`Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`, err);
                             showError(`Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`);
+                            // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
-                            // Delay removing from processing to prevent race conditions
+                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
                             setTimeout(() => {
                               setProcessingAlerts(prev => {
                                 const next = new Set(prev);
                                 next.delete(alert.id);
                                 return next;
                               });
-                            }, 100);
+                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
                           }
                         }}
                       >
