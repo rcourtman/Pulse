@@ -364,6 +364,82 @@ export function WebhookConfig(props: WebhookConfigProps) {
             </div>
           </Show>
           
+          {/* Custom Headers Section */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Custom Headers
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                Add authentication tokens or custom headers
+              </span>
+            </label>
+            <div class="space-y-2">
+              <For each={Object.entries(formData().headers || {})}>
+                {([key, value], index) => (
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      value={key}
+                      onInput={(e) => {
+                        const headers = { ...formData().headers };
+                        const oldKey = Object.keys(headers)[index()];
+                        if (oldKey !== e.currentTarget.value) {
+                          delete headers[oldKey];
+                          headers[e.currentTarget.value] = value;
+                          setFormData({ ...formData(), headers });
+                        }
+                      }}
+                      placeholder="Header Name"
+                      class="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <input
+                      type="text"
+                      value={value}
+                      onInput={(e) => {
+                        const headers = { ...formData().headers };
+                        headers[key] = e.currentTarget.value;
+                        setFormData({ ...formData(), headers });
+                      }}
+                      placeholder="Header Value"
+                      class="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const headers = { ...formData().headers };
+                        delete headers[key];
+                        setFormData({ ...formData(), headers });
+                      }}
+                      class="px-3 py-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 border border-red-300 dark:border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+              <button
+                type="button"
+                onClick={() => {
+                  const headers = { ...formData().headers };
+                  // Find a unique key name
+                  let newKey = 'X-Custom-Header';
+                  let counter = 1;
+                  while (headers[newKey]) {
+                    newKey = `X-Custom-Header-${counter}`;
+                    counter++;
+                  }
+                  headers[newKey] = '';
+                  setFormData({ ...formData(), headers });
+                }}
+                class="w-full py-2 text-sm border border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
+              >
+                + Add Header
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
+            </p>
+          </div>
+          
           <div>
             <label class="flex items-center gap-2">
               <input
