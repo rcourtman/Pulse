@@ -189,6 +189,9 @@ func generateNodes(config MockConfig) []models.Node {
 			node.Memory.Used = 0
 			node.Memory.Usage = 0
 			node.ConnectionHealth = "offline"
+		} else {
+			// For cluster nodes, since one is offline, the cluster is degraded
+			node.ConnectionHealth = "degraded"
 		}
 		
 		nodes = append(nodes, node)
@@ -209,6 +212,7 @@ func generateNodes(config MockConfig) []models.Node {
 		node.Instance = nodeName // Standalone - instance matches name
 		node.IsClusterMember = false
 		node.ClusterName = "" // Empty for standalone
+		node.ConnectionHealth = "healthy" // Standalone nodes are healthy if online
 		nodes = append(nodes, node)
 	}
 	
