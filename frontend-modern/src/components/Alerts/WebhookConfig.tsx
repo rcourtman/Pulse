@@ -35,6 +35,37 @@ export function WebhookConfig(props: WebhookConfigProps) {
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
   
+  // Track header inputs separately to avoid focus loss
+  const [headerInputs, setHeaderInputs] = createSignal<Array<{id: string; key: string; value: string}>>([]);
+  
+  // Sync headerInputs with formData.headers
+  createEffect(() => {
+    const headers = formData().headers || {};
+    const currentInputs = headerInputs();
+    
+    // Only update if we're starting fresh (not already editing headers)
+    if (currentInputs.length === 0 && Object.keys(headers).length > 0) {
+      setHeaderInputs(
+        Object.entries(headers).map(([key, value], index) => ({
+          id: `header-${Date.now()}-${index}`,
+          key,
+          value
+        }))
+      );
+    }
+  });
+  
+  // Update formData.headers when headerInputs change
+  const updateHeadersInFormData = () => {
+    const headers: Record<string, string> = {};
+    headerInputs().forEach(input => {
+      if (input.key) {
+        headers[input.key] = input.value;
+      }
+    });
+    setFormData({ ...formData(), headers });
+  };
+  
   // Load webhook templates
   createEffect(async () => {
     try {
@@ -46,6 +77,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
   });
   
   const saveWebhook = () => {
+    // First sync headers from inputs to formData
+    updateHeadersInFormData();
+    
     const data = formData();
     if (!data.name || !data.url) return;
     
@@ -58,6 +92,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       });
       setEditingId(null);
       setAdding(false);
+      setHeaderInputs([]);
     } else {
       // onAdd expects a webhook without id, but with service
       const newWebhook: Omit<Webhook, 'id'> = {
@@ -80,6 +115,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         enabled: true,
         payloadTemplate: ''
       });
+      setHeaderInputs([]);
       setAdding(false);
     }
   };
@@ -96,6 +132,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       enabled: true,
       payloadTemplate: ''
     });
+    setHeaderInputs([]);
   };
   
   const editWebhook = (webhook: Webhook) => {
@@ -105,6 +142,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
       service: webhook.service || 'generic',
       payloadTemplate: webhook.template || ''
     });
+    // Set up header inputs for editing
+    const headers = webhook.headers || {};
+    setHeaderInputs(
+      Object.entries(headers).map(([key, value], index) => ({
+        id: `header-${Date.now()}-${index}`,
+        key,
+        value
+      }))
+    );
     setAdding(true);
   };
   
@@ -121,6 +167,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
         // Only generic service should have custom payloads
         payloadTemplate: service === 'generic' ? formData().payloadTemplate : ''
       });
+      // Update header inputs when switching services
+      const headers = template.headers || {};
+      setHeaderInputs(
+        Object.entries(headers).map(([key, value], index) => ({
+          id: `header-${Date.now()}-${index}`,
+          key,
+          value
+        }))
+      );
     }
     setShowServiceDropdown(false);
   };
@@ -376,38 +431,29 @@ export function WebhookConfig(props: WebhookConfigProps) {
               </span>
             </label>
             <div class="space-y-2">
-              <For each={Object.entries(formData().headers || {})}>
-                {([key, value]) => (
+              <For each={headerInputs()}>
+                {(header) => (
                   <div class="flex gap-2">
                     <input
                       type="text"
-                      value={key}
+                      value={header.key}
                       onInput={(e) => {
                         const newKey = e.currentTarget.value;
-                        if (key !== newKey) {
-                          const headers = { ...formData().headers };
-                          // Preserve order by rebuilding the headers object
-                          const newHeaders: Record<string, string> = {};
-                          for (const [k, v] of Object.entries(headers)) {
-                            if (k === key) {
-                              newHeaders[newKey] = v;
-                            } else {
-                              newHeaders[k] = v;
-                            }
-                          }
-                          setFormData({ ...formData(), headers: newHeaders });
-                        }
+                        setHeaderInputs(inputs => 
+                          inputs.map(h => h.id === header.id ? { ...h, key: newKey } : h)
+                        );
                       }}
                       placeholder="Header Name"
                       class="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                     />
                     <input
                       type="text"
-                      value={value}
+                      value={header.value}
                       onInput={(e) => {
-                        const headers = { ...formData().headers };
-                        headers[key] = e.currentTarget.value;
-                        setFormData({ ...formData(), headers });
+                        const newValue = e.currentTarget.value;
+                        setHeaderInputs(inputs => 
+                          inputs.map(h => h.id === header.id ? { ...h, value: newValue } : h)
+                        );
                       }}
                       placeholder="Header Value"
                       class="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
@@ -415,9 +461,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        const headers = { ...formData().headers };
-                        delete headers[key];
-                        setFormData({ ...formData(), headers });
+                        setHeaderInputs(inputs => inputs.filter(h => h.id !== header.id));
                       }}
                       class="px-3 py-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 border border-red-300 dark:border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
@@ -429,16 +473,12 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <button
                 type="button"
                 onClick={() => {
-                  const headers = { ...formData().headers };
-                  // Find a unique key name
-                  let newKey = 'X-Custom-Header';
-                  let counter = 1;
-                  while (headers[newKey]) {
-                    newKey = `X-Custom-Header-${counter}`;
-                    counter++;
-                  }
-                  headers[newKey] = '';
-                  setFormData({ ...formData(), headers });
+                  const newId = `header-${Date.now()}-${Math.random()}`;
+                  setHeaderInputs([...headerInputs(), { 
+                    id: newId, 
+                    key: '', 
+                    value: '' 
+                  }]);
                 }}
                 class="w-full py-2 text-sm border border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
               >
@@ -497,7 +537,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
       {/* Add Webhook Button */}
       <Show when={!adding()}>
         <button 
-          onClick={() => setAdding(true)}
+          onClick={() => {
+            setAdding(true);
+            // Initialize with default Content-Type header
+            setHeaderInputs([{
+              id: `header-${Date.now()}-0`,
+              key: 'Content-Type',
+              value: 'application/json'
+            }]);
+          }}
           class="w-full py-2 text-sm border border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
         >
           + Add Webhook
