@@ -303,6 +303,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				clusterEndpoints = append(clusterEndpoints, config.ClusterEndpoint{
 					NodeName: n.Name,
 					Host:     fmt.Sprintf("192.168.0.%d:8006", 100+i),
+					Online:   n.Status == "online", // Set Online based on node status
 				})
 			}
 			
