@@ -405,6 +405,12 @@ func formatWebhookDuration(d time.Duration) string {
 
 // TestEnhancedWebhook tests a webhook with a specific payload
 func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig) (int, string, error) {
+	// Use the configured publicURL if available, otherwise use a placeholder
+	instanceURL := n.publicURL
+	if instanceURL == "" {
+		instanceURL = "https://192.168.1.100:8006"
+	}
+	
 	// Create test alert
 	testAlert := &alerts.Alert{
 		ID:           "test-" + time.Now().Format("20060102-150405"),
@@ -413,7 +419,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		ResourceID:   "100",
 		ResourceName: "Test VM",
 		Node:         "pve-node-01",
-		Instance:     "https://192.168.1.100:8006",
+		Instance:     instanceURL,
 		Message:      "Test webhook notification from Pulse Monitoring",
 		Value:        85.5,
 		Threshold:    80.0,

@@ -47,6 +47,7 @@ type NotificationManager struct {
 	pendingAlerts []*alerts.Alert
 	groupTimer   *time.Timer
 	groupByNode  bool
+	publicURL    string // Full URL to access Pulse
 	groupByGuest bool
 	webhookHistory []WebhookDelivery // Keep last 100 webhook deliveries for debugging
 }
@@ -92,7 +93,7 @@ type WebhookConfig struct {
 }
 
 // NewNotificationManager creates a new notification manager
-func NewNotificationManager() *NotificationManager {
+func NewNotificationManager(publicURL string) *NotificationManager {
 	return &NotificationManager{
 		enabled:        true,
 		cooldown:       5 * time.Minute,
@@ -103,6 +104,7 @@ func NewNotificationManager() *NotificationManager {
 		groupByNode:    true,
 		groupByGuest:   false,
 		webhookHistory: make([]WebhookDelivery, 0, 100), // Pre-allocate for 100 entries
+		publicURL:      publicURL,
 	}
 }
 
@@ -820,6 +822,19 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
 	
+	// Construct full Pulse URL if publicURL is configured
+	instance := alert.Instance
+	if n.publicURL != "" && alert.Instance != "" {
+		// If alert.Instance is just the instance name (e.g., "pve-10.0.1.21")
+		// construct the full URL to view this instance in Pulse
+		if !strings.HasPrefix(alert.Instance, "http://") && !strings.HasPrefix(alert.Instance, "https://") {
+			// Remove trailing slash from publicURL if present
+			publicURL := strings.TrimRight(n.publicURL, "/")
+			// Construct the full URL with the instance path
+			instance = fmt.Sprintf("%s/%s", publicURL, alert.Instance)
+		}
+	}
+	
 	return WebhookPayloadData{
 		ID:           alert.ID,
 		Level:        string(alert.Level),
@@ -827,7 +842,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		ResourceName: alert.ResourceName,
 		ResourceID:   alert.ResourceID,
 		Node:         alert.Node,
-		Instance:     alert.Instance,
+		Instance:     instance,
 		Message:      alert.Message,
 		Value:        alert.Value,
 		Threshold:    alert.Threshold,
@@ -1129,6 +1144,12 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 // SendTestWebhook sends a test notification to a specific webhook
 func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 	// Create a test alert for webhook testing with realistic values
+	// Use the configured publicURL if available, otherwise use a placeholder
+	instanceURL := n.publicURL
+	if instanceURL == "" {
+		instanceURL = "http://your-pulse-instance:7655"
+	}
+	
 	testAlert := &alerts.Alert{
 		ID:           "test-webhook-" + webhook.ID,
 		Type:         "cpu",
@@ -1136,7 +1157,7 @@ func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 		ResourceID:   "webhook-test",
 		ResourceName: "Test Alert",
 		Node:         "test-node",
-		Instance:     "http://your-pulse-instance:7655", // Placeholder URL for test webhooks
+		Instance:     instanceURL, // Use the actual Pulse URL
 		Message:      fmt.Sprintf("This is a test alert from Pulse to verify your %s webhook is working correctly", webhook.Name),
 		Value:        85.5,
 		Threshold:    80.0,
@@ -1158,7 +1179,10 @@ func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 func (n *NotificationManager) SendTestNotificationWithConfig(method string, config *EmailConfig, nodeInfo *TestNodeInfo) error {
 	// Use actual node info if provided, otherwise use defaults
 	nodeName := "test-node"
-	instanceURL := "https://proxmox.local:8006"
+	instanceURL := n.publicURL
+	if instanceURL == "" {
+		instanceURL = "https://proxmox.local:8006"
+	}
 	if nodeInfo != nil {
 		if nodeInfo.NodeName != "" {
 			nodeName = nodeInfo.NodeName
