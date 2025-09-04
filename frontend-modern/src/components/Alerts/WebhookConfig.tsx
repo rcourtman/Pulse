@@ -377,18 +377,25 @@ export function WebhookConfig(props: WebhookConfigProps) {
             </label>
             <div class="space-y-2">
               <For each={Object.entries(formData().headers || {})}>
-                {([key, value], index) => (
+                {([key, value]) => (
                   <div class="flex gap-2">
                     <input
                       type="text"
                       value={key}
                       onInput={(e) => {
-                        const headers = { ...formData().headers };
-                        const oldKey = Object.keys(headers)[index()];
-                        if (oldKey !== e.currentTarget.value) {
-                          delete headers[oldKey];
-                          headers[e.currentTarget.value] = value;
-                          setFormData({ ...formData(), headers });
+                        const newKey = e.currentTarget.value;
+                        if (key !== newKey) {
+                          const headers = { ...formData().headers };
+                          // Preserve order by rebuilding the headers object
+                          const newHeaders: Record<string, string> = {};
+                          for (const [k, v] of Object.entries(headers)) {
+                            if (k === key) {
+                              newHeaders[newKey] = v;
+                            } else {
+                              newHeaders[k] = v;
+                            }
+                          }
+                          setFormData({ ...formData(), headers: newHeaders });
                         }
                       }}
                       placeholder="Header Name"
