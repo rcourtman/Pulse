@@ -886,11 +886,15 @@ const Settings: Component = () => {
                               // Find the corresponding node in the WebSocket state
                               const stateNode = state.nodes.find(n => n.instance === node.name);
                               // Check if the node has an unhealthy connection or is offline
-                              if (stateNode?.connectionHealth === 'unhealthy' || stateNode?.status === 'offline') {
+                              if (stateNode?.connectionHealth === 'unhealthy' || stateNode?.connectionHealth === 'error' || stateNode?.status === 'offline') {
                                 return 'bg-red-500';
                               }
+                              // Check if connection is degraded (partial cluster connectivity)
+                              if (stateNode?.connectionHealth === 'degraded') {
+                                return 'bg-yellow-500';
+                              }
                               // Check if we have a healthy connection
-                              if (stateNode && stateNode.status === 'online') {
+                              if (stateNode && (stateNode.status === 'online' || stateNode.connectionHealth === 'healthy')) {
                                 return 'bg-green-500';
                               }
                               // Default to red if no state data (node is offline/unreachable)
@@ -1156,11 +1160,15 @@ const Settings: Component = () => {
                               // Find the corresponding PBS instance in the WebSocket state
                               const statePBS = state.pbs.find(p => p.name === node.name);
                               // Check if the PBS has an unhealthy connection or is offline
-                              if (statePBS?.connectionHealth === 'unhealthy' || statePBS?.status === 'offline') {
+                              if (statePBS?.connectionHealth === 'unhealthy' || statePBS?.connectionHealth === 'error' || statePBS?.status === 'offline') {
                                 return 'bg-red-500';
                               }
+                              // Check if connection is degraded (not commonly used for PBS but keeping consistent)
+                              if (statePBS?.connectionHealth === 'degraded') {
+                                return 'bg-yellow-500';
+                              }
                               // Check if we have a healthy connection
-                              if (statePBS && statePBS.status === 'online') {
+                              if (statePBS && (statePBS.status === 'online' || statePBS.connectionHealth === 'healthy')) {
                                 return 'bg-green-500';
                               }
                               // Default to red if no state data (server is offline/unreachable)
