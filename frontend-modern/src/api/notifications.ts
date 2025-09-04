@@ -159,7 +159,7 @@ export class NotificationsAPI {
     });
   }
 
-  static async testWebhook(webhook: Webhook): Promise<{ success: boolean; message?: string }> {
+  static async testWebhook(webhook: Omit<Webhook, 'id'>): Promise<{ success: boolean; message?: string }> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),
