@@ -362,9 +362,12 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 595 in Proxmox means "no ticket" but in cluster context often means target node unreachable
 		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
 		// Error 403 for storage operations means permission issue, not node health issue
+		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
 		if strings.Contains(errStr, "595") || 
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "No QEMU guest agent configured")) ||
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "QEMU guest agent is not running")) ||
 		   (strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
 		   strings.Contains(errStr, "permission denied") {
 			// This is likely a node-specific failure, not an endpoint failure
