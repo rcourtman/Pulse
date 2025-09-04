@@ -823,16 +823,14 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 	duration := time.Since(alert.StartTime)
 	
 	// Construct full Pulse URL if publicURL is configured
-	instance := alert.Instance
-	if n.publicURL != "" && alert.Instance != "" {
-		// If alert.Instance is just the instance name (e.g., "pve-10.0.1.21")
-		// construct the full URL to view this instance in Pulse
-		if !strings.HasPrefix(alert.Instance, "http://") && !strings.HasPrefix(alert.Instance, "https://") {
-			// Remove trailing slash from publicURL if present
-			publicURL := strings.TrimRight(n.publicURL, "/")
-			// Construct the full URL with the instance path
-			instance = fmt.Sprintf("%s/%s", publicURL, alert.Instance)
-		}
+	// The Instance field should contain the full URL to the Pulse dashboard
+	instance := ""
+	if n.publicURL != "" {
+		// Remove trailing slash from publicURL if present
+		instance = strings.TrimRight(n.publicURL, "/")
+	} else if alert.Instance != "" && (strings.HasPrefix(alert.Instance, "http://") || strings.HasPrefix(alert.Instance, "https://")) {
+		// If publicURL is not set but alert.Instance contains a full URL, use it
+		instance = alert.Instance
 	}
 	
 	return WebhookPayloadData{
