@@ -44,13 +44,41 @@ const Storage: Component = () => {
   });
   
   
-  // Filter storage - in storage view, filter out 0 capacity
+  // Filter storage - in storage view, filter out 0 capacity and deduplicate
   const filteredStorage = createMemo(() => {
     let storage = state.storage || [];
     
-    // In storage view, filter out 0 capacity
+    // In storage view, deduplicate identical storage and filter out 0 capacity
     if (viewMode() === 'storage') {
+      // Filter out 0 capacity first
       storage = storage.filter(s => s.total > 0);
+      
+      // Deduplicate storage entries that are identical (same name, type, total, used)
+      // Keep the first occurrence and add node count info
+      const storageMap = new Map();
+      storage.forEach(s => {
+        // Create a key based on storage name and type (PBS storage with same name is the same storage)
+        const key = `${s.name}-${s.type}`;
+        
+        if (!storageMap.has(key)) {
+          // First occurrence - store it with node list
+          storageMap.set(key, {
+            ...s,
+            nodes: [s.node],
+            nodeCount: 1
+          });
+        } else {
+          // Duplicate - just add to node list
+          const existing = storageMap.get(key);
+          if (!existing.nodes.includes(s.node)) {
+            existing.nodes.push(s.node);
+            existing.nodeCount = existing.nodes.length;
+          }
+        }
+      });
+      
+      // Convert back to array
+      storage = Array.from(storageMap.values());
     }
     
     return storage;
@@ -311,7 +339,7 @@ const Storage: Component = () => {
                                   </span>
                                   <Show when={viewMode() === 'storage'}>
                                     <span class="text-xs text-gray-500 dark:text-gray-400">
-                                      ({storage.node})
+                                      ({storage.nodes ? storage.nodes.join(', ') : storage.node})
                                     </span>
                                   </Show>
                                 </div>
