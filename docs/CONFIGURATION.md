@@ -184,9 +184,9 @@ These env vars override system.json values. When set, the UI will show a warning
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
 - `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
 - `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`)
-  - **Required for webhook notifications** to include working "View in Pulse" links
-  - Without this, Gotify/ntfy notifications will have broken links
-  - Set this to the URL you use to access Pulse in your browser
+  - **Auto-detected** if not set - Pulse will try to determine its IP address automatically
+  - Used in webhook notifications for "View in Pulse" links
+  - Only set this if auto-detection uses the wrong IP (e.g., multiple network interfaces)
   - Example: `PULSE_PUBLIC_URL="http://192.168.1.100:7655"`
 
 #### Authentication Variables (from .env file)
