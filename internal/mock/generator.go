@@ -1028,6 +1028,30 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 		}
 	}
 	
+	// Generate host config backups (VMID 0) - PMG/PVE host configs
+	// These are common when backing up Proxmox Mail Gateway hosts
+	hostBackupCount := 2 + rand.Intn(3) // 2-4 host backups
+	for i := 0; i < hostBackupCount; i++ {
+		backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
+		
+		backup := models.PBSBackup{
+			ID:         fmt.Sprintf("pbs-backup-host-0-%d", i),
+			Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
+			Datastore:  datastores[rand.Intn(len(datastores))],
+			Namespace:  "root",
+			BackupType: "ct", // Host configs are stored as 'ct' type in PBS
+			VMID:       "0",   // VMID 0 indicates host config
+			BackupTime: backupTime,
+			Size:       int64(50*1024*1024 + rand.Int63n(100*1024*1024)), // 50-150MB for host configs
+			Protected:  rand.Float64() > 0.7, // 30% protected
+			Verified:   rand.Float64() > 0.1,  // 90% verified
+			Comment:    "PMG host configuration backup",
+			Owner:      "root@pam",
+		}
+		
+		backups = append(backups, backup)
+	}
+	
 	// Sort by time (newest first)
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].BackupTime.After(backups[j].BackupTime)
