@@ -481,11 +481,11 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			func() string {
 				switch testAlert.Level {
 				case alerts.AlertLevelCritical:
-					return "🔴 CRITICAL"
+					return "CRITICAL"
 				case alerts.AlertLevelWarning:
-					return "🟡 WARNING"
+					return "WARNING"
 				default:
-					return "🟢 INFO"
+					return "INFO"
 				}
 			}(),
 			testAlert.ResourceName,
