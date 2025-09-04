@@ -102,6 +102,9 @@ export interface Storage {
   shared: boolean;
   enabled: boolean;
   active: boolean;
+  // Added for deduplication in storage view
+  nodes?: string[];
+  nodeCount?: number;
 }
 
 export interface PBSInstance {
