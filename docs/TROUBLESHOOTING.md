@@ -4,76 +4,130 @@
 
 ### Authentication Problems
 
-#### Forgot Password / Password Reset
+#### Forgot Password / Lost Access
+
+**⚠️ SECURITY WARNING**: Password reset requires server-level access. If someone can reset your Pulse password, they already have root/admin access to your server. **Secure your server access first!**
 
 **Problem**: Can't remember the password and are locked out of the Pulse interface.
 
-**Solutions**:
+**Important Security Considerations**:
+- These methods require server access (SSH/console)
+- If an attacker can perform these steps, they already have server control
+- Use a password manager to avoid needing password resets
+- **Re-enable authentication immediately after regaining access**
 
-**Option 1: Use the password reset script (Native Install)**
+## Secure Recovery Methods
+
+### Method 1: Recovery Token (Most Secure)
+
+Pulse includes a secure recovery token system for emergency access:
+
+**Step 1: Generate Recovery Token (from server)**
 ```bash
-# Run the password reset script
-sudo /opt/pulse/scripts/reset-password.sh
+# SSH into your server and generate a time-limited recovery token
+curl -X POST http://localhost:7655/api/security/recovery \
+  -H "Content-Type: application/json" \
+  -d '{"action": "generate_token", "duration": 30}'
 
-# Choose option 1 to reset password (keeps username)
-# Choose option 2 to set new username and password
-# Choose option 3 to disable authentication temporarily
-# Choose option 4 to check current status
+# This returns a token valid for 30 minutes (max 60)
+# Save this token immediately - it's shown only once!
 ```
 
-**Option 2: Manually reset via .env file (Native Install)**
+**Step 2: Use Recovery Token (from any browser)**
 ```bash
-# Edit the .env file directly
-sudo nano /opt/pulse/.env
+# Use the token to access the recovery endpoint
+curl -X POST http://your-server:7655/api/security/recovery \
+  -H "X-Recovery-Token: your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "disable_auth"}'
 
-# Option A: Disable authentication temporarily
-# Add or modify this line:
-DISABLE_AUTH=true
-# Then restart: sudo systemctl restart pulse
-
-# Option B: Set new credentials
-# Add or modify these lines:
-PULSE_AUTH_USER=yournewusername
-PULSE_AUTH_PASS=yournewpassword
-# Then restart: sudo systemctl restart pulse
+# Now you can access the UI and reset your password
 ```
 
-**Option 3: Docker - Reset authentication**
+**Step 3: Re-enable Authentication**
 ```bash
-# Option A: Disable auth temporarily
-docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
+# After setting new password in the UI
+curl -X POST http://localhost:7655/api/security/recovery \
+  -H "Content-Type: application/json" \
+  -d '{"action": "enable_auth"}'
+```
+
+**Security Features:**
+- Tokens are single-use only
+- Time-limited (30-60 minutes)
+- Cryptographically secure (32 bytes of entropy)
+- Logged for audit purposes
+- Constant-time validation to prevent timing attacks
+
+### Method 2: Emergency Recovery Mode (Localhost Only)
+
+If you have direct server access but can't use tokens:
+
+**Native Install:**
+```bash
+# Enable recovery mode (localhost access only)
+echo "Recovery mode enabled at $(date)" | sudo tee /etc/pulse/.auth_recovery
+
+# Access Pulse from the server itself (localhost)
+curl http://localhost:7655  # or use local browser/port forward
+
+# Set new credentials through the UI
+
+# Disable recovery mode
+sudo rm /etc/pulse/.auth_recovery
+sudo systemctl restart pulse
+```
+
+**Docker:**
+```bash
+# Enable recovery mode
+docker exec pulse sh -c "echo 'Recovery mode' > /data/.auth_recovery"
+
+# Access from localhost (port forward if needed)
+# Set new credentials
+
+# Disable recovery mode
+docker exec pulse rm /data/.auth_recovery
 docker restart pulse
-
-# Option B: Set new credentials
-docker exec pulse sh -c "cat > /data/.env << 'EOF'
-PULSE_AUTH_USER=yournewusername  
-PULSE_AUTH_PASS=yournewpassword
-EOF"
-docker restart pulse
-
-# Option C: Remove auth completely and use Quick Setup
-docker exec pulse rm -f /data/.env
-docker restart pulse
-# Then access the UI and use Quick Security Setup
 ```
 
-**Option 4: ProxmoxVE LXC - Reset from console**
+### Method 3: Manual Override (Last Resort)
+
+⚠️ **Only use if other methods fail:**
+
 ```bash
-# Access the container console in Proxmox
-# Then run:
-/opt/pulse/scripts/reset-password.sh
+# Temporarily bypass auth (native install)
+echo "DISABLE_AUTH=true" | sudo tee -a /opt/pulse/.env
+sudo systemctl restart pulse
 
-# Or manually edit:
-nano /opt/pulse/.env
-# Add: DISABLE_AUTH=true
-# Then: systemctl restart pulse
+# IMMEDIATELY set new credentials in UI
+# Then remove the DISABLE_AUTH line and restart
+
+# For Docker:
+docker exec pulse sh -c "echo 'DISABLE_AUTH=true' >> /data/.env"
+docker restart pulse
+# Set credentials, then remove the line
 ```
 
-**Important Notes:**
-- Passwords are hashed with bcrypt when Pulse starts (you'll see a 60-character hash starting with $2)
-- Minimum password length is 8 characters
-- The .env file is located at `/opt/pulse/.env` (native) or `/data/.env` (Docker)
-- After resetting, you can re-enable authentication through the UI's security settings
+**Best Practices to Avoid This Situation**:
+1. **Use a password manager** - Store credentials securely
+2. **Document credentials** - Keep in a secure location
+3. **Set up API tokens** - Alternative authentication method
+4. **Regular backups** - Include .env file in backups
+5. **Secure server access** - Use SSH keys, disable root login, use fail2ban
+
+**Alternative: API Token Access**:
+If you have an API token configured, you can still access the API:
+```bash
+curl -H "X-API-Token: your-token-here" http://localhost:7655/api/config/system
+```
+
+**Security Reminder**: 
+After regaining access:
+1. Set a strong password (use a password generator)
+2. Save credentials in a password manager
+3. Review server access logs for unauthorized access
+4. Consider implementing additional server security measures
 
 #### Cannot login after setting up security
 **Symptoms**: "Invalid username or password" error despite correct credentials
@@ -216,39 +270,9 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 ### Data Recovery
 
 #### Lost authentication
-If you've lost access and need to reset:
+See [Forgot Password / Lost Access](#forgot-password--lost-access) section above for detailed recovery instructions.
 
-**Native Install (Recommended)**:
-```bash
-# Use the password reset script
-sudo /opt/pulse/scripts/reset-password.sh
-# Follow the prompts to reset or disable auth
-```
-
-**Docker**:
-```bash
-# Option 1: Reset credentials
-docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
-docker restart pulse
-# Access UI and set new credentials
-
-# Option 2: Remove auth completely
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI and use Quick Security Setup
-```
-
-**Manual Reset**:
-```bash
-# Native install
-sudo nano /opt/pulse/.env
-# Add: DISABLE_AUTH=true
-sudo systemctl restart pulse  # or pulse-backend
-
-# Docker
-docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
-docker restart pulse
-```
+**⚠️ Security Note**: Password recovery requires root access. If someone can reset your password, they already have full control of your server. Focus on securing server access (SSH keys, firewall rules, etc.) rather than worrying about Pulse password resets.
 
 #### Corrupt configuration
 Restore from backup or delete config files to start fresh:
