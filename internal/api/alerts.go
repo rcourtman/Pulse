@@ -367,7 +367,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 
 // HandleAlerts routes alert requests to appropriate handlers
 func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/alerts")
+	path := strings.TrimPrefix(r.URL.Path, "/api/alerts/")
 	
 	log.Debug().
 		Str("originalPath", r.URL.Path).
@@ -376,19 +376,19 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 		Msg("HandleAlerts routing request")
 	
 	switch {
-	case path == "/config" && r.Method == http.MethodGet:
+	case path == "config" && r.Method == http.MethodGet:
 		h.GetAlertConfig(w, r)
-	case path == "/config" && r.Method == http.MethodPut:
+	case path == "config" && r.Method == http.MethodPut:
 		h.UpdateAlertConfig(w, r)
-	case path == "/active" && r.Method == http.MethodGet:
+	case path == "active" && r.Method == http.MethodGet:
 		h.GetActiveAlerts(w, r)
-	case path == "/history" && r.Method == http.MethodGet:
+	case path == "history" && r.Method == http.MethodGet:
 		h.GetAlertHistory(w, r)
-	case path == "/history" && r.Method == http.MethodDelete:
+	case path == "history" && r.Method == http.MethodDelete:
 		h.ClearAlertHistory(w, r)
-	case path == "/bulk/acknowledge" && r.Method == http.MethodPost:
+	case path == "bulk/acknowledge" && r.Method == http.MethodPost:
 		h.BulkAcknowledgeAlerts(w, r)
-	case path == "/bulk/clear" && r.Method == http.MethodPost:
+	case path == "bulk/clear" && r.Method == http.MethodPost:
 		h.BulkClearAlerts(w, r)
 	case strings.HasSuffix(path, "/acknowledge") && r.Method == http.MethodPost:
 		h.AcknowledgeAlert(w, r)
