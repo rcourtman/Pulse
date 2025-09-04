@@ -61,7 +61,7 @@ URL Format: https://your-gotify-server/message?token={your-app-token}
 3. Use the URL format: `https://your-gotify-server/message?token=YOUR_APP_TOKEN`
 4. The token MUST be included as a URL parameter
 5. Pulse will send rich markdown-formatted notifications with emojis and full alert details
-6. **View in Pulse links**: Set `PULSE_PUBLIC_URL` environment variable (e.g., `http://192.168.1.100:7655`) to ensure notification links work correctly
+6. **View in Pulse links**: Automatically detected - links will work out of the box in most cases
 
 ### ntfy
 ```
@@ -78,7 +78,7 @@ URL Format: https://ntfy.sh/{topic} or https://your-ntfy-server/{topic}
    - Add header: `Authorization`
    - Value: `Bearer YOUR_TOKEN` or `Basic base64_encoded_credentials`
 6. Notifications include dynamic priority levels and emoji tags based on alert severity
-7. **View in Pulse links**: Set `PULSE_PUBLIC_URL` environment variable (e.g., `http://192.168.1.100:7655`) to ensure notification links work correctly
+7. **View in Pulse links**: Automatically detected - links will work out of the box in most cases
 
 ### PagerDuty
 ```
