@@ -16,7 +16,7 @@ interface WebhookConfigProps {
   onAdd: (webhook: Omit<Webhook, 'id'>) => void;
   onUpdate: (webhook: Webhook) => void;
   onDelete: (id: string) => void;
-  onTest: (id: string) => void;
+  onTest: (id: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testing?: string | null;
 }
 
@@ -461,6 +461,20 @@ export function WebhookConfig(props: WebhookConfigProps) {
             >
               Cancel
             </button>
+            <Show when={formData().url && formData().name}>
+              <button 
+                onClick={() => {
+                  // Test the webhook with current form data
+                  // Use a consistent temporary ID for this form session
+                  const tempId = editingId() || 'temp-new-webhook';
+                  props.onTest(tempId, formData());
+                }}
+                disabled={props.testing === (editingId() || 'temp-new-webhook')}
+                class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                {props.testing === (editingId() || 'temp-new-webhook') ? 'Testing...' : 'Test'}
+              </button>
+            </Show>
             <button 
               onClick={saveWebhook}
               disabled={!formData().name || !formData().url}

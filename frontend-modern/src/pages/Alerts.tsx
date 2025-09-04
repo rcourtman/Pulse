@@ -1078,10 +1078,16 @@ function DestinationsTab(props: DestinationsTabProps) {
     }
   };
   
-  const testWebhook = async (webhookId: string) => {
+  const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
     setTestingWebhook(webhookId);
     try {
-      await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+      if (webhookData) {
+        // Test unsaved webhook with provided configuration
+        await NotificationsAPI.testWebhook(webhookData);
+      } else {
+        // Test existing webhook by ID
+        await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+      }
       showSuccess('Test webhook sent successfully!');
     } catch (err) {
       showError('Failed to send test webhook', err instanceof Error ? err.message : 'Unknown error');
