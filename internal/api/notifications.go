@@ -393,8 +393,12 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 				if webhook.Headers == nil {
 					webhook.Headers = make(map[string]string)
 				}
+				// Only copy headers that don't contain template syntax
+				// This prevents issues with headers that have Go template expressions
 				for k, v := range tmpl.Headers {
-					webhook.Headers[k] = v
+					if !strings.Contains(v, "{{") {
+						webhook.Headers[k] = v
+					}
 				}
 				log.Info().Str("service", webhook.Service).Msg("Found template for service")
 				break
