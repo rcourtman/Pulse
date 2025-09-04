@@ -1034,54 +1034,63 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Verify current password matches
-	authHeader := req.Header.Get("Authorization")
-	if authHeader == "" {
+	// When behind a proxy with Basic Auth, the proxy may overwrite the Authorization header
+	// So we verify the current password from the JSON body instead
+	
+	// First, validate that currentPassword was provided
+	if changeReq.CurrentPassword == "" {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
 			"Current password required", nil)
 		return
 	}
 	
-	// Parse Basic auth header
-	const basicPrefix = "Basic "
-	if !strings.HasPrefix(authHeader, basicPrefix) {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-			"Invalid authorization format", nil)
-		return
+	// Check if we should use Basic Auth header or JSON body for verification
+	// If there's an Authorization header AND it's not from a proxy, use it
+	authHeader := req.Header.Get("Authorization")
+	useAuthHeader := false
+	username := r.config.AuthUser // Default to configured username
+	
+	if authHeader != "" {
+		const basicPrefix = "Basic "
+		if strings.HasPrefix(authHeader, basicPrefix) {
+			decoded, err := base64.StdEncoding.DecodeString(authHeader[len(basicPrefix):])
+			if err == nil {
+				parts := strings.SplitN(string(decoded), ":", 2)
+				if len(parts) == 2 {
+					// Check if this looks like Pulse credentials (matching username)
+					if parts[0] == r.config.AuthUser {
+						// This is likely from Pulse's own auth, not a proxy
+						username = parts[0]
+						useAuthHeader = true
+						// Verify the password from the header matches
+						if !auth.CheckPasswordHash(parts[1], r.config.AuthPass) {
+							log.Warn().
+								Str("ip", req.RemoteAddr).
+								Str("username", username).
+								Msg("Failed password change attempt - incorrect current password in auth header")
+							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+								"Current password is incorrect", nil)
+							return
+						}
+					}
+					// If username doesn't match, this is likely proxy auth - ignore it
+				}
+			}
+		}
 	}
 	
-	decoded, err := base64.StdEncoding.DecodeString(authHeader[len(basicPrefix):])
-	if err != nil {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-			"Invalid authorization encoding", nil)
-		return
-	}
-	
-	parts := strings.SplitN(string(decoded), ":", 2)
-	if len(parts) != 2 {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-			"Invalid authorization format", nil)
-		return
-	}
-	
-	username := parts[0]
-	password := parts[1]
-	
-	// Check if username matches configured user
-	if username != r.config.AuthUser {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-			"Invalid username", nil)
-		return
-	}
-	
-	// Verify current password
-	if !auth.CheckPasswordHash(password, r.config.AuthPass) {
-		log.Warn().
-			Str("ip", req.RemoteAddr).
-			Str("username", username).
-			Msg("Failed password change attempt - incorrect current password")
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
-			"Current password is incorrect", nil)
-		return
+	// If we didn't use the auth header, or need to double-check, verify from JSON body
+	if !useAuthHeader || changeReq.CurrentPassword != "" {
+		// Verify current password from JSON body
+		if !auth.CheckPasswordHash(changeReq.CurrentPassword, r.config.AuthPass) {
+			log.Warn().
+				Str("ip", req.RemoteAddr).
+				Str("username", username).
+				Msg("Failed password change attempt - incorrect current password")
+			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+				"Current password is incorrect", nil)
+			return
+		}
 	}
 
 	// Hash the new password before storing
