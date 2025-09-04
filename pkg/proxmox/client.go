@@ -555,7 +555,16 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 
 // GetStorage returns storage information for a specific node
 func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error) {
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/storage", node))
+	// Storage queries can take longer on large clusters or slow storage backends
+	// Create a new context with extended timeout if the original doesn't have one
+	storageCtx := ctx
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+		var cancel context.CancelFunc
+		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		defer cancel()
+	}
+	
+	resp, err := c.get(storageCtx, fmt.Sprintf("/nodes/%s/storage", node))
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +583,16 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 
 // GetAllStorage returns storage information across all nodes
 func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
-	resp, err := c.get(ctx, "/storage")
+	// Storage queries can take longer on large clusters
+	// Create a new context with extended timeout if the original doesn't have one
+	storageCtx := ctx
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+		var cancel context.CancelFunc
+		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		defer cancel()
+	}
+	
+	resp, err := c.get(storageCtx, "/storage")
 	if err != nil {
 		return nil, err
 	}
@@ -658,7 +676,16 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 
 // GetStorageContent returns the content of a specific storage
 func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
-	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage))
+	// Storage content queries can take longer on large storages
+	// Create a new context with extended timeout if the original doesn't have one
+	storageCtx := ctx
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+		var cancel context.CancelFunc
+		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		defer cancel()
+	}
+	
+	resp, err := c.get(storageCtx, fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage))
 	if err != nil {
 		return nil, err
 	}
