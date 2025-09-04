@@ -70,8 +70,8 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	// Prepare template data
 	data := n.prepareWebhookData(alert, webhook.CustomFields)
 	
-	// Generate payload from template
-	payload, err := n.generatePayloadFromTemplate(webhook.PayloadTemplate, data)
+	// Generate payload from template with service-specific handling
+	payload, err := n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	if err != nil {
 		return fmt.Errorf("failed to generate payload: %w", err)
 	}
