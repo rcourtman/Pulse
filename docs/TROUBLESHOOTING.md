@@ -6,128 +6,29 @@
 
 #### Forgot Password / Lost Access
 
-**⚠️ SECURITY WARNING**: Password reset requires server-level access. If someone can reset your Pulse password, they already have root/admin access to your server. **Secure your server access first!**
+**Solution: Start Fresh**
 
-**Problem**: Can't remember the password and are locked out of the Pulse interface.
+If you've forgotten your password, the recommended approach is to simply start fresh. Pulse is designed for quick setup - it takes just 2-3 minutes to be fully operational again.
 
-**Important Security Considerations**:
-- These methods require server access (SSH/console)
-- If an attacker can perform these steps, they already have server control
-- Use a password manager to avoid needing password resets
-- **Re-enable authentication immediately after regaining access**
+**Why no password recovery?**
+- Adding recovery mechanisms creates security vulnerabilities
+- Pulse setup is intentionally simple and fast
+- You're not losing important data (Pulse only tracks current state, not history)
+- Your nodes will immediately repopulate with all VMs/containers
 
-## Secure Recovery Methods
+**Steps to start fresh:**
+1. Stop Pulse
+2. Delete your configuration/data directory (`/etc/pulse`, `/data`, or wherever you configured it)
+3. Restart Pulse
+4. Run Quick Security Setup (30 seconds)
+5. Add your nodes back (another 30 seconds)
 
-### Method 1: Recovery Token (Most Secure)
+That's it. Your infrastructure will be fully visible again immediately.
 
-Pulse includes a secure recovery token system for emergency access:
-
-**Step 1: Generate Recovery Token (from server)**
-```bash
-# SSH into your server and generate a time-limited recovery token
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "Content-Type: application/json" \
-  -d '{"action": "generate_token", "duration": 30}'
-
-# This returns a token valid for 30 minutes (max 60)
-# Save this token immediately - it's shown only once!
-```
-
-**Step 2: Use Recovery Token (from any browser)**
-```bash
-# Use the token to access the recovery endpoint
-curl -X POST http://your-server:7655/api/security/recovery \
-  -H "X-Recovery-Token: your-token-here" \
-  -H "Content-Type: application/json" \
-  -d '{"action": "disable_auth"}'
-
-# Now you can access the UI and reset your password
-```
-
-**Step 3: Re-enable Authentication**
-```bash
-# After setting new password in the UI
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "Content-Type: application/json" \
-  -d '{"action": "enable_auth"}'
-```
-
-**Security Features:**
-- Tokens are single-use only
-- Time-limited (30-60 minutes)
-- Cryptographically secure (32 bytes of entropy)
-- Logged for audit purposes
-- Constant-time validation to prevent timing attacks
-
-### Method 2: Emergency Recovery Mode (Localhost Only)
-
-If you have direct server access but can't use tokens:
-
-**Native Install:**
-```bash
-# Enable recovery mode (localhost access only)
-echo "Recovery mode enabled at $(date)" | sudo tee /etc/pulse/.auth_recovery
-
-# Access Pulse from the server itself (localhost)
-curl http://localhost:7655  # or use local browser/port forward
-
-# Set new credentials through the UI
-
-# Disable recovery mode
-sudo rm /etc/pulse/.auth_recovery
-sudo systemctl restart pulse
-```
-
-**Docker:**
-```bash
-# Enable recovery mode
-docker exec pulse sh -c "echo 'Recovery mode' > /data/.auth_recovery"
-
-# Access from localhost (port forward if needed)
-# Set new credentials
-
-# Disable recovery mode
-docker exec pulse rm /data/.auth_recovery
-docker restart pulse
-```
-
-### Method 3: Manual Override (Last Resort)
-
-⚠️ **Only use if other methods fail:**
-
-```bash
-# Temporarily bypass auth (native install)
-echo "DISABLE_AUTH=true" | sudo tee -a /opt/pulse/.env
-sudo systemctl restart pulse
-
-# IMMEDIATELY set new credentials in UI
-# Then remove the DISABLE_AUTH line and restart
-
-# For Docker:
-docker exec pulse sh -c "echo 'DISABLE_AUTH=true' >> /data/.env"
-docker restart pulse
-# Set credentials, then remove the line
-```
-
-**Best Practices to Avoid This Situation**:
-1. **Use a password manager** - Store credentials securely
-2. **Document credentials** - Keep in a secure location
-3. **Set up API tokens** - Alternative authentication method
-4. **Regular backups** - Include .env file in backups
-5. **Secure server access** - Use SSH keys, disable root login, use fail2ban
-
-**Alternative: API Token Access**:
-If you have an API token configured, you can still access the API:
-```bash
-curl -H "X-API-Token: your-token-here" http://localhost:7655/api/config/system
-```
-
-**Security Reminder**: 
-After regaining access:
-1. Set a strong password (use a password generator)
-2. Save credentials in a password manager
-3. Review server access logs for unauthorized access
-4. Consider implementing additional server security measures
+**Prevention:**
+- Use a password manager
+- Document your credentials securely
+- Consider using API tokens for automation
 
 #### Cannot login after setting up security
 **Symptoms**: "Invalid username or password" error despite correct credentials
@@ -270,9 +171,9 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 ### Data Recovery
 
 #### Lost authentication
-See [Forgot Password / Lost Access](#forgot-password--lost-access) section above for detailed recovery instructions.
+See [Forgot Password / Lost Access](#forgot-password--lost-access) section above.
 
-**⚠️ Security Note**: Password recovery requires root access. If someone can reset your password, they already have full control of your server. Focus on securing server access (SSH keys, firewall rules, etc.) rather than worrying about Pulse password resets.
+**Recommended approach**: Start fresh. Delete your Pulse data and restart - takes 2 minutes to set up again.
 
 #### Corrupt configuration
 Restore from backup or delete config files to start fresh:
