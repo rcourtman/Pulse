@@ -4,6 +4,77 @@
 
 ### Authentication Problems
 
+#### Forgot Password / Password Reset
+
+**Problem**: Can't remember the password and are locked out of the Pulse interface.
+
+**Solutions**:
+
+**Option 1: Use the password reset script (Native Install)**
+```bash
+# Run the password reset script
+sudo /opt/pulse/scripts/reset-password.sh
+
+# Choose option 1 to reset password (keeps username)
+# Choose option 2 to set new username and password
+# Choose option 3 to disable authentication temporarily
+# Choose option 4 to check current status
+```
+
+**Option 2: Manually reset via .env file (Native Install)**
+```bash
+# Edit the .env file directly
+sudo nano /opt/pulse/.env
+
+# Option A: Disable authentication temporarily
+# Add or modify this line:
+DISABLE_AUTH=true
+# Then restart: sudo systemctl restart pulse
+
+# Option B: Set new credentials
+# Add or modify these lines:
+PULSE_AUTH_USER=yournewusername
+PULSE_AUTH_PASS=yournewpassword
+# Then restart: sudo systemctl restart pulse
+```
+
+**Option 3: Docker - Reset authentication**
+```bash
+# Option A: Disable auth temporarily
+docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
+docker restart pulse
+
+# Option B: Set new credentials
+docker exec pulse sh -c "cat > /data/.env << 'EOF'
+PULSE_AUTH_USER=yournewusername  
+PULSE_AUTH_PASS=yournewpassword
+EOF"
+docker restart pulse
+
+# Option C: Remove auth completely and use Quick Setup
+docker exec pulse rm -f /data/.env
+docker restart pulse
+# Then access the UI and use Quick Security Setup
+```
+
+**Option 4: ProxmoxVE LXC - Reset from console**
+```bash
+# Access the container console in Proxmox
+# Then run:
+/opt/pulse/scripts/reset-password.sh
+
+# Or manually edit:
+nano /opt/pulse/.env
+# Add: DISABLE_AUTH=true
+# Then: systemctl restart pulse
+```
+
+**Important Notes:**
+- Passwords are hashed with bcrypt when Pulse starts (you'll see a 60-character hash starting with $2)
+- Minimum password length is 8 characters
+- The .env file is located at `/opt/pulse/.env` (native) or `/data/.env` (Docker)
+- After resetting, you can re-enable authentication through the UI's security settings
+
 #### Cannot login after setting up security
 **Symptoms**: "Invalid username or password" error despite correct credentials
 
@@ -147,19 +218,36 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 #### Lost authentication
 If you've lost access and need to reset:
 
+**Native Install (Recommended)**:
+```bash
+# Use the password reset script
+sudo /opt/pulse/scripts/reset-password.sh
+# Follow the prompts to reset or disable auth
+```
+
 **Docker**:
 ```bash
-# Remove auth from container
+# Option 1: Reset credentials
+docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
+docker restart pulse
+# Access UI and set new credentials
+
+# Option 2: Remove auth completely
 docker exec pulse rm /data/.env
 docker restart pulse
 # Access UI and use Quick Security Setup
 ```
 
-**Native Install**:
+**Manual Reset**:
 ```bash
-sudo rm /etc/pulse/.env
+# Native install
+sudo nano /opt/pulse/.env
+# Add: DISABLE_AUTH=true
 sudo systemctl restart pulse  # or pulse-backend
-# Access UI and use Quick Security Setup
+
+# Docker
+docker exec pulse sh -c "echo 'DISABLE_AUTH=true' > /data/.env"
+docker restart pulse
 ```
 
 #### Corrupt configuration
