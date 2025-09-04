@@ -665,7 +665,43 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	// Reset auth failures on successful connection
 	m.resetAuthFailures(instanceName, "pve")
-	m.state.SetConnectionHealth(instanceName, true)
+	
+	// Check if client is a ClusterClient to determine health status
+	connectionHealthStr := "healthy"
+	if clusterClient, ok := client.(*proxmox.ClusterClient); ok {
+		// For cluster clients, check if all endpoints are healthy
+		healthStatus := clusterClient.GetHealthStatus()
+		healthyCount := 0
+		totalCount := len(healthStatus)
+		
+		for _, isHealthy := range healthStatus {
+			if isHealthy {
+				healthyCount++
+			}
+		}
+		
+		if healthyCount == 0 {
+			// All endpoints are down
+			connectionHealthStr = "error"
+			m.state.SetConnectionHealth(instanceName, false)
+		} else if healthyCount < totalCount {
+			// Some endpoints are down - degraded state
+			connectionHealthStr = "degraded"
+			m.state.SetConnectionHealth(instanceName, true) // Still functional but degraded
+			log.Warn().
+				Str("instance", instanceName).
+				Int("healthy", healthyCount).
+				Int("total", totalCount).
+				Msg("Cluster is in degraded state - some nodes are unreachable")
+		} else {
+			// All endpoints are healthy
+			connectionHealthStr = "healthy"
+			m.state.SetConnectionHealth(instanceName, true)
+		}
+	} else {
+		// Regular client - simple healthy/unhealthy
+		m.state.SetConnectionHealth(instanceName, true)
+	}
 
 	// Convert to models
 	var modelNodes []models.Node
@@ -693,7 +729,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			Uptime:           int64(node.Uptime),
 			LoadAverage:      []float64{},
 			LastSeen:         time.Now(),
-			ConnectionHealth: "healthy",
+			ConnectionHealth: connectionHealthStr, // Use the determined health status
 			IsClusterMember:  instanceCfg.IsCluster,
 			ClusterName:      instanceCfg.ClusterName,
 		}

@@ -66,7 +66,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         } hover:shadow-sm transition-all cursor-pointer hover:scale-[1.01]`}
         onClick={props.onClick}>
         {/* Status dot */}
-        <span class={`w-2 h-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span class={`w-2 h-2 rounded-full ${
+          props.node.connectionHealth === 'degraded' 
+            ? 'bg-yellow-500' 
+            : isOnline() 
+              ? 'bg-green-500' 
+              : 'bg-red-500'
+        }`} />
         
         {/* Node name */}
         <a 
@@ -127,7 +133,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
       onClick={props.onClick}>
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <span class={`w-2 h-2 rounded-full ${isOnline() ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span class={`w-2 h-2 rounded-full ${
+            props.node.connectionHealth === 'degraded' 
+              ? 'bg-yellow-500' 
+              : isOnline() 
+                ? 'bg-green-500' 
+                : 'bg-red-500'
+          }`} />
           <a 
             href={props.node.host || `https://${props.node.name}:8006`}
             target="_blank"
