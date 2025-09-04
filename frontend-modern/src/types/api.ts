@@ -105,6 +105,7 @@ export interface Storage {
   // Added for deduplication in storage view
   nodes?: string[];
   nodeCount?: number;
+  pbsNames?: string[];
 }
 
 export interface PBSInstance {
