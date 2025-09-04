@@ -906,40 +906,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		
-		// Apply rate limiting for API endpoints
-		if strings.HasPrefix(req.URL.Path, "/api/") {
-			// Skip rate limiting ONLY for real-time data endpoints
-			skipRateLimit := false
-			for _, path := range []string{
-				"/api/state",           // WebSocket updates  
-				"/api/guests/metadata", // Guest metadata (polled frequently)
-				"/api/health",          // Health checks
-				"/ws",                  // WebSocket
-			} {
-				if strings.Contains(req.URL.Path, path) {
-					skipRateLimit = true
-					break
-				}
-			}
-			
-			// Apply stricter rate limiting for auth endpoints (but not status checks)
-			if (strings.Contains(req.URL.Path, "/api/security/") && req.URL.Path != "/api/security/status") || req.URL.Path == "/api/login" {
-				clientIP := GetClientIP(req)
-				// Use auth limiter for security endpoints (10 per minute)
-				if !authLimiter.Allow(clientIP) {
-					http.Error(w, "Too many requests. Please wait before trying again.", http.StatusTooManyRequests)
-					LogAuditEvent("rate_limit", "", clientIP, req.URL.Path, false, "Auth rate limit exceeded")
-					return
-				}
-			} else if !skipRateLimit {
-				// Use general API limiter for other endpoints (500 per minute)
-				clientIP := GetClientIP(req)
-				if !apiLimiter.Allow(clientIP) {
-					http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-					return
-				}
-			}
-		}
+		// Rate limiting is now handled by UniversalRateLimitMiddleware
+		// No need for duplicate rate limiting logic here
 
 		// Log request
 		start := time.Now()
