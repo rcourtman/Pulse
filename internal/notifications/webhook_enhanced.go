@@ -442,8 +442,8 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		// as this may be intentional during testing
 	}
 	
-	// Generate payload
-	payload, err := n.generatePayloadFromTemplate(webhook.PayloadTemplate, data)
+	// Generate payload with service-specific handling
+	payload, err := n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to generate payload: %w", err)
 	}
@@ -471,10 +471,64 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	}
 
 	// Set headers
-	for key, value := range webhook.Headers {
-		req.Header.Set(key, value)
+	// Special handling for ntfy service - add dynamic headers based on test alert level
+	if webhook.Service == "ntfy" {
+		// Set Content-Type for ntfy (plain text)
+		req.Header.Set("Content-Type", "text/plain")
+		
+		// Set dynamic headers based on alert level
+		title := fmt.Sprintf("%s: %s", 
+			func() string {
+				switch testAlert.Level {
+				case alerts.AlertLevelCritical:
+					return "🔴 CRITICAL"
+				case alerts.AlertLevelWarning:
+					return "🟡 WARNING"
+				default:
+					return "🟢 INFO"
+				}
+			}(),
+			testAlert.ResourceName,
+		)
+		req.Header.Set("Title", title)
+		
+		priority := func() string {
+			switch testAlert.Level {
+			case alerts.AlertLevelCritical:
+				return "urgent"
+			case alerts.AlertLevelWarning:
+				return "high"
+			default:
+				return "default"
+			}
+		}()
+		req.Header.Set("Priority", priority)
+		
+		tags := fmt.Sprintf("%s,pulse,%s",
+			func() string {
+				switch testAlert.Level {
+				case alerts.AlertLevelCritical:
+					return "rotating_light"
+				case alerts.AlertLevelWarning:
+					return "warning"
+				default:
+					return "white_check_mark"
+				}
+			}(),
+			testAlert.Type,
+		)
+		req.Header.Set("Tags", tags)
 	}
-	if req.Header.Get("Content-Type") == "" {
+	
+	// Apply any custom headers from webhook config (these override defaults)
+	for key, value := range webhook.Headers {
+		// Skip template-like headers (those with {{)
+		if !strings.Contains(value, "{{") {
+			req.Header.Set(key, value)
+		}
+	}
+	
+	if webhook.Service != "ntfy" && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0 (Test)")
