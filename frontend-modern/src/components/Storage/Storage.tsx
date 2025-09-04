@@ -60,15 +60,16 @@ const Storage: Component = () => {
         
         // For PBS storage, group by capacity since they're the same PBS server
         // PBS namespaces (pbs-node1, pbs-node2) pointing to same server should be grouped
-        if (s.type === 'pbs') {
-          // Group PBS by type, total size, and usage (same PBS server = same capacity)
+        if (s.type === 'pbs' && s.shared) {
+          // Group shared PBS by type, total size, and usage (same PBS server = same capacity)
           key = `pbs-${s.total}-${s.used}`;
         } else if (s.shared) {
-          // Shared storage should only appear once
+          // Other shared storage should only appear once
           key = `${s.name}-${s.type}`;
         } else {
-          // Regular storage - deduplicate by name and type
-          key = `${s.name}-${s.type}`;
+          // Non-shared storage (local, local-zfs) - NEVER deduplicate these!
+          // Each node has its own physical storage
+          key = `${s.node}-${s.name}-${s.type}`;
         }
         
         if (!storageMap.has(key)) {
