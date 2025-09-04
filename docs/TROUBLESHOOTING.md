@@ -8,7 +8,7 @@
 
 **Solution: Start Fresh**
 
-If you've forgotten your password, the recommended approach is to simply start fresh. Pulse is designed for quick setup - it takes just 2-3 minutes to be fully operational again.
+If you've forgotten your password, the recommended approach is to simply start fresh. Pulse is designed for quick setup.
 
 **Why no password recovery?**
 - Adding recovery mechanisms creates security vulnerabilities
@@ -173,7 +173,7 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 #### Lost authentication
 See [Forgot Password / Lost Access](#forgot-password--lost-access) section above.
 
-**Recommended approach**: Start fresh. Delete your Pulse data and restart - takes 2 minutes to set up again.
+**Recommended approach**: Start fresh. Delete your Pulse data and restart.
 
 #### Corrupt configuration
 Restore from backup or delete config files to start fresh:
