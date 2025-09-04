@@ -53,19 +53,32 @@ const Storage: Component = () => {
       // Filter out 0 capacity first
       storage = storage.filter(s => s.total > 0);
       
-      // Deduplicate storage entries that are identical (same name, type, total, used)
-      // Keep the first occurrence and add node count info
+      // Deduplicate storage entries that are identical
       const storageMap = new Map();
       storage.forEach(s => {
-        // Create a key based on storage name and type (PBS storage with same name is the same storage)
-        const key = `${s.name}-${s.type}`;
+        let key;
+        
+        // For PBS storage, group by capacity since they're the same PBS server
+        // PBS namespaces (pbs-node1, pbs-node2) pointing to same server should be grouped
+        if (s.type === 'pbs') {
+          // Group PBS by type, total size, and usage (same PBS server = same capacity)
+          key = `pbs-${s.total}-${s.used}`;
+        } else if (s.shared) {
+          // Shared storage should only appear once
+          key = `${s.name}-${s.type}`;
+        } else {
+          // Regular storage - deduplicate by name and type
+          key = `${s.name}-${s.type}`;
+        }
         
         if (!storageMap.has(key)) {
           // First occurrence - store it with node list
           storageMap.set(key, {
             ...s,
+            name: s.type === 'pbs' ? 'PBS Storage' : s.name, // Generic name for PBS
             nodes: [s.node],
-            nodeCount: 1
+            nodeCount: 1,
+            pbsNames: s.type === 'pbs' ? [s.name] : undefined // Track individual PBS names
           });
         } else {
           // Duplicate - just add to node list
@@ -73,6 +86,10 @@ const Storage: Component = () => {
           if (!existing.nodes.includes(s.node)) {
             existing.nodes.push(s.node);
             existing.nodeCount = existing.nodes.length;
+          }
+          // For PBS, collect all namespace names
+          if (s.type === 'pbs' && existing.pbsNames && !existing.pbsNames.includes(s.name)) {
+            existing.pbsNames.push(s.name);
           }
         }
       });
@@ -338,9 +355,16 @@ const Storage: Component = () => {
                                     {storage.name}
                                   </span>
                                   <Show when={viewMode() === 'storage'}>
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                                      ({storage.nodes ? storage.nodes.join(', ') : storage.node})
-                                    </span>
+                                    <Show when={storage.pbsNames}>
+                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        ({storage.pbsNames.sort().join(', ')})
+                                      </span>
+                                    </Show>
+                                    <Show when={!storage.pbsNames}>
+                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        ({storage.nodes ? storage.nodes.join(', ') : storage.node})
+                                      </span>
+                                    </Show>
                                   </Show>
                                 </div>
                               </td>
