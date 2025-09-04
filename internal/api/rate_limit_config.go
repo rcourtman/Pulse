@@ -127,6 +127,19 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		
+		// Skip rate limiting for real-time data endpoints that are polled frequently
+		// These endpoints are essential for UI functionality and should not be rate limited
+		skipPaths := []string{
+			"/api/state",           // Real-time state updates
+			"/api/guests/metadata", // Guest metadata (polled frequently)
+		}
+		for _, path := range skipPaths {
+			if strings.Contains(r.URL.Path, path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		
 		// Extract client IP
 		ip := GetClientIP(r)
 		
