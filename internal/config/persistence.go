@@ -505,6 +505,9 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		return nil, err
 	}
 	
+	// Track if any migrations were applied
+	migrationApplied := false
+	
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
 	for i := range config.PBSInstances {
@@ -558,6 +561,27 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				}
 			}
 		}
+		
+		// Migration: Ensure MonitorBackups is enabled for PBS instances
+		// This fixes issue #411 where PBS backups weren't showing
+		if !config.PBSInstances[i].MonitorBackups {
+			log.Info().
+				Str("instance", config.PBSInstances[i].Name).
+				Msg("Enabling MonitorBackups for PBS instance (was disabled)")
+			config.PBSInstances[i].MonitorBackups = true
+			migrationApplied = true
+		}
+	}
+	
+	// If any migrations were applied, save the updated configuration
+	if migrationApplied {
+		log.Info().Msg("Migrations applied, saving updated configuration")
+		// Need to unlock before saving to avoid deadlock
+		c.mu.RUnlock()
+		if err := c.SaveNodesConfig(config.PVEInstances, config.PBSInstances); err != nil {
+			log.Error().Err(err).Msg("Failed to save configuration after migration")
+		}
+		c.mu.RLock()
 	}
 	
 	log.Info().Str("file", c.nodesFile).
