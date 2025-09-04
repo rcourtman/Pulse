@@ -183,7 +183,11 @@ These env vars override system.json values. When set, the UI will show a warning
 - `CONNECTION_TIMEOUT` - API timeout in seconds (default: 10)
 - `ALLOWED_ORIGINS` - CORS origins (default: same-origin only)
 - `LOG_LEVEL` - Log verbosity: debug/info/warn/error (default: info)
-- `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`) - Used in webhook notifications for "View in Pulse" links
+- `PULSE_PUBLIC_URL` - Full URL to access Pulse (e.g., `http://192.168.1.100:7655`)
+  - **Required for webhook notifications** to include working "View in Pulse" links
+  - Without this, Gotify/ntfy notifications will have broken links
+  - Set this to the URL you use to access Pulse in your browser
+  - Example: `PULSE_PUBLIC_URL="http://192.168.1.100:7655"`
 
 #### Authentication Variables (from .env file)
 These should be set in the .env file for security:
