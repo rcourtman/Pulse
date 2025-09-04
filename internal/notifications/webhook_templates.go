@@ -231,6 +231,24 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Instructions: "1. In Teams channel, click ... > Connectors\n2. Configure Incoming Webhook\n3. Copy the URL and paste it here\n\nThis uses the modern Adaptive Card format recommended for new implementations.",
 		},
 		{
+			Service:    "pushover",
+			Name:       "Pushover",
+			URLPattern: "https://api.pushover.net/1/messages.json",
+			Method:     "POST",
+			Headers:    map[string]string{"Content-Type": "application/json"},
+			PayloadTemplate: `{
+				"token": "{{.CustomFields.app_token}}",
+				"user": "{{.CustomFields.user_token}}",
+				"title": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
+				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}",
+				"priority": {{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}},
+				"sound": "{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}",
+				"device": "{{.ResourceName}}",
+				"timestamp": "{{.Timestamp}}"
+			}`,
+			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • app_token: YOUR_APP_TOKEN\n   • user_token: YOUR_USER_KEY",
+		},
+		{
 			Service:    "gotify",
 			Name:       "Gotify",
 			URLPattern: "https://{your-gotify-server}/message?token={your-app-token}",
