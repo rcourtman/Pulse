@@ -136,12 +136,14 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 // UpdateWebhook updates an existing webhook
 func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	// Extract webhook ID from URL path
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+	// Path is like /api/notifications/webhooks/{id} after routing
+	path := strings.TrimPrefix(r.URL.Path, "/api/notifications/webhooks/")
+	webhookID := path
+	
+	if webhookID == "" {
+		http.Error(w, "Invalid URL - missing webhook ID", http.StatusBadRequest)
 		return
 	}
-	webhookID := parts[len(parts)-1]
 	
 	// Read the raw body to preserve all fields
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -186,12 +188,14 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 // DeleteWebhook deletes a webhook
 func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	// Extract webhook ID from URL path
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+	// Path is like /api/notifications/webhooks/{id} after routing
+	path := strings.TrimPrefix(r.URL.Path, "/api/notifications/webhooks/")
+	webhookID := path
+	
+	if webhookID == "" {
+		http.Error(w, "Invalid URL - missing webhook ID", http.StatusBadRequest)
 		return
 	}
-	webhookID := parts[len(parts)-1]
 	
 	if err := h.monitor.GetNotificationManager().DeleteWebhook(webhookID); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
