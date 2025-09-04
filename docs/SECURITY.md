@@ -354,4 +354,4 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Can't login?** Check PULSE_AUTH_USER and PULSE_AUTH_PASS environment variables
 **API access denied?** Verify API_TOKEN is correct (use original token, not hash)
 **CORS errors?** Configure ALLOWED_ORIGINS for your domain
-**Forgot password?** Use Settings → Security → Remove Password (requires filesystem access)
+**Forgot password?** Start fresh - delete your Pulse data and restart (takes 2 minutes)
