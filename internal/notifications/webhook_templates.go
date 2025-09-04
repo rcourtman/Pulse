@@ -284,9 +284,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers: map[string]string{
 				"Content-Type": "text/plain",
-				"Title": "{{if eq .Level \"critical\"}}🔴 CRITICAL{{else if eq .Level \"warning\"}}🟡 WARNING{{else}}🟢 INFO{{end}}: {{.ResourceName}}",
-				"Priority": "{{if eq .Level \"critical\"}}urgent{{else if eq .Level \"warning\"}}high{{else}}default{{end}}",
-				"Tags": "{{if eq .Level \"critical\"}}rotating_light{{else if eq .Level \"warning\"}}warning{{else}}white_check_mark{{end}},pulse,{{.Type}}",
+				// Note: Title, Priority, and Tags headers should be added dynamically based on alert level
+				// For now, we'll use static reasonable defaults that won't break
 			},
 			PayloadTemplate: `{{if eq .Level "critical"}}🔴 CRITICAL{{else if eq .Level "warning"}}🟡 WARNING{{else}}🟢 INFO{{end}}: {{.ResourceName}} on {{.Node}}
 

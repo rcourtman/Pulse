@@ -625,8 +625,62 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
+	
+	// Special handling for ntfy service - add dynamic headers based on alert level
+	if webhook.Service == "ntfy" {
+		// Set Content-Type for ntfy (plain text)
+		req.Header.Set("Content-Type", "text/plain")
+		
+		// Set dynamic headers based on alert level
+		title := fmt.Sprintf("%s: %s", 
+			func() string {
+				switch alert.Level {
+				case alerts.AlertLevelCritical:
+					return "🔴 CRITICAL"
+				case alerts.AlertLevelWarning:
+					return "🟡 WARNING"
+				default:
+					return "🟢 INFO"
+				}
+			}(),
+			alert.ResourceName,
+		)
+		req.Header.Set("Title", title)
+		
+		priority := func() string {
+			switch alert.Level {
+			case alerts.AlertLevelCritical:
+				return "urgent"
+			case alerts.AlertLevelWarning:
+				return "high"
+			default:
+				return "default"
+			}
+		}()
+		req.Header.Set("Priority", priority)
+		
+		tags := fmt.Sprintf("%s,pulse,%s",
+			func() string {
+				switch alert.Level {
+				case alerts.AlertLevelCritical:
+					return "rotating_light"
+				case alerts.AlertLevelWarning:
+					return "warning"
+				default:
+					return "white_check_mark"
+				}
+			}(),
+			alert.Type,
+		)
+		req.Header.Set("Tags", tags)
+	}
+	
+	// Apply any custom headers from webhook config (these override defaults)
 	for key, value := range webhook.Headers {
-		req.Header.Set(key, value)
+		// Skip template-like headers (those with {{)
+		if !strings.Contains(value, "{{") {
+			req.Header.Set(key, value)
+		}
 	}
 
 	// Debug log the payload for Telegram and Gotify webhooks
