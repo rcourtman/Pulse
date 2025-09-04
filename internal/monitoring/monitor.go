@@ -157,7 +157,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rateTracker:      NewRateTracker(),
 		metricsHistory:   NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
 		alertManager:     alerts.NewManager(),
-		notificationMgr:  notifications.NewNotificationManager(),
+		notificationMgr:  notifications.NewNotificationManager(cfg.PublicURL),
 		configPersist:    config.NewConfigPersistence(cfg.DataPath),
 		discoveryService: nil, // Will be initialized in Start()
 		authFailures:     make(map[string]int),

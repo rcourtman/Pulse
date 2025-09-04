@@ -58,6 +58,7 @@ type Config struct {
 	FrontendPort  int    `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath    string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
 	DataPath      string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
+	PublicURL     string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -479,6 +480,10 @@ func Load() (*Config, error) {
 		cfg.AllowedOrigins = allowedOrigins
 		cfg.EnvOverrides["allowedOrigins"] = true
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
+	}
+	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
+		cfg.PublicURL = publicURL
+		log.Info().Str("url", publicURL).Msg("Public URL configured from PULSE_PUBLIC_URL env var")
 	}
 	
 	// Set log level
