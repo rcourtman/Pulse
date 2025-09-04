@@ -358,7 +358,7 @@ const Storage: Component = () => {
                                   <Show when={viewMode() === 'storage'}>
                                     <Show when={storage.pbsNames}>
                                       <span class="text-xs text-gray-500 dark:text-gray-400">
-                                        ({storage.pbsNames.sort().join(', ')})
+                                        ({storage.pbsNames?.sort().join(', ')})
                                       </span>
                                     </Show>
                                     <Show when={!storage.pbsNames}>
