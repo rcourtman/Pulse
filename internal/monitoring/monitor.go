@@ -1152,12 +1152,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								   strings.HasPrefix(fs.Mountpoint, "/proc") ||
 								   strings.HasPrefix(fs.Mountpoint, "/sys") ||
 								   strings.HasPrefix(fs.Mountpoint, "/run") ||
-								   fs.Mountpoint == "/boot/efi" {
+								   fs.Mountpoint == "/boot/efi" ||
+								   fs.Mountpoint == "System Reserved" ||  // Windows System Reserved partition
+								   strings.Contains(fs.Mountpoint, "System Reserved") {  // Various Windows reserved formats
 									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s)", fs.Mountpoint, fs.Type))
 									continue
 								}
 								
-								// Only count real filesystems
+								// Only count real filesystems with valid data
+								// Some filesystems report 0 bytes (like unformatted or system partitions)
 								if fs.TotalBytes > 0 {
 									totalBytes += fs.TotalBytes
 									usedBytes += fs.UsedBytes
@@ -1169,6 +1172,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 										Uint64("total", fs.TotalBytes).
 										Uint64("used", fs.UsedBytes).
 										Msg("Including filesystem in disk usage calculation")
+								} else if fs.TotalBytes == 0 && len(fs.Mountpoint) > 0 {
+									log.Debug().
+										Str("instance", instanceName).
+										Str("vm", res.Name).
+										Str("mountpoint", fs.Mountpoint).
+										Str("type", fs.Type).
+										Msg("Skipping filesystem with zero total bytes")
 								}
 							}
 							
@@ -1600,12 +1610,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						   strings.HasPrefix(fs.Mountpoint, "/proc") ||
 						   strings.HasPrefix(fs.Mountpoint, "/sys") ||
 						   strings.HasPrefix(fs.Mountpoint, "/run") ||
-						   fs.Mountpoint == "/boot/efi" {
+						   fs.Mountpoint == "/boot/efi" ||
+						   fs.Mountpoint == "System Reserved" ||  // Windows System Reserved partition
+						   strings.Contains(fs.Mountpoint, "System Reserved") {  // Various Windows reserved formats
 							skippedFS = append(skippedFS, fmt.Sprintf("%s(%s)", fs.Mountpoint, fs.Type))
 							continue
 						}
 						
-						// Only count real filesystems (ext4, xfs, btrfs, ntfs, etc.)
+						// Only count real filesystems (ext4, xfs, btrfs, ntfs, etc.) with valid data
 						if fs.TotalBytes > 0 {
 							totalBytes += fs.TotalBytes
 							usedBytes += fs.UsedBytes
@@ -1617,6 +1629,13 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 								Uint64("total", fs.TotalBytes).
 								Uint64("used", fs.UsedBytes).
 								Msg("Including filesystem in disk usage calculation (legacy API)")
+						} else if fs.TotalBytes == 0 && len(fs.Mountpoint) > 0 {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Str("mountpoint", fs.Mountpoint).
+								Str("type", fs.Type).
+								Msg("Skipping filesystem with zero total bytes (legacy API)")
 						}
 					}
 					
