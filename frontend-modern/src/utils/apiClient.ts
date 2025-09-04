@@ -57,6 +57,9 @@ class ApiClient {
       type: 'basic',
       value: this.authHeader
     }));
+    
+    // Also store username for password change functionality
+    sessionStorage.setItem('pulse_auth_user', username);
   }
 
   // Set API token
@@ -75,6 +78,7 @@ class ApiClient {
     this.authHeader = null;
     this.apiToken = null;
     sessionStorage.removeItem('pulse_auth');
+    sessionStorage.removeItem('pulse_auth_user');
   }
 
   // Check if we have any auth configured
