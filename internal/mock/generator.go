@@ -748,22 +748,25 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	}
 	
 	// Add PBS storage for each node (simulating node-specific PBS namespaces)
-	// In real clusters, each node reports the same PBS storage entries but with node-specific namespaces
-	pbsNodeNames := []string{"pve1", "pve2", "pve3"} // Use the cluster node names for PBS
-	for _, node := range nodes {
-		// Only add PBS storage for cluster nodes
-		if node.Instance != "mock-cluster" {
-			continue
+	// In real clusters, each node reports ALL PBS storage entries but with node-specific namespaces
+	// This matches real behavior where each node sees all PBS configurations
+	clusterNodes := []models.Node{}
+	for _, n := range nodes {
+		if n.Instance == "mock-cluster" {
+			clusterNodes = append(clusterNodes, n)
 		}
-		
-		// Each node reports ALL PBS namespaces (one for each node in the cluster)
-		for _, pbsNode := range pbsNodeNames {
-			pbsTotal := int64(5 * 1024 * 1024 * 1024 * 1024) // 5TB per namespace
-			pbsUsed := int64(float64(pbsTotal) * (0.2 + rand.Float64()*0.4))
+	}
+	
+	// Each cluster node reports ALL PBS storage entries (one for each node)
+	for _, node := range clusterNodes {
+		// Each node sees ALL PBS storage configurations
+		for _, pbsTargetNode := range clusterNodes {
+			pbsTotal := int64(950 * 1024 * 1024 * 1024) // ~950GB matching real PBS
+			pbsUsed := int64(float64(pbsTotal) * 0.14) // ~14% usage matching real data
 			storage = append(storage, models.Storage{
-				ID:       fmt.Sprintf("%s-pbs-%s", node.Name, pbsNode),
-				Name:     fmt.Sprintf("pbs-%s", pbsNode),
-				Node:     node.Name, // Each node reports this storage
+				ID:       fmt.Sprintf("%s-pbs-%s", node.Name, pbsTargetNode.Name),
+				Name:     fmt.Sprintf("pbs-%s", pbsTargetNode.Name),
+				Node:     node.Name, // The node that reports this storage
 				Instance: node.Instance,
 				Type:     "pbs",
 				Status:   "available",
