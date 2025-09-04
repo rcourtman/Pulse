@@ -1990,9 +1990,8 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			// Get cluster config for this storage
 			clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
 
-			// Determine if shared
-			// PBS storage is never shared - each node has its own namespace even if connecting to the same PBS
-			shared := hasClusterConfig && clusterConfig.Shared == 1 && storage.Type != "pbs"
+			// Determine if shared based on cluster configuration
+			shared := hasClusterConfig && clusterConfig.Shared == 1
 
 			// For shared storage, only include it once
 			storageKey := storage.Storage
