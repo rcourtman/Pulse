@@ -81,14 +81,20 @@ func (cc *ClusterClient) initialHealthCheck() {
 			cancel()
 			
 			cc.mu.Lock()
+			
+			// Check if error is VM-specific (shouldn't affect health)
+			isVMSpecificError := false
 			if err != nil {
-				cc.nodeHealth[ep] = false
-				log.Info().
-					Str("cluster", cc.name).
-					Str("endpoint", ep).
-					Msg("Cluster endpoint failed initial health check")
-			} else {
-				// Create a proper client with full timeout for actual use
+				errStr := err.Error()
+				if strings.Contains(errStr, "No QEMU guest agent") || 
+				   strings.Contains(errStr, "QEMU guest agent is not running") ||
+				   strings.Contains(errStr, "guest agent") {
+					isVMSpecificError = true
+				}
+			}
+			
+			if err == nil || isVMSpecificError {
+				// Node is healthy - create a proper client with full timeout for actual use
 				fullCfg := cc.config
 				fullCfg.Host = ep
 				fullClient, clientErr := NewClient(fullCfg)
@@ -102,11 +108,26 @@ func (cc *ClusterClient) initialHealthCheck() {
 				} else {
 					cc.nodeHealth[ep] = true
 					cc.clients[ep] = fullClient  // Store the full client, not test client
-					log.Info().
-						Str("cluster", cc.name).
-						Str("endpoint", ep).
-						Msg("Cluster endpoint passed initial health check")
+					if isVMSpecificError {
+						log.Debug().
+							Str("cluster", cc.name).
+							Str("endpoint", ep).
+							Msg("Cluster endpoint healthy despite VM-specific errors")
+					} else {
+						log.Info().
+							Str("cluster", cc.name).
+							Str("endpoint", ep).
+							Msg("Cluster endpoint passed initial health check")
+					}
 				}
+			} else {
+				// Real connectivity issue
+				cc.nodeHealth[ep] = false
+				log.Info().
+					Str("cluster", cc.name).
+					Str("endpoint", ep).
+					Err(err).
+					Msg("Cluster endpoint failed initial health check")
 			}
 			cc.lastHealthCheck[ep] = time.Now()
 			cc.mu.Unlock()
@@ -192,14 +213,29 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		cancel()
 		
 		if testErr != nil {
-			// Mark as unhealthy
-			cc.nodeHealth[selectedEndpoint] = false
-			log.Warn().
-				Str("cluster", cc.name).
-				Str("endpoint", selectedEndpoint).
-				Err(testErr).
-				Msg("Cluster endpoint failed connectivity test")
-			return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+			// Check if this is a VM-specific error that shouldn't mark the node unhealthy
+			testErrStr := testErr.Error()
+			if strings.Contains(testErrStr, "No QEMU guest agent") || 
+			   strings.Contains(testErrStr, "QEMU guest agent is not running") ||
+			   strings.Contains(testErrStr, "guest agent") {
+				// This is a VM-specific issue, not a connectivity problem
+				// The node is actually healthy, so don't mark it unhealthy
+				log.Debug().
+					Str("cluster", cc.name).
+					Str("endpoint", selectedEndpoint).
+					Err(testErr).
+					Msg("Ignoring VM-specific error during connectivity test")
+				// Continue with client creation since the node is actually accessible
+			} else {
+				// Mark as unhealthy for real connectivity issues
+				cc.nodeHealth[selectedEndpoint] = false
+				log.Warn().
+					Str("cluster", cc.name).
+					Str("endpoint", selectedEndpoint).
+					Err(testErr).
+					Msg("Cluster endpoint failed connectivity test")
+				return nil, fmt.Errorf("endpoint %s failed connectivity test: %w", selectedEndpoint, testErr)
+			}
 		}
 		
 		log.Debug().
@@ -244,9 +280,10 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if !healthy {
-			// Skip if we checked this endpoint recently (within 30 seconds)
+			// Skip if we checked this endpoint recently (within 5 seconds)
+			// Reduced from 30 seconds to allow faster recovery
 			if lastCheck, exists := cc.lastHealthCheck[endpoint]; exists {
-				if now.Sub(lastCheck) < 30*time.Second {
+				if now.Sub(lastCheck) < 5*time.Second {
 					continue
 				}
 			}
