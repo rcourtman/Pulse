@@ -361,9 +361,12 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Check if it's a node-specific or transient failure that shouldn't mark endpoint unhealthy
 		// Error 595 in Proxmox means "no ticket" but in cluster context often means target node unreachable
 		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
+		// Error 403 for storage operations means permission issue, not node health issue
 		if strings.Contains(errStr, "595") || 
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
-		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) {
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
+		   (strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
+		   strings.Contains(errStr, "permission denied") {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().
