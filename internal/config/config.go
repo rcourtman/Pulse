@@ -359,11 +359,16 @@ func Load() (*Config, error) {
 		log.Debug().Msg("API token exists without explicit enabled flag, assuming enabled for backwards compatibility")
 	}
 	// Check if auth is disabled
-	if disableAuth := os.Getenv("DISABLE_AUTH"); disableAuth != "" {
-		cfg.DisableAuth = disableAuth == "true" || disableAuth == "1"
+	disableAuthEnv := os.Getenv("DISABLE_AUTH")
+	log.Debug().Str("DISABLE_AUTH_ENV", disableAuthEnv).Msg("Checking DISABLE_AUTH environment variable")
+	if disableAuthEnv != "" {
+		cfg.DisableAuth = disableAuthEnv == "true" || disableAuthEnv == "1"
+		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DisableAuth set from environment")
 		if cfg.DisableAuth {
 			log.Warn().Msg("⚠️  AUTHENTICATION DISABLED - Pulse is running without authentication!")
 		}
+	} else {
+		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DISABLE_AUTH not set, DisableAuth remains")
 	}
 	
 	// Load proxy authentication settings
