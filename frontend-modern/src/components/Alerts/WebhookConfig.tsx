@@ -70,7 +70,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         template: data.payloadTemplate
       };
       props.onAdd(newWebhook);
-      // Reset form but keep adding state true
+      // Reset form and close the adding panel
       setFormData({
         name: '',
         url: '',
@@ -80,6 +80,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         enabled: true,
         payloadTemplate: ''
       });
+      setAdding(false);
     }
   };
   
