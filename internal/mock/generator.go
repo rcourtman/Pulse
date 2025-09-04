@@ -775,7 +775,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 				Free:     pbsTotal - pbsUsed,
 				Usage:    float64(pbsUsed) / float64(pbsTotal) * 100,
 				Content:  "backup",
-				Shared:   false, // PBS storage is NOT shared (node-specific namespaces)
+				Shared:   true, // PBS storage is shared cluster-wide (all nodes can access it)
 				Enabled:  true,
 				Active:   true,
 			})
