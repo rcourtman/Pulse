@@ -626,58 +626,16 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
 	
-	// Special handling for ntfy service - add dynamic headers based on alert level
+	// Special handling for ntfy service
 	if webhook.Service == "ntfy" {
 		// Set Content-Type for ntfy (plain text)
 		req.Header.Set("Content-Type", "text/plain")
-		
-		// Set dynamic headers based on alert level
-		title := fmt.Sprintf("%s: %s", 
-			func() string {
-				switch alert.Level {
-				case alerts.AlertLevelCritical:
-					return "CRITICAL"
-				case alerts.AlertLevelWarning:
-					return "WARNING"
-				default:
-					return "INFO"
-				}
-			}(),
-			alert.ResourceName,
-		)
-		req.Header.Set("Title", title)
-		
-		priority := func() string {
-			switch alert.Level {
-			case alerts.AlertLevelCritical:
-				return "urgent"
-			case alerts.AlertLevelWarning:
-				return "high"
-			default:
-				return "default"
-			}
-		}()
-		req.Header.Set("Priority", priority)
-		
-		tags := fmt.Sprintf("%s,pulse,%s",
-			func() string {
-				switch alert.Level {
-				case alerts.AlertLevelCritical:
-					return "rotating_light"
-				case alerts.AlertLevelWarning:
-					return "warning"
-				default:
-					return "white_check_mark"
-				}
-			}(),
-			alert.Type,
-		)
-		req.Header.Set("Tags", tags)
+		// Note: Dynamic headers for ntfy are set in sendWebhook for individual alerts
 	}
 	
-	// Apply any custom headers from webhook config (these override defaults)
+	// Apply any custom headers from webhook config
 	for key, value := range webhook.Headers {
-		// Skip template-like headers (those with {{)
+		// Skip template-like headers (those with {{) to prevent errors
 		if !strings.Contains(value, "{{") {
 			req.Header.Set(key, value)
 		}
