@@ -747,6 +747,38 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		}
 	}
 	
+	// Add PBS storage for each node (simulating node-specific PBS namespaces)
+	// In real clusters, each node reports the same PBS storage entries but with node-specific namespaces
+	pbsNodeNames := []string{"pve1", "pve2", "pve3"} // Use the cluster node names for PBS
+	for _, node := range nodes {
+		// Only add PBS storage for cluster nodes
+		if node.Instance != "mock-cluster" {
+			continue
+		}
+		
+		// Each node reports ALL PBS namespaces (one for each node in the cluster)
+		for _, pbsNode := range pbsNodeNames {
+			pbsTotal := int64(5 * 1024 * 1024 * 1024 * 1024) // 5TB per namespace
+			pbsUsed := int64(float64(pbsTotal) * (0.2 + rand.Float64()*0.4))
+			storage = append(storage, models.Storage{
+				ID:       fmt.Sprintf("%s-pbs-%s", node.Name, pbsNode),
+				Name:     fmt.Sprintf("pbs-%s", pbsNode),
+				Node:     node.Name, // Each node reports this storage
+				Instance: node.Instance,
+				Type:     "pbs",
+				Status:   "available",
+				Total:    pbsTotal,
+				Used:     pbsUsed,
+				Free:     pbsTotal - pbsUsed,
+				Usage:    float64(pbsUsed) / float64(pbsTotal) * 100,
+				Content:  "backup",
+				Shared:   false, // PBS storage is NOT shared (node-specific namespaces)
+				Enabled:  true,
+				Active:   true,
+			})
+		}
+	}
+	
 	// Add a shared storage (NFS or CephFS)
 	if len(nodes) > 1 {
 		sharedTotal := int64(10 * 1024 * 1024 * 1024 * 1024) // 10TB
