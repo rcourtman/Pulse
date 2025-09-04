@@ -11,7 +11,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -489,6 +491,12 @@ func Load() (*Config, error) {
 	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
 		cfg.PublicURL = publicURL
 		log.Info().Str("url", publicURL).Msg("Public URL configured from PULSE_PUBLIC_URL env var")
+	} else {
+		// Try to auto-detect public URL if not explicitly configured
+		if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
+			cfg.PublicURL = detectedURL
+			log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
+		}
 	}
 	
 	// Set log level
@@ -610,4 +618,89 @@ func (c *Config) Validate() error {
 	c.PBSInstances = validPBS
 
 	return nil
+}
+
+// detectPublicURL attempts to automatically detect the public URL for Pulse
+func detectPublicURL(port int) string {
+	// Method 1: Check if we're in a Proxmox container (most common deployment)
+	if _, err := os.Stat("/etc/pve"); err == nil {
+		// We're likely in a ProxmoxVE container
+		// Try to get the container's IP from hostname -I
+		if output, err := exec.Command("hostname", "-I").Output(); err == nil {
+			ips := strings.Fields(string(output))
+			for _, ip := range ips {
+				// Skip localhost and IPv6
+				if !strings.HasPrefix(ip, "127.") && !strings.Contains(ip, ":") {
+					return fmt.Sprintf("http://%s:%d", ip, port)
+				}
+			}
+		}
+	}
+	
+	// Method 2: Try to get the primary network interface IP
+	if ip := getOutboundIP(); ip != "" {
+		return fmt.Sprintf("http://%s:%d", ip, port)
+	}
+	
+	// Method 3: Check if running in Docker (check for .dockerenv)
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		// In Docker, try to get the host IP from default route
+		if output, err := exec.Command("ip", "route", "show", "default").Output(); err == nil {
+			// Parse output like "default via 172.17.0.1 dev eth0"
+			fields := strings.Fields(string(output))
+			for i, field := range fields {
+				if field == "via" && i+1 < len(fields) {
+					// gatewayIP := fields[i+1]
+					// The gateway is usually .1, so we need our actual IP
+					// Better to use the outbound IP method above
+					_ = fields[i+1] // acknowledge but don't use
+					break
+				}
+			}
+		}
+	}
+	
+	// Method 4: Get all non-loopback IPs and use the first private one
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					ip := ipnet.IP.String()
+					// Prefer private IPs (RFC1918)
+					if strings.HasPrefix(ip, "192.168.") || 
+					   strings.HasPrefix(ip, "10.") || 
+					   strings.HasPrefix(ip, "172.") {
+						return fmt.Sprintf("http://%s:%d", ip, port)
+					}
+				}
+			}
+		}
+		// If no private IP found, use the first public one
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					return fmt.Sprintf("http://%s:%d", ipnet.IP.String(), port)
+				}
+			}
+		}
+	}
+	
+	return ""
+}
+
+// getOutboundIP gets the preferred outbound IP of this machine
+func getOutboundIP() string {
+	// Try to connect to a public DNS server (doesn't actually connect, just resolves the route)
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		// Try Cloudflare DNS as fallback
+		conn, err = net.Dial("udp", "1.1.1.1:80")
+		if err != nil {
+			return ""
+		}
+	}
+	defer conn.Close()
+	
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }

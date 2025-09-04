@@ -94,6 +94,11 @@ type WebhookConfig struct {
 
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager(publicURL string) *NotificationManager {
+	if publicURL != "" {
+		log.Info().Str("publicURL", publicURL).Msg("NotificationManager initialized with public URL")
+	} else {
+		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
+	}
 	return &NotificationManager{
 		enabled:        true,
 		cooldown:       5 * time.Minute,
