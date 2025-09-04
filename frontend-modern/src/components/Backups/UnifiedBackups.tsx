@@ -197,11 +197,22 @@ const UnifiedBackups: Component = () => {
           return file.crypt || file.encrypted || (file.filename && file.filename.includes('.enc'));
         });
       
+      // Determine the display type based on VMID and backup type
+      // VMID 0 = host config backup (e.g. PMG)
+      let displayType: GuestType;
+      if (parseInt(backup.vmid) === 0) {
+        displayType = 'Host';
+      } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
+        displayType = 'VM';
+      } else {
+        displayType = 'LXC';
+      }
+      
       unified.push({
         backupType: 'remote',
         vmid: parseInt(backup.vmid) || 0,
         name: backup.comment || '',
-        type: (backup.backupType === 'vm' || backup.backupType === 'VM') ? 'VM' : 'LXC',
+        type: displayType,
         node: backup.instance || 'PBS',
         backupTime: backupTimeSeconds,
         backupName: backupName,
@@ -242,14 +253,14 @@ const UnifiedBackups: Component = () => {
         }
       }
       
-      // Determine the display type based on backup.type
+      // Determine the display type based on backup.type and VMID
       let displayType: GuestType;
-      if (backup.type === 'qemu') {
+      if (backup.vmid === 0 || backup.type === 'host') {
+        displayType = 'Host'; // PMG/PVE host config backups (VMID 0)
+      } else if (backup.type === 'qemu') {
         displayType = 'VM';
       } else if (backup.type === 'lxc') {
         displayType = 'LXC';
-      } else if (backup.type === 'host') {
-        displayType = 'Host'; // PMG host config backups
       } else {
         displayType = 'LXC'; // Default fallback (most people have more containers than VMs)
       }
