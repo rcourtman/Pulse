@@ -50,7 +50,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID}}",
-				"text": "🚨 *Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n📊 *Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n🔗 [View in Pulse]({{.Instance}})",
+				"text": "*Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n*Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n[View in Pulse]({{.Instance}})",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
@@ -255,8 +255,8 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:     "POST",
 			Headers:    map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"message": "{{if eq .Level "critical"}}🔴 **CRITICAL**{{else if eq .Level "warning"}}🟡 **WARNING**{{else}}🟢 **INFO**{{end}}: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n📊 **Alert Details:**\n• 🖥️ **Resource:** {{.ResourceName}}\n• 🗄️ **Node:** {{.Node}}\n• 📈 **Type:** {{.Type | title}}\n• 🎯 **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• ⚠️ **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• ⏱️ **Duration:** {{.Duration}}\n• 🆔 **Alert ID:** {{.ID}}\n\n🔗 [View in Pulse]({{.Instance}})",
-				"title": "{{if eq .Level "critical"}}🔴{{else if eq .Level "warning"}}🟡{{else}}🟢{{end}} {{.ResourceName}} - {{.Type | title}} Alert",
+				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration}}\n- **Alert ID:** {{.ID}}\n\n[View in Pulse]({{.Instance}})",
+				"title": "{{.ResourceName}} - {{.Type | title}} {{.Level | upper}} Alert",
 				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
 				"extras": {
 					"client::display": {
@@ -287,20 +287,20 @@ func GetWebhookTemplates() []WebhookTemplate {
 				// Note: Title, Priority, and Tags headers should be added dynamically based on alert level
 				// For now, we'll use static reasonable defaults that won't break
 			},
-			PayloadTemplate: `{{if eq .Level "critical"}}🔴 CRITICAL{{else if eq .Level "warning"}}🟡 WARNING{{else}}🟢 INFO{{end}}: {{.ResourceName}} on {{.Node}}
+			PayloadTemplate: `{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}: {{.ResourceName}} on {{.Node}}
 
 {{.Message}}
 
-📊 Alert Details:
-• 🖥️ Resource: {{.ResourceName}}
-• 🗄️ Node: {{.Node}}
-• 📈 Type: {{.Type | title}}
-• 🎯 Current: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}
-• ⚠️ Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}
-• ⏱️ Duration: {{.Duration}}
-• 🆔 Alert ID: {{.ID}}
+Alert Details:
+- Resource: {{.ResourceName}}
+- Node: {{.Node}}
+- Type: {{.Type | title}}
+- Current: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}
+- Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}
+- Duration: {{.Duration}}
+- Alert ID: {{.ID}}
 
-🔗 View in Pulse: {{.Instance}}`,
+View in Pulse: {{.Instance}}`,
 			Instructions: "1. Choose a topic name (e.g., 'my-pulse-alerts')\n2. URL format: https://ntfy.sh/YOUR_TOPIC\n   Or for self-hosted: https://your-ntfy-server/YOUR_TOPIC\n3. For authentication, add a custom header:\n   • Header Name: Authorization\n   • Header Value: Bearer YOUR_TOKEN (or Basic base64_encoded_credentials)\n4. Subscribe to the topic in your ntfy app using the same topic name",
 		},
 		{
