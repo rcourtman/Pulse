@@ -240,6 +240,8 @@ create_lxc_container() {
         
         echo
         # Try to get cluster-wide IDs, fall back to local
+        # Disable error exit for this section as commands may fail on fresh PVE installs without VMs
+        set +e
         local USED_IDS=""
         if command -v pvesh &>/dev/null; then
             # Parse JSON output using grep and sed (works without jq)
@@ -256,6 +258,8 @@ create_lxc_container() {
             local LOCAL_VMS=$(qm list 2>/dev/null | tail -n +2 | awk '{print $1}' | sort -n)
             USED_IDS=$(echo -e "$LOCAL_CTS\n$LOCAL_VMS" | grep -v '^$' | sort -n | paste -sd',' -)
         fi
+        # Re-enable error exit
+        set -e
         
         echo "Container/VM IDs in use: ${USED_IDS:-none}"
         safe_read_with_default "Container ID [$CTID]: " custom_ctid "$CTID"
