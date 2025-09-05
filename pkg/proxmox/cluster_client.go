@@ -51,6 +51,16 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string) *Clu
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
 func (cc *ClusterClient) initialHealthCheck() {
+	// Skip initial health check if there's only one endpoint
+	// For single-endpoint clusters (using main host for routing), assume healthy
+	if len(cc.endpoints) == 1 {
+		log.Info().
+			Str("cluster", cc.name).
+			Str("endpoint", cc.endpoints[0]).
+			Msg("Single endpoint cluster - skipping initial health check")
+		return
+	}
+	
 	var wg sync.WaitGroup
 	for _, endpoint := range cc.endpoints {
 		wg.Add(1)
@@ -177,7 +187,19 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		}
 		
 		if len(healthyEndpoints) == 0 {
-			return nil, fmt.Errorf("no healthy nodes available in cluster %s", cc.name)
+			// If still no healthy endpoints and we only have one endpoint,
+			// try to use it anyway (could be temporarily unreachable)
+			if len(cc.endpoints) == 1 {
+				log.Warn().
+					Str("cluster", cc.name).
+					Str("endpoint", cc.endpoints[0]).
+					Msg("Single endpoint appears unhealthy but attempting to use it anyway")
+				healthyEndpoints = cc.endpoints
+				// Mark it as healthy optimistically
+				cc.nodeHealth[cc.endpoints[0]] = true
+			} else {
+				return nil, fmt.Errorf("no healthy nodes available in cluster %s", cc.name)
+			}
 		}
 	}
 	
@@ -503,6 +525,18 @@ func (cc *ClusterClient) GetVMs(ctx context.Context, node string) ([]VM, error) 
 		result = vms
 		return nil
 	})
+	
+	// If we get "no healthy nodes" error, return empty list instead of error
+	// This prevents VMs from disappearing when cluster has connectivity issues
+	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("node", node).
+			Err(err).
+			Msg("No healthy nodes for GetVMs - returning empty list to preserve UI state")
+		return []VM{}, nil
+	}
+	
 	return result, err
 }
 
@@ -516,6 +550,18 @@ func (cc *ClusterClient) GetContainers(ctx context.Context, node string) ([]Cont
 		result = containers
 		return nil
 	})
+	
+	// If we get "no healthy nodes" error, return empty list instead of error
+	// This prevents containers from disappearing when cluster has connectivity issues
+	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("node", node).
+			Err(err).
+			Msg("No healthy nodes for GetContainers - returning empty list to preserve UI state")
+		return []Container{}, nil
+	}
+	
 	return result, err
 }
 
