@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -221,8 +222,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 		// Check if this is a cluster
 		if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
-			// Create cluster client
+			// For clusters, check if endpoints have IPs/resolvable hosts
+			// If not, use the main host for all connections (Proxmox will route cluster API calls)
+			hasValidEndpoints := false
 			endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+			
 			for _, ep := range pve.ClusterEndpoints {
 				// Use IP if available, otherwise use host
 				host := ep.IP
@@ -237,6 +241,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 						Msg("Skipping cluster endpoint with no host/IP")
 					continue
 				}
+				
+				// Check if we have a valid IP or a fully qualified hostname (with dots)
+				if strings.Contains(host, ".") || net.ParseIP(host) != nil {
+					hasValidEndpoints = true
+				}
 
 				// Ensure we have the full URL
 				if !strings.HasPrefix(host, "http") {
@@ -249,11 +258,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 				endpoints = append(endpoints, host)
 			}
 
-			// If no valid endpoints, fall back to single node mode
-			if len(endpoints) == 0 {
-				log.Warn().
+			// If endpoints are just node names (not FQDNs or IPs), use main host only
+			// This is common when cluster nodes are discovered but not directly reachable
+			if !hasValidEndpoints || len(endpoints) == 0 {
+				log.Info().
 					Str("instance", pve.Name).
-					Msg("No valid cluster endpoints found, falling back to single node mode")
+					Str("mainHost", pve.Host).
+					Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
 				endpoints = []string{pve.Host}
 				if !strings.HasPrefix(endpoints[0], "http") {
 					endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
@@ -961,18 +972,21 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			// This prevents syslog spam on non-clustered nodes from certificate checks
 			useClusterEndpoint := false
 			if instanceCfg.IsCluster {
-				// Double-check that this is actually a cluster to prevent misconfiguration
-				// This helps avoid certificate spam on standalone nodes incorrectly marked as clusters
-				isActuallyCluster, _ := client.IsClusterMember(ctx)
-				if isActuallyCluster {
-					// Try to use efficient cluster/resources endpoint
-					useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
-				} else {
-					// Misconfigured - marked as cluster but isn't one
-					log.Warn().
-						Str("instance", instanceName).
-						Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
-					instanceCfg.IsCluster = false
+				// Try to use efficient cluster/resources endpoint
+				// The cluster client will handle routing through the main host if needed
+				useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+				
+				// Only check if actually a cluster if the efficient endpoint fails
+				if !useClusterEndpoint {
+					// Double-check that this is actually a cluster to prevent misconfiguration
+					isActuallyCluster, checkErr := client.IsClusterMember(ctx)
+					if checkErr == nil && !isActuallyCluster {
+						// Misconfigured - marked as cluster but isn't one
+						log.Warn().
+							Str("instance", instanceName).
+							Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
+						instanceCfg.IsCluster = false
+					}
 				}
 			}
 			
