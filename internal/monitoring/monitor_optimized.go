@@ -480,7 +480,17 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			// Fetch storage for this node
 			nodeStorage, err := client.GetStorage(ctx, n.Node)
 			if err != nil {
-				// Log more details about the failure
+				// Handle timeout gracefully - unavailable storage (e.g., NFS mounts) can cause this
+				if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+					log.Warn().
+						Str("node", n.Node).
+						Str("instance", instanceName).
+						Msg("Storage query timed out - likely due to unavailable storage mounts. Continuing without storage data for this node.")
+					// Return empty storage list but don't fail the node
+					resultChan <- nodeResult{node: n.Node, storage: []models.Storage{}}
+					return
+				}
+				// For other errors, log as error
 				log.Error().
 					Err(err).
 					Str("node", n.Node).
