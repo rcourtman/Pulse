@@ -556,11 +556,12 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 // GetStorage returns storage information for a specific node
 func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error) {
 	// Storage queries can take longer on large clusters or slow storage backends
-	// Create a new context with extended timeout if the original doesn't have one
+	// Create a new context with shorter timeout for storage API calls
+	// Storage endpoints can hang when NFS/network storage is unavailable
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 	}
 	
@@ -584,11 +585,12 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 // GetAllStorage returns storage information across all nodes
 func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 	// Storage queries can take longer on large clusters
-	// Create a new context with extended timeout if the original doesn't have one
+	// Create a new context with shorter timeout for storage API calls
+	// Storage endpoints can hang when NFS/network storage is unavailable
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 	}
 	
@@ -677,11 +679,12 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 // GetStorageContent returns the content of a specific storage
 func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
 	// Storage content queries can take longer on large storages
-	// Create a new context with extended timeout if the original doesn't have one
+	// Create a new context with shorter timeout for storage API calls
+	// Storage endpoints can hang when NFS/network storage is unavailable
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 120*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 	}
 	
