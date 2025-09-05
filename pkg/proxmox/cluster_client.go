@@ -61,16 +61,19 @@ func (cc *ClusterClient) initialHealthCheck() {
 		return
 	}
 	
+	// For multi-node clusters, do a very quick check but don't mark unhealthy immediately
+	// This prevents nodes from being marked unhealthy due to temporary startup conditions
+	
 	var wg sync.WaitGroup
 	for _, endpoint := range cc.endpoints {
 		wg.Add(1)
 		go func(ep string) {
 			defer wg.Done()
 			
-			// Try a quick connection test
+			// Try a quick connection test with slightly longer timeout for initial check
 			cfg := cc.config
 			cfg.Host = ep
-			cfg.Timeout = 2 * time.Second
+			cfg.Timeout = 5 * time.Second
 			
 			testClient, err := NewClient(cfg)
 			if err != nil {
@@ -85,8 +88,8 @@ func (cc *ClusterClient) initialHealthCheck() {
 				return
 			}
 			
-			// Quick test
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			// Quick test with slightly longer timeout for initial check
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_, err = testClient.GetNodes(ctx)
 			cancel()
 			
@@ -302,10 +305,10 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if !healthy {
-			// Skip if we checked this endpoint recently (within 5 seconds)
-			// Reduced from 30 seconds to allow faster recovery
+			// Skip if we checked this endpoint recently (within 10 seconds)
+			// Balance between recovery speed and avoiding excessive checks
 			if lastCheck, exists := cc.lastHealthCheck[endpoint]; exists {
-				if now.Sub(lastCheck) < 5*time.Second {
+				if now.Sub(lastCheck) < 10*time.Second {
 					continue
 				}
 			}
@@ -422,13 +425,16 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
 		// Error 403 for storage operations means permission issue, not node health issue
 		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
+		// JSON unmarshal errors are data format issues, not connectivity problems
 		if strings.Contains(errStr, "595") || 
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "No QEMU guest agent configured")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "QEMU guest agent is not running")) ||
 		   (strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
-		   strings.Contains(errStr, "permission denied") {
+		   strings.Contains(errStr, "permission denied") ||
+		   strings.Contains(errStr, "json: cannot unmarshal") ||
+		   strings.Contains(errStr, "unexpected response format") {
 			// This is likely a node-specific failure, not an endpoint failure
 			// Return the error but don't mark the endpoint as unhealthy
 			log.Debug().
@@ -526,10 +532,9 @@ func (cc *ClusterClient) GetVMs(ctx context.Context, node string) ([]VM, error) 
 		return nil
 	})
 	
-	// If we get "no healthy nodes" error, return empty list instead of error
-	// This prevents VMs from disappearing when cluster has connectivity issues
+	// Don't return error for transient connectivity issues - preserve UI state
 	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
-		log.Warn().
+		log.Debug().
 			Str("cluster", cc.name).
 			Str("node", node).
 			Err(err).
@@ -551,10 +556,9 @@ func (cc *ClusterClient) GetContainers(ctx context.Context, node string) ([]Cont
 		return nil
 	})
 	
-	// If we get "no healthy nodes" error, return empty list instead of error
-	// This prevents containers from disappearing when cluster has connectivity issues
+	// Don't return error for transient connectivity issues - preserve UI state  
 	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
-		log.Warn().
+		log.Debug().
 			Str("cluster", cc.name).
 			Str("node", node).
 			Err(err).

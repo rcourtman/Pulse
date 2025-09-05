@@ -905,17 +905,39 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	defer resp.Body.Close()
 
-	var result struct {
+	// First, read the response body into bytes so we can try multiple unmarshal attempts
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Try to unmarshal as an array first (expected format)
+	var arrayResult struct {
 		Data struct {
 			Result []VMFileSystem `json:"result"`
 		} `json:"data"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
+		return arrayResult.Data.Result, nil
 	}
-
-	return result.Data.Result, nil
+	
+	// If that fails, try as an object (might be an error response or different format)
+	var objectResult struct {
+		Data struct {
+			Result interface{} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
+		// If result is an object, it might be an error or empty response
+		// Return empty array to indicate no filesystem info available
+		log.Debug().
+			Interface("result", objectResult.Data.Result).
+			Msg("GetVMFSInfo received object instead of array, returning empty")
+		return []VMFileSystem{}, nil
+	}
+	
+	// If both fail, return error
+	return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
 }
 
 // GetVMStatus returns detailed VM status including balloon info
