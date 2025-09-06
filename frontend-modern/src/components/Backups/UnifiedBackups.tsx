@@ -200,7 +200,7 @@ const UnifiedBackups: Component = () => {
       // Determine the display type based on VMID and backup type
       // VMID 0 = host config backup (e.g. PMG)
       let displayType: GuestType;
-      if (parseInt(backup.vmid) === 0) {
+      if (parseInt(backup.vmid) === 0 || backup.backupType === 'host') {
         displayType = 'Host';
       } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
         displayType = 'VM';
@@ -255,8 +255,9 @@ const UnifiedBackups: Component = () => {
       
       // Determine the display type based on backup.type and VMID
       let displayType: GuestType;
+      // Check for host backups - VMID 0 or type 'host' (for PMG/PVE host configs)
       if (backup.vmid === 0 || backup.type === 'host') {
-        displayType = 'Host'; // PMG/PVE host config backups (VMID 0)
+        displayType = 'Host';
       } else if (backup.type === 'qemu') {
         displayType = 'VM';
       } else if (backup.type === 'lxc') {
