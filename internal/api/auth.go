@@ -212,7 +212,8 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		
 		// If a token was provided, validate it
 		if providedToken != "" {
-			if providedToken == cfg.APIToken {
+			// Use secure token comparison
+			if internalauth.CompareAPIToken(providedToken, cfg.APIToken) {
 				return true
 			}
 			// Invalid token provided
