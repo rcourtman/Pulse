@@ -200,6 +200,18 @@ const UnifiedBackups: Component = () => {
       // Determine the display type based on VMID and backup type
       // VMID 0 = host config backup (e.g. PMG)
       let displayType: GuestType;
+      
+      // Debug logging for PMG backup detection
+      if (backup.vmid === '0' || backup.vmid === 0 || parseInt(backup.vmid) === 0) {
+        console.log('PBS backup with VMID=0 detected:', {
+          vmid: backup.vmid,
+          vmidType: typeof backup.vmid,
+          backupType: backup.backupType,
+          instance: backup.instance,
+          comment: backup.comment
+        });
+      }
+      
       if (parseInt(backup.vmid) === 0 || backup.backupType === 'host') {
         displayType = 'Host';
       } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
@@ -255,6 +267,19 @@ const UnifiedBackups: Component = () => {
       
       // Determine the display type based on backup.type and VMID
       let displayType: GuestType;
+      
+      // Debug logging for PMG backup detection in storage backups
+      if (backup.vmid === 0) {
+        console.log('Storage backup with VMID=0 detected:', {
+          vmid: backup.vmid,
+          vmidType: typeof backup.vmid,
+          type: backup.type,
+          volid: backup.volid,
+          notes: backup.notes,
+          storage: backup.storage
+        });
+      }
+      
       // Check for host backups - VMID 0 or type 'host' (for PMG/PVE host configs)
       if (backup.vmid === 0 || backup.type === 'host') {
         displayType = 'Host';
