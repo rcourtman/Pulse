@@ -349,8 +349,9 @@ const Storage: Component = () => {
                           });
                           
                           return (
-                            <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} style={rowStyle()}>
-                              <td class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}>
+                            <>
+                              <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} style={rowStyle()}>
+                                <td class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}>
                                 <div class="flex items-center gap-2">
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
@@ -411,7 +412,6 @@ const Storage: Component = () => {
                               <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
                               <td class="p-0.5 px-1.5 text-xs">{formatBytes(storage.total || 0)}</td>
                             </tr>
-                            {/* ZFS Pool Status Row - Show when pool has issues */}
                             <Show when={storage.zfsPool && (
                               storage.zfsPool.state !== 'ONLINE' || 
                               storage.zfsPool.readErrors > 0 || 
@@ -463,6 +463,7 @@ const Storage: Component = () => {
                                 </td>
                               </tr>
                             </Show>
+                            </>
                           );
                         }}
                       </For>
