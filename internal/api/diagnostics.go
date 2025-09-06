@@ -226,7 +226,11 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			Host: pbsNode.Host,
 		}
 
-		// Test connection
+		// Test connection with a shorter timeout for PBS specifically
+		// PBS can be slow to respond, so we use a separate 30-second timeout
+		pbsCtx, pbsCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer pbsCancel()
+
 		testCfg := pbs.ClientConfig{
 			Host:         pbsNode.Host,
 			User:         pbsNode.User,
@@ -235,6 +239,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			TokenValue:   pbsNode.TokenValue,
 			Fingerprint:  pbsNode.Fingerprint,
 			VerifySSL:    pbsNode.VerifySSL,
+			Timeout:      30 * time.Second, // Set explicit timeout in client config
 		}
 
 		client, err := pbs.NewClient(testCfg)
@@ -242,8 +247,8 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 			pbsDiag.Connected = false
 			pbsDiag.Error = err.Error()
 		} else {
-			// Try to get version
-			if version, err := client.GetVersion(ctx); err != nil {
+			// Try to get version with PBS-specific context
+			if version, err := client.GetVersion(pbsCtx); err != nil {
 				pbsDiag.Connected = false
 				pbsDiag.Error = "Connection established but version check failed: " + err.Error()
 			} else {
