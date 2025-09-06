@@ -203,7 +203,8 @@ const UnifiedBackups: Component = () => {
       let displayType: GuestType;
       
       // Check for VMID=0 which indicates host backup (handle both string and number)
-      const isVmidZero = backup.vmid === '0' || backup.vmid === 0 || parseInt(String(backup.vmid)) === 0;
+      const vmidAsNumber = typeof backup.vmid === 'string' ? parseInt(backup.vmid, 10) : backup.vmid;
+      const isVmidZero = vmidAsNumber === 0;
       
       if (debugMode && isVmidZero) {
         console.log('[PMG Debug] PBS backup with VMID=0:', {
@@ -277,7 +278,8 @@ const UnifiedBackups: Component = () => {
       let displayType: GuestType;
       
       // Check for VMID=0 which indicates host backup
-      const isVmidZero = backup.vmid === 0 || backup.vmid === '0' || parseInt(String(backup.vmid)) === 0;
+      const vmidAsNumber = typeof backup.vmid === 'string' ? parseInt(backup.vmid, 10) : backup.vmid;
+      const isVmidZero = vmidAsNumber === 0;
       
       if (debugMode && isVmidZero) {
         console.log('[PMG Debug] Storage backup with VMID=0:', {
