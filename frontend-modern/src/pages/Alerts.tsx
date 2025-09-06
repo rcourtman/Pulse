@@ -19,7 +19,6 @@ interface DestinationsRef {
 }
 
 // ScheduleConfig interface - used for loading schedule configuration
-// @ts-ignore - used in type annotations
 interface ScheduleConfig {
   quietHours?: {
     enabled: boolean;
@@ -106,7 +105,7 @@ export function Alerts() {
   let destinationsRef: DestinationsRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
-  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, any>>({});  // Store raw config
+  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, unknown>>({});  // Store raw config
   
   // Email configuration state moved to parent to persist across tab changes
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
@@ -993,13 +992,13 @@ interface ThresholdsTabProps {
   storageDefault: () => number;
   timeThreshold: () => number;
   overrides: () => Override[];
-  rawOverridesConfig: () => Record<string, any>;
+  rawOverridesConfig: () => Record<string, unknown>;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
   setOverrides: (value: Override[]) => void;
-  setRawOverridesConfig: (value: Record<string, any>) => void;
+  setRawOverridesConfig: (value: Record<string, unknown>) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
 }
@@ -1194,18 +1193,52 @@ function DestinationsTab(props: DestinationsTabProps) {
 }
 
 // History Tab - Alert history
+
+interface QuietHoursConfig {
+  enabled: boolean;
+  start: string;
+  end: string;
+  timezone: string;
+  days: Record<string, boolean>;
+}
+
+interface CooldownConfig {
+  enabled: boolean;
+  minutes: number;
+  maxAlerts: number;
+}
+
+interface GroupingConfig {
+  enabled: boolean;
+  window: number;
+  maxGroupSize?: number;
+  byNode?: boolean;
+  byGuest?: boolean;
+}
+
+interface EscalationConfig {
+  enabled: boolean;
+  timeToEscalate?: number;
+  levels: Array<{
+    level?: number;
+    destinations?: string[];
+    after?: number;
+    notify?: string;
+  }>;
+}
+
 // Schedule Tab - Quiet hours, cooldown, and grouping
 interface ScheduleTabProps {
   hasUnsavedChanges: () => boolean;
   setHasUnsavedChanges: (value: boolean) => void;
-  quietHours: () => any;
-  setQuietHours: (value: any) => void;
-  cooldown: () => any;
-  setCooldown: (value: any) => void;
-  grouping: () => any;
-  setGrouping: (value: any) => void;
-  escalation: () => any;
-  setEscalation: (value: any) => void;
+  quietHours: () => QuietHoursConfig;
+  setQuietHours: (value: QuietHoursConfig) => void;
+  cooldown: () => CooldownConfig;
+  setCooldown: (value: CooldownConfig) => void;
+  grouping: () => GroupingConfig;
+  setGrouping: (value: GroupingConfig) => void;
+  escalation: () => EscalationConfig;
+  setEscalation: (value: EscalationConfig) => void;
 }
 
 function ScheduleTab(props: ScheduleTabProps) {
@@ -1639,7 +1672,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </div>
                   <button type="button"
                     onClick={() => {
-                      const newLevels = escalation().levels.filter((_: any, i: number) => i !== index());
+                      const newLevels = escalation().levels.filter((_, i) => i !== index());
                       setEscalation({ ...escalation(), levels: newLevels });
                       props.setHasUnsavedChanges(true);
                     }}

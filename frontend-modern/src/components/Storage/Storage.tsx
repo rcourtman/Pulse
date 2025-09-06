@@ -340,7 +340,7 @@ const Storage: Component = () => {
                           
                           // Create row style with inset box-shadow for alert border
                           const rowStyle = createMemo(() => {
-                            const styles: any = {};
+                            const styles: Record<string, string> = {};
                             if (alertStyles.hasAlert) {
                               const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
                               styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;

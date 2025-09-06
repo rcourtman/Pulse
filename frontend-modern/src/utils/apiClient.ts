@@ -174,7 +174,7 @@ class ApiClient {
   }
 
   // Convenience method for JSON requests
-  async fetchJSON(url: string, options: FetchOptions = {}): Promise<any> {
+  async fetchJSON<T = unknown>(url: string, options: FetchOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       headers: {
@@ -189,10 +189,10 @@ class ApiClient {
     }
 
     const text = await response.text();
-    if (!text) return null;
+    if (!text) return null as T;
     
     try {
-      return JSON.parse(text);
+      return JSON.parse(text) as T;
     } catch (e) {
       console.error('Failed to parse JSON response:', text);
       throw new Error('Invalid JSON response from server');
@@ -234,7 +234,7 @@ export const apiClient = new ApiClient();
 
 // Export convenience functions
 export const apiFetch = (url: string, options?: FetchOptions) => apiClient.fetch(url, options);
-export const apiFetchJSON = (url: string, options?: FetchOptions) => apiClient.fetchJSON(url, options);
+export const apiFetchJSON = <T = unknown>(url: string, options?: FetchOptions) => apiClient.fetchJSON<T>(url, options);
 export const setBasicAuth = (username: string, password: string) => apiClient.setBasicAuth(username, password);
 export const setApiToken = (token: string) => apiClient.setApiToken(token);
 export const clearAuth = () => apiClient.clearAuth();

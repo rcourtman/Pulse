@@ -95,6 +95,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
 	r.mux.HandleFunc("/api/charts", r.handleCharts)
 	r.mux.HandleFunc("/api/diagnostics", RequireAuth(r.config, r.handleDiagnostics))
+	r.mux.HandleFunc("/api/diagnostics/vm", RequireAuth(r.config, r.handleVMDiagnostics))
 	r.mux.HandleFunc("/api/config", r.handleConfig)
 	r.mux.HandleFunc("/api/backups", r.handleBackups)
 	r.mux.HandleFunc("/api/backups/", r.handleBackups)

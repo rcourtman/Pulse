@@ -76,7 +76,7 @@ export function GuestURLs(props: GuestURLsProps) {
     setLoading(true);
     try {
       const metadata = guestMetadata();
-      const promises: Promise<any>[] = [];
+      const promises: Promise<void>[] = [];
       
       // Update each guest that has changes
       for (const [guestId, meta] of Object.entries(metadata)) {

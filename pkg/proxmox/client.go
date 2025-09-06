@@ -893,7 +893,8 @@ type VMFileSystem struct {
 	Mountpoint string  `json:"mountpoint"`
 	TotalBytes uint64  `json:"total-bytes"`
 	UsedBytes  uint64  `json:"used-bytes"`
-	Disk       []interface{} `json:"disk"` // Disk device info, not needed for usage
+	Disk       string  // Extracted disk device name for duplicate detection
+	DiskRaw    []interface{} `json:"disk"` // Raw disk device info from API
 }
 
 // GetVMFSInfo returns filesystem information from QEMU guest agent
@@ -918,6 +919,36 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
+		// Post-process to extract disk device names
+		for i := range arrayResult.Data.Result {
+			fs := &arrayResult.Data.Result[i]
+			// Extract disk device name from the DiskRaw field
+			if len(fs.DiskRaw) > 0 {
+				// The disk field usually contains device info as a map
+				if diskMap, ok := fs.DiskRaw[0].(map[string]interface{}); ok {
+					// Try to get the device name from various possible fields
+					if dev, ok := diskMap["dev"].(string); ok {
+						fs.Disk = dev
+					} else if serial, ok := diskMap["serial"].(string); ok {
+						fs.Disk = serial
+					} else if bus, ok := diskMap["bus-type"].(string); ok {
+						if target, ok := diskMap["target"].(float64); ok {
+							fs.Disk = fmt.Sprintf("%s-%d", bus, int(target))
+						}
+					}
+				}
+			}
+			// If we still don't have a disk identifier, use the mountpoint as a fallback
+			if fs.Disk == "" && fs.Mountpoint != "" {
+				// For root filesystem, use a special identifier
+				if fs.Mountpoint == "/" {
+					fs.Disk = "root-filesystem"
+				} else {
+					// Use mountpoint as unique identifier
+					fs.Disk = fs.Mountpoint
+				}
+			}
+		}
 		return arrayResult.Data.Result, nil
 	}
 	
