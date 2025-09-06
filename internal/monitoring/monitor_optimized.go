@@ -14,41 +14,43 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// convertZFSPoolStatus converts Proxmox ZFS pool status to our model
-// NOTE: This is a simplified conversion - full implementation would need the detail endpoint
-func convertZFSPoolStatus(pool *proxmox.ZFSPoolStatus) *models.ZFSPool {
-	if pool == nil {
+// convertPoolInfoToModel converts Proxmox ZFS pool info to our model
+func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
+	if poolInfo == nil {
 		return nil
 	}
 	
-	// Basic conversion from list endpoint data
-	// The health field maps to state in our model
-	zfsPool := &models.ZFSPool{
-		Name:           pool.Name,
-		State:          pool.Health, // API uses "health" not "state"
-		Status:         pool.Health, // Simplified - would need detail endpoint for full status
-		Scan:           "unknown",   // Not available in list endpoint
-		ReadErrors:     0,           // Not available in list endpoint
-		WriteErrors:    0,           // Not available in list endpoint
-		ChecksumErrors: 0,           // Not available in list endpoint
-		Devices:        make([]models.ZFSDevice, 0), // Would need detail endpoint
+	// Use the converter from the proxmox package
+	proxmoxPool := poolInfo.ConvertToModelZFSPool()
+	if proxmoxPool == nil {
+		return nil
 	}
 	
-	return zfsPool
-}
-
-// convertZFSDevice converts a Proxmox ZFS device to our model
-func convertZFSDevice(dev proxmox.ZFSPoolDevice) models.ZFSDevice {
-	device := models.ZFSDevice{
-		Name:           dev.Name,
-		Type:           "disk", // Would need to determine from structure
-		State:          dev.State,
-		ReadErrors:     dev.Read,
-		WriteErrors:    dev.Write,
-		ChecksumErrors: dev.Cksum, // API uses "cksum" not "checksum"
+	// Convert to our internal model
+	modelPool := &models.ZFSPool{
+		Name:           proxmoxPool.Name,
+		State:          proxmoxPool.State,
+		Status:         proxmoxPool.Status,
+		Scan:           proxmoxPool.Scan,
+		ReadErrors:     proxmoxPool.ReadErrors,
+		WriteErrors:    proxmoxPool.WriteErrors,
+		ChecksumErrors: proxmoxPool.ChecksumErrors,
+		Devices:        make([]models.ZFSDevice, 0, len(proxmoxPool.Devices)),
 	}
 	
-	return device
+	// Convert devices
+	for _, dev := range proxmoxPool.Devices {
+		modelPool.Devices = append(modelPool.Devices, models.ZFSDevice{
+			Name:           dev.Name,
+			Type:           dev.Type,
+			State:          dev.State,
+			ReadErrors:     dev.ReadErrors,
+			WriteErrors:    dev.WriteErrors,
+			ChecksumErrors: dev.ChecksumErrors,
+		})
+	}
+	
+	return modelPool
 }
 
 // pollVMsWithNodesOptimized polls VMs from all nodes in parallel using goroutines
@@ -541,40 +543,42 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			var nodeStorageList []models.Storage
 			
 			// Get ZFS pool status for this node if any storage is ZFS
-			// NOTE: This is experimental and disabled by default due to API complexity
-			var zfsPools []proxmox.ZFSPoolStatus
-			enableZFSMonitoring := os.Getenv("PULSE_ENABLE_ZFS_MONITORING") == "true"
+			// This is now production-ready with proper API integration
+			var zfsPoolMap = make(map[string]*models.ZFSPool)
+			enableZFSMonitoring := os.Getenv("PULSE_DISABLE_ZFS_MONITORING") != "true" // Enabled by default
 			
 			if enableZFSMonitoring {
 				hasZFSStorage := false
 				for _, storage := range nodeStorage {
-					if storage.Type == "zfspool" || storage.Type == "zfs" {
+					if storage.Type == "zfspool" || storage.Type == "zfs" || storage.Type == "local-zfs" {
 						hasZFSStorage = true
 						break
 					}
 				}
 				
 				if hasZFSStorage {
-					if pools, err := client.GetZFSPoolStatus(ctx, n.Node); err == nil {
-						zfsPools = pools
+					if poolInfos, err := client.GetZFSPoolsWithDetails(ctx, n.Node); err == nil {
 						log.Debug().
 							Str("node", n.Node).
-							Int("pools", len(pools)).
-							Msg("Successfully fetched ZFS pool status")
+							Int("pools", len(poolInfos)).
+							Msg("Successfully fetched ZFS pool details")
+						
+						// Convert to our model format
+						for _, poolInfo := range poolInfos {
+							modelPool := convertPoolInfoToModel(&poolInfo)
+							if modelPool != nil {
+								zfsPoolMap[poolInfo.Name] = modelPool
+							}
+						}
 					} else {
-						log.Warn().
+						// Log but don't fail - ZFS monitoring is optional
+						log.Debug().
 							Err(err).
 							Str("node", n.Node).
 							Str("instance", instanceName).
-							Msg("Failed to get ZFS pool status - this feature is experimental")
+							Msg("Could not get ZFS pool status (may require additional permissions)")
 					}
 				}
-			}
-			
-			// Create a map of ZFS pools for quick lookup
-			zfsPoolMap := make(map[string]*proxmox.ZFSPoolStatus)
-			for i := range zfsPools {
-				zfsPoolMap[zfsPools[i].Name] = &zfsPools[i]
 			}
 			
 			// Process each storage
@@ -613,9 +617,29 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				}
 				
 				// If this is ZFS storage, attach pool status information
-				if storage.Type == "zfspool" || storage.Type == "zfs" {
-					if poolStatus, found := zfsPoolMap[storage.Storage]; found {
-						modelStorage.ZFSPool = convertZFSPoolStatus(poolStatus)
+				if storage.Type == "zfspool" || storage.Type == "zfs" || storage.Type == "local-zfs" {
+					// Try to match by storage name or by common ZFS pool names
+					poolName := storage.Storage
+					
+					// Common mappings
+					if poolName == "local-zfs" {
+						poolName = "rpool/data" // Common default
+					}
+					
+					// Look for exact match first
+					if pool, found := zfsPoolMap[poolName]; found {
+						modelStorage.ZFSPool = pool
+					} else {
+						// Try partial matches for common patterns
+						for name, pool := range zfsPoolMap {
+							if name == "rpool" && strings.Contains(storage.Storage, "rpool") {
+								modelStorage.ZFSPool = pool
+								break
+							} else if name == "data" && strings.Contains(storage.Storage, "data") {
+								modelStorage.ZFSPool = pool
+								break
+							}
+						}
 					}
 				}
 				
