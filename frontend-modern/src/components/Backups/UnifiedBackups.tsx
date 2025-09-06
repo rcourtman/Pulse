@@ -199,24 +199,20 @@ const UnifiedBackups: Component = () => {
       
       // Determine the display type based on VMID and backup type
       // VMID 0 = host config backup (e.g. PMG)
+      // PBS stores PMG backups as 'ct' type with VMID='0'
       let displayType: GuestType;
       
-      // Debug logging for PMG backup detection
-      if (backup.vmid === '0' || backup.vmid === 0 || parseInt(backup.vmid) === 0) {
-        console.log('PBS backup with VMID=0 detected:', {
-          vmid: backup.vmid,
-          vmidType: typeof backup.vmid,
-          backupType: backup.backupType,
-          instance: backup.instance,
-          comment: backup.comment
-        });
-      }
+      // Check for VMID=0 which indicates host backup (handle both string and number)
+      const isVmidZero = backup.vmid === '0' || backup.vmid === 0 || parseInt(String(backup.vmid)) === 0;
       
-      if (parseInt(backup.vmid) === 0 || backup.backupType === 'host') {
+      if (isVmidZero || backup.backupType === 'host') {
         displayType = 'Host';
       } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
         displayType = 'VM';
+      } else if (backup.backupType === 'ct' || backup.backupType === 'lxc') {
+        displayType = 'LXC';
       } else {
+        // Default fallback
         displayType = 'LXC';
       }
       
@@ -266,29 +262,22 @@ const UnifiedBackups: Component = () => {
       }
       
       // Determine the display type based on backup.type and VMID
+      // VMID 0 = host config backup (e.g. PMG/PVE host configs)
       let displayType: GuestType;
       
-      // Debug logging for PMG backup detection in storage backups
-      if (backup.vmid === 0) {
-        console.log('Storage backup with VMID=0 detected:', {
-          vmid: backup.vmid,
-          vmidType: typeof backup.vmid,
-          type: backup.type,
-          volid: backup.volid,
-          notes: backup.notes,
-          storage: backup.storage
-        });
-      }
+      // Check for VMID=0 which indicates host backup
+      const isVmidZero = backup.vmid === 0 || backup.vmid === '0' || parseInt(String(backup.vmid)) === 0;
       
       // Check for host backups - VMID 0 or type 'host' (for PMG/PVE host configs)
-      if (backup.vmid === 0 || backup.type === 'host') {
+      if (isVmidZero || backup.type === 'host') {
         displayType = 'Host';
-      } else if (backup.type === 'qemu') {
+      } else if (backup.type === 'qemu' || backup.type === 'vm') {
         displayType = 'VM';
-      } else if (backup.type === 'lxc') {
+      } else if (backup.type === 'lxc' || backup.type === 'ct') {
         displayType = 'LXC';
       } else {
-        displayType = 'LXC'; // Default fallback (most people have more containers than VMs)
+        // Default fallback
+        displayType = 'LXC';
       }
       
       // For PBS backups through storage: show Proxmox node in Node column, PBS storage in Location
