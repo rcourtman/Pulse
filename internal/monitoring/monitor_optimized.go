@@ -140,14 +140,16 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 				
-				// Get memory info for running VMs
+				// Get memory info for running VMs (and agent status for disk)
 				memUsed := uint64(0)
 				memTotal := vm.MaxMem
+				var vmStatus *proxmox.VMStatus
 				
 				if vm.Status == "running" {
 					// Try to get detailed VM status (but don't wait too long)
 					statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-					if vmStatus, err := client.GetVMStatus(statusCtx, n.Node, vm.VMID); err == nil {
+					if status, err := client.GetVMStatus(statusCtx, n.Node, vm.VMID); err == nil {
+						vmStatus = status
 						if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
 							memTotal = vmStatus.Balloon
 						}
@@ -174,6 +176,56 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				
 				if diskUsed == 0 && diskTotal > 0 && vm.Status == "running" {
 					diskUsage = -1 // Unknown
+				}
+				
+				// For running VMs, try to get filesystem info from guest agent if disk is 0
+				// The cluster/resources endpoint often returns 0 for disk even when data is available
+				if vm.Status == "running" && diskUsed == 0 && vmStatus != nil {
+					// Use the vmStatus we already fetched above for balloon memory
+					// Try to get filesystem info if agent is enabled or disk shows 0
+					if vmStatus.Agent > 0 || diskUsed == 0 {
+						statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err == nil && len(fsInfo) > 0 {
+								// Aggregate disk usage from all filesystems
+								var totalBytes, usedBytes uint64
+								for _, fs := range fsInfo {
+									// Skip special filesystems and Windows System Reserved
+									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
+									   strings.HasPrefix(fs.Mountpoint, "/dev") ||
+									   strings.HasPrefix(fs.Mountpoint, "/proc") ||
+									   strings.HasPrefix(fs.Mountpoint, "/sys") ||
+									   strings.HasPrefix(fs.Mountpoint, "/run") ||
+									   fs.Mountpoint == "/boot/efi" ||
+									   fs.Mountpoint == "System Reserved" ||
+									   strings.Contains(fs.Mountpoint, "System Reserved") {
+										continue
+									}
+									
+									// Only count real filesystems with valid data
+									if fs.TotalBytes > 0 {
+										totalBytes += fs.TotalBytes
+										usedBytes += fs.UsedBytes
+									}
+								}
+								
+								// If we got valid data from guest agent, use it
+								if totalBytes > 0 {
+									diskTotal = totalBytes
+									diskUsed = usedBytes
+									diskFree = totalBytes - usedBytes
+									diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+									
+									log.Debug().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Uint64("totalBytes", totalBytes).
+										Uint64("usedBytes", usedBytes).
+										Float64("usage", diskUsage).
+										Msg("Successfully retrieved disk usage from guest agent")
+								}
+							}
+						cancel()
+					}
 				}
 				
 				// Create VM model
