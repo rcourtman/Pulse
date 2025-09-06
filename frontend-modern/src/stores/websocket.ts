@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { State, WSMessage, Alert, ResolvedAlert, PVEBackups } from '@/types/api';
+import type { State, WSMessage, Alert, ResolvedAlert, PVEBackups, VM, Container } from '@/types/api';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
@@ -47,7 +47,7 @@ export function createWebSocketStore(url: string) {
   });
   const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
-  const [updateProgress, setUpdateProgress] = createSignal<any>(null);
+  const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
   
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Set<string>();
@@ -104,7 +104,7 @@ export function createWebSocketStore(url: string) {
               }
               if (message.data.vms !== undefined) {
                 // Transform tags from comma-separated strings to arrays
-                const transformedVMs = message.data.vms.map((vm: any) => {
+                const transformedVMs = message.data.vms.map((vm: VM) => {
                   const originalTags = vm.tags;
                   let transformedTags;
                   
@@ -113,7 +113,7 @@ export function createWebSocketStore(url: string) {
                     transformedTags = originalTags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
                   } else if (Array.isArray(originalTags)) {
                     // Already an array - filter out empty/whitespace-only tags
-                    transformedTags = originalTags.filter((tag: any) => 
+                    transformedTags = originalTags.filter((tag: string) => 
                       typeof tag === 'string' && tag.trim().length > 0
                     );
                   } else {
@@ -130,7 +130,7 @@ export function createWebSocketStore(url: string) {
               }
               if (message.data.containers !== undefined) {
                 // Transform tags from comma-separated strings to arrays
-                const transformedContainers = message.data.containers.map((container: any) => {
+                const transformedContainers = message.data.containers.map((container: Container) => {
                   const originalTags = container.tags;
                   let transformedTags;
                   
@@ -139,7 +139,7 @@ export function createWebSocketStore(url: string) {
                     transformedTags = originalTags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
                   } else if (Array.isArray(originalTags)) {
                     // Already an array - filter out empty/whitespace-only tags
-                    transformedTags = originalTags.filter((tag: any) => 
+                    transformedTags = originalTags.filter((tag: string) => 
                       typeof tag === 'string' && tag.trim().length > 0
                     );
                   } else {
@@ -178,7 +178,7 @@ export function createWebSocketStore(url: string) {
                 const currentAlertIds = Object.keys(activeAlerts);
                 currentAlertIds.forEach(id => {
                   if (!newAlerts[id]) {
-                    setActiveAlerts(id, undefined!);
+                    setActiveAlerts(id, undefined as unknown as Alert);
                   }
                 });
                 
@@ -216,7 +216,7 @@ export function createWebSocketStore(url: string) {
                 const currentResolvedIds = Object.keys(recentlyResolved);
                 currentResolvedIds.forEach(id => {
                   if (!newResolvedAlerts[id]) {
-                    setRecentlyResolved(id, undefined!);
+                    setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
                   }
                 });
                 

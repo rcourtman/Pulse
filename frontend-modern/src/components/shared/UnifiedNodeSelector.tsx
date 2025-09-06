@@ -1,16 +1,17 @@
 import { Component, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
+import type { Node, VM, Container, Storage, PBSBackup } from '@/types/api';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;
-  nodes?: any[];
-  filteredVms?: any[];
-  filteredContainers?: any[];
-  filteredStorage?: any[];
-  filteredBackups?: any[];
+  nodes?: Node[];
+  filteredVms?: VM[];
+  filteredContainers?: Container[];
+  filteredStorage?: Storage[];
+  filteredBackups?: PBSBackup[];
   searchTerm?: string;
 }
 
@@ -50,7 +51,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     // Count PVE backups and snapshots by node
     const nodes = props.nodes || state.nodes;
     if (nodes) {
-      nodes.forEach((node: any) => {
+      nodes.forEach((node) => {
         let count = 0;
         
         // Count storage backups (excluding PBS backups which are counted separately)

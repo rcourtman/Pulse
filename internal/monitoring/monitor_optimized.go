@@ -130,15 +130,11 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, vm.VMID)
 				}
 				
-				// Calculate I/O rates
-				currentMetrics := IOMetrics{
-					DiskRead:   int64(vm.DiskRead),
-					DiskWrite:  int64(vm.DiskWrite),
-					NetworkIn:  int64(vm.NetIn),
-					NetworkOut: int64(vm.NetOut),
-					Timestamp:  time.Now(),
-				}
-				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+				// Initialize metrics from VM listing (may be 0 for disk I/O)
+				diskReadBytes := int64(vm.DiskRead)
+				diskWriteBytes := int64(vm.DiskWrite)
+				networkInBytes := int64(vm.NetIn)
+				networkOutBytes := int64(vm.NetOut)
 				
 				// Get memory info for running VMs (and agent status for disk)
 				memUsed := uint64(0)
@@ -158,8 +154,35 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						} else if vmStatus.Mem > 0 {
 							memUsed = vmStatus.Mem
 						}
+						// Use actual disk I/O values from detailed status
+						diskReadBytes = int64(vmStatus.DiskRead)
+						diskWriteBytes = int64(vmStatus.DiskWrite)
+						networkInBytes = int64(vmStatus.NetIn)
+						networkOutBytes = int64(vmStatus.NetOut)
 					}
 					cancel()
+				}
+				
+				// Calculate I/O rates after we have the actual values
+				currentMetrics := IOMetrics{
+					DiskRead:   diskReadBytes,
+					DiskWrite:  diskWriteBytes,
+					NetworkIn:  networkInBytes,
+					NetworkOut: networkOutBytes,
+					Timestamp:  time.Now(),
+				}
+				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+				
+				// Debug log disk I/O rates
+				if diskReadRate > 0 || diskWriteRate > 0 {
+					log.Debug().
+						Str("vm", vm.Name).
+						Int("vmid", vm.VMID).
+						Float64("diskReadRate", diskReadRate).
+						Float64("diskWriteRate", diskWriteRate).
+						Int64("diskReadBytes", diskReadBytes).
+						Int64("diskWriteBytes", diskWriteBytes).
+						Msg("VM disk I/O rates calculated")
 				}
 				
 				// Set CPU to 0 for non-running VMs
@@ -168,27 +191,106 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					cpuUsage = 0
 				}
 				
-				// Calculate disk usage
+				// Calculate disk usage - start with allocated disk size
+				// NOTE: The Proxmox cluster/resources API always returns 0 for VM disk usage
+				// We must query the guest agent to get actual disk usage
 				diskUsed := uint64(vm.Disk)
 				diskTotal := uint64(vm.MaxDisk)
 				diskFree := diskTotal - diskUsed
 				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+				diskStatusReason := ""
 				
-				if diskUsed == 0 && diskTotal > 0 && vm.Status == "running" {
-					diskUsage = -1 // Unknown
+				// For stopped VMs, we can't get guest agent data
+				if vm.Status != "running" {
+					// Show allocated disk size for stopped VMs
+					if diskTotal > 0 {
+						diskUsage = -1 // Indicates "allocated size only"
+						diskStatusReason = "vm-stopped"
+					}
 				}
 				
-				// For running VMs, try to get filesystem info from guest agent if disk is 0
-				// The cluster/resources endpoint often returns 0 for disk even when data is available
-				if vm.Status == "running" && diskUsed == 0 && vmStatus != nil {
-					// Use the vmStatus we already fetched above for balloon memory
-					// Try to get filesystem info if agent is enabled or disk shows 0
-					if vmStatus.Agent > 0 || diskUsed == 0 {
+				// For running VMs, ALWAYS try to get filesystem info from guest agent
+				// The cluster/resources endpoint always returns 0 for disk usage
+				if vm.Status == "running" && vmStatus != nil && diskTotal > 0 {
+					// Log the initial state
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", vm.Name).
+						Int("vmid", vm.VMID).
+						Int("agent", vmStatus.Agent).
+						Uint64("diskUsed", diskUsed).
+						Uint64("diskTotal", diskTotal).
+						Msg("VM has 0 disk usage, checking guest agent")
+					
+					// Check if agent is enabled
+					if vmStatus.Agent == 0 {
+						diskStatusReason = "agent-disabled"
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("Guest agent disabled in VM config")
+					} else if vmStatus.Agent > 0 || diskUsed == 0 {
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Int("vmid", vm.VMID).
+							Msg("Guest agent enabled, fetching filesystem info")
+						
 						statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err == nil && len(fsInfo) > 0 {
+						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err != nil {
+							// Handle errors
+							errStr := err.Error()
+							log.Warn().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Int("vmid", vm.VMID).
+								Str("error", errStr).
+								Msg("Failed to get VM filesystem info from guest agent")
+							
+							if strings.Contains(errStr, "QEMU guest agent is not running") {
+								diskStatusReason = "agent-not-running"
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("vmid", vm.VMID).
+									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
+							} else if strings.Contains(err.Error(), "timeout") {
+								diskStatusReason = "agent-timeout"
+							} else if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "not allowed") {
+								diskStatusReason = "permission-denied"
+							} else {
+								diskStatusReason = "agent-error"
+							}
+						} else if len(fsInfo) == 0 {
+							diskStatusReason = "no-filesystems"
+							log.Warn().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Int("vmid", vm.VMID).
+								Msg("Guest agent returned empty filesystem list")
+						} else {
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("vmid", vm.VMID).
+									Int("filesystems", len(fsInfo)).
+									Msg("Got filesystem info from guest agent")
 								// Aggregate disk usage from all filesystems
+								// Fix for #425: Track seen devices to avoid counting duplicates
 								var totalBytes, usedBytes uint64
+								seenDevices := make(map[string]bool)
+								
 								for _, fs := range fsInfo {
+									// Log each filesystem for debugging
+									log.Debug().
+										Str("vm", vm.Name).
+										Str("mountpoint", fs.Mountpoint).
+										Str("type", fs.Type).
+										Str("disk", fs.Disk).
+										Uint64("total", fs.TotalBytes).
+										Uint64("used", fs.UsedBytes).
+										Msg("Processing filesystem from guest agent")
+									
 									// Skip special filesystems and Windows System Reserved
 									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
 									   strings.HasPrefix(fs.Mountpoint, "/dev") ||
@@ -197,14 +299,47 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 									   strings.HasPrefix(fs.Mountpoint, "/run") ||
 									   fs.Mountpoint == "/boot/efi" ||
 									   fs.Mountpoint == "System Reserved" ||
-									   strings.Contains(fs.Mountpoint, "System Reserved") {
+									   strings.Contains(fs.Mountpoint, "System Reserved") ||
+									   strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("type", fs.Type).
+											Msg("Skipping special filesystem")
+										continue
+									}
+									
+									// Skip if we've already seen this device (duplicate mount point)
+									if fs.Disk != "" && seenDevices[fs.Disk] {
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("disk", fs.Disk).
+											Msg("Skipping duplicate mount of same device")
 										continue
 									}
 									
 									// Only count real filesystems with valid data
 									if fs.TotalBytes > 0 {
+										// Mark this device as seen
+										if fs.Disk != "" {
+											seenDevices[fs.Disk] = true
+										}
+										
 										totalBytes += fs.TotalBytes
 										usedBytes += fs.UsedBytes
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("disk", fs.Disk).
+											Uint64("added_total", fs.TotalBytes).
+											Uint64("added_used", fs.UsedBytes).
+											Msg("Adding filesystem to total")
+									} else {
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Msg("Skipping filesystem with 0 total bytes")
 									}
 								}
 								
@@ -214,31 +349,54 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 									diskUsed = usedBytes
 									diskFree = totalBytes - usedBytes
 									diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+									diskStatusReason = "" // Clear reason on success
 									
-									log.Debug().
+									log.Info().
 										Str("instance", instanceName).
 										Str("vm", vm.Name).
+										Int("vmid", vm.VMID).
 										Uint64("totalBytes", totalBytes).
 										Uint64("usedBytes", usedBytes).
 										Float64("usage", diskUsage).
-										Msg("Successfully retrieved disk usage from guest agent")
+										Msg("✓ Successfully retrieved disk usage from guest agent")
+								} else {
+									// Only special filesystems found - show allocated disk size instead
+									diskStatusReason = "special-filesystems-only"
+									if diskTotal > 0 {
+										diskUsage = -1 // Show as allocated size
+									}
+									log.Info().
+										Str("instance", instanceName).
+										Str("vm", vm.Name).
+										Int("filesystems_found", len(fsInfo)).
+										Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 								}
 							}
 						cancel()
+					} else {
+						// No vmStatus available or agent disabled - show allocated disk
+						if diskTotal > 0 {
+							diskUsage = -1 // Show as allocated size
+							diskStatusReason = "no-agent"
+						}
 					}
+				} else if vm.Status == "running" && diskTotal > 0 {
+					// Running VM but no vmStatus - show allocated disk
+					diskUsage = -1
+					diskStatusReason = "no-status"
 				}
 				
 				// Create VM model
 				modelVM := models.VM{
-					ID:         guestID,
-					VMID:       vm.VMID,
-					Name:       vm.Name,
-					Node:       n.Node,
-					Instance:   instanceName,
-					Status:     vm.Status,
-					Type:       "qemu",
-					CPU:        cpuUsage,
-					CPUs:       int(vm.CPUs),
+					ID:               guestID,
+					VMID:             vm.VMID,
+					Name:             vm.Name,
+					Node:             n.Node,
+					Instance:         instanceName,
+					Status:           vm.Status,
+					Type:             "qemu",
+					CPU:              cpuUsage,
+					CPUs:             int(vm.CPUs),
 					Memory: models.Memory{
 						Total: int64(memTotal),
 						Used:  int64(memUsed),
@@ -251,14 +409,15 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						Free:  int64(diskFree),
 						Usage: diskUsage,
 					},
-					NetworkIn:  maxInt64(0, int64(netInRate)),
-					NetworkOut: maxInt64(0, int64(netOutRate)),
-					DiskRead:   maxInt64(0, int64(diskReadRate)),
-					DiskWrite:  maxInt64(0, int64(diskWriteRate)),
-					Uptime:     int64(vm.Uptime),
-					Template:   vm.Template == 1,
-					LastSeen:   time.Now(),
-					Tags:       tags,
+					DiskStatusReason: diskStatusReason,
+					NetworkIn:        maxInt64(0, int64(netInRate)),
+					NetworkOut:       maxInt64(0, int64(netOutRate)),
+					DiskRead:         maxInt64(0, int64(diskReadRate)),
+					DiskWrite:        maxInt64(0, int64(diskWriteRate)),
+					Uptime:           int64(vm.Uptime),
+					Template:         vm.Template == 1,
+					LastSeen:         time.Now(),
+					Tags:             tags,
 				}
 				
 				// Zero out metrics for non-running VMs

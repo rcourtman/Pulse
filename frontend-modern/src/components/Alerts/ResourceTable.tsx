@@ -1,21 +1,33 @@
 import { For, Show } from 'solid-js';
 import type { Alert } from '@/types/api';
 
+interface Resource {
+  id: string;
+  name: string;
+  node?: string;
+  instance?: string;
+  type?: string;
+  thresholds?: Record<string, number>;
+  disabled?: boolean;
+  nodeConnectivity?: boolean;
+  [key: string]: unknown;
+}
+
 interface ResourceTableProps {
   title: string;
-  resources?: any[];
-  groupedResources?: Record<string, any[]>;
+  resources?: Resource[];
+  groupedResources?: Record<string, Resource[]>;
   columns: string[];
   activeAlerts?: Record<string, Alert>;
-  onEdit: (resourceId: string, thresholds: any, defaults: any) => void;
+  onEdit: (resourceId: string, thresholds: Record<string, number>, defaults: Record<string, number>) => void;
   onSaveEdit: (resourceId: string) => void;
   onCancelEdit: () => void;
   onRemoveOverride: (resourceId: string) => void;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
   editingId: () => string | null;
-  editingThresholds: () => Record<string, any>;
-  setEditingThresholds: (value: Record<string, any>) => void;
+  editingThresholds: () => Record<string, number>;
+  setEditingThresholds: (value: Record<string, number>) => void;
   formatMetricValue: (metric: string, value: number | undefined) => string;
   hasActiveAlert: (resourceId: string, metric: string) => boolean;
 }
@@ -201,7 +213,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             <td class="p-1 px-2 text-center">
                               <Show when={resource.type === 'guest' && props.onToggleDisabled}>
                                 <button type="button"
-                                  onClick={() => props.onToggleDisabled!(resource.id)}
+                                  onClick={() => props.onToggleDisabled?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
                                       ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -213,7 +225,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               </Show>
                               <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
                                 <button type="button"
-                                  onClick={() => props.onToggleNodeConnectivity!(resource.id)}
+                                  onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disableConnectivity
                                       ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -226,7 +238,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               </Show>
                               <Show when={resource.type === 'storage'}>
                                 <button type="button"
-                                  onClick={() => props.onToggleDisabled!(resource.id)}
+                                  onClick={() => props.onToggleDisabled?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
                                       ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -238,7 +250,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               </Show>
                               <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
                                 <button type="button"
-                                  onClick={() => props.onToggleDisabled!(resource.id)}
+                                  onClick={() => props.onToggleDisabled?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
                                       ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -422,7 +434,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       <td class="p-1 px-2 text-center">
                         <Show when={resource.type === 'guest' && props.onToggleDisabled}>
                           <button type="button"
-                            onClick={() => props.onToggleDisabled!(resource.id)}
+                            onClick={() => props.onToggleDisabled?.(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disabled
                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -434,7 +446,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </Show>
                         <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
                           <button type="button"
-                            onClick={() => props.onToggleNodeConnectivity!(resource.id)}
+                            onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disableConnectivity
                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -447,7 +459,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </Show>
                         <Show when={resource.type === 'storage'}>
                           <button type="button"
-                            onClick={() => props.onToggleDisabled!(resource.id)}
+                            onClick={() => props.onToggleDisabled?.(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disabled
                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
@@ -459,7 +471,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </Show>
                         <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
                           <button type="button"
-                            onClick={() => props.onToggleDisabled!(resource.id)}
+                            onClick={() => props.onToggleDisabled?.(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                               resource.disabled
                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'

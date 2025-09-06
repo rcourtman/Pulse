@@ -56,11 +56,22 @@ export function getTagColorDark(tag: string): { bg: string; text: string; border
   };
 }
 
+interface TagColorStyle {
+  bg: string;
+  text: string;
+  border: string;
+}
+
+interface TagColorTheme {
+  light: TagColorStyle;
+  dark: TagColorStyle;
+}
+
 /**
  * Proxmox's default tag colors for special tags
  * These override the hash-based colors for specific tags
  */
-const specialTagColors: Record<string, { light: any; dark: any }> = {
+const specialTagColors: Record<string, TagColorTheme> = {
   'production': {
     light: { bg: 'rgb(254, 226, 226)', text: 'rgb(153, 27, 27)', border: 'rgb(239, 68, 68)' },
     dark: { bg: 'rgb(127, 29, 29)', text: 'rgb(254, 202, 202)', border: 'rgb(185, 28, 28)' }
