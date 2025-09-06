@@ -106,6 +106,28 @@ export interface Storage {
   nodes?: string[];
   nodeCount?: number;
   pbsNames?: string[];
+  // ZFS pool status
+  zfsPool?: ZFSPool;
+}
+
+export interface ZFSPool {
+  name: string;
+  state: string;      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+  status: string;     // Healthy, Degraded, Faulted, etc.
+  scan: string;       // Current scan status (scrub, resilver, none)
+  readErrors: number;
+  writeErrors: number;
+  checksumErrors: number;
+  devices: ZFSDevice[];
+}
+
+export interface ZFSDevice {
+  name: string;
+  type: string;       // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+  state: string;      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+  readErrors: number;
+  writeErrors: number;
+  checksumErrors: number;
 }
 
 export interface PBSInstance {

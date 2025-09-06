@@ -1025,6 +1025,30 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	return result.Data, nil
 }
 
+// ZFSPoolStatus represents the status of a ZFS pool
+type ZFSPoolStatus struct {
+	Name       string          `json:"name"`
+	State      string          `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+	Status     string          `json:"status"`     // Healthy, Degraded, Faulted, etc.
+	Scan       string          `json:"scan"`       // Current scan status
+	Errors     string          `json:"errors"`     // Error summary
+	ReadErrors int64           `json:"read"`
+	WriteErrors int64          `json:"write"`
+	ChecksumErrors int64       `json:"cksum"`
+	Config     []ZFSPoolDevice `json:"config"`     // Pool configuration and devices
+}
+
+// ZFSPoolDevice represents a device in a ZFS pool
+type ZFSPoolDevice struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`       // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+	State      string `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+	Read       int64  `json:"read"`
+	Write      int64  `json:"write"`
+	Checksum   int64  `json:"cksum"`
+	Children   []ZFSPoolDevice `json:"children,omitempty"` // For vdevs that contain other devices
+}
+
 // VMStatus represents detailed VM status
 type VMStatus struct {
 	Status     string  `json:"status"`
@@ -1048,4 +1072,23 @@ type VMStatus struct {
 	NetOut     uint64  `json:"netout"`
 	Uptime     uint64  `json:"uptime"`
 	Agent      int     `json:"agent"`
+}
+
+// GetZFSPoolStatus gets the status of ZFS pools on a node
+func (c *Client) GetZFSPoolStatus(ctx context.Context, node string) ([]ZFSPoolStatus, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/disks/zfs", node))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []ZFSPoolStatus `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
 }

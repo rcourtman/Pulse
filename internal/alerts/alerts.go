@@ -697,8 +697,224 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
 		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 	}
+	
+	// Check ZFS pool status if this is ZFS storage
+	if storage.ZFSPool != nil {
+		m.checkZFSPoolHealth(storage)
+	}
 }
 
+// checkZFSPoolHealth checks ZFS pool for errors and degraded state
+func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
+	pool := storage.ZFSPool
+	if pool == nil {
+		return
+	}
+	
+	// Check pool state (DEGRADED, FAULTED, etc.)
+	if pool.State != "ONLINE" {
+		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
+		
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			level := AlertLevelWarning
+			if pool.State == "FAULTED" || pool.State == "UNAVAIL" {
+				level = AlertLevelCritical
+			}
+			
+			alert := &Alert{
+				ID:           alertID,
+				Type:         "zfs-pool-state",
+				Level:        level,
+				ResourceID:   storage.ID,
+				ResourceName: fmt.Sprintf("%s (%s)", storage.Name, pool.Name),
+				Node:         storage.Node,
+				Instance:     storage.Instance,
+				Message:      fmt.Sprintf("ZFS pool '%s' is %s", pool.Name, pool.State),
+				Value:        0,
+				Threshold:    0,
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata: map[string]interface{}{
+					"pool_name":  pool.Name,
+					"pool_state": pool.State,
+				},
+			}
+			
+			m.activeAlerts[alertID] = alert
+			m.recentAlerts[alertID] = alert
+			m.historyManager.AddAlert(*alert)
+			
+			if m.onAlert != nil {
+				m.onAlert(alert)
+			}
+			
+			log.Warn().
+				Str("pool", pool.Name).
+				Str("state", pool.State).
+				Str("node", storage.Node).
+				Msg("ZFS pool is not healthy")
+		}
+	} else {
+		// Clear state alert if pool is back online
+		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
+		m.clearAlert(alertID)
+	}
+	
+	// Check for read/write/checksum errors
+	totalErrors := pool.ReadErrors + pool.WriteErrors + pool.ChecksumErrors
+	if totalErrors > 0 {
+		alertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
+		
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		
+		existingAlert, exists := m.activeAlerts[alertID]
+		
+		// Only create new alert or update if error count increased
+		if !exists || (exists && float64(totalErrors) > existingAlert.Value) {
+			alert := &Alert{
+				ID:           alertID,
+				Type:         "zfs-pool-errors",
+				Level:        AlertLevelWarning,
+				ResourceID:   storage.ID,
+				ResourceName: fmt.Sprintf("%s (%s)", storage.Name, pool.Name),
+				Node:         storage.Node,
+				Instance:     storage.Instance,
+				Message:      fmt.Sprintf("ZFS pool '%s' has errors: %d read, %d write, %d checksum", 
+					pool.Name, pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors),
+				Value:        float64(totalErrors),
+				Threshold:    0,
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata: map[string]interface{}{
+					"pool_name":       pool.Name,
+					"read_errors":     pool.ReadErrors,
+					"write_errors":    pool.WriteErrors,
+					"checksum_errors": pool.ChecksumErrors,
+				},
+			}
+			
+			if exists {
+				// Update existing alert
+				alert.StartTime = existingAlert.StartTime
+			}
+			
+			m.activeAlerts[alertID] = alert
+			m.recentAlerts[alertID] = alert
+			m.historyManager.AddAlert(*alert)
+			
+			if m.onAlert != nil {
+				m.onAlert(alert)
+			}
+			
+			log.Error().
+				Str("pool", pool.Name).
+				Int64("read_errors", pool.ReadErrors).
+				Int64("write_errors", pool.WriteErrors).
+				Int64("checksum_errors", pool.ChecksumErrors).
+				Str("node", storage.Node).
+				Msg("ZFS pool has I/O errors")
+		}
+	}
+	
+	// Check individual devices for errors
+	for _, device := range pool.Devices {
+		if device.State != "ONLINE" || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
+			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
+			
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			
+			if _, exists := m.activeAlerts[alertID]; !exists {
+				level := AlertLevelWarning
+				if device.State == "FAULTED" || device.State == "UNAVAIL" {
+					level = AlertLevelCritical
+				}
+				
+				message := fmt.Sprintf("ZFS device '%s' in pool '%s'", device.Name, pool.Name)
+				if device.State != "ONLINE" {
+					message += fmt.Sprintf(" is %s", device.State)
+				}
+				if device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
+					message += fmt.Sprintf(" has errors: %d read, %d write, %d checksum", 
+						device.ReadErrors, device.WriteErrors, device.ChecksumErrors)
+				}
+				
+				alert := &Alert{
+					ID:           alertID,
+					Type:         "zfs-device",
+					Level:        level,
+					ResourceID:   storage.ID,
+					ResourceName: fmt.Sprintf("%s (%s/%s)", storage.Name, pool.Name, device.Name),
+					Node:         storage.Node,
+					Instance:     storage.Instance,
+					Message:      message,
+					Value:        float64(device.ReadErrors + device.WriteErrors + device.ChecksumErrors),
+					Threshold:    0,
+					StartTime:    time.Now(),
+					LastSeen:     time.Now(),
+					Metadata: map[string]interface{}{
+						"pool_name":       pool.Name,
+						"device_name":     device.Name,
+						"device_state":    device.State,
+						"read_errors":     device.ReadErrors,
+						"write_errors":    device.WriteErrors,
+						"checksum_errors": device.ChecksumErrors,
+					},
+				}
+				
+				m.activeAlerts[alertID] = alert
+				m.recentAlerts[alertID] = alert
+				m.historyManager.AddAlert(*alert)
+				
+				if m.onAlert != nil {
+					m.onAlert(alert)
+				}
+				
+				log.Warn().
+					Str("pool", pool.Name).
+					Str("device", device.Name).
+					Str("state", device.State).
+					Int64("errors", device.ReadErrors + device.WriteErrors + device.ChecksumErrors).
+					Str("node", storage.Node).
+					Msg("ZFS device has issues")
+			}
+		} else {
+			// Clear device alert if it's back to normal
+			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
+			m.clearAlert(alertID)
+		}
+	}
+}
+
+// clearAlert removes an alert if it exists
+func (m *Manager) clearAlert(alertID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		delete(m.activeAlerts, alertID)
+		
+		// Add to recently resolved
+		resolvedAlert := &ResolvedAlert{
+			Alert:        alert,
+			ResolvedTime: time.Now(),
+		}
+		m.recentlyResolved[alertID] = resolvedAlert
+		
+		// Send recovery notification
+		if m.onResolved != nil {
+			m.onResolved(alertID)
+		}
+		
+		log.Info().
+			Str("alertID", alertID).
+			Msg("Alert cleared")
+	}
+}
 
 // checkMetric checks a single metric against its threshold with hysteresis
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold) {

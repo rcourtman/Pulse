@@ -411,6 +411,58 @@ const Storage: Component = () => {
                               <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
                               <td class="p-0.5 px-1.5 text-xs">{formatBytes(storage.total || 0)}</td>
                             </tr>
+                            {/* ZFS Pool Status Row - Show when pool has issues */}
+                            <Show when={storage.zfsPool && (
+                              storage.zfsPool.state !== 'ONLINE' || 
+                              storage.zfsPool.readErrors > 0 || 
+                              storage.zfsPool.writeErrors > 0 || 
+                              storage.zfsPool.checksumErrors > 0
+                            )}>
+                              <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
+                                <td colspan="8" class="p-2">
+                                  <div class="text-xs space-y-1">
+                                    <div class="flex items-center gap-2">
+                                      <span class="font-semibold text-yellow-700 dark:text-yellow-400">
+                                        ZFS Pool Status:
+                                      </span>
+                                      <span class={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                        storage.zfsPool!.state === 'ONLINE' 
+                                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                          : storage.zfsPool!.state === 'DEGRADED'
+                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                          : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                      }`}>
+                                        {storage.zfsPool!.state}
+                                      </span>
+                                      <Show when={storage.zfsPool!.readErrors > 0 || storage.zfsPool!.writeErrors > 0 || storage.zfsPool!.checksumErrors > 0}>
+                                        <span class="text-red-600 dark:text-red-400">
+                                          Errors: {storage.zfsPool!.readErrors} read, {storage.zfsPool!.writeErrors} write, {storage.zfsPool!.checksumErrors} checksum
+                                        </span>
+                                      </Show>
+                                    </div>
+                                    <Show when={storage.zfsPool!.devices.some(d => d.state !== 'ONLINE' || d.readErrors > 0 || d.writeErrors > 0 || d.checksumErrors > 0)}>
+                                      <div class="ml-4 space-y-0.5">
+                                        <For each={storage.zfsPool!.devices.filter(d => d.state !== 'ONLINE' || d.readErrors > 0 || d.writeErrors > 0 || d.checksumErrors > 0)}>
+                                          {(device) => (
+                                            <div class="flex items-center gap-2 text-xs">
+                                              <span class="text-gray-600 dark:text-gray-400">Device {device.name}:</span>
+                                              <span class={`${device.state !== 'ONLINE' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                                                {device.state}
+                                                <Show when={device.readErrors > 0 || device.writeErrors > 0 || device.checksumErrors > 0}>
+                                                  <span class="ml-1">
+                                                    ({device.readErrors}R/{device.writeErrors}W/{device.checksumErrors}C errors)
+                                                  </span>
+                                                </Show>
+                                              </span>
+                                            </div>
+                                          )}
+                                        </For>
+                                      </div>
+                                    </Show>
+                                  </div>
+                                </td>
+                              </tr>
+                            </Show>
                           );
                         }}
                       </For>
