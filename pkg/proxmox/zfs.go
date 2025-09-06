@@ -140,7 +140,7 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 	deviceType := "disk"
 	if dev.Leaf == 0 && len(dev.Children) > 0 {
 		// It's a vdev (mirror, raidz, etc.)
-		if dev.Name == "mirror" || dev.Name[:6] == "mirror" {
+		if dev.Name == "mirror" || (len(dev.Name) >= 6 && dev.Name[:6] == "mirror") {
 			deviceType = "mirror"
 		} else if len(dev.Name) >= 5 && dev.Name[:5] == "raidz" {
 			deviceType = dev.Name // raidz, raidz2, raidz3

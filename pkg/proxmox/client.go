@@ -1111,10 +1111,13 @@ func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSP
 	}
 	defer resp.Body.Close()
 
-	var detail ZFSPoolDetail
-	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+	// Proxmox returns {"data": {...}}
+	var result struct {
+		Data ZFSPoolDetail `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	return &detail, nil
+	return &result.Data, nil
 }
