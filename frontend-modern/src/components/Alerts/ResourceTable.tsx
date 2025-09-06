@@ -110,11 +110,13 @@ export function ResourceTable(props: ResourceTableProps) {
                         const isEditing = () => props.editingId() === resource.id;
                         const thresholds = () => isEditing() ? props.editingThresholds() : resource.thresholds;
                         const displayValue = (metric: string) => {
-                          if (isEditing()) return thresholds()[metric] || resource.defaults[metric] || '';
-                          return resource.thresholds[metric] || resource.defaults[metric] || 0;
+                          const thresh = thresholds();
+                          const defaults = (resource.defaults as any) || {};
+                          if (isEditing()) return thresh?.[metric] || defaults[metric] || '';
+                          return resource.thresholds?.[metric] || defaults[metric] || 0;
                         };
                         const isOverridden = (metric: string) => {
-                          return resource.thresholds[metric] !== undefined && resource.thresholds[metric] !== null;
+                          return resource.thresholds?.[metric] !== undefined && resource.thresholds?.[metric] !== null;
                         };
                         
                         return (
