@@ -123,20 +123,43 @@ type Container struct {
 
 // Storage represents a storage resource
 type Storage struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Node     string  `json:"node"`
-	Instance string  `json:"instance"`
-	Type     string  `json:"type"`
-	Status   string  `json:"status"`
-	Total    int64   `json:"total"`
-	Used     int64   `json:"used"`
-	Free     int64   `json:"free"`
-	Usage    float64 `json:"usage"`
-	Content  string  `json:"content"`
-	Shared   bool    `json:"shared"`
-	Enabled  bool    `json:"enabled"`
-	Active   bool    `json:"active"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Node     string   `json:"node"`
+	Instance string   `json:"instance"`
+	Type     string   `json:"type"`
+	Status   string   `json:"status"`
+	Total    int64    `json:"total"`
+	Used     int64    `json:"used"`
+	Free     int64    `json:"free"`
+	Usage    float64  `json:"usage"`
+	Content  string   `json:"content"`
+	Shared   bool     `json:"shared"`
+	Enabled  bool     `json:"enabled"`
+	Active   bool     `json:"active"`
+	ZFSPool  *ZFSPool `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
+}
+
+// ZFSPool represents a ZFS pool with health and error information
+type ZFSPool struct {
+	Name       string       `json:"name"`
+	State      string       `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+	Status     string       `json:"status"`     // Healthy, Degraded, Faulted, etc.
+	Scan       string       `json:"scan"`       // Current scan status (scrub, resilver, none)
+	ReadErrors int64        `json:"readErrors"`
+	WriteErrors int64       `json:"writeErrors"`
+	ChecksumErrors int64    `json:"checksumErrors"`
+	Devices    []ZFSDevice  `json:"devices"`
+}
+
+// ZFSDevice represents a device in a ZFS pool
+type ZFSDevice struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`       // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+	State      string `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+	ReadErrors int64  `json:"readErrors"`
+	WriteErrors int64 `json:"writeErrors"`
+	ChecksumErrors int64 `json:"checksumErrors"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance

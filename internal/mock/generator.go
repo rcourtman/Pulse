@@ -674,6 +674,105 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 	return alerts
 }
 
+// generateZFSPoolWithIssues creates a ZFS pool with various issues for testing
+func generateZFSPoolWithIssues(poolName string) *models.ZFSPool {
+	scenarios := []func() *models.ZFSPool{
+		// Degraded pool with device errors
+		func() *models.ZFSPool {
+			return &models.ZFSPool{
+				Name:           poolName,
+				State:          "DEGRADED",
+				Status:         "Degraded",
+				Scan:           "resilver in progress",
+				ReadErrors:     12,
+				WriteErrors:    0,
+				ChecksumErrors: 3,
+				Devices: []models.ZFSDevice{
+					{
+						Name:           "sda2",
+						Type:           "disk",
+						State:          "ONLINE",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 0,
+					},
+					{
+						Name:           "sdb2",
+						Type:           "disk",
+						State:          "DEGRADED",
+						ReadErrors:     12,
+						WriteErrors:    0,
+						ChecksumErrors: 3,
+					},
+				},
+			}
+		},
+		// Pool with checksum errors
+		func() *models.ZFSPool {
+			return &models.ZFSPool{
+				Name:           poolName,
+				State:          "ONLINE",
+				Status:         "Healthy",
+				Scan:           "scrub in progress",
+				ReadErrors:     0,
+				WriteErrors:    0,
+				ChecksumErrors: 7,
+				Devices: []models.ZFSDevice{
+					{
+						Name:           "sda2",
+						Type:           "disk",
+						State:          "ONLINE",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 7,
+					},
+				},
+			}
+		},
+		// Faulted device
+		func() *models.ZFSPool {
+			return &models.ZFSPool{
+				Name:           poolName,
+				State:          "DEGRADED",
+				Status:         "Degraded",
+				Scan:           "none",
+				ReadErrors:     0,
+				WriteErrors:    0,
+				ChecksumErrors: 0,
+				Devices: []models.ZFSDevice{
+					{
+						Name:           "mirror-0",
+						Type:           "mirror",
+						State:          "DEGRADED",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 0,
+					},
+					{
+						Name:           "sda2",
+						Type:           "disk",
+						State:          "ONLINE",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 0,
+					},
+					{
+						Name:           "sdb2",
+						Type:           "disk",
+						State:          "FAULTED",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 0,
+					},
+				},
+			}
+		},
+	}
+	
+	// Pick a random scenario
+	return scenarios[rand.Intn(len(scenarios))]()
+}
+
 // generateStorage generates mock storage data for nodes
 func generateStorage(nodes []models.Node) []models.Storage {
 	var storage []models.Storage
@@ -704,6 +803,33 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		// Local-zfs (common)
 		zfsTotal := int64(2 * 1024 * 1024 * 1024 * 1024) // 2TB
 		zfsUsed := int64(float64(zfsTotal) * (0.2 + rand.Float64()*0.6))
+		
+		// Generate ZFS pool status
+		var zfsPool *models.ZFSPool
+		if rand.Float64() < 0.15 { // 15% chance of ZFS pool with issues
+			zfsPool = generateZFSPoolWithIssues("local-zfs")
+		} else if rand.Float64() < 0.95 { // Most ZFS pools are healthy
+			zfsPool = &models.ZFSPool{
+				Name:           "rpool/data",
+				State:          "ONLINE",
+				Status:         "Healthy",
+				Scan:           "none",
+				ReadErrors:     0,
+				WriteErrors:    0,
+				ChecksumErrors: 0,
+				Devices: []models.ZFSDevice{
+					{
+						Name:           "sda2",
+						Type:           "disk",
+						State:          "ONLINE",
+						ReadErrors:     0,
+						WriteErrors:    0,
+						ChecksumErrors: 0,
+					},
+				},
+			}
+		}
+		
 		storage = append(storage, models.Storage{
 			ID:       fmt.Sprintf("%s-local-zfs", node.Name),
 			Name:     "local-zfs",
@@ -719,6 +845,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   false,
 			Enabled:  true,
 			Active:   true,
+			ZFSPool:  zfsPool,
 		})
 		
 		// Add one more random storage per node
