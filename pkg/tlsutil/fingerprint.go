@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -52,6 +53,15 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 		MaxConnsPerHost:     20,   // Limit concurrent connections per host
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  true,  // Disable compression for lower latency
+		// Add specific timeouts for DNS, TLS handshake, and response headers
+		// These prevent hanging on DNS resolution or TLS negotiation
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,  // Connection timeout
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,  // TLS handshake timeout
+		ResponseHeaderTimeout: 10 * time.Second,  // Time to wait for response headers
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 	
 	if !verifySSL && fingerprint == "" {
