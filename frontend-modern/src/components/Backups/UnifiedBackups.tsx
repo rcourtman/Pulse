@@ -133,8 +133,8 @@ const UnifiedBackups: Component = () => {
     const unified: UnifiedBackup[] = [];
     const seenBackups = new Set<string>(); // Track backups to avoid duplicates
     
-    // Debug mode - remove in production
-    const debugMode = false;
+    // Debug mode - can be enabled via console: localStorage.setItem('debug-pmg', 'true')
+    const debugMode = typeof window !== 'undefined' && localStorage.getItem('debug-pmg') === 'true';
 
     // Normalize snapshots
     state.pveBackups?.guestSnapshots?.forEach((snapshot) => {
@@ -205,6 +205,17 @@ const UnifiedBackups: Component = () => {
       // Check for VMID=0 which indicates host backup (handle both string and number)
       const isVmidZero = backup.vmid === '0' || backup.vmid === 0 || parseInt(String(backup.vmid)) === 0;
       
+      if (debugMode && isVmidZero) {
+        console.log('[PMG Debug] PBS backup with VMID=0:', {
+          vmid: backup.vmid,
+          vmidType: typeof backup.vmid,
+          backupType: backup.backupType,
+          instance: backup.instance,
+          comment: backup.comment,
+          willBeMarkedAs: isVmidZero ? 'Host' : (backup.backupType === 'ct' ? 'LXC' : 'Unknown')
+        });
+      }
+      
       if (isVmidZero || backup.backupType === 'host') {
         displayType = 'Host';
       } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
@@ -267,6 +278,17 @@ const UnifiedBackups: Component = () => {
       
       // Check for VMID=0 which indicates host backup
       const isVmidZero = backup.vmid === 0 || backup.vmid === '0' || parseInt(String(backup.vmid)) === 0;
+      
+      if (debugMode && isVmidZero) {
+        console.log('[PMG Debug] Storage backup with VMID=0:', {
+          vmid: backup.vmid,
+          vmidType: typeof backup.vmid,
+          type: backup.type,
+          volid: backup.volid,
+          notes: backup.notes,
+          willBeMarkedAs: isVmidZero ? 'Host' : (backup.type === 'lxc' ? 'LXC' : 'Unknown')
+        });
+      }
       
       // Check for host backups - VMID 0 or type 'host' (for PMG/PVE host configs)
       if (isVmidZero || backup.type === 'host') {

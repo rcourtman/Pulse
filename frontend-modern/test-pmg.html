@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PMG Backup Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .backup { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .host { background: #ffe6cc; }
+        .lxc { background: #ccffcc; }
+        .vm { background: #ccccff; }
+        .label { display: inline-block; padding: 2px 8px; border-radius: 3px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>PMG Backup Detection Test</h1>
+    <button onclick="testBackups()">Run Test</button>
+    <div id="results"></div>
+
+    <script>
+        // Test data matching what the backend might send
+        const testBackups = [
+            // PBS backups
+            {
+                source: "PBS",
+                data: {
+                    backupType: "ct",
+                    vmid: "0",
+                    comment: "PMG host configuration backup",
+                    instance: "pbs-main",
+                    backupTime: "2024-01-15T10:00:00Z"
+                }
+            },
+            {
+                source: "PBS",
+                data: {
+                    backupType: "ct",
+                    vmid: 0,  // numeric
+                    comment: "PMG backup",
+                    instance: "pbs-main",
+                    backupTime: "2024-01-14T10:00:00Z"
+                }
+            },
+            // Storage backups
+            {
+                source: "Storage",
+                data: {
+                    type: "host",
+                    vmid: 0,
+                    volid: "local:backup/pmgbackup-pmg-01-2024_01_15.tar.zst",
+                    notes: "PMG host config backup"
+                }
+            },
+            {
+                source: "Storage",
+                data: {
+                    type: "lxc",
+                    vmid: 0,
+                    volid: "local:backup/vzdump-lxc-0-2024_01_15.tar.gz",
+                    notes: "PMG configuration"
+                }
+            },
+            // Regular backups for comparison
+            {
+                source: "Storage",
+                data: {
+                    type: "lxc",
+                    vmid: 101,
+                    volid: "local:backup/vzdump-lxc-101-2024_01_15.tar.gz",
+                    notes: "Regular LXC"
+                }
+            }
+        ];
+
+        function detectType(backup) {
+            // Mimics the frontend logic
+            if ('backupType' in backup) {
+                // PBS backup
+                const isVmidZero = backup.vmid === '0' || backup.vmid === 0 || parseInt(String(backup.vmid)) === 0;
+                
+                if (isVmidZero || backup.backupType === 'host') {
+                    return 'Host';
+                } else if (backup.backupType === 'vm' || backup.backupType === 'VM') {
+                    return 'VM';
+                } else {
+                    return 'LXC';
+                }
+            } else if ('type' in backup) {
+                // Storage backup
+                const isVmidZero = backup.vmid === 0 || backup.vmid === '0' || parseInt(String(backup.vmid)) === 0;
+                
+                if (isVmidZero || backup.type === 'host') {
+                    return 'Host';
+                } else if (backup.type === 'qemu' || backup.type === 'vm') {
+                    return 'VM';
+                } else {
+                    return 'LXC';
+                }
+            }
+            return 'Unknown';
+        }
+
+        function testBackups() {
+            const results = document.getElementById('results');
+            results.innerHTML = '';
+            
+            testBackups.forEach((test, i) => {
+                const type = detectType(test.data);
+                const div = document.createElement('div');
+                div.className = `backup ${type.toLowerCase()}`;
+                
+                const isCorrect = (test.data.vmid === 0 || test.data.vmid === '0') ? type === 'Host' : true;
+                
+                div.innerHTML = `
+                    <strong>Test ${i + 1}: ${test.source} Backup</strong><br>
+                    VMID: ${test.data.vmid} (type: ${typeof test.data.vmid})<br>
+                    Type field: ${test.data.type || test.data.backupType || 'N/A'}<br>
+                    Detected as: <span class="label ${type.toLowerCase()}">${type}</span>
+                    ${isCorrect ? '✓' : '✗ SHOULD BE HOST!'}
+                    <br>
+                    <small>${JSON.stringify(test.data)}</small>
+                `;
+                results.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -2,7 +2,6 @@ package proxmox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog/log"
 )

@@ -44,6 +44,7 @@ type PVEClientInterface interface {
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
+	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
 }
 
 // Monitor handles all monitoring operations
