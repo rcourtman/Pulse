@@ -13,6 +13,45 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// convertZFSPoolStatus converts Proxmox ZFS pool status to our model
+func convertZFSPoolStatus(pool *proxmox.ZFSPoolStatus) *models.ZFSPool {
+	if pool == nil {
+		return nil
+	}
+	
+	zfsPool := &models.ZFSPool{
+		Name:           pool.Name,
+		State:          pool.State,
+		Status:         pool.Status,
+		Scan:           pool.Scan,
+		ReadErrors:     pool.ReadErrors,
+		WriteErrors:    pool.WriteErrors,
+		ChecksumErrors: pool.ChecksumErrors,
+		Devices:        make([]models.ZFSDevice, 0),
+	}
+	
+	// Convert devices recursively
+	for _, dev := range pool.Config {
+		zfsPool.Devices = append(zfsPool.Devices, convertZFSDevice(dev))
+	}
+	
+	return zfsPool
+}
+
+// convertZFSDevice converts a Proxmox ZFS device to our model
+func convertZFSDevice(dev proxmox.ZFSPoolDevice) models.ZFSDevice {
+	device := models.ZFSDevice{
+		Name:           dev.Name,
+		Type:           dev.Type,
+		State:          dev.State,
+		ReadErrors:     dev.Read,
+		WriteErrors:    dev.Write,
+		ChecksumErrors: dev.Checksum,
+	}
+	
+	return device
+}
+
 // pollVMsWithNodesOptimized polls VMs from all nodes in parallel using goroutines
 func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
@@ -502,6 +541,34 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			
 			var nodeStorageList []models.Storage
 			
+			// Get ZFS pool status for this node if any storage is ZFS
+			var zfsPools []proxmox.ZFSPoolStatus
+			hasZFSStorage := false
+			for _, storage := range nodeStorage {
+				if storage.Type == "zfspool" || storage.Type == "zfs" {
+					hasZFSStorage = true
+					break
+				}
+			}
+			
+			if hasZFSStorage {
+				if pools, err := client.GetZFSPoolStatus(ctx, n.Node); err == nil {
+					zfsPools = pools
+				} else {
+					log.Warn().
+						Err(err).
+						Str("node", n.Node).
+						Str("instance", instanceName).
+						Msg("Failed to get ZFS pool status")
+				}
+			}
+			
+			// Create a map of ZFS pools for quick lookup
+			zfsPoolMap := make(map[string]*proxmox.ZFSPoolStatus)
+			for i := range zfsPools {
+				zfsPoolMap[zfsPools[i].Name] = &zfsPools[i]
+			}
+			
 			// Process each storage
 			for _, storage := range nodeStorage {
 				
@@ -535,6 +602,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					Shared:   shared,
 					Enabled:  true,
 					Active:   true,
+				}
+				
+				// If this is ZFS storage, attach pool status information
+				if storage.Type == "zfspool" || storage.Type == "zfs" {
+					if poolStatus, found := zfsPoolMap[storage.Storage]; found {
+						modelStorage.ZFSPool = convertZFSPoolStatus(poolStatus)
+					}
 				}
 				
 				// Override with cluster config if available

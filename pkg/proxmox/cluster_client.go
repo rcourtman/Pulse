@@ -742,6 +742,20 @@ func (cc *ClusterClient) IsClusterMember(ctx context.Context) (bool, error) {
 	return result, err
 }
 
+// GetZFSPoolStatus returns ZFS pool status for a node
+func (cc *ClusterClient) GetZFSPoolStatus(ctx context.Context, node string) ([]ZFSPoolStatus, error) {
+	var result []ZFSPoolStatus
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		pools, err := client.GetZFSPoolStatus(ctx, node)
+		if err != nil {
+			return err
+		}
+		result = pools
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterHealthInfo returns detailed health information about the cluster
 func (cc *ClusterClient) GetClusterHealthInfo() models.ClusterHealth {
 	cc.mu.RLock()
