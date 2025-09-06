@@ -299,11 +299,21 @@ const UnifiedBackups: Component = () => {
       // Check if backups are at the instance level
       if (pbsInstance.backups && Array.isArray(pbsInstance.backups)) {
         pbsInstance.backups.forEach((backup: PBSBackup) => {
+          // Determine display type - VMID 0 indicates host backup (e.g., PMG)
+          let displayType: GuestType;
+          if (backup.vmid === 0) {
+            displayType = 'Host';
+          } else if (backup.type === 'vm' || backup.type === 'qemu') {
+            displayType = 'VM';
+          } else {
+            displayType = 'LXC';
+          }
+          
           unified.push({
             backupType: 'remote',
             vmid: backup.vmid || 0,
             name: backup.guestName || '',
-            type: backup.type === 'vm' || backup.type === 'qemu' ? 'VM' : 'LXC',
+            type: displayType,
             node: pbsInstance.name || 'PBS',
             backupTime: backup.ctime || backup.backupTime || 0,
             backupName: `${backup.vmid}/${new Date((backup.ctime || backup.backupTime || 0) * 1000).toISOString().split('T')[0]}`,

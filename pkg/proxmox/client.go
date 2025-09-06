@@ -1025,28 +1025,38 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	return result.Data, nil
 }
 
-// ZFSPoolStatus represents the status of a ZFS pool
+// ZFSPoolStatus represents the status of a ZFS pool (list endpoint)
 type ZFSPoolStatus struct {
-	Name       string          `json:"name"`
-	State      string          `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
-	Status     string          `json:"status"`     // Healthy, Degraded, Faulted, etc.
-	Scan       string          `json:"scan"`       // Current scan status
-	Errors     string          `json:"errors"`     // Error summary
-	ReadErrors int64           `json:"read"`
-	WriteErrors int64          `json:"write"`
-	ChecksumErrors int64       `json:"cksum"`
-	Config     []ZFSPoolDevice `json:"config"`     // Pool configuration and devices
+	Name   string  `json:"name"`
+	Health string  `json:"health"`  // ONLINE, DEGRADED, FAULTED, etc.
+	Size   uint64  `json:"size"`
+	Alloc  uint64  `json:"alloc"`
+	Free   uint64  `json:"free"`
+	Frag   int     `json:"frag"`
+	Dedup  float64 `json:"dedup"`
+}
+
+// ZFSPoolDetail represents detailed status of a ZFS pool
+type ZFSPoolDetail struct {
+	Name     string          `json:"name"`
+	State    string          `json:"state"`   // ONLINE, DEGRADED, FAULTED, etc.
+	Status   string          `json:"status"`  // Detailed status message
+	Action   string          `json:"action"`  // Recommended action
+	Scan     string          `json:"scan"`    // Scan status
+	Errors   string          `json:"errors"`  // Error summary
+	Children []ZFSPoolDevice `json:"children"` // Top-level vdevs
 }
 
 // ZFSPoolDevice represents a device in a ZFS pool
 type ZFSPoolDevice struct {
-	Name       string `json:"name"`
-	Type       string `json:"type"`       // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
-	State      string `json:"state"`      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
-	Read       int64  `json:"read"`
-	Write      int64  `json:"write"`
-	Checksum   int64  `json:"cksum"`
-	Children   []ZFSPoolDevice `json:"children,omitempty"` // For vdevs that contain other devices
+	Name     string          `json:"name"`
+	State    string          `json:"state"` // ONLINE, DEGRADED, FAULTED, etc.
+	Read     int64           `json:"read"`
+	Write    int64           `json:"write"`
+	Cksum    int64           `json:"cksum"`
+	Msg      string          `json:"msg"`
+	Leaf     int             `json:"leaf"` // 1 for leaf devices, 0 for vdevs
+	Children []ZFSPoolDevice `json:"children,omitempty"`
 }
 
 // VMStatus represents detailed VM status
@@ -1091,4 +1101,20 @@ func (c *Client) GetZFSPoolStatus(ctx context.Context, node string) ([]ZFSPoolSt
 	}
 
 	return result.Data, nil
+}
+
+// GetZFSPoolDetail gets detailed status of a specific ZFS pool
+func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSPoolDetail, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/disks/zfs/%s", node, pool))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var detail ZFSPoolDetail
+	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+		return nil, err
+	}
+
+	return &detail, nil
 }
