@@ -1382,6 +1382,16 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				continue
 			}
 			
+			// Calculate I/O rates for container
+			currentMetrics := IOMetrics{
+				DiskRead:   int64(res.DiskRead),
+				DiskWrite:  int64(res.DiskWrite),
+				NetworkIn:  int64(res.NetIn),
+				NetworkOut: int64(res.NetOut),
+				Timestamp:  time.Now(),
+			}
+			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+			
 			container := models.Container{
 				ID:         guestID,
 				VMID:       res.VMID,
