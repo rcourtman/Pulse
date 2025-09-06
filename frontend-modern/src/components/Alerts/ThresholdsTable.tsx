@@ -1,5 +1,5 @@
 import { createSignal, createMemo, Show, onMount, onCleanup } from 'solid-js';
-import type { VM, Container, Node, Alert, Storage } from '@/types/api';
+import type { VM, Container, Node, Alert, Storage, PBSInstance } from '@/types/api';
 import { ResourceTable } from './ResourceTable';
 
 interface Override {
@@ -39,12 +39,12 @@ interface SimpleThresholds {
 interface ThresholdsTableProps {
   overrides: () => Override[];
   setOverrides: (overrides: Override[]) => void;
-  rawOverridesConfig: () => Record<string, any>;
-  setRawOverridesConfig: (config: Record<string, any>) => void;
+  rawOverridesConfig: () => Record<string, unknown>;
+  setRawOverridesConfig: (config: Record<string, unknown>) => void;
   allGuests: () => (VM | Container)[];
   nodes: Node[];
   storage: Storage[];
-  pbsInstances?: any[]; // PBS instances from state
+  pbsInstances?: PBSInstance[]; // PBS instances from state
   guestDefaults: SimpleThresholds;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   nodeDefaults: SimpleThresholds;
@@ -61,7 +61,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [showGlobalSettings, setShowGlobalSettings] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [editingThresholds, setEditingThresholds] = createSignal<Record<string, any>>({});
+  const [editingThresholds, setEditingThresholds] = createSignal<Record<string, number>>({});
   
   let searchInputRef: HTMLInputElement | undefined;
   
@@ -235,9 +235,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
     
     // Get PBS instances from props
-    const pbsInstances = (props as any).pbsInstances || [];
+    const pbsInstances = props.pbsInstances || [];
     
-    const pbsServers = pbsInstances.filter((pbs: any) => pbs.cpu > 0 || pbs.memory > 0).map((pbs: any) => {
+    const pbsServers = pbsInstances.filter((pbs) => (pbs.cpu || 0) > 0 || (pbs.memory?.usage || 0) > 0).map((pbs) => {
       const pbsId = `pbs-${pbs.id}`;
       const override = overridesMap.get(pbsId);
       
@@ -247,7 +247,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           const k = key as keyof typeof override.thresholds;
           // PBS uses node defaults for CPU/Memory
           return override.thresholds[k] !== undefined && 
-                 override.thresholds[k] !== (props.nodeDefaults as any)[k];
+                 override.thresholds[k] !== props.nodeDefaults[k as keyof typeof props.nodeDefaults];
         });
       
       return {
@@ -273,7 +273,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     });
     
     if (search) {
-      return pbsServers.filter((p: any) => 
+      return pbsServers.filter((p) => 
         p.name.toLowerCase().includes(search) ||
         p.host?.toLowerCase().includes(search)
       );
@@ -321,7 +321,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   });
   
   
-  const startEditing = (resourceId: string, currentThresholds: any, defaults: any) => {
+  const startEditing = (resourceId: string, currentThresholds: Record<string, number>, defaults: Record<string, number>) => {
     setEditingId(resourceId);
     // Merge defaults with overrides for editing
     const mergedThresholds = { ...defaults, ...currentThresholds };
@@ -339,7 +339,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const defaultThresholds = resource.defaults;
     
     // Only include values that differ from defaults
-    const overrideThresholds: Record<string, any> = {};
+    const overrideThresholds: Record<string, number> = {};
     Object.keys(editedThresholds).forEach(key => {
       const editedValue = editedThresholds[key];
       const defaultValue = defaultThresholds[key as keyof typeof defaultThresholds];
@@ -390,7 +390,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     // Update raw config
     const newRawConfig = { ...props.rawOverridesConfig() };
-    const hysteresisThresholds: Record<string, any> = {};
+    const hysteresisThresholds: Record<string, number> = {};
     Object.entries(overrideThresholds).forEach(([metric, value]) => {
       if (value !== undefined && value !== null) {
         hysteresisThresholds[metric] = { 
@@ -441,8 +441,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const newDisabledState = forceState !== undefined ? forceState : !currentDisabledState;
     
     // Clean the thresholds to exclude 'disabled' if it got in there
-    const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
-    delete cleanThresholds.disabled;
+    const cleanThresholds: Record<string, number> = { ...(existingOverride?.thresholds || {}) };
+    delete (cleanThresholds as Record<string, unknown>).disabled;
     
     // If enabling (disabled = false) and no custom thresholds exist, remove the override entirely
     if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
@@ -478,7 +478,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       
       // Update raw config
       const newRawConfig = { ...props.rawOverridesConfig() };
-      const hysteresisThresholds: Record<string, any> = {};
+      const hysteresisThresholds: Record<string, number> = {};
       
       // Only add threshold overrides that differ from defaults
       Object.entries(override.thresholds).forEach(([metric, value]) => {
@@ -514,9 +514,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const newDisableConnectivity = forceState !== undefined ? forceState : !currentDisableConnectivity;
     
     // Clean the thresholds to exclude any unwanted fields
-    const cleanThresholds: any = { ...(existingOverride?.thresholds || {}) };
-    delete cleanThresholds.disabled;
-    delete cleanThresholds.disableConnectivity;
+    const cleanThresholds: Record<string, number> = { ...(existingOverride?.thresholds || {}) };
+    delete (cleanThresholds as Record<string, unknown>).disabled;
+    delete (cleanThresholds as Record<string, unknown>).disableConnectivity;
     
     // If enabling connectivity alerts (disableConnectivity = false) and no custom thresholds exist, remove the override entirely
     if (!newDisableConnectivity && Object.keys(cleanThresholds).length === 0) {
@@ -550,7 +550,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       
       // Update raw config
       const newRawConfig = { ...props.rawOverridesConfig() };
-      const hysteresisThresholds: Record<string, any> = {};
+      const hysteresisThresholds: Record<string, number> = {};
       
       // Add threshold configs
       Object.entries(cleanThresholds).forEach(([metric, value]) => {

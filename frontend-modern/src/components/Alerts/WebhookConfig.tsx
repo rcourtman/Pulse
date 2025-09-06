@@ -114,7 +114,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
   };
   
   const editWebhook = (webhook: Webhook) => {
-    setEditingId(webhook.id!);
+    if (webhook.id) {
+      setEditingId(webhook.id);
+    }
     setFormData({
       ...webhook,
       service: webhook.service || 'generic',
@@ -241,7 +243,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       {webhook.enabled ? 'Enabled' : 'Disabled'}
                     </button>
                     <button 
-                      onClick={() => props.onTest(webhook.id!)}
+                      onClick={() => webhook.id && props.onTest(webhook.id)}
                       disabled={props.testing === webhook.id || !webhook.enabled}
                       class="px-3 py-1 text-xs text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 disabled:opacity-50"
                     >
@@ -254,7 +256,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       Edit
                     </button>
                     <button 
-                      onClick={() => props.onDelete(webhook.id!)}
+                      onClick={() => webhook.id && props.onDelete(webhook.id)}
                       class="px-3 py-1 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
                     >
                       Delete

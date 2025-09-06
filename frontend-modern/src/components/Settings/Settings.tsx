@@ -2081,7 +2081,7 @@ const Settings: Component = () => {
                     
                     {/* Helper function to sanitize sensitive data */}
                     {(() => {
-                      const sanitizeForGitHub = (data: any) => {
+                      const sanitizeForGitHub = (data: Record<string, unknown>) => {
                         // Deep clone the data
                         const sanitized = JSON.parse(JSON.stringify(data));
                         
@@ -2106,14 +2106,14 @@ const Settings: Component = () => {
                         
                         // Sanitize nodes
                         if (sanitized.nodes) {
-                          sanitized.nodes = sanitized.nodes.map((node: any, index: number) => ({
+                          sanitized.nodes = (sanitized.nodes as Array<Record<string, unknown>>).map((node, index: number) => ({
                             ...node,
                             id: `${node.type}-${index}`,
                             name: sanitizeHostname(node.name),
                             host: node.host ? node.host.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED') : node.host,
                             tokenName: node.tokenName ? 'token-REDACTED' : node.tokenName,
                             clusterName: node.clusterName ? 'cluster-REDACTED' : node.clusterName,
-                            clusterEndpoints: node.clusterEndpoints ? node.clusterEndpoints.map((ep: any, epIndex: number) => ({
+                            clusterEndpoints: node.clusterEndpoints ? (node.clusterEndpoints as Array<Record<string, unknown>>).map((ep, epIndex: number) => ({
                               ...ep,
                               NodeName: `node-${epIndex + 1}`,
                               Host: `node-${epIndex + 1}`,
@@ -2124,7 +2124,7 @@ const Settings: Component = () => {
                         
                         // Sanitize storage
                         if (sanitized.storage) {
-                          sanitized.storage = sanitized.storage.map((s: any, index: number) => ({
+                          sanitized.storage = (sanitized.storage as Array<Record<string, unknown>>).map((s, index: number) => ({
                             ...s,
                             id: `storage-${index}`,
                             node: sanitizeHostname(s.node),
@@ -2136,7 +2136,7 @@ const Settings: Component = () => {
                         if (sanitized.backups) {
                           // Sanitize PVE backup tasks
                           if (sanitized.backups.pveBackupTasks) {
-                            sanitized.backups.pveBackupTasks = sanitized.backups.pveBackupTasks.map((b: any, index: number) => ({
+                            sanitized.backups.pveBackupTasks = (sanitized.backups.pveBackupTasks as Array<Record<string, unknown>>).map((b, index: number) => ({
                               ...b,
                               node: sanitizeHostname(b.node),
                               storage: `storage-${index}`,
@@ -2146,7 +2146,7 @@ const Settings: Component = () => {
                           
                           // Sanitize PVE storage backups
                           if (sanitized.backups.pveStorageBackups) {
-                            sanitized.backups.pveStorageBackups = sanitized.backups.pveStorageBackups.map((b: any, index: number) => ({
+                            sanitized.backups.pveStorageBackups = (sanitized.backups.pveStorageBackups as Array<Record<string, unknown>>).map((b, index: number) => ({
                               ...b,
                               node: sanitizeHostname(b.node),
                               storage: `storage-${index}`,
@@ -2157,7 +2157,7 @@ const Settings: Component = () => {
                           
                           // Sanitize PBS backups
                           if (sanitized.backups.pbsBackups) {
-                            sanitized.backups.pbsBackups = sanitized.backups.pbsBackups.map((b: any, index: number) => ({
+                            sanitized.backups.pbsBackups = (sanitized.backups.pbsBackups as Array<Record<string, unknown>>).map((b, index: number) => ({
                               ...b,
                               datastore: `datastore-${index}`,
                               backupId: b.backupId ? `backup-${index}` : b.backupId,
@@ -2168,7 +2168,7 @@ const Settings: Component = () => {
                         
                         // Sanitize active alerts
                         if (sanitized.activeAlerts) {
-                          sanitized.activeAlerts = sanitized.activeAlerts.map((alert: any) => ({
+                          sanitized.activeAlerts = (sanitized.activeAlerts as Array<Record<string, unknown>>).map((alert) => ({
                             ...alert,
                             node: sanitizeHostname(alert.node),
                             details: alert.details ? alert.details.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, 'xxx.xxx.xxx.xxx') : alert.details
@@ -2187,7 +2187,7 @@ const Settings: Component = () => {
                       };
                       
                       const exportDiagnostics = (sanitize: boolean) => {
-                        let diagnostics: any = {
+                        let diagnostics: Record<string, unknown> = {
                           timestamp: new Date().toISOString(),
                           version: '2.0.0',
                           environment: {
@@ -2227,7 +2227,7 @@ const Settings: Component = () => {
                             shared: s.shared,
                             used: s.used,
                             total: s.total,
-                            hasBackups: (state.pveBackups?.storageBackups?.filter((b: any) => b.storage === s.name).length || 0) > 0
+                            hasBackups: (state.pveBackups?.storageBackups?.filter((b) => b.storage === s.name).length || 0) > 0
                           })) || [],
                           backups: {
                             pveBackupTasks: state.pveBackups?.backupTasks?.slice(0, 10) || [],

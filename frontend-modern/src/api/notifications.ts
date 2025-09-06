@@ -67,20 +67,20 @@ export class NotificationsAPI {
 
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON(`${this.baseUrl}/email`);
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
     
     // Backend already returns fields with correct names (server, port)
     return {
-      enabled: backendConfig.enabled || false,
-      provider: backendConfig.provider || '',
-      server: backendConfig.server || '',
-      port: backendConfig.port || 587,
-      username: backendConfig.username || '',
-      password: backendConfig.password || '',
-      from: backendConfig.from || '',
-      to: backendConfig.to || [],
-      tls: backendConfig.tls || false,
-      startTLS: backendConfig.startTLS || false
+      enabled: (backendConfig.enabled as boolean) || false,
+      provider: (backendConfig.provider as string) || '',
+      server: (backendConfig.server as string) || '',
+      port: (backendConfig.port as number) || 587,
+      username: (backendConfig.username as string) || '',
+      password: (backendConfig.password as string) || '',
+      from: (backendConfig.from as string) || '',
+      to: (backendConfig.to as string[]) || [],
+      tls: (backendConfig.tls as boolean) || false,
+      startTLS: (backendConfig.startTLS as boolean) || false
     };
   }
 

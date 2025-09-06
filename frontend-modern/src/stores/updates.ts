@@ -199,6 +199,12 @@ export const updateStore = {
 };
 
 // Expose for testing in development
+declare global {
+  interface Window {
+    updateStore?: typeof updateStore;
+  }
+}
+
 if (import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
-  (window as any).updateStore = updateStore;
+  window.updateStore = updateStore;
 }

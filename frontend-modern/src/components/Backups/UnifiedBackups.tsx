@@ -192,9 +192,10 @@ const UnifiedBackups: Component = () => {
       
       // Check if any files have encryption
       const isEncrypted = backup.files && Array.isArray(backup.files) && 
-        backup.files.some((file: any) => {
+        backup.files.some((file) => {
           if (typeof file === 'string') return false;
-          return file.crypt || file.encrypted || (file.filename && file.filename.includes('.enc'));
+          const fileObj = file as Record<string, unknown>;
+          return fileObj.crypt || fileObj.encrypted || (typeof fileObj.filename === 'string' && fileObj.filename.includes('.enc'));
         });
       
       // Determine the display type based on VMID and backup type

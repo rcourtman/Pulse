@@ -1081,15 +1081,11 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			Str("type", res.Type).
 			Msg("Processing cluster resource")
 		
-		// Calculate I/O rates
-		currentMetrics := IOMetrics{
-			DiskRead:   int64(res.DiskRead),
-			DiskWrite:  int64(res.DiskWrite),
-			NetworkIn:  int64(res.NetIn),
-			NetworkOut: int64(res.NetOut),
-			Timestamp:  time.Now(),
-		}
-		diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+		// Initialize I/O metrics from cluster resources (may be 0 for VMs)
+		diskReadBytes := int64(res.DiskRead)
+		diskWriteBytes := int64(res.DiskWrite)
+		networkInBytes := int64(res.NetIn)
+		networkOutBytes := int64(res.NetOut)
 		
 		
 		if res.Type == "qemu" {
@@ -1123,6 +1119,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 						Int("vmid", res.VMID).
 						Msg("Could not get VM status to check guest agent availability")
 				} else if vmStatus != nil {
+					// Use actual disk I/O values from detailed status
+					diskReadBytes = int64(vmStatus.DiskRead)
+					diskWriteBytes = int64(vmStatus.DiskWrite)
+					networkInBytes = int64(vmStatus.NetIn)
+					networkOutBytes = int64(vmStatus.NetOut)
+					
 					// Always try to get filesystem info if VM is running and disk shows 0
 					// Even if agent flag is 0, the agent might still be available
 					if vmStatus.Agent > 0 || (diskUsed == 0 && diskTotal > 0) {
@@ -1257,6 +1259,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Float64("usage", diskUsage).
 									Msg("Successfully retrieved disk usage from guest agent (cluster/resources showed 0)")
 							} else {
+								// Only special filesystems found - show allocated disk size instead
+								if diskTotal > 0 {
+									diskUsage = -1 // Show as allocated size
+								}
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -1265,6 +1271,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							}
 						}
 					} else {
+						// Agent disabled - show allocated disk size
+						if diskTotal > 0 {
+							diskUsage = -1 // Show as allocated size
+						}
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
@@ -1272,8 +1282,26 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Int("agent", vmStatus.Agent).
 							Msg("VM does not have guest agent enabled in config")
 					}
+				} else {
+					// No vmStatus available - show allocated disk size
+					if diskTotal > 0 {
+						diskUsage = -1 // Show as allocated size
+					}
 				}
+			} else if diskTotal > 0 {
+				// VM is not running - show allocated disk size
+				diskUsage = -1
 			}
+			
+			// Calculate I/O rates after we have the actual values
+			currentMetrics := IOMetrics{
+				DiskRead:   diskReadBytes,
+				DiskWrite:  diskWriteBytes,
+				NetworkIn:  networkInBytes,
+				NetworkOut: networkOutBytes,
+				Timestamp:  time.Now(),
+			}
+			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 			
 			vm := models.VM{
 				ID:         guestID,
@@ -1507,7 +1535,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 				}
 			}
 
-			// Calculate I/O rates
 			// Avoid duplicating node name in ID when instance name equals node name
 			var guestID string
 			if instanceName == node.Node {
@@ -1515,22 +1542,26 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			} else {
 				guestID = fmt.Sprintf("%s-%s-%d", instanceName, node.Node, vm.VMID)
 			}
-			currentMetrics := IOMetrics{
-				DiskRead:   int64(vm.DiskRead),
-				DiskWrite:  int64(vm.DiskWrite),
-				NetworkIn:  int64(vm.NetIn),
-				NetworkOut: int64(vm.NetOut),
-				Timestamp:  time.Now(),
-			}
-			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+			
+			// Initialize I/O metrics from VM listing (may be 0 for disk I/O)
+			diskReadBytes := int64(vm.DiskRead)
+			diskWriteBytes := int64(vm.DiskWrite)
+			networkInBytes := int64(vm.NetIn)
+			networkOutBytes := int64(vm.NetOut)
 
 			// For running VMs, try to get detailed status with balloon info
 			memUsed := uint64(0)
 			memTotal := vm.MaxMem
 
 			if vm.Status == "running" {
-				// Try to get detailed VM status for more accurate memory reporting
+				// Try to get detailed VM status for more accurate memory reporting and disk I/O
 				if vmStatus, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil {
+					// Use actual disk I/O values from detailed status
+					diskReadBytes = int64(vmStatus.DiskRead)
+					diskWriteBytes = int64(vmStatus.DiskWrite)
+					networkInBytes = int64(vmStatus.NetIn)
+					networkOutBytes = int64(vmStatus.NetOut)
+					
 					// If balloon is enabled, use balloon as the total available memory
 					if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
 						memTotal = vmStatus.Balloon
@@ -1735,6 +1766,16 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						Msg("VM does not have guest agent enabled in config (legacy API)")
 				}
 			}
+
+			// Calculate I/O rates after we have the actual values
+			currentMetrics := IOMetrics{
+				DiskRead:   diskReadBytes,
+				DiskWrite:  diskWriteBytes,
+				NetworkIn:  networkInBytes,
+				NetworkOut: networkOutBytes,
+				Timestamp:  time.Now(),
+			}
+			diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
 			modelVM := models.VM{
 				ID:       guestID,

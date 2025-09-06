@@ -179,7 +179,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 
                 // Get row styles including box-shadow for alert border
                 const rowStyle = createMemo(() => {
-                  const styles: any = {};
+                  const styles: Record<string, string> = {};
                   if (isSelected()) {
                     styles['box-shadow'] = '0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
                   }
