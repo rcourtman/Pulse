@@ -7,9 +7,16 @@ interface Resource {
   node?: string;
   instance?: string;
   type?: string;
+  resourceType?: string;
   thresholds?: Record<string, number>;
+  defaults?: Record<string, number>;
   disabled?: boolean;
-  nodeConnectivity?: boolean;
+  disableConnectivity?: boolean;
+  hasOverride?: boolean;
+  status?: string;
+  vmid?: number;
+  cpu?: number;
+  memory?: number;
   [key: string]: unknown;
 }
 
@@ -109,10 +116,13 @@ export function ResourceTable(props: ResourceTableProps) {
                       {(resource) => {
                         const isEditing = () => props.editingId() === resource.id;
                         const thresholds = () => isEditing() ? props.editingThresholds() : resource.thresholds;
-                        const displayValue = (metric: string) => {
+                        const displayValue = (metric: string): number => {
                           const thresh = thresholds();
-                          const defaults = (resource.defaults as any) || {};
-                          if (isEditing()) return thresh?.[metric] || defaults[metric] || '';
+                          const defaults = resource.defaults || {};
+                          if (isEditing()) {
+                            const val = thresh?.[metric] || defaults[metric];
+                            return typeof val === 'string' ? (parseFloat(val) || 0) : (val || 0);
+                          }
                           return resource.thresholds?.[metric] || defaults[metric] || 0;
                         };
                         const isOverridden = (metric: string) => {
@@ -196,11 +206,16 @@ export function ResourceTable(props: ResourceTableProps) {
                                           type="number"
                                           min="0"
                                           max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
-                                          value={thresholds()[metric] || ''}
-                                          onInput={(e) => props.setEditingThresholds({
-                                            ...props.editingThresholds(),
-                                            [metric]: parseInt(e.currentTarget.value) || undefined
-                                          })}
+                                          value={thresholds()?.[metric] || ''}
+                                          onInput={(e) => {
+                                            const val = parseInt(e.currentTarget.value);
+                                            if (!isNaN(val)) {
+                                              props.setEditingThresholds({
+                                                ...props.editingThresholds(),
+                                                [metric]: val
+                                              });
+                                            }
+                                          }}
                                           class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
                                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                         />
@@ -291,7 +306,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </>
                                 }>
                                   <button type="button"
-                                    onClick={() => props.onEdit(resource.id, resource.thresholds, resource.defaults)}
+                                    onClick={() => props.onEdit(resource.id, resource.thresholds || {}, resource.defaults || {})}
                                     class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                     title="Edit thresholds"
                                   >
@@ -327,12 +342,17 @@ export function ResourceTable(props: ResourceTableProps) {
                   {(resource) => {
                   const isEditing = () => props.editingId() === resource.id;
                   const thresholds = () => isEditing() ? props.editingThresholds() : resource.thresholds;
-                  const displayValue = (metric: string) => {
-                    if (isEditing()) return thresholds()[metric] || resource.defaults[metric] || '';
-                    return resource.thresholds[metric] || resource.defaults[metric] || 0;
+                  const displayValue = (metric: string): number => {
+                    const thresh = thresholds();
+                    const defaults = resource.defaults || {};
+                    if (isEditing()) {
+                      const val = thresh?.[metric] || defaults[metric];
+                      return typeof val === 'string' ? (parseFloat(val) || 0) : (val || 0);
+                    }
+                    return resource.thresholds?.[metric] || defaults[metric] || 0;
                   };
                   const isOverridden = (metric: string) => {
-                    return resource.thresholds[metric] !== undefined && resource.thresholds[metric] !== null;
+                    return resource.thresholds?.[metric] !== undefined && resource.thresholds?.[metric] !== null;
                   };
                   
                   return (
@@ -513,7 +533,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             </>
                           }>
                             <button type="button"
-                              onClick={() => props.onEdit(resource.id, resource.thresholds, resource.defaults)}
+                              onClick={() => props.onEdit(resource.id, resource.thresholds || {}, resource.defaults || {})}
                               class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                               title="Edit thresholds"
                             >
