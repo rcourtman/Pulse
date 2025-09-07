@@ -185,7 +185,24 @@ class ApiClient {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`API request failed: ${response.status} ${text}`);
+      // Try to extract just the error message without HTTP status codes
+      let errorMessage = text;
+      
+      // If it looks like an HTML error page, try to extract the message
+      if (text.includes('<pre>') && text.includes('</pre>')) {
+        const match = text.match(/<pre>(.*?)<\/pre>/s);
+        if (match) errorMessage = match[1];
+      }
+      
+      // If the backend sent a plain text error, use it directly
+      if (!text.includes('<') && text.length < 200) {
+        errorMessage = text;
+      } else if (text.length > 200) {
+        // For long responses, just use a generic message
+        errorMessage = `Request failed with status ${response.status}`;
+      }
+      
+      throw new Error(errorMessage || `Request failed with status ${response.status}`);
     }
 
     const text = await response.text();

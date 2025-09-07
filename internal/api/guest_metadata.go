@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -90,9 +91,28 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 
 	// Validate URL if provided
 	if meta.CustomURL != "" {
-		// Basic URL validation - just check it starts with http:// or https://
-		if !strings.HasPrefix(meta.CustomURL, "http://") && !strings.HasPrefix(meta.CustomURL, "https://") {
-			http.Error(w, "Custom URL must start with http:// or https://", http.StatusBadRequest)
+		// Parse and validate the URL
+		parsedURL, err := url.Parse(meta.CustomURL)
+		if err != nil {
+			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		
+		// Check scheme
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
+			return
+		}
+		
+		// Check host is present and valid
+		if parsedURL.Host == "" {
+			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:8006 or https://emby.local)", http.StatusBadRequest)
+			return
+		}
+		
+		// Check for incomplete URLs like "https://emby."
+		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
+			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
 			return
 		}
 	}
