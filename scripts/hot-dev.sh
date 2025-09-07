@@ -40,8 +40,11 @@ pkill -f vite 2>/dev/null
 pkill -f "npm run dev" 2>/dev/null
 pkill -f "npm exec" 2>/dev/null
 
-# Kill Pulse binary (exact match only)
+# Kill Pulse binary - first try gracefully, then force
 pkill -x "pulse" 2>/dev/null
+sleep 1
+# Force kill if still running
+pkill -9 -x "pulse" 2>/dev/null
 
 # Force-kill ANYTHING on our ports
 kill_port 7655
@@ -158,11 +161,22 @@ EOF
 cleanup() {
     echo ""
     echo "Stopping services..."
-    kill $BACKEND_PID 2>/dev/null
+    # Try graceful shutdown first
+    if [ -n "$BACKEND_PID" ] && kill -0 $BACKEND_PID 2>/dev/null; then
+        kill $BACKEND_PID 2>/dev/null
+        sleep 1
+        # Force kill if still running
+        if kill -0 $BACKEND_PID 2>/dev/null; then
+            echo "Backend not responding to SIGTERM, force killing..."
+            kill -9 $BACKEND_PID 2>/dev/null
+        fi
+    fi
     rm -f vite.config.dev.ts
     # Clean up any leftover Vite processes
     pkill -f vite 2>/dev/null
     pkill -f "npm run dev" 2>/dev/null
+    # Final cleanup of any stuck pulse processes
+    pkill -9 -x "pulse" 2>/dev/null
     echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse-backend"
     exit
 }

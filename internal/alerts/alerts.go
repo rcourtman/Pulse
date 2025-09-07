@@ -1408,14 +1408,14 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	
-	// Check if PBS offline alerts are disabled
-	if override, exists := m.config.Overrides[pbs.ID]; exists && override.Disabled {
-		// PBS alerts are disabled, clear any existing alert and return
+	// Check if PBS offline alerts are disabled via disableConnectivity flag
+	if override, exists := m.config.Overrides[pbs.ID]; exists && (override.Disabled || override.DisableConnectivity) {
+		// PBS connectivity alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
 			delete(m.activeAlerts, alertID)
 			log.Debug().
 				Str("pbs", pbs.Name).
-				Msg("PBS offline alert cleared (alerts disabled)")
+				Msg("PBS offline alert cleared (connectivity alerts disabled)")
 		}
 		return
 	}
