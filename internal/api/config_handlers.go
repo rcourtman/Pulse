@@ -151,6 +151,66 @@ type NodeResponse struct {
 	ClusterEndpoints   []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
+// validateNodeAPI tests if a cluster node has a working Proxmox API
+// This helps filter out qdevice VMs and other non-Proxmox participants
+func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) bool {
+	// Determine the host to test - prefer IP if available, otherwise use node name
+	testHost := clusterNode.IP
+	if testHost == "" {
+		testHost = clusterNode.Name
+	}
+	
+	// Skip empty hostnames (shouldn't happen but be safe)
+	if testHost == "" {
+		return false
+	}
+	
+	// Create a test configuration for this specific node
+	testConfig := baseConfig
+	testConfig.Host = testHost
+	if !strings.HasPrefix(testConfig.Host, "http") {
+		testConfig.Host = fmt.Sprintf("https://%s:8006", testConfig.Host)
+	}
+	
+	// Use a very short timeout for validation - we just need to know if the API exists
+	testConfig.Timeout = 2 * time.Second
+	
+	log.Debug().
+		Str("node", clusterNode.Name).
+		Str("test_host", testConfig.Host).
+		Msg("Validating Proxmox API for cluster node")
+	
+	// Try to create a client and make a simple API call
+	testClient, err := proxmox.NewClient(testConfig)
+	if err != nil {
+		log.Debug().
+			Str("node", clusterNode.Name).
+			Err(err).
+			Msg("Failed to create test client for cluster node")
+		return false
+	}
+	
+	// Test with a simple API call that all Proxmox nodes should support
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	
+	// Try to get the node version - this is a very lightweight API call
+	_, err = testClient.GetNodes(ctx)
+	if err != nil {
+		log.Debug().
+			Str("node", clusterNode.Name).
+			Err(err).
+			Msg("Node failed Proxmox API validation - likely not a Proxmox node")
+		return false
+	}
+	
+	log.Debug().
+		Str("node", clusterNode.Name).
+		Msg("Node passed Proxmox API validation")
+	
+	return true
+}
+
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
 func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	tempClient, err := proxmox.NewClient(clientConfig)
@@ -194,6 +254,16 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			Msg("Detected Proxmox cluster")
 		
 		for _, clusterNode := range clusterNodes {
+			// Validate that this node actually has a working Proxmox API
+			// This filters out qdevice VMs and other non-Proxmox participants
+			if !validateNodeAPI(clusterNode, clientConfig) {
+				log.Debug().
+					Str("node", clusterNode.Name).
+					Str("ip", clusterNode.IP).
+					Msg("Skipping cluster node - no valid Proxmox API detected (likely qdevice or external node)")
+				continue
+			}
+			
 			endpoint := config.ClusterEndpoint{
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
@@ -208,6 +278,13 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			
 			clusterEndpoints = append(clusterEndpoints, endpoint)
 		}
+		
+		// Log the final count of valid Proxmox nodes found
+		log.Info().
+			Str("cluster", clusterName).
+			Int("total_discovered", len(clusterNodes)).
+			Int("valid_proxmox_nodes", len(clusterEndpoints)).
+			Msg("Cluster node validation complete")
 		
 		// Fallback if we couldn't get the cluster name
 		if clusterName == "" {
