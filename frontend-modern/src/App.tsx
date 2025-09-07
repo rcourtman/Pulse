@@ -46,14 +46,16 @@ export const useDarkMode = () => {
 };
 
 function App() {
-  // Simple auth state
-  const [isLoading, setIsLoading] = createSignal(true);
+  console.log('[App] Component initializing...');
+  
+  // Simple auth state - START WITH FALSE TO BYPASS LOADING
+  const [isLoading, setIsLoading] = createSignal(false);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{ username?: string; logoutURL?: string } | null>(null);
   
-  // Don't initialize WebSocket until after auth check
-  const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
+  // Initialize WebSocket immediately for testing
+  const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(getGlobalWebSocketStore());
   const state = () => wsStore()?.state || { vms: [], containers: [], nodes: [], pbs: [], lastUpdate: '' };
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
@@ -147,7 +149,16 @@ function App() {
   
   // Check auth on mount
   onMount(async () => {
-    console.log('[App] Starting auth check...');
+    console.log('[App] onMount triggered, starting auth check...');
+    console.log('[App] Current location:', window.location.href);
+    
+    // Add a timeout fallback - if auth check takes too long, just proceed
+    const timeoutId = setTimeout(() => {
+      console.error('[App] Auth check timeout - proceeding without auth');
+      setIsLoading(false);
+      setNeedsAuth(false);
+      setWsStore(getGlobalWebSocketStore());
+    }, 10000); // 10 second timeout
     
     // Check if we just logged out - if so, always show login page
     const justLoggedOut = localStorage.getItem('just_logged_out');
@@ -162,8 +173,11 @@ function App() {
     
     // First check security status to see if auth is configured
     try {
+      console.log('[App] Fetching /api/security/status...');
       const securityRes = await apiFetch('/api/security/status');
+      console.log('[App] Security response received:', securityRes.status);
       const securityData = await securityRes.json();
+      console.log('[App] Security data:', securityData);
       console.log('[App] Security status:', securityData);
       
       // Check if auth is disabled via DISABLE_AUTH
@@ -318,6 +332,7 @@ function App() {
         document.documentElement.classList.remove('dark');
       }
     } finally {
+      clearTimeout(timeoutId); // Clear the timeout since we completed
       setIsLoading(false);
     }
     
@@ -386,6 +401,7 @@ function App() {
   const enhancedStore = () => wsStore();
 
   // Use Show for reactive rendering
+  console.log('[App] Rendering, isLoading:', isLoading());
   return (
     <Show 
       when={!isLoading()} 

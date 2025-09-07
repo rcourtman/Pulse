@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Debug Pulse</title>
+</head>
+<body>
+    <h1>Debug Page</h1>
+    <div id="root">Initial content - if you see this, JavaScript didn't run</div>
+    
+    <div id="log" style="background: #f0f0f0; padding: 10px; margin-top: 20px;">
+        <h3>Log:</h3>
+    </div>
+    
+    <script>
+        const log = document.getElementById('log');
+        function addLog(msg, isError = false) {
+            const p = document.createElement('p');
+            p.textContent = new Date().toISOString().substr(11, 8) + ' - ' + msg;
+            if (isError) p.style.color = 'red';
+            log.appendChild(p);
+        }
+        
+        window.onerror = function(msg, url, line) {
+            addLog('ERROR: ' + msg + ' at ' + url + ':' + line, true);
+            return false;
+        };
+        
+        addLog('Debug page loaded');
+        
+        // Try to load and run the app
+        addLog('Loading solid-js...');
+        import('/node_modules/.vite/deps/solid-js_web.js?v=f20dde78')
+            .then(solidWeb => {
+                addLog('solid-js loaded');
+                return import('/src/Test.tsx');
+            })
+            .then(TestModule => {
+                addLog('Test.tsx loaded');
+                const render = solidWeb.render;
+                const Test = TestModule.default;
+                
+                const root = document.getElementById('root');
+                root.innerHTML = ''; // Clear initial content
+                
+                addLog('Attempting to render...');
+                render(() => Test(), root);
+                addLog('Render complete!');
+            })
+            .catch(err => {
+                addLog('Import error: ' + err.toString(), true);
+                console.error(err);
+            });
+    </script>
+</body>
+</html>

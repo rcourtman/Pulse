@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test App Loading</title>
+</head>
+<body>
+    <h1>Testing App Loading</h1>
+    <div id="log"></div>
+    <script>
+        const log = document.getElementById('log');
+        function addLog(msg) {
+            log.innerHTML += '<p>' + new Date().toISOString() + ': ' + msg + '</p>';
+        }
+        
+        addLog('Page loaded');
+        
+        // Test API connection
+        fetch('/api/security/status')
+            .then(res => {
+                addLog('Security status response: ' + res.status);
+                return res.json();
+            })
+            .then(data => {
+                addLog('Has auth: ' + data.hasAuthentication);
+                addLog('Requires auth: ' + data.requiresAuth);
+            })
+            .catch(err => {
+                addLog('ERROR: ' + err);
+            });
+            
+        // Test WebSocket
+        const ws = new WebSocket('ws://' + window.location.host + '/ws');
+        ws.onopen = () => addLog('WebSocket opened');
+        ws.onerror = (e) => addLog('WebSocket error: ' + e);
+        ws.onclose = (e) => addLog('WebSocket closed: ' + e.code);
+        ws.onmessage = (e) => addLog('WebSocket message: ' + e.data.substring(0, 100));
+    </script>
+</body>
+</html>
