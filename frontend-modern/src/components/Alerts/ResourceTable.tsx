@@ -250,16 +250,17 @@ export function ResourceTable(props: ResourceTableProps) {
                                   {resource.disabled ? 'Disabled' : 'Enabled'}
                                 </button>
                               </Show>
-                              <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
+                              <Show when={resource.type === 'pbs' && props.onToggleNodeConnectivity}>
                                 <button type="button"
-                                  onClick={() => props.onToggleDisabled?.(resource.id)}
+                                  onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                                    resource.disabled
+                                    resource.disableConnectivity
                                       ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
                                       : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
                                   }`}
+                                  title="Toggle connectivity alerts for this PBS server"
                                 >
-                                  {resource.disabled ? 'Disabled' : 'Enabled'}
+                                  {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
                                 </button>
                               </Show>
                             </td>
@@ -471,16 +472,17 @@ export function ResourceTable(props: ResourceTableProps) {
                             {resource.disabled ? 'Disabled' : 'Enabled'}
                           </button>
                         </Show>
-                        <Show when={resource.type === 'pbs' && props.onToggleDisabled}>
+                        <Show when={resource.type === 'pbs' && props.onToggleNodeConnectivity}>
                           <button type="button"
-                            onClick={() => props.onToggleDisabled?.(resource.id)}
+                            onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                             class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                              resource.disabled
+                              resource.disableConnectivity
                                 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
                             }`}
+                            title="Toggle connectivity alerts for this PBS server"
                           >
-                            {resource.disabled ? 'Disabled' : 'Enabled'}
+                            {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
                           </button>
                         </Show>
                       </td>

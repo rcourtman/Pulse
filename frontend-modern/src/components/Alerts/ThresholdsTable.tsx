@@ -238,7 +238,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const pbsInstances = props.pbsInstances || [];
     
     const pbsServers = pbsInstances.filter((pbs) => (pbs.cpu || 0) > 0 || (pbs.memory?.usage || 0) > 0).map((pbs) => {
-      const pbsId = `pbs-${pbs.id}`;
+      // PBS IDs already have "pbs-" prefix from backend, don't double it
+      const pbsId = pbs.id;
       const override = overridesMap.get(pbsId);
       
       // Check if any threshold values actually differ from defaults
@@ -264,6 +265,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         uptime: pbs.uptime,
         hasOverride: hasCustomThresholds || false,
         disabled: false,
+        disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: { 
           cpu: props.nodeDefaults.cpu, 
@@ -502,15 +504,18 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   
-  const toggleNodeConnectivity = (nodeId: string, forceState?: boolean) => {
-    const node = nodesWithOverrides().find(r => r.id === nodeId);
-    if (!node || node.type !== 'node') return;
+  const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {
+    // Find the resource - could be a node or PBS server
+    const nodes = nodesWithOverrides();
+    const pbsServers = pbsServersWithOverrides();
+    const resource = [...nodes, ...pbsServers].find(r => r.id === resourceId);
+    if (!resource || (resource.type !== 'node' && resource.type !== 'pbs')) return;
     
     // Get existing override if it exists  
-    const existingOverride = props.overrides().find(o => o.id === nodeId);
+    const existingOverride = props.overrides().find(o => o.id === resourceId);
     
-    // Determine the current state - use the node's computed state, not just the override
-    const currentDisableConnectivity = node.disableConnectivity;
+    // Determine the current state - use the resource's computed state, not just the override
+    const currentDisableConnectivity = resource.disableConnectivity;
     const newDisableConnectivity = forceState !== undefined ? forceState : !currentDisableConnectivity;
     
     // Clean the thresholds to exclude any unwanted fields
@@ -521,25 +526,25 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // If enabling connectivity alerts (disableConnectivity = false) and no custom thresholds exist, remove the override entirely
     if (!newDisableConnectivity && Object.keys(cleanThresholds).length === 0) {
       // Remove the override completely
-      props.setOverrides(props.overrides().filter(o => o.id !== nodeId));
+      props.setOverrides(props.overrides().filter(o => o.id !== resourceId));
       
       // Remove from raw config
       const newRawConfig = { ...props.rawOverridesConfig() };
-      delete newRawConfig[nodeId];
+      delete newRawConfig[resourceId];
       props.setRawOverridesConfig(newRawConfig);
     } else {
       // Update or create the override
       const override: Override = {
-        id: nodeId,
-        name: node.name,
-        type: node.type,
-        resourceType: node.resourceType,
+        id: resourceId,
+        name: resource.name,
+        type: resource.type as 'node' | 'guest' | 'storage',
+        resourceType: resource.resourceType,
         disableConnectivity: newDisableConnectivity,
         thresholds: cleanThresholds
       };
       
       // Update overrides list
-      const existingIndex = props.overrides().findIndex(o => o.id === nodeId);
+      const existingIndex = props.overrides().findIndex(o => o.id === resourceId);
       if (existingIndex >= 0) {
         const newOverrides = [...props.overrides()];
         newOverrides[existingIndex] = override;
@@ -566,7 +571,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         hysteresisThresholds.disableConnectivity = true;
       }
       
-      newRawConfig[nodeId] = hysteresisThresholds;
+      newRawConfig[resourceId] = hysteresisThresholds;
       props.setRawOverridesConfig(newRawConfig);
     }
     
@@ -915,7 +920,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           onSaveEdit={saveEdit}
           onCancelEdit={cancelEdit}
           onRemoveOverride={removeOverride}
-          onToggleDisabled={toggleDisabled}
+          onToggleNodeConnectivity={toggleNodeConnectivity}
           editingId={editingId}
           editingThresholds={editingThresholds}
           setEditingThresholds={setEditingThresholds}
