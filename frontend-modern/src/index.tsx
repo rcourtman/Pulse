@@ -4,6 +4,7 @@ import './index.css';
 import './styles/animations.css';
 import App from './App';
 // import App from './Test';
+// import App from './SimpleApp';
 import { logger } from './utils/logger';
 
 const root = document.getElementById('root');

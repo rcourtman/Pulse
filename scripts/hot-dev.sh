@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Load development environment variables
+if [ -f /opt/pulse/.env.dev ]; then
+    export $(cat /opt/pulse/.env.dev | grep -v '^#' | xargs)
+fi
+
 # Hot-reload development setup
 # Frontend runs on Vite dev server on port 7655 with instant hot-reload
 # Backend API runs on port 7656 (one port up)
