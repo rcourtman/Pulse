@@ -99,7 +99,14 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 
 	if err := h.store.Set(guestID, &meta); err != nil {
 		log.Error().Err(err).Str("guestID", guestID).Msg("Failed to save guest metadata")
-		http.Error(w, "Failed to save metadata", http.StatusInternalServerError)
+		// Provide more specific error message
+		errMsg := "Failed to save metadata"
+		if strings.Contains(err.Error(), "permission") {
+			errMsg = "Permission denied - check file permissions"
+		} else if strings.Contains(err.Error(), "no space") {
+			errMsg = "Disk full - cannot save metadata"
+		}
+		http.Error(w, errMsg, http.StatusInternalServerError)
 		return
 	}
 
