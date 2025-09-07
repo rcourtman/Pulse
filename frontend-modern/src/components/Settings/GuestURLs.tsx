@@ -17,6 +17,7 @@ export function GuestURLs(props: GuestURLsProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [initialLoad, setInitialLoad] = createSignal(true);
+  const [urlErrors, setUrlErrors] = createSignal<Record<string, string>>({});
 
   // Combine VMs and containers into a single list
   const allGuests = createMemo(() => {
@@ -76,23 +77,67 @@ export function GuestURLs(props: GuestURLsProps) {
     setLoading(true);
     try {
       const metadata = guestMetadata();
-      const promises: Promise<void>[] = [];
+      const errors: string[] = [];
       
       // Update each guest that has changes
       for (const [guestId, meta] of Object.entries(metadata)) {
         if (meta.customUrl !== undefined) {
-          promises.push(GuestMetadataAPI.updateMetadata(guestId, { customUrl: meta.customUrl }));
+          try {
+            await GuestMetadataAPI.updateMetadata(guestId, { customUrl: meta.customUrl });
+          } catch (err: any) {
+            // Extract error message from response
+            const errorMsg = err.message || err.toString();
+            errors.push(`${guestId}: ${errorMsg}`);
+            console.error(`Failed to save URL for ${guestId}:`, err);
+          }
         }
       }
       
-      await Promise.all(promises);
-      showSuccess('Guest URLs saved');
-      props.setHasUnsavedChanges(false);
+      if (errors.length > 0) {
+        // Show specific validation errors
+        showError(errors.join('\n'));
+      } else {
+        showSuccess('Guest URLs saved');
+        props.setHasUnsavedChanges(false);
+      }
     } catch (err) {
       console.error('Failed to save guest URLs:', err);
       showError('Failed to save guest URLs');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Validate URL format
+  const validateURL = (url: string): string | null => {
+    if (!url) return null; // Empty is valid
+    
+    // Check for incomplete URLs like "https://emby."
+    if (url.endsWith('.') && !url.includes('..')) {
+      return 'URL appears incomplete - please enter a complete domain or IP address';
+    }
+    
+    // Check for missing protocol
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return 'URL must start with http:// or https://';
+    }
+    
+    try {
+      const parsed = new URL(url);
+      
+      // Check for valid host
+      if (!parsed.hostname) {
+        return 'URL must include a valid hostname or IP address';
+      }
+      
+      // Check for incomplete hostnames
+      if (parsed.hostname.endsWith('.') && !parsed.hostname.includes('..')) {
+        return 'Hostname appears incomplete';
+      }
+      
+      return null; // Valid
+    } catch (e) {
+      return 'Invalid URL format';
     }
   };
 
@@ -105,6 +150,16 @@ export function GuestURLs(props: GuestURLsProps) {
         customUrl: url
       }
     });
+    
+    // Validate and update errors
+    const error = validateURL(url);
+    const errors = { ...urlErrors() };
+    if (error) {
+      errors[guestId] = error;
+    } else {
+      delete errors[guestId];
+    }
+    setUrlErrors(errors);
     
     props.setHasUnsavedChanges(true);
   };
@@ -154,7 +209,7 @@ export function GuestURLs(props: GuestURLsProps) {
       </div>
 
       {/* Save Button */}
-      <Show when={props.hasUnsavedChanges()}>
+      <Show when={props.hasUnsavedChanges() && Object.keys(urlErrors()).length === 0}>
         <div class="flex justify-end">
           <button type="button"
             onClick={saveURLs}
@@ -215,6 +270,8 @@ export function GuestURLs(props: GuestURLsProps) {
                           const meta = guestMetadata()[guestId];
                           const url = getURL(guestId);
                           
+                          const urlError = urlErrors()[guestId];
+                          
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                               <td class="p-1 px-2">
@@ -235,16 +292,27 @@ export function GuestURLs(props: GuestURLsProps) {
                                 {guest.vmid}
                               </td>
                               <td class="p-1 px-2">
-                                <input
-                                  type="text"
-                                  placeholder="https://192.168.1.100:8006"
-                                  value={meta?.customUrl || ''}
-                                  onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
-                                  class="w-full min-w-[300px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded
-                                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                                         focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  style="min-width: 300px;"
-                                />
+                                <div>
+                                  <input
+                                    type="text"
+                                    placeholder="https://192.168.1.100:8006"
+                                    value={meta?.customUrl || ''}
+                                    onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
+                                    class={`w-full min-w-[300px] px-2 py-1 text-sm border rounded
+                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                                           focus:ring-2 focus:border-transparent ${
+                                           urlError 
+                                             ? 'border-red-500 dark:border-red-400 focus:ring-red-500' 
+                                             : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                                           }`}
+                                    style="min-width: 300px;"
+                                  />
+                                  <Show when={urlError}>
+                                    <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                      {urlError}
+                                    </div>
+                                  </Show>
+                                </div>
                               </td>
                               <td class="p-1 px-2">
                                 <div class="flex items-center gap-2">
