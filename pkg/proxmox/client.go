@@ -1152,3 +1152,66 @@ func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSP
 
 	return &result.Data, nil
 }
+
+// Disk represents a physical disk on a Proxmox node
+type Disk struct {
+	DevPath  string  `json:"devpath"`
+	Model    string  `json:"model"`
+	Serial   string  `json:"serial"`
+	Type     string  `json:"type"`     // nvme, sata, sas
+	Health   string  `json:"health"`   // PASSED, FAILED, UNKNOWN
+	Wearout  int     `json:"wearout"`  // SSD wear percentage (0-100, 100 is best)
+	Size     int64   `json:"size"`     // Size in bytes
+	RPM      int     `json:"rpm"`      // 0 for SSDs
+	Used     string  `json:"used"`     // Filesystem or partition usage
+	Vendor   string  `json:"vendor"`
+	WWN      string  `json:"wwn"`      // World Wide Name
+}
+
+// DiskSmart represents SMART data for a disk
+type DiskSmart struct {
+	Health  string `json:"health"`   // PASSED, FAILED, UNKNOWN
+	Wearout int    `json:"wearout"`  // SSD wear percentage
+	Type    string `json:"type"`     // Type of response (text, attributes)
+	Text    string `json:"text"`     // Raw SMART output text
+}
+
+// GetDisks returns the list of physical disks on a node
+func (c *Client) GetDisks(ctx context.Context, node string) ([]Disk, error) {
+	resp, err := c.request(ctx, "GET", fmt.Sprintf("/nodes/%s/disks/list", node), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []Disk `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetDiskSmart returns SMART data for a specific disk
+func (c *Client) GetDiskSmart(ctx context.Context, node, disk string) (*DiskSmart, error) {
+	params := url.Values{
+		"disk": {disk},
+	}
+	
+	resp, err := c.request(ctx, "GET", fmt.Sprintf("/nodes/%s/disks/smart?%s", node, params.Encode()), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data DiskSmart `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}

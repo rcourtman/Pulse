@@ -14,6 +14,7 @@ type State struct {
 	VMs              []VM              `json:"vms"`
 	Containers       []Container       `json:"containers"`
 	Storage          []Storage         `json:"storage"`
+	PhysicalDisks    []PhysicalDisk    `json:"physicalDisks"`
 	PBSInstances     []PBSInstance     `json:"pbs"`
 	PBSBackups       []PBSBackup       `json:"pbsBackups"`
 	Metrics          []Metric          `json:"metrics"`
@@ -160,6 +161,24 @@ type ZFSDevice struct {
 	ReadErrors int64  `json:"readErrors"`
 	WriteErrors int64 `json:"writeErrors"`
 	ChecksumErrors int64 `json:"checksumErrors"`
+}
+
+// PhysicalDisk represents a physical disk on a node
+type PhysicalDisk struct {
+	ID           string    `json:"id"`           // "{instance}-{node}-{devpath}"
+	Node         string    `json:"node"`
+	Instance     string    `json:"instance"`
+	DevPath      string    `json:"devPath"`      // /dev/nvme0n1, /dev/sda
+	Model        string    `json:"model"`
+	Serial       string    `json:"serial"`
+	Type         string    `json:"type"`         // nvme, sata, sas
+	Size         int64     `json:"size"`         // bytes
+	Health       string    `json:"health"`       // PASSED, FAILED, UNKNOWN
+	Wearout      int       `json:"wearout"`      // SSD life remaining percentage (0-100, 100 is best)
+	Temperature  int       `json:"temperature"`  // Celsius (if available)
+	RPM          int       `json:"rpm"`          // 0 for SSDs
+	Used         string    `json:"used"`         // Filesystem or partition usage
+	LastChecked  time.Time `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance
@@ -384,6 +403,7 @@ func NewState() *State {
 		VMs:              make([]VM, 0),
 		Containers:       make([]Container, 0),
 		Storage:          make([]Storage, 0),
+		PhysicalDisks:    make([]PhysicalDisk, 0),
 		PBSInstances:     make([]PBSInstance, 0),
 		PBSBackups:       make([]PBSBackup, 0),
 		Metrics:          make([]Metric, 0),
@@ -548,6 +568,42 @@ func (s *State) UpdateStorage(storage []Storage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Storage = storage
+	s.LastUpdate = time.Now()
+}
+
+// UpdatePhysicalDisks updates physical disks for a specific instance
+func (s *State) UpdatePhysicalDisks(instanceName string, disks []PhysicalDisk) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Create a map of existing disks, excluding those from this instance
+	diskMap := make(map[string]PhysicalDisk)
+	for _, disk := range s.PhysicalDisks {
+		if disk.Instance != instanceName {
+			diskMap[disk.ID] = disk
+		}
+	}
+	
+	// Add or update disks from this instance
+	for _, disk := range disks {
+		diskMap[disk.ID] = disk
+	}
+	
+	// Convert map back to slice
+	newDisks := make([]PhysicalDisk, 0, len(diskMap))
+	for _, disk := range diskMap {
+		newDisks = append(newDisks, disk)
+	}
+	
+	// Sort by node and dev path for consistent ordering
+	sort.Slice(newDisks, func(i, j int) bool {
+		if newDisks[i].Node != newDisks[j].Node {
+			return newDisks[i].Node < newDisks[j].Node
+		}
+		return newDisks[i].DevPath < newDisks[j].DevPath
+	})
+	
+	s.PhysicalDisks = newDisks
 	s.LastUpdate = time.Now()
 }
 

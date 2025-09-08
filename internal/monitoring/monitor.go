@@ -45,6 +45,7 @@ type PVEClientInterface interface {
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
 	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
+	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
 }
 
 // Monitor handles all monitoring operations
@@ -900,6 +901,97 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}
 	}
+
+	// Poll physical disks for health monitoring
+	log.Debug().Int("nodeCount", len(nodes)).Msg("Starting disk health polling")
+	var allDisks []models.PhysicalDisk
+	for _, node := range nodes {
+		// Skip offline nodes
+		if node.Status != "online" {
+			log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node")
+			continue
+		}
+		
+		// Get disk list for this node
+		log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
+		disks, err := client.GetDisks(ctx, node.Node)
+		if err != nil {
+			// Log but don't fail - disk monitoring is optional
+			log.Debug().
+				Str("node", node.Node).
+				Err(err).
+				Msg("Failed to get disk list - disk monitoring may not be available")
+			continue
+		}
+		
+		log.Debug().
+			Str("node", node.Node).
+			Int("diskCount", len(disks)).
+			Msg("Got disk list for node")
+		
+		// Check each disk for health issues and add to state
+		for _, disk := range disks {
+			// Create PhysicalDisk model
+			diskID := fmt.Sprintf("%s-%s-%s", instanceName, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+			physicalDisk := models.PhysicalDisk{
+				ID:          diskID,
+				Node:        node.Node,
+				Instance:    instanceName,
+				DevPath:     disk.DevPath,
+				Model:       disk.Model,
+				Serial:      disk.Serial,
+				Type:        disk.Type,
+				Size:        disk.Size,
+				Health:      disk.Health,
+				Wearout:     disk.Wearout,
+				RPM:         disk.RPM,
+				Used:        disk.Used,
+				LastChecked: time.Now(),
+			}
+			
+			allDisks = append(allDisks, physicalDisk)
+			
+			log.Debug().
+				Str("node", node.Node).
+				Str("disk", disk.DevPath).
+				Str("model", disk.Model).
+				Str("health", disk.Health).
+				Int("wearout", disk.Wearout).
+				Msg("Checking disk health")
+				
+			if disk.Health != "PASSED" && disk.Health != "" {
+				// Disk has failed or is failing - alert manager will handle this
+				log.Warn().
+					Str("node", node.Node).
+					Str("disk", disk.DevPath).
+					Str("model", disk.Model).
+					Str("health", disk.Health).
+					Int("wearout", disk.Wearout).
+					Msg("Disk health issue detected")
+				
+				// Pass disk info to alert manager
+				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
+			} else if disk.Wearout > 0 && disk.Wearout < 10 {
+				// Low wearout warning (less than 10% life remaining)
+				log.Warn().
+					Str("node", node.Node).
+					Str("disk", disk.DevPath).
+					Str("model", disk.Model).
+					Int("wearout", disk.Wearout).
+					Msg("SSD wearout critical - less than 10% life remaining")
+				
+				// Pass to alert manager for wearout alert
+				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
+			}
+		}
+	}
+	
+	// Update physical disks in state
+	log.Debug().
+		Str("instance", instanceName).
+		Int("diskCount", len(allDisks)).
+		Msg("Updating physical disks in state")
+	m.state.UpdatePhysicalDisks(instanceName, allDisks)
 
 	// Update nodes with storage fallback if rootfs was not available
 	for i := range modelNodes {

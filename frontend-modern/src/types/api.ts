@@ -5,6 +5,7 @@ export interface State {
   vms: VM[];
   containers: Container[];
   storage: Storage[];
+  physicalDisks: PhysicalDisk[];
   pbs: PBSInstance[];
   pbsBackups: PBSBackup[];
   metrics: Metric[];
@@ -246,6 +247,23 @@ export interface Disk {
   used: number;
   free: number;
   usage: number;
+}
+
+export interface PhysicalDisk {
+  id: string;
+  node: string;
+  instance: string;
+  devPath: string;
+  model: string;
+  serial: string;
+  type: 'nvme' | 'sata' | 'sas' | string;
+  size: number;
+  health: 'PASSED' | 'FAILED' | 'UNKNOWN' | string;
+  wearout: number; // 0-100, 100 is best (percentage life remaining)
+  temperature: number;
+  rpm: number;
+  used: string;
+  lastChecked: string;
 }
 
 export interface CPUInfo {

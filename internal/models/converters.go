@@ -35,6 +35,7 @@ func (s *State) ToFrontend() StateFrontend {
 		VMs:              vms,
 		Containers:       containers,
 		Storage:          storage,
+		PhysicalDisks:    s.PhysicalDisks,
 		PBS:              s.PBSInstances,
 		ActiveAlerts:     s.ActiveAlerts,
 		Metrics:          make(map[string]any),

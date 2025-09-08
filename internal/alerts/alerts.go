@@ -11,6 +11,7 @@ import (
 	
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -2240,5 +2241,134 @@ func (m *Manager) periodicSaveAlerts() {
 		case <-m.escalationStop:
 			return
 		}
+	}
+}
+
+// CheckDiskHealth checks disk health and creates alerts if needed
+func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
+	// Create unique alert ID for this disk
+	alertID := fmt.Sprintf("disk-health-%s-%s-%s", instance, node, disk.DevPath)
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Check if disk health is not PASSED
+	if disk.Health != "PASSED" && disk.Health != "" {
+		// Check if alert already exists
+		if _, exists := m.activeAlerts[alertID]; !exists {
+			// Create new health alert
+			alert := &Alert{
+				ID:           alertID,
+				Type:         "disk-health",
+				Level:        AlertLevelCritical,
+				ResourceID:   fmt.Sprintf("%s-%s", node, disk.DevPath),
+				ResourceName: fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath),
+				Node:         node,
+				Instance:     instance,
+				Message:      fmt.Sprintf("Disk health check failed: %s", disk.Health),
+				Value:        0, // Not applicable for health status
+				Threshold:    0,
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata: map[string]interface{}{
+					"disk_path":   disk.DevPath,
+					"disk_model":  disk.Model,
+					"disk_serial": disk.Serial,
+					"disk_type":   disk.Type,
+					"disk_health": disk.Health,
+					"disk_size":   disk.Size,
+				},
+			}
+			
+			m.activeAlerts[alertID] = alert
+			m.recentAlerts[alertID] = alert
+			m.historyManager.AddAlert(*alert)
+			
+			if m.onAlert != nil {
+				m.onAlert(alert)
+			}
+			
+			log.Error().
+				Str("node", node).
+				Str("disk", disk.DevPath).
+				Str("model", disk.Model).
+				Str("health", disk.Health).
+				Msg("Disk health alert created")
+		}
+	} else {
+		// Disk is healthy, clear alert if it exists
+		m.clearAlertNoLock(alertID)
+	}
+	
+	// Check for low wearout (SSD life remaining)
+	if disk.Wearout > 0 && disk.Wearout < 10 {
+		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
+		
+		if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+			// Create wearout alert
+			alert := &Alert{
+				ID:           wearoutAlertID,
+				Type:         "disk-wearout",
+				Level:        AlertLevelWarning,
+				ResourceID:   fmt.Sprintf("%s-%s", node, disk.DevPath),
+				ResourceName: fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath),
+				Node:         node,
+				Instance:     instance,
+				Message:      fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout),
+				Value:        float64(disk.Wearout),
+				Threshold:    10.0,
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata: map[string]interface{}{
+					"disk_path":   disk.DevPath,
+					"disk_model":  disk.Model,
+					"disk_serial": disk.Serial,
+					"disk_type":   disk.Type,
+					"disk_wearout": disk.Wearout,
+				},
+			}
+			
+			m.activeAlerts[wearoutAlertID] = alert
+			m.recentAlerts[wearoutAlertID] = alert
+			m.historyManager.AddAlert(*alert)
+			
+			if m.onAlert != nil {
+				m.onAlert(alert)
+			}
+			
+			log.Warn().
+				Str("node", node).
+				Str("disk", disk.DevPath).
+				Str("model", disk.Model).
+				Int("wearout", disk.Wearout).
+				Msg("Disk wearout alert created")
+		}
+	} else if disk.Wearout >= 10 {
+		// Wearout is acceptable, clear alert if it exists
+		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
+		m.clearAlertNoLock(wearoutAlertID)
+	}
+}
+
+// clearAlertNoLock clears an alert without locking (must be called with lock held)
+func (m *Manager) clearAlertNoLock(alertID string) {
+	if alert, exists := m.activeAlerts[alertID]; exists {
+		delete(m.activeAlerts, alertID)
+		
+		// Add to recently resolved
+		resolvedAlert := &ResolvedAlert{
+			Alert:        alert,
+			ResolvedTime: time.Now(),
+		}
+		m.recentlyResolved[alertID] = resolvedAlert
+		
+		// Send recovery notification
+		if m.onResolved != nil {
+			m.onResolved(alertID)
+		}
+		
+		log.Info().
+			Str("alertID", alertID).
+			Msg("Alert cleared")
 	}
 }

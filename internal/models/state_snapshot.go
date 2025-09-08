@@ -8,6 +8,7 @@ type StateSnapshot struct {
 	VMs              []VM              `json:"vms"`
 	Containers       []Container       `json:"containers"`
 	Storage          []Storage         `json:"storage"`
+	PhysicalDisks    []PhysicalDisk    `json:"physicalDisks"`
 	PBSInstances     []PBSInstance     `json:"pbs"`
 	PBSBackups       []PBSBackup       `json:"pbsBackups"`
 	Metrics          []Metric          `json:"metrics"`
@@ -31,6 +32,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		VMs:              append([]VM{}, s.VMs...),
 		Containers:       append([]Container{}, s.Containers...),
 		Storage:          append([]Storage{}, s.Storage...),
+		PhysicalDisks:    append([]PhysicalDisk{}, s.PhysicalDisks...),
 		PBSInstances:     append([]PBSInstance{}, s.PBSInstances...),
 		PBSBackups:       append([]PBSBackup{}, s.PBSBackups...),
 		Metrics:          append([]Metric{}, s.Metrics...),
@@ -86,6 +88,7 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		VMs:              vms,
 		Containers:       containers,
 		Storage:          storage,
+		PhysicalDisks:    s.PhysicalDisks,
 		PBS:              s.PBSInstances,
 		ActiveAlerts:     s.ActiveAlerts,
 		Metrics:          make(map[string]any),
