@@ -81,103 +81,106 @@ export const DiskList: Component<DiskListProps> = (props) => {
   };
   
   return (
-    <div class="space-y-4">
+    <div>
       <Show when={filteredDisks().length === 0}>
-        <div class="text-center py-8 text-gray-500">
-          No physical disks found
-          {props.selectedNode && ` for node ${props.selectedNode}`}
-          {props.searchTerm && ` matching "${props.searchTerm}"`}
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div class="text-center text-gray-500">
+            No physical disks found
+            {props.selectedNode && ` for node ${props.selectedNode}`}
+            {props.searchTerm && ` matching "${props.searchTerm}"`}
+          </div>
         </div>
       </Show>
       
-      <For each={filteredDisks()}>
-        {(disk) => {
-          const health = getHealthStatus(disk);
-          
-          return (
-            <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
-              <div class="flex items-start justify-between">
-                <div class="flex-1">
-                  {/* Header with model and health */}
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class={`px-2 py-0.5 text-xs font-medium rounded ${health.bgColor} ${health.color}`}>
-                      {health.text}
-                    </span>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      {disk.model || 'Unknown Model'}
-                    </h3>
-                    <span class={`px-2 py-1 text-xs font-medium rounded-full ${getDiskTypeBadge(disk.type)}`}>
-                      {disk.type.toUpperCase()}
-                    </span>
-                  </div>
-                  
-                  {/* Disk details */}
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span class="text-gray-500">Node:</span>
-                      <span class="ml-2 font-medium">{disk.node}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-500">Path:</span>
-                      <span class="ml-2 font-mono text-xs">{disk.devPath}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-500">Size:</span>
-                      <span class="ml-2 font-medium">{formatBytes(disk.size)}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-500">Usage:</span>
-                      <span class="ml-2">{disk.used || 'Unknown'}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Additional metrics for SSDs */}
-                  <Show when={disk.wearout > 0}>
-                    <div class="mt-3 space-y-2">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm text-gray-500">SSD Life Remaining:</span>
-                        <div class="flex-1 max-w-xs">
-                          <div class="bg-gray-200 rounded-full h-2">
-                            <div 
-                              class={`h-2 rounded-full transition-all ${
-                                disk.wearout >= 50 ? 'bg-green-500' :
-                                disk.wearout >= 20 ? 'bg-yellow-500' :
-                                disk.wearout >= 10 ? 'bg-orange-500' :
-                                'bg-red-500'
-                              }`}
-                              style={`width: ${disk.wearout}%`}
-                            />
-                          </div>
-                        </div>
-                        <span class="text-sm font-medium">{disk.wearout}%</span>
-                      </div>
-                    </div>
-                  </Show>
-                  
-                  {/* Temperature if available */}
-                  <Show when={disk.temperature > 0}>
-                    <div class="mt-2 text-sm">
-                      <span class="text-gray-500">Temperature:</span>
-                      <span class={`ml-2 font-medium ${
-                        disk.temperature > 70 ? 'text-red-500' :
-                        disk.temperature > 60 ? 'text-yellow-500' :
-                        'text-green-500'
-                      }`}>
-                        {disk.temperature}°C
-                      </span>
-                    </div>
-                  </Show>
-                  
-                  {/* Serial number (smaller, muted) */}
-                  <div class="mt-2 text-xs text-gray-400">
-                    Serial: {disk.serial}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        }}
-      </For>
+      <Show when={filteredDisks().length > 0}>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Device</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Model</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">SSD Life</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Temp</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Size</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <For each={filteredDisks()}>
+                  {(disk) => {
+                    const health = getHealthStatus(disk);
+                    
+                    return (
+                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class="font-medium text-gray-900 dark:text-gray-100">{disk.node}</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class="font-mono text-gray-600 dark:text-gray-400">{disk.devPath}</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class="text-gray-700 dark:text-gray-300">{disk.model || 'Unknown'}</span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(disk.type)}`}>
+                            {disk.type.toUpperCase()}
+                          </span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}>
+                            {health.text}
+                          </span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <Show when={disk.wearout > 0} fallback={<span class="text-gray-400">-</span>}>
+                            <div class="flex items-center gap-2">
+                              <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                <div 
+                                  class={`h-1.5 rounded-full transition-all ${
+                                    disk.wearout >= 50 ? 'bg-green-500' :
+                                    disk.wearout >= 20 ? 'bg-yellow-500' :
+                                    disk.wearout >= 10 ? 'bg-orange-500' :
+                                    'bg-red-500'
+                                  }`}
+                                  style={`width: ${disk.wearout}%`}
+                                />
+                              </div>
+                              <span class={`text-xs font-medium ${
+                                disk.wearout < 10 ? 'text-red-600 dark:text-red-400' :
+                                disk.wearout < 20 ? 'text-yellow-600 dark:text-yellow-400' :
+                                'text-gray-600 dark:text-gray-400'
+                              }`}>
+                                {disk.wearout}%
+                              </span>
+                            </div>
+                          </Show>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs hidden sm:table-cell">
+                          <Show when={disk.temperature > 0} fallback={<span class="text-gray-400">-</span>}>
+                            <span class={`font-medium ${
+                              disk.temperature > 70 ? 'text-red-600 dark:text-red-400' :
+                              disk.temperature > 60 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-gray-600 dark:text-gray-400'
+                            }`}>
+                              {disk.temperature}°C
+                            </span>
+                          </Show>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <span class="text-gray-700 dark:text-gray-300">{formatBytes(disk.size)}</span>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 };
