@@ -163,6 +163,7 @@ export function createWebSocketStore(url: string) {
               if (message.data.performance !== undefined) setState('performance', message.data.performance);
               if (message.data.connectionHealth !== undefined) setState('connectionHealth', message.data.connectionHealth);
               if (message.data.stats !== undefined) setState('stats', message.data.stats);
+              if (message.data.physicalDisks !== undefined) setState('physicalDisks', message.data.physicalDisks);
               // Sync active alerts from state
               if (message.data.activeAlerts !== undefined) {
                 // Received activeAlerts update

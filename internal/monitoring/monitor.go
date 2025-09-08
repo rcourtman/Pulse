@@ -481,6 +481,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("containers", len(state.Containers)).
 				Int("pbs", len(state.PBSInstances)).
 				Int("pbsBackups", len(state.PBSBackups)).
+				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
 			wsHub.BroadcastState(state)
 
