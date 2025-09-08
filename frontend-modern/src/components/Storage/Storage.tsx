@@ -7,11 +7,13 @@ import type { Storage as StorageType } from '@/types/api';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
+import { DiskList } from './DiskList';
 
 
 const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
+  const [tabView, setTabView] = createSignal<'pools' | 'disks'>('pools');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   // TODO: Implement sorting in sortedStorage function
@@ -220,16 +222,62 @@ const Storage: Component = () => {
         searchTerm={searchTerm()}
       />
       
-      {/* Storage Filter */}
-      <StorageFilter
-        search={searchTerm}
-        setSearch={setSearchTerm}
-        groupBy={viewMode}
-        setGroupBy={setViewMode}
-        setSortKey={() => {}}
-        setSortDirection={() => {}}
-        searchInputRef={(el) => searchInputRef = el}
-      />
+      {/* Tab Toggle */}
+      <div class="mb-4 border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
+            onClick={() => setTabView('pools')}
+            class={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              tabView() === 'pools'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Storage Pools
+          </button>
+          <button
+            onClick={() => setTabView('disks')}
+            class={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              tabView() === 'disks'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Physical Disks
+            <Show when={state.physicalDisks?.length > 0}>
+              <span class="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                {state.physicalDisks.length}
+              </span>
+            </Show>
+          </button>
+        </nav>
+      </div>
+      
+      {/* Show Storage Filter only for pools */}
+      <Show when={tabView() === 'pools'}>
+        <StorageFilter
+          search={searchTerm}
+          setSearch={setSearchTerm}
+          groupBy={viewMode}
+          setGroupBy={setViewMode}
+          setSortKey={() => {}}
+          setSortDirection={() => {}}
+          searchInputRef={(el) => searchInputRef = el}
+        />
+      </Show>
+      
+      {/* Show simple search for disks */}
+      <Show when={tabView() === 'disks'}>
+        <div class="mb-4">
+          <input
+            type="text"
+            placeholder="Search disks by model, path, or serial..."
+            value={searchTerm()}
+            onInput={(e) => setSearchTerm(e.currentTarget.value)}
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </Show>
       
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
@@ -267,21 +315,23 @@ const Storage: Component = () => {
         </div>
       </Show>
       
-      {/* No results found message */}
-      <Show when={connected() && initialDataReceived() && sortedStorage().length === 0 && searchTerm().trim() !== ''}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage found</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400">No storage matches your search "{searchTerm()}"</p>
+      {/* Conditional rendering based on tab */}
+      <Show when={tabView() === 'pools'}>
+        {/* No results found message for storage pools */}
+        <Show when={connected() && initialDataReceived() && sortedStorage().length === 0 && searchTerm().trim() !== ''}>
+          <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+            <div class="text-center">
+              <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage found</h3>
+              <p class="text-xs text-gray-600 dark:text-gray-400">No storage matches your search "{searchTerm()}"</p>
+            </div>
           </div>
-        </div>
-      </Show>
-      
-      {/* Storage Table - shows for both PVE and PBS storage */}
-      <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
+        </Show>
+        
+        {/* Storage Table - shows for both PVE and PBS storage */}
+        <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
         <ComponentErrorBoundary name="Storage Table">
           <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
@@ -356,6 +406,22 @@ const Storage: Component = () => {
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {storage.name}
                                   </span>
+                                  {/* ZFS Health Badge */}
+                                  <Show when={storage.zfsPool && storage.zfsPool.state !== 'ONLINE'}>
+                                    <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      storage.zfsPool.state === 'DEGRADED'
+                                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                    }`}>
+                                      {storage.zfsPool.state}
+                                    </span>
+                                  </Show>
+                                  {/* ZFS Error Badge */}
+                                  <Show when={storage.zfsPool && (storage.zfsPool.readErrors > 0 || storage.zfsPool.writeErrors > 0 || storage.zfsPool.checksumErrors > 0)}>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                                      ERRORS
+                                    </span>
+                                  </Show>
                                   <Show when={viewMode() === 'storage'}>
                                     <Show when={storage.pbsNames}>
                                       <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -475,10 +541,18 @@ const Storage: Component = () => {
             </div>
           </div>
         </ComponentErrorBoundary>
+        </Show>
       </Show>
       
-      {/* Tooltip System */}
-      <TooltipComponent />
+      {/* Physical Disks Tab */}
+      <Show when={tabView() === 'disks'}>
+        <DiskList 
+          disks={state.physicalDisks || []}
+          selectedNode={selectedNode()}
+          searchTerm={searchTerm()}
+        />
+      </Show>
+      
     </div>
   );
 };
