@@ -60,12 +60,18 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		Nodes:            generateNodes(config),
 		VMs:              []models.VM{},
 		Containers:       []models.Container{},
+		PhysicalDisks:    []models.PhysicalDisk{},
 		LastUpdate:       time.Now(),
 		ConnectionHealth: make(map[string]bool),
 		Stats:            models.Stats{},
 		ActiveAlerts:     []models.Alert{},
 	}
 
+	// Generate physical disks for each node
+	for _, node := range data.Nodes {
+		data.PhysicalDisks = append(data.PhysicalDisks, generateDisksForNode(node)...)
+	}
+	
 	// Generate VMs and containers for each node
 	vmidCounter := 100
 	for nodeIdx, node := range data.Nodes {
@@ -1395,5 +1401,103 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 		ct.Uptime += 2
 	}
 	
+	// Update disk metrics occasionally
+	for i := range data.PhysicalDisks {
+		disk := &data.PhysicalDisks[i]
+		
+		// Occasionally change temperature
+		if rand.Float64() < 0.1 {
+			disk.Temperature += rand.Intn(5) - 2
+			if disk.Temperature < 30 {
+				disk.Temperature = 30
+			}
+			if disk.Temperature > 85 {
+				disk.Temperature = 85
+			}
+		}
+		
+		// Occasionally degrade SSD life
+		if disk.Wearout > 0 && rand.Float64() < 0.01 {
+			disk.Wearout = disk.Wearout - 1
+			if disk.Wearout < 0 {
+				disk.Wearout = 0
+			}
+		}
+		
+		disk.LastChecked = time.Now()
+	}
+	
 	data.LastUpdate = time.Now()
+}
+
+func generateDisksForNode(node models.Node) []models.PhysicalDisk {
+	disks := []models.PhysicalDisk{}
+	
+	// Generate 1-3 disks per node
+	diskCount := rand.Intn(3) + 1
+	
+	diskModels := []struct {
+		model string
+		diskType string
+		size int64
+	}{
+		{"Samsung SSD 970 EVO Plus 1TB", "nvme", 1000204886016},
+		{"WD Blue SN570 500GB", "nvme", 500107862016},
+		{"Crucial MX500 2TB", "sata", 2000398934016},
+		{"Seagate BarraCuda 4TB", "sata", 4000787030016},
+		{"Kingston NV2 250GB", "nvme", 250059350016},
+		{"WD Red Pro 8TB", "sata", 8001563222016},
+		{"Samsung 980 PRO 2TB", "nvme", 2000398934016},
+		{"Intel SSD 660p 1TB", "nvme", 1000204886016},
+		{"Toshiba X300 6TB", "sata", 6001175126016},
+	}
+	
+	for i := 0; i < diskCount; i++ {
+		diskModel := diskModels[rand.Intn(len(diskModels))]
+		
+		// Generate health status - most are healthy
+		health := "PASSED"
+		if rand.Float64() < 0.05 { // 5% chance of failure
+			health = "FAILED"
+		} else if rand.Float64() < 0.1 { // 10% chance of unknown
+			health = "UNKNOWN"
+		}
+		
+		// Generate wearout for SSDs (100 is new, 0 is dead)
+		wearout := 0
+		if diskModel.diskType == "nvme" || diskModel.diskType == "sata" {
+			if rand.Float64() < 0.7 { // 70% chance it's an SSD with wearout data
+				wearout = rand.Intn(50) + 50 // 50-100% life remaining
+				if rand.Float64() < 0.1 { // 10% chance of low life
+					wearout = rand.Intn(15) + 5 // 5-20% life remaining
+				}
+			}
+		}
+		
+		// Generate temperature
+		temp := rand.Intn(20) + 35 // 35-55°C normal range
+		if rand.Float64() < 0.1 { // 10% chance of high temp
+			temp = rand.Intn(15) + 65 // 65-80°C hot
+		}
+		
+		disk := models.PhysicalDisk{
+			ID:        fmt.Sprintf("%s-%s-/dev/%s%d", node.Instance, node.Name, []string{"nvme", "sd"}[i%2], i),
+			Node:      node.Name,
+			Instance:  node.Instance,
+			DevPath:   fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i),
+			Model:     diskModel.model,
+			Serial:    fmt.Sprintf("SERIAL%d%d%d", rand.Intn(9999), rand.Intn(9999), rand.Intn(9999)),
+			Type:      diskModel.diskType,
+			Size:      diskModel.size,
+			Health:    health,
+			Wearout:   wearout,
+			Temperature: temp,
+			Used:      []string{"ext4", "zfs", "btrfs", "xfs"}[rand.Intn(4)],
+			LastChecked: time.Now(),
+		}
+		
+		disks = append(disks, disk)
+	}
+	
+	return disks
 }
