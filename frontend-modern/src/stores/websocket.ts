@@ -16,6 +16,7 @@ export function createWebSocketStore(url: string) {
     vms: [],
     containers: [],
     storage: [],
+    physicalDisks: [],
     pbs: [],
     metrics: [],
     pveBackups: {
