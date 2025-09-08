@@ -29,8 +29,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
       );
     }
     
-    // Sort by node and devPath
-    return disks.sort((a, b) => {
+    // Sort by node and devPath - create a copy to avoid mutating store
+    return [...disks].sort((a, b) => {
       if (a.node !== b.node) return a.node.localeCompare(b.node);
       return a.devPath.localeCompare(b.devPath);
     });
