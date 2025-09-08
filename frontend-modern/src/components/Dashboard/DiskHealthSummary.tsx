@@ -64,25 +64,25 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
           {/* Health Status */}
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-600 dark:text-gray-400">Status</span>
-            <div class="flex gap-3">
+            <div class="flex gap-2">
               <Show when={diskStats().healthy > 0}>
-                <span class="text-green-600 dark:text-green-400">
-                  ✅ {diskStats().healthy}
+                <span class="px-1.5 py-0.5 text-xs rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                  {diskStats().healthy} healthy
                 </span>
               </Show>
               <Show when={diskStats().failing > 0}>
-                <span class="text-red-600 dark:text-red-400">
-                  ❌ {diskStats().failing}
+                <span class="px-1.5 py-0.5 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                  {diskStats().failing} failed
                 </span>
               </Show>
               <Show when={diskStats().lowLife > 0}>
-                <span class="text-yellow-600 dark:text-yellow-400">
-                  ⚠️ {diskStats().lowLife} low
+                <span class="px-1.5 py-0.5 text-xs rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                  {diskStats().lowLife} low
                 </span>
               </Show>
               <Show when={diskStats().unknown > 0}>
-                <span class="text-gray-500">
-                  ❓ {diskStats().unknown}
+                <span class="px-1.5 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400">
+                  {diskStats().unknown} unknown
                 </span>
               </Show>
             </div>

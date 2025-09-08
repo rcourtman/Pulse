@@ -36,18 +36,34 @@ export const DiskList: Component<DiskListProps> = (props) => {
     });
   });
   
-  // Get health status color and icon
+  // Get health status color and badge
   const getHealthStatus = (disk: PhysicalDisk) => {
     if (disk.health === 'PASSED') {
       // Check wearout for SSDs
       if (disk.wearout > 0 && disk.wearout < 10) {
-        return { color: 'text-yellow-500', icon: '⚠️', text: 'Low Life' };
+        return { 
+          color: 'text-yellow-700 dark:text-yellow-400', 
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+          text: 'LOW LIFE' 
+        };
       }
-      return { color: 'text-green-500', icon: '✅', text: 'Healthy' };
+      return { 
+        color: 'text-green-700 dark:text-green-400', 
+        bgColor: 'bg-green-100 dark:bg-green-900/30',
+        text: 'HEALTHY' 
+      };
     } else if (disk.health === 'FAILED') {
-      return { color: 'text-red-500', icon: '❌', text: 'Failed' };
+      return { 
+        color: 'text-red-700 dark:text-red-400', 
+        bgColor: 'bg-red-100 dark:bg-red-900/30',
+        text: 'FAILED' 
+      };
     }
-    return { color: 'text-gray-500', icon: '❓', text: 'Unknown' };
+    return { 
+      color: 'text-gray-700 dark:text-gray-400', 
+      bgColor: 'bg-gray-100 dark:bg-gray-700',
+      text: 'UNKNOWN' 
+    };
   };
   
   // Get disk type badge color
@@ -84,10 +100,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 <div class="flex-1">
                   {/* Header with model and health */}
                   <div class="flex items-center gap-3 mb-2">
-                    <span class={`text-lg ${health.color}`} title={health.text}>
-                      {health.icon}
+                    <span class={`px-2 py-0.5 text-xs font-medium rounded ${health.bgColor} ${health.color}`}>
+                      {health.text}
                     </span>
-                    <h3 class="text-lg font-semibold text-gray-900">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {disk.model || 'Unknown Model'}
                     </h3>
                     <span class={`px-2 py-1 text-xs font-medium rounded-full ${getDiskTypeBadge(disk.type)}`}>
