@@ -11,6 +11,7 @@ import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { MetricBar } from './MetricBar';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DashboardFilter } from './DashboardFilter';
+import { DiskHealthSummary } from './DiskHealthSummary';
 
 interface DashboardProps {
   vms: VM[];
@@ -24,7 +25,7 @@ type GroupingMode = 'grouped' | 'flat';
 
 
 export function Dashboard(props: DashboardProps) {
-  const { connected, activeAlerts, initialDataReceived } = useWebSocket();
+  const { connected, activeAlerts, initialDataReceived, state } = useWebSocket();
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -474,6 +475,11 @@ export function Dashboard(props: DashboardProps) {
         filteredContainers={filteredGuests().filter(g => g.type === 'lxc')}
         searchTerm={search()}
       />
+      
+      {/* Disk Health Summary Widget */}
+      <div class="mb-4">
+        <DiskHealthSummary disks={state.physicalDisks || []} />
+      </div>
       
       {/* Removed old node table - keeping the rest unchanged */}
       <Show when={false}>
