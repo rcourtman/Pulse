@@ -18,7 +18,7 @@ interface NodeSummaryTableProps {
 }
 
 export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
-  const { activeAlerts } = useWebSocket();
+  const { activeAlerts, state } = useWebSocket();
   // Combine and sort nodes based on tab
   const sortedItems = createMemo(() => {
     const items: Array<{ type: 'pve' | 'pbs'; data: Node | PBSInstance }> = [];
@@ -56,7 +56,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const getCountHeader = () => {
     switch (props.currentTab) {
       case 'dashboard': return ['VMs', 'Containers'];
-      case 'storage': return ['Storage'];
+      case 'storage': return ['Storage', 'Disks'];
       case 'backups': return ['Backups'];
       default: return [];
     }
@@ -71,8 +71,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           // PBS doesn't have VMs/Containers, return dashes
           return ['-', '-'];
         case 'storage':
-          // PBS doesn't have storage count
-          return ['-'];
+          // PBS doesn't have storage or disk count
+          return ['-', '-'];
         case 'backups':
           // PBS shows backup count
           return [props.backupCounts?.[item.data.name] || 0];
@@ -89,7 +89,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         return [vmCount, containerCount];
       case 'storage':
         const storageCount = props.storage?.filter(s => s.node === node.name).length || 0;
-        return [storageCount];
+        const diskCount = state.physicalDisks?.filter(d => d.node === node.name).length || 0;
+        return [storageCount, diskCount];
       case 'backups':
         return [props.backupCounts?.[node.name] || 0];
       default:
