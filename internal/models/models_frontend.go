@@ -12,10 +12,11 @@ type NodeFrontend struct {
 	Status           string    `json:"status"`
 	Type             string    `json:"type"`
 	CPU              float64   `json:"cpu"`
-	Mem              int64     `json:"mem"`      // Maps to Memory.Used
-	MaxMem           int64     `json:"maxmem"`   // Maps to Memory.Total
-	Disk             int64     `json:"disk"`     // Maps to Disk.Used
-	MaxDisk          int64     `json:"maxdisk"`  // Maps to Disk.Total
+	Memory           *Memory   `json:"memory,omitempty"` // Full memory object with usage percentage
+	Mem              int64     `json:"mem"`      // Maps to Memory.Used (kept for backward compat)
+	MaxMem           int64     `json:"maxmem"`   // Maps to Memory.Total (kept for backward compat)
+	Disk             *Disk     `json:"disk,omitempty"`   // Full disk object with usage percentage
+	MaxDisk          int64     `json:"maxdisk"`  // Maps to Disk.Total (kept for backward compat)
 	Uptime           int64     `json:"uptime"`
 	LoadAverage      []float64 `json:"loadAverage"`
 	KernelVersion    string    `json:"kernelVersion"`
@@ -36,6 +37,7 @@ type VMFrontend struct {
 	Type       string   `json:"type"`
 	CPU        float64  `json:"cpu"`
 	CPUs       int      `json:"cpus"`
+	Memory     *Memory  `json:"memory,omitempty"`  // Full memory object
 	Mem        int64    `json:"mem"`       // Maps to Memory.Used
 	MaxMem     int64    `json:"maxmem"`    // Maps to Memory.Total
 	Disk       int64    `json:"disk"`      // Maps to Disk.Used  
@@ -63,6 +65,7 @@ type ContainerFrontend struct {
 	Type       string   `json:"type"`
 	CPU        float64  `json:"cpu"`
 	CPUs       int      `json:"cpus"`
+	Memory     *Memory  `json:"memory,omitempty"`  // Full memory object
 	Mem        int64    `json:"mem"`       // Maps to Memory.Used
 	MaxMem     int64    `json:"maxmem"`    // Maps to Memory.Total
 	Disk       int64    `json:"disk"`      // Maps to Disk.Used
