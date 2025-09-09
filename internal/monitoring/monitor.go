@@ -1292,17 +1292,57 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							// Aggregate disk usage from all filesystems
 							var totalBytes, usedBytes uint64
 							var skippedFS []string
+							var includedFS []string
+							
+							// Log all filesystems received for debugging
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", res.Name).
+								Int("vmid", res.VMID).
+								Int("filesystem_count", len(fsInfo)).
+								Msg("Processing filesystems from guest agent")
+							
 							for _, fs := range fsInfo {
 								// Skip special filesystems and mounts
+								skipReasons := []string{}
+								shouldSkip := false
+								
+								// Check filesystem type
+								fsTypeLower := strings.ToLower(fs.Type)
 								if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
-								   strings.HasPrefix(fs.Mountpoint, "/dev") ||
+								   fs.Type == "cgroup" || fs.Type == "cgroup2" ||
+								   fs.Type == "sysfs" || fs.Type == "proc" ||
+								   fs.Type == "devpts" || fs.Type == "securityfs" ||
+								   fs.Type == "debugfs" || fs.Type == "tracefs" ||
+								   fs.Type == "fusectl" || fs.Type == "configfs" ||
+								   fs.Type == "pstore" || fs.Type == "hugetlbfs" ||
+								   fs.Type == "mqueue" || fs.Type == "bpf" ||
+								   strings.Contains(fsTypeLower, "fuse") ||  // Skip FUSE mounts (often network/special)
+								   strings.Contains(fsTypeLower, "9p") ||    // Skip 9p mounts (VM shared folders)
+								   strings.Contains(fsTypeLower, "nfs") ||    // Skip NFS mounts
+								   strings.Contains(fsTypeLower, "cifs") ||   // Skip CIFS/SMB mounts
+								   strings.Contains(fsTypeLower, "smb") {     // Skip SMB mounts
+									skipReasons = append(skipReasons, "special-fs-type")
+									shouldSkip = true
+								}
+								
+								// Check mountpoint patterns
+								if strings.HasPrefix(fs.Mountpoint, "/dev") ||
 								   strings.HasPrefix(fs.Mountpoint, "/proc") ||
 								   strings.HasPrefix(fs.Mountpoint, "/sys") ||
 								   strings.HasPrefix(fs.Mountpoint, "/run") ||
+								   strings.HasPrefix(fs.Mountpoint, "/var/lib/docker") || // Skip Docker volumes
+								   strings.HasPrefix(fs.Mountpoint, "/snap") ||            // Skip snap mounts
 								   fs.Mountpoint == "/boot/efi" ||
 								   fs.Mountpoint == "System Reserved" ||  // Windows System Reserved partition
 								   strings.Contains(fs.Mountpoint, "System Reserved") {  // Various Windows reserved formats
-									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s)", fs.Mountpoint, fs.Type))
+									skipReasons = append(skipReasons, "special-mountpoint")
+									shouldSkip = true
+								}
+								
+								if shouldSkip {
+									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,%s)", 
+										fs.Mountpoint, fs.Type, strings.Join(skipReasons, ",")))
 									continue
 								}
 								
@@ -1311,18 +1351,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								if fs.TotalBytes > 0 {
 									totalBytes += fs.TotalBytes
 									usedBytes += fs.UsedBytes
+									includedFS = append(includedFS, fmt.Sprintf("%s(%s,%.1fGB)", 
+										fs.Mountpoint, fs.Type, float64(fs.TotalBytes)/1073741824))
 									log.Debug().
 										Str("instance", instanceName).
 										Str("vm", res.Name).
+										Int("vmid", res.VMID).
 										Str("mountpoint", fs.Mountpoint).
 										Str("type", fs.Type).
 										Uint64("total", fs.TotalBytes).
 										Uint64("used", fs.UsedBytes).
+										Float64("total_gb", float64(fs.TotalBytes)/1073741824).
+										Float64("used_gb", float64(fs.UsedBytes)/1073741824).
 										Msg("Including filesystem in disk usage calculation")
 								} else if fs.TotalBytes == 0 && len(fs.Mountpoint) > 0 {
+									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,0GB)", fs.Mountpoint, fs.Type))
 									log.Debug().
 										Str("instance", instanceName).
 										Str("vm", res.Name).
+										Int("vmid", res.VMID).
 										Str("mountpoint", fs.Mountpoint).
 										Str("type", fs.Type).
 										Msg("Skipping filesystem with zero total bytes")
@@ -1337,8 +1384,36 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Msg("Skipped special filesystems")
 							}
 							
+							if len(includedFS) > 0 {
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Int("vmid", res.VMID).
+									Strs("included", includedFS).
+									Msg("Filesystems included in disk calculation")
+							}
+							
 							// If we got valid data from guest agent, use it
 							if totalBytes > 0 {
+								// Sanity check: if the reported disk is way larger than allocated disk,
+								// we might be getting host disk info somehow
+								allocatedDiskGB := float64(res.MaxDisk) / 1073741824
+								reportedDiskGB := float64(totalBytes) / 1073741824
+								
+								// If reported disk is more than 2x the allocated disk, log a warning
+								// This could indicate we're getting host disk or network shares
+								if allocatedDiskGB > 0 && reportedDiskGB > allocatedDiskGB * 2 {
+									log.Warn().
+										Str("instance", instanceName).
+										Str("vm", res.Name).
+										Int("vmid", res.VMID).
+										Float64("allocated_gb", allocatedDiskGB).
+										Float64("reported_gb", reportedDiskGB).
+										Float64("ratio", reportedDiskGB/allocatedDiskGB).
+										Strs("filesystems", includedFS).
+										Msg("VM reports disk usage significantly larger than allocated disk - possible issue with filesystem detection")
+								}
+								
 								diskTotal = totalBytes
 								diskUsed = usedBytes
 								diskFree = totalBytes - usedBytes
@@ -1347,8 +1422,12 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
+									Int("vmid", res.VMID).
 									Uint64("totalBytes", totalBytes).
 									Uint64("usedBytes", usedBytes).
+									Float64("total_gb", float64(totalBytes)/1073741824).
+									Float64("used_gb", float64(usedBytes)/1073741824).
+									Float64("allocated_gb", allocatedDiskGB).
 									Float64("usage", diskUsage).
 									Msg("Successfully retrieved disk usage from guest agent (cluster/resources showed 0)")
 							} else {
