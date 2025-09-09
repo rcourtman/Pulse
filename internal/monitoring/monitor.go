@@ -832,6 +832,39 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					Msg("No valid disk metrics available for node")
 			}
 
+			// Update memory metrics to use Available field for more accurate usage
+			if nodeInfo.Memory != nil && nodeInfo.Memory.Total > 0 {
+				// Calculate memory usage based on available memory (which excludes non-reclaimable cache)
+				// This provides a more accurate picture of actual memory pressure
+				var actualUsed uint64
+				if nodeInfo.Memory.Available > 0 {
+					// Use available memory for calculation (preferred method)
+					actualUsed = nodeInfo.Memory.Total - nodeInfo.Memory.Available
+					log.Debug().
+						Str("node", node.Node).
+						Uint64("total", nodeInfo.Memory.Total).
+						Uint64("available", nodeInfo.Memory.Available).
+						Uint64("actualUsed", actualUsed).
+						Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total))).
+						Msg("Using available memory for accurate usage calculation")
+				} else {
+					// Fallback to traditional used memory if available field is missing
+					actualUsed = nodeInfo.Memory.Used
+					log.Debug().
+						Str("node", node.Node).
+						Uint64("total", nodeInfo.Memory.Total).
+						Uint64("used", nodeInfo.Memory.Used).
+						Msg("Available memory field missing, using traditional used memory")
+				}
+				
+				modelNode.Memory = models.Memory{
+					Total: int64(nodeInfo.Memory.Total),
+					Used:  int64(actualUsed),
+					Free:  int64(nodeInfo.Memory.Total - actualUsed),
+					Usage: safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)),
+				}
+			}
+
 			if nodeInfo.CPUInfo != nil {
 				// Use MaxCPU from node data for logical CPU count (includes hyperthreading)
 				// If MaxCPU is not available or 0, fall back to physical cores
