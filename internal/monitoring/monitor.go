@@ -1199,9 +1199,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 				diskUsage = -1
 			}
 			
-			// For running VMs, always try to get filesystem info from guest agent if disk is 0
-			// The cluster/resources endpoint often returns 0 for disk even when data is available
-			if res.Status == "running" && res.Type == "qemu" && diskUsed == 0 && diskTotal > 0 {
+			// For running VMs, always try to get filesystem info from guest agent
+			// The cluster/resources endpoint often returns 0 or incorrect values for disk usage
+			// We should prefer guest agent data when available for accurate metrics
+			if res.Status == "running" && res.Type == "qemu" {
 				// First check if agent is enabled by getting VM status
 				vmStatus, err := client.GetVMStatus(ctx, res.Node, res.VMID)
 				if err != nil {
@@ -1218,16 +1219,17 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					networkInBytes = int64(vmStatus.NetIn)
 					networkOutBytes = int64(vmStatus.NetOut)
 					
-					// Always try to get filesystem info if VM is running and disk shows 0
-					// Even if agent flag is 0, the agent might still be available
-					if vmStatus.Agent > 0 || (diskUsed == 0 && diskTotal > 0) {
+					// Always try to get filesystem info if agent is enabled
+					// Prefer guest agent data over cluster/resources data for accuracy
+					if vmStatus.Agent > 0 {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", res.Name).
 							Int("vmid", res.VMID).
 							Int("agent", vmStatus.Agent).
-							Bool("diskIsZero", diskUsed == 0).
-							Msg("Attempting to get filesystem info from guest agent")
+							Uint64("current_disk", diskUsed).
+							Uint64("current_maxdisk", diskTotal).
+							Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
 						
 						fsInfo, err := client.GetVMFSInfo(ctx, res.Node, res.VMID)
 						if err != nil {
@@ -1429,7 +1431,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Float64("used_gb", float64(usedBytes)/1073741824).
 									Float64("allocated_gb", allocatedDiskGB).
 									Float64("usage", diskUsage).
-									Msg("Successfully retrieved disk usage from guest agent (cluster/resources showed 0)")
+									Uint64("old_disk", res.Disk).
+									Uint64("old_maxdisk", res.MaxDisk).
+									Msg("Using guest agent data for accurate disk usage (replacing cluster/resources data)")
 							} else {
 								// Only special filesystems found - show allocated disk size instead
 								if diskTotal > 0 {
@@ -1455,14 +1459,13 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							Msg("VM does not have guest agent enabled in config")
 					}
 				} else {
-					// No vmStatus available - show allocated disk size
-					if diskTotal > 0 {
-						diskUsage = -1 // Show as allocated size
-					}
+					// No vmStatus available - keep cluster/resources data
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Msg("Could not get VM status, using cluster/resources disk data")
 				}
-			} else if diskTotal > 0 {
-				// VM is not running - show allocated disk size
-				diskUsage = -1
 			}
 			
 			// Calculate I/O rates after we have the actual values
