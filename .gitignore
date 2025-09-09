@@ -9,6 +9,10 @@ pulse
 .DS_Store
 Thumbs.db
 
+# Development environment files
+.dev-mode
+.tmux.conf
+
 # IDE
 .idea/
 .vscode/
@@ -78,6 +82,15 @@ package-lock.json
 *.test.md
 screenshots/
 .devdata/
+test-*.js
+test-*.sh
+test-*.html
+*.backup.*
+.env.dev
+.env.backup*
+PMG_BACKUP_DETECTION.md
+SAFE_TESTING.md
+tmp/
 
 # Master plan documents (local only)
 PULSE_V4_ISSUES_MASTER_PLAN.md
