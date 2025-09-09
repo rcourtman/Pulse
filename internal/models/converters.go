@@ -49,7 +49,7 @@ func (s *State) ToFrontend() StateFrontend {
 
 // ToFrontend converts a Node to NodeFrontend
 func (n Node) ToFrontend() NodeFrontend {
-	return NodeFrontend{
+	nf := NodeFrontend{
 		ID:               n.ID,
 		Node:             n.Name,
 		Name:             n.Name,
@@ -59,7 +59,6 @@ func (n Node) ToFrontend() NodeFrontend {
 		CPU:              n.CPU,
 		Mem:              n.Memory.Used,
 		MaxMem:           n.Memory.Total,
-		Disk:             n.Disk.Used,
 		MaxDisk:          n.Disk.Total,
 		Uptime:           n.Uptime,
 		LoadAverage:      n.LoadAverage,
@@ -69,6 +68,18 @@ func (n Node) ToFrontend() NodeFrontend {
 		LastSeen:         n.LastSeen.Unix() * 1000,
 		ConnectionHealth: n.ConnectionHealth,
 	}
+	
+	// Include full Memory object if it has data
+	if n.Memory.Total > 0 {
+		nf.Memory = &n.Memory
+	}
+	
+	// Include full Disk object if it has data  
+	if n.Disk.Total > 0 {
+		nf.Disk = &n.Disk
+	}
+	
+	return nf
 }
 
 // ToFrontend converts a VM to VMFrontend
@@ -105,6 +116,11 @@ func (v VM) ToFrontend() VMFrontend {
 	// Convert last backup time if not zero
 	if !v.LastBackup.IsZero() {
 		vm.LastBackup = v.LastBackup.Unix() * 1000
+	}
+	
+	// Include full Memory object if it has data
+	if v.Memory.Total > 0 {
+		vm.Memory = &v.Memory
 	}
 
 	return vm
@@ -144,6 +160,11 @@ func (c Container) ToFrontend() ContainerFrontend {
 	// Convert last backup time if not zero
 	if !c.LastBackup.IsZero() {
 		ct.LastBackup = c.LastBackup.Unix() * 1000
+	}
+	
+	// Include full Memory object if it has data
+	if c.Memory.Total > 0 {
+		ct.Memory = &c.Memory
 	}
 
 	return ct
