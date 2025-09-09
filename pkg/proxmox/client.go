@@ -349,9 +349,10 @@ type NodeStatus struct {
 
 // MemoryStatus represents real-time memory information
 type MemoryStatus struct {
-	Total uint64 `json:"total"`
-	Used  uint64 `json:"used"`
-	Free  uint64 `json:"free"`
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+	Free      uint64 `json:"free"`
+	Available uint64 `json:"available"` // Memory available for allocation (excludes non-reclaimable cache)
 }
 
 // SwapStatus represents swap information
