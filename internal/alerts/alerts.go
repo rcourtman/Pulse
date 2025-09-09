@@ -923,6 +923,35 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		return
 	}
 	
+	// Special case: 100% threshold effectively disables alerts for this metric
+	if threshold.Trigger >= 100 {
+		log.Debug().
+			Str("resource", resourceName).
+			Str("metric", metricType).
+			Float64("value", value).
+			Float64("threshold", threshold.Trigger).
+			Msg("Alert disabled (100% threshold)")
+		
+		// Clear any existing alert for this metric
+		alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
+		m.mu.Lock()
+		if _, exists := m.activeAlerts[alertID]; exists {
+			delete(m.activeAlerts, alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Str("resource", resourceName).
+				Str("metric", metricType).
+				Msg("Cleared alert - threshold set to 100%")
+			
+			// Notify resolution
+			if m.onResolved != nil {
+				go m.onResolved(alertID)
+			}
+		}
+		m.mu.Unlock()
+		return
+	}
+	
 	log.Debug().
 		Str("resource", resourceName).
 		Str("metric", metricType).
