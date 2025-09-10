@@ -92,11 +92,16 @@ function App() {
   
   // Dark mode - initialize immediately from localStorage to prevent flash
   // This addresses issue #443 where dark mode wasn't persisting
+  // Priority: 1. localStorage (user's last choice on this device)
+  //           2. System preference
+  //           3. Server preference (loaded later for cross-device sync)
   const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-  const initialDarkMode = savedDarkMode !== null 
+  const hasLocalPreference = savedDarkMode !== null;
+  const initialDarkMode = hasLocalPreference
     ? savedDarkMode === 'true'
     : window.matchMedia('(prefers-color-scheme: dark)').matches;
   const [darkMode, setDarkMode] = createSignal(initialDarkMode);
+  const [hasLoadedServerTheme, setHasLoadedServerTheme] = createSignal(false);
   
   // Apply dark mode immediately on initialization
   if (initialDarkMode) {
@@ -200,8 +205,26 @@ function App() {
         // Initialize WebSocket immediately since no auth needed
         setWsStore(getGlobalWebSocketStore());
         
-        // Don't override local theme preference when auth is disabled
-        // The user's local preference takes priority
+        // Load theme preference from server for cross-device sync
+        // Only use server preference if no local preference exists
+        if (!hasLocalPreference) {
+          try {
+            const systemSettings = await SettingsAPI.getSystemSettings();
+            if (systemSettings.theme && systemSettings.theme !== '') {
+              const prefersDark = systemSettings.theme === 'dark';
+              setDarkMode(prefersDark);
+              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+              if (prefersDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            }
+            setHasLoadedServerTheme(true);
+          } catch (error) {
+            console.error('Failed to load theme from server:', error);
+          }
+        }
         
         // Load version info even when auth is disabled
         UpdatesAPI.getVersion()
@@ -230,8 +253,26 @@ function App() {
         // Initialize WebSocket for proxy auth users
         setWsStore(getGlobalWebSocketStore());
         
-        // Don't override local theme preference for proxy auth users
-        // The user's local preference takes priority
+        // Load theme preference from server for cross-device sync
+        // Only use server preference if no local preference exists
+        if (!hasLocalPreference) {
+          try {
+            const systemSettings = await SettingsAPI.getSystemSettings();
+            if (systemSettings.theme && systemSettings.theme !== '') {
+              const prefersDark = systemSettings.theme === 'dark';
+              setDarkMode(prefersDark);
+              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+              if (prefersDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            }
+            setHasLoadedServerTheme(true);
+          } catch (error) {
+            console.error('Failed to load theme from server:', error);
+          }
+        }
         
         // Load version info
         UpdatesAPI.getVersion()
@@ -269,9 +310,29 @@ function App() {
         // Only initialize WebSocket after successful auth check
         setWsStore(getGlobalWebSocketStore());
         
-        // Don't load theme preference from server - always use local preference
-        // This ensures the user's choice persists across reloads
-        // The theme is already set from localStorage on initialization
+        // Load theme preference from server for cross-device sync
+        // Only use server preference if no local preference exists
+        if (!hasLocalPreference) {
+          try {
+            const systemSettings = await SettingsAPI.getSystemSettings();
+            if (systemSettings.theme && systemSettings.theme !== '') {
+              const prefersDark = systemSettings.theme === 'dark';
+              setDarkMode(prefersDark);
+              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+              if (prefersDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            }
+            setHasLoadedServerTheme(true);
+          } catch (error) {
+            console.error('Failed to load theme from server:', error);
+          }
+        } else {
+          // We have a local preference, just mark that we've checked the server
+          setHasLoadedServerTheme(true);
+        }
       }
     } catch (error) {
       console.error('Auth check error:', error);
