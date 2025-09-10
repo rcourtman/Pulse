@@ -646,6 +646,11 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	// Check if there's an override for this storage device
 	override, hasOverride := m.config.Overrides[storage.ID]
 	threshold := m.config.StorageDefault
+	
+	// Apply override if it exists for usage threshold
+	if hasOverride && override.Usage != nil {
+		threshold = *override.Usage
+	}
 	m.mu.RUnlock()
 
 	// Check if storage is truly offline/unavailable (not just inactive from other nodes)
@@ -920,6 +925,25 @@ func (m *Manager) clearAlert(alertID string) {
 // checkMetric checks a single metric against its threshold with hysteresis
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold) {
 	if threshold == nil || threshold.Trigger <= 0 {
+		return
+	}
+	
+	// If threshold is set to 100%, effectively disable the alert
+	// This addresses issue #434 where users want to disable specific alerts
+	if threshold.Trigger >= 100 {
+		// Clear any existing alert for this metric
+		alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
+		m.mu.Lock()
+		if _, exists := m.activeAlerts[alertID]; exists {
+			delete(m.activeAlerts, alertID)
+			log.Debug().
+				Str("alertID", alertID).
+				Str("resource", resourceName).
+				Str("metric", metricType).
+				Float64("threshold", threshold.Trigger).
+				Msg("Alert cleared - threshold set to 100% or higher (disabled)")
+		}
+		m.mu.Unlock()
 		return
 	}
 	
