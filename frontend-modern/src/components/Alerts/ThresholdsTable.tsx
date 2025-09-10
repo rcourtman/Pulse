@@ -392,7 +392,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     // Update raw config
     const newRawConfig = { ...props.rawOverridesConfig() };
-    const hysteresisThresholds: Record<string, number> = {};
+    const hysteresisThresholds: Record<string, any> = {};
     Object.entries(overrideThresholds).forEach(([metric, value]) => {
       if (value !== undefined && value !== null) {
         hysteresisThresholds[metric] = { 
@@ -480,7 +480,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       
       // Update raw config
       const newRawConfig = { ...props.rawOverridesConfig() };
-      const hysteresisThresholds: Record<string, number> = {};
+      const hysteresisThresholds: Record<string, any> = {};
       
       // Only add threshold overrides that differ from defaults
       Object.entries(override.thresholds).forEach(([metric, value]) => {
@@ -555,7 +555,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       
       // Update raw config
       const newRawConfig = { ...props.rawOverridesConfig() };
-      const hysteresisThresholds: Record<string, number> = {};
+      const hysteresisThresholds: Record<string, any> = {};
       
       // Add threshold configs
       Object.entries(cleanThresholds).forEach(([metric, value]) => {
