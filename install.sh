@@ -1524,6 +1524,11 @@ start_pulse() {
     fi
 }
 
+create_marker_file() {
+    # Create marker file for version tracking (helps with Community Scripts compatibility)
+    touch ~/.pulse 2>/dev/null || true
+}
+
 print_completion() {
     local IP=$(hostname -I | awk '{print $1}')
     
@@ -1648,6 +1653,7 @@ main() {
             fi
             
             start_pulse
+            create_marker_file
             print_completion
             return 0
         fi
@@ -1857,6 +1863,7 @@ main() {
                 fi
                 
                 start_pulse
+                create_marker_file
                 print_completion
                 exit 0
                 ;;
@@ -1913,6 +1920,7 @@ main() {
                 fi
                 
                 start_pulse
+                create_marker_file
                 print_completion
                 exit 0
                 ;;
@@ -2021,6 +2029,7 @@ main() {
         fi
         
         start_pulse
+        create_marker_file
         print_completion
     fi
 }
