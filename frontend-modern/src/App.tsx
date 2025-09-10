@@ -152,15 +152,6 @@ function App() {
     console.log('[App] onMount triggered, starting auth check...');
     console.log('[App] Current location:', window.location.href);
     
-    // For development, just skip auth entirely
-    console.log('[App] Development mode - skipping auth');
-    setIsLoading(false);
-    setNeedsAuth(false);
-    if (!wsStore()) {
-      setWsStore(getGlobalWebSocketStore());
-    }
-    return;
-    
     // Add a timeout fallback - if auth check takes too long, just proceed
     const timeoutId = setTimeout(() => {
       console.error('[App] Auth check timeout - proceeding without auth');
