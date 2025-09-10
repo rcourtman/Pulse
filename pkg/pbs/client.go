@@ -336,10 +336,16 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	log.Debug().Msg("PBS GetNodeStatus: starting")
 	
-	// PBS uses "localhost" as the node name for single-node installations
-	// Try localhost directly (this is the standard for PBS)
+	// The /nodes/localhost/status endpoint requires special permissions that API tokens often don't have
+	// This is a known PBS limitation - the endpoint is primarily for internal use
+	// We'll gracefully handle the permission error and return nil
 	statusResp, err := c.get(ctx, "/nodes/localhost/status")
 	if err != nil {
+		// Check if this is a permission error (403)
+		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission") {
+			log.Debug().Msg("PBS GetNodeStatus: permission denied (expected with API tokens) - returning nil")
+			return nil, nil // Return nil without error for permission issues
+		}
 		return nil, fmt.Errorf("failed to get node status: %w", err)
 	}
 	defer statusResp.Body.Close()
@@ -405,7 +411,9 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	var datastores []Datastore
 	for _, ds := range datastoreList.Data {
 		// Try to get RRD data first which has more statistics
-		rrdResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/rrd", ds.Store))
+		// RRD requires cf (consolidation function) and timeframe parameters
+		rrdPath := fmt.Sprintf("/admin/datastore/%s/rrd?cf=average&timeframe=hour", ds.Store)
+		rrdResp, err := c.get(ctx, rrdPath)
 		var dedupFactor float64
 		if err == nil {
 			defer rrdResp.Body.Close()

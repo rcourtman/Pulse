@@ -2547,7 +2547,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	if err != nil {
 		// Log as debug instead of error since this is often a permission issue
 		log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
-	} else {
+	} else if nodeStatus != nil {
+		// Only process if we got actual status data (might be nil due to permissions)
 		pbsInst.CPU = nodeStatus.CPU
 		if nodeStatus.Memory.Total > 0 {
 			pbsInst.Memory = float64(nodeStatus.Memory.Used) / float64(nodeStatus.Memory.Total) * 100
