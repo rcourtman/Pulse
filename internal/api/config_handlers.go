@@ -1045,6 +1045,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Invalid node ID", http.StatusBadRequest)
 		return
 	}
+	
 
 	// Update the node
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
@@ -1144,6 +1145,26 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+	
+	// IMPORTANT: Preserve alert overrides when updating nodes
+	// This fixes issue #440 where PBS alert thresholds were being reset
+	// Alert overrides are stored separately from node configuration
+	// and must be explicitly preserved during node updates
+	if h.monitor != nil {
+		// Load current alert configuration to preserve overrides
+		alertConfig, err := h.persistence.LoadAlertConfig()
+		if err == nil && alertConfig != nil {
+			// The alert configuration contains overrides keyed by node ID
+			// Since the node ID doesn't change (it's based on index), the overrides
+			// remain valid and don't need migration
+			// Just ensure the alert manager has the current configuration
+			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
+			log.Debug().
+				Str("nodeID", nodeID).
+				Str("nodeType", nodeType).
+				Msg("Preserved alert overrides after node update")
+		}
 	}
 
 	// Reload monitor with new configuration
