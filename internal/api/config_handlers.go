@@ -1175,7 +1175,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 				
 				// Check if there are overrides for this PBS node
 				if alertConfig.Overrides != nil {
-					if override, exists := alertConfig.Overrides[monitoringID]; exists {
+					if _, exists := alertConfig.Overrides[monitoringID]; exists {
 						log.Debug().
 							Str("nodeID", nodeID).
 							Str("monitoringID", monitoringID).
@@ -2855,7 +2855,7 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	host := r.Host
 	
 	// Dev environment fix: if we detect localhost from vite proxy AND we're in dev mode, use the actual IP
-	if host == "127.0.0.1:7656" {
+	if host == "127.0.0.1:7656" || host == "localhost:7656" {
 		// Check if we're in development mode
 		if _, err := os.Stat("/opt/pulse/.dev-mode"); err == nil {
 			// This is the dev backend being proxied through vite on the dev machine
