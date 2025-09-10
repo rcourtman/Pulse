@@ -260,19 +260,18 @@ const UnifiedBackups: Component = () => {
       // Determine if this is actually a PBS backup based on storage
       const backupType = backup.isPBS ? 'remote' : 'local';
       
-      // Skip PBS backups that we already have from direct PBS API
-      if (backup.isPBS && backup.volid) {
-        // Check if we already have this from PBS API using the same key format
-        const backupKey = `${backup.vmid}-${backup.ctime}`;
-        
+      // Create a key to check for duplicates - use VMID and timestamp
+      // This prevents the same backup from appearing twice if it's in multiple storages
+      const backupKey = `${backup.vmid}-${backup.ctime}`;
+      
+      // Skip if we've already seen this backup (PBS or local duplicate)
+      if (seenBackups.has(backupKey)) {
         if (debugMode) {
-          console.log(`PVE storage backup: vmid=${backup.vmid}, ctime=${backup.ctime}, key=${backupKey}, isPBS=${backup.isPBS}, skip=${seenBackups.has(backupKey)}`);
+          console.log(`PVE storage backup duplicate skipped: vmid=${backup.vmid}, ctime=${backup.ctime}, key=${backupKey}, storage=${backup.storage}`);
         }
-        
-        if (seenBackups.has(backupKey)) {
-          return; // Skip duplicate
-        }
+        return; // Skip duplicate
       }
+      seenBackups.add(backupKey); // Mark as seen to prevent duplicates
       
       // Determine the display type based on backup.type and VMID
       // VMID 0 = host config backup (e.g. PMG/PVE host configs)
