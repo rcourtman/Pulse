@@ -263,14 +263,22 @@ const Storage: Component = () => {
       
       {/* Show simple search for disks */}
       <Show when={tabView() === 'disks'}>
-        <div class="mb-4">
-          <input
-            type="text"
-            placeholder="Search disks by model, path, or serial..."
-            value={searchTerm()}
-            onInput={(e) => setSearchTerm(e.currentTarget.value)}
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-          />
+        <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3">
+          <div class="relative">
+            <input
+              type="text"
+              placeholder="Search disks by model, path, or serial..."
+              value={searchTerm()}
+              onInput={(e) => setSearchTerm(e.currentTarget.value)}
+              ref={(el) => searchInputRef = el}
+              class="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                     bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
+                     focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+            />
+            <svg class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
         </div>
       </Show>
       
