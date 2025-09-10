@@ -290,8 +290,8 @@ export function Alerts() {
             storage: config.timeThresholds.storage ?? 30,
             pbs: config.timeThresholds.pbs ?? 30
           });
-        } else if (config.timeThreshold !== undefined) {
-          // Fallback to legacy single threshold for all types
+        } else if (config.timeThreshold !== undefined && config.timeThreshold > 0) {
+          // Fallback to legacy single threshold for all types (only if it's non-zero)
           setTimeThresholds({
             guest: config.timeThreshold,
             node: config.timeThreshold,
@@ -299,6 +299,7 @@ export function Alerts() {
             pbs: config.timeThreshold
           });
         }
+        // If neither is set or legacy is 0, keep the defaults (10, 15, 30, 30)
         if (config.overrides) {
           // Store raw config to be processed when state is available
           setRawOverridesConfig(config.overrides);
