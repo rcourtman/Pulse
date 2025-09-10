@@ -1166,10 +1166,26 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		// Load current alert configuration to preserve overrides
 		alertConfig, err := h.persistence.LoadAlertConfig()
 		if err == nil && alertConfig != nil {
-			// The alert configuration contains overrides keyed by node ID
-			// Since the node ID doesn't change (it's based on index), the overrides
-			// remain valid and don't need migration
-			// Just ensure the alert manager has the current configuration
+			// For PBS nodes, we need to handle ID mapping
+			// PBS monitoring uses "pbs-<name>" but config uses "pbs-<index>"
+			// We need to preserve overrides by the monitoring ID
+			if nodeType == "pbs" && index < len(h.config.PBSInstances) {
+				pbsName := h.config.PBSInstances[index].Name
+				monitoringID := "pbs-" + pbsName
+				
+				// Check if there are overrides for this PBS node
+				if alertConfig.Overrides != nil {
+					if override, exists := alertConfig.Overrides[monitoringID]; exists {
+						log.Debug().
+							Str("nodeID", nodeID).
+							Str("monitoringID", monitoringID).
+							Str("pbsName", pbsName).
+							Msg("Preserving PBS alert overrides using monitoring ID")
+					}
+				}
+			}
+			
+			// Apply the alert configuration to preserve all overrides
 			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
 			log.Debug().
 				Str("nodeID", nodeID).
