@@ -347,7 +347,18 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 				_, err = testClient.GetNodes(testCtx)
 				cancel()
 				
-				if err == nil {
+				// Check if error is VM-specific (shouldn't prevent recovery)
+				isVMSpecificError := false
+				if err != nil {
+					errStr := err.Error()
+					if strings.Contains(errStr, "No QEMU guest agent") || 
+					   strings.Contains(errStr, "QEMU guest agent is not running") ||
+					   strings.Contains(errStr, "guest agent") {
+						isVMSpecificError = true
+					}
+				}
+				
+				if err == nil || isVMSpecificError {
 					recoveredEndpoints <- ep
 					
 					// Store the client with original timeout
@@ -359,10 +370,17 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 					cc.clients[ep] = fullClient
 					cc.mu.Unlock()
 					
-					log.Info().
-						Str("cluster", cc.name).
-						Str("endpoint", ep).
-						Msg("Recovered unhealthy cluster node")
+					if isVMSpecificError {
+						log.Info().
+							Str("cluster", cc.name).
+							Str("endpoint", ep).
+							Msg("Recovered unhealthy cluster node (ignoring VM-specific errors)")
+					} else {
+						log.Info().
+							Str("cluster", cc.name).
+							Str("endpoint", ep).
+							Msg("Recovered unhealthy cluster node")
+					}
 				}
 			}
 		}(endpoint)
@@ -425,12 +443,16 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
 		// Error 403 for storage operations means permission issue, not node health issue
 		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
+		// Error 500 with "QEMU guest agent is not running" means VM-specific issue, not node failure
+		// Error 500 with any "guest agent" message means VM-specific issue, not node failure
 		// JSON unmarshal errors are data format issues, not connectivity problems
 		if strings.Contains(errStr, "595") || 
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "No QEMU guest agent configured")) ||
 		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "QEMU guest agent is not running")) ||
+		   (strings.Contains(errStr, "500") && strings.Contains(errStr, "guest agent")) ||
+		   strings.Contains(errStr, "guest agent") ||
 		   (strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
 		   strings.Contains(errStr, "permission denied") ||
 		   strings.Contains(errStr, "json: cannot unmarshal") ||
