@@ -244,11 +244,6 @@ const Storage: Component = () => {
             }`}
           >
             Physical Disks
-            <Show when={state.physicalDisks?.length > 0}>
-              <span class="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
-                {state.physicalDisks.length}
-              </span>
-            </Show>
           </button>
         </nav>
       </div>
