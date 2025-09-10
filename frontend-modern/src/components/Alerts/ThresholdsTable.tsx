@@ -249,7 +249,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     
     const search = searchTerm().toLowerCase();
     const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
-    console.log('PBS memo recomputing, overrides:', Array.from(overridesMap.entries()));
     
     // Get PBS instances from props
     const pbsInstances = props.pbsInstances || [];
@@ -357,33 +356,23 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const allGuests = Object.values(guestsGroupedByNode()).flat();
     const allResources = [...nodesWithOverrides(), ...allGuests, ...storageWithOverrides(), ...pbsServersWithOverrides()];
     const resource = allResources.find(r => r.id === resourceId);
-    if (!resource) {
-      console.log('Resource not found for id:', resourceId);
-      return;
-    }
+    if (!resource) return;
     
-    console.log('SAVING PBS THRESHOLD FOR:', resourceId, 'Type:', resource.type);
     const editedThresholds = editingThresholds();
     const defaultThresholds = resource.defaults;
-    console.log('Edited thresholds:', editedThresholds);
-    console.log('Default thresholds:', defaultThresholds);
     
     // Only include values that differ from defaults
     const overrideThresholds: Record<string, number> = {};
     Object.keys(editedThresholds).forEach(key => {
       const editedValue = editedThresholds[key];
       const defaultValue = defaultThresholds[key as keyof typeof defaultThresholds];
-      console.log(`Comparing ${key}: edited=${editedValue}, default=${defaultValue}`);
       if (editedValue !== defaultValue && editedValue !== undefined && editedValue !== '') {
         overrideThresholds[key] = editedValue;
       }
     });
     
-    console.log('Override thresholds to save:', overrideThresholds);
-    
     // If no overrides, just cancel the edit
     if (Object.keys(overrideThresholds).length === 0) {
-      console.log('No overrides to save, canceling edit');
       // If there was an existing override, remove it
       if (resource.hasOverride) {
         const newOverrides = props.overrides().filter(o => o.id !== resourceId);
@@ -440,7 +429,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     props.setRawOverridesConfig(newRawConfig);
     
     props.setHasUnsavedChanges(true);
-    console.log('Save complete, clearing edit state');
     setEditingId(null);
     setEditingThresholds({});
   };

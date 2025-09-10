@@ -123,9 +123,6 @@ export function ResourceTable(props: ResourceTableProps) {
                             const val = thresh?.[metric] || defaults[metric];
                             return typeof val === 'string' ? (parseFloat(val) || 0) : (val || 0);
                           }
-                          if (resource.type === 'pbs') {
-                            console.log(`PBS Display - Resource: ${resource.id}, Metric: ${metric}, Thresholds:`, resource.thresholds, 'Defaults:', defaults);
-                          }
                           return resource.thresholds?.[metric] || defaults[metric] || 0;
                         };
                         const isOverridden = (metric: string) => {
