@@ -867,13 +867,8 @@ create_lxc_container() {
         echo 'net.ipv4.tcp_keepalive_time=60' >> /etc/sysctl.conf
         sysctl -p >/dev/null 2>&1
         
-        # Create convenient update script
-        cat > /usr/local/bin/update << 'EOF'
-#!/bin/bash
-echo 'Updating Pulse...'
-curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-EOF
-        chmod +x /usr/local/bin/update
+        # Note: We don't create /usr/local/bin/update to avoid conflicts with Community Scripts
+        # Native installations should update using: curl -fsSL ... | bash
         
         # Ensure /usr/local/bin is in PATH for all users
         if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
@@ -1325,15 +1320,9 @@ setup_directories() {
 }
 
 setup_update_command() {
-    # Create or update the convenient update script
-    if [[ ! -f /usr/local/bin/update ]]; then
-        cat > /usr/local/bin/update << 'EOF'
-#!/bin/bash
-echo 'Updating Pulse...'
-curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-EOF
-        chmod +x /usr/local/bin/update
-    fi
+    # Function kept for compatibility but no longer creates update command
+    # Community Scripts installations have their own update mechanism at /bin/update
+    # Native installations should update using: curl -fsSL ... | bash
     
     # Ensure /usr/local/bin is in PATH for all users
     if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
@@ -2073,7 +2062,8 @@ uninstall_pulse() {
     rm -f /etc/systemd/system/pulse-update.timer
     rm -f /usr/local/bin/pulse
     rm -f /usr/local/bin/pulse-auto-update.sh
-    rm -f /usr/local/bin/update
+    # Don't remove update commands - might be from community scripts
+    # rm -f /usr/local/bin/update
     
     # Remove user (if it exists and isn't being used by other services)
     if id "pulse" &>/dev/null; then
