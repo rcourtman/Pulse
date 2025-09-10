@@ -943,11 +943,23 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	// Poll physical disks for health monitoring
 	log.Debug().Int("nodeCount", len(nodes)).Msg("Starting disk health polling")
+	
+	// Get existing disks from state to preserve data for offline nodes
+	currentState := m.state.GetSnapshot()
+	existingDisksMap := make(map[string]models.PhysicalDisk)
+	for _, disk := range currentState.PhysicalDisks {
+		if disk.Instance == instanceName {
+			existingDisksMap[disk.ID] = disk
+		}
+	}
+	
 	var allDisks []models.PhysicalDisk
+	polledNodes := make(map[string]bool) // Track which nodes we successfully polled
+	
 	for _, node := range nodes {
-		// Skip offline nodes
+		// Skip offline nodes but preserve their existing disk data
 		if node.Status != "online" {
-			log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node")
+			log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
 			continue
 		}
 		
@@ -967,6 +979,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			Str("node", node.Node).
 			Int("diskCount", len(disks)).
 			Msg("Got disk list for node")
+		
+		// Mark this node as successfully polled
+		polledNodes[node.Node] = true
 		
 		// Check each disk for health issues and add to state
 		for _, disk := range disks {
@@ -1025,10 +1040,24 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 	
+	// Preserve existing disk data for nodes that weren't polled (offline or error)
+	for diskID, existingDisk := range existingDisksMap {
+		// Only preserve if we didn't poll this node
+		if !polledNodes[existingDisk.Node] {
+			// Keep the existing disk data but update the LastChecked to indicate it's stale
+			allDisks = append(allDisks, existingDisk)
+			log.Debug().
+				Str("node", existingDisk.Node).
+				Str("disk", existingDisk.DevPath).
+				Msg("Preserving existing disk data for unpolled node")
+		}
+	}
+	
 	// Update physical disks in state
 	log.Debug().
 		Str("instance", instanceName).
 		Int("diskCount", len(allDisks)).
+		Int("preservedCount", len(existingDisksMap)-len(polledNodes)).
 		Msg("Updating physical disks in state")
 	m.state.UpdatePhysicalDisks(instanceName, allDisks)
 
