@@ -1310,13 +1310,22 @@ download_pulse() {
 setup_directories() {
     print_info "Setting up directories..."
     
-    # Create directories
+    # Create directories (only if they don't exist)
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$INSTALL_DIR"
     
-    # Set permissions
-    chown -R pulse:pulse "$CONFIG_DIR" "$INSTALL_DIR"
+    # Set permissions (preserve existing files)
+    # Use chown without -R on CONFIG_DIR to avoid changing existing file permissions
+    chown pulse:pulse "$CONFIG_DIR"
+    chown -R pulse:pulse "$INSTALL_DIR"
     chmod 700 "$CONFIG_DIR"
+    
+    # Ensure critical config files retain proper permissions if they exist
+    for config_file in "$CONFIG_DIR"/alerts.json "$CONFIG_DIR"/system.json "$CONFIG_DIR"/*.enc; do
+        if [[ -f "$config_file" ]]; then
+            chown pulse:pulse "$config_file"
+        fi
+    done
 }
 
 setup_update_command() {
