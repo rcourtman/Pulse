@@ -289,10 +289,21 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 				continue
 			}
 			
+			// Build the host URL with proper port
+			// Prefer IP if available, otherwise use node name
+			nodeHost := clusterNode.IP
+			if nodeHost == "" {
+				nodeHost = clusterNode.Name
+			}
+			// Ensure host has port (PVE uses 8006)
+			if !strings.Contains(nodeHost, ":") {
+				nodeHost = nodeHost + ":8006"
+			}
+			
 			endpoint := config.ClusterEndpoint{
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
-				Host:     clusterNode.Name,
+				Host:     nodeHost,
 				Online:   clusterNode.Online == 1,
 				LastSeen: time.Now(),
 			}
