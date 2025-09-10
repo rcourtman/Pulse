@@ -1041,7 +1041,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	}
 	
 	// Preserve existing disk data for nodes that weren't polled (offline or error)
-	for diskID, existingDisk := range existingDisksMap {
+	for _, existingDisk := range existingDisksMap {
 		// Only preserve if we didn't poll this node
 		if !polledNodes[existingDisk.Node] {
 			// Keep the existing disk data but update the LastChecked to indicate it's stale
