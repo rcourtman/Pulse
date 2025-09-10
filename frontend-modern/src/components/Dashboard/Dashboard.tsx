@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Show, onMount } from 'solid-js';
 import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import { useWebSocket } from '@/App';
@@ -11,6 +11,8 @@ import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { MetricBar } from './MetricBar';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DashboardFilter } from './DashboardFilter';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import type { GuestMetadata } from '@/api/guestMetadata';
 
 interface DashboardProps {
   vms: VM[];
@@ -28,6 +30,7 @@ export function Dashboard(props: DashboardProps) {
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
   
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -77,6 +80,17 @@ export function Dashboard(props: DashboardProps) {
   
   // Create tooltip system
   const TooltipComponent = createTooltipSystem();
+  
+  // Load all guest metadata on mount (single API call for all guests)
+  onMount(async () => {
+    try {
+      const metadata = await GuestMetadataAPI.getAllMetadata();
+      setGuestMetadata(metadata || {});
+    } catch (err) {
+      // Silently fail - metadata is optional for display
+      console.debug('Failed to load guest metadata:', err);
+    }
+  });
   
   
   
@@ -780,10 +794,12 @@ export function Dashboard(props: DashboardProps) {
                         <ComponentErrorBoundary name="GuestRow">
                           {(() => {
                             const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
+                            const metadata = guestMetadata()[guestId] || guestMetadata()[`${guest.node}-${guest.vmid}`];
                             return (
                               <GuestRow 
                                 guest={guest} 
                                 alertStyles={getAlertStyles(guestId, activeAlerts)}
+                                customUrl={metadata?.customUrl}
                                 onTagClick={handleTagClick}
                                 activeSearch={search()}
                               />
