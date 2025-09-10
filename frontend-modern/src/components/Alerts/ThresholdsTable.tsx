@@ -53,6 +53,8 @@ interface ThresholdsTableProps {
   setStorageDefault: (value: number) => void;
   timeThreshold: () => number;
   setTimeThreshold: (value: number) => void;
+  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
+  setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
   setHasUnsavedChanges: (value: boolean) => void;
   activeAlerts?: Record<string, Alert>;
 }
@@ -793,29 +795,84 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               </div>
             </div>
             
-            {/* Additional settings row */}
-            <div class="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-gray-500 dark:text-gray-400">
-                  Alert delay:
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="300"
-                  value={props.timeThreshold()}
-                  onInput={(e) => {
-                    props.setTimeThreshold(parseInt(e.currentTarget.value) || 0);
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="w-14 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  seconds before alerting
-                </span>
-              </div>
-              
+            {/* Alert delay settings per resource type */}
+            <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div class="mb-2">
+                <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Alert Delay (seconds before triggering)</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
+                      VMs/Containers:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={props.timeThresholds().guest}
+                      onInput={(e) => {
+                        props.setTimeThresholds({...props.timeThresholds(), guest: parseInt(e.currentTarget.value) || 0});
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
+                      Nodes:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={props.timeThresholds().node}
+                      onInput={(e) => {
+                        props.setTimeThresholds({...props.timeThresholds(), node: parseInt(e.currentTarget.value) || 0});
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
+                      Storage:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={props.timeThresholds().storage}
+                      onInput={(e) => {
+                        props.setTimeThresholds({...props.timeThresholds(), storage: parseInt(e.currentTarget.value) || 0});
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
+                      PBS:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={props.timeThresholds().pbs}
+                      onInput={(e) => {
+                        props.setTimeThresholds({...props.timeThresholds(), pbs: parseInt(e.currentTarget.value) || 0});
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+            </div>
+            
+            {/* Reset button row */}
+            <div class="flex justify-end pt-2">
               <button 
                 onClick={() => {
                   props.setGuestDefaults({
@@ -834,6 +891,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                   });
                   props.setStorageDefault(85);
                   props.setTimeThreshold(0);
+                  props.setTimeThresholds({ guest: 10, node: 15, storage: 30, pbs: 30 });
                   props.setHasUnsavedChanges(true);
                 }}
                 class="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
@@ -846,6 +904,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               </button>
             </div>
           </div>
+        </div>
       </div>
       
       {/* Search Bar */}

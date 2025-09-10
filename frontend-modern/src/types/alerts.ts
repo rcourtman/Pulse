@@ -57,7 +57,13 @@ export interface AlertConfig {
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;
-  timeThreshold?: number;
+  timeThreshold?: number; // Legacy single global delay
+  timeThresholds?: {
+    guest?: number;
+    node?: number;
+    storage?: number;
+    pbs?: number;
+  };
   aggregation?: {
     enabled: boolean;
     timeWindow: number;

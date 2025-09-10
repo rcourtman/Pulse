@@ -69,6 +69,7 @@ type ThresholdConfig struct {
 	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
 	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
+	Usage               *HysteresisThreshold `json:"usage,omitempty"` // For storage devices
 	// Legacy fields for backward compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
 	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
@@ -169,7 +170,8 @@ type AlertConfig struct {
 	MinimumDelta      float64                     `json:"minimumDelta"`      // Minimum % change to trigger new alert
 	SuppressionWindow int                         `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
 	HysteresisMargin  float64                     `json:"hysteresisMargin"`  // Default margin for legacy thresholds
-	TimeThreshold     int                         `json:"timeThreshold"`     // Seconds that threshold must be exceeded before triggering
+	TimeThreshold     int                         `json:"timeThreshold"`     // Legacy: Seconds that threshold must be exceeded before triggering
+	TimeThresholds    map[string]int              `json:"timeThresholds"`    // Per-type delays: guest, node, storage, pbs
 }
 
 // Manager handles alert monitoring and state
@@ -922,6 +924,34 @@ func (m *Manager) clearAlert(alertID string) {
 	}
 }
 
+// getTimeThresholdForType returns the appropriate time threshold for the resource type
+func (m *Manager) getTimeThresholdForType(resourceType string) int {
+	// Use per-type thresholds if available
+	if m.config.TimeThresholds != nil {
+		switch resourceType {
+		case "qemu", "lxc", "guest":
+			if delay, ok := m.config.TimeThresholds["guest"]; ok {
+				return delay
+			}
+		case "node":
+			if delay, ok := m.config.TimeThresholds["node"]; ok {
+				return delay
+			}
+		case "storage":
+			if delay, ok := m.config.TimeThresholds["storage"]; ok {
+				return delay
+			}
+		case "pbs":
+			if delay, ok := m.config.TimeThresholds["pbs"]; ok {
+				return delay
+			}
+		}
+	}
+	
+	// Fall back to legacy single threshold
+	return m.config.TimeThreshold
+}
+
 // checkMetric checks a single metric against its threshold with hysteresis
 func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold) {
 	if threshold == nil || threshold.Trigger <= 0 {
@@ -956,24 +986,27 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	if value >= threshold.Trigger {
 		// Threshold exceeded
 		if !exists {
+			// Determine the appropriate time threshold based on resource type
+			timeThreshold := m.getTimeThresholdForType(resourceType)
+			
 			// Check if we have a time threshold configured
-			if m.config.TimeThreshold > 0 {
+			if timeThreshold > 0 {
 				// Check if this threshold was already pending
 				if pendingTime, isPending := m.pendingAlerts[alertID]; isPending {
 					// Check if enough time has passed
-					if time.Since(pendingTime) >= time.Duration(m.config.TimeThreshold)*time.Second {
+					if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
 						// Time threshold met, proceed with alert
 						delete(m.pendingAlerts, alertID)
 						log.Debug().
 							Str("alertID", alertID).
-							Int("timeThreshold", m.config.TimeThreshold).
+							Int("timeThreshold", timeThreshold).
 							Dur("elapsed", time.Since(pendingTime)).
 							Msg("Time threshold met, triggering alert")
 					} else {
 						// Still waiting for time threshold
 						log.Debug().
 							Str("alertID", alertID).
-							Int("timeThreshold", m.config.TimeThreshold).
+							Int("timeThreshold", timeThreshold).
 							Dur("elapsed", time.Since(pendingTime)).
 							Msg("Threshold exceeded but waiting for time threshold")
 						return
@@ -983,7 +1016,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					m.pendingAlerts[alertID] = time.Now()
 					log.Debug().
 						Str("alertID", alertID).
-						Int("timeThreshold", m.config.TimeThreshold).
+						Int("timeThreshold", timeThreshold).
 						Msg("Threshold exceeded, starting time threshold tracking")
 					return
 				}

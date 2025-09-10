@@ -282,6 +282,23 @@ export function Alerts() {
         if (config.timeThreshold !== undefined) {
           setTimeThreshold(config.timeThreshold);
         }
+        // Load per-type time thresholds if available
+        if (config.timeThresholds) {
+          setTimeThresholds({
+            guest: config.timeThresholds.guest ?? 10,
+            node: config.timeThresholds.node ?? 15,
+            storage: config.timeThresholds.storage ?? 30,
+            pbs: config.timeThresholds.pbs ?? 30
+          });
+        } else if (config.timeThreshold !== undefined) {
+          // Fallback to legacy single threshold for all types
+          setTimeThresholds({
+            guest: config.timeThreshold,
+            node: config.timeThreshold,
+            storage: config.timeThreshold,
+            pbs: config.timeThreshold
+          });
+        }
         if (config.overrides) {
           // Store raw config to be processed when state is available
           setRawOverridesConfig(config.overrides);
@@ -461,7 +478,13 @@ export function Alerts() {
   });
 
   const [storageDefault, setStorageDefault] = createSignal(85);
-  const [timeThreshold, setTimeThreshold] = createSignal(0);
+  const [timeThreshold, setTimeThreshold] = createSignal(0); // Legacy
+  const [timeThresholds, setTimeThresholds] = createSignal({
+    guest: 10,
+    node: 15,
+    storage: 30,
+    pbs: 30
+  });
   
   const tabs: { id: AlertTab; label: string; icon: string }[] = [
     { 
@@ -546,7 +569,8 @@ export function Alerts() {
                       minimumDelta: 2.0,
                       suppressionWindow: 5,
                       hysteresisMargin: 5.0,
-                      timeThreshold: timeThreshold() || 0,
+                      timeThreshold: timeThreshold() || 0, // Legacy
+                      timeThresholds: timeThresholds(),
                       // Use rawOverridesConfig which is already properly formatted with disabled flags
                       overrides: rawOverridesConfig(),
                       schedule: {
@@ -668,6 +692,8 @@ export function Alerts() {
               setStorageDefault={setStorageDefault}
               timeThreshold={timeThreshold}
               setTimeThreshold={setTimeThreshold}
+              timeThresholds={timeThresholds}
+              setTimeThresholds={setTimeThresholds}
               activeAlerts={activeAlerts}
               setHasUnsavedChanges={setHasUnsavedChanges}
             />
@@ -991,12 +1017,14 @@ interface ThresholdsTabProps {
   nodeDefaults: () => Record<string, number>;
   storageDefault: () => number;
   timeThreshold: () => number;
+  timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, unknown>;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
+  setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
   setOverrides: (value: Override[]) => void;
   setRawOverridesConfig: (value: Record<string, unknown>) => void;
   activeAlerts: Record<string, Alert>;
@@ -1023,6 +1051,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setStorageDefault={props.setStorageDefault}
       timeThreshold={props.timeThreshold}
       setTimeThreshold={props.setTimeThreshold}
+      timeThresholds={props.timeThresholds}
+      setTimeThresholds={props.setTimeThresholds}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
       activeAlerts={props.activeAlerts}
     />
