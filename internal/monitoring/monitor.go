@@ -66,6 +66,8 @@ type Monitor struct {
 	pollCounter      int64                // Counter for polling cycles
 	authFailures     map[string]int       // Track consecutive auth failures per node
 	lastAuthAttempt  map[string]time.Time // Track last auth attempt time
+	lastClusterCheck map[string]time.Time // Track last cluster check for standalone nodes
+	persistence      *config.ConfigPersistence // Add persistence for saving updated configs
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -166,6 +168,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 		discoveryService: nil, // Will be initialized in Start()
 		authFailures:     make(map[string]int),
 		lastAuthAttempt:  make(map[string]time.Time),
+		lastClusterCheck: make(map[string]time.Time),
+		persistence:      config.NewConfigPersistence(cfg.DataPath),
 	}
 
 	// Load saved configurations
@@ -1060,6 +1064,42 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		existingNodes[node.Name] = true
 	}
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
+	
+	// Periodically re-check cluster status for nodes marked as standalone
+	// This addresses issue #437 where clusters aren't detected on first attempt
+	if !instanceCfg.IsCluster {
+		// Check every 5 minutes if this is actually a cluster
+		if time.Since(m.lastClusterCheck[instanceName]) > 5*time.Minute {
+			m.lastClusterCheck[instanceName] = time.Now()
+			
+			// Try to detect if this is actually a cluster
+			isActuallyCluster, checkErr := client.IsClusterMember(ctx)
+			if checkErr == nil && isActuallyCluster {
+				// This node is actually part of a cluster!
+				log.Info().
+					Str("instance", instanceName).
+					Msg("Detected that standalone node is actually part of a cluster - updating configuration")
+				
+				// Update the configuration
+				for i := range m.config.PVEInstances {
+					if m.config.PVEInstances[i].Name == instanceName {
+						m.config.PVEInstances[i].IsCluster = true
+						// Note: We can't get the cluster name here without direct client access
+						// It will be detected on the next configuration update
+						log.Info().
+							Str("instance", instanceName).
+							Msg("Marked node as cluster member - cluster name will be detected on next update")
+						
+						// Save the updated configuration
+						if m.persistence != nil {
+							m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances)
+						}
+						break
+					}
+				}
+			}
+		}
+	}
 	
 	// Update cluster endpoint online status if this is a cluster
 	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {

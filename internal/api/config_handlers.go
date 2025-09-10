@@ -219,15 +219,40 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 		return false, "", nil
 	}
 	
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	// Try to get cluster status with retries to handle API permission propagation delays
+	// This addresses issue #437 where cluster detection fails on first attempt
+	var clusterStatus []proxmox.ClusterStatus
+	var lastErr error
 	
-	// Get full cluster status to find the actual cluster name
-	// Note: This can cause certificate lookup errors on standalone nodes, but it's only done once during configuration
-	clusterStatus, err := tempClient.GetClusterStatus(ctx)
-	if err != nil {
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			// Wait a bit for permissions to propagate
+			time.Sleep(time.Duration(attempt) * time.Second)
+			log.Debug().Int("attempt", attempt+1).Msg("Retrying cluster detection")
+		}
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		
+		// Get full cluster status to find the actual cluster name
+		// Note: This can cause certificate lookup errors on standalone nodes, but it's only done once during configuration
+		clusterStatus, lastErr = tempClient.GetClusterStatus(ctx)
+		if lastErr == nil {
+			// Success!
+			break
+		}
+		
+		// Check if this is definitely not a cluster (e.g., 501 not implemented)
+		if strings.Contains(lastErr.Error(), "501") || strings.Contains(lastErr.Error(), "not implemented") {
+			// This is a standalone node, no need to retry
+			log.Debug().Err(lastErr).Msg("Standalone node detected - cluster API not available")
+			return false, "", nil
+		}
+	}
+	
+	if lastErr != nil {
 		// This is expected for standalone nodes - they will return an error when accessing cluster endpoints
-		log.Debug().Err(err).Msg("Could not get cluster status - likely a standalone node")
+		log.Debug().Err(lastErr).Msg("Could not get cluster status after retries - likely a standalone node")
 		return false, "", nil
 	}
 	
