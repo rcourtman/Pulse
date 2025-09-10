@@ -6,7 +6,7 @@
 
 **Real-time monitoring for Proxmox VE and PBS with alerts and webhooks.**
 
-Monitor your entire Proxmox infrastructure from a single dashboard. Get instant alerts when VMs go down, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
+Monitor your entire Proxmox infrastructure from a single dashboard. Get instant alerts when nodes go down, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
 
 ![Dashboard](docs/images/01-dashboard.png)
 
