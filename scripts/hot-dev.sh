@@ -91,7 +91,8 @@ echo ""
 if [ -f /opt/pulse/mock.env ]; then
     source /opt/pulse/mock.env
     if [ "$PULSE_MOCK_MODE" = "true" ]; then
-        echo "Mock mode ENABLED with $PULSE_MOCK_NODES nodes"
+        TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
+        echo "Mock mode ENABLED with $PULSE_MOCK_NODES nodes ($TOTAL_GUESTS total guests)"
     fi
 fi
 

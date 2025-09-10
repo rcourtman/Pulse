@@ -403,9 +403,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		wsHub.BroadcastAlertResolved(alertID)
-		// Broadcast updated state immediately so frontend gets the new activeAlerts list
-		state := m.GetState()
-		wsHub.BroadcastState(state)
+		// Don't broadcast full state here - it causes a cascade with many guests
+		// The frontend will get the updated alerts through the regular broadcast ticker
+		// state := m.GetState()
+		// wsHub.BroadcastState(state)
 	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
 		log.Info().
@@ -2695,7 +2696,6 @@ func (m *Monitor) GetState() models.StateSnapshot {
 		mockState := mock.GetMockState()
 		// Include real alerts from the alert manager
 		activeAlerts := m.alertManager.GetActiveAlerts()
-		log.Debug().Int("alertCount", len(activeAlerts)).Msg("GetState: fetching alerts for mock state")
 		modelAlerts := make([]models.Alert, 0, len(activeAlerts))
 		for _, alert := range activeAlerts {
 			modelAlerts = append(modelAlerts, models.Alert{

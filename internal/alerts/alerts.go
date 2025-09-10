@@ -1223,11 +1223,15 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 // GetActiveAlerts returns all active alerts
 func (m *Manager) GetActiveAlerts() []Alert {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Make a quick copy of the map to avoid holding the lock too long
+	alertsCopy := make(map[string]*Alert, len(m.activeAlerts))
+	for k, v := range m.activeAlerts {
+		alertsCopy[k] = v
+	}
+	m.mu.RUnlock()
 
-	log.Debug().Int("count", len(m.activeAlerts)).Msg("GetActiveAlerts called")
-	alerts := make([]Alert, 0, len(m.activeAlerts))
-	for _, alert := range m.activeAlerts {
+	alerts := make([]Alert, 0, len(alertsCopy))
+	for _, alert := range alertsCopy {
 		alerts = append(alerts, *alert)
 	}
 	return alerts

@@ -159,15 +159,19 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 		Str("alertID", alertID).
 		Msg("Alert unacknowledged successfully")
 	
-	// Broadcast updated state to all WebSocket clients
-	if h.wsHub != nil {
-		state := h.monitor.GetState()
-		h.wsHub.BroadcastState(state)
-		log.Debug().Msg("Broadcasted state after alert unacknowledgment")
-	}
-	
+	// Send response immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	
+	// Broadcast updated state to all WebSocket clients after response
+	// Do this in a goroutine to avoid blocking the HTTP response
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state)
+			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
+		}()
+	}
 }
 
 // AcknowledgeAlert acknowledges an alert
@@ -205,6 +209,10 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	// In a real implementation, you'd get the user from authentication
 	user := "admin"
 	
+	log.Debug().
+		Str("alertID", alertID).
+		Msg("About to call AcknowledgeAlert on manager")
+	
 	if err := h.monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 		log.Error().
 			Err(err).
@@ -219,15 +227,19 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		Str("user", user).
 		Msg("Alert acknowledged successfully")
 	
-	// Broadcast updated state to all WebSocket clients
-	if h.wsHub != nil {
-		state := h.monitor.GetState()
-		h.wsHub.BroadcastState(state)
-		log.Debug().Msg("Broadcasted state after alert acknowledgment")
-	}
-	
+	// Send response immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	
+	// Broadcast updated state to all WebSocket clients after response
+	// Do this in a goroutine to avoid blocking the HTTP response
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state)
+			log.Debug().Msg("Broadcasted state after alert acknowledgment")
+		}()
+	}
 }
 
 // ClearAlert manually clears an alert
@@ -258,15 +270,19 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	
 	h.monitor.GetAlertManager().ClearAlert(alertID)
 	
-	// Broadcast updated state to all WebSocket clients
-	if h.wsHub != nil {
-		state := h.monitor.GetState()
-		h.wsHub.BroadcastState(state)
-		log.Debug().Msg("Broadcasted state after alert clear")
-	}
-	
+	// Send response immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	
+	// Broadcast updated state to all WebSocket clients after response
+	// Do this in a goroutine to avoid blocking the HTTP response
+	if h.wsHub != nil {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state)
+			log.Debug().Msg("Broadcasted state after alert clear")
+		}()
+	}
 }
 
 // BulkAcknowledgeAlerts acknowledges multiple alerts at once
@@ -304,7 +320,14 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		results = append(results, result)
 	}
 
+	// Send response immediately
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results": results,
+	})
+	
 	// Broadcast updated state to all WebSocket clients if any alerts were acknowledged
+	// Do this in a goroutine to avoid blocking the HTTP response
 	if h.wsHub != nil {
 		hasSuccess := false
 		for _, result := range results {
@@ -314,16 +337,13 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 			}
 		}
 		if hasSuccess {
-			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
-			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
+			go func() {
+				state := h.monitor.GetState()
+				h.wsHub.BroadcastState(state)
+				log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
+			}()
 		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"results": results,
-	})
 }
 
 // BulkClearAlerts clears multiple alerts at once
@@ -352,17 +372,21 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 		results = append(results, result)
 	}
 
-	// Broadcast updated state to all WebSocket clients
-	if h.wsHub != nil && len(results) > 0 {
-		state := h.monitor.GetState()
-		h.wsHub.BroadcastState(state)
-		log.Debug().Msg("Broadcasted state after bulk alert clear")
-	}
-
+	// Send response immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"results": results,
 	})
+	
+	// Broadcast updated state to all WebSocket clients after response
+	// Do this in a goroutine to avoid blocking the HTTP response
+	if h.wsHub != nil && len(results) > 0 {
+		go func() {
+			state := h.monitor.GetState()
+			h.wsHub.BroadcastState(state)
+			log.Debug().Msg("Broadcasted state after bulk alert clear")
+		}()
+	}
 }
 
 // HandleAlerts routes alert requests to appropriate handlers
