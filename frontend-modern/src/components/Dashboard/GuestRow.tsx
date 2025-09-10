@@ -1,10 +1,9 @@
-import { Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
+import { Show, createMemo, createSignal, createEffect } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
-import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
 
@@ -39,24 +38,7 @@ export function GuestRow(props: GuestRowProps) {
   
   // Update custom URL when prop changes
   createEffect(() => {
-    if (props.customUrl !== undefined) {
-      setCustomUrl(props.customUrl);
-    }
-  });
-  
-  // Load custom URL from backend if not provided via props
-  onMount(async () => {
-    if (!props.customUrl) {
-      try {
-        const metadata = await GuestMetadataAPI.getMetadata(guestId());
-        if (metadata && metadata.customUrl) {
-          setCustomUrl(metadata.customUrl);
-        }
-      } catch (err) {
-        // Silently fail - not critical for display
-        console.debug('Failed to load guest metadata:', err);
-      }
-    }
+    setCustomUrl(props.customUrl);
   });
   
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
