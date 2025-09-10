@@ -136,24 +136,20 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </td>
                         <td class="px-2 py-1.5 text-xs">
                           <Show when={disk.wearout > 0} fallback={<span class="text-gray-400">-</span>}>
-                            <div class="flex items-center gap-2">
-                              <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                <div 
-                                  class={`h-1.5 rounded-full transition-all ${
-                                    disk.wearout >= 50 ? 'bg-green-500' :
-                                    disk.wearout >= 20 ? 'bg-yellow-500' :
-                                    disk.wearout >= 10 ? 'bg-orange-500' :
-                                    'bg-red-500'
-                                  }`}
-                                  style={`width: ${disk.wearout}%`}
-                                />
-                              </div>
-                              <span class={`text-xs font-medium ${
-                                disk.wearout < 10 ? 'text-red-600 dark:text-red-400' :
-                                disk.wearout < 20 ? 'text-yellow-600 dark:text-yellow-400' :
-                                'text-gray-600 dark:text-gray-400'
-                              }`}>
-                                {disk.wearout}%
+                            <div class="relative w-24 h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                              <div 
+                                class={`absolute top-0 left-0 h-full ${
+                                  disk.wearout >= 50 ? 'bg-green-500/60 dark:bg-green-500/50' :
+                                  disk.wearout >= 20 ? 'bg-yellow-500/60 dark:bg-yellow-500/50' :
+                                  disk.wearout >= 10 ? 'bg-orange-500/60 dark:bg-orange-500/50' :
+                                  'bg-red-500/60 dark:bg-red-500/50'
+                                }`}
+                                style={{ width: `${disk.wearout}%` }}
+                              />
+                              <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                                <span class="whitespace-nowrap px-0.5">
+                                  {disk.wearout}%
+                                </span>
                               </span>
                             </div>
                           </Show>
