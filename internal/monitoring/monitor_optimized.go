@@ -941,7 +941,7 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 	
 	// Preserve existing storage data for nodes that weren't polled (offline or error)
 	preservedCount := 0
-	for storageID, existingStorage := range existingStorageMap {
+	for _, existingStorage := range existingStorageMap {
 		// Only preserve if we didn't poll this node
 		if !polledNodes[existingStorage.Node] && existingStorage.Node != "cluster" {
 			allStorage = append(allStorage, existingStorage)
