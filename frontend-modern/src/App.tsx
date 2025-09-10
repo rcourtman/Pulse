@@ -101,6 +101,8 @@ function App() {
   // Apply dark mode immediately on initialization
   if (initialDarkMode) {
     document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
   }
   
   // Toggle dark mode
@@ -198,7 +200,8 @@ function App() {
         // Initialize WebSocket immediately since no auth needed
         setWsStore(getGlobalWebSocketStore());
         
-        // Theme is already applied on initialization, no need to reapply
+        // Don't override local theme preference when auth is disabled
+        // The user's local preference takes priority
         
         // Load version info even when auth is disabled
         UpdatesAPI.getVersion()
@@ -227,7 +230,8 @@ function App() {
         // Initialize WebSocket for proxy auth users
         setWsStore(getGlobalWebSocketStore());
         
-        // Theme is already applied on initialization, no need to reapply
+        // Don't override local theme preference for proxy auth users
+        // The user's local preference takes priority
         
         // Load version info
         UpdatesAPI.getVersion()
@@ -265,32 +269,9 @@ function App() {
         // Only initialize WebSocket after successful auth check
         setWsStore(getGlobalWebSocketStore());
         
-        // Load theme preference from server
-        try {
-          const systemSettings = await SettingsAPI.getSystemSettings();
-          let prefersDark = false;
-          
-          if (systemSettings.theme) {
-            // Use server-side theme preference
-            prefersDark = systemSettings.theme === 'dark';
-            // Also update localStorage to match server
-            localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
-          } else {
-            // No server preference, use the already initialized theme
-            prefersDark = darkMode();
-          }
-          
-          setDarkMode(prefersDark);
-          if (prefersDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        } catch (error) {
-          // If loading theme from server fails, keep using the initialized theme
-          console.error('Failed to load theme from server:', error);
-          // Theme is already set from localStorage/system preference on init
-        }
+        // Don't load theme preference from server - always use local preference
+        // This ensures the user's choice persists across reloads
+        // The theme is already set from localStorage on initialization
       }
     } catch (error) {
       console.error('Auth check error:', error);
