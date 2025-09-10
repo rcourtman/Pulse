@@ -45,10 +45,10 @@ interface ScheduleConfig {
 
 // Override interface for both guests and nodes
 interface Override {
-  id: string;  // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node)
+  id: string;  // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
   name: string;  // Display name
-  type: 'guest' | 'node' | 'storage';
-  resourceType?: string;  // VM, CT, Node, or Storage
+  type: 'guest' | 'node' | 'storage' | 'pbs';
+  resourceType?: string;  // VM, CT, Node, Storage, or PBS
   vmid?: number;  // Only for guests
   node?: string;  // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;
@@ -179,54 +179,74 @@ export function Alerts() {
   
   // Process raw overrides config when state changes
   createEffect(() => {
+    // Skip this effect if there are unsaved changes to prevent losing focus
+    if (hasUnsavedChanges()) {
+      return;
+    }
+    
     const rawConfig = rawOverridesConfig();
     if (Object.keys(rawConfig).length > 0 && state.nodes && state.vms && state.containers && state.storage) {
       // Convert overrides object to array format
       const overridesList: Override[] = [];
       
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
-        // Check if it's a node override by looking for matching node
-        const node = (state.nodes || []).find((n) => n.id === key);
-        if (node) {
-          overridesList.push({
-            id: key,
-            name: node.name,
-            type: 'node',
-            resourceType: 'Node',
-            disableConnectivity: thresholds.disableConnectivity || false,
-            thresholds: extractTriggerValues(thresholds)
-          });
-        } else {
-          // Check if it's a storage device
-          const storage = (state.storage || []).find((s) => s.id === key);
-          if (storage) {
+        // Check if it's a PBS server override (starts with "pbs-")
+        if (key.startsWith('pbs-')) {
+          const pbs = (state.pbs || []).find((p) => p.id === key);
+          if (pbs) {
             overridesList.push({
               id: key,
-              name: storage.name,
-              type: 'storage',
-              resourceType: 'Storage',
-              node: storage.node,
-              instance: storage.instance,
-              disabled: thresholds.disabled || false,
+              name: pbs.name,
+              type: 'pbs',
+              resourceType: 'PBS',
+              disableConnectivity: thresholds.disableConnectivity || false,
+              thresholds: extractTriggerValues(thresholds)
+            });
+          }
+        } else {
+          // Check if it's a node override by looking for matching node
+          const node = (state.nodes || []).find((n) => n.id === key);
+          if (node) {
+            overridesList.push({
+              id: key,
+              name: node.name,
+              type: 'node',
+              resourceType: 'Node',
+              disableConnectivity: thresholds.disableConnectivity || false,
               thresholds: extractTriggerValues(thresholds)
             });
           } else {
-            // Find the guest by matching the full ID
-            const vm = (state.vms || []).find((g) => g.id === key);
-            const container = (state.containers || []).find((g) => g.id === key);
-            const guest = vm || container;
-            if (guest) {
+            // Check if it's a storage device
+            const storage = (state.storage || []).find((s) => s.id === key);
+            if (storage) {
               overridesList.push({
                 id: key,
-                name: guest.name,
-                type: 'guest',
-                resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
-                vmid: guest.vmid,
-                node: guest.node,
-                instance: guest.instance,
+                name: storage.name,
+                type: 'storage',
+                resourceType: 'Storage',
+                node: storage.node,
+                instance: storage.instance,
                 disabled: thresholds.disabled || false,
                 thresholds: extractTriggerValues(thresholds)
               });
+            } else {
+              // Find the guest by matching the full ID
+              const vm = (state.vms || []).find((g) => g.id === key);
+              const container = (state.containers || []).find((g) => g.id === key);
+              const guest = vm || container;
+              if (guest) {
+                overridesList.push({
+                  id: key,
+                  name: guest.name,
+                  type: 'guest',
+                  resourceType: guest.type === 'qemu' ? 'VM' : 'CT',
+                  vmid: guest.vmid,
+                  node: guest.node,
+                  instance: guest.instance,
+                  disabled: thresholds.disabled || false,
+                  thresholds: extractTriggerValues(thresholds)
+                });
+              }
             }
           }
         }
@@ -238,9 +258,9 @@ export function Alerts() {
         overridesList.some((newOverride) => {
           const existing = currentOverrides.find(o => o.id === newOverride.id);
           if (!existing) return true;
-          // Check both thresholds and disableConnectivity for nodes
+          // Check both thresholds and disableConnectivity for nodes/PBS
           const thresholdsChanged = JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
-          const connectivityChanged = newOverride.type === 'node' && newOverride.disableConnectivity !== existing.disableConnectivity;
+          const connectivityChanged = (newOverride.type === 'node' || newOverride.type === 'pbs') && newOverride.disableConnectivity !== existing.disableConnectivity;
           const disabledChanged = (newOverride.type === 'guest' || newOverride.type === 'storage') && newOverride.disabled !== existing.disabled;
           return thresholdsChanged || connectivityChanged || disabledChanged;
         });
