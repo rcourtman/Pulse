@@ -59,7 +59,6 @@ interface ThresholdsTableProps {
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
-  const [showGlobalSettings, setShowGlobalSettings] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<Record<string, number>>({});
   
@@ -582,28 +581,16 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     <div class="space-y-6">
       {/* Global Settings Section */}
       <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-        <div 
-          class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50"
-          onClick={() => setShowGlobalSettings(!showGlobalSettings())}
-        >
+        <div class="p-4">
           <div>
             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Global Default Thresholds</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Default thresholds that apply to all resources unless overridden
             </p>
           </div>
-          <svg 
-            class={`w-5 h-5 text-gray-500 transition-transform ${showGlobalSettings() ? 'rotate-180' : ''}`}
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
         </div>
         
-        <Show when={showGlobalSettings()}>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
+        <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
             {/* Threshold table */}
             <div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -859,7 +846,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               </button>
             </div>
           </div>
-        </Show>
       </div>
       
       {/* Search Bar */}
