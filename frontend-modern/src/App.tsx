@@ -90,8 +90,18 @@ function App() {
   // Version info
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   
-  // Dark mode - only apply user preferences after authentication
-  const [darkMode, setDarkMode] = createSignal(false);
+  // Dark mode - initialize immediately from localStorage to prevent flash
+  // This addresses issue #443 where dark mode wasn't persisting
+  const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
+  const initialDarkMode = savedDarkMode !== null 
+    ? savedDarkMode === 'true'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const [darkMode, setDarkMode] = createSignal(initialDarkMode);
+  
+  // Apply dark mode immediately on initialization
+  if (initialDarkMode) {
+    document.documentElement.classList.add('dark');
+  }
   
   // Toggle dark mode
   const toggleDarkMode = async () => {
@@ -188,17 +198,7 @@ function App() {
         // Initialize WebSocket immediately since no auth needed
         setWsStore(getGlobalWebSocketStore());
         
-        // Apply theme preference
-        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-        const prefersDark = savedDarkMode !== null 
-          ? savedDarkMode === 'true'
-          : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(prefersDark);
-        if (prefersDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        // Theme is already applied on initialization, no need to reapply
         
         // Load version info even when auth is disabled
         UpdatesAPI.getVersion()
@@ -227,17 +227,7 @@ function App() {
         // Initialize WebSocket for proxy auth users
         setWsStore(getGlobalWebSocketStore());
         
-        // Apply theme preference
-        const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-        const prefersDark = savedDarkMode !== null 
-          ? savedDarkMode === 'true'
-          : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(prefersDark);
-        if (prefersDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        // Theme is already applied on initialization, no need to reapply
         
         // Load version info
         UpdatesAPI.getVersion()
@@ -286,11 +276,8 @@ function App() {
             // Also update localStorage to match server
             localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
           } else {
-            // No server preference, check localStorage then system preference
-            const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-            prefersDark = savedDarkMode !== null 
-              ? savedDarkMode === 'true'
-              : window.matchMedia('(prefers-color-scheme: dark)').matches;
+            // No server preference, use the already initialized theme
+            prefersDark = darkMode();
           }
           
           setDarkMode(prefersDark);
@@ -300,18 +287,9 @@ function App() {
             document.documentElement.classList.remove('dark');
           }
         } catch (error) {
-          // If loading theme from server fails, fall back to localStorage
+          // If loading theme from server fails, keep using the initialized theme
           console.error('Failed to load theme from server:', error);
-          const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-          const prefersDark = savedDarkMode !== null 
-            ? savedDarkMode === 'true'
-            : window.matchMedia('(prefers-color-scheme: dark)').matches;
-          setDarkMode(prefersDark);
-          if (prefersDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
+          // Theme is already set from localStorage/system preference on init
         }
       }
     } catch (error) {
@@ -320,17 +298,7 @@ function App() {
       setNeedsAuth(false);
       setWsStore(getGlobalWebSocketStore());
       
-      // Apply theme preference if we're proceeding without auth
-      const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
-      const prefersDark = savedDarkMode !== null 
-        ? savedDarkMode === 'true'
-        : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setDarkMode(prefersDark);
-      if (prefersDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      // Theme is already applied on initialization, no need to reapply
     } finally {
       clearTimeout(timeoutId); // Clear the timeout since we completed
       setIsLoading(false);
