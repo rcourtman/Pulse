@@ -711,14 +711,26 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel storage polling")
 	
+	// Get existing storage from state to preserve data for offline nodes
+	currentState := m.state.GetSnapshot()
+	existingStorageMap := make(map[string]models.Storage)
+	for _, storage := range currentState.Storage {
+		if storage.Instance == instanceName {
+			existingStorageMap[storage.ID] = storage
+		}
+	}
+	
+	// Track which nodes we successfully polled
+	polledNodes := make(map[string]bool)
+	
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
-		// Skip offline nodes
+		// Skip offline nodes but preserve their existing storage data
 		if node.Status != "online" {
 			log.Debug().
 				Str("node", node.Node).
 				Str("status", node.Status).
-				Msg("Skipping offline node for storage polling")
+				Msg("Skipping offline node for storage polling - preserving existing data")
 			continue
 		}
 		
@@ -900,6 +912,7 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			failedNodes++
 		} else {
 			successfulNodes++
+			polledNodes[result.node] = true // Mark this node as successfully polled
 			for _, storage := range result.storage {
 				if storage.Shared {
 					// For shared storage, use just the storage name as key
@@ -926,6 +939,20 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		allStorage = append(allStorage, storage)
 	}
 	
+	// Preserve existing storage data for nodes that weren't polled (offline or error)
+	preservedCount := 0
+	for storageID, existingStorage := range existingStorageMap {
+		// Only preserve if we didn't poll this node
+		if !polledNodes[existingStorage.Node] && existingStorage.Node != "cluster" {
+			allStorage = append(allStorage, existingStorage)
+			preservedCount++
+			log.Debug().
+				Str("node", existingStorage.Node).
+				Str("storage", existingStorage.Name).
+				Msg("Preserving existing storage data for unpolled node")
+		}
+	}
+	
 	// Check alerts for all storage devices
 	for _, storage := range allStorage {
 		m.alertManager.CheckStorage(storage)
@@ -948,6 +975,7 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			Int("totalStorage", len(allStorage)).
 			Int("successfulNodes", successfulNodes).
 			Int("failedNodes", failedNodes).
+			Int("preservedStorage", preservedCount).
 			Dur("duration", duration).
 			Msg("Parallel storage polling completed")
 	}

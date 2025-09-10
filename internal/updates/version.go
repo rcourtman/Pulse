@@ -1,6 +1,7 @@
 package updates
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Version represents a semantic version
@@ -204,8 +206,12 @@ func isDockerEnvironment() bool {
 		return true
 	}
 	
-	// Check cgroup for Docker
-	data, err := exec.Command("cat", "/proc/1/cgroup").Output()
+	// Check cgroup for Docker - with timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	
+	cmd := exec.CommandContext(ctx, "cat", "/proc/1/cgroup")
+	data, err := cmd.Output()
 	if err == nil && strings.Contains(string(data), "docker") {
 		return true
 	}
@@ -215,8 +221,9 @@ func isDockerEnvironment() bool {
 
 // fileExists checks if a file exists
 func fileExists(path string) bool {
-	cmd := exec.Command("test", "-f", path)
-	return cmd.Run() == nil
+	// Use os.Stat instead of exec.Command for better performance and reliability
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // GetDeploymentType determines how Pulse was deployed
@@ -228,7 +235,8 @@ func GetDeploymentType() string {
 	
 	// Check for ProxmoxVE LXC installation (has update command)
 	if fileExists("/bin/update") {
-		data, err := exec.Command("cat", "/bin/update").Output()
+		// Read file directly instead of using exec.Command
+		data, err := os.ReadFile("/bin/update")
 		if err == nil && strings.Contains(string(data), "pulse.sh") {
 			return "proxmoxve"
 		}
@@ -236,8 +244,8 @@ func GetDeploymentType() string {
 	
 	// Check for systemd service to determine installation type
 	if fileExists("/etc/systemd/system/pulse-backend.service") {
-		// Check if it's a ProxmoxVE installation (specific user setup)
-		data, err := exec.Command("cat", "/etc/systemd/system/pulse-backend.service").Output()
+		// Read file directly instead of using exec.Command
+		data, err := os.ReadFile("/etc/systemd/system/pulse-backend.service")
 		if err == nil {
 			content := string(data)
 			if strings.Contains(content, "User=pulse") && strings.Contains(content, "/opt/pulse/bin/pulse") {
