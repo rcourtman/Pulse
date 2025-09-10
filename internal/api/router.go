@@ -341,9 +341,11 @@ func (r *Router) setupRoutes() {
 				
 				// Then restart the service - this will kill us and restart with new env
 				time.Sleep(500 * time.Millisecond)
-				cmd = exec.Command("sudo", "-n", "systemctl", "restart", "pulse-backend")
+				// Try to restart with the detected service name
+				serviceName := detectServiceName()
+				cmd = exec.Command("sudo", "-n", "systemctl", "restart", serviceName)
 				if err := cmd.Run(); err != nil {
-					log.Error().Err(err).Msg("Failed to restart service, falling back to exit")
+					log.Error().Err(err).Str("service", serviceName).Msg("Failed to restart service, falling back to exit")
 					// Fallback to exit if restart fails
 					os.Exit(0)
 				}
@@ -1214,10 +1216,7 @@ PULSE_AUTH_PASS='%s'
 		LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed")
 		
 		// Detect service name for restart instructions
-		serviceName := "pulse"
-		if _, err := os.Stat("/etc/systemd/system/pulse-backend.service"); err == nil {
-			serviceName = "pulse-backend"
-		}
+		serviceName := detectServiceName()
 		
 		// Return success with manual restart instructions
 		w.Header().Set("Content-Type", "application/json")
