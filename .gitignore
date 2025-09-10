@@ -113,3 +113,7 @@ scripts/mock-dev.sh
 scripts/toggle-mock.sh
 scripts/toggle-mock-pure.sh
 MOCK_MODE_GUIDE.md
+
+# Claude Code Safety Hooks (local only)
+.claudecode-settings.json
+.claudecode-hooks/
