@@ -928,25 +928,6 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		return
 	}
 	
-	// If threshold is set to 100%, effectively disable the alert
-	// This addresses issue #434 where users want to disable specific alerts
-	if threshold.Trigger >= 100 {
-		// Clear any existing alert for this metric
-		alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
-		m.mu.Lock()
-		if _, exists := m.activeAlerts[alertID]; exists {
-			delete(m.activeAlerts, alertID)
-			log.Debug().
-				Str("alertID", alertID).
-				Str("resource", resourceName).
-				Str("metric", metricType).
-				Float64("threshold", threshold.Trigger).
-				Msg("Alert cleared - threshold set to 100% or higher (disabled)")
-		}
-		m.mu.Unlock()
-		return
-	}
-	
 	log.Debug().
 		Str("resource", resourceName).
 		Str("metric", metricType).
