@@ -55,28 +55,90 @@ export function createWebSocketStore(url: string) {
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
+  let heartbeatInterval: number;
   let reconnectAttempt = 0;
   let isReconnecting = false;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
+  const heartbeatIntervalMs = 30000; // Send heartbeat every 30 seconds
 
   const connect = () => {
     try {
       // Close existing connection if any
-      if (ws && ws.readyState !== WebSocket.CLOSED) {
-        ws.close();
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, 'Reconnecting');
+        }
+        ws = null;
+      }
+      
+      // Add a small delay before reconnecting to avoid rapid reconnect loops
+      if (reconnectAttempt > 0) {
+        const delay = Math.min(100 * reconnectAttempt, 1000);
+        setTimeout(() => {
+          ws = new WebSocket(url);
+          setupWebSocket();
+        }, delay);
+        return;
       }
       
       ws = new WebSocket(url);
+      setupWebSocket();
+    } catch (err) {
+      logger.error('Failed to create WebSocket', err);
+      handleReconnect();
+    }
+  };
 
-      ws.onopen = () => {
-        logger.debug('connect');
-        setConnected(true);
-        setReconnecting(false); // Clear reconnecting state
-        reconnectAttempt = 0; // Reset reconnect attempts on successful connection
-        
-        // Alerts will come with the initial state broadcast
-      };
+  const handleReconnect = () => {
+    if (isReconnecting) return;
+    
+    isReconnecting = true;
+    setReconnecting(true);
+    
+    // Clear any existing timeout
+    if (reconnectTimeout) {
+      window.clearTimeout(reconnectTimeout);
+      reconnectTimeout = 0;
+    }
+    
+    // Calculate exponential backoff delay
+    const delay = Math.min(
+      initialReconnectDelay * Math.pow(2, reconnectAttempt),
+      maxReconnectDelay
+    );
+    
+    logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempt + 1})`);
+    reconnectAttempt++;
+    
+    reconnectTimeout = window.setTimeout(() => {
+      isReconnecting = false;
+      connect();
+    }, delay);
+  };
+
+  const setupWebSocket = () => {
+    if (!ws) return;
+
+    ws.onopen = () => {
+      logger.debug('connect');
+      setConnected(true);
+      setReconnecting(false); // Clear reconnecting state
+      reconnectAttempt = 0; // Reset reconnect attempts on successful connection
+      isReconnecting = false;
+      
+      // Start heartbeat to keep connection alive
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+      }
+      heartbeatInterval = window.setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping', data: { timestamp: Date.now() } }));
+        }
+      }, heartbeatIntervalMs);
+      
+      // Alerts will come with the initial state broadcast
+    };
 
       ws.onmessage = (event) => {
         let data;
@@ -303,71 +365,32 @@ export function createWebSocketStore(url: string) {
         }
       };
 
-      ws.onclose = (event) => {
-        logger.debug('disconnect', { code: event.code, reason: event.reason });
-        setConnected(false);
-        setInitialDataReceived(false);
-        
-        // Don't reconnect if we're already trying
-        if (isReconnecting) {
-          return;
-        }
-        
-        // Clear any existing timeout to prevent multiple reconnections
-        if (reconnectTimeout) {
-          window.clearTimeout(reconnectTimeout);
-          reconnectTimeout = 0;
-        }
-        
-        isReconnecting = true;
-        setReconnecting(true);
-        
-        // Calculate exponential backoff delay
-        const delay = Math.min(
-          initialReconnectDelay * Math.pow(2, reconnectAttempt),
-          maxReconnectDelay
-        );
-        
-        logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempt + 1})`);
-        reconnectAttempt++;
-        
-        reconnectTimeout = window.setTimeout(() => {
-          isReconnecting = false;
-          setReconnecting(false);
-          connect();
-        }, delay);
-      };
-
-      ws.onerror = (error) => {
-        // Don't log connection errors if we're already connected
-        // Browser may show errors for initial connection attempts even after success
-        if (!connected()) {
-          logger.debug('error', error);
-        }
-      };
-    } catch (err) {
-      logger.error('Failed to connect', err);
+    ws.onclose = (event) => {
+      logger.debug('disconnect', { code: event.code, reason: event.reason });
       setConnected(false);
+      setInitialDataReceived(false);
       
-      // Don't reconnect if we're already trying
-      if (isReconnecting) return;
+      // Clear heartbeat interval
+      if (heartbeatInterval) {
+        window.clearInterval(heartbeatInterval);
+        heartbeatInterval = 0;
+      }
       
-      isReconnecting = true;
-      setReconnecting(true);
+      // Don't try to reconnect if the close was intentional (code 1000)
+      if (event.code === 1000 && event.reason === 'Reconnecting') {
+        return;
+      }
       
-      // Use exponential backoff for connection errors too
-      const delay = Math.min(
-        initialReconnectDelay * Math.pow(2, reconnectAttempt),
-        maxReconnectDelay
-      );
-      
-      reconnectAttempt++;
-      reconnectTimeout = window.setTimeout(() => {
-        isReconnecting = false;
-        setReconnecting(false);
-        connect();
-      }, delay);
-    }
+      handleReconnect();
+    };
+
+    ws.onerror = (error) => {
+      // Don't log connection errors if we're already connected
+      // Browser may show errors for initial connection attempts even after success
+      if (!connected()) {
+        logger.debug('error', error);
+      }
+    };
   };
 
   // Connect immediately
@@ -376,7 +399,10 @@ export function createWebSocketStore(url: string) {
   // Cleanup on unmount
   onCleanup(() => {
     window.clearTimeout(reconnectTimeout);
-    ws?.close();
+    window.clearInterval(heartbeatInterval);
+    if (ws) {
+      ws.close(1000, 'Component unmounting');
+    }
   });
 
   return {

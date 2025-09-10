@@ -26,7 +26,7 @@ type GroupingMode = 'grouped' | 'flat';
 
 
 export function Dashboard(props: DashboardProps) {
-  const { connected, activeAlerts, initialDataReceived } = useWebSocket();
+  const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
@@ -647,7 +647,17 @@ export function Dashboard(props: DashboardProps) {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Loading dashboard data...</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400">Connecting to monitoring service</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">
+              {reconnecting() ? 'Reconnecting to monitoring service...' : 'Connecting to monitoring service'}
+            </p>
+            <Show when={!connected() && !reconnecting()}>
+              <button
+                onClick={() => reconnect()}
+                class="mt-3 px-4 py-2 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              >
+                Retry Connection
+              </button>
+            </Show>
           </div>
         </div>
       </Show>
@@ -682,7 +692,17 @@ export function Dashboard(props: DashboardProps) {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h3 class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Connection Lost</h3>
-            <p class="text-xs text-red-700 dark:text-red-300">Unable to connect to the backend server. Attempting to reconnect...</p>
+            <p class="text-xs text-red-700 dark:text-red-300">
+              {reconnecting() ? 'Attempting to reconnect...' : 'Unable to connect to the backend server'}
+            </p>
+            <Show when={!reconnecting()}>
+              <button
+                onClick={() => reconnect()}
+                class="mt-3 px-4 py-2 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                Reconnect Now
+              </button>
+            </Show>
           </div>
         </div>
       </Show>

@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net"
 	"net/http"
@@ -198,9 +199,11 @@ func (h *Hub) Run() {
 			log.Info().Str("client", client.id).Msg("WebSocket client connected")
 			
 			// Send initial state to the new client immediately
+			log.Debug().Bool("hasGetState", h.getState != nil).Msg("Checking getState function for new client")
 			if h.getState != nil {
 				// Add a small delay to ensure client is ready
 				go func() {
+					log.Debug().Str("client", client.id).Msg("Starting initial state goroutine")
 					time.Sleep(500 * time.Millisecond)
 					
 					// First send a small welcome message
@@ -225,10 +228,15 @@ func (h *Hub) Run() {
 					
 					// Then send the initial state after another delay
 					time.Sleep(100 * time.Millisecond)
+					log.Debug().Str("client", client.id).Msg("About to get state")
+					
+					// Get the state
+					stateData := h.getState()
+					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("Got state for initial message")
 					
 					initialMsg := Message{
 						Type: "initialState", 
-						Data: sanitizeData(h.getState()),
+						Data: sanitizeData(stateData),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
 						// Check if client is still registered before sending
@@ -299,8 +307,8 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	
 	// Create upgrader with our origin check
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 64,  // 64KB to handle large state messages
-		WriteBufferSize: 1024 * 64,  // 64KB to handle large state messages
+		ReadBufferSize:  1024 * 1024 * 4,  // 4MB to handle large state messages
+		WriteBufferSize: 1024 * 1024 * 4,  // 4MB to handle large state messages
 		CheckOrigin:     h.checkOrigin,
 	}
 		
