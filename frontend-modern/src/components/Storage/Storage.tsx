@@ -274,7 +274,7 @@ const Storage: Component = () => {
             placeholder="Search disks by model, path, or serial..."
             value={searchTerm()}
             onInput={(e) => setSearchTerm(e.currentTarget.value)}
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           />
         </div>
       </Show>
