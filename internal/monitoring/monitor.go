@@ -3343,14 +3343,30 @@ func (m *Monitor) checkMockAlerts() {
 		Msg("Collecting nodes for alert cleanup")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 	
-	// Check alerts for each VM
+	// Limit how many guests we check per cycle to prevent blocking with large datasets
+	const maxGuestsPerCycle = 50
+	guestsChecked := 0
+	
+	// Check alerts for VMs (up to limit)
 	for _, vm := range state.VMs {
+		if guestsChecked >= maxGuestsPerCycle {
+			log.Debug().
+				Int("checked", guestsChecked).
+				Int("total", len(state.VMs)+len(state.Containers)).
+				Msg("Reached guest check limit for this cycle")
+			break
+		}
 		m.alertManager.CheckGuest(vm, "mock")
+		guestsChecked++
 	}
 	
-	// Check alerts for each container
+	// Check alerts for containers (if we haven't hit the limit)
 	for _, container := range state.Containers {
+		if guestsChecked >= maxGuestsPerCycle {
+			break
+		}
 		m.alertManager.CheckGuest(container, "mock")
+		guestsChecked++
 	}
 	
 	// Check alerts for each node
