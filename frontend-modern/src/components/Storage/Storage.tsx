@@ -223,8 +223,8 @@ const Storage: Component = () => {
       />
       
       {/* Tab Toggle */}
-      <div class="mb-4 border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+      <div class="mb-4">
+        <nav class="flex space-x-8" aria-label="Tabs">
           <button
             onClick={() => setTabView('pools')}
             class={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
