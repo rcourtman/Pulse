@@ -1793,6 +1793,8 @@ main() {
             cd ..
             
             print_info "Building Pulse..."
+            # Ensure Go is in PATH for the build
+            export PATH=/usr/local/go/bin:$PATH
             if ! make build >/dev/null 2>&1; then
                 print_error "Build failed"
                 cd /
