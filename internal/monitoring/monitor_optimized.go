@@ -751,9 +751,9 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					log.Warn().
 						Str("node", n.Node).
 						Str("instance", instanceName).
-						Msg("Storage query timed out - likely due to unavailable storage mounts. Continuing without storage data for this node.")
-					// Return empty storage list but don't fail the node
-					resultChan <- nodeResult{node: n.Node, storage: []models.Storage{}}
+						Msg("Storage query timed out - likely due to unavailable storage mounts. Preserving existing storage data for this node.")
+					// Don't send any result - this allows existing storage to be preserved
+					// The preservation logic at the end will keep the existing data
 					return
 				}
 				// For other errors, log as error
