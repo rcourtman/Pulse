@@ -1934,20 +1934,6 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 	// Start with defaults
 	thresholds := m.config.GuestDefaults
 	
-	// Extract instance, node, and vmid for flexible matching
-	var instance, node string
-	var vmid int
-	switch g := guest.(type) {
-	case models.VM:
-		instance = g.Instance
-		node = g.Node
-		vmid = g.VMID
-	case models.Container:
-		instance = g.Instance
-		node = g.Node
-		vmid = g.VMID
-	}
-	
 	// Check custom rules (sorted by priority, highest first)
 	var applicableRule *CustomAlertRule
 	highestPriority := -1
@@ -2013,55 +1999,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 	}
 	
 	// Finally check guest-specific overrides (highest priority)
-	// Try multiple possible ID formats to match what the frontend might have saved
-	var override *ThresholdConfig
-	var overrideFound bool
-	
-	// Try the exact guest ID first
-	if o, exists := m.config.Overrides[guestID]; exists {
-		override = &o
-		overrideFound = true
-	}
-	
-	// If not found and we have instance/node/vmid info, try alternative formats
-	if !overrideFound && instance != "" && node != "" && vmid != 0 {
-		// Try various ID formats that the frontend might have used
-		possibleIDs := []string{
-			fmt.Sprintf("%s-%d", node, vmid), // node-vmid
-			fmt.Sprintf("%s-%s-%d", instance, node, vmid), // instance-node-vmid
-		}
-		
-		// Also check all override keys for any that end with -node-vmid
-		for key := range m.config.Overrides {
-			if strings.HasSuffix(key, fmt.Sprintf("-%s-%d", node, vmid)) {
-				o := m.config.Overrides[key]
-				override = &o
-				overrideFound = true
-				log.Debug().
-					Str("guestID", guestID).
-					Str("matchedKey", key).
-					Msg("Found override with partial match")
-				break
-			}
-		}
-		
-		// If still not found, try the alternative formats
-		if !overrideFound {
-			for _, id := range possibleIDs {
-				if o, exists := m.config.Overrides[id]; exists {
-					override = &o
-					overrideFound = true
-					log.Debug().
-						Str("guestID", guestID).
-						Str("matchedID", id).
-						Msg("Found override with alternative ID format")
-					break
-				}
-			}
-		}
-	}
-	
-	if overrideFound && override != nil {
+	if override, exists := m.config.Overrides[guestID]; exists {
 		// Apply the disabled flag if set
 		if override.Disabled {
 			thresholds.Disabled = true
