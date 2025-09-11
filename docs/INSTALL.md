@@ -124,6 +124,17 @@ curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | b
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --rc
 ```
 
+### Install from Source (Testing)
+Build and install directly from the main branch to test the latest fixes before they're released:
+```bash
+# Install from main branch (latest development code)
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --main
+
+# Install from a specific branch
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash -s -- --source develop
+```
+**Note:** This builds Pulse from source code on your machine. Requires Go, Node.js, and npm.
+
 ## Troubleshooting
 
 ### Permission Denied
