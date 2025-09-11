@@ -204,7 +204,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       }>
                                         <input
                                           type="number"
-                                          min="0"
+                                          min="-1"
                                           max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
                                           value={thresholds()?.[metric] || ''}
                                           onInput={(e) => {
@@ -436,7 +436,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 }>
                                   <input
                                     type="number"
-                                    min="0"
+                                    min="-1"
                                     max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
                                     value={thresholds()[metric] || ''}
                                     onInput={(e) => props.setEditingThresholds({
