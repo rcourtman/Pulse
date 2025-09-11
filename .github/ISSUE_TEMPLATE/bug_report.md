@@ -14,28 +14,16 @@ A clear and concise description of what the bug is.
 Steps to reproduce the behavior:
 1. Go to '...'
 2. Click on '....'
-3. Scroll down to '....'
-4. See error
+3. See error
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
-
-**Diagnostics Output**
-Please attach the diagnostics output from Pulse:
-1. Go to Settings tab
-2. Scroll to the bottom
-3. Click "Download Diagnostics" 
-4. Choose "Export for GitHub" (this creates a sanitized version without sensitive data)
-5. Copy and paste the output here or attach as a file
-
-**Environment (please complete the following information):**
+**Environment:**
  - Pulse Version: [e.g. v4.15.0]
  - Installation Type: [e.g. ProxmoxVE LXC, Docker, Manual]
- - Browser: [e.g. chrome, safari]
- - Proxmox Version: [e.g. 8.2]
 
 **Additional context**
-Add any other context about the problem here.
+Add any other context, screenshots, or logs here.
+
+💡 **Tip:** If you're experiencing connection issues, API errors, or missing data, you can attach diagnostics from Settings → Download Diagnostics → Export for GitHub (sanitized version)

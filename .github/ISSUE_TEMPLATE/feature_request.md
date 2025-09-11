@@ -18,11 +18,3 @@ A clear and concise description of any alternative solutions or features you've 
 
 **Additional context**
 Add any other context or screenshots about the feature request here.
-
-**Current Setup (optional)**
-If relevant, you can attach diagnostics to show your current setup:
-1. Go to Settings tab
-2. Scroll to the bottom  
-3. Click "Download Diagnostics"
-4. Choose "Export for GitHub" (sanitized version)
-5. Attach if it helps explain your feature request
