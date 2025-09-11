@@ -26,4 +26,4 @@ What you expected to happen.
 **Additional context**
 Add any other context, screenshots, or logs here.
 
-💡 **Tip:** If you're experiencing connection issues, API errors, or missing data, you can attach diagnostics from Settings → Download Diagnostics → Export for GitHub (sanitized version)
+💡 **Tip:** If you're experiencing connection issues, API errors, or missing data, you can attach diagnostics from Settings → Diagnostics tab → Export for GitHub (sanitized version)
