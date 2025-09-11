@@ -1177,31 +1177,30 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		case <-ctx.Done():
 			return
 		default:
-			// Only try cluster endpoints if this is configured as a cluster
-			// This prevents syslog spam on non-clustered nodes from certificate checks
-			useClusterEndpoint := false
-			if instanceCfg.IsCluster {
-				// Try to use efficient cluster/resources endpoint
-				// The cluster client will handle routing through the main host if needed
-				useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			// Always try the efficient cluster/resources endpoint first
+			// This endpoint works on both clustered and standalone nodes
+			// Testing confirmed it works on standalone nodes like pimox
+			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			
+			if !useClusterEndpoint {
+				// Fall back to traditional polling only if cluster/resources not available
+				// This should be rare - only for very old Proxmox versions
+				log.Debug().
+					Str("instance", instanceName).
+					Msg("cluster/resources endpoint not available, using traditional polling")
 				
-				// Only check if actually a cluster if the efficient endpoint fails
-				if !useClusterEndpoint {
-					// Double-check that this is actually a cluster to prevent misconfiguration
+				// Check if configuration needs updating
+				if instanceCfg.IsCluster {
 					isActuallyCluster, checkErr := client.IsClusterMember(ctx)
 					if checkErr == nil && !isActuallyCluster {
-						// Misconfigured - marked as cluster but isn't one
 						log.Warn().
 							Str("instance", instanceName).
 							Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
 						instanceCfg.IsCluster = false
 					}
 				}
-			}
-			
-			if !useClusterEndpoint {
-				// Use traditional polling for non-clusters or if cluster endpoint fails
-				// Use optimized parallel versions for better performance
+				
+				// Use optimized parallel polling for better performance
 				if instanceCfg.MonitorVMs {
 					m.pollVMsWithNodesOptimized(ctx, instanceName, client, nodes)
 				}
@@ -1257,9 +1256,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 }
 
 // pollVMsAndContainersEfficient uses the cluster/resources endpoint to get all VMs and containers in one call
-// This should only be called for instances configured as clusters
+// This works on both clustered and standalone nodes for efficient polling
 func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceName string, client PVEClientInterface) bool {
-	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using cluster/resources")
+	log.Info().Str("instance", instanceName).Msg("Polling VMs and containers using efficient cluster/resources endpoint")
 	
 	// Get all resources in a single API call
 	resources, err := client.GetClusterResources(ctx, "vm")
