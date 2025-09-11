@@ -2189,7 +2189,8 @@ const Settings: Component = () => {
                       const exportDiagnostics = (sanitize: boolean) => {
                         let diagnostics: Record<string, unknown> = {
                           timestamp: new Date().toISOString(),
-                          version: '2.0.0',
+                          version: '2.1.0',
+                          pulseVersion: state.version || 'unknown',
                           environment: {
                             userAgent: navigator.userAgent,
                             platform: navigator.platform,
@@ -2202,12 +2203,21 @@ const Settings: Component = () => {
                             connected: connected(),
                             url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
                           },
-                          nodes: nodes(),
+                          // Include backend diagnostics if available
+                          backendDiagnostics: diagnosticsData() || null,
+                          nodes: nodes()?.map(n => ({
+                            ...n,
+                            status: state.nodes?.find(sn => sn.id === n.id)?.status || 'unknown',
+                            online: state.nodes?.find(sn => sn.id === n.id)?.status === 'online'
+                          })) || [],
                           state: {
                             nodesCount: state.nodes?.length || 0,
+                            nodesOnline: state.nodes?.filter(n => n.status === 'online').length || 0,
+                            nodesOffline: state.nodes?.filter(n => n.status !== 'online').length || 0,
                             vmsCount: state.vms?.length || 0,
                             containersCount: state.containers?.length || 0,
                             storageCount: state.storage?.length || 0,
+                            physicalDisksCount: state.physicalDisks?.length || 0,
                             pbsCount: state.pbs?.length || 0,
                             pbsBackupsCount: state.pbsBackups?.length || 0,
                             pveBackups: {
@@ -2216,6 +2226,17 @@ const Settings: Component = () => {
                               guestSnapshotsCount: state.pveBackups?.guestSnapshots?.length || 0
                             }
                           },
+                          // Node status details
+                          nodeStatus: state.nodes?.map(n => ({
+                            id: n.id,
+                            name: n.name,
+                            status: n.status,
+                            online: n.status === 'online',
+                            cpu: n.cpu,
+                            memory: n.memory,
+                            uptime: n.uptime,
+                            version: n.version
+                          })) || [],
                           storage: state.storage?.map(s => ({
                             id: s.id,
                             node: s.node,
@@ -2227,7 +2248,26 @@ const Settings: Component = () => {
                             shared: s.shared,
                             used: s.used,
                             total: s.total,
+                            zfsPool: s.zfsPool ? {
+                              state: s.zfsPool.state,
+                              readErrors: s.zfsPool.readErrors,
+                              writeErrors: s.zfsPool.writeErrors,
+                              checksumErrors: s.zfsPool.checksumErrors,
+                              deviceCount: s.zfsPool.devices?.length || 0
+                            } : undefined,
                             hasBackups: (state.pveBackups?.storageBackups?.filter((b) => b.storage === s.name).length || 0) > 0
+                          })) || [],
+                          // Physical disks - critical for troubleshooting
+                          physicalDisks: state.physicalDisks?.map(d => ({
+                            node: d.node,
+                            device: d.device,
+                            model: d.model,
+                            size: d.size,
+                            type: d.type,
+                            health: d.health,
+                            wearout: d.wearout,
+                            rpm: d.rpm,
+                            smart: d.smart
                           })) || [],
                           backups: {
                             pveBackupTasks: state.pveBackups?.backupTasks?.slice(0, 10) || [],
@@ -2241,7 +2281,11 @@ const Settings: Component = () => {
                             failedApiCalls: state.performance?.failedApiCalls || 0,
                             apiCallDuration: state.performance?.apiCallDuration || {}
                           },
-                          activeAlerts: state.activeAlerts?.slice(0, 10) || [],
+                          activeAlerts: state.activeAlerts?.slice(0, 20) || [],
+                          // Alert configuration - helps debug threshold save issues
+                          alertConfig: state.alertConfig || null,
+                          // Recent errors if any
+                          recentErrors: state.errors?.slice(0, 20) || [],
                           settings: {
                           }
                         };
@@ -2263,19 +2307,26 @@ const Settings: Component = () => {
                       };
                       
                       return (
-                        <div class="flex gap-2">
-                          <button type="button"
-                            onClick={() => exportDiagnostics(false)}
-                            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                          >
-                            Export Full
-                          </button>
-                          <button type="button"
-                            onClick={() => exportDiagnostics(true)}
-                            class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            Export for GitHub
-                          </button>
+                        <div class="space-y-3">
+                          <Show when={!diagnosticsData()}>
+                            <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
+                              💡 Run diagnostics first for more comprehensive export data
+                            </div>
+                          </Show>
+                          <div class="flex gap-2">
+                            <button type="button"
+                              onClick={() => exportDiagnostics(false)}
+                              class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              Export Full
+                            </button>
+                            <button type="button"
+                              onClick={() => exportDiagnostics(true)}
+                              class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              Export for GitHub
+                            </button>
+                          </div>
                         </div>
                       );
                     })()}
