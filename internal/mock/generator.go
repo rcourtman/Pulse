@@ -456,7 +456,7 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 		NetworkIn:  generateRealisticIO("network-in"),
 		NetworkOut: generateRealisticIO("network-out"),
 		Uptime:     uptime,
-		ID:         fmt.Sprintf("%s:qemu/%d", nodeName, vmid),
+		ID:         fmt.Sprintf("mock-%s-%d", nodeName, vmid),
 		Tags:       generateTags(),
 	}
 }
@@ -528,7 +528,7 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 		NetworkIn:  generateRealisticIO("network-in-ct"),
 		NetworkOut: generateRealisticIO("network-out-ct"),
 		Uptime:     uptime,
-		ID:         fmt.Sprintf("%s:lxc/%d", nodeName, vmid),
+		ID:         fmt.Sprintf("mock-%s-%d", nodeName, vmid),
 		Tags:       generateTags(),
 	}
 }
