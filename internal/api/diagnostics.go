@@ -39,6 +39,7 @@ type NodeDiagnostic struct {
 	LastPoll     string            `json:"lastPoll,omitempty"`
 	ClusterInfo  *ClusterInfo      `json:"clusterInfo,omitempty"`
 	VMDiskCheck  *VMDiskCheckResult `json:"vmDiskCheck,omitempty"`
+	PhysicalDisks *PhysicalDiskCheck `json:"physicalDisks,omitempty"`
 }
 
 // NodeDetails contains node-specific details
@@ -75,6 +76,24 @@ type FilesystemDetail struct {
 	Used       uint64 `json:"used"`
 	Filtered   bool   `json:"filtered"`
 	Reason     string `json:"reason,omitempty"`
+}
+
+// PhysicalDiskCheck contains diagnostic results for physical disk detection
+type PhysicalDiskCheck struct {
+	NodesChecked   int              `json:"nodesChecked"`
+	NodesWithDisks int              `json:"nodesWithDisks"`
+	TotalDisks     int              `json:"totalDisks"`
+	NodeResults    []NodeDiskResult `json:"nodeResults"`
+	TestResult     string           `json:"testResult,omitempty"`
+	Recommendations []string        `json:"recommendations,omitempty"`
+}
+
+type NodeDiskResult struct {
+	NodeName    string   `json:"nodeName"`
+	DiskCount   int      `json:"diskCount"`
+	Error       string   `json:"error,omitempty"`
+	DiskDevices []string `json:"diskDevices,omitempty"`
+	APIResponse string   `json:"apiResponse,omitempty"`
 }
 
 // ClusterInfo contains cluster information
@@ -212,6 +231,9 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 					
 					// Run VM disk monitoring check
 					nodeDiag.VMDiskCheck = r.checkVMDiskMonitoring(ctx, client, node.Name)
+					
+					// Run physical disk check
+					nodeDiag.PhysicalDisks = r.checkPhysicalDisks(ctx, client, node.Name)
 				}
 			}
 
@@ -508,4 +530,104 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	}
 	
 	return result
+}
+
+// checkPhysicalDisks performs diagnostic checks for physical disk detection
+func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client, instanceName string) *PhysicalDiskCheck {
+	result := &PhysicalDiskCheck{
+		Recommendations: []string{},
+		NodeResults:     []NodeDiskResult{},
+	}
+	
+	// Get all nodes
+	nodes, err := client.GetNodes(ctx)
+	if err != nil {
+		result.TestResult = "Failed to get nodes: " + err.Error()
+		return result
+	}
+	
+	result.NodesChecked = len(nodes)
+	
+	// Check each node for physical disks
+	for _, node := range nodes {
+		nodeResult := NodeDiskResult{
+			NodeName: node.Node,
+		}
+		
+		// Skip offline nodes
+		if node.Status != "online" {
+			nodeResult.Error = "Node is offline"
+			result.NodeResults = append(result.NodeResults, nodeResult)
+			continue
+		}
+		
+		// Try to get disk list
+		disks, err := client.GetDisks(ctx, node.Node)
+		if err != nil {
+			errStr := err.Error()
+			nodeResult.Error = errStr
+			
+			// Provide specific recommendations based on error
+			if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {
+				nodeResult.APIResponse = "Permission denied"
+				if !contains(result.Recommendations, "Check API token has sufficient permissions for disk monitoring") {
+					result.Recommendations = append(result.Recommendations, 
+						"Check API token has sufficient permissions for disk monitoring",
+						"Token needs at least PVEAuditor role on the node")
+				}
+			} else if strings.Contains(errStr, "404") || strings.Contains(errStr, "501") {
+				nodeResult.APIResponse = "Endpoint not available"
+				if !contains(result.Recommendations, "Node may be running older Proxmox version without disk API support") {
+					result.Recommendations = append(result.Recommendations,
+						"Node may be running older Proxmox version without disk API support",
+						"Check if node is running on non-standard hardware (Raspberry Pi, etc)")
+				}
+			} else {
+				nodeResult.APIResponse = "API error"
+			}
+		} else {
+			nodeResult.DiskCount = len(disks)
+			if len(disks) > 0 {
+				result.NodesWithDisks++
+				result.TotalDisks += len(disks)
+				
+				// List disk devices
+				for _, disk := range disks {
+					nodeResult.DiskDevices = append(nodeResult.DiskDevices, disk.DevPath)
+				}
+			} else {
+				nodeResult.APIResponse = "Empty response (no traditional disks found)"
+				// This could be normal for SD card/USB based systems
+				if !contains(result.Recommendations, "Some nodes returned no disks - may be using SD cards or USB storage") {
+					result.Recommendations = append(result.Recommendations,
+						"Some nodes returned no disks - may be using SD cards or USB storage",
+						"Proxmox disk API only returns SATA/NVMe/SAS disks, not SD cards")
+				}
+			}
+		}
+		
+		result.NodeResults = append(result.NodeResults, nodeResult)
+	}
+	
+	// Generate summary
+	if result.NodesChecked == 0 {
+		result.TestResult = "No nodes found to check"
+	} else if result.NodesWithDisks == 0 {
+		result.TestResult = fmt.Sprintf("Checked %d nodes, none returned physical disks", result.NodesChecked)
+	} else {
+		result.TestResult = fmt.Sprintf("Found %d disks across %d of %d nodes", 
+			result.TotalDisks, result.NodesWithDisks, result.NodesChecked)
+	}
+	
+	return result
+}
+
+// Helper function to check if slice contains string
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }
