@@ -266,7 +266,7 @@ export function GuestURLs(props: GuestURLsProps) {
                       {/* Guest rows for this node */}
                       <For each={guests}>
                         {(guest) => {
-                          const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
+                          const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
                           const meta = guestMetadata()[guestId];
                           const url = getURL(guestId);
                           
