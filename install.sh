@@ -2251,7 +2251,7 @@ while [[ $# -gt 0 ]]; do
             ENABLE_AUTO_UPDATES=true
             shift
             ;;
-        --source|--from-source|--branch)
+        --main|--source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
             if [[ -n "$2" ]] && [[ ! "$2" =~ ^-- ]]; then
@@ -2269,6 +2269,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --rc, --pre        Install latest RC/pre-release version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
+            echo "  --main             Build and install from main branch source"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo ""
