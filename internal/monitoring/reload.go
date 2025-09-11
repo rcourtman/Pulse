@@ -92,30 +92,7 @@ func (rm *ReloadableMonitor) doReload() error {
 		return err
 	}
 
-	// Check if only polling interval changed (common case)
-	if rm.config != nil && onlyPollingIntervalChanged(rm.config, cfg) {
-		// For polling interval changes, just update the config and restart monitoring
-		// without recreating everything
-		log.Info().
-			Dur("oldInterval", rm.config.PollingInterval).
-			Dur("newInterval", cfg.PollingInterval).
-			Msg("Updating polling interval without full reload")
-		
-		// Update config
-		rm.config.PollingInterval = cfg.PollingInterval
-		rm.monitor.config.PollingInterval = cfg.PollingInterval
-		
-		// Cancel and restart the monitoring loop
-		if rm.cancel != nil {
-			rm.cancel()
-		}
-		
-		// Start new monitoring loop with updated interval
-		rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
-		go rm.monitor.Start(rm.ctx, rm.wsHub)
-		
-		return nil
-	}
+	// Note: Polling interval is now hardcoded to 10s, no special handling needed
 
 	// For other changes, do a full reload
 	log.Info().Msg("Performing full monitor reload")
@@ -148,20 +125,7 @@ func (rm *ReloadableMonitor) doReload() error {
 	return nil
 }
 
-// onlyPollingIntervalChanged checks if only the polling interval changed
-func onlyPollingIntervalChanged(old, new *config.Config) bool {
-	if old == nil || new == nil {
-		return false
-	}
-	
-	// Check if only polling interval is different
-	return old.PollingInterval != new.PollingInterval &&
-		old.BackendHost == new.BackendHost &&
-		old.BackendPort == new.BackendPort &&
-		old.FrontendPort == new.FrontendPort &&
-		len(old.PVEInstances) == len(new.PVEInstances) &&
-		len(old.PBSInstances) == len(new.PBSInstances)
-}
+// Note: Polling interval change detection removed - now hardcoded to 10s
 
 // GetMonitor returns the current monitor instance
 func (rm *ReloadableMonitor) GetMonitor() *Monitor {
@@ -189,30 +153,4 @@ func (rm *ReloadableMonitor) Stop() {
 	}
 }
 
-// UpdatePollingInterval updates just the polling interval without full reload
-func (rm *ReloadableMonitor) UpdatePollingInterval(interval time.Duration) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-	
-	if rm.config.PollingInterval == interval {
-		return // No change
-	}
-	
-	log.Info().
-		Dur("oldInterval", rm.config.PollingInterval).
-		Dur("newInterval", interval).
-		Msg("Updating polling interval via SIGHUP")
-	
-	// Update config
-	rm.config.PollingInterval = interval
-	rm.monitor.config.PollingInterval = interval
-	
-	// Cancel and restart the monitoring loop
-	if rm.cancel != nil {
-		rm.cancel()
-	}
-	
-	// Start new monitoring loop with updated interval
-	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
-	go rm.monitor.Start(rm.ctx, rm.wsHub)
-}
+// Note: UpdatePollingInterval removed - polling interval is now hardcoded to 10s

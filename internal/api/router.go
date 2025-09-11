@@ -1890,7 +1890,6 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Return public configuration
 	config := map[string]interface{}{
-		"pollingInterval":   r.config.PollingInterval.Seconds(),
 		"csrfProtection":    false, // Not implemented yet
 		"autoUpdateEnabled": r.config.AutoUpdateEnabled,
 		"updateChannel":     r.config.UpdateChannel,

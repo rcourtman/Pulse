@@ -87,7 +87,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			Username             string `json:"username"`
 			Password             string `json:"password"`
 			APIToken             string `json:"apiToken"`
-			PollingInterval      int    `json:"pollingInterval"`
 			EnableNotifications  bool   `json:"enableNotifications"`
 			DarkMode            bool   `json:"darkMode"`
 		}
@@ -109,10 +108,6 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 		
-		// Set default polling interval if not provided
-		if setupRequest.PollingInterval == 0 {
-			setupRequest.PollingInterval = 5
-		}
 		
 		// Hash the password
 		hashedPassword, err := internalauth.HashPassword(setupRequest.Password)
@@ -145,12 +140,10 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		r.config.AuthPass = hashedPassword
 		r.config.APIToken = hashedAPIToken
 		r.config.APITokenEnabled = true
-		r.config.PollingInterval = time.Duration(setupRequest.PollingInterval) * time.Second
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 		
-		// Save system settings to system.json (polling interval, etc)
+		// Save system settings to system.json
 		systemSettings := config.SystemSettings{
-			PollingInterval: setupRequest.PollingInterval,
 			ConnectionTimeout: 10, // Default
 			AutoUpdateEnabled: false, // Default  
 		}

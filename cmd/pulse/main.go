@@ -202,22 +202,9 @@ func runServer() {
 			persistence := config.NewConfigPersistence(cfg.DataPath)
 			if persistence != nil {
 				if sysConfig, err := persistence.LoadSystemSettings(); err == nil {
-					// Update polling interval if changed
-					if sysConfig.PollingInterval > 0 {
-						oldInterval := cfg.PollingInterval
-						cfg.PollingInterval = time.Duration(sysConfig.PollingInterval) * time.Second
-						if cfg.PollingInterval != oldInterval {
-							log.Info().
-								Dur("old", oldInterval).
-								Dur("new", cfg.PollingInterval).
-								Msg("Polling interval updated")
-							// Update monitor's polling interval
-							if reloadableMonitor != nil {
-								reloadableMonitor.UpdatePollingInterval(cfg.PollingInterval)
-							}
-						}
-					}
+					// Note: Polling interval is now hardcoded to 10s, no longer configurable
 					// Could reload other system.json settings here
+					_ = sysConfig // Avoid unused variable warning
 					log.Info().Msg("Reloaded system configuration")
 				} else {
 					log.Error().Err(err).Msg("Failed to reload system.json")
