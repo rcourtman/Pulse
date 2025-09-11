@@ -1157,154 +1157,235 @@ download_pulse() {
         print_info "Latest version: $LATEST_RELEASE"
     fi
     
-    # Detect architecture
-    ARCH=$(uname -m)
-    case $ARCH in
-        x86_64)
-            PULSE_ARCH="amd64"
-            ;;
-        aarch64)
-            PULSE_ARCH="arm64"
-            ;;
-        armv7l)
-            PULSE_ARCH="armv7"
-            ;;
-        *)
-            print_error "Unsupported architecture: $ARCH"
-            exit 1
-            ;;
-    esac
-    
-    print_info "Detected architecture: $ARCH ($PULSE_ARCH)"
-    
-    # Download architecture-specific release
-    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
-    print_info "Downloading from: $DOWNLOAD_URL"
-    
-    # Detect and stop existing service BEFORE downloading (to free the binary)
-    EXISTING_SERVICE=$(detect_service_name)
-    if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
-        print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-        safe_systemctl stop $EXISTING_SERVICE || true
-        sleep 2  # Give the process time to fully stop and release the binary
-    fi
-    
-    cd /tmp
-    # Download with timeout (60 seconds should be enough for ~5MB file)
-    if ! wget -q --timeout=60 --tries=2 -O pulse.tar.gz "$DOWNLOAD_URL"; then
-        print_error "Failed to download Pulse release"
-        print_info "This can happen due to network issues or GitHub rate limiting"
-        print_info "You can try downloading manually from: $DOWNLOAD_URL"
-        exit 1
-    fi
-    
-    # Extract to temporary directory first
-    TEMP_EXTRACT="/tmp/pulse-extract-$$"
-    mkdir -p "$TEMP_EXTRACT"
-    tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
-    
-    # Ensure install directory and bin subdirectory exist
-    mkdir -p "$INSTALL_DIR/bin"
-    
-    # Copy Pulse binary to the correct location (/opt/pulse/bin/pulse)
-    # First, backup the old binary if it exists
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-    fi
-    
-    if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
-        if ! cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/bin/pulse"; then
-            print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
-            # Try to restore old binary
-            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
-                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-            fi
-            exit 1
-        fi
-    elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
-        # Fallback for old archives (pre-v4.3.1)
-        if ! cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"; then
-            print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
-            # Try to restore old binary
-            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
-                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-            fi
-            exit 1
-        fi
-    else
-        print_error "Pulse binary not found in archive"
-        # Try to restore old binary
-        if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
-            mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-        fi
-        exit 1
-    fi
-    
-    # Verify the new binary was copied and is executable
-    if [[ ! -f "$INSTALL_DIR/bin/pulse" ]]; then
-        print_error "Binary installation failed - file not found after copy"
-        # Try to restore old binary
-        if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
-            mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-        fi
-        exit 1
-    fi
-    
-    chmod +x "$INSTALL_DIR/bin/pulse"
-    chown -R pulse:pulse "$INSTALL_DIR"
-    
-    # Clean up old binary backup if everything succeeded
-    rm -f "$INSTALL_DIR/bin/pulse.old"
-    
-    # Create symlink in /usr/local/bin for PATH convenience
-    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
-    print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
-    print_success "Symlink created at /usr/local/bin/pulse"
-    
-    # Copy VERSION file if present
-    if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
-        cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
-        chown pulse:pulse "$INSTALL_DIR/VERSION"
-    fi
-    
-    # Verify the installed version matches what we expected
-    INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-    if [[ "$INSTALLED_VERSION" != "$LATEST_RELEASE" ]]; then
-        print_warn "Version verification issue: Expected $LATEST_RELEASE but binary reports $INSTALLED_VERSION"
-        print_info "This can happen if the binary wasn't properly replaced. Trying to fix..."
+    # Check if we should build from source
+    if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+        print_info "Building Pulse from source (branch: $SOURCE_BRANCH)..."
         
-        # Force remove and recopy
-        rm -f "$INSTALL_DIR/bin/pulse"
-        if [[ -f "/tmp/pulse.tar.gz" ]]; then
-            # Re-extract and try again
-            TEMP_EXTRACT2="/tmp/pulse-extract2-$$"
-            mkdir -p "$TEMP_EXTRACT2"
-            tar -xzf /tmp/pulse.tar.gz -C "$TEMP_EXTRACT2"
-            
-            if [[ -f "$TEMP_EXTRACT2/bin/pulse" ]]; then
-                cp -f "$TEMP_EXTRACT2/bin/pulse" "$INSTALL_DIR/bin/pulse"
-            elif [[ -f "$TEMP_EXTRACT2/pulse" ]]; then
-                cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
-            fi
-            
-            chmod +x "$INSTALL_DIR/bin/pulse"
-            chown -R pulse:pulse "$INSTALL_DIR"
-            rm -rf "$TEMP_EXTRACT2"
-            
-            # Check version again
-            INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-            if [[ "$INSTALLED_VERSION" == "$LATEST_RELEASE" ]]; then
-                print_success "Version issue resolved - now running $INSTALLED_VERSION"
-            else
-                print_warn "Version mismatch persists. You may need to restart the service or reboot."
-            fi
+        # Install build dependencies
+        print_info "Installing build dependencies..."
+        if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git golang-go make nodejs npm >/dev/null 2>&1); then
+            print_error "Failed to install build dependencies"
+            exit 1
         fi
-    else
-        print_success "Version verified: $INSTALLED_VERSION"
+        
+        # Create temp directory for build
+        TEMP_BUILD="/tmp/pulse-build-$$"
+        mkdir -p "$TEMP_BUILD"
+        cd "$TEMP_BUILD"
+        
+        print_info "Cloning repository (branch: $SOURCE_BRANCH)..."
+        if ! git clone --depth 1 --branch "$SOURCE_BRANCH" "https://github.com/$GITHUB_REPO.git" >/dev/null 2>&1; then
+            print_error "Failed to clone repository (branch: $SOURCE_BRANCH)"
+            print_info "Make sure the branch exists and is accessible"
+            exit 1
+        fi
+        
+        cd Pulse
+        
+        print_info "Building frontend..."
+        cd frontend-modern
+        if ! (npm ci >/dev/null 2>&1 && npm run build >/dev/null 2>&1); then
+            print_error "Failed to build frontend"
+            exit 1
+        fi
+        cd ..
+        
+        print_info "Building backend..."
+        if ! make build >/dev/null 2>&1; then
+            print_error "Failed to build backend"
+            exit 1
+        fi
+        
+        # Detect and stop existing service BEFORE installing new binary
+        EXISTING_SERVICE=$(detect_service_name)
+        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
+            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+            safe_systemctl stop $EXISTING_SERVICE || true
+            sleep 2  # Give the process time to fully stop and release the binary
+        fi
+        
+        # Ensure install directory and bin subdirectory exist
+        mkdir -p "$INSTALL_DIR/bin"
+        
+        # Copy the built binary
+        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+            mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
+        fi
+        
+        if ! cp bin/pulse "$INSTALL_DIR/bin/pulse"; then
+            print_error "Failed to copy built binary to $INSTALL_DIR/bin/pulse"
+            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+            fi
+            exit 1
+        fi
+        
+        chmod +x "$INSTALL_DIR/bin/pulse"
+        
+        # Update VERSION file to show it's from source
+        echo "$SOURCE_BRANCH-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
+        
+        # Cleanup
+        cd /
+        rm -rf "$TEMP_BUILD"
+        
+        print_success "Successfully built and installed Pulse from source (branch: $SOURCE_BRANCH)"
+        
+        # Skip the rest of the download/install logic
+        SKIP_DOWNLOAD=true
     fi
     
-    # Cleanup
-    rm -rf "$TEMP_EXTRACT" pulse.tar.gz
+    # Only do download if not building from source
+    if [[ "$SKIP_DOWNLOAD" != "true" ]]; then
+        # Detect architecture
+        ARCH=$(uname -m)
+        case $ARCH in
+            x86_64)
+                PULSE_ARCH="amd64"
+                ;;
+            aarch64)
+                PULSE_ARCH="arm64"
+                ;;
+            armv7l)
+                PULSE_ARCH="armv7"
+                ;;
+            *)
+                print_error "Unsupported architecture: $ARCH"
+                exit 1
+                ;;
+        esac
+        
+        print_info "Detected architecture: $ARCH ($PULSE_ARCH)"
+        
+        # Download architecture-specific release
+        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
+        print_info "Downloading from: $DOWNLOAD_URL"
+        
+        # Detect and stop existing service BEFORE downloading (to free the binary)
+        EXISTING_SERVICE=$(detect_service_name)
+        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
+            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+            safe_systemctl stop $EXISTING_SERVICE || true
+            sleep 2  # Give the process time to fully stop and release the binary
+        fi
+        
+        cd /tmp
+        # Download with timeout (60 seconds should be enough for ~5MB file)
+        if ! wget -q --timeout=60 --tries=2 -O pulse.tar.gz "$DOWNLOAD_URL"; then
+            print_error "Failed to download Pulse release"
+            print_info "This can happen due to network issues or GitHub rate limiting"
+            print_info "You can try downloading manually from: $DOWNLOAD_URL"
+            exit 1
+        fi
+        
+        # Extract to temporary directory first
+        TEMP_EXTRACT="/tmp/pulse-extract-$$"
+        mkdir -p "$TEMP_EXTRACT"
+        tar -xzf pulse.tar.gz -C "$TEMP_EXTRACT"
+    
+        # Ensure install directory and bin subdirectory exist
+        mkdir -p "$INSTALL_DIR/bin"
+    
+        # Copy Pulse binary to the correct location (/opt/pulse/bin/pulse)
+        # First, backup the old binary if it exists
+        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+            mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
+        fi
+    
+        if [[ -f "$TEMP_EXTRACT/bin/pulse" ]]; then
+            if ! cp "$TEMP_EXTRACT/bin/pulse" "$INSTALL_DIR/bin/pulse"; then
+                print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
+                # Try to restore old binary
+                if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                    mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+                fi
+                exit 1
+            fi
+        elif [[ -f "$TEMP_EXTRACT/pulse" ]]; then
+            # Fallback for old archives (pre-v4.3.1)
+            if ! cp "$TEMP_EXTRACT/pulse" "$INSTALL_DIR/bin/pulse"; then
+                print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
+                # Try to restore old binary
+                if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                    mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+                fi
+                exit 1
+            fi
+        else
+            print_error "Pulse binary not found in archive"
+            # Try to restore old binary
+            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+            fi
+            exit 1
+        fi
+    
+        # Verify the new binary was copied and is executable
+        if [[ ! -f "$INSTALL_DIR/bin/pulse" ]]; then
+            print_error "Binary installation failed - file not found after copy"
+            # Try to restore old binary
+            if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
+                mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+            fi
+            exit 1
+        fi
+        
+        chmod +x "$INSTALL_DIR/bin/pulse"
+        chown -R pulse:pulse "$INSTALL_DIR"
+        
+        # Clean up old binary backup if everything succeeded
+        rm -f "$INSTALL_DIR/bin/pulse.old"
+        
+        # Create symlink in /usr/local/bin for PATH convenience
+        ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+        print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
+        print_success "Symlink created at /usr/local/bin/pulse"
+    
+        # Copy VERSION file if present
+        if [[ -f "$TEMP_EXTRACT/VERSION" ]]; then
+            cp "$TEMP_EXTRACT/VERSION" "$INSTALL_DIR/VERSION"
+            chown pulse:pulse "$INSTALL_DIR/VERSION"
+        fi
+    
+        # Verify the installed version matches what we expected
+        INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+        if [[ "$INSTALLED_VERSION" != "$LATEST_RELEASE" ]]; then
+            print_warn "Version verification issue: Expected $LATEST_RELEASE but binary reports $INSTALLED_VERSION"
+            print_info "This can happen if the binary wasn't properly replaced. Trying to fix..."
+            
+            # Force remove and recopy
+            rm -f "$INSTALL_DIR/bin/pulse"
+            if [[ -f "/tmp/pulse.tar.gz" ]]; then
+                # Re-extract and try again
+                TEMP_EXTRACT2="/tmp/pulse-extract2-$$"
+                mkdir -p "$TEMP_EXTRACT2"
+                tar -xzf /tmp/pulse.tar.gz -C "$TEMP_EXTRACT2"
+                
+                if [[ -f "$TEMP_EXTRACT2/bin/pulse" ]]; then
+                    cp -f "$TEMP_EXTRACT2/bin/pulse" "$INSTALL_DIR/bin/pulse"
+                elif [[ -f "$TEMP_EXTRACT2/pulse" ]]; then
+                    cp -f "$TEMP_EXTRACT2/pulse" "$INSTALL_DIR/bin/pulse"
+                fi
+                
+                chmod +x "$INSTALL_DIR/bin/pulse"
+                chown -R pulse:pulse "$INSTALL_DIR"
+                rm -rf "$TEMP_EXTRACT2"
+                
+                # Check version again
+                INSTALLED_VERSION=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+                if [[ "$INSTALLED_VERSION" == "$LATEST_RELEASE" ]]; then
+                    print_success "Version issue resolved - now running $INSTALLED_VERSION"
+                else
+                    print_warn "Version mismatch persists. You may need to restart the service or reboot."
+                fi
+            fi
+        else
+            print_success "Version verified: $INSTALLED_VERSION"
+        fi
+    
+        # Cleanup
+        rm -rf "$TEMP_EXTRACT" pulse.tar.gz
+    fi  # End of SKIP_DOWNLOAD check
 }
 
 setup_directories() {
@@ -2170,6 +2251,17 @@ while [[ $# -gt 0 ]]; do
             ENABLE_AUTO_UPDATES=true
             shift
             ;;
+        --source|--from-source|--branch)
+            BUILD_FROM_SOURCE=true
+            # Optional: specify branch
+            if [[ -n "$2" ]] && [[ ! "$2" =~ ^-- ]]; then
+                SOURCE_BRANCH="$2"
+                shift 2
+            else
+                SOURCE_BRANCH="main"
+                shift
+            fi
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -2177,6 +2269,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --rc, --pre        Install latest RC/pre-release version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
+            echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo ""
             echo "Management options:"
