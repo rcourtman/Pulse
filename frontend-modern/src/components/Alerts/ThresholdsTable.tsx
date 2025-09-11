@@ -109,14 +109,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const formatMetricValue = (metric: string, value: number | undefined): string => {
     if (value === undefined || value === null) return '0';
     
+    // Show "Off" for disabled thresholds (0 or negative values)
+    if (value <= 0) return 'Off';
+    
     // Percentage-based metrics
     if (metric === 'cpu' || metric === 'memory' || metric === 'disk' || metric === 'usage') {
       return `${value}%`;
     }
     
-    // MB/s metrics - show "Off" for 0 values
+    // MB/s metrics
     if (metric === 'diskRead' || metric === 'diskWrite' || metric === 'networkIn' || metric === 'networkOut') {
-      return value === 0 ? 'Off' : `${value} MB/s`;
+      return `${value} MB/s`;
     }
     
     return String(value);
@@ -617,6 +620,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             <div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 Default thresholds for all resources. Individual resources can override these values below.
+                <span class="ml-2 text-blue-600 dark:text-blue-400">Enter 0 or -1 to disable specific alerts.</span>
               </p>
               <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -639,9 +643,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.guestDefaults.cpu || 0}
+                          title="Enter 0 or -1 to disable CPU alerts"
                           onInput={(e) => {
                             props.setGuestDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
                             props.setHasUnsavedChanges(true);
@@ -653,7 +658,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.guestDefaults.memory || 0}
                           onInput={(e) => {
@@ -667,7 +672,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.guestDefaults.disk || 0}
                           onInput={(e) => {
@@ -682,7 +687,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="10000"
                           value={props.guestDefaults.diskRead || 0}
                           onInput={(e) => {
@@ -696,7 +701,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="10000"
                           value={props.guestDefaults.diskWrite || 0}
                           onInput={(e) => {
@@ -710,7 +715,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="10000"
                           value={props.guestDefaults.networkIn || 0}
                           onInput={(e) => {
@@ -724,7 +729,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="10000"
                           value={props.guestDefaults.networkOut || 0}
                           onInput={(e) => {
@@ -741,7 +746,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.nodeDefaults.cpu || 0}
                           onInput={(e) => {
@@ -755,7 +760,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.nodeDefaults.memory || 0}
                           onInput={(e) => {
@@ -769,7 +774,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.nodeDefaults.disk || 0}
                           onInput={(e) => {
@@ -794,7 +799,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                       <td class="text-center p-1 px-2">
                         <input
                           type="number"
-                          min="0"
+                          min="-1"
                           max="100"
                           value={props.storageDefault()}
                           onInput={(e) => {
