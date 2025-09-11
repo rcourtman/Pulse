@@ -1782,6 +1782,16 @@ main() {
             
             cd pulse-src
             
+            print_info "Installing frontend dependencies..."
+            cd frontend-modern
+            if ! npm install >/dev/null 2>&1; then
+                print_error "Failed to install frontend dependencies"
+                cd /
+                rm -rf "$TEMP_BUILD_DIR"
+                exit 1
+            fi
+            cd ..
+            
             print_info "Building Pulse..."
             if ! make build >/dev/null 2>&1; then
                 print_error "Build failed"
