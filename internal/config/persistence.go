@@ -406,8 +406,7 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	PollingInterval         int    `json:"pollingInterval"`         // Legacy - kept for compatibility
-	PVEPollingInterval      int    `json:"pvePollingInterval"`      // Proxmox polling interval in seconds
+	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	PBSPollingInterval      int    `json:"pbsPollingInterval"`      // PBS polling interval in seconds
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
@@ -661,15 +660,14 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	
 	var lines []string
 	scanner := bufio.NewScanner(file)
-	updatedPolling := false
 	
 	for scanner.Scan() {
 		line := scanner.Text()
 		
-		// Update POLLING_INTERVAL if found
-		if strings.HasPrefix(line, "POLLING_INTERVAL=") && settings.PollingInterval > 0 {
-			lines = append(lines, fmt.Sprintf("POLLING_INTERVAL=%d", settings.PollingInterval))
-			updatedPolling = true
+		// Skip POLLING_INTERVAL lines - deprecated
+		if strings.HasPrefix(line, "POLLING_INTERVAL=") {
+			// Skip this line, polling interval is now hardcoded
+			continue
 		} else if strings.HasPrefix(line, "UPDATE_CHANNEL=") && settings.UpdateChannel != "" {
 			lines = append(lines, fmt.Sprintf("UPDATE_CHANNEL=%s", settings.UpdateChannel))
 		} else if strings.HasPrefix(line, "AUTO_UPDATE_ENABLED=") {
@@ -686,10 +684,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return err
 	}
 	
-	// If POLLING_INTERVAL wasn't found and we have a value, add it
-	if !updatedPolling && settings.PollingInterval > 0 {
-		lines = append(lines, fmt.Sprintf("POLLING_INTERVAL=%d", settings.PollingInterval))
-	}
+	// Note: POLLING_INTERVAL is deprecated and no longer written
 	
 	// Write the updated content back atomically
 	content := strings.Join(lines, "\n")

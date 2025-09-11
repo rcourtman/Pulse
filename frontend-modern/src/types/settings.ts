@@ -12,7 +12,7 @@ export interface ServerSettings {
 }
 
 export interface MonitoringSettings {
-  pollingInterval: number;
+  // Note: PVE polling is hardcoded to 10s server-side
   concurrentPolling: boolean;
   backupPollingCycles: number;
   metricsRetentionDays: number;

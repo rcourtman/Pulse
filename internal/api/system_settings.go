@@ -41,38 +41,8 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
-	// Validate polling intervals (min 1 second, max 1 hour)
-	if val, ok := rawRequest["pollingInterval"]; ok {
-		if interval, ok := val.(float64); ok {
-			if interval <= 0 {
-				return fmt.Errorf("polling interval must be positive (minimum 1 second)")
-			}
-			if interval < 1 {
-				return fmt.Errorf("polling interval must be at least 1 second")
-			}
-			if interval > 3600 {
-				return fmt.Errorf("polling interval cannot exceed 3600 seconds (1 hour)")
-			}
-		} else {
-			return fmt.Errorf("polling interval must be a number")
-		}
-	}
-	
-	if val, ok := rawRequest["pvePollingInterval"]; ok {
-		if interval, ok := val.(float64); ok {
-			if interval <= 0 {
-				return fmt.Errorf("PVE polling interval must be positive (minimum 1 second)")
-			}
-			if interval < 1 {
-				return fmt.Errorf("PVE polling interval must be at least 1 second")
-			}
-			if interval > 3600 {
-				return fmt.Errorf("PVE polling interval cannot exceed 3600 seconds (1 hour)")
-			}
-		} else {
-			return fmt.Errorf("PVE polling interval must be a number")
-		}
-	}
+	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
+	// Legacy polling interval fields are ignored if provided
 	
 	if val, ok := rawRequest["pbsPollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -178,15 +148,12 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 	settings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load system settings")
-		settings = &config.SystemSettings{
-			PollingInterval: 5,
-		}
+		settings = &config.SystemSettings{}
 	}
 	
 	// Log loaded settings for debugging
 	if settings != nil {
 		log.Debug().
-			Int("pollingInterval", settings.PollingInterval).
 			Str("theme", settings.Theme).
 			Msg("Loaded system settings for API response")
 	}
@@ -278,13 +245,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	settings := *existingSettings
 	
 	// Only update fields that were provided in the request
-	// Use rawRequest to check if field was provided (allows setting to 0 to clear)
-	if _, ok := rawRequest["pollingInterval"]; ok {
-		settings.PollingInterval = updates.PollingInterval
-	}
-	if _, ok := rawRequest["pvePollingInterval"]; ok {
-		settings.PVEPollingInterval = updates.PVEPollingInterval
-	}
+	// Note: PVE polling is hardcoded to 10s, legacy polling fields are ignored
 	if _, ok := rawRequest["pbsPollingInterval"]; ok {
 		settings.PBSPollingInterval = updates.PBSPollingInterval
 	}
@@ -326,9 +287,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 
 	// Update the config
-	if settings.PollingInterval > 0 {
-		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
-	}
+	// Note: PVE polling is hardcoded to 10s
 	if settings.AllowedOrigins != "" {
 		h.config.AllowedOrigins = settings.AllowedOrigins
 	}

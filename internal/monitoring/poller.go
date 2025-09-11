@@ -203,11 +203,8 @@ func (m *Monitor) pollWithChannels(ctx context.Context) {
 	pool := NewPollerPool(workerCount, m)
 	
 	// Create a context with timeout for this polling cycle
-	// Use polling interval minus 200ms or minimum 5 seconds, whichever is larger
-	timeout := m.config.PollingInterval - 200*time.Millisecond
-	if timeout < 5*time.Second {
-		timeout = 5*time.Second
-	}
+	// Hardcoded to 10s minus 200ms (matches polling interval)
+	timeout := 10*time.Second - 200*time.Millisecond
 	pollCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	
