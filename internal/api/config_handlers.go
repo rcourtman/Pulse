@@ -1865,8 +1865,7 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "success",
-		"message": fmt.Sprintf("Polling interval updated to %d seconds", settings.PollingInterval),
-		"pollingInterval": settings.PollingInterval,
+		"message": "Settings updated successfully",
 	})
 }
 

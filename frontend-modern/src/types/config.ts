@@ -25,9 +25,8 @@ export interface AuthConfig {
  * These are application behavior settings
  */
 export interface SystemConfig {
-  pollingInterval: number;              // Legacy - seconds between node polls
-  pvePollingInterval?: number;          // Proxmox polling interval in seconds (2-60)
-  pbsPollingInterval?: number;          // DEPRECATED - PBS polling fixed at 10 seconds
+  // Note: PVE polling is hardcoded to 10s (Proxmox cluster/resources updates every 10s)
+  pbsPollingInterval?: number;          // PBS polling interval in seconds
   connectionTimeout?: number;            // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean;           // Enable auto-updates
   updateChannel?: string;                // Update channel: 'stable' | 'rc' | 'beta'
@@ -107,7 +106,6 @@ export interface SetupRequest {
   username: string;
   password: string;
   apiToken?: string;
-  pollingInterval?: number;
   enableNotifications?: boolean;
   darkMode?: boolean;
 }
@@ -115,10 +113,6 @@ export interface SetupRequest {
 /**
  * Type guards for configuration validation
  */
-export const isValidPollingInterval = (value: number): boolean => {
-  return value >= 2 && value <= 60;  // 2s minimum now that sync is fixed
-};
-
 export const isValidUpdateChannel = (value: string): value is 'stable' | 'rc' | 'beta' => {
   return ['stable', 'rc', 'beta'].includes(value);
 };
@@ -134,7 +128,6 @@ export const DEFAULT_CONFIG: {
   system: SystemConfig;
 } = {
   system: {
-    pollingInterval: 5,
     connectionTimeout: 10,
     autoUpdateEnabled: false,
     updateChannel: 'stable',

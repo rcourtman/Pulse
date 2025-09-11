@@ -69,8 +69,7 @@ type Config struct {
 	PBSInstances []PBSInstance
 
 	// Monitoring settings
-	PollingInterval      time.Duration `envconfig:"POLLING_INTERVAL"` // Deprecated - ignored, always 10s
-	PVEPollingInterval   time.Duration `envconfig:"PVE_POLLING_INTERVAL"` // Deprecated - ignored, always 10s
+	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	PBSPollingInterval   time.Duration `envconfig:"PBS_POLLING_INTERVAL"` // PBS polling interval (60s default)
 	ConcurrentPolling    bool          `envconfig:"CONCURRENT_POLLING" default:"true"`
 	ConnectionTimeout    time.Duration `envconfig:"CONNECTION_TIMEOUT" default:"45s"` // Increased for slow storage operations
@@ -218,8 +217,6 @@ func Load() (*Config, error) {
 		LogCompress:          true,
 		AllowedOrigins:       "", // Empty means no CORS headers (same-origin only)
 		IframeEmbeddingAllow: "SAMEORIGIN",
-		PollingInterval:      10 * time.Second, // Deprecated - not used
-		PVEPollingInterval:   10 * time.Second, // Deprecated - not used
 		PBSPollingInterval:   60 * time.Second, // Default PBS polling (slower)
 		DiscoveryEnabled:     true,
 		DiscoverySubnet:      "auto",
@@ -245,24 +242,9 @@ func Load() (*Config, error) {
 		
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
-			// Handle new separate intervals
-			if systemSettings.PVEPollingInterval > 0 {
-				cfg.PVEPollingInterval = time.Duration(systemSettings.PVEPollingInterval) * time.Second
-			} else if systemSettings.PollingInterval > 0 {
-				// Fallback to legacy interval for PVE
-				cfg.PVEPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
-			}
-			
+			// Load PBS polling interval if configured
 			if systemSettings.PBSPollingInterval > 0 {
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
-			} else if systemSettings.PollingInterval > 0 {
-				// Fallback to legacy interval for PBS
-				cfg.PBSPollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
-			}
-			
-			// Keep legacy field for compatibility
-			if systemSettings.PollingInterval > 0 {
-				cfg.PollingInterval = time.Duration(systemSettings.PollingInterval) * time.Second
 			}
 			
 			if systemSettings.UpdateChannel != "" {
@@ -291,7 +273,6 @@ func Load() (*Config, error) {
 			}
 			// APIToken no longer loaded from system.json - only from .env
 			log.Info().
-				Dur("interval", cfg.PollingInterval).
 				Str("updateChannel", cfg.UpdateChannel).
 				Str("logLevel", cfg.LogLevel).
 				Msg("Loaded system configuration")
@@ -299,7 +280,6 @@ func Load() (*Config, error) {
 			// No system.json exists - create default one
 			log.Info().Msg("No system.json found, creating default")
 			defaultSettings := SystemSettings{
-				PollingInterval:   int(cfg.PollingInterval.Seconds()),
 				ConnectionTimeout: int(cfg.ConnectionTimeout.Seconds()),
 				AutoUpdateEnabled: false,
 			}
@@ -309,18 +289,10 @@ func Load() (*Config, error) {
 		}
 	}
 	
-	// Ensure new polling intervals have defaults if not set
-	if cfg.PVEPollingInterval == 0 {
-		cfg.PVEPollingInterval = cfg.PollingInterval
-		if cfg.PVEPollingInterval == 0 {
-			cfg.PVEPollingInterval = 5 * time.Second
-		}
-	}
+	// Ensure PBS polling interval has default if not set
+	// Note: PVE polling is hardcoded to 10s in monitor.go
 	if cfg.PBSPollingInterval == 0 {
-		cfg.PBSPollingInterval = cfg.PollingInterval
-		if cfg.PBSPollingInterval == 0 {
-			cfg.PBSPollingInterval = 60 * time.Second
-		}
+		cfg.PBSPollingInterval = 60 * time.Second
 	}
 	
 	// Limited environment variable support
@@ -532,7 +504,7 @@ func SaveConfig(cfg *Config) error {
 	
 	// Save system configuration
 	systemSettings := SystemSettings{
-		PollingInterval:         int(cfg.PollingInterval.Seconds()),
+		// Note: PVE polling is hardcoded to 10s
 		UpdateChannel:           cfg.UpdateChannel,
 		AutoUpdateEnabled:       cfg.AutoUpdateEnabled,
 		AutoUpdateCheckInterval: int(cfg.AutoUpdateCheckInterval.Hours()),
@@ -551,18 +523,6 @@ func SaveConfig(cfg *Config) error {
 	return nil
 }
 
-// UpdatePollingInterval updates just the polling interval
-func UpdatePollingInterval(interval int) error {
-	if globalPersistence == nil {
-		return fmt.Errorf("config persistence not initialized")
-	}
-	
-	systemSettings := SystemSettings{
-		PollingInterval: interval,
-	}
-	return globalPersistence.SaveSystemSettings(systemSettings)
-}
-
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
@@ -575,9 +535,7 @@ func (c *Config) Validate() error {
 	}
 	
 	// Validate monitoring settings
-	if c.PollingInterval < time.Second {
-		return fmt.Errorf("polling interval must be at least 1 second")
-	}
+	// Note: PVE polling is hardcoded to 10s
 	if c.ConnectionTimeout < time.Second {
 		return fmt.Errorf("connection timeout must be at least 1 second")
 	}

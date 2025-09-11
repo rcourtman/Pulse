@@ -2,7 +2,7 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 
 export interface SystemSettings {
-  pollingInterval: number;
+  // Note: PVE polling is hardcoded to 10s server-side
   updateChannel?: string;
   autoUpdateEnabled: boolean;
   autoUpdateCheckInterval?: number;
