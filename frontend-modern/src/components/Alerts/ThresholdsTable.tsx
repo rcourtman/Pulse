@@ -184,7 +184,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const overridesMap = new Map(props.overrides().map(o => [o.id, o]));
     
     const guests = props.allGuests().map(guest => {
-      const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
+      const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
       const override = overridesMap.get(guestId);
       
       // Check if any threshold values actually differ from defaults
