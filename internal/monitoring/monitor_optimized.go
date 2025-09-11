@@ -292,7 +292,10 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 										Msg("Processing filesystem from guest agent")
 									
 									// Skip special filesystems and Windows System Reserved
-									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
+									// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
+									isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
+									
+									if !isWindowsDrive && (fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
 									   strings.HasPrefix(fs.Mountpoint, "/dev") ||
 									   strings.HasPrefix(fs.Mountpoint, "/proc") ||
 									   strings.HasPrefix(fs.Mountpoint, "/sys") ||
@@ -300,7 +303,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 									   fs.Mountpoint == "/boot/efi" ||
 									   fs.Mountpoint == "System Reserved" ||
 									   strings.Contains(fs.Mountpoint, "System Reserved") ||
-									   strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
+									   strings.HasPrefix(fs.Mountpoint, "/snap")) { // Skip snap mounts
 										log.Debug().
 											Str("vm", vm.Name).
 											Str("mountpoint", fs.Mountpoint).
