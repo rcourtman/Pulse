@@ -813,7 +813,7 @@ export function Dashboard(props: DashboardProps) {
                       {(guest) => (
                         <ComponentErrorBoundary name="GuestRow">
                           {(() => {
-                            const guestId = guest.id || `${guest.instance}-${guest.name}-${guest.vmid}`;
+                            const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
                             const metadata = guestMetadata()[guestId] || guestMetadata()[`${guest.node}-${guest.vmid}`];
                             return (
                               <GuestRow 
