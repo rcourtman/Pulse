@@ -1717,6 +1717,87 @@ main() {
     
     # Check for existing installation FIRST before asking for configuration
     if check_existing_installation; then
+        # If building from source was requested, skip the update prompt
+        if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            print_info "Building Pulse from source (branch: $SOURCE_BRANCH)..."
+            
+            # Install build dependencies
+            print_info "Installing build dependencies..."
+            if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git make nodejs npm wget >/dev/null 2>&1); then
+                print_error "Failed to install build dependencies"
+                exit 1
+            fi
+            
+            # Check for Go installation
+            if ! command -v go &> /dev/null; then
+                print_info "Go is not installed. Installing Go 1.23..."
+                install_go
+            else
+                GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+')
+                if awk "BEGIN {exit !($GO_VERSION < 1.23)}"; then
+                    print_info "Go version $GO_VERSION is too old. Installing Go 1.23..."
+                    install_go
+                else
+                    print_info "Go version $GO_VERSION is installed"
+                fi
+            fi
+            
+            # Clone and build
+            print_info "Cloning repository..."
+            TEMP_BUILD_DIR=$(mktemp -d)
+            cd "$TEMP_BUILD_DIR"
+            
+            if ! git clone -b "$SOURCE_BRANCH" "https://github.com/$GITHUB_REPO.git" pulse-src >/dev/null 2>&1; then
+                print_error "Failed to clone repository"
+                rm -rf "$TEMP_BUILD_DIR"
+                exit 1
+            fi
+            
+            cd pulse-src
+            
+            print_info "Building Pulse..."
+            if ! make build >/dev/null 2>&1; then
+                print_error "Build failed"
+                cd /
+                rm -rf "$TEMP_BUILD_DIR"
+                exit 1
+            fi
+            
+            # Detect service name before stopping
+            SERVICE_NAME=$(detect_service_name)
+            
+            # Stop existing service if running
+            if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+                print_info "Stopping existing Pulse service..."
+                systemctl stop $SERVICE_NAME
+            fi
+            
+            # Install the built binary
+            print_info "Installing Pulse..."
+            create_user
+            setup_directories
+            
+            # Copy the built binary
+            cp bin/pulse "$INSTALL_DIR/bin/pulse"
+            chmod +x "$INSTALL_DIR/bin/pulse"
+            chown pulse:pulse "$INSTALL_DIR/bin/pulse"
+            
+            # Create symlink for backward compatibility
+            ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+            
+            # Setup update command and service
+            setup_update_command
+            install_systemd_service
+            start_pulse
+            create_marker_file
+            
+            # Clean up
+            cd /
+            rm -rf "$TEMP_BUILD_DIR"
+            
+            print_completion
+            exit 0
+        fi
         # If a specific version was requested, just update to it
         if [[ -n "${FORCE_VERSION}" ]]; then
             # Determine if this is an upgrade, downgrade, or reinstall
