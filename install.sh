@@ -1163,9 +1163,48 @@ download_pulse() {
         
         # Install build dependencies
         print_info "Installing build dependencies..."
-        if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git golang-go make nodejs npm >/dev/null 2>&1); then
+        if ! (apt-get update >/dev/null 2>&1 && apt-get install -y git make nodejs npm wget >/dev/null 2>&1); then
             print_error "Failed to install build dependencies"
             exit 1
+        fi
+        
+        # Check Go version and install newer version if needed
+        GO_MIN_VERSION="1.21"
+        GO_INSTALLED=false
+        if command -v go >/dev/null 2>&1; then
+            GO_VERSION=$(go version | grep -oE '[0-9]+\.[0-9]+' | head -1)
+            if [[ "$(printf '%s\n' "$GO_MIN_VERSION" "$GO_VERSION" | sort -V | head -n1)" == "$GO_MIN_VERSION" ]]; then
+                GO_INSTALLED=true
+                print_info "Go $GO_VERSION is installed (meets minimum $GO_MIN_VERSION)"
+            fi
+        fi
+        
+        if [[ "$GO_INSTALLED" != "true" ]]; then
+            print_info "Installing Go 1.23 (system Go is too old or missing)..."
+            # Detect architecture for Go download
+            ARCH=$(uname -m)
+            case $ARCH in
+                x86_64)
+                    GO_ARCH="amd64"
+                    ;;
+                aarch64)
+                    GO_ARCH="arm64"
+                    ;;
+                armv7l)
+                    GO_ARCH="armv6l"
+                    ;;
+                *)
+                    print_error "Unsupported architecture for Go: $ARCH"
+                    exit 1
+                    ;;
+            esac
+            
+            cd /tmp
+            wget -q "https://go.dev/dl/go1.23.4.linux-${GO_ARCH}.tar.gz"
+            rm -rf /usr/local/go
+            tar -C /usr/local -xzf "go1.23.4.linux-${GO_ARCH}.tar.gz"
+            export PATH=/usr/local/go/bin:$PATH
+            rm "go1.23.4.linux-${GO_ARCH}.tar.gz"
         fi
         
         # Create temp directory for build
@@ -1191,6 +1230,8 @@ download_pulse() {
         cd ..
         
         print_info "Building backend..."
+        # Ensure Go is in PATH for the build
+        export PATH=/usr/local/go/bin:$PATH
         if ! make build >/dev/null 2>&1; then
             print_error "Failed to build backend"
             exit 1
