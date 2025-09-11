@@ -1,5 +1,6 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { formatBytes } from '@/utils/format';
+import { useWebSocket } from '@/App';
 import type { PhysicalDisk } from '@/types/api';
 
 interface DiskListProps {
@@ -9,6 +10,8 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
+  const { state } = useWebSocket();
+  
   // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
@@ -102,10 +105,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Device</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Model</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
+                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">FS</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">SSD Life</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Temp</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Size</th>
+                  <th class="px-2 py-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -114,7 +119,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const health = getHealthStatus(disk);
                     
                     return (
-                      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                      <>
+                      <tr 
+                        class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
                         <td class="px-2 py-1.5 text-xs">
                           <span class="font-medium text-gray-900 dark:text-gray-100">{disk.node}</span>
                         </td>
@@ -128,6 +136,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(disk.type)}`}>
                             {disk.type.toUpperCase()}
                           </span>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs">
+                          <Show when={disk.used && disk.used !== 'unknown'} fallback={<span class="text-gray-400">-</span>}>
+                            <span class="text-[10px] font-mono text-gray-600 dark:text-gray-400">
+                              {disk.used}
+                            </span>
+                          </Show>
                         </td>
                         <td class="px-2 py-1.5 text-xs">
                           <span class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}>
@@ -168,7 +183,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         <td class="px-2 py-1.5 text-xs">
                           <span class="text-gray-700 dark:text-gray-300">{formatBytes(disk.size)}</span>
                         </td>
+                        <td class="px-2 py-1.5"></td>
                       </tr>
+                      </>
                     );
                   }}
                 </For>
