@@ -913,6 +913,13 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		return nil, err
 	}
 	
+	// Log the raw response for debugging
+	log.Debug().
+		Str("node", node).
+		Int("vmid", vmid).
+		Str("response", string(bodyBytes)).
+		Msg("Raw response from guest agent get-fsinfo")
+	
 	// Try to unmarshal as an array first (expected format)
 	var arrayResult struct {
 		Data struct {
@@ -961,10 +968,20 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
 		// If result is an object, it might be an error or empty response
+		// Check if it's null or an error
+		if objectResult.Data.Result == nil {
+			log.Debug().
+				Str("node", node).
+				Int("vmid", vmid).
+				Msg("GetVMFSInfo received null result - guest agent may not be providing disk info")
+		} else {
+			log.Debug().
+				Str("node", node).
+				Int("vmid", vmid).
+				Interface("result", objectResult.Data.Result).
+				Msg("GetVMFSInfo received object instead of array")
+		}
 		// Return empty array to indicate no filesystem info available
-		log.Debug().
-			Interface("result", objectResult.Data.Result).
-			Msg("GetVMFSInfo received object instead of array, returning empty")
 		return []VMFileSystem{}, nil
 	}
 	
