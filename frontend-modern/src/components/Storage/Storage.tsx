@@ -354,6 +354,7 @@ const Storage: Component = () => {
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[200px]">Usage</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Free</th>
                   <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
+                  <th class="px-2 py-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -403,7 +404,10 @@ const Storage: Component = () => {
                           
                           return (
                             <>
-                              <tr class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} style={rowStyle()}>
+                              <tr 
+                                class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} 
+                                style={rowStyle()}
+                              >
                                 <td class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}>
                                 <div class="flex items-center gap-2">
                                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -480,6 +484,7 @@ const Storage: Component = () => {
                               </td>
                               <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
                               <td class="p-0.5 px-1.5 text-xs">{formatBytes(storage.total || 0)}</td>
+                              <td class="p-0.5 px-1.5"></td>
                             </tr>
                             <Show when={storage.zfsPool && (
                               storage.zfsPool.state !== 'ONLINE' || 
@@ -488,7 +493,7 @@ const Storage: Component = () => {
                               storage.zfsPool.checksumErrors > 0
                             )}>
                               <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
-                                <td colspan="8" class="p-2">
+                                <td colspan="9" class="p-2">
                                   <div class="text-xs space-y-1">
                                     <div class="flex items-center gap-2">
                                       <span class="font-semibold text-yellow-700 dark:text-yellow-400">
