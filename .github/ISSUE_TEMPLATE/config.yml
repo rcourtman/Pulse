@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Community Support
+    url: https://github.com/rcourtman/Pulse/discussions
+    about: Please ask and answer questions here
+  - name: Documentation
+    url: https://github.com/rcourtman/Pulse/wiki
+    about: Check the wiki for guides and documentation
