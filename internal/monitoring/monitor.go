@@ -1177,32 +1177,28 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		case <-ctx.Done():
 			return
 		default:
-			// Only try cluster endpoints if this is configured as a cluster
-			// This prevents issues where cluster/resources doesn't return data for all nodes
-			useClusterEndpoint := false
-			if instanceCfg.IsCluster {
-				// Try to use efficient cluster/resources endpoint
-				// The cluster client will handle routing through the main host if needed
-				useClusterEndpoint = m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			// Always try the efficient cluster/resources endpoint first
+			// This endpoint works on both clustered and standalone nodes
+			// Testing confirmed it works on standalone nodes like pimox
+			useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, client)
+			
+			if !useClusterEndpoint {
+				// Fall back to traditional polling only if cluster/resources not available
+				// This should be rare - only for very old Proxmox versions
+				log.Debug().
+					Str("instance", instanceName).
+					Msg("cluster/resources endpoint not available, using traditional polling")
 				
-				// Only check if actually a cluster if the efficient endpoint fails
-				if !useClusterEndpoint {
-					// Double-check that this is actually a cluster to prevent misconfiguration
+				// Check if configuration needs updating
+				if instanceCfg.IsCluster {
 					isActuallyCluster, checkErr := client.IsClusterMember(ctx)
 					if checkErr == nil && !isActuallyCluster {
 						log.Warn().
 							Str("instance", instanceName).
-							Msg("Instance marked as cluster but is actually standalone - updating configuration")
+							Msg("Instance marked as cluster but is actually standalone - consider updating configuration")
 						instanceCfg.IsCluster = false
 					}
 				}
-			}
-			
-			// Fall back to traditional polling if not a cluster or if cluster endpoint failed
-			if !useClusterEndpoint {
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("Using traditional node-by-node polling")
 				
 				// Use optimized parallel polling for better performance
 				if instanceCfg.MonitorVMs {
