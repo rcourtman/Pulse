@@ -1729,17 +1729,44 @@ main() {
             fi
             
             # Check for Go installation
+            GO_INSTALLED=false
             if ! command -v go &> /dev/null; then
                 print_info "Go is not installed. Installing Go 1.23..."
-                install_go
             else
                 GO_VERSION=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+')
                 if awk "BEGIN {exit !($GO_VERSION < 1.23)}"; then
                     print_info "Go version $GO_VERSION is too old. Installing Go 1.23..."
-                    install_go
                 else
                     print_info "Go version $GO_VERSION is installed"
+                    GO_INSTALLED=true
                 fi
+            fi
+            
+            if [[ "$GO_INSTALLED" != "true" ]]; then
+                # Detect architecture for Go download
+                ARCH=$(uname -m)
+                case $ARCH in
+                    x86_64)
+                        GO_ARCH="amd64"
+                        ;;
+                    aarch64)
+                        GO_ARCH="arm64"
+                        ;;
+                    armv7l)
+                        GO_ARCH="armv7"
+                        ;;
+                    *)
+                        print_error "Unsupported architecture: $ARCH"
+                        exit 1
+                        ;;
+                esac
+                
+                cd /tmp
+                wget -q "https://go.dev/dl/go1.23.4.linux-${GO_ARCH}.tar.gz"
+                rm -rf /usr/local/go
+                tar -C /usr/local -xzf "go1.23.4.linux-${GO_ARCH}.tar.gz"
+                export PATH=/usr/local/go/bin:$PATH
+                rm "go1.23.4.linux-${GO_ARCH}.tar.gz"
             fi
             
             # Clone and build
