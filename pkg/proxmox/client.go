@@ -559,10 +559,11 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 	// Storage queries can take longer on large clusters or slow storage backends
 	// Create a new context with shorter timeout for storage API calls
 	// Storage endpoints can hang when NFS/network storage is unavailable
+	// Using 30s timeout as a balance between responsiveness and reliability
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 	
@@ -588,10 +589,11 @@ func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 	// Storage queries can take longer on large clusters
 	// Create a new context with shorter timeout for storage API calls
 	// Storage endpoints can hang when NFS/network storage is unavailable
+	// Using 30s timeout as a balance between responsiveness and reliability
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 	
@@ -682,10 +684,11 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 	// Storage content queries can take longer on large storages
 	// Create a new context with shorter timeout for storage API calls
 	// Storage endpoints can hang when NFS/network storage is unavailable
+	// Using 30s timeout as a balance between responsiveness and reliability
 	storageCtx := ctx
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 15*time.Second {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 30*time.Second {
 		var cancel context.CancelFunc
-		storageCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 	
