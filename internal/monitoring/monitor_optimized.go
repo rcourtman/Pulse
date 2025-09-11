@@ -894,6 +894,27 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				Dur("duration", nodeDuration).
 				Msg("Node storage polling completed")
 			
+			// If we got empty storage but have existing storage for this node, don't mark as successfully polled
+			// This allows preservation logic to keep the existing storage
+			if len(nodeStorageList) == 0 {
+				// Check if we have existing storage for this node
+				hasExisting := false
+				for _, existing := range existingStorageMap {
+					if existing.Node == n.Node {
+						hasExisting = true
+						break
+					}
+				}
+				if hasExisting {
+					log.Warn().
+						Str("node", n.Node).
+						Str("instance", instanceName).
+						Msg("Node returned empty storage but has existing storage - preserving existing data")
+					// Don't send result, allowing preservation logic to work
+					return
+				}
+			}
+			
 			resultChan <- nodeResult{node: n.Node, storage: nodeStorageList}
 		}(node)
 	}
