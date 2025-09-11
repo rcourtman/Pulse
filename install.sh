@@ -1816,8 +1816,8 @@ main() {
             create_user
             setup_directories
             
-            # Copy the built binary
-            cp bin/pulse "$INSTALL_DIR/bin/pulse"
+            # Copy the built binary (Makefile builds to ./pulse not bin/pulse)
+            cp pulse "$INSTALL_DIR/bin/pulse"
             chmod +x "$INSTALL_DIR/bin/pulse"
             chown pulse:pulse "$INSTALL_DIR/bin/pulse"
             
