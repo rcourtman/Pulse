@@ -115,7 +115,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">CPU</th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">Memory</th>
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
-                {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
+                {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk Used'}
               </th>
               <For each={getCountHeader()}>
                 {(header) => (
