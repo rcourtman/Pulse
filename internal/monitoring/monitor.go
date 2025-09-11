@@ -967,11 +967,22 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
 		disks, err := client.GetDisks(ctx, node.Node)
 		if err != nil {
-			// Log but don't fail - disk monitoring is optional
-			log.Debug().
-				Str("node", node.Node).
-				Err(err).
-				Msg("Failed to get disk list - disk monitoring may not be available")
+			// Check if it's a permission error or if the endpoint doesn't exist
+			if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+				log.Warn().
+					Str("node", node.Node).
+					Err(err).
+					Msg("Insufficient permissions to access disk information - check API token permissions")
+			} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "501") {
+				log.Info().
+					Str("node", node.Node).
+					Msg("Disk monitoring not available on this node (may be using non-standard storage)")
+			} else {
+				log.Warn().
+					Str("node", node.Node).
+					Err(err).
+					Msg("Failed to get disk list")
+			}
 			continue
 		}
 		
