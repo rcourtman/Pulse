@@ -1253,7 +1253,7 @@ download_pulse() {
             mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
         fi
         
-        if ! cp bin/pulse "$INSTALL_DIR/bin/pulse"; then
+        if ! cp pulse "$INSTALL_DIR/bin/pulse"; then
             print_error "Failed to copy built binary to $INSTALL_DIR/bin/pulse"
             if [[ -f "$INSTALL_DIR/bin/pulse.old" ]]; then
                 mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
