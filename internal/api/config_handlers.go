@@ -533,6 +533,11 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 		hostStr = strings.TrimPrefix(hostStr, "https://")
 	}
 	
+	// Remove trailing slash and path if present
+	if idx := strings.Index(hostStr, "/"); idx != -1 {
+		hostStr = hostStr[:idx]
+	}
+	
 	// Check if it contains a port
 	if strings.Contains(hostStr, ":") {
 		host, port, err := net.SplitHostPort(hostStr)
@@ -1752,8 +1757,7 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 	
 	// Get current values from running config
 	settings := config.SystemSettings{
-		PollingInterval:         int(h.config.PollingInterval.Seconds()),
-		PVEPollingInterval:      int(h.config.PVEPollingInterval.Seconds()),
+		// Note: PVE polling is hardcoded to 10s
 		PBSPollingInterval:      int(h.config.PBSPollingInterval.Seconds()),
 		BackendPort:             h.config.BackendPort,
 		FrontendPort:            h.config.FrontendPort,
@@ -1783,46 +1787,26 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 		return
 	}
 	
-	// Validate polling intervals (must be positive)
-	if settings.PollingInterval < 0 || settings.PVEPollingInterval < 0 || settings.PBSPollingInterval < 0 {
-		http.Error(w, "Polling intervals must be positive", http.StatusBadRequest)
+	// Validate PBS polling interval (must be positive)
+	if settings.PBSPollingInterval < 0 {
+		http.Error(w, "PBS polling interval must be positive", http.StatusBadRequest)
 		return
 	}
 	
 	// Update polling intervals
 	needsReload := false
 	
-	// Handle PVE polling interval
-	if settings.PVEPollingInterval > 0 {
-		h.config.PVEPollingInterval = time.Duration(settings.PVEPollingInterval) * time.Second
-		needsReload = true
-	} else if settings.PollingInterval > 0 {
-		// Fallback to legacy interval
-		h.config.PVEPollingInterval = time.Duration(settings.PollingInterval) * time.Second
-		needsReload = true
-	}
-	
-	// Handle PBS polling interval
+	// Note: PVE polling is hardcoded to 10s, only PBS interval can be configured
 	if settings.PBSPollingInterval > 0 {
 		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
 		needsReload = true
-	} else if settings.PollingInterval > 0 {
-		// Fallback to legacy interval
-		h.config.PBSPollingInterval = time.Duration(settings.PollingInterval) * time.Second
-		needsReload = true
-	}
-	
-	// Keep legacy interval updated for compatibility
-	if settings.PollingInterval > 0 {
-		h.config.PollingInterval = time.Duration(settings.PollingInterval) * time.Second
 	}
 	
 	// Trigger a monitor reload if intervals changed
 	if needsReload && h.reloadFunc != nil {
 		log.Info().
-			Int("pveInterval", settings.PVEPollingInterval).
 			Int("pbsInterval", settings.PBSPollingInterval).
-			Msg("Triggering monitor reload for new polling intervals")
+			Msg("Triggering monitor reload for new PBS polling interval")
 		if err := h.reloadFunc(); err != nil {
 			log.Error().Err(err).Msg("Failed to reload monitor with new polling intervals")
 			// Don't fail the request, the setting was saved
@@ -1861,7 +1845,7 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	}
 	
 	log.Info().
-		Int("pollingInterval", settings.PollingInterval).
+		Int("pbsPollingInterval", settings.PBSPollingInterval).
 		Int("backendPort", settings.BackendPort).
 		Int("frontendPort", settings.FrontendPort).
 		Msg("Updated system settings in unified config")
@@ -1873,8 +1857,8 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 			// Continue anyway - settings are saved
 		} else {
 			log.Info().
-				Int("pollingInterval", settings.PollingInterval).
-				Msg("Monitor reloaded with new polling interval")
+				Int("pbsPollingInterval", settings.PBSPollingInterval).
+				Msg("Monitor reloaded with new PBS polling interval")
 		}
 	}
 	
