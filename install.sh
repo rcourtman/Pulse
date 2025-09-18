@@ -18,6 +18,7 @@ CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
 SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
 BUILD_FROM_SOURCE=false
+SKIP_DOWNLOAD=false
 
 # Wrapper for systemctl commands that might hang in unprivileged containers
 safe_systemctl() {
