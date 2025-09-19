@@ -2375,6 +2375,7 @@ FORCE_CHANNEL=""
 IN_CONTAINER=false
 IN_DOCKER=false
 ENABLE_AUTO_UPDATES=false
+SKIP_DOWNLOAD=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
