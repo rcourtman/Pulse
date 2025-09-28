@@ -279,11 +279,11 @@ export function GuestURLs(props: GuestURLsProps) {
                           const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
                           const fallbackId = `${guest.node}-${guest.vmid}`;
 
-                          const metadataKey = () => resolveMetadataKey(guestId, fallbackId);
-                          const meta = () => guestMetadata()[metadataKey()];
-                          const url = () => meta()?.customUrl || '';
-                          const hasUrl = () => url().trim().length > 0;
-                          const urlError = () => urlErrors()[metadataKey()];
+                          const metadataKey = createMemo(() => resolveMetadataKey(guestId, fallbackId));
+                          const meta = createMemo(() => guestMetadata()[metadataKey()]);
+                          const url = createMemo(() => meta()?.customUrl || '');
+                          const hasUrl = createMemo(() => url().trim().length > 0);
+                          const urlError = createMemo(() => urlErrors()[metadataKey()]);
 
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
