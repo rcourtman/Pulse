@@ -6,6 +6,9 @@ import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { BackupsFilter } from './BackupsFilter';
+import { Card } from '@/components/shared/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 type BackupType = 'snapshot' | 'local' | 'remote';
 type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
@@ -968,24 +971,29 @@ const UnifiedBackups: Component = () => {
     <div class="space-y-4">
       {/* Empty State - No nodes at all configured */}
       <Show when={!isLoading() && (state.nodes || []).length === 0 && (!state.pbs || state.pbs.length === 0)}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No backup sources configured</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE or PBS node in the Settings tab to start monitoring backups.</p>
-            <button type="button"
-              onClick={() => {
-                const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
-                settingsTab?.click();
-              }}
-              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Go to Settings
-            </button>
-          </div>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            title="No backup sources configured"
+            description="Add a Proxmox VE or PBS node in the Settings tab to start monitoring backups."
+            actions={(
+              <button
+                type="button"
+                onClick={() => {
+                  const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
+                  settingsTab?.click();
+                }}
+                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Go to Settings
+              </button>
+            )}
+          />
+        </Card>
       </Show>
 
       {/* Unified Node Selector */}
@@ -1006,7 +1014,7 @@ const UnifiedBackups: Component = () => {
 
       {/* Removed old PBS table */}
       <Show when={false && sortedPBSInstances().length > 0}>
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <Card padding="none" class="overflow-hidden">
           <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
             <style>{`
               .overflow-x-auto::-webkit-scrollbar { display: none; }
@@ -1145,18 +1153,16 @@ const UnifiedBackups: Component = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </Show>
 
       {/* Main Content - show when any nodes or PBS are configured */}
       <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
       {/* Backup Frequency Chart - hide when no backups match the filter */}
       <Show when={filteredData().length > 0}>
-      <div class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-        <div class="flex justify-between items-center mb-3">
-          <div class="flex items-center gap-4">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Frequency</h3>
-          </div>
+      <Card padding="md">
+        <div class="mb-3 flex items-start justify-between gap-3">
+          <SectionHeader title="Backup frequency" size="sm" class="flex-1" />
           <div class="flex items-center gap-2 text-xs">
             <div class="flex items-center gap-1">
               <button type="button"
@@ -1218,8 +1224,18 @@ const UnifiedBackups: Component = () => {
           <Show 
             when={chartData().data.length > 0}
             fallback={
-              <div class="h-full flex items-center justify-center">
-                <p class="text-sm text-gray-500 dark:text-gray-400">No backup data for selected time range</p>
+              <div class="flex h-full items-center justify-center">
+                <EmptyState
+                  class="max-w-xs"
+                  align="center"
+                  icon={(
+                    <svg class="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 10h2v9H7zm4-5h2v14h-2zm4 8h2v6h-2z" />
+                    </svg>
+                  )}
+                  title="No backup data"
+                  description="Adjust filters or expand the time range to see activity."
+                />
               </div>
             }
           >
@@ -1545,7 +1561,7 @@ const UnifiedBackups: Component = () => {
             </span>
           </div>
         </div>
-      </div>
+      </Card>
       </Show>
 
       {/* Backups Filter */}
@@ -1563,7 +1579,7 @@ const UnifiedBackups: Component = () => {
       />
 
       {/* Table */}
-      <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <Card padding="none" class="mb-4 overflow-hidden">
         <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
         <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
@@ -1582,22 +1598,34 @@ const UnifiedBackups: Component = () => {
         <Show
           when={!isLoading()}
           fallback={
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-              <div class="flex flex-col items-center gap-4">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                <p class="text-lg">Loading backup data...</p>
-                <p class="text-sm">This may take up to 20 seconds on first load</p>
-              </div>
-            </div>
+            <Card padding="lg">
+              <EmptyState
+                icon={(
+                  <svg class="h-12 w-12 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                title="Loading backup data..."
+                description="This may take up to 20 seconds on the first load."
+              />
+            </Card>
           }
         >
           <Show
             when={groupedData().length > 0}
             fallback={
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p class="text-lg">No backups found</p>
-                <p class="text-sm mt-2">No backups, snapshots, or remote backups match your filters</p>
-              </div>
+              <Card padding="lg">
+                <EmptyState
+                  icon={(
+                    <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  )}
+                  title="No backups match your filters"
+                  description="Try adjusting filters or selecting a different time range."
+                />
+              </Card>
             }
           >
           {/* Mobile Card View - Compact */}
@@ -1610,7 +1638,7 @@ const UnifiedBackups: Component = () => {
                   </div>
                   <For each={group.items}>
                     {(item) => (
-                      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 hover:shadow-sm transition-shadow">
+                      <Card padding="sm" class="hover:shadow-sm transition-shadow">
                         {/* Compact header row */}
                         <div class="flex items-center justify-between gap-2 mb-1">
                           <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -1666,7 +1694,7 @@ const UnifiedBackups: Component = () => {
                             </span>
                           </Show>
                         </div>
-                      </div>
+                      </Card>
                     )}
                   </For>
                 </div>
@@ -1939,7 +1967,7 @@ const UnifiedBackups: Component = () => {
           </Show>
         </Show>
         </div>
-      </div>
+      </Card>
 
       {/* Tooltip */}
       <Show when={tooltip()}>

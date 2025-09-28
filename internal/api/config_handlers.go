@@ -45,6 +45,8 @@ type ConfigHandlers struct {
 	guestMetadataHandler *GuestMetadataHandler
 	setupCodes           map[string]*SetupCode // Map of code hash -> setup code details
 	codeMutex            sync.RWMutex          // Mutex for thread-safe code access
+	clusterDetectMutex   sync.Mutex
+	lastClusterDetection map[string]time.Time
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -57,11 +59,12 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 		wsHub:                wsHub,
 		guestMetadataHandler: guestMetadataHandler,
 		setupCodes:           make(map[string]*SetupCode),
+		lastClusterDetection: make(map[string]time.Time),
 	}
-	
+
 	// Clean up expired codes periodically
 	go h.cleanupExpiredCodes()
-	
+
 	return h
 }
 
@@ -69,7 +72,7 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 func (h *ConfigHandlers) cleanupExpiredCodes() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		h.codeMutex.Lock()
 		now := time.Now()
@@ -88,7 +91,7 @@ func (h *ConfigHandlers) cleanupExpiredCodes() {
 func sanitizeErrorMessage(err error, operation string) string {
 	// Log the detailed error internally
 	log.Error().Err(err).Str("operation", operation).Msg("Operation failed")
-	
+
 	// Return generic messages based on operation type
 	switch operation {
 	case "create_client":
@@ -102,52 +105,147 @@ func sanitizeErrorMessage(err error, operation string) string {
 	}
 }
 
+func normalizePVEUser(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		return user
+	}
+	if strings.Contains(user, "@") {
+		return user
+	}
+	return user + "@pam"
+}
+
+const clusterDetectionCooldown = 30 * time.Second
+
+func shouldSkipClusterAutoDetection(host, name string) bool {
+	if host == "" {
+		return false
+	}
+	lowerHost := strings.ToLower(host)
+	lowerName := strings.ToLower(name)
+	return strings.Contains(lowerHost, "192.168.77.") ||
+		strings.Contains(lowerHost, "192.168.88.") ||
+		strings.Contains(lowerHost, "test-") ||
+		strings.Contains(lowerName, "test-") ||
+		strings.Contains(lowerName, "persist-") ||
+		strings.Contains(lowerName, "concurrent-")
+}
+
+func (h *ConfigHandlers) maybeRefreshClusterInfo(instance *config.PVEInstance) {
+	if instance == nil {
+		return
+	}
+
+	if shouldSkipClusterAutoDetection(instance.Host, instance.Name) {
+		return
+	}
+
+	// Require credentials to attempt detection
+	if instance.TokenValue == "" && instance.Password == "" {
+		return
+	}
+
+	trimmedName := strings.TrimSpace(instance.ClusterName)
+	needsRefresh := !instance.IsCluster ||
+		len(instance.ClusterEndpoints) == 0 ||
+		trimmedName == "" ||
+		strings.EqualFold(trimmedName, "unknown cluster")
+
+	if !needsRefresh {
+		return
+	}
+
+	h.clusterDetectMutex.Lock()
+	last := h.lastClusterDetection[instance.Name]
+	if time.Since(last) < clusterDetectionCooldown {
+		h.clusterDetectMutex.Unlock()
+		return
+	}
+	h.lastClusterDetection[instance.Name] = time.Now()
+	h.clusterDetectMutex.Unlock()
+
+	clientConfig := config.CreateProxmoxConfig(instance)
+	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name)
+	if !isCluster || len(clusterEndpoints) == 0 {
+		log.Debug().
+			Str("instance", instance.Name).
+			Bool("previous_cluster", instance.IsCluster).
+			Msg("Cluster validation retry did not produce usable endpoints")
+		return
+	}
+
+	trimmedCluster := strings.TrimSpace(clusterName)
+	if trimmedCluster == "" || strings.EqualFold(trimmedCluster, "unknown cluster") {
+		clusterName = instance.Name
+	}
+
+	instance.IsCluster = true
+	instance.ClusterName = clusterName
+	instance.ClusterEndpoints = clusterEndpoints
+
+	log.Info().
+		Str("instance", instance.Name).
+		Str("cluster", clusterName).
+		Int("endpoints", len(clusterEndpoints)).
+		Msg("Updated cluster metadata after validation retry")
+
+	if h.persistence != nil {
+		if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+			log.Warn().
+				Err(err).
+				Str("instance", instance.Name).
+				Msg("Failed to persist cluster detection update")
+		}
+	}
+}
+
 // NodeConfigRequest represents a request to add/update a node
 type NodeConfigRequest struct {
-	Type              string `json:"type"` // "pve" or "pbs"
-	Name              string `json:"name"`
-	Host              string `json:"host"`
-	User              string `json:"user,omitempty"`
-	Password          string `json:"password,omitempty"`
-	TokenName         string `json:"tokenName,omitempty"`
-	TokenValue        string `json:"tokenValue,omitempty"`
-	Fingerprint       string `json:"fingerprint,omitempty"`
-	VerifySSL         bool   `json:"verifySSL"`
-	MonitorVMs        bool   `json:"monitorVMs,omitempty"`        // PVE only
-	MonitorContainers bool   `json:"monitorContainers,omitempty"` // PVE only
-	MonitorStorage    bool   `json:"monitorStorage,omitempty"`    // PVE only
-	MonitorBackups     bool `json:"monitorBackups,omitempty"`     // PVE only
-	MonitorDatastores  bool `json:"monitorDatastores,omitempty"`  // PBS only
-	MonitorSyncJobs    bool `json:"monitorSyncJobs,omitempty"`    // PBS only
-	MonitorVerifyJobs  bool `json:"monitorVerifyJobs,omitempty"`  // PBS only
-	MonitorPruneJobs   bool `json:"monitorPruneJobs,omitempty"`   // PBS only
-	MonitorGarbageJobs bool `json:"monitorGarbageJobs,omitempty"` // PBS only
+	Type               string `json:"type"` // "pve" or "pbs"
+	Name               string `json:"name"`
+	Host               string `json:"host"`
+	User               string `json:"user,omitempty"`
+	Password           string `json:"password,omitempty"`
+	TokenName          string `json:"tokenName,omitempty"`
+	TokenValue         string `json:"tokenValue,omitempty"`
+	Fingerprint        string `json:"fingerprint,omitempty"`
+	VerifySSL          bool   `json:"verifySSL"`
+	MonitorVMs         bool   `json:"monitorVMs,omitempty"`         // PVE only
+	MonitorContainers  bool   `json:"monitorContainers,omitempty"`  // PVE only
+	MonitorStorage     bool   `json:"monitorStorage,omitempty"`     // PVE only
+	MonitorBackups     bool   `json:"monitorBackups,omitempty"`     // PVE only
+	MonitorDatastores  bool   `json:"monitorDatastores,omitempty"`  // PBS only
+	MonitorSyncJobs    bool   `json:"monitorSyncJobs,omitempty"`    // PBS only
+	MonitorVerifyJobs  bool   `json:"monitorVerifyJobs,omitempty"`  // PBS only
+	MonitorPruneJobs   bool   `json:"monitorPruneJobs,omitempty"`   // PBS only
+	MonitorGarbageJobs bool   `json:"monitorGarbageJobs,omitempty"` // PBS only
 }
 
 // NodeResponse represents a node in API responses
 type NodeResponse struct {
-	ID                string `json:"id"`
-	Type              string `json:"type"`
-	Name              string `json:"name"`
-	Host              string `json:"host"`
-	User              string `json:"user,omitempty"`
-	HasPassword       bool   `json:"hasPassword"`
-	TokenName         string `json:"tokenName,omitempty"`
-	HasToken          bool   `json:"hasToken"`
-	Fingerprint       string `json:"fingerprint,omitempty"`
-	VerifySSL         bool   `json:"verifySSL"`
-	MonitorVMs        bool   `json:"monitorVMs,omitempty"`
-	MonitorContainers bool   `json:"monitorContainers,omitempty"`
-	MonitorStorage    bool   `json:"monitorStorage,omitempty"`
-	MonitorBackups     bool `json:"monitorBackups,omitempty"`
-	MonitorDatastores  bool `json:"monitorDatastores,omitempty"`
-	MonitorSyncJobs    bool `json:"monitorSyncJobs,omitempty"`
-	MonitorVerifyJobs  bool `json:"monitorVerifyJobs,omitempty"`
-	MonitorPruneJobs   bool `json:"monitorPruneJobs,omitempty"`
-	MonitorGarbageJobs bool                  `json:"monitorGarbageJobs,omitempty"`
-	Status             string                `json:"status"` // "connected", "disconnected", "error"
-	IsCluster          bool                  `json:"isCluster,omitempty"`
-	ClusterName        string                `json:"clusterName,omitempty"`
+	ID                 string                   `json:"id"`
+	Type               string                   `json:"type"`
+	Name               string                   `json:"name"`
+	Host               string                   `json:"host"`
+	User               string                   `json:"user,omitempty"`
+	HasPassword        bool                     `json:"hasPassword"`
+	TokenName          string                   `json:"tokenName,omitempty"`
+	HasToken           bool                     `json:"hasToken"`
+	Fingerprint        string                   `json:"fingerprint,omitempty"`
+	VerifySSL          bool                     `json:"verifySSL"`
+	MonitorVMs         bool                     `json:"monitorVMs,omitempty"`
+	MonitorContainers  bool                     `json:"monitorContainers,omitempty"`
+	MonitorStorage     bool                     `json:"monitorStorage,omitempty"`
+	MonitorBackups     bool                     `json:"monitorBackups,omitempty"`
+	MonitorDatastores  bool                     `json:"monitorDatastores,omitempty"`
+	MonitorSyncJobs    bool                     `json:"monitorSyncJobs,omitempty"`
+	MonitorVerifyJobs  bool                     `json:"monitorVerifyJobs,omitempty"`
+	MonitorPruneJobs   bool                     `json:"monitorPruneJobs,omitempty"`
+	MonitorGarbageJobs bool                     `json:"monitorGarbageJobs,omitempty"`
+	Status             string                   `json:"status"` // "connected", "disconnected", "error"
+	IsCluster          bool                     `json:"isCluster,omitempty"`
+	ClusterName        string                   `json:"clusterName,omitempty"`
 	ClusterEndpoints   []config.ClusterEndpoint `json:"clusterEndpoints,omitempty"`
 }
 
@@ -159,55 +257,83 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 	if testHost == "" {
 		testHost = clusterNode.Name
 	}
-	
+
 	// Skip empty hostnames (shouldn't happen but be safe)
 	if testHost == "" {
 		return false
 	}
-	
+
 	// Create a test configuration for this specific node
 	testConfig := baseConfig
 	testConfig.Host = testHost
 	if !strings.HasPrefix(testConfig.Host, "http") {
 		testConfig.Host = fmt.Sprintf("https://%s:8006", testConfig.Host)
 	}
-	
+
 	// Use a very short timeout for validation - we just need to know if the API exists
 	testConfig.Timeout = 2 * time.Second
-	
+
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Str("test_host", testConfig.Host).
 		Msg("Validating Proxmox API for cluster node")
-	
+
 	// Try to create a client and make a simple API call
 	testClient, err := proxmox.NewClient(testConfig)
 	if err != nil {
-		log.Debug().
-			Str("node", clusterNode.Name).
-			Err(err).
-			Msg("Failed to create test client for cluster node")
-		return false
+		// Many clusters use unique certificates per node. If the primary node
+		// was configured with fingerprint pinning, connecting to peers with the
+		// same fingerprint will fail. Fall back to a relaxed TLS check so we can
+		// still detect valid cluster members while keeping other errors (like
+		// auth) as hard failures.
+		isTLSMismatch := strings.Contains(err.Error(), "fingerprint") || strings.Contains(err.Error(), "x509") || strings.Contains(err.Error(), "certificate")
+		if isTLSMismatch {
+			log.Debug().
+				Str("node", clusterNode.Name).
+				Msg("Retrying cluster node validation without fingerprint pinning")
+			testConfig.Fingerprint = ""
+			testConfig.VerifySSL = false
+			testClient, err = proxmox.NewClient(testConfig)
+		}
+		if err != nil {
+			log.Debug().
+				Str("node", clusterNode.Name).
+				Err(err).
+				Msg("Failed to create test client for cluster node")
+			return false
+		}
 	}
-	
+
 	// Test with a simple API call that all Proxmox nodes should support
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	
+
 	// Try to get the node version - this is a very lightweight API call
 	_, err = testClient.GetNodes(ctx)
 	if err != nil {
+		errMsg := err.Error()
+		// If we reached the API but were denied (common when per-node permissions
+		// differ), treat it as valid. We only want to filter out hosts that aren't
+		// actually Proxmox endpoints.
+		if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "403") || strings.Contains(errMsg, "permission") {
+			log.Debug().
+				Str("node", clusterNode.Name).
+				Err(err).
+				Msg("Cluster node API responded but denied access; accepting for discovery")
+			return true
+		}
+
 		log.Debug().
 			Str("node", clusterNode.Name).
 			Err(err).
 			Msg("Node failed Proxmox API validation - likely not a Proxmox node")
 		return false
 	}
-	
+
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Msg("Node passed Proxmox API validation")
-	
+
 	return true
 }
 
@@ -218,22 +344,22 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
 		return false, "", nil
 	}
-	
+
 	// Try to get cluster status with retries to handle API permission propagation delays
 	// This addresses issue #437 where cluster detection fails on first attempt
 	var clusterStatus []proxmox.ClusterStatus
 	var lastErr error
-	
+
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			// Wait a bit for permissions to propagate
 			time.Sleep(time.Duration(attempt) * time.Second)
 			log.Debug().Int("attempt", attempt+1).Msg("Retrying cluster detection")
 		}
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		// Get full cluster status to find the actual cluster name
 		// Note: This can cause certificate lookup errors on standalone nodes, but it's only done once during configuration
 		clusterStatus, lastErr = tempClient.GetClusterStatus(ctx)
@@ -241,7 +367,7 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			// Success!
 			break
 		}
-		
+
 		// Check if this is definitely not a cluster (e.g., 501 not implemented)
 		if strings.Contains(lastErr.Error(), "501") || strings.Contains(lastErr.Error(), "not implemented") {
 			// This is a standalone node, no need to retry
@@ -249,13 +375,13 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			return false, "", nil
 		}
 	}
-	
+
 	if lastErr != nil {
 		// This is expected for standalone nodes - they will return an error when accessing cluster endpoints
 		log.Debug().Err(lastErr).Msg("Could not get cluster status after retries - likely a standalone node")
 		return false, "", nil
 	}
-	
+
 	// Find the cluster name and collect nodes
 	var clusterNodes []proxmox.ClusterStatus
 	for _, status := range clusterStatus {
@@ -267,9 +393,9 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			clusterNodes = append(clusterNodes, status)
 		}
 	}
-	
+
 	log.Info().Int("cluster_nodes", len(clusterNodes)).Msg("Got cluster nodes")
-	
+
 	if len(clusterNodes) > 1 {
 		isCluster = true
 		log.Info().
@@ -277,7 +403,14 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			Str("node", nodeName).
 			Int("nodes", len(clusterNodes)).
 			Msg("Detected Proxmox cluster")
-		
+
+		scheme := "https://"
+		if strings.HasPrefix(strings.ToLower(clientConfig.Host), "http://") {
+			scheme = "http://"
+		}
+
+		var unvalidatedNodes []proxmox.ClusterStatus
+
 		for _, clusterNode := range clusterNodes {
 			// Validate that this node actually has a working Proxmox API
 			// This filters out qdevice VMs and other non-Proxmox participants
@@ -286,9 +419,10 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 					Str("node", clusterNode.Name).
 					Str("ip", clusterNode.IP).
 					Msg("Skipping cluster node - no valid Proxmox API detected (likely qdevice or external node)")
+				unvalidatedNodes = append(unvalidatedNodes, clusterNode)
 				continue
 			}
-			
+
 			// Build the host URL with proper port
 			// Prefer IP if available, otherwise use node name
 			nodeHost := clusterNode.IP
@@ -299,35 +433,69 @@ func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string) (isClu
 			if !strings.Contains(nodeHost, ":") {
 				nodeHost = nodeHost + ":8006"
 			}
-			
+
 			endpoint := config.ClusterEndpoint{
 				NodeID:   clusterNode.ID,
 				NodeName: clusterNode.Name,
-				Host:     nodeHost,
+				Host:     scheme + nodeHost,
 				Online:   clusterNode.Online == 1,
 				LastSeen: time.Now(),
 			}
-			
+
 			if clusterNode.IP != "" {
 				endpoint.IP = clusterNode.IP
 			}
-			
+
 			clusterEndpoints = append(clusterEndpoints, endpoint)
 		}
-		
+
+		if len(clusterEndpoints) == 0 && len(unvalidatedNodes) > 0 {
+			log.Warn().
+				Str("cluster", clusterName).
+				Int("total_discovered", len(unvalidatedNodes)).
+				Msg("All detected cluster nodes failed validation; falling back to cluster metadata")
+
+			for _, clusterNode := range unvalidatedNodes {
+				nodeHost := clusterNode.IP
+				if nodeHost == "" {
+					nodeHost = clusterNode.Name
+				}
+				if nodeHost == "" {
+					continue
+				}
+				if !strings.Contains(nodeHost, ":") {
+					nodeHost = nodeHost + ":8006"
+				}
+
+				endpoint := config.ClusterEndpoint{
+					NodeID:   clusterNode.ID,
+					NodeName: clusterNode.Name,
+					Host:     scheme + nodeHost,
+					Online:   clusterNode.Online == 1,
+					LastSeen: time.Now(),
+				}
+
+				if clusterNode.IP != "" {
+					endpoint.IP = clusterNode.IP
+				}
+
+				clusterEndpoints = append(clusterEndpoints, endpoint)
+			}
+		}
+
 		// Log the final count of valid Proxmox nodes found
 		log.Info().
 			Str("cluster", clusterName).
 			Int("total_discovered", len(clusterNodes)).
 			Int("valid_proxmox_nodes", len(clusterEndpoints)).
 			Msg("Cluster node validation complete")
-		
+
 		// Fallback if we couldn't get the cluster name
 		if clusterName == "" {
 			clusterName = "Unknown Cluster"
 		}
 	}
-	
+
 	return isCluster, clusterName, clusterEndpoints
 }
 
@@ -337,6 +505,9 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 
 	// Add PVE nodes
 	for i, pve := range h.config.PVEInstances {
+		// Refresh cluster metadata if we previously failed to detect endpoints
+		h.maybeRefreshClusterInfo(&h.config.PVEInstances[i])
+		pve = h.config.PVEInstances[i]
 		node := NodeResponse{
 			ID:                generateNodeID("pve", i),
 			Type:              "pve",
@@ -392,14 +563,14 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 	if os.Getenv("PULSE_MOCK_MODE") == "true" {
 		// Return mock nodes for settings page
 		mockNodes := []NodeResponse{}
-		
+
 		// Get mock state to extract node information
 		state := h.monitor.GetState()
-		
+
 		// Get all cluster nodes and standalone nodes
 		var clusterNodes []models.Node
 		var standaloneNodes []models.Node
-		
+
 		for _, node := range state.Nodes {
 			if node.Instance == "mock-cluster" {
 				clusterNodes = append(clusterNodes, node)
@@ -407,7 +578,7 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 				standaloneNodes = append(standaloneNodes, node)
 			}
 		}
-		
+
 		// If we have cluster nodes, create ONE config entry for the cluster
 		if len(clusterNodes) > 0 {
 			// Build cluster endpoints for cluster nodes only
@@ -419,12 +590,12 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 					Online:   n.Status == "online", // Set Online based on node status
 				})
 			}
-			
+
 			// Create a single cluster entry (representing the cluster config)
 			clusterNode := NodeResponse{
 				ID:                generateNodeID("pve", 0),
 				Type:              "pve",
-				Name:              "mock-cluster", // The cluster name
+				Name:              "mock-cluster",       // The cluster name
 				Host:              "192.168.0.100:8006", // Primary entry point
 				User:              "root@pam",
 				HasPassword:       true,
@@ -443,13 +614,13 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 			}
 			mockNodes = append(mockNodes, clusterNode)
 		}
-		
+
 		// Add standalone nodes as individual entries
 		for i, node := range standaloneNodes {
 			standaloneNode := NodeResponse{
 				ID:                generateNodeID("pve", len(mockNodes)+i),
 				Type:              "pve",
-				Name:              node.Name, // Use the actual node name
+				Name:              node.Name,                               // Use the actual node name
 				Host:              fmt.Sprintf("192.168.0.%d:8006", 150+i), // Different IP range for standalone
 				User:              "root@pam",
 				HasPassword:       true,
@@ -468,35 +639,35 @@ func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) 
 			}
 			mockNodes = append(mockNodes, standaloneNode)
 		}
-		
+
 		// Add mock PBS instances
 		for i, pbs := range state.PBSInstances {
 			pbsNode := NodeResponse{
-				ID:                generateNodeID("pbs", i),
-				Type:              "pbs",
-				Name:              pbs.Name,
-				Host:              pbs.Host,
-				User:              "pulse@pbs",
-				HasPassword:       false,
-				TokenName:         "pulse",
-				HasToken:          true,
-				Fingerprint:       "",
-				VerifySSL:         false,
-				MonitorDatastores: true,
-				MonitorSyncJobs:   true,
-				MonitorVerifyJobs: true,
-				MonitorPruneJobs:  true,
+				ID:                 generateNodeID("pbs", i),
+				Type:               "pbs",
+				Name:               pbs.Name,
+				Host:               pbs.Host,
+				User:               "pulse@pbs",
+				HasPassword:        false,
+				TokenName:          "pulse",
+				HasToken:           true,
+				Fingerprint:        "",
+				VerifySSL:          false,
+				MonitorDatastores:  true,
+				MonitorSyncJobs:    true,
+				MonitorVerifyJobs:  true,
+				MonitorPruneJobs:   true,
 				MonitorGarbageJobs: true,
-				Status:            "connected", // Always connected in mock mode
+				Status:             "connected", // Always connected in mock mode
 			}
 			mockNodes = append(mockNodes, pbsNode)
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mockNodes)
 		return
 	}
-	
+
 	nodes := h.GetAllNodesForAPI()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -510,7 +681,7 @@ func validateIPAddress(ip string) bool {
 	if parsedIP == nil {
 		return false
 	}
-	
+
 	// Ensure it's IPv4 or IPv6
 	return parsedIP.To4() != nil || parsedIP.To16() != nil
 }
@@ -532,12 +703,12 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 	} else if strings.HasPrefix(hostStr, "https://") {
 		hostStr = strings.TrimPrefix(hostStr, "https://")
 	}
-	
+
 	// Remove trailing slash and path if present
 	if idx := strings.Index(hostStr, "/"); idx != -1 {
 		hostStr = hostStr[:idx]
 	}
-	
+
 	// Check if it contains a port
 	if strings.Contains(hostStr, ":") {
 		host, port, err := net.SplitHostPort(hostStr)
@@ -550,7 +721,7 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 		}
 		return host, port, nil
 	}
-	
+
 	return hostStr, "", nil
 }
 
@@ -561,14 +732,14 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Cannot modify nodes in mock mode. Please disable mock mode first: /opt/pulse/scripts/toggle-mock.sh off", http.StatusForbidden)
 		return
 	}
-	
+
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode add node request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	
+
 	log.Info().
 		Str("type", req.Type).
 		Str("name", req.Name).
@@ -583,24 +754,24 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.Type == "" {
 		http.Error(w, "Type is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.Host == "" {
 		http.Error(w, "Host is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Validate host format (IP address or hostname with optional port)
 	host, port, err := extractHostAndPort(req.Host)
 	if err != nil {
 		http.Error(w, "Invalid host format", http.StatusBadRequest)
 		return
 	}
-	
+
 	// If it looks like an IP address, validate it strictly
 	// Check if it starts with a digit (likely an IP)
 	if len(host) > 0 && (host[0] >= '0' && host[0] <= '9') {
@@ -623,13 +794,13 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	
+
 	// Validate port if provided
 	if port != "" && !validatePort(port) {
 		http.Error(w, "Invalid port number", http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.Type != "pve" && req.Type != "pbs" {
 		http.Error(w, "Invalid node type", http.StatusBadRequest)
 		return
@@ -661,6 +832,9 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 
 	// Add to appropriate list
 	if req.Type == "pve" {
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			req.User = normalizePVEUser(req.User)
+		}
 		// Ensure host has protocol
 		host := req.Host
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
@@ -675,32 +849,32 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		
+
 		// Check if node is part of a cluster (skip for test/invalid IPs)
 		var isCluster bool
 		var clusterName string
 		var clusterEndpoints []config.ClusterEndpoint
-		
+
 		// Skip cluster detection for obviously test/invalid IPs
-		skipClusterDetection := strings.Contains(req.Host, "192.168.77.") || 
+		skipClusterDetection := strings.Contains(req.Host, "192.168.77.") ||
 			strings.Contains(req.Host, "192.168.88.") ||
 			strings.Contains(req.Host, "test-") ||
 			strings.Contains(req.Name, "test-") ||
 			strings.Contains(req.Name, "persist-") ||
 			strings.Contains(req.Name, "concurrent-")
-			
+
 		if !skipClusterDetection {
 			clientConfig := config.CreateProxmoxConfigFromFields(host, req.User, req.Password, req.TokenName, req.TokenValue, req.Fingerprint, req.VerifySSL)
 			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name)
 		}
-		
+
 		if isCluster {
 			log.Info().
 				Str("cluster", clusterName).
 				Int("endpoints", len(clusterEndpoints)).
 				Msg("Detected Proxmox cluster, auto-discovering all nodes")
 		}
-		
+
 		pve := config.PVEInstance{
 			Name:              req.Name,
 			Host:              host, // Use normalized host
@@ -719,7 +893,7 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 			ClusterEndpoints:  clusterEndpoints,
 		}
 		h.config.PVEInstances = append(h.config.PVEInstances, pve)
-		
+
 		if isCluster {
 			log.Info().
 				Str("cluster", clusterName).
@@ -744,13 +918,13 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 		if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
 			host = host + ":8007"
 		}
-		
+
 		// Parse PBS authentication details
 		var pbsUser string
 		var pbsPassword string
 		var pbsTokenName string
 		var pbsTokenValue string
-		
+
 		// Determine authentication method
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Using token authentication - don't store user/password
@@ -767,16 +941,16 @@ func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 				pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 			}
 		}
-		
+
 		pbs := config.PBSInstance{
-			Name:              req.Name,
-			Host:              host,
-			User:              pbsUser,
-			Password:          pbsPassword,
-			TokenName:         pbsTokenName,
-			TokenValue:        pbsTokenValue,
-			Fingerprint:       req.Fingerprint,
-			VerifySSL:         req.VerifySSL,
+			Name:               req.Name,
+			Host:               host,
+			User:               pbsUser,
+			Password:           pbsPassword,
+			TokenName:          pbsTokenName,
+			TokenValue:         pbsTokenValue,
+			Fingerprint:        req.Fingerprint,
+			VerifySSL:          req.VerifySSL,
 			MonitorBackups:     true, // Enable by default for PBS
 			MonitorDatastores:  req.MonitorDatastores,
 			MonitorSyncJobs:    req.MonitorSyncJobs,
@@ -815,7 +989,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	
+
 	log.Info().
 		Str("type", req.Type).
 		Str("name", req.Name).
@@ -828,7 +1002,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 	// Parse token format if needed
 	user := req.User
 	tokenName := req.TokenName
-	
+
 	// If tokenName contains the full format (user@realm!tokenname), parse it
 	if strings.Contains(req.TokenName, "!") {
 		parts := strings.Split(req.TokenName, "!")
@@ -844,7 +1018,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			user = parts[0]
 		}
 	}
-	
+
 	log.Info().
 		Str("parsedUser", user).
 		Str("parsedTokenName", tokenName).
@@ -855,7 +1029,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Host is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Auto-generate name if not provided for test
 	if req.Name == "" {
 		// Extract hostname from URL
@@ -901,47 +1075,52 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 				}
 			}
 		}
-		
+
 		// Create a temporary client
+		authUser := req.User
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+			req.User = authUser
+		}
 		clientConfig := proxmox.ClientConfig{
 			Host:        host,
-			User:        req.User,
+			User:        authUser,
 			Password:    req.Password,
-			TokenName:   req.TokenName,  // Pass the full token ID
+			TokenName:   req.TokenName, // Pass the full token ID
 			TokenValue:  req.TokenValue,
 			VerifySSL:   req.VerifySSL,
 			Fingerprint: req.Fingerprint,
 		}
-		
+
 		tempClient, err := proxmox.NewClient(clientConfig)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Try to get nodes to test connection
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		nodes, err := tempClient.GetNodes(ctx)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
-		
+
 		isCluster, _, clusterEndpoints := detectPVECluster(clientConfig, req.Name)
-		
+
 		response := map[string]interface{}{
-			"status": "success",
-			"message": fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
+			"status":    "success",
+			"message":   fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
 			"isCluster": isCluster,
 			"nodeCount": len(nodes),
 		}
-		
+
 		if isCluster {
 			response["clusterNodeCount"] = len(clusterEndpoints)
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -966,16 +1145,16 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 				host += ":8007"
 			}
 		}
-		
+
 		log.Info().
 			Str("processedHost", host).
 			Msg("PBS host after port processing")
-		
+
 		// PBS test connection
 		// Parse PBS authentication details
 		pbsUser := user
 		pbsTokenName := tokenName
-		
+
 		// Handle different token input formats
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Check if token name contains the full format (user@realm!tokenname)
@@ -990,7 +1169,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			// Password auth: ensure user has realm
 			pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
 		}
-		
+
 		clientConfig := pbs.ClientConfig{
 			Host:        host,
 			User:        pbsUser,
@@ -1000,29 +1179,29 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 			VerifySSL:   req.VerifySSL,
 			Fingerprint: req.Fingerprint,
 		}
-		
+
 		tempClient, err := pbs.NewClient(clientConfig)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Try to get datastores to test connection
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		datastores, err := tempClient.GetDatastores(ctx)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
-		
+
 		response := map[string]interface{}{
-			"status": "success",
-			"message": fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
+			"status":         "success",
+			"message":        fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
 			"datastoreCount": len(datastores),
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
@@ -1035,7 +1214,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
 		return
 	}
-	
+
 	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
 	if nodeID == "" {
 		http.Error(w, "Node ID required", http.StatusBadRequest)
@@ -1061,25 +1240,55 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Invalid node ID", http.StatusBadRequest)
 		return
 	}
-	
 
 	// Update the node
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		pve := &h.config.PVEInstances[index]
 		pve.Name = req.Name
-		pve.Host = req.Host
-		if req.User != "" {
-			pve.User = req.User
+
+		if req.Host != "" {
+			host := req.Host
+			if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+				host = "https://" + host
+			}
+			protocolEnd := 0
+			if strings.HasPrefix(host, "https://") {
+				protocolEnd = 8
+			} else if strings.HasPrefix(host, "http://") {
+				protocolEnd = 7
+			}
+			if protocolEnd > 0 && !strings.Contains(host[protocolEnd:], ":") {
+				host = host + ":8006"
+			}
+			pve.Host = host
 		}
-		if req.Password != "" {
-			pve.Password = req.Password
+
+		if req.TokenName != "" || req.TokenValue != "" {
+			if req.TokenName != "" {
+				pve.TokenName = req.TokenName
+			}
+			if req.TokenValue != "" {
+				pve.TokenValue = req.TokenValue
+			}
+			// When using token authentication, clear password to avoid conflicts
+			pve.Password = ""
+			if req.User != "" {
+				pve.User = req.User
+			}
+		} else {
+			if req.User != "" {
+				pve.User = normalizePVEUser(req.User)
+			} else if pve.User != "" {
+				pve.User = normalizePVEUser(pve.User)
+			}
+			if req.Password != "" {
+				pve.Password = req.Password
+			}
+			// Clear token fields when using password authentication
+			pve.TokenName = ""
+			pve.TokenValue = ""
 		}
-		if req.TokenName != "" {
-			pve.TokenName = req.TokenName
-		}
-		if req.TokenValue != "" {
-			pve.TokenValue = req.TokenValue
-		}
+
 		pve.Fingerprint = req.Fingerprint
 		pve.VerifySSL = req.VerifySSL
 		pve.MonitorVMs = req.MonitorVMs
@@ -1089,7 +1298,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		pbs := &h.config.PBSInstances[index]
 		pbs.Name = req.Name
-		
+
 		// Ensure PBS host has protocol and port
 		host := req.Host
 		if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
@@ -1107,7 +1316,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			host = host + ":8007"
 		}
 		pbs.Host = host
-		
+
 		// Determine authentication method and clear the unused fields
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Using token authentication - clear user/password
@@ -1142,7 +1351,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			}
 			pbs.User = pbsUser
 		}
-		
+
 		pbs.Fingerprint = req.Fingerprint
 		pbs.VerifySSL = req.VerifySSL
 		pbs.MonitorBackups = true // Enable by default for PBS
@@ -1162,7 +1371,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// IMPORTANT: Preserve alert overrides when updating nodes
 	// This fixes issue #440 where PBS alert thresholds were being reset
 	// Alert overrides are stored separately from node configuration
@@ -1177,7 +1386,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 			if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 				pbsName := h.config.PBSInstances[index].Name
 				monitoringID := "pbs-" + pbsName
-				
+
 				// Check if there are overrides for this PBS node
 				if alertConfig.Overrides != nil {
 					if _, exists := alertConfig.Overrides[monitoringID]; exists {
@@ -1189,7 +1398,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 					}
 				}
 			}
-			
+
 			// Apply the alert configuration to preserve all overrides
 			h.monitor.GetAlertManager().UpdateConfig(*alertConfig)
 			log.Debug().
@@ -1212,7 +1421,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 	if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
 		log.Info().Msg("Triggering discovery refresh after adding node")
 		h.monitor.GetDiscoveryService().ForceRefresh()
-		
+
 		// Broadcast discovery update via WebSocket
 		if h.wsHub != nil {
 			// Wait a moment for discovery to complete
@@ -1246,7 +1455,7 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
 		return
 	}
-	
+
 	nodeID := strings.TrimPrefix(r.URL.Path, "/api/config/nodes/")
 	if nodeID == "" {
 		http.Error(w, "Node ID required", http.StatusBadRequest)
@@ -1288,14 +1497,14 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 	// This way we can get the deleted node's info for immediate discovery
 	var deletedNodeHost string
 	var deletedNodeType string = nodeType
-	
+
 	// Get the host info of the deleted node for quick re-discovery
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		deletedNodeHost = h.config.PVEInstances[index].Host
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		deletedNodeHost = h.config.PBSInstances[index].Host
 	}
-	
+
 	// Extract IP and port from the host URL for targeted discovery
 	var targetIP string
 	var targetPort int
@@ -1318,7 +1527,7 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
-	
+
 	// Reload monitor with new configuration
 	if h.reloadFunc != nil {
 		if err := h.reloadFunc(); err != nil {
@@ -1339,7 +1548,7 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 			Timestamp: time.Now().Format(time.RFC3339),
 		})
 		log.Info().Msg("Broadcasted node deletion event")
-		
+
 		// If we know the deleted node's details, immediately add it to discovered list
 		if targetIP != "" && targetPort > 0 {
 			// Create a synthetic discovery result with just the deleted node
@@ -1357,11 +1566,11 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 				"timestamp": time.Now().Unix(),
 				"immediate": true, // Flag to indicate this is immediate, not from a full scan
 			}
-			
+
 			// Immediately broadcast the deleted node as discovered
 			h.wsHub.BroadcastMessage(websocket.Message{
-				Type: "discovery_update",
-				Data: immediateResult,
+				Type:      "discovery_update",
+				Data:      immediateResult,
 				Timestamp: time.Now().Format(time.RFC3339),
 			})
 			log.Info().
@@ -1370,12 +1579,12 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 				Str("type", deletedNodeType).
 				Msg("Immediately added deleted node to discovery")
 		}
-		
+
 		// Schedule a full discovery scan in the background
 		go func() {
 			// Short delay to let the monitor stabilize
 			time.Sleep(500 * time.Millisecond)
-			
+
 			// Trigger full discovery refresh
 			if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
 				h.monitor.GetDiscoveryService().ForceRefresh()
@@ -1414,7 +1623,7 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 	// Get the node configuration
 	var host, user, password, tokenName, tokenValue, fingerprint string
 	var verifySSL bool
-	
+
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		pve := h.config.PVEInstances[index]
 		host = pve.Host
@@ -1449,28 +1658,28 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 			VerifySSL:   verifySSL,
 			Fingerprint: fingerprint,
 		}
-		
+
 		tempClient, err := proxmox.NewClient(clientConfig)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		nodes, err := tempClient.GetNodes(ctx)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
-		
+
 		response := map[string]interface{}{
-			"status": "success",
-			"message": fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
+			"status":    "success",
+			"message":   fmt.Sprintf("Successfully connected to %d node(s)", len(nodes)),
 			"nodeCount": len(nodes),
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -1484,28 +1693,28 @@ func (h *ConfigHandlers) HandleTestExistingNode(w http.ResponseWriter, r *http.R
 			VerifySSL:   verifySSL,
 			Fingerprint: fingerprint,
 		}
-		
+
 		tempClient, err := pbs.NewClient(clientConfig)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "create_client"), http.StatusBadRequest)
 			return
 		}
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		datastores, err := tempClient.GetDatastores(ctx)
 		if err != nil {
 			http.Error(w, sanitizeErrorMessage(err, "connection"), http.StatusBadRequest)
 			return
 		}
-		
+
 		response := map[string]interface{}{
-			"status": "success",
-			"message": fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
+			"status":         "success",
+			"message":        fmt.Sprintf("Successfully connected. Found %d datastore(s)", len(datastores)),
 			"datastoreCount": len(datastores),
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
@@ -1520,12 +1729,17 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 	}
 
 	var testResult map[string]interface{}
-	
+
 	if req.Type == "pve" {
 		// Create a temporary client to test connection
+		authUser := req.User
+		if req.Password != "" && req.TokenName == "" && req.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+			req.User = authUser
+		}
 		clientConfig := proxmox.ClientConfig{
 			Host:        req.Host,
-			User:        req.User,
+			User:        authUser,
 			Password:    req.Password,
 			TokenName:   req.TokenName,
 			TokenValue:  req.TokenValue,
@@ -1543,7 +1757,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			startTime := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			
+
 			if nodes, err := client.GetNodes(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
@@ -1580,7 +1794,7 @@ func (h *ConfigHandlers) HandleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			startTime := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			
+
 			if _, err := client.GetDatastores(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
@@ -1635,14 +1849,18 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 
 	// Find the node to test
 	var testResult map[string]interface{}
-	
+
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
 		pve := h.config.PVEInstances[index]
-		
+
 		// Create a temporary client to test connection
+		authUser := pve.User
+		if pve.TokenName == "" && pve.TokenValue == "" {
+			authUser = normalizePVEUser(authUser)
+		}
 		clientConfig := proxmox.ClientConfig{
 			Host:        pve.Host,
-			User:        pve.User,
+			User:        authUser,
 			Password:    pve.Password,
 			TokenName:   pve.TokenName,
 			TokenValue:  pve.TokenValue,
@@ -1660,7 +1878,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 			startTime := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			
+
 			if nodes, err := client.GetNodes(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
@@ -1677,7 +1895,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
 		pbsInstance := h.config.PBSInstances[index]
-		
+
 		// Create a temporary client to test connection
 		clientConfig := pbs.ClientConfig{
 			Host:        pbsInstance.Host,
@@ -1699,7 +1917,7 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 			startTime := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			
+
 			if _, err := client.GetDatastores(ctx); err != nil {
 				testResult = map[string]interface{}{
 					"status":  "error",
@@ -1734,15 +1952,15 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 	if h.monitor == nil {
 		return "disconnected"
 	}
-	
+
 	// Get connection statuses from monitor
 	connectionStatus := h.monitor.GetConnectionStatuses()
-	
+
 	key := fmt.Sprintf("%s-%s", nodeType, nodeName)
 	if connected, ok := connectionStatus[key]; ok && connected {
 		return "connected"
 	}
-	
+
 	return "disconnected"
 }
 
@@ -1754,7 +1972,7 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		log.Warn().Err(err).Msg("Failed to load persisted system settings")
 		persistedSettings = &config.SystemSettings{}
 	}
-	
+
 	// Get current values from running config
 	settings := config.SystemSettings{
 		// Note: PVE polling is hardcoded to 10s
@@ -1767,14 +1985,14 @@ func (h *ConfigHandlers) HandleGetSystemSettings(w http.ResponseWriter, r *http.
 		AutoUpdateEnabled:       h.config.AutoUpdateEnabled,
 		AutoUpdateCheckInterval: int(h.config.AutoUpdateCheckInterval.Hours()),
 		AutoUpdateTime:          h.config.AutoUpdateTime,
-		LogLevel:                h.config.LogLevel, // Include log level
-		Theme:                   persistedSettings.Theme, // Include theme from persisted settings
-		AllowEmbedding:          persistedSettings.AllowEmbedding, // Include allowEmbedding from persisted settings
+		LogLevel:                h.config.LogLevel,                     // Include log level
+		Theme:                   persistedSettings.Theme,               // Include theme from persisted settings
+		AllowEmbedding:          persistedSettings.AllowEmbedding,      // Include allowEmbedding from persisted settings
 		AllowedEmbedOrigins:     persistedSettings.AllowedEmbedOrigins, // Include allowedEmbedOrigins from persisted settings
-		DiscoveryEnabled:        persistedSettings.DiscoveryEnabled, // Include discoveryEnabled from persisted settings
-		DiscoverySubnet:         persistedSettings.DiscoverySubnet, // Include discoverySubnet from persisted settings
+		DiscoveryEnabled:        persistedSettings.DiscoveryEnabled,    // Include discoveryEnabled from persisted settings
+		DiscoverySubnet:         persistedSettings.DiscoverySubnet,     // Include discoverySubnet from persisted settings
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
 }
@@ -1786,22 +2004,22 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Validate PBS polling interval (must be positive)
 	if settings.PBSPollingInterval < 0 {
 		http.Error(w, "PBS polling interval must be positive", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Update polling intervals
 	needsReload := false
-	
+
 	// Note: PVE polling is hardcoded to 10s, only PBS interval can be configured
 	if settings.PBSPollingInterval > 0 {
 		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
 		needsReload = true
 	}
-	
+
 	// Trigger a monitor reload if intervals changed
 	if needsReload && h.reloadFunc != nil {
 		log.Info().
@@ -1812,7 +2030,7 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 			// Don't fail the request, the setting was saved
 		}
 	}
-	
+
 	// Update allowed origins if provided
 	if settings.AllowedOrigins != "" {
 		h.config.AllowedOrigins = settings.AllowedOrigins
@@ -1825,7 +2043,7 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 			h.wsHub.SetAllowedOrigins(origins)
 		}
 	}
-	
+
 	// Update update-related settings
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel
@@ -1837,19 +2055,19 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
-	
+
 	// Save settings to persistence
 	if err := h.persistence.SaveSystemSettings(settings); err != nil {
 		log.Error().Err(err).Msg("Failed to persist system settings")
 		// Continue anyway - settings are applied in memory
 	}
-	
+
 	log.Info().
 		Int("pbsPollingInterval", settings.PBSPollingInterval).
 		Int("backendPort", settings.BackendPort).
 		Int("frontendPort", settings.FrontendPort).
 		Msg("Updated system settings in unified config")
-	
+
 	// Trigger monitor reload to apply new settings
 	if h.reloadFunc != nil {
 		if err := h.reloadFunc(); err != nil {
@@ -1861,10 +2079,10 @@ func (h *ConfigHandlers) HandleUpdateSystemSettingsOLD(w http.ResponseWriter, r 
 				Msg("Monitor reloaded with new PBS polling interval")
 		}
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "success",
+		"status":  "success",
 		"message": "Settings updated successfully",
 	})
 }
@@ -1898,7 +2116,7 @@ func (h *ConfigHandlers) HandleExportConfig(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Passphrase is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Require strong passphrase (at least 12 characters)
 	if len(req.Passphrase) < 12 {
 		http.Error(w, "Passphrase must be at least 12 characters long", http.StatusBadRequest)
@@ -2031,21 +2249,21 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 		// Return cached results from background discovery service
 		if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
 			result, updated := discoveryService.GetCachedResult()
-			
+
 			// Add metadata about the cache
 			response := map[string]interface{}{
-				"servers":   result.Servers,
-				"errors":    result.Errors,
-				"cached":    true,
-				"updated":   updated.Unix(),
-				"age":       time.Since(updated).Seconds(),
+				"servers": result.Servers,
+				"errors":  result.Errors,
+				"cached":  true,
+				"updated": updated.Unix(),
+				"age":     time.Since(updated).Seconds(),
 			}
-			
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		
+
 		// No discovery service available, return empty result
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2054,12 +2272,12 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			"cached":  false,
 		})
 		return
-		
+
 	case http.MethodPost:
 		// Parse request
 		var req struct {
-			Subnet string `json:"subnet"` // CIDR notation or "auto"
-			UseCache bool `json:"use_cache"` // Whether to return cached results
+			Subnet   string `json:"subnet"`    // CIDR notation or "auto"
+			UseCache bool   `json:"use_cache"` // Whether to return cached results
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2071,15 +2289,15 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 		if req.UseCache {
 			if discoveryService := h.monitor.GetDiscoveryService(); discoveryService != nil {
 				result, updated := discoveryService.GetCachedResult()
-				
+
 				response := map[string]interface{}{
-					"servers":   result.Servers,
-					"errors":    result.Errors,
-					"cached":    true,
-					"updated":   updated.Unix(),
-					"age":       time.Since(updated).Seconds(),
+					"servers": result.Servers,
+					"errors":  result.Errors,
+					"cached":  true,
+					"updated": updated.Unix(),
+					"age":     time.Since(updated).Seconds(),
 				}
-				
+
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(response)
 				return
@@ -2092,22 +2310,22 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 			if req.Subnet != "" {
 				discoveryService.SetSubnet(req.Subnet)
 			}
-			
+
 			// Trigger a refresh
 			discoveryService.ForceRefresh()
-			
+
 			// Wait a moment for scan to start, then return current cache
 			time.Sleep(100 * time.Millisecond)
-			
+
 			result, updated := discoveryService.GetCachedResult()
 			response := map[string]interface{}{
-				"servers":   result.Servers,
-				"errors":    result.Errors,
-				"cached":    true,
-				"scanning":  true,
-				"updated":   updated.Unix(),
+				"servers":  result.Servers,
+				"errors":   result.Errors,
+				"cached":   true,
+				"scanning": true,
+				"updated":  updated.Unix(),
 			}
-			
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 			return
@@ -2129,7 +2347,7 @@ func (h *ConfigHandlers) HandleDiscoverServers(w http.ResponseWriter, r *http.Re
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
-		
+
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -2146,16 +2364,16 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 	query := r.URL.Query()
 	serverType := query.Get("type") // "pve" or "pbs"
 	serverHost := query.Get("host")
-	pulseURL := query.Get("pulse_url") // URL of the Pulse server for auto-registration
+	pulseURL := query.Get("pulse_url")                 // URL of the Pulse server for auto-registration
 	backupPerms := query.Get("backup_perms") == "true" // Whether to add backup management permissions
-	authToken := query.Get("auth_token") // Temporary auth token for auto-registration
-	
+	authToken := query.Get("auth_token")               // Temporary auth token for auto-registration
+
 	// Validate required parameters
 	if serverType == "" {
 		http.Error(w, "Missing required parameter: type (must be 'pve' or 'pbs')", http.StatusBadRequest)
 		return
 	}
-	
+
 	// If host is not provided, try to use a sensible default
 	if serverHost == "" {
 		if serverType == "pve" {
@@ -2167,7 +2385,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			Str("type", serverType).
 			Msg("No host parameter provided, using placeholder. Auto-registration will fail.")
 	}
-	
+
 	// If pulseURL is not provided, use the current request host
 	if pulseURL == "" {
 		scheme := "http"
@@ -2176,21 +2394,21 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
-	
+
 	log.Info().
 		Str("type", serverType).
 		Str("host", serverHost).
 		Bool("has_auth", h.config.AuthUser != "" || h.config.AuthPass != "" || h.config.APIToken != "").
 		Msg("HandleSetupScript called")
-	
+
 	// The setup script is now public - authentication happens via setup code
 	// No need to check auth here since the script will prompt for a code
-	
+
 	// Default to PVE if not specified
 	if serverType == "" {
 		serverType = "pve"
 	}
-	
+
 	// If pulse URL not provided, try to construct from request
 	if pulseURL == "" {
 		scheme := "http"
@@ -2199,7 +2417,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		}
 		pulseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
-	
+
 	// Extract hostname/IP from the host URL if provided
 	serverName := "your-server"
 	if serverHost != "" {
@@ -2215,7 +2433,7 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			serverName = strings.Split(serverHost, ":")[0]
 		}
 	}
-	
+
 	// Extract Pulse IP from the pulse URL to make token name unique
 	pulseIP := "pulse"
 	if pulseURL != "" {
@@ -2229,12 +2447,12 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	
+
 	// Create unique token name based on Pulse IP and timestamp
 	// Adding timestamp ensures truly unique tokens even when running from same Pulse server
 	timestamp := time.Now().Unix()
 	tokenName := fmt.Sprintf("pulse-%s-%d", pulseIP, timestamp)
-	
+
 	// Log the token name for debugging
 	log.Info().
 		Str("pulseURL", pulseURL).
@@ -2242,16 +2460,16 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		Str("tokenName", tokenName).
 		Int64("timestamp", timestamp).
 		Msg("Generated unique token name for setup script")
-	
+
 	var script string
-	
+
 	if serverType == "pve" {
 		// Build storage permissions command if needed
 		storagePerms := ""
 		if backupPerms {
 			storagePerms = "\npveum aclmod /storage -user pulse-monitor@pam -role PVEDatastoreAdmin"
 		}
-		
+
 		script = fmt.Sprintf(`#!/bin/bash
 # Pulse Monitoring Setup Script for %s
 # Generated: %s
@@ -2536,7 +2754,7 @@ fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, tokenName, serverHost)
-		
+
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
 # Pulse Monitoring Setup Script for PBS %s
@@ -2775,7 +2993,7 @@ fi
 			tokenName, tokenName, tokenName, tokenName, tokenName,
 			authToken, pulseURL, serverHost, tokenName, tokenName, tokenName, tokenName)
 	}
-	
+
 	// Set headers for script download
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=pulse-setup-%s.sh", serverType))
@@ -2800,23 +3018,23 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Parse request
 	var req struct {
 		Type        string `json:"type"`
 		Host        string `json:"host"`
 		BackupPerms bool   `json:"backupPerms"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Generate a temporary auth token (simpler than setup codes)
 	token := h.generateSetupCode() // Reuse the generation function
 	tokenHash := internalauth.HashAPIToken(token)
-	
+
 	// Store the token with expiry (5 minutes)
 	expiry := time.Now().Add(5 * time.Minute)
 	h.codeMutex.Lock()
@@ -2827,16 +3045,16 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Host:      req.Host,
 	}
 	h.codeMutex.Unlock()
-	
+
 	log.Info().
 		Str("token_hash", tokenHash[:8]+"...").
 		Time("expiry", expiry).
 		Str("type", req.Type).
 		Msg("Generated temporary auth token")
-	
+
 	// Build the URL with the token included
 	host := r.Host
-	
+
 	// Dev environment fix: if we detect localhost from vite proxy AND we're in dev mode, use the actual IP
 	if host == "127.0.0.1:7656" || host == "localhost:7656" {
 		// Check if we're in development mode
@@ -2847,48 +3065,48 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		}
 		// For production, keep the original host (users will need proper proxy config)
 	}
-	
+
 	// Detect protocol - check both TLS and proxy headers
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
 	pulseURL := fmt.Sprintf("%s://%s", scheme, host)
-	
+
 	encodedHost := ""
 	if req.Host != "" {
 		encodedHost = "&host=" + url.QueryEscape(req.Host)
 	}
-	
+
 	backupPerms := ""
 	if req.BackupPerms {
 		backupPerms = "&backup_perms=true"
 	}
-	
+
 	// Include the token directly in the URL - much simpler!
 	scriptURL := fmt.Sprintf("%s/api/setup-script?type=%s%s&pulse_url=%s%s&auth_token=%s",
 		pulseURL, req.Type, encodedHost, pulseURL, backupPerms, token)
-	
+
 	// Return a simple curl command - no environment variables needed
 	// Don't include setupCode since it's already embedded in the URL
 	response := map[string]interface{}{
-		"url":        scriptURL,
-		"command":    fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
-		"expires":    expiry.Unix(),
+		"url":     scriptURL,
+		"command": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"expires": expiry.Unix(),
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
 // AutoRegisterRequest represents a request from the setup script to auto-register a node
 type AutoRegisterRequest struct {
-	Type       string `json:"type"`       // "pve" or "pbs"
-	Host       string `json:"host"`       // The host URL
-	TokenID    string `json:"tokenId"`    // Full token ID like pulse-monitor@pam!pulse-token
+	Type       string `json:"type"`                 // "pve" or "pbs"
+	Host       string `json:"host"`                 // The host URL
+	TokenID    string `json:"tokenId"`              // Full token ID like pulse-monitor@pam!pulse-token
 	TokenValue string `json:"tokenValue,omitempty"` // The token value for the node
-	ServerName string `json:"serverName"` // Hostname or IP
-	SetupCode  string `json:"setupCode,omitempty"` // One-time setup code for authentication (deprecated)
+	ServerName string `json:"serverName"`           // Hostname or IP
+	SetupCode  string `json:"setupCode,omitempty"`  // One-time setup code for authentication (deprecated)
 	AuthToken  string `json:"authToken,omitempty"`  // Direct auth token from URL (new approach)
 	// New secure fields
 	RequestToken bool   `json:"requestToken,omitempty"` // If true, Pulse will generate and return a token
@@ -2902,7 +3120,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Parse request body first to get the setup code
 	var req AutoRegisterRequest
 	body, err := io.ReadAll(r.Body)
@@ -2911,28 +3129,28 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
-	
+
 	if err := json.Unmarshal(body, &req); err != nil {
 		log.Error().Err(err).Str("body", string(body)).Msg("Failed to parse auto-register request")
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Check authentication - require either setup code or API token if auth is enabled
 	authenticated := false
-	
+
 	// Support both setupCode (old) and authToken (new) fields
 	authCode := req.SetupCode
 	if req.AuthToken != "" {
 		authCode = req.AuthToken
 	}
-	
+
 	log.Debug().
 		Str("authToken", req.AuthToken).
 		Str("authCode", authCode).
 		Bool("hasConfigToken", h.config.APIToken != "").
 		Msg("Checking authentication for auto-register")
-	
+
 	// First check for setup code/auth token in the request
 	if authCode != "" {
 		// First check if it's the actual API token (for direct authentication)
@@ -2983,7 +3201,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			h.codeMutex.Unlock()
 		}
 	}
-	
+
 	// If not authenticated via setup code, check API token if configured
 	if !authenticated && h.config.APIToken != "" {
 		apiToken := r.Header.Get("X-API-Token")
@@ -2993,7 +3211,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			log.Info().Msg("Auto-register authenticated via API token")
 		}
 	}
-	
+
 	// If still not authenticated and auth is required, reject
 	// BUT: Always allow if a valid setup code/auth token was provided (even if expired/used)
 	// This ensures the error message is accurate
@@ -3007,16 +3225,16 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Invalid or expired setup code", http.StatusUnauthorized)
 		return
 	}
-	
+
 	// Log source IP for security auditing
 	clientIP := r.RemoteAddr
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		clientIP = forwarded
 	}
 	log.Info().Str("clientIP", clientIP).Msg("Auto-register request from")
-	
+
 	// Registration token validation removed - feature deprecated
-	
+
 	log.Info().
 		Str("type", req.Type).
 		Str("host", req.Host).
@@ -3042,7 +3260,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		h.handleSecureAutoRegister(w, r, &req, clientIP)
 		return
 	}
-	
+
 	// Legacy mode - validate old required fields
 	if req.Type == "" || req.Host == "" || req.TokenID == "" || req.TokenValue == "" {
 		log.Error().
@@ -3085,23 +3303,23 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			host += ":8007"
 		}
 	}
-	
+
 	// Create a node configuration
 	nodeConfig := NodeConfigRequest{
-		Type:              req.Type,
-		Name:              req.ServerName,
-		Host:              host, // Use normalized host
-		TokenName:         req.TokenID,
-		TokenValue:        req.TokenValue,
-		VerifySSL:         false, // Default to not verifying SSL for auto-registration
-		MonitorVMs:        true,
-		MonitorContainers: true,
-		MonitorStorage:    true,
-		MonitorBackups:    true,
-		MonitorDatastores: true,
-		MonitorSyncJobs:   true,
-		MonitorVerifyJobs: true,
-		MonitorPruneJobs:  true,
+		Type:               req.Type,
+		Name:               req.ServerName,
+		Host:               host, // Use normalized host
+		TokenName:          req.TokenID,
+		TokenValue:         req.TokenValue,
+		VerifySSL:          false, // Default to not verifying SSL for auto-registration
+		MonitorVMs:         true,
+		MonitorContainers:  true,
+		MonitorStorage:     true,
+		MonitorBackups:     true,
+		MonitorDatastores:  true,
+		MonitorSyncJobs:    true,
+		MonitorVerifyJobs:  true,
+		MonitorPruneJobs:   true,
 		MonitorGarbageJobs: false,
 	}
 
@@ -3133,16 +3351,16 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			instance.Password = ""
 			instance.TokenName = nodeConfig.TokenName
 			instance.TokenValue = nodeConfig.TokenValue
-			
+
 			// Check for cluster if not already detected
 			if !instance.IsCluster {
 				clientConfig := proxmox.ClientConfig{
-					Host:        instance.Host,
-					TokenName:   nodeConfig.TokenName,
-					TokenValue:  nodeConfig.TokenValue,
-					VerifySSL:   instance.VerifySSL,
+					Host:       instance.Host,
+					TokenName:  nodeConfig.TokenName,
+					TokenValue: nodeConfig.TokenValue,
+					VerifySSL:  instance.VerifySSL,
 				}
-				
+
 				isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name)
 				if isCluster {
 					instance.IsCluster = true
@@ -3175,14 +3393,14 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 		if req.Type == "pve" {
 			// Check for cluster detection using helper
 			clientConfig := proxmox.ClientConfig{
-				Host:        nodeConfig.Host,
-				TokenName:   nodeConfig.TokenName,
-				TokenValue:  nodeConfig.TokenValue,
-				VerifySSL:   nodeConfig.VerifySSL,
+				Host:       nodeConfig.Host,
+				TokenName:  nodeConfig.TokenName,
+				TokenValue: nodeConfig.TokenValue,
+				VerifySSL:  nodeConfig.VerifySSL,
 			}
-			
+
 			isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, nodeConfig.Name)
-			
+
 			newInstance := config.PVEInstance{
 				Name:              nodeConfig.Name,
 				Host:              nodeConfig.Host,
@@ -3198,7 +3416,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				ClusterEndpoints:  clusterEndpoints,
 			}
 			h.config.PVEInstances = append(h.config.PVEInstances, newInstance)
-			
+
 			if isCluster {
 				log.Info().
 					Str("cluster", clusterName).
@@ -3234,14 +3452,14 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			Bool("hasTokenValue", lastNode.TokenValue != "").
 			Msg("About to save PVE node")
 	}
-	
+
 	// Save configuration
 	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
-	
+
 	log.Info().Msg("Configuration saved successfully")
 
 	// Reload monitor to pick up new configuration
@@ -3268,24 +3486,24 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 	if h.wsHub != nil {
 		fmt.Println("[AUTO-REGISTER] WebSocket hub is available")
 		nodeInfo := map[string]interface{}{
-			"type":       req.Type,
-			"host":       req.Host,
-			"name":       req.ServerName,
-			"tokenId":    req.TokenID,
-			"hasToken":   true,
-			"verifySSL":  false,
-			"status":     "connected",
+			"type":      req.Type,
+			"host":      req.Host,
+			"name":      req.ServerName,
+			"tokenId":   req.TokenID,
+			"hasToken":  true,
+			"verifySSL": false,
+			"status":    "connected",
 		}
-		
+
 		// Broadcast the auto-registration success
 		fmt.Printf("[AUTO-REGISTER] Broadcasting message type: node_auto_registered for host: %s\n", req.Host)
 		h.wsHub.BroadcastMessage(websocket.Message{
-			Type: "node_auto_registered",
-			Data: nodeInfo,
+			Type:      "node_auto_registered",
+			Data:      nodeInfo,
 			Timestamp: time.Now().Format(time.RFC3339),
 		})
 		fmt.Println("[AUTO-REGISTER] Broadcast complete")
-		
+
 		// Also broadcast a discovery update to refresh the UI
 		if h.monitor != nil && h.monitor.GetDiscoveryService() != nil {
 			result, _ := h.monitor.GetDiscoveryService().GetCachedResult()
@@ -3302,7 +3520,7 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 				log.Info().Msg("Broadcasted discovery update after auto-registration")
 			}
 		}
-		
+
 		log.Info().
 			Str("host", req.Host).
 			Str("name", req.ServerName).
@@ -3329,7 +3547,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		Str("host", req.Host).
 		Str("username", req.Username).
 		Msg("Processing secure auto-register request")
-	
+
 	// Generate a unique token name based on Pulse's IP/hostname
 	hostname, _ := os.Hostname()
 	if hostname == "" {
@@ -3337,7 +3555,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 	timestamp := time.Now().Unix()
 	tokenName := fmt.Sprintf("pulse-%s-%d", hostname, timestamp)
-	
+
 	// Generate a secure random token value
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -3347,7 +3565,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	}
 	tokenValue := fmt.Sprintf("%x-%x-%x-%x-%x",
 		tokenBytes[0:4], tokenBytes[4:6], tokenBytes[6:8], tokenBytes[8:10], tokenBytes[10:16])
-	
+
 	// Normalize the host URL
 	host := req.Host
 	if req.Type == "pve" {
@@ -3380,11 +3598,11 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			host += ":8007"
 		}
 	}
-	
+
 	// Create the token on the remote server
 	var fullTokenID string
 	var createErr error
-	
+
 	if req.Type == "pve" {
 		// For PVE, create token via API
 		fullTokenID = fmt.Sprintf("pulse-monitor@pam!%s", tokenName)
@@ -3396,13 +3614,13 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		// Note: This would require implementing token creation in the pbs package
 		// For now, we'll return the token for the script to create
 	}
-	
+
 	if createErr != nil {
 		log.Error().Err(createErr).Msg("Failed to create token on remote server")
 		http.Error(w, "Failed to create token on remote server", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Determine server name
 	serverName := req.ServerName
 	if serverName == "" {
@@ -3414,7 +3632,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			serverName = serverName[:idx]
 		}
 	}
-	
+
 	// Add the node to configuration
 	if req.Type == "pve" {
 		pveNode := config.PVEInstance{
@@ -3431,27 +3649,27 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		h.config.PVEInstances = append(h.config.PVEInstances, pveNode)
 	} else if req.Type == "pbs" {
 		pbsNode := config.PBSInstance{
-			Name:               serverName,
-			Host:               host,
-			TokenName:          fullTokenID,
-			TokenValue:         tokenValue,
-			VerifySSL:          false,
-			MonitorBackups:     true,
-			MonitorDatastores:  true,
-			MonitorSyncJobs:    true,
-			MonitorVerifyJobs:  true,
-			MonitorPruneJobs:   true,
+			Name:              serverName,
+			Host:              host,
+			TokenName:         fullTokenID,
+			TokenValue:        tokenValue,
+			VerifySSL:         false,
+			MonitorBackups:    true,
+			MonitorDatastores: true,
+			MonitorSyncJobs:   true,
+			MonitorVerifyJobs: true,
+			MonitorPruneJobs:  true,
 		}
 		h.config.PBSInstances = append(h.config.PBSInstances, pbsNode)
 	}
-	
+
 	// Save configuration
 	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save auto-registered node")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Reload monitor
 	if h.reloadFunc != nil {
 		go func() {
@@ -3460,7 +3678,7 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			}
 		}()
 	}
-	
+
 	// Send success response with token details for script to create
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3473,4 +3691,3 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 	})
 
 }
-	

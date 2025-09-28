@@ -1,6 +1,8 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
 interface SecurityCredentials {
   username: string;
@@ -159,10 +161,13 @@ Important:
               </svg>
             </div>
             <div class="flex-1">
-              <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Quick Security Setup</h4>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Enable authentication with one click. This will:
-              </p>
+              <SectionHeader
+                title="Quick security setup"
+                description="Enable authentication with one click. This will:"
+                size="sm"
+                titleClass="text-gray-900 dark:text-gray-100"
+                descriptionClass="!text-xs text-gray-600 dark:text-gray-400"
+              />
               <ul class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                 <li class="flex items-center">
                   <span class="text-green-500 mr-2">✓</span>
@@ -186,7 +191,7 @@ Important:
 
           <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 space-y-3">
             <div class="flex items-center justify-between">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class={labelClass()}>
                 Password Setup
               </label>
               <div class="flex items-center space-x-2">
@@ -215,39 +220,39 @@ Important:
 
             <Show when={useCustomPassword()}>
               <div class="space-y-2">
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div class={formField}>
+                  <label class={labelClass()}>
                     Username
                   </label>
                   <input
                     type="text"
                     value={customUsername()}
                     onInput={(e) => setCustomUsername(e.currentTarget.value)}
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class={controlClass()}
                     placeholder="admin"
                   />
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div class={formField}>
+                  <label class={labelClass()}>
                     Password (min 8 characters)
                   </label>
                   <input
                     type="password"
                     value={customPassword()}
                     onInput={(e) => setCustomPassword(e.currentTarget.value)}
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class={controlClass()}
                     placeholder="Enter password"
                   />
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Confirm Password
+                <div class={formField}>
+                  <label class={labelClass()}>
+                    Confirm password
                   </label>
                   <input
                     type="password"
                     value={confirmPassword()}
                     onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class={controlClass()}
                     placeholder="Confirm password"
                   />
                 </div>
@@ -255,7 +260,7 @@ Important:
             </Show>
 
             <Show when={!useCustomPassword()}>
-              <p class="text-xs text-gray-600 dark:text-gray-400">
+              <p class={formHelpText}>
                 A secure 16-character password will be generated for you
               </p>
             </Show>
@@ -298,9 +303,12 @@ Important:
       <Show when={showCredentials() && credentials()}>
         <div class="space-y-4">
           <div class="flex items-center justify-between">
-            <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              🎉 Security Enabled Successfully!
-            </h4>
+            <SectionHeader
+              title="🎉 Security enabled successfully!"
+              size="md"
+              class="flex-1"
+              titleClass="text-gray-900 dark:text-gray-100"
+            />
             <button type="button"
               onClick={downloadCredentials}
               class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
@@ -317,8 +325,10 @@ Important:
 
           <div class="space-y-3">
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
-              <div class="flex items-center space-x-2">
+              <label class={labelClass('text-xs')}>
+                Username
+              </label>
+              <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
                   {credentials()!.username}
                 </code>
@@ -332,8 +342,10 @@ Important:
             </div>
 
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
-              <div class="flex items-center space-x-2">
+              <label class={labelClass('text-xs')}>
+                Password
+              </label>
+              <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                   {credentials()!.password}
                 </code>
@@ -347,8 +359,10 @@ Important:
             </div>
 
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Token</label>
-              <div class="flex items-center space-x-2">
+              <label class={labelClass('text-xs')}>
+                API token
+              </label>
+              <div class="mt-1 flex items-center gap-2">
                 <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
                   {credentials()!.apiToken}
                 </code>
@@ -359,11 +373,11 @@ Important:
                   {copied() === 'token' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Use this token with X-API-Token header for automation.
+              <p class={formHelpText + ' mt-2'}>
+                Use this token with the X-API-Token header for automation.
               </p>
-              <p class="text-xs text-red-600 dark:text-red-400 mt-1 font-semibold">
-                ⚠️ This token will NEVER be shown again. Save it now!
+              <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                ⚠️ This token will never be shown again. Save it now!
               </p>
             </div>
           </div>

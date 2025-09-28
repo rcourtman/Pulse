@@ -1,6 +1,8 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { showSuccess, showError } from '@/utils/toast';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -113,9 +115,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style="z-index: 9999">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
             <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-                Change Password
-              </h2>
+              <SectionHeader title="Change password" size="lg" class="flex-1" />
               <button type="button"
                 onClick={handleClose}
                 disabled={loading()}
@@ -128,8 +128,8 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
             </div>
 
             <form onSubmit={handleSubmit} class="p-6 space-y-4">
-              <div>
-                <label for="current-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label for="current-password" class={labelClass()}>
                   Current Password
                 </label>
                 <input
@@ -137,14 +137,14 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   type="password"
                   value={currentPassword()}
                   onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  class={controlClass('shadow-sm')}
                   required
                   disabled={loading()}
                 />
               </div>
 
-              <div>
-                <label for="new-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label for="new-password" class={labelClass()}>
                   New Password
                 </label>
                 <input
@@ -152,18 +152,18 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   type="password"
                   value={newPassword()}
                   onInput={(e) => setNewPassword(e.currentTarget.value)}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  class={controlClass('shadow-sm')}
                   required
                   disabled={loading()}
                   minLength={8}
                 />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p class={`${formHelpText} mt-1`}>
                   Minimum 8 characters
                 </p>
               </div>
 
-              <div>
-                <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label for="confirm-password" class={labelClass()}>
                   Confirm New Password
                 </label>
                 <input
@@ -171,7 +171,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   type="password"
                   value={confirmPassword()}
                   onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  class={controlClass('shadow-sm')}
                   required
                   disabled={loading()}
                 />

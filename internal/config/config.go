@@ -32,12 +32,12 @@ func IsPasswordHashed(password string) bool {
 	if !strings.HasPrefix(password, "$2") {
 		return false
 	}
-	
+
 	length := len(password)
 	if length == 60 {
 		return true // Perfect bcrypt hash
 	}
-	
+
 	// Warn about truncated or invalid hashes
 	if length >= 55 && length < 60 {
 		log.Error().
@@ -46,7 +46,7 @@ func IsPasswordHashed(password string) bool {
 			Msg("Bcrypt hash appears truncated! Should be 60 characters. Password will be treated as plaintext.")
 		return false // Treat as plaintext to force user to fix it
 	}
-	
+
 	return false
 }
 
@@ -54,13 +54,13 @@ func IsPasswordHashed(password string) bool {
 // NOTE: The envconfig tags are legacy and not used - configuration is loaded from encrypted JSON files
 type Config struct {
 	// Server settings
-	BackendHost   string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
-	BackendPort   int    `envconfig:"BACKEND_PORT" default:"3000"`
-	FrontendHost  string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
-	FrontendPort  int    `envconfig:"FRONTEND_PORT" default:"7655"`
-	ConfigPath    string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
-	DataPath      string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
-	PublicURL     string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
+	BackendHost  string `envconfig:"BACKEND_HOST" default:"0.0.0.0"`
+	BackendPort  int    `envconfig:"BACKEND_PORT" default:"3000"`
+	FrontendHost string `envconfig:"FRONTEND_HOST" default:"0.0.0.0"`
+	FrontendPort int    `envconfig:"FRONTEND_PORT" default:"7655"`
+	ConfigPath   string `envconfig:"CONFIG_PATH" default:"/etc/pulse"`
+	DataPath     string `envconfig:"DATA_PATH" default:"/var/lib/pulse"`
+	PublicURL    string `envconfig:"PULSE_PUBLIC_URL" default:""` // Full URL to access Pulse (e.g., http://192.168.1.100:7655)
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -92,14 +92,14 @@ type Config struct {
 	DisableAuth          bool   `envconfig:"DISABLE_AUTH" default:"false"`
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
-	
+
 	// Proxy authentication settings
-	ProxyAuthSecret      string `envconfig:"PROXY_AUTH_SECRET"`
-	ProxyAuthUserHeader  string `envconfig:"PROXY_AUTH_USER_HEADER"`
-	ProxyAuthRoleHeader  string `envconfig:"PROXY_AUTH_ROLE_HEADER"`
+	ProxyAuthSecret        string `envconfig:"PROXY_AUTH_SECRET"`
+	ProxyAuthUserHeader    string `envconfig:"PROXY_AUTH_USER_HEADER"`
+	ProxyAuthRoleHeader    string `envconfig:"PROXY_AUTH_ROLE_HEADER"`
 	ProxyAuthRoleSeparator string `envconfig:"PROXY_AUTH_ROLE_SEPARATOR" default:"|"`
-	ProxyAuthAdminRole   string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
-	ProxyAuthLogoutURL   string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
+	ProxyAuthAdminRole     string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
+	ProxyAuthLogoutURL     string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
 	// HTTPS/TLS settings
 	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
 	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
@@ -110,15 +110,15 @@ type Config struct {
 	AutoUpdateEnabled       bool          `envconfig:"AUTO_UPDATE_ENABLED" default:"false"`
 	AutoUpdateCheckInterval time.Duration `envconfig:"AUTO_UPDATE_CHECK_INTERVAL" default:"24h"`
 	AutoUpdateTime          string        `envconfig:"AUTO_UPDATE_TIME" default:"03:00"`
-	
+
 	// Discovery settings
 	DiscoveryEnabled bool   `envconfig:"DISCOVERY_ENABLED" default:"true"`
 	DiscoverySubnet  string `envconfig:"DISCOVERY_SUBNET" default:"auto"`
-	
+
 	// Deprecated - for backward compatibility
 	Port  int  `envconfig:"PORT"` // Maps to BackendPort
 	Debug bool `envconfig:"DEBUG" default:"false"`
-	
+
 	// Track which settings are overridden by environment variables
 	EnvOverrides map[string]bool `json:"-"`
 }
@@ -126,7 +126,7 @@ type Config struct {
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name              string
-	Host              string   // Primary endpoint (user-provided)
+	Host              string // Primary endpoint (user-provided)
 	User              string
 	Password          string
 	TokenName         string
@@ -137,10 +137,10 @@ type PVEInstance struct {
 	MonitorContainers bool
 	MonitorStorage    bool
 	MonitorBackups    bool
-	
+
 	// Cluster support
-	IsCluster       bool              // True if this is a cluster
-	ClusterName     string            // Cluster name if applicable
+	IsCluster        bool              // True if this is a cluster
+	ClusterName      string            // Cluster name if applicable
 	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
 }
 
@@ -182,7 +182,7 @@ func Load() (*Config, error) {
 	if dir := os.Getenv("PULSE_DATA_DIR"); dir != "" {
 		dataDir = dir
 	}
-	
+
 	// Load .env file if it exists (for deployment overrides)
 	envFile := filepath.Join(dataDir, ".env")
 	if _, err := os.Stat(envFile); err == nil {
@@ -192,17 +192,17 @@ func Load() (*Config, error) {
 			log.Info().Str("file", envFile).Msg("Loaded .env file for deployment overrides")
 		}
 	}
-	
+
 	// Also try loading from current directory for development
 	if err := godotenv.Load(); err == nil {
 		log.Info().Msg("Loaded configuration from .env in current directory")
 	}
-	
+
 	// Initialize config with defaults
 	cfg := &Config{
 		BackendHost:          "0.0.0.0",
 		BackendPort:          3000,
-		FrontendHost:         "0.0.0.0", 
+		FrontendHost:         "0.0.0.0",
 		FrontendPort:         7655,
 		ConfigPath:           dataDir,
 		DataPath:             dataDir,
@@ -222,7 +222,7 @@ func Load() (*Config, error) {
 		DiscoverySubnet:      "auto",
 		EnvOverrides:         make(map[string]bool),
 	}
-	
+
 	// Initialize persistence
 	persistence := NewConfigPersistence(dataDir)
 	if persistence != nil {
@@ -239,14 +239,14 @@ func Load() (*Config, error) {
 		} else if err != nil {
 			log.Warn().Err(err).Msg("Failed to load nodes configuration")
 		}
-		
+
 		// Load system configuration
 		if systemSettings, err := persistence.LoadSystemSettings(); err == nil && systemSettings != nil {
 			// Load PBS polling interval if configured
 			if systemSettings.PBSPollingInterval > 0 {
 				cfg.PBSPollingInterval = time.Duration(systemSettings.PBSPollingInterval) * time.Second
 			}
-			
+
 			if systemSettings.UpdateChannel != "" {
 				cfg.UpdateChannel = systemSettings.UpdateChannel
 			}
@@ -288,16 +288,16 @@ func Load() (*Config, error) {
 			}
 		}
 	}
-	
+
 	// Ensure PBS polling interval has default if not set
 	// Note: PVE polling is hardcoded to 10s in monitor.go
 	if cfg.PBSPollingInterval == 0 {
 		cfg.PBSPollingInterval = 60 * time.Second
 	}
-	
+
 	// Limited environment variable support
 	// NOTE: Node configuration is NOT done via env vars - use the web UI instead
-	
+
 	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
 	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {
 		if p, err := strconv.Atoi(frontendPort); err == nil {
@@ -344,12 +344,12 @@ func Load() (*Config, error) {
 	} else {
 		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DISABLE_AUTH not set, DisableAuth remains")
 	}
-	
+
 	// Load proxy authentication settings
 	if proxyAuthSecret := os.Getenv("PROXY_AUTH_SECRET"); proxyAuthSecret != "" {
 		cfg.ProxyAuthSecret = proxyAuthSecret
 		log.Info().Msg("Proxy authentication secret configured")
-		
+
 		// Load other proxy auth settings
 		if userHeader := os.Getenv("PROXY_AUTH_USER_HEADER"); userHeader != "" {
 			cfg.ProxyAuthUserHeader = userHeader
@@ -399,8 +399,7 @@ func Load() (*Config, error) {
 			log.Debug().Msg("Loaded pre-hashed password from env var")
 		}
 	}
-	
-	
+
 	// HTTPS/TLS configuration from environment
 	if httpsEnabled := os.Getenv("HTTPS_ENABLED"); httpsEnabled != "" {
 		cfg.HTTPSEnabled = httpsEnabled == "true" || httpsEnabled == "1"
@@ -414,11 +413,18 @@ func Load() (*Config, error) {
 		cfg.TLSKeyFile = tlsKeyFile
 		log.Debug().Str("key_file", tlsKeyFile).Msg("TLS key file from env var")
 	}
-	
+
 	// REMOVED: Update channel, auto-update, connection timeout, and allowed origins env vars
 	// These settings now ONLY come from system.json to prevent confusion
 	// Only keeping essential deployment/infrastructure env vars
-	
+
+	// Normalize PVE user fields for password authentication
+	for i := range cfg.PVEInstances {
+		if cfg.PVEInstances[i].TokenName == "" && cfg.PVEInstances[i].TokenValue == "" && cfg.PVEInstances[i].User != "" && !strings.Contains(cfg.PVEInstances[i].User, "@") {
+			cfg.PVEInstances[i].User = cfg.PVEInstances[i].User + "@pam"
+		}
+	}
+
 	if cfg.AllowedOrigins == "" {
 		// If not configured and we're in development mode (different ports for frontend/backend)
 		// allow localhost for development convenience
@@ -470,7 +476,7 @@ func Load() (*Config, error) {
 			log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
 		}
 	}
-	
+
 	// Set log level
 	switch cfg.LogLevel {
 	case "debug":
@@ -482,12 +488,12 @@ func Load() (*Config, error) {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel) // Default to info level
 	}
-	
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return cfg, nil
 }
 
@@ -496,12 +502,12 @@ func SaveConfig(cfg *Config) error {
 	if globalPersistence == nil {
 		return fmt.Errorf("config persistence not initialized")
 	}
-	
+
 	// Save nodes configuration
 	if err := globalPersistence.SaveNodesConfig(cfg.PVEInstances, cfg.PBSInstances); err != nil {
 		return fmt.Errorf("failed to save nodes config: %w", err)
 	}
-	
+
 	// Save system configuration
 	systemSettings := SystemSettings{
 		// Note: PVE polling is hardcoded to 10s
@@ -519,10 +525,9 @@ func SaveConfig(cfg *Config) error {
 	if err := globalPersistence.SaveSystemSettings(systemSettings); err != nil {
 		return fmt.Errorf("failed to save system config: %w", err)
 	}
-	
+
 	return nil
 }
-
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
@@ -533,13 +538,13 @@ func (c *Config) Validate() error {
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
 	}
-	
+
 	// Validate monitoring settings
 	// Note: PVE polling is hardcoded to 10s
 	if c.ConnectionTimeout < time.Second {
 		return fmt.Errorf("connection timeout must be at least 1 second")
 	}
-	
+
 	// Validate PVE instances
 	for i, pve := range c.PVEInstances {
 		if pve.Host == "" {
@@ -594,12 +599,12 @@ func detectPublicURL(port int) string {
 			}
 		}
 	}
-	
+
 	// Method 2: Try to get the primary network interface IP
 	if ip := getOutboundIP(); ip != "" {
 		return fmt.Sprintf("http://%s:%d", ip, port)
 	}
-	
+
 	// Method 3: Check if running in Docker (check for .dockerenv)
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		// In Docker, try to get the host IP from default route
@@ -617,7 +622,7 @@ func detectPublicURL(port int) string {
 			}
 		}
 	}
-	
+
 	// Method 4: Get all non-loopback IPs and use the first private one
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, addr := range addrs {
@@ -625,9 +630,9 @@ func detectPublicURL(port int) string {
 				if ipnet.IP.To4() != nil {
 					ip := ipnet.IP.String()
 					// Prefer private IPs (RFC1918)
-					if strings.HasPrefix(ip, "192.168.") || 
-					   strings.HasPrefix(ip, "10.") || 
-					   strings.HasPrefix(ip, "172.") {
+					if strings.HasPrefix(ip, "192.168.") ||
+						strings.HasPrefix(ip, "10.") ||
+						strings.HasPrefix(ip, "172.") {
 						return fmt.Sprintf("http://%s:%d", ip, port)
 					}
 				}
@@ -642,7 +647,7 @@ func detectPublicURL(port int) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -658,7 +663,7 @@ func getOutboundIP() string {
 		}
 	}
 	defer conn.Close()
-	
+
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.String()
 }

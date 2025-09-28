@@ -13,6 +13,9 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
+import { Card } from '@/components/shared/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface DashboardProps {
   vms: VM[];
@@ -491,7 +494,7 @@ export function Dashboard(props: DashboardProps) {
       
       {/* Removed old node table - keeping the rest unchanged */}
       <Show when={false}>
-        <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <Card padding="none" class="mb-4">
           <div class="overflow-x-auto">
             <table class="w-full">
               <thead>
@@ -617,7 +620,7 @@ export function Dashboard(props: DashboardProps) {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </Show>
       
       {/* Dashboard Filter */}
@@ -640,77 +643,79 @@ export function Dashboard(props: DashboardProps) {
 
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="animate-spin mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Loading dashboard data...</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400">
-              {reconnecting() ? 'Reconnecting to monitoring service...' : 'Connecting to monitoring service'}
-            </p>
-            <Show when={!connected() && !reconnecting()}>
-              <button
-                onClick={() => reconnect()}
-                class="mt-3 px-4 py-2 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              >
-                Retry Connection
-              </button>
-            </Show>
-          </div>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <svg class="mx-auto h-12 w-12 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            )}
+            title="Loading dashboard data..."
+            description={reconnecting() ? 'Reconnecting to monitoring service…' : 'Connecting to monitoring service'}
+          />
+        </Card>
       </Show>
 
       {/* Empty State - No PVE Nodes Configured */}
       <Show when={connected() && initialDataReceived() && props.nodes.filter(n => n.type === 'pve').length === 0 && props.vms.length === 0 && props.containers.length === 0}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No Proxmox VE nodes configured</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure.</p>
-            <button type="button"
-              onClick={() => {
-                const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
-                settingsTab?.click();
-              }}
-              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Go to Settings
-            </button>
-          </div>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            title="No Proxmox VE nodes configured"
+            description="Add a Proxmox VE node in the Settings tab to start monitoring your infrastructure."
+            actions={(
+              <button
+                type="button"
+                onClick={() => {
+                  const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
+                  settingsTab?.click();
+                }}
+                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Go to Settings
+              </button>
+            )}
+          />
+        </Card>
       </Show>
 
       {/* Disconnected State */}
       <Show when={!connected()}>
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-600 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Connection Lost</h3>
-            <p class="text-xs text-red-700 dark:text-red-300">
-              {reconnecting() ? 'Attempting to reconnect...' : 'Unable to connect to the backend server'}
-            </p>
-            <Show when={!reconnecting()}>
-              <button
-                onClick={() => reconnect()}
-                class="mt-3 px-4 py-2 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-              >
-                Reconnect Now
-              </button>
-            </Show>
-          </div>
-        </div>
+        <Card padding="lg" tone="danger">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            title="Connection lost"
+            description={reconnecting() ? 'Attempting to reconnect…' : 'Unable to connect to the backend server'}
+            tone="danger"
+            actions={
+              !reconnecting()
+                ? (
+                  <button
+                    onClick={() => reconnect()}
+                    class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
+                  >
+                    Reconnect now
+                  </button>
+                )
+                : undefined
+            }
+          />
+        </Card>
       </Show>
 
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <Card padding="none" class="mb-4 overflow-hidden">
           <ScrollableTable 
             minWidth="900px"
           >
@@ -834,24 +839,26 @@ export function Dashboard(props: DashboardProps) {
             </tbody>
           </table>
         </ScrollableTable>
-        </div>
+        </Card>
         </ComponentErrorBoundary>
       </Show>
 
       <Show when={connected() && initialDataReceived() && filteredGuests().length === 0 && (props.vms.length > 0 || props.containers.length > 0)}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 mb-4">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No guests found</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400">
-              {search() && search().trim() !== '' 
-                ? `No guests match your search "${search()}"` 
-                : 'No guests match your current filters'}
-            </p>
-          </div>
-        </div>
+        <Card padding="lg" class="mb-4">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            )}
+            title="No guests found"
+            description={
+              search() && search().trim() !== ''
+                ? `No guests match your search "${search()}"`
+                : 'No guests match your current filters'
+            }
+          />
+        </Card>
       </Show>
       
       {/* Stats */}

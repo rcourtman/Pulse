@@ -1,7 +1,7 @@
 // Event bus for cross-component communication
 
 // Event types
-export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated' | 'theme_changed';
+export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated' | 'discovery_status' | 'theme_changed';
 
 // Event data types
 export interface NodeAutoRegisteredData {
@@ -17,6 +17,9 @@ export interface NodeAutoRegisteredData {
 }
 
 export interface DiscoveryUpdatedData {
+  scanning?: boolean;
+  cached?: boolean;
+  timestamp?: number;
   servers: Array<{
     ip: string;
     port: number;
@@ -26,9 +29,14 @@ export interface DiscoveryUpdatedData {
     release?: string;
   }>;
   errors?: string[];
-  timestamp?: number;
   immediate?: boolean;
   discoveredNodes?: number;
+}
+
+export interface DiscoveryStatusData {
+  scanning: boolean;
+  subnet?: string;
+  timestamp?: number;
 }
 
 // Map event types to their data types
@@ -36,6 +44,7 @@ export type EventDataMap = {
   'node_auto_registered': NodeAutoRegisteredData;
   'refresh_nodes': void;
   'discovery_updated': DiscoveryUpdatedData;
+  'discovery_status': DiscoveryStatusData;
   'theme_changed': string;  // 'light' or 'dark'
 }
 

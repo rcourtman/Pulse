@@ -8,6 +8,10 @@ import { GuestURLs } from './GuestURLs';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { Toggle } from '@/components/shared/Toggle';
+import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import { eventBus } from '@/stores/events';
@@ -718,14 +722,13 @@ const Settings: Component = () => {
     <>
       <div class="space-y-4">
       {/* Header with better styling */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div>
-          <h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Configuration Settings</h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Manage Proxmox nodes and system configuration
-          </p>
-        </div>
-      </div>
+      <Card padding="md">
+        <SectionHeader
+          title="Configuration settings"
+          description="Manage Proxmox nodes and system configuration"
+          size="lg"
+        />
+      </Card>
       
       {/* Save notification bar - only show when there are unsaved changes */}
       <Show when={hasUnsavedChanges() && (activeTab() === 'pve' || activeTab() === 'pbs' || activeTab() === 'system')}>
@@ -760,7 +763,7 @@ const Settings: Component = () => {
       </Show>
       
       {/* Tab Navigation - modern style */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+      <Card padding="none">
         <div class="p-1">
           <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto scrollbar-hide" style="-webkit-overflow-scrolling: touch;">
             <For each={tabs}>
@@ -793,48 +796,41 @@ const Settings: Component = () => {
               </Show>
               <Show when={initialLoadComplete()}>
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox VE Nodes</h3>
+                <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
                 <div class="flex flex-wrap gap-2 items-center justify-end">
                   {/* Discovery toggle */}
-                  <label class="flex items-center gap-1 sm:gap-2 cursor-pointer" title="Enable automatic discovery of Proxmox servers on your network">
+                  <div class="flex items-center gap-2 sm:gap-3" title="Enable automatic discovery of Proxmox servers on your network">
                     <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Discovery</span>
-                    <div class="relative inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={discoveryEnabled()}
-                        onChange={async (e) => {
-                          if (!envOverrides().discoveryEnabled) {
-                            const newValue = e.currentTarget.checked;
-                            setDiscoveryEnabled(newValue);
-                            
-                            // Save discovery setting immediately
-                            try {
-                              await SettingsAPI.updateSystemSettings({
-                                discoveryEnabled: newValue,
-                                discoverySubnet: discoverySubnet()
-                              });
-                              
-                              if (newValue) {
-                                // Trigger discovery when enabled
-                                loadDiscoveredNodes();
-                                notificationStore.success('Discovery enabled', 2000);
-                              } else {
-                                notificationStore.info('Discovery disabled', 2000);
-                              }
-                            } catch (error) {
-                              console.error('Failed to update discovery setting:', error);
-                              notificationStore.error('Failed to update discovery setting');
-                              // Revert on error
-                              setDiscoveryEnabled(!newValue);
-                            }
+                    <Toggle
+                      checked={discoveryEnabled()}
+                      onChange={async (e) => {
+                        if (envOverrides().discoveryEnabled) {
+                          return;
+                        }
+                        const newValue = e.currentTarget.checked;
+                        setDiscoveryEnabled(newValue);
+                        try {
+                          await SettingsAPI.updateSystemSettings({
+                            discoveryEnabled: newValue,
+                            discoverySubnet: discoverySubnet()
+                          });
+                          if (newValue) {
+                            loadDiscoveredNodes();
+                            notificationStore.success('Discovery enabled', 2000);
+                          } else {
+                            notificationStore.info('Discovery disabled', 2000);
                           }
-                        }}
-                        disabled={envOverrides().discoveryEnabled}
-                        class="sr-only peer"
-                      />
-                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </div>
-                  </label>
+                        } catch (error) {
+                          console.error('Failed to update discovery setting:', error);
+                          notificationStore.error('Failed to update discovery setting');
+                          setDiscoveryEnabled(!newValue);
+                        }
+                      }}
+                      disabled={envOverrides().discoveryEnabled}
+                      containerClass="gap-2"
+                      label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{discoveryEnabled() ? 'On' : 'Off'}</span>}
+                    />
+                  </div>
                   
                   <Show when={discoveryEnabled()}>
                     <button type="button" 
@@ -1069,48 +1065,41 @@ const Settings: Component = () => {
               </Show>
               <Show when={initialLoadComplete()}>
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200">Proxmox Backup Server Nodes</h3>
+                <SectionHeader title="Proxmox Backup Server nodes" size="md" class="flex-1" />
                 <div class="flex flex-wrap gap-2 items-center justify-end">
                   {/* Discovery toggle */}
-                  <label class="flex items-center gap-2 cursor-pointer" title="Enable automatic discovery of PBS servers on your network">
+                  <div class="flex items-center gap-2" title="Enable automatic discovery of PBS servers on your network">
                     <span class="text-sm text-gray-600 dark:text-gray-400">Discovery</span>
-                    <div class="relative inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={discoveryEnabled()}
-                        onChange={async (e) => {
-                          if (!envOverrides().discoveryEnabled) {
-                            const newValue = e.currentTarget.checked;
-                            setDiscoveryEnabled(newValue);
-                            
-                            // Save discovery setting immediately
-                            try {
-                              await SettingsAPI.updateSystemSettings({
-                                discoveryEnabled: newValue,
-                                discoverySubnet: discoverySubnet()
-                              });
-                              
-                              if (newValue) {
-                                // Trigger discovery when enabled
-                                loadDiscoveredNodes();
-                                notificationStore.success('Discovery enabled', 2000);
-                              } else {
-                                notificationStore.info('Discovery disabled', 2000);
-                              }
-                            } catch (error) {
-                              console.error('Failed to update discovery setting:', error);
-                              notificationStore.error('Failed to update discovery setting');
-                              // Revert on error
-                              setDiscoveryEnabled(!newValue);
-                            }
+                    <Toggle
+                      checked={discoveryEnabled()}
+                      onChange={async (e) => {
+                        if (envOverrides().discoveryEnabled) {
+                          return;
+                        }
+                        const newValue = e.currentTarget.checked;
+                        setDiscoveryEnabled(newValue);
+                        try {
+                          await SettingsAPI.updateSystemSettings({
+                            discoveryEnabled: newValue,
+                            discoverySubnet: discoverySubnet()
+                          });
+                          if (newValue) {
+                            loadDiscoveredNodes();
+                            notificationStore.success('Discovery enabled', 2000);
+                          } else {
+                            notificationStore.info('Discovery disabled', 2000);
                           }
-                        }}
-                        disabled={envOverrides().discoveryEnabled}
-                        class="sr-only peer"
-                      />
-                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </div>
-                  </label>
+                        } catch (error) {
+                          console.error('Failed to update discovery setting:', error);
+                          notificationStore.error('Failed to update discovery setting');
+                          setDiscoveryEnabled(!newValue);
+                        }
+                      }}
+                      disabled={envOverrides().discoveryEnabled}
+                      containerClass="gap-2"
+                      label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{discoveryEnabled() ? 'On' : 'Off'}</span>}
+                    />
+                  </div>
                   
                   <Show when={discoveryEnabled()}>
                     <button type="button" 
@@ -1299,7 +1288,7 @@ const Settings: Component = () => {
           <Show when={activeTab() === 'system'}>
             <div class="space-y-6">
               <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">System Configuration</h3>
+                <SectionHeader title="System configuration" size="md" class="mb-4" />
                 
                 {/* Environment Variable Info */}
                 <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
@@ -1625,11 +1614,13 @@ const Settings: Component = () => {
               </div>
               
               {/* Backup & Restore - Moved from Security tab */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Backup & Restore</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  Backup your node configurations and credentials or restore from a previous backup
-                </p>
+              <Card padding="lg" border={false} class="border border-gray-200 dark:border-gray-700">
+                <SectionHeader
+                  title="Backup & restore"
+                  description="Backup your node configurations and credentials or restore from a previous backup."
+                  size="md"
+                  class="mb-4"
+                />
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Export Section */}
@@ -1704,7 +1695,7 @@ const Settings: Component = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
           </Show>
           
@@ -1737,7 +1728,7 @@ const Settings: Component = () => {
                           <li>• Or authentication hasn't been configured yet</li>
                         </ul>
                       </div>
-                      <div class="mt-3 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
+                      <Card tone="muted" padding="sm" class="mt-3 border border-amber-200 dark:border-amber-700">
                         <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
                           To enable authentication:
                         </p>
@@ -1747,7 +1738,7 @@ const Settings: Component = () => {
                           <li>3. Restart Pulse service</li>
                           <li>4. Complete the security setup wizard on first access</li>
                         </ol>
-                      </div>
+                      </Card>
                     </div>
                   </div>
                 </div>
@@ -1755,7 +1746,7 @@ const Settings: Component = () => {
               
               {/* Authentication */}
               <Show when={!securityStatusLoading() && (securityStatus()?.hasAuthentication || securityStatus()?.apiTokenConfigured)}>
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
                   {/* Header */}
                   <div class="bg-gradient-to-r from-gray-50 to-gray-50 dark:from-gray-900/20 dark:to-gray-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center gap-3">
@@ -1764,10 +1755,12 @@ const Settings: Component = () => {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                       </div>
-                      <div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Authentication</h3>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">Manage your login credentials</p>
-                      </div>
+                      <SectionHeader
+                        title="Authentication"
+                        description="Manage your login credentials"
+                        size="sm"
+                        class="flex-1"
+                      />
                     </div>
                   </div>
                   
@@ -1797,7 +1790,7 @@ const Settings: Component = () => {
                       
                     </div>
                   </div>
-                </div>
+                </Card>
               </Show>
 
               {/* Show pending restart message if configured but not loaded */}
@@ -1884,7 +1877,7 @@ const Settings: Component = () => {
 
               {/* API Token - Show always to allow API access even when auth is disabled */}
               <Show when={!securityStatusLoading()}>
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
                   {/* Header */}
                   <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center gap-3">
@@ -1893,10 +1886,12 @@ const Settings: Component = () => {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                         </svg>
                       </div>
-                      <div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">API Token</h3>
-                        <p class="text-xs text-gray-600 dark:text-gray-400">For automation and integrations</p>
-                      </div>
+                      <SectionHeader
+                        title="API token"
+                        description="For automation and integrations"
+                        size="sm"
+                        class="flex-1"
+                      />
                     </div>
                   </div>
                   
@@ -1904,15 +1899,15 @@ const Settings: Component = () => {
                   <div class="p-6">
                     {/* Show explanation when auth is disabled */}
                     <Show when={!securityStatus()?.hasAuthentication}>
-                      <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Card tone="info" padding="sm" class="mb-4 border border-blue-200 dark:border-blue-800">
                         <p class="text-xs text-blue-800 dark:text-blue-200">
                           <strong>API Access Control:</strong> Even though authentication is disabled, you can still use API tokens to protect API access for automation and integrations.
                         </p>
-                      </div>
+                      </Card>
                     </Show>
                     <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
                   </div>
-                </div>
+                </Card>
               </Show>
 
               {/* Advanced - Only show if auth is enabled */}
@@ -1924,7 +1919,7 @@ const Settings: Component = () => {
           <Show when={activeTab() === 'diagnostics'}>
             <div class="space-y-6">
               <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">System Diagnostics</h3>
+                <SectionHeader title="System diagnostics" size="md" class="mb-4" />
                 
                 <div class="space-y-4">
                   {/* Live Connection Diagnostics */}
@@ -1956,7 +1951,7 @@ const Settings: Component = () => {
                     <Show when={diagnosticsData()}>
                       <div class="mt-4 space-y-3">
                         {/* System Info */}
-                        <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                        <Card padding="sm">
                           <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">System</h5>
                           <div class="text-xs space-y-1 text-gray-600 dark:text-gray-400">
                             <div>Version: {diagnosticsData()?.version || 'Unknown'}</div>
@@ -1964,11 +1959,11 @@ const Settings: Component = () => {
                             <div>Runtime: {diagnosticsData()?.runtime || 'Unknown'}</div>
                             <div>Memory: {Math.round((diagnosticsData()?.system?.memory?.alloc || 0) / 1024 / 1024)} MB</div>
                           </div>
-                        </div>
+                        </Card>
                         
                         {/* Nodes Status */}
                         <Show when={diagnosticsData()?.nodes && diagnosticsData()!.nodes.length > 0}>
-                          <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                          <Card padding="sm">
                             <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PVE Nodes</h5>
                             <For each={diagnosticsData()?.nodes || []}>
                               {(node) => (
@@ -1991,12 +1986,12 @@ const Settings: Component = () => {
                                 </div>
                               )}
                             </For>
-                          </div>
+                          </Card>
                         </Show>
                         
                         {/* PBS Status */}
                         <Show when={diagnosticsData()?.pbs && diagnosticsData()!.pbs.length > 0}>
-                          <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                          <Card padding="sm">
                             <h5 class="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">PBS Instances</h5>
                             <For each={diagnosticsData()?.pbs || []}>
                               {(pbs) => (
@@ -2015,7 +2010,7 @@ const Settings: Component = () => {
                                 </div>
                               )}
                             </For>
-                          </div>
+                          </Card>
                         </Show>
                       </div>
                     </Show>
@@ -2349,7 +2344,7 @@ const Settings: Component = () => {
             />
           </Show>
         </div>
-      </div>
+      </Card>
       
       {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
       <Show when={showNodeModal() && currentNodeType() === 'pve'}>
@@ -2472,8 +2467,8 @@ const Settings: Component = () => {
       {/* Export Dialog */}
       <Show when={showExportDialog()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Export Configuration</h3>
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="Export configuration" size="md" class="mb-4" />
             
             <div class="space-y-4">
               {/* Password Choice Section - Only show if auth is enabled */}
@@ -2521,8 +2516,8 @@ const Settings: Component = () => {
               </Show>
               
               {/* Show password input based on selection */}
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label class={labelClass()}>
                   {securityStatus()?.hasAuthentication 
                     ? (useCustomPassphrase() ? 'Custom Passphrase' : 'Enter Your Login Password')
                     : 'Encryption Passphrase'}
@@ -2533,18 +2528,18 @@ const Settings: Component = () => {
                   onInput={(e) => setExportPassphrase(e.currentTarget.value)}
                   placeholder={
                     securityStatus()?.hasAuthentication 
-                      ? (useCustomPassphrase() ? "Enter a strong passphrase" : "Enter your Pulse login password")
-                      : "Enter a strong passphrase for encryption"
+                      ? (useCustomPassphrase() ? 'Enter a strong passphrase' : 'Enter your Pulse login password')
+                      : 'Enter a strong passphrase for encryption'
                   }
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  class={controlClass()}
                 />
                 <Show when={!securityStatus()?.hasAuthentication || useCustomPassphrase()}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p class={`${formHelpText} mt-1`}>
                     You'll need this passphrase to restore the backup.
                   </p>
                 </Show>
                 <Show when={securityStatus()?.hasAuthentication && !useCustomPassphrase()}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p class={`${formHelpText} mt-1`}>
                     You'll use this same password when restoring the backup
                   </p>
                 </Show>
@@ -2583,25 +2578,23 @@ const Settings: Component = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       </Show>
       
       {/* API Token Modal */}
       <Show when={showApiTokenModal()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-              API Token Required
-            </h3>
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="API token required" size="md" class="mb-4" />
             
             <div class="space-y-4">
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 This Pulse instance requires an API token for export/import operations. Please enter the API token configured on the server.
               </p>
               
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label class={labelClass()}>
                   API Token
                 </label>
                 <input
@@ -2609,7 +2602,7 @@ const Settings: Component = () => {
                   value={apiTokenInput()}
                   onInput={(e) => setApiTokenInput(e.currentTarget.value)}
                   placeholder="Enter API token"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200"
+                  class={controlClass()}
                 />
               </div>
               
@@ -2653,19 +2646,19 @@ const Settings: Component = () => {
                 Authenticate
               </button>
             </div>
-          </div>
+          </Card>
         </div>
       </Show>
       
       {/* Import Dialog */}
       <Show when={showImportDialog()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Import Configuration</h3>
+          <Card padding="lg" class="max-w-md w-full">
+            <SectionHeader title="Import configuration" size="md" class="mb-4" />
             
             <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label class={labelClass()}>
                   Configuration File
                 </label>
                 <input
@@ -2675,12 +2668,12 @@ const Settings: Component = () => {
                     const file = e.currentTarget.files?.[0];
                     if (file) setImportFile(file);
                   }}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  class={controlClass('cursor-pointer')}
                 />
               </div>
               
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <div class={formField}>
+                <label class={labelClass()}>
                   Backup Password
                 </label>
                 <input
@@ -2688,9 +2681,9 @@ const Settings: Component = () => {
                   value={importPassphrase()}
                   onInput={(e) => setImportPassphrase(e.currentTarget.value)}
                   placeholder="Enter the password used when creating this backup"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  class={controlClass()}
                 />
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p class={`${formHelpText} mt-1`}>
                   This is usually your Pulse login password, unless you used a custom passphrase
                 </p>
               </div>
@@ -2721,7 +2714,7 @@ const Settings: Component = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       </Show>
       

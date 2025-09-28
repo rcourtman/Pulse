@@ -2,6 +2,7 @@ import { Component, createSignal, Show, onMount } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { STORAGE_KEYS } from '@/constants';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 export const FirstRunSetup: Component = () => {
   const [username, setUsername] = createSignal('admin');
@@ -211,9 +212,12 @@ IMPORTANT: Keep these credentials secure!
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
           <Show when={!showCredentials()}>
             <div class="p-8">
-              <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-6">
-                Initial Security Setup
-              </h2>
+              <SectionHeader
+                title="Initial security setup"
+                size="lg"
+                class="mb-6"
+                titleClass="text-gray-800 dark:text-gray-100"
+              />
               
               <div class="space-y-6">
                 {/* Username */}
@@ -343,9 +347,11 @@ IMPORTANT: Keep these credentials secure!
 
                 {/* Info Box */}
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
-                  <h3 class="font-medium text-gray-800 dark:text-gray-200">
-                    What happens next:
-                  </h3>
+                  <SectionHeader
+                    title="What happens next"
+                    size="sm"
+                    titleClass="text-gray-800 dark:text-gray-200"
+                  />
                   <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <li class="flex items-start">
                       <span class="text-green-500 mr-2">✓</span>
@@ -386,9 +392,13 @@ IMPORTANT: Keep these credentials secure!
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                  Setup Complete!
-                </h2>
+                <SectionHeader
+                  title="Setup complete!"
+                  size="lg"
+                  class="mb-2"
+                  align="center"
+                  titleClass="text-gray-800 dark:text-gray-100"
+                />
                 <p class="text-gray-600 dark:text-gray-400">
                   Save your credentials now - they won't be shown again
                 </p>

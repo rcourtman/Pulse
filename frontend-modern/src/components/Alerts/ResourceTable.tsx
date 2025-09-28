@@ -1,5 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { Alert } from '@/types/api';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface Resource {
   id: string;
@@ -65,9 +67,9 @@ export function ResourceTable(props: ResourceTableProps) {
   );
 
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
       <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">{props.title}</h3>
+        <SectionHeader title={props.title} size="sm" />
       </div>
       <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
         <style>{`
@@ -570,6 +572,6 @@ export function ResourceTable(props: ResourceTableProps) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 }

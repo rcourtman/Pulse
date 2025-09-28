@@ -1,5 +1,7 @@
 import { Component, createMemo, Show } from 'solid-js';
 import type { PhysicalDisk } from '@/types/api';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface DiskHealthSummaryProps {
   disks: PhysicalDisk[];
@@ -50,11 +52,14 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
   
   return (
     <Show when={diskStats().total > 0}>
-      <div class={`rounded-lg p-4 border ${healthBg()}`}>
+      <Card padding="md" border={false} class={`${healthBg()}`}>
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Disk Health Summary
-          </h3>
+          <SectionHeader
+            title="Disk health summary"
+            size="sm"
+            class="flex-1"
+            titleClass="text-gray-900 dark:text-gray-100"
+          />
           <span class={`text-2xl font-bold ${healthColor()}`}>
             {diskStats().healthy}/{diskStats().total}
           </span>
@@ -123,7 +128,7 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
             </div>
           </div>
         </div>
-      </div>
+      </Card>
     </Show>
   );
 };

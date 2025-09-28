@@ -2,6 +2,8 @@ import { Component, createSignal, Show, createEffect } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { apiFetch } from '@/utils/apiClient';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { formField, labelClass, formHelpText } from '@/components/shared/Form';
 
 interface GenerateAPITokenProps {
   currentTokenHint?: string;
@@ -77,7 +79,7 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
               </code>
             </div>
           </Show>
-          <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+          <p class={`${formHelpText} mb-4`}>
             An API token is configured for this instance. Use it with the X-API-Token header for automation.
           </p>
           
@@ -103,17 +105,21 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
           </div>
           
           <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your New API Token</label>
-            <div class="flex items-center space-x-2">
-              <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
-                {newToken()}
-              </code>
-              <button type="button"
-                onClick={handleCopy}
-                class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-              >
-                {copied() ? 'Copied!' : 'Copy'}
-              </button>
+            <div class={formField}>
+              <label class={labelClass('text-xs')}>
+                Your new API token
+              </label>
+              <div class="mt-1 flex items-center gap-2">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
+                  {newToken()}
+                </code>
+                <button type="button"
+                  onClick={handleCopy}
+                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  {copied() ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
           </div>
           
@@ -145,9 +151,11 @@ export const GenerateAPIToken: Component<GenerateAPITokenProps> = (props) => {
       <Show when={showConfirm()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              Generate New API Token?
-            </h3>
+            <SectionHeader
+              title="Generate new API token?"
+              size="md"
+              class="mb-4"
+            />
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
               This will generate a new API token and <span class="font-semibold text-red-600 dark:text-red-400">immediately invalidate the current token</span>. 
               Any scripts or integrations using the old token will stop working.

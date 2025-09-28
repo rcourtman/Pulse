@@ -4,6 +4,7 @@ import { formatUptime } from '@/utils/format';
 import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
 import { AlertIndicator } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
+import { Card } from '@/components/shared/Card';
 
 interface CompactNodeCardProps {
   node: Node;
@@ -57,14 +58,18 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   if (props.variant === 'ultra-compact') {
     // Single line format for 10+ nodes
     return (
-      <div 
-        class={`flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 rounded border ${
+      <Card
+        padding="none"
+        border={false}
+        hoverable
+        class={`flex items-center gap-2 px-3 py-1.5 ${
           props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
           !isOnline() ? 'border-red-500' :
           alertStyles.hasAlert ? 'border-orange-500' :
           'border-gray-200 dark:border-gray-700'
-        } hover:shadow-sm transition-all cursor-pointer hover:scale-[1.01]`}
-        onClick={props.onClick}>
+        } border transition-all cursor-pointer hover:scale-[1.01]`}
+        onClick={props.onClick}
+      >
         {/* Status dot */}
         <span class={`w-2 h-2 rounded-full ${
           props.node.connectionHealth === 'degraded' 
@@ -114,23 +119,27 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         </div>
 
         {/* Uptime */}
-        <span class="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+        <span class="ml-auto text-xs text-gray-500 dark:text-gray-400">
           ↑{formatUptime(props.node.uptime)}
         </span>
-      </div>
+      </Card>
     );
   }
 
   // Compact bar format for 5-9 nodes
   return (
-    <div 
-      class={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${
+    <Card
+      padding="sm"
+      border={false}
+      hoverable
+      class={`border ${
         props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
         !isOnline() ? 'border-red-500' :
         alertStyles.hasAlert ? 'border-orange-500' :
         'border-gray-200 dark:border-gray-700'
-      } p-3 cursor-pointer transition-all hover:scale-[1.02]`}
-      onClick={props.onClick}>
+      } cursor-pointer transition-all hover:scale-[1.02]`}
+      onClick={props.onClick}
+    >
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <span class={`w-2 h-2 rounded-full ${
@@ -190,7 +199,7 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           </span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 

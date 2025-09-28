@@ -1,6 +1,8 @@
 import { Component, Show, createMemo } from 'solid-js';
 import type { PBSInstance } from '@/types/api';
 import { formatUptime, formatBytes } from '@/utils/format';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface PBSCardProps {
   instance: PBSInstance;
@@ -125,9 +127,13 @@ const PBSCard: Component<PBSCardProps> = (props) => {
   };
 
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 flex flex-col gap-1 w-[250px] ${getBorderClass()}`}>
+    <Card
+      padding="none"
+      border={false}
+      class={`shadow-md p-2 flex flex-col gap-1 w-[250px] ${getBorderClass()}`}
+    >
       {/* Header */}
-      <div class="flex justify-between items-center">
+      <div class="flex items-center justify-between">
         <h3 class="text-sm font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-2">
           <a 
             href={props.instance.host} 
@@ -254,7 +260,7 @@ const PBSCard: Component<PBSCardProps> = (props) => {
           </div>
         </Show>
       </Show>
-    </div>
+    </Card>
   );
 };
 
