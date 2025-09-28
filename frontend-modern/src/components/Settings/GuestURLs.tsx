@@ -281,6 +281,7 @@ export function GuestURLs(props: GuestURLsProps) {
                           const metadataKey = resolveMetadataKey(guestId, fallbackId);
                           const meta = guestMetadata()[metadataKey];
                           const url = meta?.customUrl;
+                          const hasUrl = Boolean(url && url.trim() !== '');
                           const urlError = urlErrors()[metadataKey];
                           
                           return (
@@ -327,32 +328,40 @@ export function GuestURLs(props: GuestURLsProps) {
                               </td>
                               <td class="p-1 px-2">
                                 <div class="flex items-center gap-2">
-                                  <Show when={url}>
-                                    <a
-                                      href={url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                      title="Test URL"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                      </svg>
-                                    </a>
-                                  </Show>
-                                  <Show when={meta?.customUrl}>
-                                    <button type="button"
-                                      onClick={() => clearGuestURL(metadataKey)}
-                                      class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                      title="Clear URL"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                          d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    </button>
-                                  </Show>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (hasUrl && url) {
+                                        window.open(url, '_blank', 'noopener,noreferrer');
+                                      }
+                                    }}
+                                    class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                                      hasUrl
+                                        ? 'text-blue-600 border-blue-500 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-400 dark:hover:bg-blue-900/30'
+                                        : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
+                                    }`}
+                                    disabled={!hasUrl}
+                                  >
+                                    <svg class={`w-3.5 h-3.5 ${hasUrl ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                    Test
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => clearGuestURL(metadataKey)}
+                                    class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                                      hasUrl
+                                        ? 'text-red-600 border-red-500 hover:bg-red-50 dark:text-red-400 dark:border-red-500 dark:hover:bg-red-900/30'
+                                        : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
+                                    }`}
+                                    disabled={!hasUrl}
+                                  >
+                                    <svg class={`w-3.5 h-3.5 ${hasUrl ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    Clear
+                                  </button>
                                 </div>
                               </td>
                             </tr>
