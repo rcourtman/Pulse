@@ -278,12 +278,13 @@ export function GuestURLs(props: GuestURLsProps) {
                         {(guest) => {
                           const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
                           const fallbackId = `${guest.node}-${guest.vmid}`;
-                          const metadataKey = resolveMetadataKey(guestId, fallbackId);
-                          const meta = guestMetadata()[metadataKey];
-                          const url = meta?.customUrl;
-                          const hasUrl = Boolean(url && url.trim() !== '');
-                          const urlError = urlErrors()[metadataKey];
-                          
+
+                          const metadataKey = () => resolveMetadataKey(guestId, fallbackId);
+                          const meta = () => guestMetadata()[metadataKey()];
+                          const url = () => meta()?.customUrl || '';
+                          const hasUrl = () => url().trim().length > 0;
+                          const urlError = () => urlErrors()[metadataKey()];
+
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                               <td class="p-1 px-2">
@@ -308,20 +309,20 @@ export function GuestURLs(props: GuestURLsProps) {
                                   <input
                                     type="text"
                                     placeholder="https://192.168.1.100:8006"
-                                    value={meta?.customUrl || ''}
-                                    onInput={(e) => updateGuestURL(metadataKey, e.currentTarget.value)}
+                                    value={url()}
+                                    onInput={(e) => updateGuestURL(metadataKey(), e.currentTarget.value)}
                                     class={`w-full min-w-[300px] px-2 py-1 text-sm border rounded
                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                            focus:ring-2 focus:border-transparent ${
-                                           urlError 
+                                           urlError() 
                                              ? 'border-red-500 dark:border-red-400 focus:ring-red-500' 
                                              : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
                                            }`}
                                     style="min-width: 300px;"
                                   />
-                                  <Show when={urlError}>
+                                  <Show when={urlError()}>
                                     <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                      {urlError}
+                                      {urlError()}
                                     </div>
                                   </Show>
                                 </div>
@@ -331,33 +332,33 @@ export function GuestURLs(props: GuestURLsProps) {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (hasUrl && url) {
-                                        window.open(url, '_blank', 'noopener,noreferrer');
+                                      if (hasUrl() && url()) {
+                                        window.open(url(), '_blank', 'noopener,noreferrer');
                                       }
                                     }}
                                     class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
-                                      hasUrl
+                                      hasUrl()
                                         ? 'text-blue-600 border-blue-500 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-400 dark:hover:bg-blue-900/30'
                                         : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
                                     }`}
-                                    disabled={!hasUrl}
+                                    disabled={!hasUrl()}
                                   >
-                                    <svg class={`w-3.5 h-3.5 ${hasUrl ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                     </svg>
                                     Test
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => clearGuestURL(metadataKey)}
+                                    onClick={() => clearGuestURL(metadataKey())}
                                     class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
-                                      hasUrl
+                                      hasUrl()
                                         ? 'text-red-600 border-red-500 hover:bg-red-50 dark:text-red-400 dark:border-red-500 dark:hover:bg-red-900/30'
                                         : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
                                     }`}
-                                    disabled={!hasUrl}
+                                    disabled={!hasUrl()}
                                   >
-                                    <svg class={`w-3.5 h-3.5 ${hasUrl ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                     Clear
