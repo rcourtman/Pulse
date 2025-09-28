@@ -504,11 +504,13 @@ journalctl -u pulse -f
 
 ### Quick Start - Hot Reload (Recommended)
 ```bash
-# Best development experience with instant frontend updates
-./scripts/hot-dev.sh
-# Frontend: http://localhost:5173 (hot reload)
-# Backend: http://localhost:7655
+# Launch Vite + Go with automatic frontend proxying
+make dev-hot
+# Frontend HMR: http://127.0.0.1:5173
+# Backend API:   http://127.0.0.1:7655 (served via the Go app)
 ```
+
+The backend now detects `FRONTEND_DEV_SERVER` and proxies requests straight to the Vite dev server. Edit files under `frontend-modern/src/` and the browser refreshes instantly—no manual rebuilds or service restarts required. Use `CTRL+C` to stop both processes.
 
 ### Production-like Development
 ```bash

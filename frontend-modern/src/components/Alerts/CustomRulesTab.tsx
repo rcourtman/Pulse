@@ -1,5 +1,8 @@
 import { For, Show } from 'solid-js';
 import type { CustomAlertRule } from '@/types/alerts';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { EmptyState } from '@/components/shared/EmptyState';
 
 interface CustomRulesTabProps {
   rules: CustomAlertRule[];
@@ -46,13 +49,15 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
   return (
     <div class="space-y-4">
       {/* Header */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <h3 class="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Custom Alert Rules</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Custom rules apply specific thresholds to guests matching filter conditions. 
-          Rules are evaluated in priority order (higher number = higher priority).
-        </p>
-      </div>
+      <Card padding="md">
+        <SectionHeader
+          title="Custom alert rules"
+          description="Custom rules apply specific thresholds to guests matching filter conditions. Rules are evaluated in priority order (higher number = higher priority)."
+          size="md"
+          titleClass="text-gray-800 dark:text-gray-200"
+          descriptionClass="text-sm text-gray-600 dark:text-gray-400"
+        />
+      </Card>
 
       {/* Priority Order Explanation */}
       <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -73,21 +78,23 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
 
       {/* Rules List */}
       <Show when={props.rules.length > 0} fallback={
-        <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-8 text-center">
-          <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            No custom alert rules defined yet. Create rules from the Dashboard by applying filters and clicking "Create Alert".
-          </p>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            )}
+            title="No custom alert rules"
+            description="Create rules from the Dashboard by applying filters and choosing Create Alert."
+          />
+        </Card>
       }>
         <div class="space-y-3">
           <For each={props.rules.sort((a, b) => b.priority - a.priority)}>
             {(rule) => (
-              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                <div class="p-4">
-                  <div class="flex items-start justify-between mb-3">
+              <Card padding="md" class="overflow-hidden">
+                <div class="flex items-start justify-between mb-3">
                     <div class="flex-1">
                       <div class="flex items-center gap-2 mb-1">
                         <h4 class="text-sm font-medium text-gray-800 dark:text-gray-200">{rule.name}</h4>
@@ -132,7 +139,7 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
                     </div>
                   </div>
 
-                  <div class="space-y-2">
+                <div class="space-y-2">
                     <div class="flex items-start gap-2">
                       <span class="text-xs font-medium text-gray-600 dark:text-gray-400 w-20">Filters:</span>
                       <div class="flex-1">
@@ -167,8 +174,7 @@ export function CustomRulesTab(props: CustomRulesTabProps) {
                       </div>
                     </Show>
                   </div>
-                </div>
-              </div>
+              </Card>
             )}
           </For>
         </div>

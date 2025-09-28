@@ -1,4 +1,5 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Card } from '@/components/shared/Card';
 import { formatBytes } from '@/utils/format';
 import { useWebSocket } from '@/App';
 import type { PhysicalDisk } from '@/types/api';
@@ -86,17 +87,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center text-gray-500">
-            No physical disks found
-            {props.selectedNode && ` for node ${props.selectedNode}`}
-            {props.searchTerm && ` matching "${props.searchTerm}"`}
-          </div>
-        </div>
+        <Card padding="lg" class="text-center text-gray-500">
+          No physical disks found
+          {props.selectedNode && ` for node ${props.selectedNode}`}
+          {props.searchTerm && ` matching "${props.searchTerm}"`}
+        </Card>
       </Show>
       
       <Show when={filteredDisks().length > 0}>
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <Card padding="none" class="overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full">
               <thead>
@@ -192,7 +191,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </Show>
     </div>
   );

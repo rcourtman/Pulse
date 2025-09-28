@@ -3,6 +3,8 @@ import { Portal } from 'solid-js/web';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodesAPI } from '@/api/nodes';
 import type { NodeConfig } from '@/types/nodes';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 
 interface DiscoveredServer {
   ip: string;
@@ -118,9 +120,11 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
             <div class="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-lg shadow-xl">
               {/* Header */}
               <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Add {props.servers.length} Discovered Servers
-                </h3>
+                <SectionHeader
+                  title={`Add ${props.servers.length} discovered servers`}
+                  size="md"
+                  class="flex-1"
+                />
                 <Show when={!isAdding()}>
                   <button type="button"
                     onClick={props.onClose}
@@ -195,8 +199,8 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                   {/* Token Auth Fields */}
                   <Show when={authType() === 'token'}>
                     <div class="space-y-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class={formField}>
+                        <label class={labelClass()}>
                           Token ID <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -205,15 +209,15 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           onInput={(e) => setTokenName(e.currentTarget.value)}
                           placeholder="user@realm!tokenname"
                           disabled={isAdding()}
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                          class={controlClass('font-mono')}
                         />
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <p class={`${formHelpText} mt-1`}>
                           Example: pulse-monitor@pam!pulse-token or pulse-monitor@pbs!pulse-token
                         </p>
                       </div>
                       
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class={formField}>
+                        <label class={labelClass()}>
                           Token Value <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -222,7 +226,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           onInput={(e) => setTokenValue(e.currentTarget.value)}
                           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                           disabled={isAdding()}
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                          class={controlClass('font-mono')}
                         />
                       </div>
                     </div>
@@ -231,8 +235,8 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                   {/* Password Auth Fields */}
                   <Show when={authType() === 'password'}>
                     <div class="space-y-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class={formField}>
+                        <label class={labelClass()}>
                           Username <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -241,12 +245,12 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           onInput={(e) => setUsername(e.currentTarget.value)}
                           placeholder="root@pam or admin@pbs"
                           disabled={isAdding()}
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          class={controlClass()}
                         />
                       </div>
                       
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class={formField}>
+                        <label class={labelClass()}>
                           Password <span class="text-red-500">*</span>
                         </label>
                         <input
@@ -255,7 +259,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           onInput={(e) => setPassword(e.currentTarget.value)}
                           placeholder="Password"
                           disabled={isAdding()}
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          class={controlClass()}
                         />
                       </div>
                     </div>

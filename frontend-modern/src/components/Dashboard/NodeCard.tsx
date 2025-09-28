@@ -4,6 +4,7 @@ import { formatUptime } from '@/utils/format';
 import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
+import { Card } from '@/components/shared/Card';
 
 interface NodeCardProps {
   node: Node;
@@ -15,9 +16,9 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   // Early return if node data is incomplete
   if (!props.node || !props.node.memory || !props.node.disk) {
     return (
-      <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-1 w-[180px]">
+      <Card padding="sm" class="flex w-[180px] flex-col gap-1">
         <div class="text-sm text-gray-500">Loading node data...</div>
-      </div>
+      </Card>
     );
   }
   
@@ -107,20 +108,20 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   const getBorderClass = () => {
     // Selected nodes get blue ring
     if (props.isSelected) {
-      return 'ring-2 ring-blue-500 border border-gray-200 dark:border-gray-700';
+      return 'ring-2 ring-blue-500 border-blue-200 dark:border-blue-500';
     }
     // Offline nodes get red ring
     if (!isOnline()) {
-      return 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700';
+      return 'ring-2 ring-red-500 border-red-200 dark:border-red-600';
     }
     // Alert nodes get colored ring based on severity
     if (alertStyles.hasAlert) {
       return alertStyles.severity === 'critical' 
-        ? 'ring-2 ring-red-500 border border-gray-200 dark:border-gray-700' 
-        : 'ring-2 ring-orange-500 border border-gray-200 dark:border-gray-700';
+        ? 'ring-2 ring-red-500 border-red-200 dark:border-red-600' 
+        : 'ring-2 ring-orange-500 border-orange-200 dark:border-orange-500';
     }
     // Normal nodes get standard border
-    return 'border border-gray-200 dark:border-gray-700';
+    return '';
   };
   
   // Get background class from alert styles but remove the border-l-4 part
@@ -131,7 +132,11 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   };
   
   return (
-    <div class={`bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 flex flex-col gap-2 w-[180px] ${getBorderClass()} ${getBackgroundClass()}`}>
+    <Card
+      padding="sm"
+      class={`flex w-[180px] flex-col gap-2 ${getBorderClass()} ${getBackgroundClass()}`.trim()}
+      hoverable
+    >
       {/* Header */}
       <div class="flex justify-between items-center">
         <h3 class="text-xs font-semibold truncate text-gray-800 dark:text-gray-200 flex items-center gap-1">
@@ -180,7 +185,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
         <span title={`Uptime: ${formatUptime(props.node.uptime)}`}>↑{formatUptime(props.node.uptime)}</span>
         <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
       </div>
-    </div>
+    </Card>
   );
 };
 

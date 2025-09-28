@@ -8,6 +8,9 @@ import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
 import { DiskList } from './DiskList';
+import { Card } from '@/components/shared/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 
 const Storage: Component = () => {
@@ -263,7 +266,7 @@ const Storage: Component = () => {
       
       {/* Show simple search for disks */}
       <Show when={tabView() === 'disks'}>
-        <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3">
+        <Card class="mb-3" padding="sm">
           <div class="relative">
             <input
               type="text"
@@ -279,64 +282,75 @@ const Storage: Component = () => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-        </div>
+        </Card>
       </Show>
       
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="animate-spin mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Loading storage data...</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400">Connecting to monitoring service</p>
-          </div>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <div class="mx-auto flex h-12 w-12 items-center justify-center">
+                <svg class="h-8 w-8 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+            )}
+            title="Loading storage data..."
+            description="Connecting to monitoring service"
+          />
+        </Card>
       </Show>
 
       {/* Helpful hint for no PVE nodes but still show content */}
       <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n) => n.type === 'pve').length === 0 && sortedStorage().length === 0 && searchTerm().trim() === ''}>
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-          <div class="text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage configured</h3>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">Add a Proxmox VE or PBS node in the Settings tab to start monitoring storage.</p>
-            <button type="button"
-              onClick={() => {
-                const settingsTab = document.querySelector('[role="tab"]:last-child') as HTMLElement;
-                settingsTab?.click();
-              }}
-              class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Go to Settings
-            </button>
-          </div>
-        </div>
+        <Card padding="lg">
+          <EmptyState
+            icon={(
+              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            title="No storage configured"
+            description="Add a Proxmox VE or PBS node in the Settings tab to start monitoring storage."
+            actions={(
+              <button
+                type="button"
+                onClick={() => {
+                  const settingsTab = document.querySelector('[role=\"tab\"]:last-child') as HTMLElement;
+                  settingsTab?.click();
+                }}
+                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Go to Settings
+              </button>
+            )}
+          />
+        </Card>
       </Show>
       
       {/* Conditional rendering based on tab */}
       <Show when={tabView() === 'pools'}>
         {/* No results found message for storage pools */}
         <Show when={connected() && initialDataReceived() && sortedStorage().length === 0 && searchTerm().trim() !== ''}>
-          <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
-            <div class="text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">No storage found</h3>
-              <p class="text-xs text-gray-600 dark:text-gray-400">No storage matches your search "{searchTerm()}"</p>
-            </div>
-          </div>
+          <Card padding="lg">
+            <EmptyState
+              icon={(
+                <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+              title="No storage found"
+              description={`No storage matches your search "${searchTerm()}"`}
+            />
+          </Card>
         </Show>
         
         {/* Storage Table - shows for both PVE and PBS storage */}
         <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
         <ComponentErrorBoundary name="Storage Table">
-          <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <Card padding="none" class="mb-4 overflow-hidden">
             <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
               <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
@@ -547,7 +561,7 @@ const Storage: Component = () => {
               </tbody>
             </table>
             </div>
-          </div>
+        </Card>
         </ComponentErrorBoundary>
         </Show>
       </Show>

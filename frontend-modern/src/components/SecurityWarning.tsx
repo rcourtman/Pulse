@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface SecurityStatus {
   hasAuthentication: boolean;
@@ -125,11 +126,12 @@ export const SecurityWarning: Component = () => {
               <span class="text-2xl">{getScoreEmoji(status()!.score, status()!.maxScore)}</span>
               <div>
                 <div class="flex items-center gap-3">
-                  <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Security Score: <span class={getScoreColor(status()!.score, status()!.maxScore)}>
-                      {status()!.score}/{status()!.maxScore}
-                    </span>
-                  </h3>
+                  <SectionHeader
+                    title={<span>Security score: <span class={getScoreColor(status()!.score, status()!.maxScore)}>{status()!.score}/{status()!.maxScore}</span></span>}
+                    size="sm"
+                    class="flex-1"
+                    titleClass="text-gray-900 dark:text-gray-100"
+                  />
                   <button type="button"
                     onClick={() => setShowDetails(!showDetails())}
                     class="text-sm text-blue-600 dark:text-blue-400 hover:underline"

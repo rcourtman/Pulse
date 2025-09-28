@@ -3,6 +3,11 @@ import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { CustomRulesTab } from '@/components/Alerts/CustomRulesTab';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { SettingsPanel } from '@/components/shared/SettingsPanel';
+import { Toggle } from '@/components/shared/Toggle';
+import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { AlertsAPI } from '@/api/alerts';
@@ -536,21 +541,20 @@ export function Alerts() {
   ];
   
   return (
-    <div class="space-y-4">
+    <div class="space-y-6">
       {/* Header with better styling */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div>
-          <h1 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Alert Configuration</h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Configure monitoring thresholds and notification settings
-          </p>
-        </div>
-      </div>
-      
+      <Card padding="md">
+        <SectionHeader
+          title="Alert configuration"
+          description="Configure monitoring thresholds and notification settings"
+          size="lg"
+        />
+      </Card>
+
       {/* Save notification bar - only show when there are unsaved changes */}
       <Show when={hasUnsavedChanges() && activeTab() !== 'overview' && activeTab() !== 'history'}>
-        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4">
-          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <Card tone="warning" padding="sm" class="border-yellow-200 dark:border-yellow-800 sm:p-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -559,9 +563,9 @@ export function Alerts() {
               </svg>
               <span class="text-sm font-medium">You have unsaved changes</span>
             </div>
-            <div class="flex gap-2 w-full sm:w-auto">
+            <div class="flex w-full gap-2 sm:w-auto">
               <button 
-                class="flex-1 sm:flex-initial px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700"
                 onClick={async () => {
                   try {
                     // Save alert configuration with hysteresis format
@@ -648,7 +652,7 @@ export function Alerts() {
                 Save Changes
               </button>
               <button 
-                class="flex-1 sm:flex-initial px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial"
                 onClick={() => {
                   // Reset any changes made
                   window.location.reload();
@@ -658,11 +662,11 @@ export function Alerts() {
               </button>
             </div>
           </div>
-        </div>
+        </Card>
       </Show>
       
       {/* Tab Navigation - modern style */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+      <Card padding="none">
         <div class="p-1">
           <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
             <For each={tabs}>
@@ -758,7 +762,7 @@ export function Alerts() {
             />
           </Show>
         </div>
-      </div>
+      </Card>
       
     </div>
   );
@@ -810,12 +814,12 @@ function OverviewTab(props: {
   return (
     <div class="space-y-6">
       {/* Stats Cards */}
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 shadow-sm">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Active Alerts</p>
-              <p class="text-xl sm:text-2xl font-semibold text-red-600 dark:text-red-400">{alertStats().active}</p>
+              <p class="text-xl sm:text-2xl font-semibold text-gray-600 dark:text-gray-300">{alertStats().active}</p>
             </div>
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
               <svg width="16" height="16" class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -824,9 +828,9 @@ function OverviewTab(props: {
               </svg>
             </div>
           </div>
-        </div>
+        </Card>
         
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 shadow-sm">
+        <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Acknowledged</p>
@@ -839,9 +843,9 @@ function OverviewTab(props: {
               </svg>
             </div>
           </div>
-        </div>
+        </Card>
         
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 shadow-sm">
+        <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Last 24 Hours</p>
@@ -854,9 +858,9 @@ function OverviewTab(props: {
               </svg>
             </div>
           </div>
-        </div>
+        </Card>
         
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 shadow-sm">
+        <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Guest Overrides</p>
@@ -869,14 +873,12 @@ function OverviewTab(props: {
               </svg>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
       
       {/* Recent Alerts */}
       <div>
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Active Alerts</h3>
-        </div>
+        <SectionHeader title="Active Alerts" class="mb-3" />
         <Show 
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
@@ -1147,32 +1149,25 @@ function DestinationsTab(props: DestinationsTabProps) {
   };
   
   return (
-    <div class="space-y-6">
-      {/* Email Configuration */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-              <polyline points="22,6 12,13 2,6"></polyline>
-            </svg>
-            Email Notifications
-          </h3>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={props.emailConfig().enabled}
-              onChange={(e) => {
-                props.setEmailConfig({...props.emailConfig(), enabled: e.currentTarget.checked});
-                props.setHasUnsavedChanges(true);
-              }}
-              class="sr-only peer" 
-            />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-        
-        <div class={`${!props.emailConfig().enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div class="grid w-full max-w-full gap-6 md:gap-8 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+      <SettingsPanel
+        title="Email notifications"
+        description="Configure SMTP delivery for alert emails."
+        action={
+          <Toggle
+            checked={props.emailConfig().enabled}
+            onChange={(e) => {
+              props.setEmailConfig({ ...props.emailConfig(), enabled: e.currentTarget.checked });
+              props.setHasUnsavedChanges(true);
+            }}
+            containerClass="sm:self-start"
+            label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{props.emailConfig().enabled ? 'Enabled' : 'Disabled'}</span>}
+          />
+        }
+        class="min-w-0"
+        bodyClass=""
+      >
+        <div class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}>
           <EmailProviderSelect
             config={props.emailConfig()}
             onChange={(config) => {
@@ -1183,25 +1178,24 @@ function DestinationsTab(props: DestinationsTabProps) {
             testing={testingEmail()}
           />
         </div>
-      </div>
-      
-      {/* Webhook Configuration */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
-        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-4">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"></path>
-            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"></path>
-          </svg>
-          Webhooks
-        </h3>
-        
+      </SettingsPanel>
+
+      <SettingsPanel
+        title="Webhooks"
+        description="Push alerts to chat apps or automation systems."
+        action={
+          <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+            {webhooks().length} configured
+          </span>
+        }
+        class="min-w-0"
+        bodyClass="space-y-4"
+      >
         <WebhookConfig
           webhooks={webhooks()}
           onAdd={async (webhook) => {
             try {
-              // Save to backend immediately (including service field)
               const created = await NotificationsAPI.createWebhook(webhook);
-              // Update local state with the created webhook
               setWebhooks([...webhooks(), created]);
               showSuccess('Webhook added successfully');
             } catch (err) {
@@ -1211,10 +1205,8 @@ function DestinationsTab(props: DestinationsTabProps) {
           }}
           onUpdate={async (webhook) => {
             try {
-              // Update on backend immediately (including service field)
               const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
-              // Update local state
-              setWebhooks(webhooks().map(w => 
+              setWebhooks(webhooks().map(w =>
                 w.id === webhook.id ? updated : w
               ));
               showSuccess('Webhook updated successfully');
@@ -1225,9 +1217,7 @@ function DestinationsTab(props: DestinationsTabProps) {
           }}
           onDelete={async (id) => {
             try {
-              // Delete from backend immediately
               await NotificationsAPI.deleteWebhook(id);
-              // Update local state
               setWebhooks(webhooks().filter(w => w.id !== id));
               showSuccess('Webhook deleted successfully');
             } catch (err) {
@@ -1238,7 +1228,7 @@ function DestinationsTab(props: DestinationsTabProps) {
           onTest={testWebhook}
           testing={testingWebhook()}
         />
-      </div>
+      </SettingsPanel>
     </div>
   );
 }
@@ -1327,447 +1317,405 @@ function ScheduleTab(props: ScheduleTabProps) {
     { id: 'sunday', label: 'S', fullLabel: 'Sunday' }
   ];
   
-  // No longer need ref logic since we're using parent state
-  
   return (
-    <div class="space-y-4">
-      {/* Header */}
-      <div class="mb-6">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Notification Schedule</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Control when and how alerts are delivered</p>
-      </div>
-      
-      {/* Quiet Hours */}
-      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 sm:p-6">
-        <div class="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Quiet Hours</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Pause non-critical alerts during specific times</p>
-            </div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
+    <div class="space-y-6">
+      <SectionHeader
+        label="Notification Schedule"
+        title="Control when alerts are allowed to fire and how they are grouped."
+      />
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        {/* Quiet Hours */}
+        <SettingsPanel
+          title="Quiet hours"
+          description="Pause non-critical alerts during specific times."
+          action={
+            <Toggle
               checked={quietHours().enabled}
               onChange={(e) => {
                 setQuietHours({ ...quietHours(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
-              class="sr-only peer"
+              containerClass="sm:self-start"
+              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{quietHours().enabled ? 'Enabled' : 'Disabled'}</span>}
             />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-        
-        <Show when={quietHours().enabled}>
-          <div class="space-y-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Time</label>
-                <input
-                  type="time"
-                  value={quietHours().start}
-                  onChange={(e) => {
-                    setQuietHours({ ...quietHours(), start: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+          }
+          class="space-y-4"
+        >
+          <Show when={quietHours().enabled}>
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Start time
+                  </label>
+                  <input
+                    type="time"
+                    value={quietHours().start}
+                    onChange={(e) => {
+                      setQuietHours({ ...quietHours(), start: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class={controlClass('font-mono')}
+                  />
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    End time
+                  </label>
+                  <input
+                    type="time"
+                    value={quietHours().end}
+                    onChange={(e) => {
+                      setQuietHours({ ...quietHours(), end: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class={controlClass('font-mono')}
+                  />
+                </div>
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Timezone
+                  </label>
+                  <select
+                    value={quietHours().timezone}
+                    onChange={(e) => {
+                      setQuietHours({ ...quietHours(), timezone: e.currentTarget.value });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class={controlClass('pr-8')}
+                  >
+                    <For each={timezones}>
+                      {(tz) => <option value={tz}>{tz}</option>}
+                    </For>
+                  </select>
+                </div>
               </div>
+
               <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Time</label>
-                <input
-                  type="time"
-                  value={quietHours().end}
-                  onChange={(e) => {
-                    setQuietHours({ ...quietHours(), end: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Timezone</label>
-                <select
-                  value={quietHours().timezone}
-                  onChange={(e) => {
-                    setQuietHours({ ...quietHours(), timezone: e.currentTarget.value });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <For each={timezones}>
-                    {(tz) => <option value={tz}>{tz}</option>}
+                <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} mb-2 block`}>
+                  Quiet days
+                </span>
+                <div class="grid grid-cols-7 gap-1">
+                  <For each={days}>
+                    {(day) => (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentDays = quietHours().days;
+                          setQuietHours({
+                            ...quietHours(),
+                            days: { ...currentDays, [day.id]: !currentDays[day.id] }
+                          });
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        title={day.fullLabel}
+                        class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${
+                          quietHours().days[day.id]
+                            ? 'rounded-md bg-blue-500 text-white shadow-sm'
+                            : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    )}
                   </For>
-                </select>
+                </div>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  <Show when={quietHours().days.monday && quietHours().days.tuesday && quietHours().days.wednesday && quietHours().days.thursday && quietHours().days.friday && !quietHours().days.saturday && !quietHours().days.sunday}>
+                    Weekdays only
+                  </Show>
+                  <Show when={!quietHours().days.monday && !quietHours().days.tuesday && !quietHours().days.wednesday && !quietHours().days.thursday && !quietHours().days.friday && quietHours().days.saturday && quietHours().days.sunday}>
+                    Weekends only
+                  </Show>
+                </p>
               </div>
             </div>
-            
-            <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Quiet Days</label>
-              <div class="grid grid-cols-7 gap-1">
-                <For each={days}>
-                  {(day) => (
-                    <button type="button"
-                      onClick={() => {
-                        const currentDays = quietHours().days;
-                        setQuietHours({
-                          ...quietHours(),
-                          days: { ...currentDays, [day.id]: !currentDays[day.id] }
-                        });
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      title={day.fullLabel}
-                      class={`px-2 py-2 text-xs rounded-lg transition-all duration-200 font-medium ${
-                        quietHours().days[day.id]
-                          ? 'bg-blue-500 text-white shadow-sm'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {day.label}
-                    </button>
-                  )}
-                </For>
-              </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                <Show when={quietHours().days.monday && quietHours().days.tuesday && quietHours().days.wednesday && quietHours().days.thursday && quietHours().days.friday && !quietHours().days.saturday && !quietHours().days.sunday}>
-                  Weekdays only
-                </Show>
-                <Show when={!quietHours().days.monday && !quietHours().days.tuesday && !quietHours().days.wednesday && !quietHours().days.thursday && !quietHours().days.friday && quietHours().days.saturday && quietHours().days.sunday}>
-                  Weekends only
-                </Show>
-              </p>
-            </div>
-          </div>
-        </Show>
-      </div>
-      
-      {/* Cooldown Period */}
-      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 sm:p-6">
-        <div class="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Alert Cooldown</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Limit alert frequency to prevent spam</p>
-            </div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
+          </Show>
+        </SettingsPanel>
+
+        {/* Cooldown Period */}
+        <SettingsPanel
+          title="Alert cooldown"
+          description="Limit alert frequency to prevent spam."
+          action={
+            <Toggle
               checked={cooldown().enabled}
               onChange={(e) => {
                 setCooldown({ ...cooldown(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
-              class="sr-only peer"
+              containerClass="sm:self-start"
+              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{cooldown().enabled ? 'Enabled' : 'Disabled'}</span>}
             />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-        
-        <Show when={cooldown().enabled}>
-          <div class="space-y-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Cooldown Period
-                </label>
-                <div class="relative">
-                  <input
-                    type="number"
-                    min="5"
-                    max="120"
-                    value={cooldown().minutes}
-                    onChange={(e) => {
-                      setCooldown({ ...cooldown(), minutes: parseInt(e.currentTarget.value) });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">minutes</span>
+          }
+          class="space-y-4"
+        >
+          <Show when={cooldown().enabled}>
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Cooldown period
+                  </label>
+                  <div class="relative">
+                    <input
+                      type="number"
+                      min="5"
+                      max="120"
+                      value={cooldown().minutes}
+                      onChange={(e) => {
+                        setCooldown({ ...cooldown(), minutes: parseInt(e.currentTarget.value) });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class={controlClass('pr-16')}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">minutes</span>
+                  </div>
+                  <p class={`${formHelpText} mt-1`}>Minimum time between alerts for the same issue</p>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Minimum time between alerts for the same issue
-                </p>
-              </div>
-              
-              <div>
-                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Max Alerts/Hour
-                </label>
-                <div class="relative">
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={cooldown().maxAlerts}
-                    onChange={(e) => {
-                      setCooldown({ ...cooldown(), maxAlerts: parseInt(e.currentTarget.value) });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-full px-3 py-2 pr-16 text-sm border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">alerts</span>
+                
+                <div class={formField}>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                    Max alerts / hour
+                  </label>
+                  <div class="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={cooldown().maxAlerts}
+                      onChange={(e) => {
+                        setCooldown({ ...cooldown(), maxAlerts: parseInt(e.currentTarget.value) });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class={controlClass('pr-16')}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">alerts</span>
+                  </div>
+                  <p class={`${formHelpText} mt-1`}>Per guest/metric combination</p>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Per guest/metric combination
-                </p>
               </div>
             </div>
-          </div>
-        </Show>
-      </div>
-      
-      {/* Alert Grouping */}
-      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 sm:p-6">
-        <div class="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Smart Grouping</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Bundle similar alerts together</p>
-            </div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
+          </Show>
+        </SettingsPanel>
+
+        {/* Alert Grouping */}
+        <SettingsPanel
+          title="Smart grouping"
+          description="Bundle similar alerts together."
+          action={
+            <Toggle
               checked={grouping().enabled}
               onChange={(e) => {
                 setGrouping({ ...grouping(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
-              class="sr-only peer"
+              containerClass="sm:self-start"
+              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{grouping().enabled ? 'Enabled' : 'Disabled'}</span>}
             />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-        
-        <Show when={grouping().enabled}>
-          <div class="space-y-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Grouping Window
-              </label>
-              <div class="flex items-center gap-3">
-                <input
-                  type="range"
-                  min="1"
-                  max="30"
-                  value={grouping().window}
-                  onChange={(e) => {
-                    setGrouping({ ...grouping(), window: parseInt(e.currentTarget.value) });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  class="flex-1"
-                />
-                <div class="w-16 px-2 py-1 text-sm text-center bg-gray-100 dark:bg-gray-600 rounded">
-                  {grouping().window} min
-                </div>
-              </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Alerts within this window will be grouped together
-              </p>
-            </div>
-            
-            <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Grouping Strategy</label>
-              <div class="grid grid-cols-2 gap-2">
-                <label class={`relative flex items-center p-3 rounded-lg cursor-pointer border-2 transition-all ${
-                  grouping().byNode
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}>
+          }
+          class="space-y-4"
+        >
+          <Show when={grouping().enabled}>
+            <div class="space-y-4">
+              <div class={formField}>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  Grouping window
+                </label>
+                <div class="flex items-center gap-3">
                   <input
-                    type="checkbox"
-                    checked={grouping().byNode}
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={grouping().window}
                     onChange={(e) => {
-                      setGrouping({ ...grouping(), byNode: e.currentTarget.checked });
+                      setGrouping({ ...grouping(), window: parseInt(e.currentTarget.value) });
                       props.setHasUnsavedChanges(true);
                     }}
-                    class="sr-only"
+                    class="flex-1"
                   />
-                  <div class="flex items-center gap-2">
-                    <div class={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                  <div class="w-16 rounded-md bg-gray-100 px-2 py-1 text-center text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                    {grouping().window} min
+                  </div>
+                </div>
+                <p class={`${formHelpText} mt-1`}>Alerts within this window are grouped together.</p>
+              </div>
+
+              <div>
+                <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} mb-2 block`}>
+                  Grouping strategy
+                </span>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
+                    grouping().byNode
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={grouping().byNode}
+                      onChange={(e) => {
+                        setGrouping({ ...grouping(), byNode: e.currentTarget.checked });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="sr-only"
+                    />
+                    <div class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
                       grouping().byNode
                         ? 'border-blue-500 bg-blue-500'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}>
                       <Show when={grouping().byNode}>
-                        <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </Show>
                     </div>
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">By Node</span>
-                  </div>
-                </label>
-                <label class={`relative flex items-center p-3 rounded-lg cursor-pointer border-2 transition-all ${
-                  grouping().byGuest
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={grouping().byGuest}
-                    onChange={(e) => {
-                      setGrouping({ ...grouping(), byGuest: e.currentTarget.checked });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="sr-only"
-                  />
-                  <div class="flex items-center gap-2">
-                    <div class={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                  </label>
+
+                  <label class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
+                    grouping().byGuest
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={grouping().byGuest}
+                      onChange={(e) => {
+                        setGrouping({ ...grouping(), byGuest: e.currentTarget.checked });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="sr-only"
+                    />
+                    <div class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
                       grouping().byGuest
                         ? 'border-blue-500 bg-blue-500'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}>
                       <Show when={grouping().byGuest}>
-                        <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </Show>
                     </div>
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">By Guest</span>
-                  </div>
-                </label>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-        </Show>
-      </div>
-      
-      {/* Escalation Rules */}
-      <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 sm:p-6">
-        <div class="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 bg-red-100 dark:bg-red-900/50 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">Alert Escalation</h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Notify additional contacts for persistent issues</p>
-            </div>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
+          </Show>
+        </SettingsPanel>
+
+        {/* Escalation Rules */}
+        <SettingsPanel
+          title="Alert escalation"
+          description="Notify additional contacts for persistent issues."
+          action={
+            <Toggle
               checked={escalation().enabled}
               onChange={(e) => {
                 setEscalation({ ...escalation(), enabled: e.currentTarget.checked });
                 props.setHasUnsavedChanges(true);
               }}
-              class="sr-only peer"
+              containerClass="sm:self-start"
+              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{escalation().enabled ? 'Enabled' : 'Disabled'}</span>}
             />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-        
-        <Show when={escalation().enabled}>
-          <div class="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Define escalation levels for unresolved alerts:</p>
-            <For each={escalation().levels}>
-              {(level, index) => (
-                <div class="flex items-center gap-2 p-3 bg-white dark:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-500">
-                  <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">After</span>
-                      <input
-                        type="number"
-                        min="5"
-                        max="180"
-                        value={level.after}
-                        onChange={(e) => {
-                          const newLevels = [...escalation().levels];
-                          newLevels[index()] = { ...level, after: parseInt(e.currentTarget.value) };
-                          setEscalation({ ...escalation(), levels: newLevels });
-                          props.setHasUnsavedChanges(true);
-                        }}
-                        class="w-16 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <span class="text-xs text-gray-600 dark:text-gray-400">min</span>
+          }
+          class="space-y-4"
+        >
+          <Show when={escalation().enabled}>
+            <div class="space-y-3">
+              <p class={formHelpText}>Define escalation levels for unresolved alerts:</p>
+              <For each={escalation().levels}>
+                {(level, index) => (
+                  <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/40">
+                    <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">After</span>
+                        <input
+                          type="number"
+                          min="5"
+                          max="180"
+                          value={level.after}
+                          onChange={(e) => {
+                            const newLevels = [...escalation().levels];
+                            newLevels[index()] = { ...level, after: parseInt(e.currentTarget.value) };
+                            setEscalation({ ...escalation(), levels: newLevels });
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class={`${controlClass('px-2 py-1 text-sm')} w-20`}
+                        />
+                        <span class="text-xs text-gray-600 dark:text-gray-400">min</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Notify</span>
+                        <select
+                          value={level.notify}
+                          onChange={(e) => {
+                            const newLevels = [...escalation().levels];
+                            newLevels[index()] = { ...level, notify: e.currentTarget.value };
+                            setEscalation({ ...escalation(), levels: newLevels });
+                            props.setHasUnsavedChanges(true);
+                          }}
+                          class={`${controlClass('px-2 py-1 text-sm')} flex-1`}
+                        >
+                          <option value="email">Email</option>
+                          <option value="webhook">Webhooks</option>
+                          <option value="all">All Channels</option>
+                        </select>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">notify</span>
-                      <select
-                        value={level.notify}
-                        onChange={(e) => {
-                          const newLevels = [...escalation().levels];
-                          newLevels[index()] = { ...level, notify: e.currentTarget.value };
-                          setEscalation({ ...escalation(), levels: newLevels });
-                          props.setHasUnsavedChanges(true);
-                        }}
-                        class="flex-1 px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="email">Email</option>
-                        <option value="webhook">Webhooks</option>
-                        <option value="all">All Channels</option>
-                      </select>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newLevels = escalation().levels.filter((_, i) => i !== index());
+                        setEscalation({ ...escalation(), levels: newLevels });
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+                      title="Remove escalation level"
+                    >
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-                  <button type="button"
-                    onClick={() => {
-                      const newLevels = escalation().levels.filter((_, i) => i !== index());
-                      setEscalation({ ...escalation(), levels: newLevels });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                    title="Remove escalation level"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </For>
-            
-            <button type="button"
-              onClick={() => {
-                const lastLevel = escalation().levels[escalation().levels.length - 1];
-                const newAfter = lastLevel ? lastLevel.after + 30 : 15;
-                setEscalation({
-                  ...escalation(),
-                  levels: [...escalation().levels, { after: newAfter, notify: 'all' }]
-                });
-                props.setHasUnsavedChanges(true);
-              }}
-              class="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add Escalation Level
-            </button>
-          </div>
-        </Show>
-      </div>
-      
-      {/* Configuration Summary */}
-      <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-        <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Current Configuration Summary
-        </h3>
-        <div class="space-y-1 text-xs text-blue-800 dark:text-blue-300">
+                )}
+              </For>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const lastLevel = escalation().levels[escalation().levels.length - 1];
+                  const newAfter = lastLevel ? lastLevel.after + 30 : 15;
+                  setEscalation({
+                    ...escalation(),
+                    levels: [...escalation().levels, { after: newAfter, notify: 'all' }]
+                  });
+                  props.setHasUnsavedChanges(true);
+                }}
+                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add Escalation Level
+              </button>
+            </div>
+          </Show>
+        </SettingsPanel>
+
+        {/* Configuration Summary */}
+        <SettingsPanel
+          title="Configuration summary"
+          description="Preview of the active schedule settings."
+          tone="muted"
+          padding="lg"
+          bodyClass="space-y-1 text-sm text-blue-800 dark:text-blue-300"
+          class="lg:col-span-2"
+        >
           <Show when={quietHours().enabled}>
             <p>• Quiet hours active from {quietHours().start} to {quietHours().end} ({quietHours().timezone})</p>
           </Show>
@@ -1775,7 +1723,8 @@ function ScheduleTab(props: ScheduleTabProps) {
             <p>• {cooldown().minutes} minute cooldown between alerts, max {cooldown().maxAlerts} alerts per hour</p>
           </Show>
           <Show when={grouping().enabled}>
-            <p>• Grouping alerts within {grouping().window} minute windows
+            <p>
+              • Grouping alerts within {grouping().window} minute windows
               <Show when={grouping().byNode || grouping().byGuest}>
                 {' '}by {[grouping().byNode && 'node', grouping().byGuest && 'guest'].filter(Boolean).join(' and ')}
               </Show>
@@ -1787,12 +1736,11 @@ function ScheduleTab(props: ScheduleTabProps) {
           <Show when={!quietHours().enabled && !cooldown().enabled && !grouping().enabled && !escalation().enabled}>
             <p>• All notification controls are disabled - alerts will be sent immediately</p>
           </Show>
-        </div>
+        </SettingsPanel>
       </div>
     </div>
   );
 }
-
 // History Tab - Comprehensive alert table
 function HistoryTab() {
   const { state, activeAlerts } = useWebSocket();
@@ -2074,12 +2022,15 @@ function HistoryTab() {
   return (
     <div class="space-y-4">
       {/* Alert Trends Mini-Chart */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Alert Frequency 
-            <span class="text-xs text-gray-400 ml-2">({alertData().length} alerts)</span>
-          </h3>
+      <Card padding="md">
+        <div class="mb-3 flex items-start justify-between gap-3">
+          <SectionHeader
+            label="Trends"
+            title="Alert frequency"
+            description={<span class="text-xs text-gray-500 dark:text-gray-400">{alertData().length} alerts</span>}
+            size="sm"
+            class="flex-1"
+          />
           <div class="flex items-center gap-2">
             <Show when={selectedBarIndex() !== null}>
               <button type="button"
@@ -2162,7 +2113,7 @@ function HistoryTab() {
           <span>{timeFilter() === '24h' ? '24h ago' : timeFilter() === '7d' ? '7d ago' : timeFilter() === '30d' ? '30d ago' : '90d ago'}</span>
           <span>Now</span>
         </div>
-      </div>
+      </Card>
       
       {/* Filters */}
       <div class="flex flex-wrap gap-2 mb-4">

@@ -1,6 +1,8 @@
 import { createSignal, createMemo, Show, onMount, onCleanup } from 'solid-js';
 import type { VM, Container, Node, Alert, Storage, PBSInstance } from '@/types/api';
 import { ResourceTable } from './ResourceTable';
+import { Card } from '@/components/shared/Card';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface Override {
   id: string;
@@ -605,14 +607,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   return (
     <div class="space-y-6">
       {/* Global Settings Section */}
-      <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+      <Card padding="none">
         <div class="p-4">
-          <div>
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Global Default Thresholds</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Default thresholds that apply to all resources unless overridden
-            </p>
-          </div>
+          <SectionHeader
+            title="Global default thresholds"
+            description="Default thresholds that apply to all resources unless overridden"
+            size="md"
+          />
         </div>
         
         <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
@@ -930,7 +931,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             </div>
           </div>
         </div>
-      </div>
+      </Card>
       
       {/* Search Bar */}
       <div class="relative">

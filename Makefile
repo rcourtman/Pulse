@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean
+.PHONY: build run dev frontend backend all clean dev-hot
 
 # Build everything
 all: frontend backend
@@ -31,6 +31,9 @@ run: build
 # Development - rebuild everything and restart service
 dev: frontend backend
 	sudo systemctl restart pulse-backend
+
+dev-hot:
+	./scripts/dev-hot.sh
 
 # Clean build artifacts
 clean:
