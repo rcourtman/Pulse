@@ -4,6 +4,7 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
+import { Card } from '@/components/shared/Card';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -102,7 +103,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   // This prevents the table from disappearing on refresh while data loads
 
   return (
-    <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <Card padding="none" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full min-w-[600px] border-collapse">
           <thead>
@@ -309,6 +310,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 };

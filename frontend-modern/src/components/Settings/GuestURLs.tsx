@@ -4,6 +4,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import type { VM, Container } from '@/types/api';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 
 interface GuestURLsProps {
@@ -185,12 +186,11 @@ export function GuestURLs(props: GuestURLsProps) {
   return (
     <div class="space-y-6">
       {/* Header */}
-      <div>
-        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Guest URL Management</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Configure custom URLs for accessing guest web interfaces. These URLs will be clickable from the dashboard.
-        </p>
-      </div>
+      <SectionHeader
+        title="Guest URL management"
+        description="Configure custom URLs for accessing guest web interfaces. These URLs appear as shortcuts from the dashboard."
+        size="md"
+      />
 
       {/* Search */}
       <div class="relative">

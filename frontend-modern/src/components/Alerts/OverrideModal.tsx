@@ -1,6 +1,7 @@
 import { createSignal, Show, For, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface Override {
   id?: string;  // Full guest ID (e.g. "Main-node1-105")
@@ -154,9 +155,11 @@ export function OverrideModal(props: OverrideModalProps) {
           <div class="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                {props.existingOverride ? 'Edit Guest Override' : 'Add Guest Override'}
-              </h2>
+              <SectionHeader
+                title={props.existingOverride ? 'Edit guest override' : 'Add guest override'}
+                size="md"
+                titleClass="text-gray-800 dark:text-gray-200"
+              />
             </div>
             
             {/* Content */}
@@ -210,9 +213,11 @@ export function OverrideModal(props: OverrideModalProps) {
               
               {/* Threshold Overrides */}
               <div class={`space-y-4 ${alertsDisabled() ? 'opacity-50 pointer-events-none' : ''}`}>
-                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Threshold Overrides
-                </h3>
+                <SectionHeader
+                  title="Threshold overrides"
+                  size="sm"
+                  titleClass="text-gray-700 dark:text-gray-300"
+                />
                 
                 {/* CPU */}
                 <div class="flex items-start gap-3">

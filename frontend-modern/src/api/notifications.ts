@@ -107,7 +107,8 @@ export class NotificationsAPI {
 
   // Webhook management
   static async getWebhooks(): Promise<Webhook[]> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks`);
+    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
+    return Array.isArray(data) ? data : [];
   }
 
   static async createWebhook(webhook: Omit<Webhook, 'id'>): Promise<Webhook> {

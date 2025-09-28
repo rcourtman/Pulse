@@ -347,6 +347,17 @@ export function createWebSocketStore(url: string) {
           } else if (message.type === 'discovery_update') {
             // Discovery scan completed with new results
             eventBus.emit('discovery_updated', message.data);
+          } else if (message.type === 'discovery_started') {
+            eventBus.emit('discovery_status', {
+              scanning: true,
+              subnet: message.data?.subnet,
+              timestamp: message.data?.timestamp
+            });
+          } else if (message.type === 'discovery_complete') {
+            eventBus.emit('discovery_status', {
+              scanning: false,
+              timestamp: message.data?.timestamp
+            });
           } else if (message.type === 'settingsUpdate') {
             // Settings have been updated (e.g., theme change)
             if (message.data?.theme) {

@@ -185,6 +185,10 @@ func (n *NotificationManager) GetWebhooks() []WebhookConfig {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	
+	if len(n.webhooks) == 0 {
+		return []WebhookConfig{}
+	}
+
 	webhooks := make([]WebhookConfig, len(n.webhooks))
 	copy(webhooks, n.webhooks)
 	return webhooks

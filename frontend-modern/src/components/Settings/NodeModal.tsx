@@ -5,6 +5,8 @@ import type { SecurityStatus } from '@/types/config';
 import { copyToClipboard } from '@/utils/clipboard';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodesAPI } from '@/api/nodes';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { formField, formHelpText, controlClass, labelClass, formCheckbox } from '@/components/shared/Form';
 
 interface NodeModalProps {
   isOpen: boolean;
@@ -298,9 +300,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
               <form onSubmit={handleSubmit}>
                 {/* Header */}
                 <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    {props.editingNode ? 'Edit' : 'Add'} {props.nodeType === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server'} Node
-                  </h3>
+                  <SectionHeader
+                    title={`${props.editingNode ? 'Edit' : 'Add'} ${props.nodeType === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server'} node`}
+                    size="md"
+                    class="flex-1"
+                  />
                   <button type="button"
                     onClick={props.onClose}
                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
@@ -316,35 +320,40 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 <div class="p-6 space-y-6">
                   {/* Basic Information */}
                   <div>
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Basic Information</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Node Name <span class="text-gray-400">(optional)</span>
+                    <SectionHeader
+                      title="Basic information"
+                      size="sm"
+                      class="mb-4"
+                      titleClass="text-gray-900 dark:text-gray-100"
+                    />
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div class={formField}>
+                        <label class={labelClass('flex items-center gap-2')}>
+                          Node Name <span class="text-xs text-gray-500">(optional)</span>
                         </label>
                         <input
                           type="text"
                           value={formData().name}
                           onInput={(e) => updateField('name', e.currentTarget.value)}
                           placeholder="Will auto-detect from hostname"
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          class={controlClass()}
                         />
                       </div>
                       
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class={formField}>
+                        <label class={labelClass('flex items-center gap-1')}>
                           Host URL <span class="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={formData().host}
                           onInput={(e) => updateField('host', e.currentTarget.value)}
-                          placeholder={props.nodeType === 'pve' ? "https://proxmox.example.com:8006" : "https://backup.example.com:8007"}
+                          placeholder={props.nodeType === 'pve' ? 'https://proxmox.example.com:8006' : 'https://backup.example.com:8007'}
                           required
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          class={controlClass()}
                         />
                         <Show when={props.nodeType === 'pbs'}>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">PBS requires HTTPS (not HTTP). Default port is 8007</p>
+                          <p class={formHelpText}>PBS requires HTTPS (not HTTP). Default port is 8007.</p>
                         </Show>
                       </div>
                     </div>
@@ -352,7 +361,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   
                   {/* Authentication */}
                   <div>
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Authentication</h4>
+                    <SectionHeader
+                      title="Authentication"
+                      size="sm"
+                      class="mb-4"
+                      titleClass="text-gray-900 dark:text-gray-100"
+                    />
                     
                     {/* Auth Type Selector */}
                     <div class="mb-4">
@@ -384,27 +398,30 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     
                     {/* Password Auth Fields */}
                     <Show when={formData().authType === 'password'}>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class={formField}>
+                          <label class={labelClass()}>
                             Username <span class="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={formData().user}
                             onInput={(e) => updateField('user', e.currentTarget.value)}
-                            placeholder={props.nodeType === 'pve' ? "root@pam" : "admin@pbs"}
+                            placeholder={props.nodeType === 'pve' ? 'root@pam' : 'admin@pbs'}
                             required={formData().authType === 'password'}
-                            class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            class={controlClass()}
                           />
                           <Show when={props.nodeType === 'pbs'}>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Must include realm (e.g., admin@pbs)</p>
+                            <p class={formHelpText}>Must include realm (e.g., admin@pbs).</p>
                           </Show>
                         </div>
                         
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Password {!props.editingNode && <span class="text-red-500">*</span>}
+                        <div class={formField}>
+                          <label class={labelClass('flex items-center gap-2')}>
+                            Password
+                            <Show when={!props.editingNode}>
+                              <span class="text-red-500">*</span>
+                            </Show>
                           </label>
                           <input
                             type="password"
@@ -412,7 +429,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             onInput={(e) => updateField('password', e.currentTarget.value)}
                             placeholder={props.editingNode ? 'Leave blank to keep existing' : 'Password'}
                             required={formData().authType === 'password' && !props.editingNode}
-                            class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            class={controlClass()}
                           />
                         </div>
                       </div>
@@ -466,7 +483,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       type="checkbox"
                                       checked={formData().enableBackupManagement}
                                       onChange={(e) => setFormData({ ...formData(), enableBackupManagement: e.currentTarget.checked })}
-                                      class="rounded border-gray-300 dark:border-gray-600"
+                                      class={formCheckbox}
                                     />
                                     <span class="text-gray-700 dark:text-gray-300">
                                       Enable storage permissions for backup visibility
@@ -1103,9 +1120,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         </div>
                         
                         {/* Token Input Fields */}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <div class={formField}>
+                            <label class={labelClass()}>
                               Token ID <span class="text-red-500">*</span>
                             </label>
                             <input
@@ -1114,14 +1131,17 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onInput={(e) => updateField('tokenName', e.currentTarget.value)}
                               placeholder={props.nodeType === 'pve' ? 'pulse-monitor@pam!pulse-token' : 'pulse-monitor@pbs!pulse-token'}
                               required={formData().authType === 'token'}
-                              class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                              class={controlClass('font-mono')}
                             />
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Full token ID from Proxmox (user@realm!tokenname)</p>
+                            <p class={formHelpText}>Full token ID from Proxmox (user@realm!tokenname).</p>
                           </div>
                           
-                          <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Token Value {!props.editingNode && <span class="text-red-500">*</span>}
+                          <div class={formField}>
+                            <label class={labelClass('flex items-center gap-2')}>
+                              Token Value
+                              <Show when={!props.editingNode}>
+                                <span class="text-red-500">*</span>
+                              </Show>
                             </label>
                             <input
                               type="password"
@@ -1129,9 +1149,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onInput={(e) => updateField('tokenValue', e.currentTarget.value)}
                               placeholder={props.editingNode ? 'Leave blank to keep existing' : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
                               required={formData().authType === 'token' && !props.editingNode}
-                              class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                              class={controlClass('font-mono')}
                             />
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">The secret value shown when creating the token</p>
+                            <p class={formHelpText}>The secret value shown when creating the token.</p>
                           </div>
                         </div>
                       </div>
@@ -1140,125 +1160,133 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   
                   {/* SSL Settings */}
                   <div>
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">SSL Settings</h4>
+                    <SectionHeader
+                      title="SSL settings"
+                      size="sm"
+                      class="mb-4"
+                      titleClass="text-gray-900 dark:text-gray-100"
+                    />
                     <div class="space-y-3">
-                      <div class="flex items-center">
+                      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                         <input
                           type="checkbox"
-                          id="verifySSL"
                           checked={formData().verifySSL}
                           onChange={(e) => updateField('verifySSL', e.currentTarget.checked)}
-                          class="mr-2"
+                          class={formCheckbox}
                         />
-                        <label for="verifySSL" class="text-sm text-gray-700 dark:text-gray-300">
-                          Verify SSL Certificate
-                        </label>
-                      </div>
+                        Verify SSL certificate
+                      </label>
                       
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          SSL Fingerprint (Optional)
+                      <div class={formField}>
+                        <label class={labelClass()}>
+                          SSL Fingerprint (optional)
                         </label>
                         <input
                           type="text"
                           value={formData().fingerprint}
                           onInput={(e) => updateField('fingerprint', e.currentTarget.value)}
                           placeholder="AA:BB:CC:DD:EE:FF:..."
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                          class={controlClass('font-mono')}
                         />
+                        <p class={formHelpText}>Useful when connecting to servers with self-signed certificates.</p>
                       </div>
                     </div>
                   </div>
                   
                   {/* Monitoring Options */}
                   <div>
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Monitoring Options</h4>
+                    <SectionHeader
+                      title="Monitoring options"
+                      size="sm"
+                      class="mb-4"
+                      titleClass="text-gray-900 dark:text-gray-100"
+                    />
                     <div class="space-y-2">
                       {props.nodeType === 'pve' ? (
                         <>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorVMs}
                               onChange={(e) => updateField('monitorVMs', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Virtual Machines</span>
+                            <span>Monitor Virtual Machines</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorContainers}
                               onChange={(e) => updateField('monitorContainers', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Containers</span>
+                            <span>Monitor Containers</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorStorage}
                               onChange={(e) => updateField('monitorStorage', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Storage</span>
+                            <span>Monitor Storage</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorBackups}
                               onChange={(e) => updateField('monitorBackups', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Backups</span>
+                            <span>Monitor Backups</span>
                           </label>
                         </>
                       ) : (
                         <>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorDatastores}
                               onChange={(e) => updateField('monitorDatastores', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Datastores</span>
+                            <span>Monitor Datastores</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorSyncJobs}
                               onChange={(e) => updateField('monitorSyncJobs', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Sync Jobs</span>
+                            <span>Monitor Sync Jobs</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorVerifyJobs}
                               onChange={(e) => updateField('monitorVerifyJobs', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Verify Jobs</span>
+                            <span>Monitor Verify Jobs</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorPruneJobs}
                               onChange={(e) => updateField('monitorPruneJobs', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Prune Jobs</span>
+                            <span>Monitor Prune Jobs</span>
                           </label>
-                          <label class="flex items-center">
+                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <input
                               type="checkbox"
                               checked={formData().monitorGarbageJobs}
                               onChange={(e) => updateField('monitorGarbageJobs', e.currentTarget.checked)}
-                              class="mr-2"
+                              class={formCheckbox}
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Monitor Garbage Collection Jobs</span>
+                            <span>Monitor Garbage Collection Jobs</span>
                           </label>
                         </>
                       )}

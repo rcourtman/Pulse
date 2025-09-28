@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Card } from '@/components/shared/Card';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
 interface BackupsFilterProps {
@@ -16,7 +17,7 @@ interface BackupsFilterProps {
 
 export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
   return (
-    <div class="backups-filter mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3">
+    <Card class="backups-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
         {/* Search Bar */}
         <div class="flex gap-2 flex-1">
@@ -212,6 +213,6 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
           </Show>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };

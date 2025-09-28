@@ -1,6 +1,7 @@
 import { Component, Show, createSignal, For, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { showSuccess, showError } from '@/utils/toast';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface DiscoveredServer {
   ip: string;
@@ -206,9 +207,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
             <div class="relative w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-xl">
               {/* Header */}
               <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Network Discovery
-                </h3>
+                <SectionHeader title="Network discovery" size="md" class="flex-1" />
                 <button type="button"
                   onClick={props.onClose}
                   class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"

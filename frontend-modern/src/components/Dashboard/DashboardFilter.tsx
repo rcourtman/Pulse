@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Card } from '@/components/shared/Card';
 
 interface DashboardFilterProps {
   search: () => string;
@@ -17,7 +18,7 @@ interface DashboardFilterProps {
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
   return (
-    <div class="dashboard-filter mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-3">
+    <Card class="dashboard-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
         {/* Search Bar */}
         <div class="flex gap-2 flex-1">
@@ -185,6 +186,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           </Show>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
