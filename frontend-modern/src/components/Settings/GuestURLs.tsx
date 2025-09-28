@@ -142,45 +142,55 @@ export function GuestURLs(props: GuestURLsProps) {
     }
   };
 
+  // Resolve the metadata key for a guest, supporting legacy identifiers
+  const resolveMetadataKey = (guestId: string, fallbackId: string) => {
+    const metadata = guestMetadata();
+    if (metadata[guestId]) return guestId;
+    if (metadata[fallbackId]) return fallbackId;
+    return guestId;
+  };
+
   // Update a guest's URL configuration
   const updateGuestURL = (guestId: string, url: string) => {
-    setGuestMetadata({
-      ...guestMetadata(),
+    setGuestMetadata(prev => ({
+      ...prev,
       [guestId]: {
-        id: guestId,
+        ...(prev[guestId] || { id: guestId }),
         customUrl: url
       }
-    });
-    
-    // Validate and update errors
+    }));
+
     const error = validateURL(url);
-    const errors = { ...urlErrors() };
-    if (error) {
-      errors[guestId] = error;
-    } else {
-      delete errors[guestId];
-    }
-    setUrlErrors(errors);
-    
+    setUrlErrors(prev => {
+      const next = { ...prev };
+      if (error) {
+        next[guestId] = error;
+      } else {
+        delete next[guestId];
+      }
+      return next;
+    });
+
     props.setHasUnsavedChanges(true);
   };
 
   // Clear a guest's URL configuration
   const clearGuestURL = (guestId: string) => {
-    const updated = { ...guestMetadata() };
-    if (updated[guestId]) {
-      updated[guestId] = { ...updated[guestId], customUrl: '' };
-    } else {
-      updated[guestId] = { id: guestId, customUrl: '' };
-    }
-    setGuestMetadata(updated);
-    props.setHasUnsavedChanges(true);
-  };
+    setGuestMetadata(prev => ({
+      ...prev,
+      [guestId]: {
+        ...(prev[guestId] || { id: guestId }),
+        customUrl: ''
+      }
+    }));
 
-  // Get the URL for a guest
-  const getURL = (guestId: string): string | undefined => {
-    const meta = guestMetadata()[guestId];
-    return meta?.customUrl || undefined;
+    setUrlErrors(prev => {
+      const next = { ...prev };
+      delete next[guestId];
+      return next;
+    });
+
+    props.setHasUnsavedChanges(true);
   };
 
   return (
@@ -267,10 +277,11 @@ export function GuestURLs(props: GuestURLsProps) {
                       <For each={guests}>
                         {(guest) => {
                           const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
-                          const meta = guestMetadata()[guestId];
-                          const url = getURL(guestId);
-                          
-                          const urlError = urlErrors()[guestId];
+                          const fallbackId = `${guest.node}-${guest.vmid}`;
+                          const metadataKey = resolveMetadataKey(guestId, fallbackId);
+                          const meta = guestMetadata()[metadataKey];
+                          const url = meta?.customUrl;
+                          const urlError = urlErrors()[metadataKey];
                           
                           return (
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
@@ -297,7 +308,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                     type="text"
                                     placeholder="https://192.168.1.100:8006"
                                     value={meta?.customUrl || ''}
-                                    onInput={(e) => updateGuestURL(guestId, e.currentTarget.value)}
+                                    onInput={(e) => updateGuestURL(metadataKey, e.currentTarget.value)}
                                     class={`w-full min-w-[300px] px-2 py-1 text-sm border rounded
                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                            focus:ring-2 focus:border-transparent ${
@@ -332,7 +343,7 @@ export function GuestURLs(props: GuestURLsProps) {
                                   </Show>
                                   <Show when={meta?.customUrl}>
                                     <button type="button"
-                                      onClick={() => clearGuestURL(guestId)}
+                                      onClick={() => clearGuestURL(metadataKey)}
                                       class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                       title="Clear URL"
                                     >
