@@ -17,7 +17,8 @@ export interface AuthConfig {
   PULSE_AUTH_USER: string;      // Admin username
   PULSE_AUTH_PASS: string;      // Bcrypt hashed password
   API_TOKEN: string;            // API authentication token
-  ENABLE_AUDIT_LOG?: boolean;   // Enable audit logging
+  ENABLE_AUDIT_LOG?: boolean;   // @deprecated - use PULSE_AUDIT_LOG
+  PULSE_AUDIT_LOG?: boolean;    // Enable audit logging
 }
 
 /**
