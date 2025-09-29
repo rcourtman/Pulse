@@ -1,6 +1,38 @@
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import path from 'path';
+import { URL } from 'node:url';
+
+const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '0.0.0.0';
+const frontendDevPort = Number(
+  process.env.FRONTEND_DEV_PORT ?? process.env.VITE_PORT ?? process.env.PORT ?? 5173,
+);
+
+const backendProtocol = process.env.PULSE_DEV_API_PROTOCOL ?? 'http';
+const backendHost = process.env.PULSE_DEV_API_HOST ?? '127.0.0.1';
+const backendPort = Number(
+  process.env.PULSE_DEV_API_PORT ??
+    process.env.FRONTEND_PORT ??
+    process.env.PORT ??
+    7655,
+);
+
+const backendUrl =
+  process.env.PULSE_DEV_API_URL ?? `${backendProtocol}://${backendHost}:${backendPort}`;
+
+const backendWsUrl =
+  process.env.PULSE_DEV_WS_URL ??
+  (() => {
+    try {
+      const parsed = new URL(backendUrl);
+      parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+      return parsed.toString();
+    } catch {
+      return backendUrl
+        .replace(/^http:\/\//i, 'ws://')
+        .replace(/^https:\/\//i, 'wss://');
+    }
+  })();
 
 export default defineConfig({
   plugins: [solid()],
@@ -10,16 +42,17 @@ export default defineConfig({
     },
   },
   server: {
-    port: 7655,
-    host: '0.0.0.0', // Listen on all interfaces for remote access
+    port: frontendDevPort,
+    host: frontendDevHost, // Listen on all interfaces for remote access
+    strictPort: true,
     proxy: {
       '/ws': {
-        target: 'ws://127.0.0.1:7656',
+        target: backendWsUrl,
         ws: true,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://127.0.0.1:7656',
+        target: backendUrl,
         changeOrigin: true,
       },
     },

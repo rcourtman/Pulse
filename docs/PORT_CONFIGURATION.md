@@ -2,6 +2,8 @@
 
 Pulse supports multiple ways to configure the frontend port (default: 7655).
 
+> **Development tip:** The hot-reload scripts (`scripts/dev-hot.sh`, `scripts/hot-dev.sh`, and `make dev-hot`) load `.env`, `.env.local`, and `.env.dev`. Set `FRONTEND_PORT` or `PULSE_DEV_API_PORT` there to run the backend on a different port while keeping the generated `curl` commands and Vite proxy in sync.
+
 ## Recommended Methods
 
 ### 1. During Installation (Easiest)
@@ -77,4 +79,3 @@ Keeping application configuration separate from authentication credentials:
    ```bash
    sudo lsof -i :8080
    ```
-

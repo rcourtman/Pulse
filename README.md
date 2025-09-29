@@ -508,6 +508,7 @@ journalctl -u pulse -f
 make dev-hot
 # Frontend HMR: http://127.0.0.1:5173
 # Backend API:   http://127.0.0.1:7655 (served via the Go app)
+# Ports come from FRONTEND_PORT/PULSE_DEV_API_PORT (loaded from .env*. Override there if you need a different port.)
 ```
 
 The backend now detects `FRONTEND_DEV_SERVER` and proxies requests straight to the Vite dev server. Edit files under `frontend-modern/src/` and the browser refreshes instantly—no manual rebuilds or service restarts required. Use `CTRL+C` to stop both processes.

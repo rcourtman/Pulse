@@ -47,6 +47,8 @@ type ConfigHandlers struct {
 	codeMutex            sync.RWMutex          // Mutex for thread-safe code access
 	clusterDetectMutex   sync.Mutex
 	lastClusterDetection map[string]time.Time
+	recentAutoRegistered map[string]time.Time
+	recentAutoRegMutex   sync.Mutex
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -60,6 +62,7 @@ func NewConfigHandlers(cfg *config.Config, monitor *monitoring.Monitor, reloadFu
 		guestMetadataHandler: guestMetadataHandler,
 		setupCodes:           make(map[string]*SetupCode),
 		lastClusterDetection: make(map[string]time.Time),
+		recentAutoRegistered: make(map[string]time.Time),
 	}
 
 	// Clean up expired codes periodically
@@ -84,6 +87,63 @@ func (h *ConfigHandlers) cleanupExpiredCodes() {
 		}
 		h.codeMutex.Unlock()
 	}
+}
+
+func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
+	if nodeType == "" || nodeName == "" {
+		return
+	}
+	key := nodeType + ":" + nodeName
+	h.recentAutoRegMutex.Lock()
+	h.recentAutoRegistered[key] = time.Now()
+	h.recentAutoRegMutex.Unlock()
+}
+
+func (h *ConfigHandlers) clearAutoRegistered(nodeType, nodeName string) {
+	if nodeType == "" || nodeName == "" {
+		return
+	}
+	key := nodeType + ":" + nodeName
+	h.recentAutoRegMutex.Lock()
+	delete(h.recentAutoRegistered, key)
+	h.recentAutoRegMutex.Unlock()
+}
+
+func (h *ConfigHandlers) isRecentlyAutoRegistered(nodeType, nodeName string) bool {
+	if nodeType == "" || nodeName == "" {
+		return false
+	}
+	key := nodeType + ":" + nodeName
+	now := time.Now()
+	h.recentAutoRegMutex.Lock()
+	defer h.recentAutoRegMutex.Unlock()
+	registeredAt, ok := h.recentAutoRegistered[key]
+	if !ok {
+		return false
+	}
+	if now.Sub(registeredAt) > 2*time.Minute {
+		delete(h.recentAutoRegistered, key)
+		return false
+	}
+	return true
+}
+
+func (h *ConfigHandlers) findInstanceNameByHost(nodeType, host string) string {
+	switch nodeType {
+	case "pve":
+		for _, node := range h.config.PVEInstances {
+			if node.Host == host {
+				return node.Name
+			}
+		}
+	case "pbs":
+		for _, node := range h.config.PBSInstances {
+			if node.Host == host {
+				return node.Name
+			}
+		}
+	}
+	return ""
 }
 
 // sanitizeErrorMessage returns a safe error message for external responses
@@ -1950,6 +2010,9 @@ func (h *ConfigHandlers) HandleTestNode(w http.ResponseWriter, r *http.Request) 
 // getNodeStatus returns the connection status for a node
 func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 	if h.monitor == nil {
+		if h.isRecentlyAutoRegistered(nodeType, nodeName) {
+			return "connected"
+		}
 		return "disconnected"
 	}
 
@@ -1957,7 +2020,18 @@ func (h *ConfigHandlers) getNodeStatus(nodeType, nodeName string) string {
 	connectionStatus := h.monitor.GetConnectionStatuses()
 
 	key := fmt.Sprintf("%s-%s", nodeType, nodeName)
-	if connected, ok := connectionStatus[key]; ok && connected {
+	if connected, ok := connectionStatus[key]; ok {
+		if connected {
+			h.clearAutoRegistered(nodeType, nodeName)
+			return "connected"
+		}
+		if h.isRecentlyAutoRegistered(nodeType, nodeName) {
+			return "connected"
+		}
+		return "disconnected"
+	}
+
+	if h.isRecentlyAutoRegistered(nodeType, nodeName) {
 		return "connected"
 	}
 
@@ -3055,15 +3129,15 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 	// Build the URL with the token included
 	host := r.Host
 
-	// Dev environment fix: if we detect localhost from vite proxy AND we're in dev mode, use the actual IP
-	if host == "127.0.0.1:7656" || host == "localhost:7656" {
-		// Check if we're in development mode
-		if _, err := os.Stat("/opt/pulse/.dev-mode"); err == nil {
-			// This is the dev backend being proxied through vite on the dev machine
-			// Use the actual development machine IP
-			host = "192.168.0.123:7656"
+	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
+		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.config.FrontendPort) {
+			// Prefer a user-configured public URL when we're running on loopback.
+			if publicURL := strings.TrimSpace(h.config.PublicURL); publicURL != "" {
+				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
+					host = parsedURL.Host
+				}
+			}
 		}
-		// For production, keep the original host (users will need proper proxy config)
 	}
 
 	// Detect protocol - check both TLS and proxy headers
@@ -3462,6 +3536,18 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	log.Info().Msg("Configuration saved successfully")
 
+	actualName := h.findInstanceNameByHost(req.Type, host)
+	if actualName == "" {
+		actualName = strings.TrimSpace(req.ServerName)
+	}
+	if actualName == "" {
+		actualName = strings.TrimSpace(nodeConfig.Name)
+	}
+	if actualName == "" {
+		actualName = host
+	}
+	h.markAutoRegistered(req.Type, actualName)
+
 	// Reload monitor to pick up new configuration
 	if h.reloadFunc != nil {
 		log.Info().Msg("Reloading monitor after auto-registration")
@@ -3669,6 +3755,12 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
+
+	actualName := h.findInstanceNameByHost(req.Type, host)
+	if actualName == "" {
+		actualName = serverName
+	}
+	h.markAutoRegistered(req.Type, actualName)
 
 	// Reload monitor
 	if h.reloadFunc != nil {
