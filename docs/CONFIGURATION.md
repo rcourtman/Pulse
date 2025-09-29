@@ -19,6 +19,7 @@ All configuration files are stored in `/etc/pulse/` (or `/data/` in Docker conta
 ├── .env          # Authentication credentials ONLY
 ├── system.json   # Application settings (ports, intervals, etc.)
 ├── nodes.enc     # Encrypted node credentials
+├── oidc.enc      # Encrypted OIDC client configuration (issuer, client ID/secret)
 ├── alerts.json   # Alert thresholds and rules
 └── webhooks.enc  # Encrypted webhook configurations (v4.1.9+)
 ```
@@ -58,6 +59,38 @@ PROXY_AUTH_LOGOUT_URL=/logout        # URL for SSO logout
 - ProxmoxVE installations may pre-configure API_TOKEN
 - Changes to this file are applied immediately without restart (v4.3.9+)
 - **DO NOT** put port configuration here - use system.json or systemd overrides
+
+---
+
+## 📁 `oidc.enc` - OIDC Single Sign-On
+
+**Purpose:** Stores OpenID Connect (OIDC) client configuration for single sign-on.
+
+**Format:** Encrypted JSON (AES-256-GCM via Pulse crypto manager)
+
+**Contents:**
+```json
+{
+  "enabled": true,
+  "issuerUrl": "https://login.example.com/realms/pulse",
+  "clientId": "pulse",
+  "clientSecret": "s3cr3t",
+  "redirectUrl": "https://pulse.example.com/api/oidc/callback",
+  "scopes": ["openid", "profile", "email"],
+  "usernameClaim": "preferred_username",
+  "emailClaim": "email",
+  "groupsClaim": "groups",
+  "allowedGroups": ["pulse-admins"],
+  "allowedDomains": ["example.com"],
+  "allowedEmails": []
+}
+```
+
+**Important Notes:**
+- Managed through **Settings → Security → Single sign-on (OIDC)** in the UI.
+- Secrets are encrypted at rest; client secrets are never exposed back to the browser.
+- Optional environment variables (`OIDC_*`) can override individual fields and lock the UI.
+- Redirect URL defaults to `<PUBLIC_URL>/api/oidc/callback` if not specified.
 
 ---
 
@@ -195,6 +228,23 @@ These should be set in the .env file for security:
 - `PULSE_AUTH_USER`, `PULSE_AUTH_PASS` - Basic authentication
 - `API_TOKEN` - API token for authentication
 - `DISABLE_AUTH` - Set to `true` to disable authentication entirely
+
+#### OIDC Variables (optional overrides)
+Set these environment variables to manage single sign-on without using the UI. When present, the OIDC form is locked read-only.
+
+- `OIDC_ENABLED` - `true` / `false`
+- `OIDC_ISSUER_URL` - Provider issuer URL
+- `OIDC_CLIENT_ID` - Registered client ID
+- `OIDC_CLIENT_SECRET` - Client secret (plain text)
+- `OIDC_REDIRECT_URL` - Override default redirect callback
+- `OIDC_SCOPES` - Space/comma separated scopes (e.g. `openid profile email`)
+- `OIDC_USERNAME_CLAIM` - Claim used for the Pulse username
+- `OIDC_EMAIL_CLAIM` - Claim that contains the email address
+- `OIDC_GROUPS_CLAIM` - Claim that lists group memberships
+- `OIDC_ALLOWED_GROUPS` - Allowed group names (comma/space separated)
+- `OIDC_ALLOWED_DOMAINS` - Allowed email domains
+- `OIDC_ALLOWED_EMAILS` - Explicit email allowlist
+- `PULSE_PUBLIC_URL` **(strongly recommended)** - The externally reachable base URL Pulse should advertise. This is used to generate the default redirect URI. If you expose Pulse on multiple hostnames, list each one in your IdP configuration because OIDC callbacks must match exactly.
 
 #### Proxy/SSO Authentication Variables
 For integration with authentication proxies (Authentik, Authelia, etc):
