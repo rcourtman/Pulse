@@ -76,7 +76,7 @@ services:
       # Generate hash: docker run --rm -it rcourtman/pulse:latest pulse hash-password
       PULSE_AUTH_PASS: '$$2a$$12$$...'  # IMPORTANT: Use $$ in docker-compose.yml!
       API_TOKEN: 'your-48-char-hex-token'  # Generate: openssl rand -hex 24
-      # PULSE_PUBLIC_URL: 'http://192.168.1.100:7655'  # Optional: For webhook notification links
+      # PULSE_PUBLIC_URL: 'http://192.168.1.100:7655'  # Strongly recommended: external URL for webhook links
     restart: unless-stopped
 
 volumes:
@@ -240,7 +240,7 @@ Common problems:
 | `DISCOVERY_SUBNET` | Network to scan (rarely needed) | Auto-scans common networks |
 | `CONNECTION_TIMEOUT` | Connection timeout (seconds) | `10` |
 | `LOG_LEVEL` | Logging verbosity | `info` |
-| `PULSE_PUBLIC_URL` | Full URL to access Pulse (for webhook links) | None |
+| `PULSE_PUBLIC_URL` | Full URL to access Pulse (used in webhooks/notifications) | None (set explicitly when containerised) |
 
 ### System
 | Variable | Description | Default |
