@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
@@ -62,7 +62,7 @@ func isConnectionSecure(r *http.Request) bool {
 func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 	isProxied := detectProxy(r)
 	isSecure := isConnectionSecure(r)
-	
+
 	// Debug logging for Cloudflare tunnel issues
 	if isProxied {
 		log.Debug().
@@ -74,10 +74,10 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			Str("x_forwarded_proto", r.Header.Get("X-Forwarded-Proto")).
 			Msg("Proxy/tunnel detected - adjusting cookie settings")
 	}
-	
+
 	// Default to Lax for better compatibility
 	sameSitePolicy := http.SameSiteLaxMode
-	
+
 	if isProxied {
 		// For proxied connections, we need to be more permissive
 		// But only use None if connection is secure (required by browsers)
@@ -88,7 +88,7 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			sameSitePolicy = http.SameSiteLaxMode
 		}
 	}
-	
+
 	return isSecure, sameSitePolicy
 }
 
@@ -114,7 +114,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	if cfg.ProxyAuthSecret == "" {
 		return false, "", false
 	}
-	
+
 	// Validate proxy secret header
 	proxySecret := r.Header.Get("X-Proxy-Secret")
 	if proxySecret != cfg.ProxyAuthSecret {
@@ -123,7 +123,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 			Msg("Invalid proxy secret")
 		return false, "", false
 	}
-	
+
 	// Get username from header if configured
 	username := ""
 	if cfg.ProxyAuthUserHeader != "" {
@@ -133,7 +133,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 			return false, "", false
 		}
 	}
-	
+
 	// Check admin role if configured
 	isAdmin := true // Default to admin if no role checking configured
 	if cfg.ProxyAuthRoleHeader != "" && cfg.ProxyAuthAdminRole != "" {
@@ -158,12 +158,12 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 				Msg("Proxy auth roles checked")
 		}
 	}
-	
+
 	log.Debug().
 		Str("user", username).
 		Bool("is_admin", isAdmin).
 		Msg("Proxy authentication successful")
-	
+
 	return true, username, isAdmin
 }
 
@@ -182,7 +182,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		w.Header().Set("X-Auth-Disabled", "true")
 		return true
 	}
-	
+
 	// Check proxy auth first if configured
 	if cfg.ProxyAuthSecret != "" {
 		if valid, username, _ := CheckProxyAuth(cfg, r); valid {
@@ -194,13 +194,17 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			return true
 		}
 	}
-	
-	// If no auth is configured at all, allow access
+
+	// If no auth is configured at all, allow access unless OIDC is enabled
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken == "" && cfg.ProxyAuthSecret == "" {
-		log.Debug().Msg("No auth configured, allowing access")
-		return true
+		if cfg.OIDC != nil && cfg.OIDC.Enabled {
+			log.Debug().Msg("OIDC enabled without local credentials, authentication required")
+		} else {
+			log.Debug().Msg("No auth configured, allowing access")
+			return true
+		}
 	}
-	
+
 	// API-only mode: when only API token is configured (no password auth)
 	// Allow read-only endpoints for the UI to work
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.APIToken != "" {
@@ -209,7 +213,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if providedToken == "" {
 			providedToken = r.URL.Query().Get("token")
 		}
-		
+
 		// If a token was provided, validate it
 		if providedToken != "" {
 			// Use secure token comparison
@@ -222,7 +226,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 			return false
 		}
-		
+
 		// No token provided - allow read-only endpoints for UI
 		if r.Method == "GET" || r.URL.Path == "/ws" {
 			// Allow these endpoints without auth for UI to function
@@ -247,7 +251,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 				}
 			}
 		}
-		
+
 		// Require token for everything else
 		if w != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="API Token Required"`)
@@ -255,14 +259,14 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 		return false
 	}
-	
+
 	log.Debug().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
 		Bool("has_token", cfg.APIToken != "").
 		Str("url", r.URL.Path).
 		Msg("Checking authentication")
-	
+
 	// Check API token first (for backward compatibility)
 	if cfg.APIToken != "" {
 		// Check header
@@ -280,7 +284,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 		}
 	}
-	
+
 	// Check session cookie (for WebSocket and UI)
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
@@ -300,7 +304,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			Bool("has_cf_headers", r.Header.Get("CF-Ray") != "").
 			Msg("No session cookie found")
 	}
-	
+
 	// Check basic auth
 	if cfg.AuthUser != "" && cfg.AuthPass != "" {
 		auth := r.Header.Get("Authorization")
@@ -313,7 +317,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 					parts := strings.SplitN(string(decoded), ":", 2)
 					if len(parts) == 2 {
 						clientIP := GetClientIP(r)
-						
+
 						// Only apply rate limiting for actual login attempts, not regular auth checks
 						// Login attempts come to /api/login endpoint
 						if r.URL.Path == "/api/login" {
@@ -327,72 +331,72 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								return false
 							}
 						}
-						
+
 						// Check if account is locked out
 						_, userLockedUntil, userLocked := GetLockoutInfo(parts[0])
 						_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
-						
+
 						if userLocked || ipLocked {
 							lockedUntil := userLockedUntil
 							if ipLocked && ipLockedUntil.After(lockedUntil) {
 								lockedUntil = ipLockedUntil
 							}
-							
+
 							remainingMinutes := int(time.Until(lockedUntil).Minutes())
 							if remainingMinutes < 1 {
 								remainingMinutes = 1
 							}
-							
+
 							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
 							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Account locked")
 							if w != nil {
 								w.Header().Set("Content-Type", "application/json")
 								w.WriteHeader(http.StatusForbidden)
-								w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`, 
+								w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`,
 									remainingMinutes, lockedUntil.Format(time.RFC3339))))
 							}
 							return false
 						}
 						// Check username
 						userMatch := parts[0] == cfg.AuthUser
-						
+
 						// Check password - support both hashed and plain text for migration
 						// Config always has hashed password now (auto-hashed on load)
 						passMatch := internalauth.CheckPasswordHash(parts[1], cfg.AuthPass)
-						
+
 						log.Debug().
 							Str("provided_user", parts[0]).
 							Str("expected_user", cfg.AuthUser).
 							Bool("user_match", userMatch).
 							Bool("pass_match", passMatch).
 							Msg("Auth check")
-						
+
 						if userMatch && passMatch {
 							// Clear failed login attempts
 							ClearFailedLogins(parts[0])
 							ClearFailedLogins(GetClientIP(r))
-							
+
 							// Valid credentials - create session
 							if w != nil {
 								token := generateSessionToken()
 								if token == "" {
 									return false
 								}
-								
+
 								// Store session persistently
 								userAgent := r.Header.Get("User-Agent")
 								clientIP := GetClientIP(r)
 								GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
-								
+
 								// Track session for user
 								TrackUserSession(parts[0], token)
-								
+
 								// Generate CSRF token
 								csrfToken := generateCSRFToken(token)
-								
+
 								// Get appropriate cookie settings based on proxy detection
 								isSecure, sameSitePolicy := getCookieSettings(r)
-								
+
 								// Debug logging for Cloudflare tunnel issues
 								sameSiteName := "Default"
 								switch sameSitePolicy {
@@ -403,14 +407,14 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 								case http.SameSiteStrictMode:
 									sameSiteName = "Strict"
 								}
-								
+
 								log.Debug().
 									Bool("secure", isSecure).
 									Str("same_site", sameSiteName).
 									Str("token", token[:8]+"...").
 									Str("remote_addr", r.RemoteAddr).
 									Msg("Setting session cookie after successful login")
-								
+
 								// Set session cookie
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_session",
@@ -421,7 +425,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
-								
+
 								// Set CSRF cookie (not HttpOnly so JS can read it)
 								http.SetCookie(w, &http.Cookie{
 									Name:     "pulse_csrf",
@@ -431,7 +435,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
-								
+
 								// Audit log successful login
 								LogAuditEvent("login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
@@ -441,27 +445,27 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							RecordFailedLogin(parts[0])
 							RecordFailedLogin(clientIP)
 							LogAuditEvent("login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
-							
+
 							// Get updated attempt counts
 							newUserAttempts, _, _ := GetLockoutInfo(parts[0])
 							newIPAttempts, _, _ := GetLockoutInfo(clientIP)
-							
+
 							// Use the higher count for warning
 							attempts := newUserAttempts
 							if newIPAttempts > attempts {
 								attempts = newIPAttempts
 							}
-							
+
 							if r.URL.Path == "/api/login" && w != nil {
 								// For login endpoint, provide detailed error response
 								w.Header().Set("Content-Type", "application/json")
 								w.WriteHeader(http.StatusUnauthorized)
 								remaining := maxFailedAttempts - attempts
 								if remaining > 0 {
-									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","attempts":%d,"remaining":%d,"maxAttempts":%d}`, 
+									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","attempts":%d,"remaining":%d,"maxAttempts":%d}`,
 										attempts, remaining, maxFailedAttempts)))
 								} else {
-									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","locked":true,"message":"Account locked for 15 minutes"}`,)))
+									w.Write([]byte(fmt.Sprintf(`{"error":"Invalid credentials","locked":true,"message":"Account locked for 15 minutes"}`)))
 								}
 								return false
 							}
@@ -471,7 +475,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -482,14 +486,14 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			handler(w, r)
 			return
 		}
-		
+
 		// Log the failed attempt
 		log.Warn().
 			Str("ip", r.RemoteAddr).
 			Str("path", r.URL.Path).
 			Str("method", r.Method).
 			Msg("Unauthorized access attempt")
-		
+
 		// Never send WWW-Authenticate header - we want to use our custom login page
 		// The frontend will detect 401 responses and show the login component
 		// Return JSON error for API requests, plain text for others
@@ -516,7 +520,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 				Str("path", r.URL.Path).
 				Str("method", r.Method).
 				Msg("Unauthorized access attempt")
-			
+
 			// Return authentication error
 			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
 				w.Header().Set("Content-Type", "application/json")
@@ -527,7 +531,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 			}
 			return
 		}
-		
+
 		// Check if using proxy auth and if so, verify admin status
 		if cfg.ProxyAuthSecret != "" {
 			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
@@ -539,7 +543,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 						Str("method", r.Method).
 						Str("username", username).
 						Msg("Non-admin user attempted to access admin endpoint")
-					
+
 					// Return forbidden error
 					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
 						w.Header().Set("Content-Type", "application/json")
@@ -552,7 +556,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 				}
 			}
 		}
-		
+
 		// User is authenticated and has admin privileges (or not using proxy auth)
 		handler(w, r)
 	}

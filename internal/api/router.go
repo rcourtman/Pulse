@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/auth"
@@ -33,15 +34,16 @@ type Router struct {
 	updateManager *updates.Manager
 	exportLimiter *RateLimiter
 	persistence   *config.ConfigPersistence
+	oidcMu        sync.Mutex
+	oidcService   *OIDCService
 }
-
 
 // NewRouter creates a new router instance
 func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket.Hub, reloadFunc func() error) http.Handler {
 	// Initialize persistent session and CSRF stores
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
-	
+
 	r := &Router{
 		mux:           http.NewServeMux(),
 		config:        cfg,
@@ -54,10 +56,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	}
 
 	r.setupRoutes()
-	
+
 	// Start forwarding update progress to WebSocket
 	go r.forwardUpdateProgress()
-	
+
 	// Load system settings to configure security headers
 	allowEmbedding := false
 	allowedOrigins := ""
@@ -65,7 +67,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 		allowEmbedding = systemSettings.AllowEmbedding
 		allowedOrigins = systemSettings.AllowedEmbedOrigins
 	}
-	
+
 	// Apply middleware chain:
 	// 1. Universal rate limiting (outermost to stop attacks early)
 	// 2. Error handling
@@ -77,7 +79,6 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 	return handler
 }
 
-
 // setupRoutes configures all routes
 func (r *Router) setupRoutes() {
 	// Create handlers
@@ -86,7 +87,7 @@ func (r *Router) setupRoutes() {
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
-	
+
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
@@ -102,7 +103,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups/pve", r.handleBackupsPVE)
 	r.mux.HandleFunc("/api/backups/pbs", r.handleBackupsPBS)
 	r.mux.HandleFunc("/api/snapshots", r.handleSnapshots)
-	
+
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", guestMetadataHandler.HandleGetMetadata)
 	r.mux.HandleFunc("/api/guests/metadata/", func(w http.ResponseWriter, req *http.Request) {
@@ -117,12 +118,12 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Update routes
 	r.mux.HandleFunc("/api/updates/check", updateHandlers.HandleCheckUpdates)
 	r.mux.HandleFunc("/api/updates/apply", updateHandlers.HandleApplyUpdate)
 	r.mux.HandleFunc("/api/updates/status", updateHandlers.HandleUpdateStatus)
-	
+
 	// Config management routes
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -134,7 +135,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -143,7 +144,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Test connection endpoint
 	r.mux.HandleFunc("/api/config/nodes/test-connection", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -169,7 +170,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// System settings routes
 	r.mux.HandleFunc("/api/config/system", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -182,18 +183,21 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Registration token routes removed - feature deprecated
-	
+
 	// Security routes
 	r.mux.HandleFunc("/api/security/change-password", r.handleChangePassword)
 	r.mux.HandleFunc("/api/logout", r.handleLogout)
 	r.mux.HandleFunc("/api/login", r.handleLogin)
 	r.mux.HandleFunc("/api/security/reset-lockout", r.handleResetLockout)
+	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, r.handleOIDCConfig))
+	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
+	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			
+
 			// Check if auth is globally disabled
 			if r.config.DisableAuth {
 				// Even with auth disabled, report API token status for API access
@@ -201,32 +205,36 @@ func (r *Router) setupRoutes() {
 				if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
 					apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
 				}
-				
+
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"configured": false,
-					"disabled": true,
-					"message": "Authentication is disabled via DISABLE_AUTH environment variable",
+					"configured":         false,
+					"disabled":           true,
+					"message":            "Authentication is disabled via DISABLE_AUTH environment variable",
 					"apiTokenConfigured": r.config.APIToken != "",
-					"apiTokenHint": apiTokenHint,
-					"hasAuthentication": false,
+					"apiTokenHint":       apiTokenHint,
+					"hasAuthentication":  false,
 				})
 				return
 			}
-			
+
 			// Check for basic auth configuration
 			// Check both environment variables and loaded config
-			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" || 
-				os.Getenv("REQUIRE_AUTH") == "true" || 
-				r.config.AuthUser != "" || 
-				r.config.AuthPass != ""
-			
+			oidcCfg := r.ensureOIDCConfig()
+			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
+				os.Getenv("REQUIRE_AUTH") == "true" ||
+				r.config.AuthUser != "" ||
+				r.config.AuthPass != "" ||
+				(oidcCfg != nil && oidcCfg.Enabled) ||
+				r.config.APIToken != "" ||
+				r.config.ProxyAuthSecret != ""
+
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false
 			envPath := filepath.Join(r.config.ConfigPath, ".env")
 			if envPath == "" || r.config.ConfigPath == "" {
 				envPath = "/etc/pulse/.env"
 			}
-			
+
 			// If no auth is currently active but .env exists, security is pending restart
 			if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
 				if _, err := os.Stat(envPath); err == nil {
@@ -234,13 +242,13 @@ func (r *Router) setupRoutes() {
 					configuredButPendingRestart = true
 				}
 			}
-			
+
 			// Check for audit logging
 			hasAuditLogging := os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true"
-			
+
 			// Credentials are always encrypted in current implementation
 			credentialsEncrypted := true
-			
+
 			// Check network context
 			clientIP := utils.GetClientIP(
 				req.RemoteAddr,
@@ -248,20 +256,20 @@ func (r *Router) setupRoutes() {
 				req.Header.Get("X-Real-IP"),
 			)
 			isPrivateNetwork := utils.IsPrivateIP(clientIP)
-			
+
 			// Get trusted networks from environment
 			trustedNetworks := []string{}
 			if nets := os.Getenv("PULSE_TRUSTED_NETWORKS"); nets != "" {
 				trustedNetworks = strings.Split(nets, ",")
 			}
 			isTrustedNetwork := utils.IsTrustedNetwork(clientIP, trustedNetworks)
-			
+
 			// Create token hint if token exists
 			var apiTokenHint string
 			if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
 				apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
 			}
-			
+
 			// Check for proxy auth
 			hasProxyAuth := r.config.ProxyAuthSecret != ""
 			proxyAuthUsername := ""
@@ -273,45 +281,60 @@ func (r *Router) setupRoutes() {
 					proxyAuthIsAdmin = isAdmin
 				}
 			}
-			
+
+			requiresAuth := r.config.APIToken != "" ||
+				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
+				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
+				r.config.ProxyAuthSecret != ""
+
 			status := map[string]interface{}{
-				"apiTokenConfigured": r.config.APIToken != "",
-				"apiTokenHint": apiTokenHint,
-				"requiresAuth": r.config.APIToken != "",
-				"exportProtected": r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
-				"unprotectedExportAllowed": os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
-				"hasAuthentication": hasAuthentication,
+				"apiTokenConfigured":          r.config.APIToken != "",
+				"apiTokenHint":                apiTokenHint,
+				"requiresAuth":                requiresAuth,
+				"exportProtected":             r.config.APIToken != "" || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
+				"unprotectedExportAllowed":    os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
+				"hasAuthentication":           hasAuthentication,
 				"configuredButPendingRestart": configuredButPendingRestart,
-				"hasAuditLogging": hasAuditLogging,
-				"credentialsEncrypted": credentialsEncrypted,
-				"hasHTTPS": req.TLS != nil,
-				"clientIP": clientIP,
-				"isPrivateNetwork": isPrivateNetwork,
-				"isTrustedNetwork": isTrustedNetwork,
-				"publicAccess": !isPrivateNetwork,
-				"hasProxyAuth": hasProxyAuth,
-				"proxyAuthLogoutURL": r.config.ProxyAuthLogoutURL,
-				"proxyAuthUsername": proxyAuthUsername,
-				"proxyAuthIsAdmin": proxyAuthIsAdmin,
+				"hasAuditLogging":             hasAuditLogging,
+				"credentialsEncrypted":        credentialsEncrypted,
+				"hasHTTPS":                    req.TLS != nil,
+				"clientIP":                    clientIP,
+				"isPrivateNetwork":            isPrivateNetwork,
+				"isTrustedNetwork":            isTrustedNetwork,
+				"publicAccess":                !isPrivateNetwork,
+				"hasProxyAuth":                hasProxyAuth,
+				"proxyAuthLogoutURL":          r.config.ProxyAuthLogoutURL,
+				"proxyAuthUsername":           proxyAuthUsername,
+				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
 			}
+
+			if oidcCfg != nil {
+				status["oidcEnabled"] = oidcCfg.Enabled
+				status["oidcIssuer"] = oidcCfg.IssuerURL
+				status["oidcClientId"] = oidcCfg.ClientID
+				if len(oidcCfg.EnvOverrides) > 0 {
+					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
+				}
+			}
+
 			json.NewEncoder(w).Encode(status)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Quick security setup route - using fixed version
 	r.mux.HandleFunc("/api/security/quick-setup", handleQuickSecuritySetupFixed(r))
-	
+
 	// API token regeneration endpoint
 	r.mux.HandleFunc("/api/security/regenerate-token", r.HandleRegenerateAPIToken)
-	
+
 	// Apply security restart endpoint
 	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			// Only allow restart if we're running under systemd (safer)
 			isSystemd := os.Getenv("INVOCATION_ID") != ""
-			
+
 			if !isSystemd {
 				response := map[string]interface{}{
 					"success": false,
@@ -321,24 +344,24 @@ func (r *Router) setupRoutes() {
 				json.NewEncoder(w).Encode(response)
 				return
 			}
-			
+
 			// Write a recovery flag file before restarting
 			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 			recoveryContent := fmt.Sprintf("Auth setup at %s\nIf locked out, delete this file and restart to disable auth temporarily\n", time.Now().Format(time.RFC3339))
 			os.WriteFile(recoveryFile, []byte(recoveryContent), 0600)
-			
+
 			// Schedule restart with full service restart to pick up new config
 			go func() {
 				time.Sleep(2 * time.Second)
 				log.Info().Msg("Triggering restart to apply security settings")
-				
+
 				// We need to do a full systemctl restart to pick up new environment variables
 				// First try daemon-reload
 				cmd := exec.Command("sudo", "-n", "systemctl", "daemon-reload")
 				if err := cmd.Run(); err != nil {
 					log.Error().Err(err).Msg("Failed to reload systemd daemon")
 				}
-				
+
 				// Then restart the service - this will kill us and restart with new env
 				time.Sleep(500 * time.Millisecond)
 				// Try to restart with the detected service name
@@ -351,7 +374,7 @@ func (r *Router) setupRoutes() {
 				}
 				// If restart succeeds, we'll be killed by systemctl
 			}()
-			
+
 			response := map[string]interface{}{
 				"success": true,
 				"message": "Restarting Pulse to apply security settings...",
@@ -362,23 +385,23 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Initialize recovery token store
 	InitRecoveryTokenStore(r.config.DataPath)
-	
+
 	// Recovery endpoint - requires localhost access OR valid recovery token
 	r.mux.HandleFunc("/api/security/recovery", func(w http.ResponseWriter, req *http.Request) {
 		// Get client IP
 		ip := strings.Split(req.RemoteAddr, ":")[0]
 		isLocalhost := ip == "127.0.0.1" || ip == "::1" || ip == "localhost"
-		
+
 		// Check for recovery token in header
 		recoveryToken := req.Header.Get("X-Recovery-Token")
 		hasValidToken := false
 		if recoveryToken != "" {
 			hasValidToken = GetRecoveryTokenStore().ValidateRecoveryTokenConstantTime(recoveryToken, ip)
 		}
-		
+
 		// Only allow from localhost OR with valid recovery token
 		if !isLocalhost && !hasValidToken {
 			log.Warn().
@@ -388,21 +411,21 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Recovery endpoint requires localhost access or valid recovery token", http.StatusForbidden)
 			return
 		}
-		
+
 		if req.Method == http.MethodPost {
 			// Parse action
 			var recoveryRequest struct {
 				Action   string `json:"action"`
 				Duration int    `json:"duration,omitempty"` // Duration in minutes for token generation
 			}
-			
+
 			if err := json.NewDecoder(req.Body).Decode(&recoveryRequest); err != nil {
 				http.Error(w, "Invalid request", http.StatusBadRequest)
 				return
 			}
-			
+
 			response := map[string]interface{}{}
-			
+
 			switch recoveryRequest.Action {
 			case "generate_token":
 				// Only allow token generation from localhost
@@ -410,13 +433,13 @@ func (r *Router) setupRoutes() {
 					http.Error(w, "Token generation only allowed from localhost", http.StatusForbidden)
 					return
 				}
-				
+
 				// Default to 15 minutes if not specified
 				duration := 15
 				if recoveryRequest.Duration > 0 && recoveryRequest.Duration <= 60 {
 					duration = recoveryRequest.Duration
 				}
-				
+
 				token, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Duration(duration) * time.Minute)
 				if err != nil {
 					response["success"] = false
@@ -431,7 +454,7 @@ func (r *Router) setupRoutes() {
 						Int("duration_minutes", duration).
 						Msg("Recovery token generated")
 				}
-				
+
 			case "disable_auth":
 				// Temporarily disable auth by creating recovery file
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
@@ -447,7 +470,7 @@ func (r *Router) setupRoutes() {
 						Bool("via_token", hasValidToken).
 						Msg("AUTH RECOVERY: Authentication disabled via recovery endpoint")
 				}
-				
+
 			case "enable_auth":
 				// Re-enable auth by removing recovery file
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
@@ -459,12 +482,12 @@ func (r *Router) setupRoutes() {
 					response["message"] = "Recovery mode disabled. Authentication re-enabled."
 					log.Info().Msg("AUTH RECOVERY: Authentication re-enabled via recovery endpoint")
 				}
-				
+
 			default:
 				response["success"] = false
 				response["message"] = "Invalid action. Use 'disable_auth' or 'enable_auth'"
 			}
-			
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 		} else if req.Method == http.MethodGet {
@@ -473,7 +496,7 @@ func (r *Router) setupRoutes() {
 			_, err := os.Stat(recoveryFile)
 			response := map[string]interface{}{
 				"recovery_mode": err == nil,
-				"message": "Recovery endpoint accessible from localhost only",
+				"message":       "Recovery endpoint accessible from localhost only",
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
@@ -481,7 +504,7 @@ func (r *Router) setupRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	// Config export/import routes (requires authentication)
 	r.mux.HandleFunc("/api/config/export", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
@@ -494,13 +517,13 @@ func (r *Router) setupRoutes() {
 					proxyAuthIsAdmin = isAdmin
 				}
 			}
-			
+
 			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
 			}
-			
+
 			hasValidAPIToken := false
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
@@ -513,15 +536,15 @@ func (r *Router) setupRoutes() {
 					hasValidAPIToken = (authHeader == r.config.APIToken)
 				}
 			}
-			
+
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
-			
+
 			// Determine if auth is required
-			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
-				r.config.APIToken != "" || 
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
+				r.config.APIToken != "" ||
 				r.config.ProxyAuthSecret != ""
-			
+
 			// Check admin privileges for proxy auth users
 			if hasValidProxyAuth && !proxyAuthIsAdmin {
 				log.Warn().
@@ -531,7 +554,7 @@ func (r *Router) setupRoutes() {
 				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
 				return
 			}
-			
+
 			if authRequired && !hasValidAuth {
 				log.Warn().
 					Str("ip", req.RemoteAddr).
@@ -544,13 +567,13 @@ func (r *Router) setupRoutes() {
 				return
 			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
-				clientIP := utils.GetClientIP(req.RemoteAddr, 
-					req.Header.Get("X-Forwarded-For"), 
+				clientIP := utils.GetClientIP(req.RemoteAddr,
+					req.Header.Get("X-Forwarded-For"),
 					req.Header.Get("X-Real-IP"))
-				
+
 				isPrivate := utils.IsPrivateIP(clientIP)
 				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
-				
+
 				if !isPrivate && !allowUnprotected {
 					// Public network access without auth - definitely block
 					log.Warn().
@@ -567,7 +590,7 @@ func (r *Router) setupRoutes() {
 					// Continue - allow export on private networks for homelab users
 				}
 			}
-			
+
 			// Log successful export attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
@@ -575,13 +598,13 @@ func (r *Router) setupRoutes() {
 				Bool("session_auth", hasValidSession).
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration export initiated")
-			
+
 			configHandlers.HandleExportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	
+
 	r.mux.HandleFunc("/api/config/import", r.exportLimiter.Middleware(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
 			// Check proxy auth first
@@ -593,13 +616,13 @@ func (r *Router) setupRoutes() {
 					proxyAuthIsAdmin = isAdmin
 				}
 			}
-			
+
 			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
 			}
-			
+
 			hasValidAPIToken := false
 			if r.config.APIToken != "" {
 				authHeader := req.Header.Get("X-API-Token")
@@ -612,15 +635,15 @@ func (r *Router) setupRoutes() {
 					hasValidAPIToken = (authHeader == r.config.APIToken)
 				}
 			}
-			
+
 			// Check if any valid auth method is present
 			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
-			
+
 			// Determine if auth is required
-			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" || 
-				r.config.APIToken != "" || 
+			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
+				r.config.APIToken != "" ||
 				r.config.ProxyAuthSecret != ""
-			
+
 			// Check admin privileges for proxy auth users
 			if hasValidProxyAuth && !proxyAuthIsAdmin {
 				log.Warn().
@@ -630,7 +653,7 @@ func (r *Router) setupRoutes() {
 				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
 				return
 			}
-			
+
 			if authRequired && !hasValidAuth {
 				log.Warn().
 					Str("ip", req.RemoteAddr).
@@ -643,13 +666,13 @@ func (r *Router) setupRoutes() {
 				return
 			} else if !authRequired {
 				// No auth configured - check if this is a homelab/private network
-				clientIP := utils.GetClientIP(req.RemoteAddr, 
-					req.Header.Get("X-Forwarded-For"), 
+				clientIP := utils.GetClientIP(req.RemoteAddr,
+					req.Header.Get("X-Forwarded-For"),
 					req.Header.Get("X-Real-IP"))
-				
+
 				isPrivate := utils.IsPrivateIP(clientIP)
 				allowUnprotected := os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
-				
+
 				if !isPrivate && !allowUnprotected {
 					// Public network access without auth - definitely block
 					log.Warn().
@@ -666,40 +689,40 @@ func (r *Router) setupRoutes() {
 					// Continue - allow import on private networks for homelab users
 				}
 			}
-			
+
 			// Log successful import attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
 				Bool("session_auth", hasValidSession).
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration import initiated")
-			
+
 			configHandlers.HandleImportConfig(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	
+
 	// Discovery route
-	
+
 	// Setup script route
 	r.mux.HandleFunc("/api/setup-script", configHandlers.HandleSetupScript)
-	
+
 	// Generate setup script URL with temporary token (for authenticated users)
 	r.mux.HandleFunc("/api/setup-script-url", configHandlers.HandleSetupScriptURL)
-	
+
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", configHandlers.HandleAutoRegister)
 	// Discovery endpoint
 	r.mux.HandleFunc("/api/discover", RequireAuth(r.config, configHandlers.HandleDiscoverServers))
-	
+
 	// Test endpoint for WebSocket notifications
 	r.mux.HandleFunc("/api/test-notification", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		// Send a test auto-registration notification
 		r.wsHub.BroadcastMessage(websocket.Message{
 			Type: "node_auto_registered",
@@ -712,21 +735,21 @@ func (r *Router) setupRoutes() {
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		})
-		
+
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
 	})
-	
+
 	// Alert routes
 	r.mux.HandleFunc("/api/alerts/", alertHandlers.HandleAlerts)
-	
+
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", notificationHandlers.HandleNotifications)
-	
+
 	// Settings routes
 	r.mux.HandleFunc("/api/settings", getSettings)
 	r.mux.HandleFunc("/api/settings/update", updateSettings)
-	
+
 	// System settings and API token management
 	systemSettingsHandler := NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.monitor)
 	r.mux.HandleFunc("/api/system/settings", systemSettingsHandler.HandleGetSystemSettings)
@@ -735,13 +758,13 @@ func (r *Router) setupRoutes() {
 
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
-	
+
 	// Socket.io compatibility endpoints
 	r.mux.HandleFunc("/socket.io/", r.handleSocketIO)
-	
+
 	// Simple stats page
 	r.mux.HandleFunc("/simple-stats", r.handleSimpleStats)
-	
+
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
 
@@ -766,7 +789,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Msg("Path traversal attempt blocked")
 		return
 	}
-	
+
 	// Load system settings to get embedding configuration
 	var allowEmbedding bool
 	var allowedEmbedOrigins string
@@ -774,7 +797,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		allowEmbedding = systemSettings.AllowEmbedding
 		allowedEmbedOrigins = systemSettings.AllowedEmbedOrigins
 	}
-	
+
 	// Apply security headers with embedding configuration
 	SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Add CORS headers if configured
@@ -784,135 +807,136 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token")
 		}
 
-	// Handle preflight requests
-	if req.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	
-
-	// Check if we need authentication
-	needsAuth := true
-	
-	// Check if auth is globally disabled
-	// BUT still check for API tokens if provided (for API access when auth is disabled)
-	if r.config.DisableAuth {
-		// Check if an API token was provided
-		providedToken := req.Header.Get("X-API-Token")
-		if providedToken == "" {
-			providedToken = req.URL.Query().Get("token")
-		}
-		
-		// If a valid API token is provided, allow access even with DisableAuth
-		if providedToken != "" && r.config.APIToken != "" {
-			if auth.CompareAPIToken(providedToken, r.config.APIToken) {
-				// Valid API token provided, allow access
-				needsAuth = false
-				w.Header().Set("X-Auth-Method", "api-token")
-			} else {
-				// Invalid API token - reject even with DisableAuth
-				http.Error(w, "Invalid API token", http.StatusUnauthorized)
-				return
-			}
-		} else {
-			// No API token provided with DisableAuth - allow open access
-			needsAuth = false
-			w.Header().Set("X-Auth-Disabled", "true")
-		}
-	}
-	
-	// Recovery mechanism: Check if recovery mode is enabled
-	recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-	if _, err := os.Stat(recoveryFile); err == nil {
-		// Recovery mode is enabled - allow local access only
-		ip := strings.Split(req.RemoteAddr, ":")[0]
-		log.Debug().
-			Str("recovery_file", recoveryFile).
-			Str("remote_ip", ip).
-			Str("path", req.URL.Path).
-			Bool("file_exists", err == nil).
-			Msg("Checking auth recovery mode")
-		if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
-			log.Warn().
-				Str("recovery_file", recoveryFile).
-				Msg("AUTH RECOVERY MODE: Allowing local access without authentication")
-			// Allow access but add a warning header
-			w.Header().Set("X-Auth-Recovery", "true")
-			// Recovery mode bypasses auth for localhost
-			needsAuth = false
-		}
-	}
-	
-	if needsAuth {
-		// Normal authentication check
-		// Skip auth for certain public endpoints and static assets
-		publicPaths := []string{
-			"/api/health",
-			"/api/security/status",
-			"/api/version",
-			"/api/login",  // Add login endpoint as public
-		}
-		
-		// Also allow static assets without auth (JS, CSS, etc)
-		// These MUST be accessible for the login page to work
-		isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") || 
-			req.URL.Path == "/" || 
-			req.URL.Path == "/index.html" ||
-			req.URL.Path == "/favicon.ico" ||
-			req.URL.Path == "/logo.svg" ||
-			strings.HasSuffix(req.URL.Path, ".js") ||
-			strings.HasSuffix(req.URL.Path, ".css") ||
-			strings.HasSuffix(req.URL.Path, ".map")
-		
-		isPublic := isStaticAsset
-		for _, path := range publicPaths {
-			if req.URL.Path == path {
-				isPublic = true
-				break
-			}
-		}
-		
-		// Special case: setup-script should be public (uses setup codes for auth)
-		if req.URL.Path == "/api/setup-script" {
-			// The script itself prompts for a setup code
-			isPublic = true
-		}
-		
-		// Auto-register endpoint needs to be public (validates tokens internally)
-		// BUT the tokens must be generated by authenticated users via setup-script-url
-		if req.URL.Path == "/api/auto-register" {
-			isPublic = true
-		}
-		
-		// Special case: quick-setup should be accessible to check if already configured
-		// The handler itself will verify if setup should be skipped
-		if req.URL.Path == "/api/security/quick-setup" && req.Method == http.MethodPost {
-			isPublic = true
-		}
-		// Check auth for protected routes (only if auth is needed)
-		if needsAuth && !isPublic && !CheckAuth(r.config, w, req) {
-			// Never send WWW-Authenticate - use custom login page
-			// For API requests, return JSON
-			if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error":"Authentication required"}`))
-			} else {
-				http.Error(w, "Authentication required", http.StatusUnauthorized)
-			}
-			log.Warn().
-				Str("ip", req.RemoteAddr).
-				Str("path", req.URL.Path).
-				Msg("Unauthorized access attempt")
+		// Handle preflight requests
+		if req.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
-	}
+
+		// Check if we need authentication
+		needsAuth := true
+
+		// Check if auth is globally disabled
+		// BUT still check for API tokens if provided (for API access when auth is disabled)
+		if r.config.DisableAuth {
+			// Check if an API token was provided
+			providedToken := req.Header.Get("X-API-Token")
+			if providedToken == "" {
+				providedToken = req.URL.Query().Get("token")
+			}
+
+			// If a valid API token is provided, allow access even with DisableAuth
+			if providedToken != "" && r.config.APIToken != "" {
+				if auth.CompareAPIToken(providedToken, r.config.APIToken) {
+					// Valid API token provided, allow access
+					needsAuth = false
+					w.Header().Set("X-Auth-Method", "api-token")
+				} else {
+					// Invalid API token - reject even with DisableAuth
+					http.Error(w, "Invalid API token", http.StatusUnauthorized)
+					return
+				}
+			} else {
+				// No API token provided with DisableAuth - allow open access
+				needsAuth = false
+				w.Header().Set("X-Auth-Disabled", "true")
+			}
+		}
+
+		// Recovery mechanism: Check if recovery mode is enabled
+		recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+		if _, err := os.Stat(recoveryFile); err == nil {
+			// Recovery mode is enabled - allow local access only
+			ip := strings.Split(req.RemoteAddr, ":")[0]
+			log.Debug().
+				Str("recovery_file", recoveryFile).
+				Str("remote_ip", ip).
+				Str("path", req.URL.Path).
+				Bool("file_exists", err == nil).
+				Msg("Checking auth recovery mode")
+			if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+				log.Warn().
+					Str("recovery_file", recoveryFile).
+					Msg("AUTH RECOVERY MODE: Allowing local access without authentication")
+				// Allow access but add a warning header
+				w.Header().Set("X-Auth-Recovery", "true")
+				// Recovery mode bypasses auth for localhost
+				needsAuth = false
+			}
+		}
+
+		if needsAuth {
+			// Normal authentication check
+			// Skip auth for certain public endpoints and static assets
+			publicPaths := []string{
+				"/api/health",
+				"/api/security/status",
+				"/api/version",
+				"/api/login", // Add login endpoint as public
+				"/api/oidc/login",
+				config.DefaultOIDCCallbackPath,
+			}
+
+			// Also allow static assets without auth (JS, CSS, etc)
+			// These MUST be accessible for the login page to work
+			isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") ||
+				req.URL.Path == "/" ||
+				req.URL.Path == "/index.html" ||
+				req.URL.Path == "/favicon.ico" ||
+				req.URL.Path == "/logo.svg" ||
+				strings.HasSuffix(req.URL.Path, ".js") ||
+				strings.HasSuffix(req.URL.Path, ".css") ||
+				strings.HasSuffix(req.URL.Path, ".map")
+
+			isPublic := isStaticAsset
+			for _, path := range publicPaths {
+				if req.URL.Path == path {
+					isPublic = true
+					break
+				}
+			}
+
+			// Special case: setup-script should be public (uses setup codes for auth)
+			if req.URL.Path == "/api/setup-script" {
+				// The script itself prompts for a setup code
+				isPublic = true
+			}
+
+			// Auto-register endpoint needs to be public (validates tokens internally)
+			// BUT the tokens must be generated by authenticated users via setup-script-url
+			if req.URL.Path == "/api/auto-register" {
+				isPublic = true
+			}
+
+			// Special case: quick-setup should be accessible to check if already configured
+			// The handler itself will verify if setup should be skipped
+			if req.URL.Path == "/api/security/quick-setup" && req.Method == http.MethodPost {
+				isPublic = true
+			}
+			// Check auth for protected routes (only if auth is needed)
+			if needsAuth && !isPublic && !CheckAuth(r.config, w, req) {
+				// Never send WWW-Authenticate - use custom login page
+				// For API requests, return JSON
+				if strings.HasPrefix(req.URL.Path, "/api/") || strings.Contains(req.Header.Get("Accept"), "application/json") {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					w.Write([]byte(`{"error":"Authentication required"}`))
+				} else {
+					http.Error(w, "Authentication required", http.StatusUnauthorized)
+				}
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Msg("Unauthorized access attempt")
+				return
+			}
+		}
 		// Check CSRF for state-changing requests
 		// CSRF is only needed when using session-based auth
 		// Only skip CSRF for initial setup when no auth is configured
 		skipCSRF := false
-		if (req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart") && 
-		   r.config.AuthUser == "" && r.config.AuthPass == "" {
+		if (req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart") &&
+			r.config.AuthUser == "" && r.config.AuthPass == "" {
 			// Only skip CSRF for initial setup and restart when no auth exists
 			skipCSRF = true
 		}
@@ -925,22 +949,22 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			LogAuditEvent("csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
 			return
 		}
-		
+
 		// Rate limiting is now handled by UniversalRateLimitMiddleware
 		// No need for duplicate rate limiting logic here
 
 		// Log request
 		start := time.Now()
-		
+
 		// Fix for issue #334: Custom routing to prevent ServeMux's "./" redirect
 		// When accessing without trailing slash, ServeMux redirects to "./" which is wrong
 		// We handle routing manually to avoid this issue
-		
+
 		// Check if this is an API or WebSocket route
-		if strings.HasPrefix(req.URL.Path, "/api/") || 
-		   strings.HasPrefix(req.URL.Path, "/ws") || 
-		   strings.HasPrefix(req.URL.Path, "/socket.io/") ||
-		   req.URL.Path == "/simple-stats" {
+		if strings.HasPrefix(req.URL.Path, "/api/") ||
+			strings.HasPrefix(req.URL.Path, "/ws") ||
+			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
+			req.URL.Path == "/simple-stats" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
 		} else {
@@ -948,7 +972,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			handler := serveFrontendHandler()
 			handler(w, req)
 		}
-		
+
 		log.Debug().
 			Str("method", req.Method).
 			Str("path", req.URL.Path).
@@ -956,7 +980,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Msg("Request handled")
 	}), allowEmbedding, allowedEmbedOrigins).ServeHTTP(w, req)
 }
-
 
 // handleHealth handles health check requests
 func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
@@ -977,11 +1000,11 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 // handleChangePassword handles password change requests
 func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only POST method is allowed", nil)
 		return
 	}
-	
+
 	// Check if using proxy auth and if so, verify admin status
 	if r.config.ProxyAuthSecret != "" {
 		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
@@ -993,9 +1016,9 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 					Str("method", req.Method).
 					Str("username", username).
 					Msg("Non-admin user attempted to change password")
-				
+
 				// Return forbidden error
-				writeErrorResponse(w, http.StatusForbidden, "forbidden", 
+				writeErrorResponse(w, http.StatusForbidden, "forbidden",
 					"Admin privileges required", nil)
 				return
 			}
@@ -1007,16 +1030,16 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
 	}
-	
+
 	if err := json.NewDecoder(req.Body).Decode(&changeReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
 			"Invalid request body", nil)
 		return
 	}
 
 	// Validate new password complexity
 	if err := auth.ValidatePasswordComplexity(changeReq.NewPassword); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_password", 
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_password",
 			err.Error(), nil)
 		return
 	}
@@ -1024,20 +1047,20 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	// Verify current password matches
 	// When behind a proxy with Basic Auth, the proxy may overwrite the Authorization header
 	// So we verify the current password from the JSON body instead
-	
+
 	// First, validate that currentPassword was provided
 	if changeReq.CurrentPassword == "" {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 			"Current password required", nil)
 		return
 	}
-	
+
 	// Check if we should use Basic Auth header or JSON body for verification
 	// If there's an Authorization header AND it's not from a proxy, use it
 	authHeader := req.Header.Get("Authorization")
 	useAuthHeader := false
 	username := r.config.AuthUser // Default to configured username
-	
+
 	if authHeader != "" {
 		const basicPrefix = "Basic "
 		if strings.HasPrefix(authHeader, basicPrefix) {
@@ -1056,7 +1079,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
 								Msg("Failed password change attempt - incorrect current password in auth header")
-							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 								"Current password is incorrect", nil)
 							return
 						}
@@ -1066,7 +1089,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 	}
-	
+
 	// If we didn't use the auth header, or need to double-check, verify from JSON body
 	if !useAuthHeader || changeReq.CurrentPassword != "" {
 		// Verify current password from JSON body
@@ -1075,7 +1098,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
 				Msg("Failed password change attempt - incorrect current password")
-			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 				"Current password is incorrect", nil)
 			return
 		}
@@ -1085,18 +1108,18 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	hashedPassword, err := auth.HashPassword(changeReq.NewPassword)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to hash new password")
-		writeErrorResponse(w, http.StatusInternalServerError, "hash_error", 
+		writeErrorResponse(w, http.StatusInternalServerError, "hash_error",
 			"Failed to process new password", nil)
 		return
 	}
 
 	// Check if we're running in Docker
 	isDocker := os.Getenv("PULSE_DOCKER") == "true"
-	
+
 	if isDocker {
 		// For Docker, update the .env file in the data directory
 		envPath := filepath.Join(r.config.ConfigPath, ".env")
-		
+
 		// Read existing .env file to preserve other settings
 		envContent := ""
 		existingContent, err := os.ReadFile(envPath)
@@ -1124,46 +1147,46 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
-			
+
 			// Include API token if configured
 			if r.config.APIToken != "" {
 				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.APIToken)
 			}
 		}
-		
+
 		// Write the updated .env file
 		if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 			log.Error().Err(err).Str("path", envPath).Msg("Failed to write .env file")
-			writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+			writeErrorResponse(w, http.StatusInternalServerError, "config_error",
 				"Failed to save new password", nil)
 			return
 		}
-		
+
 		// Update the running config
 		r.config.AuthPass = hashedPassword
-		
+
 		log.Info().Msg("Password changed successfully in Docker environment")
-		
+
 		// Invalidate all sessions
 		InvalidateUserSessions(r.config.AuthUser)
-		
+
 		// Audit log
 		LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed (Docker)")
-		
+
 		// Return success with Docker-specific message
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"message": "Password changed successfully. Please restart your Docker container to apply changes.",
 		})
-		
+
 	} else {
 		// For non-Docker (systemd/manual), save to .env file
 		envPath := filepath.Join(r.config.ConfigPath, ".env")
 		if r.config.ConfigPath == "" {
 			envPath = "/etc/pulse/.env"
 		}
-		
+
 		// Read existing .env file to preserve other settings
 		envContent := ""
 		existingContent, err := os.ReadFile(envPath)
@@ -1190,50 +1213,49 @@ PULSE_AUTH_PASS='%s'
 PULSE_AUTH_USER='%s'
 PULSE_AUTH_PASS='%s'
 `, time.Now().Format(time.RFC3339), r.config.AuthUser, hashedPassword)
-			
+
 			if r.config.APIToken != "" {
 				envContent += fmt.Sprintf("API_TOKEN='%s'\n", r.config.APIToken)
 			}
 		}
-		
+
 		// Try to write the .env file
 		if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 			log.Error().Err(err).Str("path", envPath).Msg("Failed to write .env file")
-			writeErrorResponse(w, http.StatusInternalServerError, "config_error", 
+			writeErrorResponse(w, http.StatusInternalServerError, "config_error",
 				"Failed to save new password. You may need to update the password manually.", nil)
 			return
 		}
-		
+
 		// Update the running config
 		r.config.AuthPass = hashedPassword
-		
+
 		log.Info().Msg("Password changed successfully")
-		
+
 		// Invalidate all sessions
 		InvalidateUserSessions(r.config.AuthUser)
-		
+
 		// Audit log
 		LogAuditEvent("password_change", r.config.AuthUser, GetClientIP(req), req.URL.Path, true, "Password changed")
-		
+
 		// Detect service name for restart instructions
 		serviceName := detectServiceName()
-		
+
 		// Return success with manual restart instructions
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": fmt.Sprintf("Password changed. Restart the service to apply: sudo systemctl restart %s", serviceName),
+			"success":         true,
+			"message":         fmt.Sprintf("Password changed. Restart the service to apply: sudo systemctl restart %s", serviceName),
 			"requiresRestart": true,
-			"serviceName": serviceName,
+			"serviceName":     serviceName,
 		})
 	}
 }
 
-
 // handleLogout handles logout requests
 func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only POST method is allowed", nil)
 		return
 	}
@@ -1243,18 +1265,18 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	if cookie, err := req.Cookie("pulse_session"); err == nil {
 		sessionToken = cookie.Value
 	}
-	
+
 	// Delete the session if it exists
 	if sessionToken != "" {
 		GetSessionStore().DeleteSession(sessionToken)
-		
+
 		// Also delete CSRF token if exists
 		GetCSRFStore().DeleteCSRFToken(sessionToken)
 	}
-	
+
 	// Get appropriate cookie settings based on proxy detection (consistent with login)
 	isSecure, sameSitePolicy := getCookieSettings(req)
-	
+
 	// Clear the session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "pulse_session",
@@ -1265,15 +1287,15 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		Secure:   isSecure,
 		SameSite: sameSitePolicy,
 	})
-	
+
 	// Audit log logout (use admin as username since we have single user for now)
 	LogAuditEvent("logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
-	
+
 	log.Info().
 		Str("user", "admin").
 		Str("ip", GetClientIP(req)).
 		Msg("User logged out")
-	
+
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1282,95 +1304,134 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, username string) error {
+	token := generateSessionToken()
+	if token == "" {
+		return fmt.Errorf("failed to generate session token")
+	}
+
+	userAgent := req.Header.Get("User-Agent")
+	clientIP := GetClientIP(req)
+	GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
+
+	if username != "" {
+		TrackUserSession(username, token)
+	}
+
+	csrfToken := generateCSRFToken(token)
+	isSecure, sameSitePolicy := getCookieSettings(req)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "pulse_csrf",
+		Value:    csrfToken,
+		Path:     "/",
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	return nil
+}
+
 // handleLogin handles login requests and provides detailed feedback about lockouts
 func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only POST method is allowed", nil)
 		return
 	}
-	
+
 	// Parse request
 	var loginReq struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	
+
 	if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
 			"Invalid request body", nil)
 		return
 	}
-	
+
 	clientIP := GetClientIP(req)
-	
+
 	// Check if account is locked out before attempting login
 	_, userLockedUntil, userLocked := GetLockoutInfo(loginReq.Username)
 	_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
-	
+
 	if userLocked || ipLocked {
 		lockedUntil := userLockedUntil
 		if ipLocked && ipLockedUntil.After(lockedUntil) {
 			lockedUntil = ipLockedUntil
 		}
-		
+
 		remainingMinutes := int(time.Until(lockedUntil).Minutes())
 		if remainingMinutes < 1 {
 			remainingMinutes = 1
 		}
-		
+
 		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "account_locked",
-			"message": fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
-			"lockedUntil": lockedUntil.Format(time.RFC3339),
+			"error":            "account_locked",
+			"message":          fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
+			"lockedUntil":      lockedUntil.Format(time.RFC3339),
 			"remainingMinutes": remainingMinutes,
 		})
 		return
 	}
-	
+
 	// Check rate limiting
 	if !authLimiter.Allow(clientIP) {
 		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Rate limited")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "rate_limit",
+			"error":   "rate_limit",
 			"message": "Too many requests. Please wait before trying again.",
 		})
 		return
 	}
-	
+
 	// Verify credentials
 	if loginReq.Username == r.config.AuthUser && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)
-		
+
 		// Create session
 		token := generateSessionToken()
 		if token == "" {
-			writeErrorResponse(w, http.StatusInternalServerError, "session_error", 
+			writeErrorResponse(w, http.StatusInternalServerError, "session_error",
 				"Failed to create session", nil)
 			return
 		}
-		
+
 		// Store session persistently
 		userAgent := req.Header.Get("User-Agent")
 		GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP)
-		
+
 		// Track session for user
 		TrackUserSession(loginReq.Username, token)
-		
+
 		// Generate CSRF token
 		csrfToken := generateCSRFToken(token)
-		
+
 		// Get appropriate cookie settings based on proxy detection
 		isSecure, sameSitePolicy := getCookieSettings(req)
-		
+
 		// Set session cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "pulse_session",
@@ -1381,7 +1442,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			SameSite: sameSitePolicy,
 			MaxAge:   86400, // 24 hours
 		})
-		
+
 		// Set CSRF cookie (not HttpOnly so JS can read it)
 		http.SetCookie(w, &http.Cookie{
 			Name:     "pulse_csrf",
@@ -1391,10 +1452,10 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			SameSite: sameSitePolicy,
 			MaxAge:   86400, // 24 hours
 		})
-		
+
 		// Audit log successful login
 		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, true, "Successful login")
-		
+
 		// Return success
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1406,36 +1467,36 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		RecordFailedLogin(loginReq.Username)
 		RecordFailedLogin(clientIP)
 		LogAuditEvent("login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
-		
+
 		// Get updated attempt counts
 		newUserAttempts, _, _ := GetLockoutInfo(loginReq.Username)
 		newIPAttempts, _, _ := GetLockoutInfo(clientIP)
-		
+
 		// Use the higher count for warning
 		attempts := newUserAttempts
 		if newIPAttempts > attempts {
 			attempts = newIPAttempts
 		}
-		
+
 		// Prepare response with attempt information
 		remaining := maxFailedAttempts - attempts
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		
+
 		if remaining > 0 {
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "invalid_credentials",
-				"message": fmt.Sprintf("Invalid username or password. You have %d attempts remaining.", remaining),
-				"attempts": attempts,
-				"remaining": remaining,
+				"error":       "invalid_credentials",
+				"message":     fmt.Sprintf("Invalid username or password. You have %d attempts remaining.", remaining),
+				"attempts":    attempts,
+				"remaining":   remaining,
 				"maxAttempts": maxFailedAttempts,
 			})
 		} else {
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "invalid_credentials",
-				"message": "Invalid username or password. Account is now locked for 15 minutes.",
-				"locked": true,
+				"error":           "invalid_credentials",
+				"message":         "Invalid username or password. Account is now locked for 15 minutes.",
+				"locked":          true,
 				"lockoutDuration": "15 minutes",
 			})
 		}
@@ -1445,44 +1506,44 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 // handleResetLockout allows administrators to manually reset account lockouts
 func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only POST method is allowed", nil)
 		return
 	}
-	
+
 	// Parse request
 	var resetReq struct {
 		Identifier string `json:"identifier"` // Can be username or IP
 	}
-	
+
 	if err := json.NewDecoder(req.Body).Decode(&resetReq); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", 
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request",
 			"Invalid request body", nil)
 		return
 	}
-	
+
 	if resetReq.Identifier == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_identifier", 
+		writeErrorResponse(w, http.StatusBadRequest, "missing_identifier",
 			"Identifier (username or IP) is required", nil)
 		return
 	}
-	
+
 	// Reset the lockout
 	ResetLockout(resetReq.Identifier)
-	
+
 	// Also clear failed login attempts
 	ClearFailedLogins(resetReq.Identifier)
-	
+
 	// Audit log the reset
-	LogAuditEvent("lockout_reset", "admin", GetClientIP(req), req.URL.Path, true, 
+	LogAuditEvent("lockout_reset", "admin", GetClientIP(req), req.URL.Path, true,
 		fmt.Sprintf("Lockout reset for: %s", resetReq.Identifier))
-	
+
 	log.Info().
 		Str("identifier", resetReq.Identifier).
 		Str("reset_by", "admin").
 		Str("ip", GetClientIP(req)).
 		Msg("Account lockout manually reset")
-	
+
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1494,24 +1555,24 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 // handleState handles state requests
 func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only GET method is allowed", nil)
 		return
 	}
 
 	// Use standard auth check (supports both basic auth and API tokens) unless auth is disabled
 	if !r.config.DisableAuth && !CheckAuth(r.config, w, req) {
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", 
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 			"Authentication required", nil)
 		return
 	}
 
 	state := r.monitor.GetState()
 	frontendState := state.ToFrontend()
-	
+
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
-		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
+		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode state data", nil)
 	}
 }
@@ -1536,14 +1597,14 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	
+
 	// Convert to typed response
 	response := VersionResponse{
 		Version:   versionInfo.Version,
 		BuildTime: versionInfo.Build,
 		GoVersion: runtime.Version(),
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -1551,7 +1612,7 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 // handleStorage handles storage detail requests
 func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", 
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only GET method is allowed", nil)
 		return
 	}
@@ -1559,14 +1620,14 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 	// Extract storage ID from path
 	path := strings.TrimPrefix(req.URL.Path, "/api/storage/")
 	if path == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_storage_id", 
+		writeErrorResponse(w, http.StatusBadRequest, "missing_storage_id",
 			"Storage ID is required", nil)
 		return
 	}
 
 	// Get current state
 	state := r.monitor.GetState()
-	
+
 	// Find the storage by ID
 	var storageDetail *models.Storage
 	for _, storage := range state.Storage {
@@ -1575,21 +1636,21 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 			break
 		}
 	}
-	
+
 	if storageDetail == nil {
-		writeErrorResponse(w, http.StatusNotFound, "storage_not_found", 
+		writeErrorResponse(w, http.StatusNotFound, "storage_not_found",
 			fmt.Sprintf("Storage with ID '%s' not found", path), nil)
 		return
 	}
-	
+
 	// Return storage details
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"data": storageDetail,
+		"data":      storageDetail,
 		"timestamp": time.Now().Unix(),
 	}); err != nil {
 		log.Error().Err(err).Str("storage_id", path).Msg("Failed to encode storage details")
-		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error", 
+		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode response", nil)
 	}
 }
@@ -1597,19 +1658,19 @@ func (r *Router) handleStorage(w http.ResponseWriter, req *http.Request) {
 // handleCharts handles chart data requests
 func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("Charts endpoint hit")
-	
+
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Get time range from query parameters
 	query := req.URL.Query()
 	timeRange := query.Get("range")
 	if timeRange == "" {
 		timeRange = "1h"
 	}
-	
+
 	// Convert time range to duration
 	var duration time.Duration
 	switch timeRange {
@@ -1632,26 +1693,26 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	default:
 		duration = time.Hour
 	}
-	
+
 	// Get current state from monitor
 	state := r.monitor.GetState()
-	
+
 	// Create chart data structure that matches frontend expectations
 	chartData := make(map[string]VMChartData)
 	nodeData := make(map[string]NodeChartData)
-	
+
 	currentTime := time.Now().Unix() * 1000 // JavaScript timestamp format
 	oldestTimestamp := currentTime
-	
+
 	// Process VMs - get historical data
 	for _, vm := range state.VMs {
 		if chartData[vm.ID] == nil {
 			chartData[vm.ID] = make(VMChartData)
 		}
-		
+
 		// Get historical metrics
 		metrics := r.monitor.GetGuestMetrics(vm.ID, duration)
-		
+
 		// Convert metric points to API format
 		for metricType, points := range metrics {
 			chartData[vm.ID][metricType] = make([]MetricPoint, len(points))
@@ -1662,11 +1723,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				chartData[vm.ID][metricType][i] = MetricPoint{
 					Timestamp: ts,
-					Value: point.Value,
+					Value:     point.Value,
 				}
 			}
 		}
-		
+
 		// If no historical data, add current value
 		if len(chartData[vm.ID]["cpu"]) == 0 {
 			chartData[vm.ID]["cpu"] = []MetricPoint{
@@ -1692,16 +1753,16 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	
-	// Process Containers - get historical data  
+
+	// Process Containers - get historical data
 	for _, ct := range state.Containers {
 		if chartData[ct.ID] == nil {
 			chartData[ct.ID] = make(VMChartData)
 		}
-		
+
 		// Get historical metrics
 		metrics := r.monitor.GetGuestMetrics(ct.ID, duration)
-		
+
 		// Convert metric points to API format
 		for metricType, points := range metrics {
 			chartData[ct.ID][metricType] = make([]MetricPoint, len(points))
@@ -1712,11 +1773,11 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				chartData[ct.ID][metricType][i] = MetricPoint{
 					Timestamp: ts,
-					Value: point.Value,
+					Value:     point.Value,
 				}
 			}
 		}
-		
+
 		// If no historical data, add current value
 		if len(chartData[ct.ID]["cpu"]) == 0 {
 			chartData[ct.ID]["cpu"] = []MetricPoint{
@@ -1742,17 +1803,17 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	
+
 	// Process Storage - get historical data
 	storageData := make(map[string]StorageChartData)
 	for _, storage := range state.Storage {
 		if storageData[storage.ID] == nil {
 			storageData[storage.ID] = make(StorageChartData)
 		}
-		
+
 		// Get historical metrics
 		metrics := r.monitor.GetStorageMetrics(storage.ID, duration)
-		
+
 		// Convert usage metrics to chart format
 		if usagePoints, ok := metrics["usage"]; ok && len(usagePoints) > 0 {
 			// Convert MetricPoint slice to chart format
@@ -1764,7 +1825,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				storageData[storage.ID]["disk"][i] = MetricPoint{
 					Timestamp: ts,
-					Value: point.Value,
+					Value:     point.Value,
 				}
 			}
 		} else {
@@ -1778,13 +1839,13 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-	
+
 	// Process Nodes - get historical data
 	for _, node := range state.Nodes {
 		if nodeData[node.ID] == nil {
 			nodeData[node.ID] = make(NodeChartData)
 		}
-		
+
 		// Get historical metrics for each type
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
 			points := r.monitor.GetNodeMetrics(node.ID, metricType, duration)
@@ -1796,10 +1857,10 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				nodeData[node.ID][metricType][i] = MetricPoint{
 					Timestamp: ts,
-					Value: point.Value,
+					Value:     point.Value,
 				}
 			}
-			
+
 			// If no historical data, add current value
 			if len(nodeData[node.ID][metricType]) == 0 {
 				var value float64
@@ -1834,7 +1895,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	log.Debug().
 		Int("guests", len(chartData)).
 		Int("nodes", len(nodeData)).
@@ -1859,13 +1920,13 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 
 	duration := time.Duration(rangeMinutes) * time.Minute
 	state := r.monitor.GetState()
-	
+
 	// Build storage chart data
 	storageData := make(StorageChartsResponse)
-	
+
 	for _, storage := range state.Storage {
 		metrics := r.monitor.GetStorageMetrics(storage.ID, duration)
-		
+
 		storageData[storage.ID] = StorageMetrics{
 			Usage: metrics["usage"],
 			Used:  metrics["used"],
@@ -1899,7 +1960,6 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(config)
 }
 
-
 // handleBackups handles backup requests
 func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -1909,13 +1969,13 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 
 	// Get current state
 	state := r.monitor.GetState()
-	
+
 	// Return backup data structure
 	backups := map[string]interface{}{
-		"backupTasks": state.PVEBackups.BackupTasks,
+		"backupTasks":    state.PVEBackups.BackupTasks,
 		"storageBackups": state.PVEBackups.StorageBackups,
 		"guestSnapshots": state.PVEBackups.GuestSnapshots,
-		"pbsBackups": state.PBSBackups,
+		"pbsBackups":     state.PBSBackups,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1931,13 +1991,13 @@ func (r *Router) handleBackupsPVE(w http.ResponseWriter, req *http.Request) {
 
 	// Get state and extract PVE backups
 	state := r.monitor.GetState()
-	
+
 	// Return PVE backup data in expected format
 	backups := state.PVEBackups.StorageBackups
 	if backups == nil {
 		backups = []models.StorageBackup{}
 	}
-	
+
 	pveBackups := map[string]interface{}{
 		"backups": backups,
 	}
@@ -1959,13 +2019,13 @@ func (r *Router) handleBackupsPBS(w http.ResponseWriter, req *http.Request) {
 
 	// Get state and extract PBS backups
 	state := r.monitor.GetState()
-	
+
 	// Return PBS backup data in expected format
 	instances := state.PBSInstances
 	if instances == nil {
 		instances = []models.PBSInstance{}
 	}
-	
+
 	pbsData := map[string]interface{}{
 		"instances": instances,
 	}
@@ -1987,13 +2047,13 @@ func (r *Router) handleSnapshots(w http.ResponseWriter, req *http.Request) {
 
 	// Get state and extract guest snapshots
 	state := r.monitor.GetState()
-	
+
 	// Return snapshot data
 	snaps := state.PVEBackups.GuestSnapshots
 	if snaps == nil {
 		snaps = []models.GuestSnapshot{}
 	}
-	
+
 	snapshots := map[string]interface{}{
 		"snapshots": snaps,
 	}
@@ -2223,11 +2283,10 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
     </script>
 </body>
 </html>`
-	
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
 }
-
 
 // handleSocketIO handles socket.io requests
 func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
@@ -2236,14 +2295,14 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "https://cdn.socket.io/4.8.1/socket.io.min.js", http.StatusFound)
 		return
 	}
-	
+
 	// For other socket.io endpoints, use our WebSocket
 	// This provides basic compatibility
 	if strings.Contains(req.URL.RawQuery, "transport=websocket") {
 		r.wsHub.HandleWebSocket(w, req)
 		return
 	}
-	
+
 	// For polling transport, return proper socket.io response
 	// Socket.io v4 expects specific format
 	if strings.Contains(req.URL.RawQuery, "transport=polling") {
@@ -2263,7 +2322,7 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	
+
 	// Default: redirect to WebSocket
 	http.Redirect(w, req, "/ws", http.StatusFound)
 }
@@ -2271,18 +2330,18 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 // forwardUpdateProgress forwards update progress to WebSocket clients
 func (r *Router) forwardUpdateProgress() {
 	progressChan := r.updateManager.GetProgressChannel()
-	
+
 	for status := range progressChan {
 		// Create update event for WebSocket
 		message := websocket.Message{
-			Type: "update:progress",
-			Data: status,
+			Type:      "update:progress",
+			Data:      status,
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		
+
 		// Broadcast to all connected clients
 		r.wsHub.BroadcastMessage(message)
-		
+
 		// Log progress
 		log.Debug().
 			Str("status", status.Status).
@@ -2291,5 +2350,3 @@ func (r *Router) forwardUpdateProgress() {
 			Msg("Update progress")
 	}
 }
-
-
