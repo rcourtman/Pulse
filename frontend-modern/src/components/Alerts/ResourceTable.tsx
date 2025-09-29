@@ -3,15 +3,15 @@ import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
-interface Resource {
+export interface Resource {
   id: string;
   name: string;
   node?: string;
   instance?: string;
   type?: string;
   resourceType?: string;
-  thresholds?: Record<string, number>;
-  defaults?: Record<string, number>;
+  thresholds?: Record<string, number | undefined>;
+  defaults?: Record<string, number | undefined>;
   disabled?: boolean;
   disableConnectivity?: boolean;
   hasOverride?: boolean;
@@ -28,15 +28,15 @@ interface ResourceTableProps {
   groupedResources?: Record<string, Resource[]>;
   columns: string[];
   activeAlerts?: Record<string, Alert>;
-  onEdit: (resourceId: string, thresholds: Record<string, number>, defaults: Record<string, number>) => void;
+  onEdit: (resourceId: string, thresholds: Record<string, number | undefined>, defaults: Record<string, number | undefined>) => void;
   onSaveEdit: (resourceId: string) => void;
   onCancelEdit: () => void;
   onRemoveOverride: (resourceId: string) => void;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
   editingId: () => string | null;
-  editingThresholds: () => Record<string, number>;
-  setEditingThresholds: (value: Record<string, number>) => void;
+  editingThresholds: () => Record<string, number | undefined>;
+  setEditingThresholds: (value: Record<string, number | undefined>) => void;
   formatMetricValue: (metric: string, value: number | undefined) => string;
   hasActiveAlert: (resourceId: string, metric: string) => boolean;
 }
@@ -117,15 +117,24 @@ export function ResourceTable(props: ResourceTableProps) {
                     <For each={resources}>
                       {(resource) => {
                         const isEditing = () => props.editingId() === resource.id;
-                        const thresholds = () => isEditing() ? props.editingThresholds() : resource.thresholds;
+                        const thresholds = (): Record<string, number | undefined> => {
+                          if (isEditing()) {
+                            return props.editingThresholds();
+                          }
+                          return resource.thresholds ?? {};
+                        };
                         const displayValue = (metric: string): number => {
                           const thresh = thresholds();
                           const defaults = resource.defaults || {};
                           if (isEditing()) {
-                            const val = thresh?.[metric] || defaults[metric];
-                            return typeof val === 'string' ? (parseFloat(val) || 0) : (val || 0);
+                            const val = thresh[metric] ?? defaults[metric];
+                            return typeof val === 'number' ? val : Number(val) || 0;
                           }
-                          return resource.thresholds?.[metric] || defaults[metric] || 0;
+                          const liveValue = resource.thresholds?.[metric];
+                          if (typeof liveValue === 'number') {
+                            return liveValue;
+                          }
+                          return typeof defaults[metric] === 'number' ? (defaults[metric] as number) : 0;
                         };
                         const isOverridden = (metric: string) => {
                           return resource.thresholds?.[metric] !== undefined && resource.thresholds?.[metric] !== null;
@@ -308,7 +317,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </>
                                 }>
                                   <button type="button"
-                                    onClick={() => props.onEdit(resource.id, resource.thresholds || {}, resource.defaults || {})}
+                                    onClick={() => props.onEdit(
+                                      resource.id,
+                                      resource.thresholds ? { ...resource.thresholds } : {},
+                                      resource.defaults ? { ...resource.defaults } : {}
+                                    )}
                                     class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                     title="Edit thresholds"
                                   >
@@ -343,7 +356,12 @@ export function ResourceTable(props: ResourceTableProps) {
                 <For each={props.resources}>
                   {(resource) => {
                   const isEditing = () => props.editingId() === resource.id;
-                  const thresholds = () => isEditing() ? props.editingThresholds() : resource.thresholds;
+                  const thresholds = (): Record<string, number | undefined> => {
+                    if (isEditing()) {
+                      return props.editingThresholds();
+                    }
+                    return resource.thresholds ?? {};
+                  };
                   const displayValue = (metric: string): number => {
                     const thresh = thresholds();
                     const defaults = resource.defaults || {};
@@ -440,11 +458,23 @@ export function ResourceTable(props: ResourceTableProps) {
                                     type="number"
                                     min="-1"
                                     max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
-                                    value={thresholds()[metric] || ''}
-                                    onInput={(e) => props.setEditingThresholds({
-                                      ...props.editingThresholds(),
-                                      [metric]: parseInt(e.currentTarget.value) || undefined
-                                    })}
+                                    value={(() => {
+                                      const currentThresholds = thresholds();
+                                      const rawValue = currentThresholds[metric];
+                                      return rawValue ?? '';
+                                    })()}
+                                    onInput={(e) => {
+                                      const parsed = e.currentTarget.value.trim();
+                                      let nextValue: number | undefined;
+                                      if (parsed !== '') {
+                                        const numeric = Number(parsed);
+                                        nextValue = Number.isFinite(numeric) ? numeric : undefined;
+                                      }
+                                      props.setEditingThresholds({
+                                        ...props.editingThresholds(),
+                                        [metric]: nextValue
+                                      });
+                                    }}
                                     class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                   />
@@ -535,7 +565,11 @@ export function ResourceTable(props: ResourceTableProps) {
                             </>
                           }>
                             <button type="button"
-                              onClick={() => props.onEdit(resource.id, resource.thresholds || {}, resource.defaults || {})}
+                            onClick={() => props.onEdit(
+                              resource.id,
+                              resource.thresholds ? { ...resource.thresholds } : {},
+                              resource.defaults ? { ...resource.defaults } : {}
+                            )}
                               class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                               title="Edit thresholds"
                             >

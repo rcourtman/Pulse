@@ -2,7 +2,6 @@ import { Component, For, Show, createSignal, createMemo, createEffect } from 'so
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes } from '@/utils/format';
-import { createTooltipSystem } from '@/components/shared/Tooltip';
 import type { Storage as StorageType } from '@/types/api';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
@@ -10,7 +9,6 @@ import { StorageFilter } from './StorageFilter';
 import { DiskList } from './DiskList';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 
 
 const Storage: Component = () => {
@@ -22,9 +20,6 @@ const Storage: Component = () => {
   // TODO: Implement sorting in sortedStorage function
   // const [sortKey, setSortKey] = createSignal('name');
   // const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  
-  // Create tooltip system
-  const TooltipComponent = createTooltipSystem();
   
   // Create a mapping from node name to host URL
   const nodeHostMap = createMemo(() => {
@@ -407,14 +402,16 @@ const Storage: Component = () => {
                           const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
                           
                           // Create row style with inset box-shadow for alert border
-                          const rowStyle = createMemo(() => {
-                            const styles: Record<string, string> = {};
-                            if (alertStyles.hasAlert) {
-                              const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
-                              styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
-                            }
-                            return styles;
-                          });
+                        const rowStyle = createMemo(() => {
+                          const styles: Record<string, string> = {};
+                          if (alertStyles.hasAlert) {
+                            const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                            styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
+                          }
+                          return styles;
+                        });
+
+                        const zfsPool = storage.zfsPool;
                           
                           return (
                             <>
@@ -428,17 +425,17 @@ const Storage: Component = () => {
                                     {storage.name}
                                   </span>
                                   {/* ZFS Health Badge */}
-                                  <Show when={storage.zfsPool && storage.zfsPool.state !== 'ONLINE'}>
+                                  <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
                                     <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      storage.zfsPool.state === 'DEGRADED'
+                                      zfsPool?.state === 'DEGRADED'
                                         ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                                         : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                                     }`}>
-                                      {storage.zfsPool.state}
+                                      {zfsPool?.state}
                                     </span>
                                   </Show>
                                   {/* ZFS Error Badge */}
-                                  <Show when={storage.zfsPool && (storage.zfsPool.readErrors > 0 || storage.zfsPool.writeErrors > 0 || storage.zfsPool.checksumErrors > 0)}>
+                                  <Show when={zfsPool && (zfsPool.readErrors > 0 || zfsPool.writeErrors > 0 || zfsPool.checksumErrors > 0)}>
                                     <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
                                       ERRORS
                                     </span>

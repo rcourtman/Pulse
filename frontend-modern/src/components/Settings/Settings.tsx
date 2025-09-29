@@ -29,6 +29,16 @@ interface DiscoveredServer {
   release?: string;
 }
 
+type RawDiscoveredServer = {
+  ip?: string;
+  port?: number;
+  type?: string;
+  version?: string;
+  hostname?: string;
+  name?: string;
+  release?: string;
+};
+
 interface ClusterEndpoint {
   Host?: string;
   IP?: string;
@@ -227,54 +237,99 @@ const Settings: Component = () => {
     }
   };
 
+  const updateDiscoveredNodesFromServers = (servers: RawDiscoveredServer[] | undefined | null, options: { merge?: boolean } = {}) => {
+    const { merge = false } = options;
+
+    if (!servers || servers.length === 0) {
+      if (!merge) {
+        setDiscoveredNodes([]);
+      }
+      return;
+    }
+
+    // Prepare sets of configured hosts and cluster member IPs to filter duplicates
+    const configuredHosts = new Set<string>();
+    const clusterMemberIPs = new Set<string>();
+
+    nodes().forEach((n) => {
+      const cleanedHost = n.host.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+      configuredHosts.add(cleanedHost.toLowerCase());
+
+      if (n.type === 'pve' && 'isCluster' in n && n.isCluster && 'clusterEndpoints' in n && n.clusterEndpoints) {
+        n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
+          if (endpoint.IP) {
+            clusterMemberIPs.add(endpoint.IP.toLowerCase());
+          }
+          if (endpoint.Host) {
+            clusterMemberIPs.add(endpoint.Host.toLowerCase());
+          }
+        });
+      }
+    });
+
+    const normalized = servers
+      .map((server): DiscoveredServer | null => {
+        const ip = (server.ip || '').trim();
+        const type = (server.type || '').toLowerCase();
+        const port = typeof server.port === 'number' ? server.port : type === 'pbs' ? 8007 : 8006;
+
+        if (!ip || (type !== 'pve' && type !== 'pbs')) {
+          return null;
+        }
+
+        const hostname = (server.hostname || server.name || '').trim();
+        const version = (server.version || '').trim();
+        const release = (server.release || '').trim();
+
+        return {
+          ip,
+          port,
+          type: type as 'pve' | 'pbs',
+          version: version || 'Unknown',
+          hostname: hostname || undefined,
+          release: release || undefined,
+        };
+      })
+      .filter((server): server is DiscoveredServer => server !== null);
+
+    const filtered = normalized.filter((server) => {
+      const serverIP = server.ip.toLowerCase();
+      const serverHostname = server.hostname?.toLowerCase();
+
+      if (configuredHosts.has(serverIP) || (serverHostname && configuredHosts.has(serverHostname))) {
+        return false;
+      }
+
+      if (clusterMemberIPs.has(serverIP) || (serverHostname && clusterMemberIPs.has(serverHostname))) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (merge) {
+      setDiscoveredNodes((prev) => {
+        const existingMap = new Map(prev.map((item) => [`${item.ip}:${item.port}`, item]));
+        filtered.forEach((server) => {
+          existingMap.set(`${server.ip}:${server.port}`, server);
+        });
+        return Array.from(existingMap.values());
+      });
+    } else {
+      setDiscoveredNodes(filtered);
+    }
+  };
+
   const loadDiscoveredNodes = async () => {
     try {
       const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/discover');
       if (response.ok) {
         const data = await response.json();
-        if (data.servers && Array.isArray(data.servers)) {
-          // Get all configured hosts and cluster member IPs
-          const configuredHosts = new Set<string>();
-          const clusterMemberIPs = new Set<string>();
-          
-          nodes().forEach(n => {
-            // Add the main host
-            const host = n.host.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-            configuredHosts.add(host.toLowerCase());
-            
-            // If it's a cluster, add all member IPs
-            if (n.type === 'pve' && 'isCluster' in n && n.isCluster && 'clusterEndpoints' in n && n.clusterEndpoints) {
-              n.clusterEndpoints.forEach((endpoint: ClusterEndpoint) => {
-                if (endpoint.IP) {
-                  clusterMemberIPs.add(endpoint.IP.toLowerCase());
-                }
-                if (endpoint.Host) {
-                  clusterMemberIPs.add(endpoint.Host.toLowerCase());
-                }
-              });
-            }
-          });
-          
-          // Filter out nodes that are already configured or part of a cluster
-          const filtered = data.servers.filter((server: DiscoveredServer) => {
-            const serverIP = server.ip?.toLowerCase();
-            const serverHostname = server.hostname?.toLowerCase();
-            
-            // Check if this server is already configured directly
-            if ((serverIP && configuredHosts.has(serverIP)) || (serverHostname && configuredHosts.has(serverHostname))) {
-              return false;
-            }
-            
-            // Check if this server is part of a configured cluster
-            if ((serverIP && clusterMemberIPs.has(serverIP)) || (serverHostname && clusterMemberIPs.has(serverHostname))) {
-              return false;
-            }
-            
-            return true;
-          });
-          
-          setDiscoveredNodes(filtered);
+        if (Array.isArray(data.servers)) {
+          updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
+        } else {
+          updateDiscoveredNodesFromServers([]);
         }
       }
     } catch (error) {
@@ -299,27 +354,16 @@ const Settings: Component = () => {
     });
     
     const unsubscribeDiscovery = eventBus.on('discovery_updated', (data) => {
-      // If this is an immediate update (from node deletion), merge with existing
-      if (data && data.immediate && data.servers) {
-        setDiscoveredNodes(prev => {
-          // Create a map of existing servers by IP:port
-          const existingMap = new Map(prev.map(s => [`${s.ip}:${s.port}`, s]));
-          
-          // Add/update the new servers
-          data.servers.forEach((server) => {
-            const discoveredServer: DiscoveredServer = {
-              ...server,
-              type: server.type as 'pbs' | 'pve'
-            };
-            existingMap.set(`${server.ip}:${server.port}`, discoveredServer);
-          });
-          
-          // Convert back to array
-          return Array.from(existingMap.values());
-        });
-      } else {
-        // Full discovery update - reload from API
-        loadDiscoveredNodes();
+      if (!data) {
+        updateDiscoveredNodesFromServers([]);
+        return;
+      }
+
+      if (Array.isArray(data.servers)) {
+        updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[], { merge: !!data.immediate });
+      } else if (!data.immediate) {
+        // Ensure we clear stale results when the update explicitly reports no servers
+        updateDiscoveredNodesFromServers([]);
       }
     });
     
@@ -2088,7 +2132,7 @@ const Settings: Component = () => {
                     {(() => {
                       const sanitizeForGitHub = (data: Record<string, unknown>) => {
                         // Deep clone the data
-                        const sanitized = JSON.parse(JSON.stringify(data));
+                        const sanitized = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
                         
                         // Sanitize IP addresses (keep first octet for network type identification)
                         const sanitizeIP = (ip: string) => {
@@ -2111,78 +2155,112 @@ const Settings: Component = () => {
                         
                         // Sanitize nodes
                         if (sanitized.nodes) {
-                          sanitized.nodes = (sanitized.nodes as Array<Record<string, unknown>>).map((node, index: number) => ({
-                            ...node,
-                            id: `${node.type}-${index}`,
-                            name: sanitizeHostname(node.name),
-                            host: node.host ? node.host.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED') : node.host,
-                            tokenName: node.tokenName ? 'token-REDACTED' : node.tokenName,
-                            clusterName: node.clusterName ? 'cluster-REDACTED' : node.clusterName,
-                            clusterEndpoints: node.clusterEndpoints ? (node.clusterEndpoints as Array<Record<string, unknown>>).map((ep, epIndex: number) => ({
-                              ...ep,
-                              NodeName: `node-${epIndex + 1}`,
-                              Host: `node-${epIndex + 1}`,
-                              IP: sanitizeIP(ep.IP)
-                            })) : node.clusterEndpoints
-                          }));
+                          sanitized.nodes = (sanitized.nodes as Array<Record<string, unknown>>).map((node, index: number) => {
+                            const nodeType = typeof node.type === 'string' ? (node.type as string) : 'node';
+                            const nodeName = typeof node.name === 'string' ? (node.name as string) : '';
+                            const nodeHost = typeof node.host === 'string' ? (node.host as string) : '';
+                            const tokenName = typeof node.tokenName === 'string' ? (node.tokenName as string) : undefined;
+                            const clusterName = typeof node.clusterName === 'string' ? (node.clusterName as string) : undefined;
+                            const clusterEndpoints = Array.isArray(node.clusterEndpoints)
+                              ? (node.clusterEndpoints as Array<Record<string, unknown>>).map((ep, epIndex: number) => ({
+                                  ...ep,
+                                  NodeName: `node-${epIndex + 1}`,
+                                  Host: `node-${epIndex + 1}`,
+                                  IP: sanitizeIP(typeof ep.IP === 'string' ? ep.IP : '')
+                                }))
+                              : node.clusterEndpoints;
+
+                            return {
+                              ...node,
+                              id: `${nodeType}-${index}`,
+                              name: sanitizeHostname(nodeName),
+                              host: nodeHost ? nodeHost.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED') : nodeHost,
+                              tokenName: tokenName ? 'token-REDACTED' : tokenName,
+                              clusterName: clusterName ? 'cluster-REDACTED' : clusterName,
+                              clusterEndpoints
+                            };
+                          });
                         }
                         
                         // Sanitize storage
                         if (sanitized.storage) {
-                          sanitized.storage = (sanitized.storage as Array<Record<string, unknown>>).map((s, index: number) => ({
-                            ...s,
-                            id: `storage-${index}`,
-                            node: sanitizeHostname(s.node),
-                            name: `storage-${index}`
-                          }));
+                          sanitized.storage = (sanitized.storage as Array<Record<string, unknown>>).map((s, index: number) => {
+                            const storageNode = typeof s.node === 'string' ? s.node : '';
+                            return {
+                              ...s,
+                              id: `storage-${index}`,
+                              node: sanitizeHostname(storageNode),
+                              name: `storage-${index}`
+                            };
+                          });
                         }
                         
                         // Sanitize backups
-                        if (sanitized.backups) {
+                        const backups = sanitized.backups as Record<string, unknown> | undefined;
+                        if (backups) {
                           // Sanitize PVE backup tasks
-                          if (sanitized.backups.pveBackupTasks) {
-                            sanitized.backups.pveBackupTasks = (sanitized.backups.pveBackupTasks as Array<Record<string, unknown>>).map((b, index: number) => ({
-                              ...b,
-                              node: sanitizeHostname(b.node),
-                              storage: `storage-${index}`,
-                              vmid: b.vmid ? `vm-${b.vmid}` : b.vmid
-                            }));
+                          if (Array.isArray(backups.pveBackupTasks)) {
+                            backups.pveBackupTasks = (backups.pveBackupTasks as Array<Record<string, unknown>>).map((b, index: number) => {
+                              const backupNode = typeof b.node === 'string' ? b.node : '';
+                              const backupVmid = typeof b.vmid === 'number' ? b.vmid : undefined;
+                              return {
+                                ...b,
+                                node: sanitizeHostname(backupNode),
+                                storage: `storage-${index}`,
+                                vmid: backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid
+                              };
+                            });
                           }
                           
                           // Sanitize PVE storage backups
-                          if (sanitized.backups.pveStorageBackups) {
-                            sanitized.backups.pveStorageBackups = (sanitized.backups.pveStorageBackups as Array<Record<string, unknown>>).map((b, index: number) => ({
-                              ...b,
-                              node: sanitizeHostname(b.node),
-                              storage: `storage-${index}`,
-                              vmid: b.vmid ? `vm-${b.vmid}` : b.vmid,
-                              volid: b.volid ? `vol-REDACTED` : b.volid
-                            }));
+                          if (Array.isArray(backups.pveStorageBackups)) {
+                            backups.pveStorageBackups = (backups.pveStorageBackups as Array<Record<string, unknown>>).map((b, index: number) => {
+                              const backupNode = typeof b.node === 'string' ? b.node : '';
+                              const backupVmid = typeof b.vmid === 'number' ? b.vmid : undefined;
+                              const volid = typeof b.volid === 'string' ? b.volid : undefined;
+                              return {
+                                ...b,
+                                node: sanitizeHostname(backupNode),
+                                storage: `storage-${index}`,
+                                vmid: backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
+                                volid: volid ? 'vol-REDACTED' : volid
+                              };
+                            });
                           }
                           
                           // Sanitize PBS backups
-                          if (sanitized.backups.pbsBackups) {
-                            sanitized.backups.pbsBackups = (sanitized.backups.pbsBackups as Array<Record<string, unknown>>).map((b, index: number) => ({
-                              ...b,
-                              datastore: `datastore-${index}`,
-                              backupId: b.backupId ? `backup-${index}` : b.backupId,
-                              vmName: b.vmName ? `vm-REDACTED` : b.vmName
-                            }));
+                          if (Array.isArray(backups.pbsBackups)) {
+                            backups.pbsBackups = (backups.pbsBackups as Array<Record<string, unknown>>).map((b, index: number) => {
+                              const backupId = typeof b.backupId === 'string' ? b.backupId : undefined;
+                              const vmName = typeof b.vmName === 'string' ? b.vmName : undefined;
+                              return {
+                                ...b,
+                                datastore: `datastore-${index}`,
+                                backupId: backupId ? `backup-${index}` : backupId,
+                                vmName: vmName ? 'vm-REDACTED' : vmName
+                              };
+                            });
                           }
                         }
-                        
+
                         // Sanitize active alerts
-                        if (sanitized.activeAlerts) {
-                          sanitized.activeAlerts = (sanitized.activeAlerts as Array<Record<string, unknown>>).map((alert) => ({
-                            ...alert,
-                            node: sanitizeHostname(alert.node),
-                            details: alert.details ? alert.details.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, 'xxx.xxx.xxx.xxx') : alert.details
-                          }));
+                        const activeAlerts = sanitized.activeAlerts as Array<Record<string, unknown>> | undefined;
+                        if (activeAlerts) {
+                          sanitized.activeAlerts = activeAlerts.map((alert) => {
+                            const alertNode = typeof alert.node === 'string' ? alert.node : '';
+                            const details = typeof alert.details === 'string' ? alert.details : undefined;
+                            return {
+                              ...alert,
+                              node: sanitizeHostname(alertNode),
+                              details: details ? details.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g, 'xxx.xxx.xxx.xxx') : details
+                            };
+                          });
                         }
-                        
+
                         // Sanitize websocket URL
-                        if (sanitized.websocket?.url) {
-                          sanitized.websocket.url = sanitized.websocket.url.replace(/\/\/[^\/]+/, '//REDACTED');
+                        const websocketInfo = sanitized.websocket as Record<string, unknown> | undefined;
+                        if (websocketInfo && typeof websocketInfo.url === 'string') {
+                          websocketInfo.url = websocketInfo.url.replace(/\/\/[^\/]+/, '//REDACTED');
                         }
                         
                         // Add sanitization notice
@@ -2195,7 +2273,7 @@ const Settings: Component = () => {
                         let diagnostics: Record<string, unknown> = {
                           timestamp: new Date().toISOString(),
                           version: '2.1.0',
-                          pulseVersion: state.version || 'unknown',
+                          pulseVersion: state.stats?.version || 'unknown',
                           environment: {
                             userAgent: navigator.userAgent,
                             platform: navigator.platform,
@@ -2240,7 +2318,7 @@ const Settings: Component = () => {
                             cpu: n.cpu,
                             memory: n.memory,
                             uptime: n.uptime,
-                            version: n.version
+                            version: n.pveVersion ?? n.kernelVersion
                           })) || [],
                           storage: state.storage?.map(s => ({
                             id: s.id,
@@ -2265,14 +2343,14 @@ const Settings: Component = () => {
                           // Physical disks - critical for troubleshooting
                           physicalDisks: state.physicalDisks?.map(d => ({
                             node: d.node,
-                            device: d.device,
+                            device: d.device || d.devPath,
                             model: d.model,
                             size: d.size,
                             type: d.type,
                             health: d.health,
                             wearout: d.wearout,
                             rpm: d.rpm,
-                            smart: d.smart
+                            smart: d.smart ?? null
                           })) || [],
                           backups: {
                             pveBackupTasks: state.pveBackups?.backupTasks?.slice(0, 10) || [],
@@ -2287,10 +2365,6 @@ const Settings: Component = () => {
                             apiCallDuration: state.performance?.apiCallDuration || {}
                           },
                           activeAlerts: state.activeAlerts?.slice(0, 20) || [],
-                          // Alert configuration - helps debug threshold save issues
-                          alertConfig: state.alertConfig || null,
-                          // Recent errors if any
-                          recentErrors: state.errors?.slice(0, 20) || [],
                           settings: {
                           }
                         };

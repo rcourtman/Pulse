@@ -59,7 +59,7 @@ export interface VM {
   uptime: number;
   template: boolean;
   lastBackup: string;
-  tags: string[];
+  tags: string[] | string | null;
   lock: string;
   lastSeen: string;
 }
@@ -83,7 +83,7 @@ export interface Container {
   uptime: number;
   template: boolean;
   lastBackup: string;
-  tags: string[];
+  tags: string[] | string | null;
   lock: string;
   lastSeen: string;
 }
@@ -254,6 +254,7 @@ export interface PhysicalDisk {
   node: string;
   instance: string;
   devPath: string;
+  device?: string;
   model: string;
   serial: string;
   type: 'nvme' | 'sata' | 'sas' | string;
@@ -264,6 +265,7 @@ export interface PhysicalDisk {
   rpm: number;
   used: string;
   lastChecked: string;
+  smart?: unknown;
 }
 
 export interface CPUInfo {
@@ -410,6 +412,18 @@ export type WSMessage =
       }>;
       errors?: string[];
       timestamp?: number;
+      immediate?: boolean;
+      scanning?: boolean;
+      cached?: boolean;
+    }}
+  | { type: 'discovery_started'; data?: {
+      subnet?: string;
+      timestamp?: number;
+      scanning?: boolean;
+    }}
+  | { type: 'discovery_complete'; data?: {
+      timestamp?: number;
+      scanning?: boolean;
     }};
 
 // Utility types
