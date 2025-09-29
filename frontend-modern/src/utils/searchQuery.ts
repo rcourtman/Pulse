@@ -1,4 +1,5 @@
 import type { VM, Container, PBSBackup, StorageBackup, BackupTask } from '@/types/api';
+import type { UnifiedBackup } from '@/types/backups';
 
 export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '=' | '==';
 export type LogicalOperator = 'AND' | 'OR';
@@ -186,7 +187,7 @@ export function parseSearchQuery(query: string): ParsedQuery {
   };
 }
 
-type FilterableItem = VM | Container | PBSBackup | StorageBackup | BackupTask;
+type FilterableItem = VM | Container | PBSBackup | StorageBackup | BackupTask | UnifiedBackup;
 
 function evaluateMetricCondition(guest: FilterableItem, condition: MetricCondition): boolean {
   let value: number;
@@ -208,9 +209,13 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
       break;
     default:
       // For backup-specific numeric fields like 'size'
-      const fieldValue = (guest as Record<string, unknown>)[condition.field];
-      if (fieldValue !== undefined) {
-        value = Number(fieldValue) || 0;
+      if (typeof guest === 'object' && guest !== null && condition.field in guest) {
+        const fieldValue = (guest as unknown as Record<string, unknown>)[condition.field];
+        if (fieldValue !== undefined) {
+          value = Number(fieldValue) || 0;
+        } else {
+          return false;
+        }
       } else {
         return false;
       }
@@ -245,25 +250,30 @@ function evaluateTextCondition(guest: FilterableItem, condition: TextCondition):
       return 'vmid' in guest && guest.vmid ? guest.vmid.toString().includes(searchValue) : false;
     case 'tags':
       // Check if guest has any tags that match the search value
-      if (!('tags' in guest) || !guest.tags || !Array.isArray(guest.tags) || guest.tags.length === 0) return false;
+      if (!('tags' in guest) || !guest.tags) return false;
+      const tagsArray = Array.isArray(guest.tags)
+        ? guest.tags.filter((tag): tag is string => typeof tag === 'string')
+        : typeof guest.tags === 'string'
+          ? guest.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+          : [];
+      if (tagsArray.length === 0) return false;
       // Support comma-separated tag searches (OR logic)
       const searchTags = searchValue.split(',').map(t => t.trim()).filter(t => t.length > 0);
-      return searchTags.some(searchTag => 
-        guest.tags!.some((tag: string) => {
-          if (typeof tag !== 'string') return false;
-          return tag.toLowerCase().includes(searchTag.toLowerCase());
-        })
+      return searchTags.some(searchTag =>
+        tagsArray.some(tag => tag.toLowerCase().includes(searchTag.toLowerCase()))
       );
     default:
       // For backup-specific fields
-      const fieldValue = (guest as Record<string, unknown>)[condition.field];
-      if (fieldValue) {
-        if (typeof fieldValue === 'string') {
-          return fieldValue.toLowerCase().includes(searchValue);
-        } else if (typeof fieldValue === 'number') {
-          return fieldValue.toString().includes(searchValue);
-        } else if (typeof fieldValue === 'boolean') {
-          return fieldValue.toString() === searchValue;
+      if (typeof guest === 'object' && guest !== null && condition.field in guest) {
+        const fieldValue = (guest as unknown as Record<string, unknown>)[condition.field];
+        if (fieldValue) {
+          if (typeof fieldValue === 'string') {
+            return fieldValue.toLowerCase().includes(searchValue);
+          } else if (typeof fieldValue === 'number') {
+            return fieldValue.toString().includes(searchValue);
+          } else if (typeof fieldValue === 'boolean') {
+            return fieldValue.toString() === searchValue;
+          }
         }
       }
       return false;
@@ -335,16 +345,17 @@ export function evaluateFilterStack(guest: FilterableItem, stack: FilterStack): 
     } else if (filter.type === 'raw' && filter.rawText) {
       const term = filter.rawText.toLowerCase();
       // Check name, vmid, node, status, and tags for raw text matches
-      const basicMatch = ('name' in guest && guest.name && guest.name.toLowerCase().includes(term)) ||
-                        ('vmid' in guest && guest.vmid && guest.vmid.toString().includes(term)) ||
-                        ('node' in guest && guest.node && guest.node.toLowerCase().includes(term)) ||
-                        ('status' in guest && guest.status && guest.status.toLowerCase().includes(term));
-      
+      const nameMatch = 'name' in guest && typeof guest.name === 'string' && guest.name.toLowerCase().includes(term);
+      const vmidMatch = 'vmid' in guest && !!guest.vmid && guest.vmid.toString().includes(term);
+      const nodeMatch = 'node' in guest && typeof guest.node === 'string' && guest.node.toLowerCase().includes(term);
+      const statusMatch = 'status' in guest && typeof guest.status === 'string' && guest.status.toLowerCase().includes(term);
+
       // Also check if any tags contain the search term
-      const tagMatch = 'tags' in guest && guest.tags && Array.isArray(guest.tags) && 
-                      guest.tags.some((tag: string) => tag.toLowerCase().includes(term));
-      
-      return basicMatch || tagMatch;
+      const tagMatch = 'tags' in guest && Array.isArray(guest.tags)
+        ? guest.tags.filter((tag): tag is string => typeof tag === 'string').some(tag => tag.toLowerCase().includes(term))
+        : false;
+
+      return nameMatch || vmidMatch || nodeMatch || statusMatch || tagMatch;
     }
     return true;
   });

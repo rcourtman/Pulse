@@ -9,30 +9,9 @@ import { BackupsFilter } from './BackupsFilter';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 
-type BackupType = 'snapshot' | 'local' | 'remote';
-type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
 type FilterableGuestType = 'VM' | 'LXC' | 'Host';
-
-interface UnifiedBackup {
-  backupType: BackupType;
-  vmid: number;
-  name: string;
-  type: GuestType;
-  node: string;
-  backupTime: number;
-  backupName: string;
-  description: string;
-  status: string;
-  size: number | null;
-  storage: string | null;
-  datastore: string | null;
-  namespace: string | null;
-  verified: boolean | null;
-  protected: boolean;
-  encrypted?: boolean;
-  owner?: string;
-}
 
 // Types for PBS backups - temporarily disabled to avoid unused warnings
 // type PBSBackup = any;
@@ -1008,7 +987,6 @@ const UnifiedBackups: Component = () => {
           // Only lock if we're setting a filter, unlock if clearing
           setIsSearchLocked(namespaceFilter !== '');
         }}
-        filteredBackups={(searchTerm() || backupTypeFilter() !== 'all') ? filteredData() : undefined}
         searchTerm={searchTerm()}
       />
 

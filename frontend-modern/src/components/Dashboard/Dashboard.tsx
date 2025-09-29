@@ -15,7 +15,6 @@ import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface DashboardProps {
   vms: VM[];

@@ -3,6 +3,7 @@ import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { CustomRulesTab } from '@/components/Alerts/CustomRulesTab';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import type { RawOverrideConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
@@ -13,7 +14,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
-import type { HysteresisThreshold, AlertThresholds } from '@/types/alerts';
+import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container } from '@/types/api';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
@@ -22,31 +23,6 @@ type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'histo
 interface DestinationsRef {
   emailConfig?: () => EmailConfig;
 }
-
-// ScheduleConfig interface - used for loading schedule configuration
-interface ScheduleConfig {
-  quietHours?: {
-    enabled: boolean;
-    start: string;
-    end: string;
-    days: Record<string, boolean>;
-    timezone?: string;
-  };
-  cooldown?: number;
-  groupingWindow?: number;
-  grouping?: {
-    enabled: boolean;
-    window: number;
-    byNode?: boolean;
-    byGuest?: boolean;
-  };
-  maxAlertsHour?: number;
-  escalation?: {
-    enabled: boolean;
-    levels?: Array<{ after: number; notify: string }>;
-  };
-}
-
 
 // Override interface for both guests and nodes
 interface Override {
@@ -110,7 +86,7 @@ export function Alerts() {
   let destinationsRef: DestinationsRef = {};
   
   const [overrides, setOverrides] = createSignal<Override[]>([]);
-  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, unknown>>({});  // Store raw config
+  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, RawOverrideConfig>>({});  // Store raw config
   
   // Email configuration state moved to parent to persist across tab changes
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
@@ -476,7 +452,7 @@ export function Alerts() {
   };
 
   // Helper to extract trigger values for all thresholds
-  const extractTriggerValues = (thresholds: AlertThresholds): Record<string, number> => {
+  const extractTriggerValues = (thresholds: RawOverrideConfig): Record<string, number> => {
     const result: Record<string, number> = {};
     Object.entries(thresholds).forEach(([key, value]) => {
       // Skip non-threshold fields
@@ -1042,14 +1018,14 @@ interface ThresholdsTabProps {
   timeThreshold: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   overrides: () => Override[];
-  rawOverridesConfig: () => Record<string, unknown>;
+  rawOverridesConfig: () => Record<string, RawOverrideConfig>;
   setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
   setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
   setOverrides: (value: Override[]) => void;
-  setRawOverridesConfig: (value: Record<string, unknown>) => void;
+  setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
 }
@@ -1149,7 +1125,7 @@ function DestinationsTab(props: DestinationsTabProps) {
   };
   
   return (
-    <div class="grid w-full max-w-full gap-6 md:gap-8 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+    <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <SettingsPanel
         title="Email notifications"
         description="Configure SMTP delivery for alert emails."
@@ -1689,7 +1665,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 type="button"
                 onClick={() => {
                   const lastLevel = escalation().levels[escalation().levels.length - 1];
-                  const newAfter = lastLevel ? lastLevel.after + 30 : 15;
+                  const newAfter = typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
                   setEscalation({
                     ...escalation(),
                     levels: [...escalation().levels, { after: newAfter, notify: 'all' }]

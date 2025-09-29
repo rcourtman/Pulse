@@ -8,7 +8,7 @@ type SectionHeaderProps = {
   size?: 'sm' | 'md' | 'lg';
   titleClass?: string;
   descriptionClass?: string;
-} & JSX.HTMLAttributes<HTMLDivElement>;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'title'>;
 
 export function SectionHeader(props: SectionHeaderProps) {
   const merged = mergeProps({ align: 'left' as const, size: 'md' as const, titleClass: '', descriptionClass: '' }, props);

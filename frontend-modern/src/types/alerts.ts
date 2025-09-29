@@ -25,6 +25,11 @@ export interface AlertThresholds {
   [key: string]: HysteresisThreshold | number | undefined;
 }
 
+export type RawOverrideConfig = AlertThresholds & {
+  disabled?: boolean;
+  disableConnectivity?: boolean;
+};
+
 export interface CustomAlertRule {
   id: string;
   name: string;
@@ -53,7 +58,7 @@ export interface AlertConfig {
   nodeDefaults: AlertThresholds;
   storageDefault: HysteresisThreshold;
   customRules?: CustomAlertRule[];
-  overrides: Record<string, AlertThresholds>; // key: resource ID
+  overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;
   suppressionWindow?: number;
   hysteresisMargin?: number;

@@ -4,7 +4,7 @@ import { getTagColorWithSpecial } from '@/utils/tagColors';
 import { useDarkMode } from '@/App';
 
 interface TagBadgesProps {
-  tags: string[];
+  tags?: string[];
   maxVisible?: number;
   isDarkMode?: boolean;
   onTagClick?: (tag: string) => void;

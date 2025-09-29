@@ -169,7 +169,7 @@ export function createWebSocketStore(url: string) {
                 // Transform tags from comma-separated strings to arrays
                 const transformedVMs = message.data.vms.map((vm: VM) => {
                   const originalTags = vm.tags;
-                  let transformedTags;
+                  let transformedTags: string[];
                   
                   if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
                     // String with content - split into array
@@ -195,7 +195,7 @@ export function createWebSocketStore(url: string) {
                 // Transform tags from comma-separated strings to arrays
                 const transformedContainers = message.data.containers.map((container: Container) => {
                   const originalTags = container.tags;
-                  let transformedTags;
+                  let transformedTags: string[];
                   
                   if (originalTags && typeof originalTags === 'string' && originalTags.trim()) {
                     // String with content - split into array

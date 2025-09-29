@@ -1,7 +1,6 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { formatBytes } from '@/utils/format';
-import { useWebSocket } from '@/App';
 import type { PhysicalDisk } from '@/types/api';
 
 interface DiskListProps {
@@ -11,8 +10,6 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
-  const { state } = useWebSocket();
-  
   // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
