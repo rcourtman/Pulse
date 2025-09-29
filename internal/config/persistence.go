@@ -24,6 +24,7 @@ type ConfigPersistence struct {
 	webhookFile string
 	nodesFile   string
 	systemFile  string
+	oidcFile    string
 	crypto      *crypto.CryptoManager
 }
 
@@ -32,14 +33,14 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 	if configDir == "" {
 		configDir = "/etc/pulse"
 	}
-	
+
 	// Initialize crypto manager
 	cryptoMgr, err := crypto.NewCryptoManager()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize crypto manager, using unencrypted storage")
 		cryptoMgr = nil
 	}
-	
+
 	cp := &ConfigPersistence{
 		configDir:   configDir,
 		alertFile:   filepath.Join(configDir, "alerts.json"),
@@ -47,16 +48,17 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 		webhookFile: filepath.Join(configDir, "webhooks.enc"),
 		nodesFile:   filepath.Join(configDir, "nodes.enc"),
 		systemFile:  filepath.Join(configDir, "system.json"),
+		oidcFile:    filepath.Join(configDir, "oidc.enc"),
 		crypto:      cryptoMgr,
 	}
-	
+
 	log.Debug().
 		Str("configDir", configDir).
 		Str("systemFile", cp.systemFile).
 		Str("nodesFile", cp.nodesFile).
 		Bool("encryptionEnabled", cryptoMgr != nil).
 		Msg("Config persistence initialized")
-	
+
 	return cp
 }
 
@@ -69,7 +71,7 @@ func (c *ConfigPersistence) EnsureConfigDir() error {
 func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Ensure critical defaults are set before saving
 	if config.StorageDefault.Trigger <= 0 {
 		config.StorageDefault.Trigger = 85
@@ -84,20 +86,20 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
-	
+
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(c.alertFile, data, 0600); err != nil {
 		return err
 	}
-	
+
 	log.Info().Str("file", c.alertFile).Msg("Alert configuration saved")
 	return nil
 }
@@ -106,7 +108,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	data, err := os.ReadFile(c.alertFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -132,12 +134,12 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		}
 		return nil, err
 	}
-	
+
 	var config alerts.AlertConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-	
+
 	// For empty config files ({}), enable alerts by default
 	// This handles the case where the file exists but is empty
 	if string(data) == "{}" {
@@ -156,7 +158,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
-	
+
 	// Migration: Set I/O metrics to Off (0) if they have the old default values
 	// This helps existing users avoid noisy I/O alerts
 	if config.GuestDefaults.DiskRead != nil && config.GuestDefaults.DiskRead.Trigger == 150 {
@@ -171,7 +173,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if config.GuestDefaults.NetworkOut != nil && config.GuestDefaults.NetworkOut.Trigger == 200 {
 		config.GuestDefaults.NetworkOut = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
 	}
-	
+
 	log.Info().
 		Str("file", c.alertFile).
 		Bool("enabled", config.Enabled).
@@ -183,17 +185,17 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Marshal to JSON first
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
-	
+
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
@@ -202,12 +204,12 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 		}
 		data = encrypted
 	}
-	
+
 	// Save with restricted permissions (owner read/write only)
 	if err := os.WriteFile(c.emailFile, data, 0600); err != nil {
 		return err
 	}
-	
+
 	log.Info().
 		Str("file", c.emailFile).
 		Bool("encrypted", c.crypto != nil).
@@ -219,7 +221,7 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	data, err := os.ReadFile(c.emailFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -233,7 +235,7 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 		}
 		return nil, err
 	}
-	
+
 	// Decrypt if crypto manager is available
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
@@ -242,12 +244,12 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 		}
 		data = decrypted
 	}
-	
+
 	var config notifications.EmailConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-	
+
 	log.Info().
 		Str("file", c.emailFile).
 		Bool("encrypted", c.crypto != nil).
@@ -259,16 +261,16 @@ func (c *ConfigPersistence) LoadEmailConfig() (*notifications.EmailConfig, error
 func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	data, err := json.MarshalIndent(webhooks, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
-	
+
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
@@ -277,11 +279,11 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 		}
 		data = encrypted
 	}
-	
+
 	if err := os.WriteFile(c.webhookFile, data, 0600); err != nil {
 		return err
 	}
-	
+
 	log.Info().Str("file", c.webhookFile).
 		Int("count", len(webhooks)).
 		Bool("encrypted", c.crypto != nil).
@@ -293,7 +295,7 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// First try to load from encrypted file
 	data, err := os.ReadFile(c.webhookFile)
 	if err != nil {
@@ -309,7 +311,7 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 						Str("file", legacyFile).
 						Int("count", len(webhooks)).
 						Msg("Found unencrypted webhooks - migration needed")
-					
+
 					// Return the loaded webhooks - migration will be handled by caller
 					return webhooks, nil
 				}
@@ -319,7 +321,7 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 		}
 		return nil, err
 	}
-	
+
 	// Decrypt if crypto manager is available
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
@@ -337,12 +339,12 @@ func (c *ConfigPersistence) LoadWebhooks() ([]notifications.WebhookConfig, error
 		}
 		data = decrypted
 	}
-	
+
 	var webhooks []notifications.WebhookConfig
 	if err := json.Unmarshal(data, &webhooks); err != nil {
 		return nil, err
 	}
-	
+
 	log.Info().
 		Str("file", c.webhookFile).
 		Int("count", len(webhooks)).
@@ -358,7 +360,7 @@ func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 		// Encrypted file exists, no migration needed
 		return nil
 	}
-	
+
 	// Check for legacy unencrypted file
 	legacyFile := filepath.Join(c.configDir, "webhooks.json")
 	legacyData, err := os.ReadFile(legacyFile)
@@ -369,24 +371,24 @@ func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 		}
 		return fmt.Errorf("failed to read legacy webhooks file: %w", err)
 	}
-	
+
 	// Parse legacy webhooks
 	var webhooks []notifications.WebhookConfig
 	if err := json.Unmarshal(legacyData, &webhooks); err != nil {
 		return fmt.Errorf("failed to parse legacy webhooks: %w", err)
 	}
-	
+
 	log.Info().
 		Str("from", legacyFile).
 		Str("to", c.webhookFile).
 		Int("count", len(webhooks)).
 		Msg("Migrating webhooks to encrypted format")
-	
+
 	// Save to encrypted file
 	if err := c.SaveWebhooks(webhooks); err != nil {
 		return fmt.Errorf("failed to save encrypted webhooks: %w", err)
 	}
-	
+
 	// Create backup of original file
 	backupFile := legacyFile + ".backup"
 	if err := os.Rename(legacyFile, backupFile); err != nil {
@@ -394,7 +396,7 @@ func (c *ConfigPersistence) MigrateWebhooksIfNeeded() error {
 	} else {
 		log.Info().Str("backup", backupFile).Msg("Legacy webhooks file backed up")
 	}
-	
+
 	return nil
 }
 
@@ -407,7 +409,7 @@ type NodesConfig struct {
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
-	PBSPollingInterval      int    `json:"pbsPollingInterval"`      // PBS polling interval in seconds
+	PBSPollingInterval      int    `json:"pbsPollingInterval"` // PBS polling interval in seconds
 	BackendPort             int    `json:"backendPort,omitempty"`
 	FrontendPort            int    `json:"frontendPort,omitempty"`
 	AllowedOrigins          string `json:"allowedOrigins,omitempty"`
@@ -419,8 +421,8 @@ type SystemSettings struct {
 	LogLevel                string `json:"logLevel,omitempty"`
 	DiscoveryEnabled        bool   `json:"discoveryEnabled"`
 	DiscoverySubnet         string `json:"discoverySubnet,omitempty"`
-	Theme                   string `json:"theme,omitempty"` // User theme preference: "light", "dark", or empty for system default
-	AllowEmbedding          bool   `json:"allowEmbedding"`   // Allow iframe embedding
+	Theme                   string `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
+	AllowEmbedding          bool   `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins     string `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	// APIToken removed - now handled via .env file only
 }
@@ -433,24 +435,24 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		log.Warn().Msg("Skipping nodes save - mock mode is enabled")
 		return nil // Silently succeed to prevent errors but don't save
 	}
-	
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	config := NodesConfig{
 		PVEInstances: pveInstances,
 		PBSInstances: pbsInstances,
 	}
-	
+
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
-	
+
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
@@ -459,11 +461,11 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		}
 		data = encrypted
 	}
-	
+
 	if err := os.WriteFile(c.nodesFile, data, 0600); err != nil {
 		return err
 	}
-	
+
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(pveInstances)).
 		Int("pbs", len(pbsInstances)).
@@ -476,7 +478,7 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	data, err := os.ReadFile(c.nodesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -489,7 +491,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 		return nil, err
 	}
-	
+
 	// Decrypt if crypto manager is available
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
@@ -498,15 +500,15 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 		data = decrypted
 	}
-	
+
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-	
+
 	// Track if any migrations were applied
 	migrationApplied := false
-	
+
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
 	for i := range config.PBSInstances {
@@ -517,7 +519,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			config.PBSInstances[i].TokenName = ""
 			config.PBSInstances[i].TokenValue = ""
 		}
-		
+
 		// Fix for missing port in PBS host
 		host := config.PBSInstances[i].Host
 		if host != "" {
@@ -560,7 +562,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				}
 			}
 		}
-		
+
 		// Migration: Ensure MonitorBackups is enabled for PBS instances
 		// This fixes issue #411 where PBS backups weren't showing
 		if !config.PBSInstances[i].MonitorBackups {
@@ -571,7 +573,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			migrationApplied = true
 		}
 	}
-	
+
 	// If any migrations were applied, save the updated configuration
 	if migrationApplied {
 		log.Info().Msg("Migrations applied, saving updated configuration")
@@ -582,7 +584,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		}
 		c.mu.RLock()
 	}
-	
+
 	log.Info().Str("file", c.nodesFile).
 		Int("pve", len(config.PVEInstances)).
 		Int("pbs", len(config.PBSInstances)).
@@ -595,36 +597,99 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(c.systemFile, data, 0600); err != nil {
 		return err
 	}
-	
+
 	// Also update the .env file if it exists
 	envFile := filepath.Join(c.configDir, ".env")
 	if err := c.updateEnvFile(envFile, settings); err != nil {
 		log.Warn().Err(err).Msg("Failed to update .env file")
 		// Don't fail the operation if .env update fails
 	}
-	
+
 	log.Info().Str("file", c.systemFile).Msg("System settings saved")
 	return nil
+}
+
+// SaveOIDCConfig stores OIDC settings, encrypting them when a crypto manager is available.
+func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return err
+	}
+
+	// Do not persist runtime-only flags.
+	settings.EnvOverrides = nil
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if c.crypto != nil {
+		encrypted, err := c.crypto.Encrypt(data)
+		if err != nil {
+			return err
+		}
+		data = encrypted
+	}
+
+	if err := os.WriteFile(c.oidcFile, data, 0600); err != nil {
+		return err
+	}
+
+	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration saved")
+	return nil
+}
+
+// LoadOIDCConfig retrieves the persisted OIDC settings. It returns nil when no configuration exists yet.
+func (c *ConfigPersistence) LoadOIDCConfig() (*OIDCConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := os.ReadFile(c.oidcFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if c.crypto != nil {
+		decrypted, err := c.crypto.Decrypt(data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+
+	var settings OIDCConfig
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+
+	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration loaded")
+	return &settings, nil
 }
 
 // LoadSystemSettings loads system settings from file
 func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	data, err := os.ReadFile(c.systemFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -633,12 +698,12 @@ func (c *ConfigPersistence) LoadSystemSettings() (*SystemSettings, error) {
 		}
 		return nil, err
 	}
-	
+
 	var settings SystemSettings
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return nil, err
 	}
-	
+
 	log.Info().Str("file", c.systemFile).Msg("System settings loaded")
 	return &settings, nil
 }
@@ -650,20 +715,20 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		// File doesn't exist, nothing to update
 		return nil
 	}
-	
+
 	// Read the existing .env file
 	file, err := os.Open(envFile)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	
+
 	var lines []string
 	scanner := bufio.NewScanner(file)
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Skip POLLING_INTERVAL lines - deprecated
 		if strings.HasPrefix(line, "POLLING_INTERVAL=") {
 			// Skip this line, polling interval is now hardcoded
@@ -679,26 +744,25 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 			lines = append(lines, line)
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	
+
 	// Note: POLLING_INTERVAL is deprecated and no longer written
-	
+
 	// Write the updated content back atomically
 	content := strings.Join(lines, "\n")
 	if len(lines) > 0 && !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
-	
+
 	// Write to temp file first
 	tempFile := envFile + ".tmp"
 	if err := os.WriteFile(tempFile, []byte(content), 0644); err != nil {
 		return err
 	}
-	
+
 	// Atomic rename
 	return os.Rename(tempFile, envFile)
 }
-

@@ -57,6 +57,11 @@ func getFrontendDevProxy() (*httputil.ReverseProxy, error) {
 
 // getFrontendFS returns the embedded frontend filesystem
 func getFrontendFS() (http.FileSystem, error) {
+	if dir := strings.TrimSpace(os.Getenv("PULSE_FRONTEND_DIR")); dir != "" {
+		log.Warn().Str("frontend_dir", dir).Msg("Serving frontend from filesystem override")
+		return http.Dir(dir), nil
+	}
+
 	// Strip the prefix to serve files from root
 	fsys, err := fs.Sub(embeddedFrontend, "frontend-modern/dist")
 	if err != nil {
