@@ -97,7 +97,7 @@ export function GuestRow(props: GuestRowProps) {
 
   // Get first cell styling
   const firstCellClass = createMemo(() => {
-    const base = 'p-1 px-2 whitespace-nowrap relative';
+    const base = 'py-0.5 px-2 whitespace-nowrap relative';
     // Add extra padding when alert is present for visual spacing
     const padding = props.alertStyles?.hasAlert ? 'pl-4' : '';
     return `${base} ${padding}`;
@@ -150,7 +150,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Type */}
-      <td class="p-1 px-2 whitespace-nowrap">
+      <td class="py-0.5 px-2 whitespace-nowrap">
         <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
           props.guest.type === 'qemu' 
             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
@@ -161,13 +161,13 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* VMID */}
-      <td class="p-1 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+      <td class="py-0.5 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
         {props.guest.vmid}
       </td>
 
 
       {/* Uptime */}
-      <td class={`p-1 px-2 text-sm whitespace-nowrap ${
+      <td class={`py-0.5 px-2 text-sm whitespace-nowrap ${
         props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
       }`}>
         <Show when={isRunning()} fallback="-">
@@ -176,7 +176,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* CPU */}
-      <td class="p-1 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[140px]">
         <MetricBar 
           value={cpuPercent()} 
           label={`${cpuPercent().toFixed(0)}%`}
@@ -186,7 +186,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Memory */}
-      <td class="p-1 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[140px]">
         <MetricBar 
           value={memPercent()} 
           label={`${memPercent().toFixed(0)}%`}
@@ -196,7 +196,7 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk */}
-      <td class="p-1 px-2 w-[140px]">
+      <td class="py-0.5 px-2 w-[140px]">
         <Show 
           when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
           fallback={
@@ -218,18 +218,18 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk I/O */}
-      <td class="p-1 px-2">
+      <td class="py-0.5 px-2">
         <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
       </td>
-      <td class="p-1 px-2">
+      <td class="py-0.5 px-2">
         <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
       </td>
 
       {/* Network I/O */}
-      <td class="p-1 px-2">
+      <td class="py-0.5 px-2">
         <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
       </td>
-      <td class="p-1 px-2">
+      <td class="py-0.5 px-2">
         <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
       </td>
 
