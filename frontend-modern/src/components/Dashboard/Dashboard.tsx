@@ -546,7 +546,7 @@ export function Dashboard(props: DashboardProps) {
                           }
                         }}
                       >
-                        <td class="p-1 px-2 whitespace-nowrap">
+                        <td class="py-0.5 px-2 whitespace-nowrap">
                           <div class="flex items-center gap-1">
                             <a 
                               href={node.host || `https://${node.name}:8006`}
@@ -567,7 +567,7 @@ export function Dashboard(props: DashboardProps) {
                             </Show>
                           </div>
                         </td>
-                        <td class="p-1 px-2 whitespace-nowrap">
+                        <td class="py-0.5 px-2 whitespace-nowrap">
                           <div class="flex items-center gap-1">
                             <span class={`h-2 w-2 rounded-full ${
                               isOnline() ? 'bg-green-500' : 'bg-red-500'
@@ -577,7 +577,7 @@ export function Dashboard(props: DashboardProps) {
                             </span>
                           </div>
                         </td>
-                        <td class="p-1 px-2 min-w-[180px]">
+                        <td class="py-0.5 px-2 min-w-[180px]">
                           <MetricBar 
                             value={cpuPercent()} 
                             label={`${cpuPercent()}%`}
@@ -585,7 +585,7 @@ export function Dashboard(props: DashboardProps) {
                             type="cpu"
                           />
                         </td>
-                        <td class="p-1 px-2 min-w-[180px]">
+                        <td class="py-0.5 px-2 min-w-[180px]">
                           <MetricBar 
                             value={memPercent()} 
                             label={`${memPercent()}%`}
@@ -593,7 +593,7 @@ export function Dashboard(props: DashboardProps) {
                             type="memory"
                           />
                         </td>
-                        <td class="p-1 px-2 min-w-[180px]">
+                        <td class="py-0.5 px-2 min-w-[180px]">
                           <MetricBar 
                             value={diskPercent()} 
                             label={`${diskPercent()}%`}
@@ -601,13 +601,13 @@ export function Dashboard(props: DashboardProps) {
                             type="disk"
                           />
                         </td>
-                        <td class="p-1 px-2 whitespace-nowrap text-center">
+                        <td class="py-0.5 px-2 whitespace-nowrap text-center">
                           <span class="text-xs text-gray-700 dark:text-gray-300">{nodeVMs()}</span>
                         </td>
-                        <td class="p-1 px-2 whitespace-nowrap text-center">
+                        <td class="py-0.5 px-2 whitespace-nowrap text-center">
                           <span class="text-xs text-gray-700 dark:text-gray-300">{nodeContainers()}</span>
                         </td>
-                        <td class="p-1 px-2 whitespace-nowrap">
+                        <td class="py-0.5 px-2 whitespace-nowrap">
                           <span class="text-xs text-gray-600 dark:text-gray-400">
                             {formatUptime(node.uptime)}
                           </span>
@@ -722,7 +722,7 @@ export function Dashboard(props: DashboardProps) {
             <thead>
               <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                 <th 
-                  class="pl-6 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                  class="pl-6 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                   onClick={() => handleSort('name')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                   tabindex="0"
@@ -732,61 +732,61 @@ export function Dashboard(props: DashboardProps) {
                   Name {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[60px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[60px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('type')}
                 >
                   Type {sortKey() === 'type' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[70px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[70px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('vmid')}
                 >
                   VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[100px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('uptime')}
                 >
                   Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('cpu')}
                 >
                   CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('memory')}
                 >
                   Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[140px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('disk')}
                 >
                   Disk {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('diskRead')}
                 >
                   Disk Read {sortKey() === 'diskRead' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('diskWrite')}
                 >
                   Disk Write {sortKey() === 'diskWrite' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('networkIn')}
                 >
                   Net In {sortKey() === 'networkIn' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
                 <th 
-                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  class="px-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[90px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                   onClick={() => handleSort('networkOut')}
                 >
                   Net Out {sortKey() === 'networkOut' && (sortDirection() === 'asc' ? '▲' : '▼')}
@@ -799,7 +799,7 @@ export function Dashboard(props: DashboardProps) {
                   <>
                     <Show when={node && groupingMode() === 'grouped'}>
                       <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                        <td class="p-1 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
+                        <td class="py-0.5 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                           <a 
                             href={nodeHostMap()[node] || (node.includes(':') ? `https://${node}` : `https://${node}:8006`)} 
                             target="_blank" 
@@ -810,7 +810,7 @@ export function Dashboard(props: DashboardProps) {
                             {node}
                           </a>
                         </td>
-                        <td colspan="10" class="p-1 px-2"></td>
+                        <td colspan="10" class="py-0.5 px-2"></td>
                       </tr>
                     </Show>
                     <For each={guests} fallback={<></>}>
