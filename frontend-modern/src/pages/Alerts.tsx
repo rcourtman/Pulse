@@ -88,15 +88,16 @@ interface GroupingConfig {
   byGuest?: boolean;
 }
 
+type EscalationNotifyTarget = 'email' | 'webhook' | 'all';
+
+interface EscalationLevel {
+  after: number;
+  notify: EscalationNotifyTarget;
+}
+
 interface EscalationConfig {
   enabled: boolean;
-  timeToEscalate?: number;
-  levels: Array<{
-    level?: number;
-    destinations?: string[];
-    after?: number;
-    notify?: string;
-  }>;
+  levels: EscalationLevel[];
 }
 
 const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -411,9 +412,14 @@ export function Alerts() {
           }
           
           if (config.schedule.escalation) {
+            const rawLevels = config.schedule.escalation.levels || [];
+            const levels = rawLevels.map((level) => ({
+              after: typeof level.after === 'number' ? level.after : 15,
+              notify: (level.notify as EscalationNotifyTarget) || 'all'
+            }));
             setScheduleEscalation({
-              enabled: config.schedule.escalation.enabled || false,
-              levels: config.schedule.escalation.levels || []
+              enabled: Boolean(config.schedule.escalation.enabled),
+              levels
             });
           }
         }
@@ -1647,7 +1653,8 @@ function ScheduleTab(props: ScheduleTabProps) {
                           value={level.after}
                           onChange={(e) => {
                             const newLevels = [...escalation().levels];
-                            newLevels[index()] = { ...level, after: parseInt(e.currentTarget.value) };
+                            const parsed = Number.parseInt(e.currentTarget.value, 10);
+                            newLevels[index()] = { ...level, after: Number.isNaN(parsed) ? level.after : parsed };
                             setEscalation({ ...escalation(), levels: newLevels });
                             props.setHasUnsavedChanges(true);
                           }}
@@ -1661,7 +1668,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           value={level.notify}
                           onChange={(e) => {
                             const newLevels = [...escalation().levels];
-                            newLevels[index()] = { ...level, notify: e.currentTarget.value };
+                            newLevels[index()] = { ...level, notify: e.currentTarget.value as EscalationNotifyTarget };
                             setEscalation({ ...escalation(), levels: newLevels });
                             props.setHasUnsavedChanges(true);
                           }}
@@ -1698,7 +1705,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   const newAfter = typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
                   setEscalation({
                     ...escalation(),
-                    levels: [...escalation().levels, { after: newAfter, notify: 'all' }]
+                    levels: [...escalation().levels, { after: newAfter, notify: 'all' as EscalationNotifyTarget }]
                   });
                   props.setHasUnsavedChanges(true);
                 }}

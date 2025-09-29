@@ -47,7 +47,10 @@ export const useDarkMode = () => {
 
 function App() {
   const owner = getOwner();
-  const acquireWsStore = () => (owner ? runWithOwner(owner, () => getGlobalWebSocketStore()) : getGlobalWebSocketStore());
+  const acquireWsStore = (): EnhancedStore => {
+    const store = owner ? runWithOwner(owner, () => getGlobalWebSocketStore()) : getGlobalWebSocketStore();
+    return store || getGlobalWebSocketStore();
+  };
 
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);

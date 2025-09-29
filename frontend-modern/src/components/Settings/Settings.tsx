@@ -6,6 +6,8 @@ import { GenerateAPIToken } from './GenerateAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { GuestURLs } from './GuestURLs';
 import { OIDCPanel } from './OIDCPanel';
+import { QuickSecuritySetup } from './QuickSecuritySetup';
+import { SecurityPostureSummary } from './SecurityPostureSummary';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -15,6 +17,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
+import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
@@ -138,18 +141,7 @@ const Settings: Component = () => {
   const [runningDiagnostics, setRunningDiagnostics] = createSignal(false);
   
   // Security
-  const [securityStatus, setSecurityStatus] = createSignal<{
-    apiTokenConfigured: boolean;
-    apiTokenHint?: string;
-    requiresAuth: boolean;
-    exportProtected: boolean;
-    unprotectedExportAllowed: boolean;
-    hasAuthentication: boolean;
-    configuredButPendingRestart?: boolean;
-    hasAuditLogging: boolean;
-    credentialsEncrypted: boolean;
-    hasHTTPS: boolean;
-  } | null>(null);
+  const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
@@ -160,6 +152,20 @@ const Settings: Component = () => {
   const [showApiTokenModal, setShowApiTokenModal] = createSignal(false);
   const [apiTokenInput, setApiTokenInput] = createSignal('');
   const [apiTokenModalSource, setApiTokenModalSource] = createSignal<'export' | 'import' | null>(null);
+  const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
+
+  const formatTimestamp = (timestamp?: string) => {
+    if (!timestamp) {
+      return 'Unknown';
+    }
+
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return 'Unknown';
+    }
+
+    return date.toLocaleString();
+  };
 
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
@@ -1753,6 +1759,49 @@ const Settings: Component = () => {
           {/* Security Tab */}
           <Show when={activeTab() === 'security'}>
             <div class="space-y-6">
+              <Show when={!securityStatusLoading() && securityStatus()}>
+                <SecurityPostureSummary status={securityStatus()!} />
+              </Show>
+
+              <Show when={!securityStatusLoading() && securityStatus()?.hasProxyAuth}>
+                <Card padding="sm" class="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+                  <div class="flex flex-col gap-2 text-xs text-blue-800 dark:text-blue-200">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span class="font-semibold text-blue-900 dark:text-blue-100">Proxy authentication detected</span>
+                    </div>
+                    <p>
+                      Requests are validated by an upstream proxy. The current proxied user is
+                      {securityStatus()?.proxyAuthUsername ? ` ${securityStatus()?.proxyAuthUsername}` : ' available once a request is received'}.
+                      {securityStatus()?.proxyAuthIsAdmin ? ' Admin privileges confirmed.' : ''}
+                      <Show when={securityStatus()?.proxyAuthLogoutURL}>
+                        {' '}
+                        <a
+                          class="underline font-medium"
+                          href={securityStatus()?.proxyAuthLogoutURL}
+                        >
+                          Proxy logout
+                        </a>
+                      </Show>
+                    </p>
+                    <p>
+                      Need configuration tips? Review the proxy auth guide in the docs.
+                      {' '}
+                      <a
+                        class="underline font-medium"
+                        href="https://github.com/rcourtman/Pulse/blob/main/docs/PROXY_AUTH.md"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Read proxy auth guide →
+                      </a>
+                    </p>
+                  </div>
+                </Card>
+              </Show>
+
               {/* Show message when auth is disabled */}
               <Show when={!securityStatus()?.hasAuthentication}>
                 <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
@@ -1790,6 +1839,23 @@ const Settings: Component = () => {
                           <li>4. Complete the security setup wizard on first access</li>
                         </ol>
                       </Card>
+                      <div class="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
+                          class="px-4 py-2 text-xs font-semibold rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors dark:border-blue-700 dark:text-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/40"
+                        >
+                          {showQuickSecuritySetup() ? 'Hide quick security setup' : 'Launch quick security setup'}
+                        </button>
+                      </div>
+                      <Show when={showQuickSecuritySetup()}>
+                        <div class="mt-4">
+                          <QuickSecuritySetup onConfigured={() => {
+                            setShowQuickSecuritySetup(false);
+                            loadSecurityStatus();
+                          }} />
+                        </div>
+                      </Show>
                     </div>
                   </div>
                 </div>
@@ -1838,7 +1904,67 @@ const Settings: Component = () => {
                           <div class="text-xs text-gray-500 dark:text-gray-400">Update your login credentials</div>
                         </div>
                       </button>
-                      
+                      <a
+                        href="https://github.com/rcourtman/Pulse/blob/main/docs/SECURITY.md#first-run-security-setup"
+                        target="_blank"
+                        rel="noreferrer"
+                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
+                      >
+                        <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/50 transition-colors">
+                          <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div class="text-left">
+                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Run quick security wizard</div>
+                          <div class="text-xs text-gray-500 dark:text-gray-400">Refresh authentication end-to-end</div>
+                        </div>
+                      </a>
+                    </div>
+
+                    <div class="mt-6 grid gap-3 text-xs text-gray-600 dark:text-gray-400 md:grid-cols-2">
+                      <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <div>
+                          <div class="font-medium text-gray-800 dark:text-gray-200">Admin user</div>
+                          <div>{securityStatus()?.authUsername || 'Not configured'}</div>
+                        </div>
+                      </div>
+                      <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3" />
+                        </svg>
+                        <div>
+                          <div class="font-medium text-gray-800 dark:text-gray-200">Last updated</div>
+                          <div>{formatTimestamp(securityStatus()?.authLastModified)}</div>
+                        </div>
+                      </div>
+                      <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+                        </svg>
+                        <div>
+                          <div class="font-medium text-gray-800 dark:text-gray-200">Current coverage</div>
+                          <div>
+                            {securityStatus()?.hasAuthentication ? 'Password login required.' : 'Password login disabled.'}
+                            {' '}
+                            {securityStatus()?.oidcEnabled ? 'OIDC available.' : 'OIDC off.'}
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m9 3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <div class="font-medium text-gray-800 dark:text-gray-200">Disable password auth</div>
+                          <div>
+                            Confirm OIDC or proxy auth works, then set <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">DISABLE_AUTH=true</code> in your deployment.
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -1965,6 +2091,21 @@ const Settings: Component = () => {
                         </p>
                       </Card>
                     </Show>
+                    <div class="mb-4 space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                      <p>
+                        Exports and imports {securityStatus()?.exportProtected && !securityStatus()?.unprotectedExportAllowed ? 'require an API token and a passphrase' : 'follow the current server policy'}. Generating a token lets you:
+                      </p>
+                      <ul class="list-disc pl-5 space-y-1">
+                        <li>Authenticate scripts with the <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">X-API-Token</code> header.</li>
+                        <li>Unlock encrypted export/import flows in Settings → Security → Backup &amp; restore.</li>
+                        <li>Keep UI logins separate from automation secrets.</li>
+                      </ul>
+                      <Show when={securityStatus()?.unprotectedExportAllowed}>
+                        <p class="text-amber-700 dark:text-amber-300">
+                          Unprotected exports are currently allowed. Set <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/50 rounded">ALLOW_UNPROTECTED_EXPORT=false</code> or configure an API token to harden backups.
+                        </p>
+                      </Show>
+                    </div>
                     <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
                   </div>
                 </Card>
