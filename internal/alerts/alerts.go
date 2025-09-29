@@ -328,6 +328,12 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	}
 	
 	m.config = config
+	for id, override := range m.config.Overrides {
+		if override.Usage != nil {
+			override.Usage = ensureHysteresisThreshold(override.Usage)
+			m.config.Overrides[id] = override
+		}
+	}
 	log.Info().
 		Bool("enabled", config.Enabled).
 		Interface("guestDefaults", config.GuestDefaults).

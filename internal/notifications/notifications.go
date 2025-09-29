@@ -42,7 +42,7 @@ type NotificationManager struct {
 	webhooks     []WebhookConfig
 	enabled      bool
 	cooldown     time.Duration
-	lastNotified map[string]time.Time
+	lastNotified map[string]notificationRecord
 	groupWindow  time.Duration
 	pendingAlerts []*alerts.Alert
 	groupTimer   *time.Timer
@@ -50,6 +50,11 @@ type NotificationManager struct {
 	publicURL    string // Full URL to access Pulse
 	groupByGuest bool
 	webhookHistory []WebhookDelivery // Keep last 100 webhook deliveries for debugging
+}
+
+type notificationRecord struct {
+	lastSent   time.Time
+	alertStart time.Time
 }
 
 // Alert represents an alert (interface to avoid circular dependency)
@@ -102,7 +107,7 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 	return &NotificationManager{
 		enabled:        true,
 		cooldown:       5 * time.Minute,
-		lastNotified:   make(map[string]time.Time),
+		lastNotified:   make(map[string]notificationRecord),
 		webhooks:       []WebhookConfig{},
 		groupWindow:    30 * time.Second,
 		pendingAlerts:  make([]*alerts.Alert, 0),
@@ -219,13 +224,13 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	}
 	
 	// Check cooldown
-	lastTime, exists := n.lastNotified[alert.ID]
-	if exists && time.Since(lastTime) < n.cooldown {
+	record, exists := n.lastNotified[alert.ID]
+	if exists && record.alertStart.Equal(alert.StartTime) && time.Since(record.lastSent) < n.cooldown {
 		log.Info().
 			Str("alertID", alert.ID).
-			Dur("timeSince", time.Since(lastTime)).
+			Dur("timeSince", time.Since(record.lastSent)).
 			Dur("cooldown", n.cooldown).
-			Msg("Alert notification in cooldown")
+			Msg("Alert notification in cooldown for active alert")
 		return
 	}
 	
@@ -282,7 +287,10 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	// Update last notified time for all alerts
 	now := time.Now()
 	for _, alert := range alertsToSend {
-		n.lastNotified[alert.ID] = now
+		n.lastNotified[alert.ID] = notificationRecord{
+			lastSent:   now,
+			alertStart: alert.StartTime,
+		}
 	}
 }
 
