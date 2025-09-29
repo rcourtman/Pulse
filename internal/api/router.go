@@ -235,10 +235,10 @@ func (r *Router) setupRoutes() {
 				envPath = "/etc/pulse/.env"
 			}
 
-			// If no auth is currently active but .env exists, security is pending restart
-			if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
-				if _, err := os.Stat(envPath); err == nil {
-					// .env exists but auth not loaded - pending restart
+			authLastModified := ""
+			if stat, err := os.Stat(envPath); err == nil {
+				authLastModified = stat.ModTime().UTC().Format(time.RFC3339)
+				if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
 					configuredButPendingRestart = true
 				}
 			}
@@ -306,6 +306,8 @@ func (r *Router) setupRoutes() {
 				"proxyAuthLogoutURL":          r.config.ProxyAuthLogoutURL,
 				"proxyAuthUsername":           proxyAuthUsername,
 				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
+				"authUsername":                r.config.AuthUser,
+				"authLastModified":            authLastModified,
 			}
 
 			if oidcCfg != nil {

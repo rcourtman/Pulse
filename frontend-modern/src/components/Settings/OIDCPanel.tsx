@@ -202,6 +202,16 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </div>
       <form class="p-6 space-y-5" onSubmit={handleSave}>
+        <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-xs text-blue-800 dark:text-blue-200">
+          <p class="font-semibold mb-2">Getting started</p>
+          <ol class="space-y-1 list-decimal pl-5">
+            <li>Register a confidential client with your IdP and set the redirect URL shown below.</li>
+            <li>Copy the issuer, client ID, and client secret into the fields here.</li>
+            <li>Grant scopes such as <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">openid profile email</code>.</li>
+            <li>Optionally restrict access by domain, email, or groups.</li>
+            <li>Save, then sign out to test the new SSO button.</li>
+          </ol>
+        </div>
         <Show when={loading()}>
           <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
             <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

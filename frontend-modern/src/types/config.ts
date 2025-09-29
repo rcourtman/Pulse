@@ -97,6 +97,18 @@ export interface SecurityStatus {
   exportProtected: boolean;
   hasAuditLogging: boolean;
   configuredButPendingRestart: boolean;
+  unprotectedExportAllowed?: boolean;
+  hasHTTPS?: boolean;
+  oidcEnabled?: boolean;
+  publicAccess?: boolean;
+  isPrivateNetwork?: boolean;
+  clientIP?: string;
+  hasProxyAuth?: boolean;
+  proxyAuthUsername?: string;
+  proxyAuthIsAdmin?: boolean;
+  proxyAuthLogoutURL?: string;
+  authUsername?: string;
+  authLastModified?: string;
 }
 
 /**
