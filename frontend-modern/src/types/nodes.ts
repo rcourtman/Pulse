@@ -51,7 +51,7 @@ export interface PBSNodeConfig {
 
 export type NodeConfig = (PVENodeConfig | PBSNodeConfig) & {
   type: 'pve' | 'pbs';
-  status?: 'connected' | 'disconnected' | 'error';
+  status?: 'connected' | 'disconnected' | 'error' | 'pending';
 };
 
 export interface NodesResponse {
