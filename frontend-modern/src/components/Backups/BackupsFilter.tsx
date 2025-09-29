@@ -13,9 +13,27 @@ interface BackupsFilterProps {
   typeFilter?: () => 'all' | 'VM' | 'LXC' | 'Host';
   setTypeFilter?: (value: 'all' | 'VM' | 'LXC' | 'Host') => void;
   hasHostBackups?: () => boolean;
+  sortKey: () => string;
+  setSortKey: (value: string) => void;
+  sortDirection: () => 'asc' | 'desc';
+  setSortDirection: (value: 'asc' | 'desc') => void;
+  sortOptions?: { value: string; label: string }[];
+  onReset?: () => void;
 }
 
 export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
+  const sortOptions = props.sortOptions ?? [
+    { value: 'backupTime', label: 'Time' },
+    { value: 'name', label: 'Guest Name' },
+    { value: 'node', label: 'Node' },
+    { value: 'vmid', label: 'VMID' },
+    { value: 'backupType', label: 'Backup Type' },
+    { value: 'size', label: 'Size' },
+    { value: 'storage', label: 'Storage' },
+    { value: 'verified', label: 'Verified' },
+    { value: 'type', label: 'Guest Type' },
+    { value: 'owner', label: 'Owner' }
+  ];
   return (
     <Card class="backups-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
@@ -184,12 +202,48 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
+          {/* Sort controls */}
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Sort</span>
+            <select
+              value={props.sortKey()}
+              onChange={(e) => props.setSortKey(e.currentTarget.value)}
+              class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400"
+            >
+              {sortOptions.map(option => (
+                <option value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              title={`Sort ${props.sortDirection() === 'asc' ? 'descending' : 'ascending'}`}
+              onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
+              class="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg
+                class={`h-4 w-4 transition-transform ${props.sortDirection() === 'asc' ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+
           {/* Reset Button */}
           <button 
             onClick={() => {
-              props.setSearch('');
-              props.setViewMode('all');
-              props.setGroupBy('date');
+              if (props.onReset) {
+                props.onReset();
+              } else {
+                props.setSearch('');
+                props.setViewMode('all');
+                props.setGroupBy('date');
+              }
             }}
             title="Reset all filters"
             class="flex items-center justify-center px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 
@@ -206,7 +260,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
           </button>
 
           {/* Active Indicator */}
-          <Show when={props.search() || props.viewMode() !== 'all' || props.groupBy() !== 'date'}>
+          <Show when={props.search().trim() !== '' || props.viewMode() !== 'all' || props.groupBy() !== 'date' || props.sortKey() !== 'backupTime' || props.sortDirection() !== 'desc'}>
             <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
               Active
             </span>

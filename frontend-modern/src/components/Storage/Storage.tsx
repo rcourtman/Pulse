@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, createMemo, createEffect } from 'solid-js';
+import { Component, For, Show, createSignal, createMemo, createEffect, onMount } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes } from '@/utils/format';
@@ -17,9 +17,9 @@ const Storage: Component = () => {
   const [tabView, setTabView] = createSignal<'pools' | 'disks'>('pools');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  // TODO: Implement sorting in sortedStorage function
-  // const [sortKey, setSortKey] = createSignal('name');
-  // const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
+  const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   
   // Create a mapping from node name to host URL
   const nodeHostMap = createMemo(() => {
@@ -32,15 +32,43 @@ const Storage: Component = () => {
     return map;
   });
   
+  const sortKeyOptions: { value: StorageSortKey; label: string }[] = [
+    { value: 'name', label: 'Name' },
+    { value: 'node', label: 'Node' },
+    { value: 'type', label: 'Type' },
+    { value: 'status', label: 'Status' },
+    { value: 'usage', label: 'Usage %' },
+    { value: 'free', label: 'Free Capacity' },
+    { value: 'total', label: 'Total Capacity' }
+  ];
+  
   // Load preferences from localStorage
-  createEffect(() => {
+  onMount(() => {
     const savedViewMode = localStorage.getItem('storageViewMode');
     if (savedViewMode === 'storage') setViewMode('storage');
+
+    const savedSortKey = localStorage.getItem('storageSortKey') as StorageSortKey | null;
+    if (savedSortKey && sortKeyOptions.some(option => option.value === savedSortKey)) {
+      setSortKey(savedSortKey);
+    }
+
+    const savedSortDirection = localStorage.getItem('storageSortDirection');
+    if (savedSortDirection === 'desc' || savedSortDirection === 'asc') {
+      setSortDirection(savedSortDirection);
+    }
   });
   
-  // Save preferences to localStorage
+  // Persist preferences
   createEffect(() => {
     localStorage.setItem('storageViewMode', viewMode());
+  });
+
+  createEffect(() => {
+    localStorage.setItem('storageSortKey', sortKey());
+  });
+
+  createEffect(() => {
+    localStorage.setItem('storageSortDirection', sortDirection());
   });
   
   
@@ -109,24 +137,98 @@ const Storage: Component = () => {
     // Apply node selection filter
     const nodeFilter = selectedNode();
     if (nodeFilter) {
-      storage = storage.filter(s => s.node.toLowerCase() === nodeFilter.toLowerCase());
+      const normalizedNode = nodeFilter.toLowerCase();
+      storage = storage.filter(s => {
+        const primary = s.node?.toLowerCase();
+        const extraNodes = s.nodes?.map(node => node.toLowerCase()) || [];
+        return primary === normalizedNode || extraNodes.includes(normalizedNode);
+      });
     }
     
     // Apply search filter
-    const search = searchTerm().toLowerCase();
+    let search = searchTerm().toLowerCase().trim();
     if (search) {
-      // Regular search
-      storage = storage.filter(s => 
-        s.name.toLowerCase().includes(search) ||
-        s.node.toLowerCase().includes(search) ||
-        s.type.toLowerCase().includes(search) ||
-        s.content?.toLowerCase().includes(search) ||
-        (s.status && s.status.toLowerCase().includes(search))
-      );
+      const nodePattern = /node:([a-z0-9_.:-]+)/i;
+      const nodeMatch = search.match(nodePattern);
+      let nodeQuery: string | null = null;
+
+      if (nodeMatch) {
+        nodeQuery = nodeMatch[1].toLowerCase();
+        search = search.replace(nodeMatch[0], '').trim();
+      }
+
+      if (nodeQuery) {
+        storage = storage.filter(s => {
+          const primary = s.node?.toLowerCase();
+          const extraNodes = s.nodes?.map(node => node.toLowerCase()) || [];
+          return primary === nodeQuery || extraNodes.includes(nodeQuery);
+        });
+      }
+
+      if (search) {
+        const terms = search.split(/\s+/).filter(Boolean);
+        storage = storage.filter(s => {
+          const haystack = [
+            s.name,
+            s.node,
+            s.type,
+            s.content,
+            s.status,
+            ...(s.nodes ?? []),
+            ...(s.pbsNames ?? [])
+          ].filter(Boolean).map(value => value!.toLowerCase());
+
+          return terms.every(term => haystack.some(entry => entry.includes(term)));
+        });
+      }
     }
     
-    // Always sort by name alphabetically for consistent order
-    return storage.sort((a, b) => a.name.localeCompare(b.name));
+    const numericCompare = (a: number, b: number) => {
+      const normalizedA = Number.isFinite(a) ? a : -Infinity;
+      const normalizedB = Number.isFinite(b) ? b : -Infinity;
+      if (normalizedA === normalizedB) return 0;
+      return normalizedA < normalizedB ? -1 : 1;
+    };
+
+    const result = storage.sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortKey()) {
+        case 'node': {
+          const nodeA = (a.nodes && a.nodes.length > 0 ? a.nodes[0] : a.node) ?? '';
+          const nodeB = (b.nodes && b.nodes.length > 0 ? b.nodes[0] : b.node) ?? '';
+          comparison = nodeA.localeCompare(nodeB, undefined, { sensitivity: 'base' });
+          break;
+        }
+        case 'type':
+          comparison = (a.type ?? '').localeCompare(b.type ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'status':
+          comparison = (a.status ?? '').localeCompare(b.status ?? '', undefined, { sensitivity: 'base' });
+          break;
+        case 'usage':
+          comparison = numericCompare(a.usage ?? 0, b.usage ?? 0);
+          break;
+        case 'free':
+          comparison = numericCompare(a.free ?? 0, b.free ?? 0);
+          break;
+        case 'total':
+          comparison = numericCompare(a.total ?? 0, b.total ?? 0);
+          break;
+        case 'name':
+        default:
+          comparison = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+          break;
+      }
+
+      if (comparison === 0) {
+        comparison = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+      }
+
+      return sortDirection() === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
   });
   
   // Group storage by node or storage
@@ -165,8 +267,8 @@ const Storage: Component = () => {
     setSearchTerm('');
     setSelectedNode(null);
     setViewMode('node');
-    // setSortKey('name');
-    // setSortDirection('asc');
+    setSortKey('name');
+    setSortDirection('asc');
   };
   
   
@@ -253,8 +355,11 @@ const Storage: Component = () => {
           setSearch={setSearchTerm}
           groupBy={viewMode}
           setGroupBy={setViewMode}
-          setSortKey={() => {}}
-          setSortDirection={() => {}}
+          sortOptions={sortKeyOptions}
+          sortKey={sortKey}
+          setSortKey={setSortKey}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
           searchInputRef={(el) => searchInputRef = el}
         />
       </Show>
