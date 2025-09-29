@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, createMemo, createEffect } from 'solid-js';
+import { Component, createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { formatBytes, formatAbsoluteTime, formatRelativeTime, formatUptime } from '@/utils/format';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
@@ -46,12 +46,47 @@ const UnifiedBackups: Component = () => {
     else if (value === 'pve') setBackupTypeFilter('local');
     else if (value === 'pbs') setBackupTypeFilter('remote');
   };
-  const [sortKey, setSortKey] = createSignal<keyof UnifiedBackup>('backupTime');
+  type BackupSortKey = keyof Pick<UnifiedBackup,
+    'backupTime' | 'name' | 'node' | 'vmid' | 'backupType' | 'size' | 'storage' | 'verified' | 'type' | 'owner'>;
+  const [sortKey, setSortKey] = createSignal<BackupSortKey>('backupTime');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
   const [selectedDateRange, setSelectedDateRange] = createSignal<{ start: number; end: number } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
   const [tooltip, setTooltip] = createSignal<{ text: string; x: number; y: number } | null>(null);
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+
+  const sortKeyOptions: { value: BackupSortKey; label: string }[] = [
+    { value: 'backupTime', label: 'Time' },
+    { value: 'name', label: 'Guest Name' },
+    { value: 'node', label: 'Node' },
+    { value: 'vmid', label: 'VMID' },
+    { value: 'backupType', label: 'Backup Type' },
+    { value: 'size', label: 'Size' },
+    { value: 'storage', label: 'Storage' },
+    { value: 'verified', label: 'Verified' },
+    { value: 'type', label: 'Guest Type' },
+    { value: 'owner', label: 'Owner' }
+  ];
+
+  onMount(() => {
+    const savedSortKey = localStorage.getItem('backupsSortKey') as BackupSortKey | null;
+    if (savedSortKey && sortKeyOptions.some(option => option.value === savedSortKey)) {
+      setSortKey(savedSortKey);
+    }
+
+    const savedSortDirection = localStorage.getItem('backupsSortDirection');
+    if (savedSortDirection === 'asc' || savedSortDirection === 'desc') {
+      setSortDirection(savedSortDirection);
+    }
+  });
+
+  createEffect(() => {
+    localStorage.setItem('backupsSortKey', sortKey());
+  });
+
+  createEffect(() => {
+    localStorage.setItem('backupsSortDirection', sortDirection());
+  });
   
   // Extract PBS instance from search term
   const selectedPBSInstance = createMemo(() => {
@@ -655,7 +690,7 @@ const UnifiedBackups: Component = () => {
   });
 
   // Sort handler
-  const handleSort = (key: keyof UnifiedBackup) => {
+  const handleSort = (key: BackupSortKey) => {
     if (sortKey() === key) {
       // Toggle direction for the same column
       const newDir = sortDirection() === 'asc' ? 'desc' : 'asc';
@@ -1554,6 +1589,12 @@ const UnifiedBackups: Component = () => {
         typeFilter={typeFilter}
         setTypeFilter={setTypeFilter}
         hasHostBackups={hasHostBackups}
+        sortOptions={sortKeyOptions}
+        sortKey={sortKey}
+        setSortKey={(value) => setSortKey(value as BackupSortKey)}
+        sortDirection={sortDirection}
+        setSortDirection={setSortDirection}
+        onReset={resetFilters}
       />
 
       {/* Table */}
