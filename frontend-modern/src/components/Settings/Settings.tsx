@@ -162,6 +162,7 @@ const Settings: Component = () => {
   const [apiTokenInput, setApiTokenInput] = createSignal('');
   const [apiTokenModalSource, setApiTokenModalSource] = createSignal<'export' | 'import' | null>(null);
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
+  const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
 
   const formatTimestamp = (timestamp?: string) => {
     if (!timestamp) {
@@ -1589,39 +1590,47 @@ const Settings: Component = () => {
           {/* System Settings Tab */}
           <Show when={activeTab() === 'system'}>
             <div class="space-y-6">
-              <div>
-                <SectionHeader title="System configuration" size="md" class="mb-4" />
-                
-                {/* Environment Variable Info */}
-                <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                  <div class="flex items-start gap-2">
-                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div class="text-sm text-blue-800 dark:text-blue-200">
-                      <p class="font-medium mb-1">Configuration Priority:</p>
-                      <p>• Some env vars override settings (API_TOKEN, PORTS, AUTH)</p>
-                      <p>• Changes made here are saved to system.json immediately</p>
-                      <p>• Settings persist unless overridden by env vars</p>
-                    </div>
+              <SectionHeader title="System configuration" size="md" class="mb-2" />
+
+              <Card
+                tone="info"
+                padding="md"
+                border={false}
+                class="border border-blue-200 dark:border-blue-800"
+              >
+                <div class="flex items-start gap-3">
+                  <svg
+                    class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div class="text-sm text-blue-800 dark:text-blue-200">
+                    <p class="font-medium mb-1">Configuration Priority</p>
+                    <ul class="space-y-1">
+                      <li>• Some env vars override settings (API_TOKEN, PORTS, AUTH)</li>
+                      <li>• Changes made here are saved to system.json immediately</li>
+                      <li>• Settings persist unless overridden by env vars</li>
+                    </ul>
                   </div>
                 </div>
-                
-                <div class="space-y-4">
-                  
-                  {/* Network Settings */}
-                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+              </Card>
+
+              <div class="grid gap-4 lg:grid-cols-5">
+                <Card padding="lg" class="space-y-6 lg:col-span-3">
+                  <section class="space-y-3">
+                    <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
                       </svg>
                       Network Settings
                     </h4>
-                    
-                    <div>
+                    <div class="space-y-2">
                       <label class="text-sm font-medium text-gray-900 dark:text-gray-100">CORS Allowed Origins</label>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">For reverse proxy setups (* = allow all, empty = same-origin only)</p>
+                      <p class="text-xs text-gray-600 dark:text-gray-400">For reverse proxy setups (* = allow all, empty = same-origin only)</p>
                       <div class="relative">
                         <input
                           type="text"
@@ -1635,8 +1644,8 @@ const Settings: Component = () => {
                           disabled={envOverrides().allowedOrigins}
                           placeholder="* or https://example.com"
                           class={`w-full px-3 py-1.5 text-sm border rounded-lg ${
-                            envOverrides().allowedOrigins 
-                              ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75' 
+                            envOverrides().allowedOrigins
+                              ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
                               : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
                           }`}
                         />
@@ -1655,67 +1664,71 @@ const Settings: Component = () => {
                         )}
                       </div>
                     </div>
-                    
-                    {/* Iframe Embedding Settings */}
-                    <div class="mt-4">
-                      <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Iframe Embedding</label>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)</p>
-                      
-                      <div class="space-y-3">
-                        <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  </section>
+
+                  <section class="space-y-3">
+                    <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+                        <path d="M7 20h10"></path>
+                      </svg>
+                      Embedding
+                    </h4>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)</p>
+                    <div class="space-y-3">
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="allowEmbedding"
+                          checked={allowEmbedding()}
+                          onChange={(e) => {
+                            setAllowEmbedding(e.currentTarget.checked);
+                            setHasUnsavedChanges(true);
+                          }}
+                          class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label for="allowEmbedding" class="text-sm text-gray-700 dark:text-gray-300">
+                          Allow iframe embedding
+                        </label>
+                      </div>
+
+                      <Show when={allowEmbedding()}>
+                        <div class="space-y-2">
+                          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Allowed Embed Origins (optional)</label>
+                          <p class="text-xs text-gray-600 dark:text-gray-400">Comma-separated list of origins that can embed Pulse (leave empty for same-origin only)</p>
                           <input
-                            type="checkbox"
-                            id="allowEmbedding"
-                            checked={allowEmbedding()}
+                            type="text"
+                            value={allowedEmbedOrigins()}
                             onChange={(e) => {
-                              setAllowEmbedding(e.currentTarget.checked);
+                              setAllowedEmbedOrigins(e.currentTarget.value);
                               setHasUnsavedChanges(true);
                             }}
-                            class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            placeholder="https://my.domain, https://dashboard.example.com"
+                            class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                           />
-                          <label for="allowEmbedding" class="text-sm text-gray-700 dark:text-gray-300">
-                            Allow iframe embedding
-                          </label>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at <code>my.domain</code>, add <code>https://my.domain</code> here.
+                          </p>
                         </div>
-                        
-                        <Show when={allowEmbedding()}>
-                          <div>
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Allowed Embed Origins (optional)</label>
-                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Comma-separated list of origins that can embed Pulse (leave empty for same-origin only)</p>
-                            <input
-                              type="text"
-                              value={allowedEmbedOrigins()}
-                              onChange={(e) => {
-                                setAllowedEmbedOrigins(e.currentTarget.value);
-                                setHasUnsavedChanges(true);
-                              }}
-                              placeholder="https://my.domain, https://dashboard.example.com"
-                              class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                            />
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at <code>my.domain</code>, 
-                              add <code>https://my.domain</code> here.
-                            </p>
-                          </div>
-                        </Show>
-                      </div>
+                      </Show>
                     </div>
-                    
-                    <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                      <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
-                        <strong>Port Configuration:</strong> Use <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">systemctl edit pulse</code>
-                      </p>
-                      <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
-                        [Service]<br/>
-                        Environment="FRONTEND_PORT=8080"<br/>
-                        <span class="text-xs text-amber-600 dark:text-amber-400">Then restart: sudo systemctl restart pulse</span>
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Update Settings */}
-                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                  </section>
+
+                  <Card tone="warning" padding="sm" border={false} class="border border-amber-200 dark:border-amber-800">
+                    <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
+                      <strong>Port Configuration:</strong> Use <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">systemctl edit pulse</code>
+                    </p>
+                    <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
+                      [Service]<br/>
+                      Environment="FRONTEND_PORT=8080"<br/>
+                      <span class="text-xs text-amber-600 dark:text-amber-400">Then restart: sudo systemctl restart pulse</span>
+                    </p>
+                  </Card>
+                </Card>
+
+                <Card padding="lg" class="space-y-6 lg:col-span-2">
+                  <section class="space-y-4">
+                    <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"></polyline>
                         <polyline points="1 20 1 14 7 14"></polyline>
@@ -1723,10 +1736,9 @@ const Settings: Component = () => {
                       </svg>
                       Updates
                     </h4>
-                    
+
                     <div class="space-y-4">
-                      {/* Version Info */}
-                      <div class="flex items-center justify-between">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Current Version</label>
                           <p class="text-xs text-gray-600 dark:text-gray-400">
@@ -1754,8 +1766,7 @@ const Settings: Component = () => {
                           )}
                         </button>
                       </div>
-                      
-                      {/* Docker Message */}
+
                       <Show when={versionInfo()?.isDocker && !updateInfo()?.available}>
                         <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                           <p class="text-xs text-blue-800 dark:text-blue-200">
@@ -1763,11 +1774,10 @@ const Settings: Component = () => {
                           </p>
                         </div>
                       </Show>
-                      
-                      {/* Update Available */}
+
                       <Show when={updateInfo()?.available}>
-                        <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                          <div class="mb-2">
+                        <div class="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                          <div>
                             <p class="text-sm font-medium text-green-800 dark:text-green-200">
                               Update Available: {updateInfo()?.latestVersion}
                             </p>
@@ -1775,10 +1785,9 @@ const Settings: Component = () => {
                               Released: {updateInfo()?.releaseDate ? new Date(updateInfo()!.releaseDate).toLocaleDateString() : 'Unknown'}
                             </p>
                           </div>
-                          
-                          {/* Update Instructions based on deployment type */}
-                          <div class="mt-3 p-2 bg-green-100 dark:bg-green-900/40 rounded">
-                            <p class="text-xs font-medium text-green-800 dark:text-green-200 mb-1">How to update:</p>
+
+                          <div class="p-2 bg-green-100 dark:bg-green-900/40 rounded space-y-2">
+                            <p class="text-xs font-medium text-green-800 dark:text-green-200">How to update:</p>
                             <Show when={versionInfo()?.deploymentType === 'proxmoxve'}>
                               <p class="text-xs text-green-700 dark:text-green-300">
                                 Type <code class="px-1 py-0.5 bg-green-200 dark:bg-green-800 rounded">update</code> in the LXC console
@@ -1806,10 +1815,15 @@ const Settings: Component = () => {
                                 Pull latest changes and rebuild
                               </p>
                             </Show>
+                            <Show when={!versionInfo()?.deploymentType && versionInfo()?.isDocker}>
+                              <p class="text-xs text-green-700 dark:text-green-300">
+                                Pull the latest Pulse Docker image and recreate your container.
+                              </p>
+                            </Show>
                           </div>
-                          
+
                           <Show when={updateInfo()?.releaseNotes}>
-                            <details class="mt-2">
+                            <details class="mt-1">
                               <summary class="text-xs text-green-700 dark:text-green-300 cursor-pointer">Release Notes</summary>
                               <pre class="mt-2 text-xs text-green-600 dark:text-green-400 whitespace-pre-wrap font-mono bg-green-100 dark:bg-green-900/30 p-2 rounded">
                                 {updateInfo()?.releaseNotes}
@@ -1818,11 +1832,9 @@ const Settings: Component = () => {
                           </Show>
                         </div>
                       </Show>
-                      
-                      
-                      {/* Update Settings */}
+
                       <div class="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Channel</label>
                             <p class="text-xs text-gray-600 dark:text-gray-400">
@@ -1842,8 +1854,8 @@ const Settings: Component = () => {
                             <option value="rc">Release Candidate</option>
                           </select>
                         </div>
-                        
-                        <div class="flex items-center justify-between">
+
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Update Checks</label>
                             <p class="text-xs text-gray-600 dark:text-gray-400">
@@ -1864,10 +1876,10 @@ const Settings: Component = () => {
                             <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
                           </label>
                         </div>
-                        
+
                         <Show when={autoUpdateEnabled()}>
-                          <div class="pl-4 space-y-4 border-l-2 border-gray-200 dark:border-gray-600">
-                            <div class="flex items-center justify-between">
+                          <div class="space-y-4 rounded-md border border-gray-200 dark:border-gray-600 p-3">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Check Interval</label>
                                 <p class="text-xs text-gray-600 dark:text-gray-400">
@@ -1888,8 +1900,8 @@ const Settings: Component = () => {
                                 <option value="168">Weekly</option>
                               </select>
                             </div>
-                            
-                            <div class="flex items-center justify-between">
+
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <label class="text-sm font-medium text-gray-900 dark:text-gray-100">Check Time</label>
                                 <p class="text-xs text-gray-600 dark:text-gray-400">
@@ -1910,11 +1922,10 @@ const Settings: Component = () => {
                         </Show>
                       </div>
                     </div>
-                  </div>
-                  
-                </div>
+                  </section>
+                </Card>
               </div>
-              
+
               {/* Backup & Restore - Moved from Security tab */}
               <Card padding="lg" border={false} class="border border-gray-200 dark:border-gray-700">
                 <SectionHeader
@@ -2128,46 +2139,63 @@ const Settings: Component = () => {
                   
                   {/* Content */}
                   <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <button type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('Change password button clicked, current modal state:', showPasswordModal());
-                          setShowPasswordModal(true);
-                          console.log('Modal state after setting:', showPasswordModal());
-                        }}
-                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group cursor-pointer"
-                      >
-                        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
-                          <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                          </svg>
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="flex-1 text-sm text-gray-600 dark:text-gray-400">
+                        <p class="font-semibold text-gray-900 dark:text-gray-100">Credential controls</p>
+                        <p class="mt-1 leading-relaxed">
+                          Update the administrator password for routine maintenance, or rotate both the password and API token when you need a full credential refresh.
+                        </p>
+                      </div>
+                      <div class="flex flex-wrap items-start gap-4">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowPasswordModal(true);
+                          }}
+                          class="flex items-center gap-3 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all"
+                        >
+                          <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                            </svg>
+                          </div>
+                          <div class="text-left">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Change password</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Keep existing API token</div>
+                          </div>
+                        </button>
+                        <div class="flex flex-col gap-1">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">Need to replace both the password and API token?</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
+                            class={`inline-flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors ${showQuickSecurityWizard() ? 'underline' : ''}`}
+                          >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Generate new credentials</span>
+                          </button>
                         </div>
-                        <div class="text-left">
-                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Change Password</div>
-                          <div class="text-xs text-gray-500 dark:text-gray-400">Update your login credentials</div>
-                        </div>
-                      </button>
-                      <a
-                        href="https://github.com/rcourtman/Pulse/blob/main/docs/SECURITY.md#first-run-security-setup"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all group"
-                      >
-                        <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/50 transition-colors">
-                          <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                        </div>
-                        <div class="text-left">
-                          <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Run quick security wizard</div>
-                          <div class="text-xs text-gray-500 dark:text-gray-400">Refresh authentication end-to-end</div>
-                        </div>
-                      </a>
+                      </div>
                     </div>
 
-                    <div class="mt-6 grid gap-3 text-xs text-gray-600 dark:text-gray-400 md:grid-cols-2">
+                    <Show when={showQuickSecurityWizard()}>
+                      <div class="mt-6">
+                        <QuickSecuritySetup
+                          mode="rotate"
+                          defaultUsername={securityStatus()?.authUsername || 'admin'}
+                          onConfigured={() => {
+                            setShowQuickSecurityWizard(false);
+                            loadSecurityStatus();
+                          }}
+                        />
+                      </div>
+                    </Show>
+
+                    <div class="mt-8 grid gap-3 text-xs text-gray-600 dark:text-gray-400 md:grid-cols-2">
                       <div class="flex items-start gap-2">
                         <svg class="w-4 h-4 mt-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />

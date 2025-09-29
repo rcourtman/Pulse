@@ -41,7 +41,7 @@ API_TOKEN=abc123...                  # API token (plain text, not hashed)
 
 # Security settings
 DISABLE_AUTH=true                    # Disable authentication entirely
-ENABLE_AUDIT_LOG=true                # Enable security audit logging
+PULSE_AUDIT_LOG=true                # Enable security audit logging
 
 # Proxy/SSO Authentication (see docs/PROXY_AUTH.md for full details)
 PROXY_AUTH_SECRET=secret123          # Shared secret between proxy and Pulse
