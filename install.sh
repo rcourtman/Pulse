@@ -2372,6 +2372,8 @@ reset_pulse() {
 # Parse command line arguments
 FORCE_VERSION=""
 FORCE_CHANNEL=""
+BUILD_FROM_SOURCE=false
+SOURCE_BRANCH="main"
 IN_CONTAINER=false
 IN_DOCKER=false
 ENABLE_AUTO_UPDATES=false

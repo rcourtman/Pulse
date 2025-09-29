@@ -78,6 +78,21 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		config.StorageDefault.Clear = 80
 	}
 	if config.MinimumDelta <= 0 {
+		margin := config.HysteresisMargin
+		if margin <= 0 {
+			margin = 5.0
+		}
+		for id, override := range config.Overrides {
+			if override.Usage != nil {
+				if override.Usage.Clear <= 0 {
+					override.Usage.Clear = override.Usage.Trigger - margin
+					if override.Usage.Clear < 0 {
+						override.Usage.Clear = 0
+					}
+				}
+				config.Overrides[id] = override
+			}
+		}
 		config.MinimumDelta = 2.0
 	}
 	if config.SuppressionWindow <= 0 {
