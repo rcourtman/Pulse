@@ -1073,67 +1073,65 @@ const Settings: Component = () => {
                       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                         <div class="flex-1 min-w-0">
                           <div class="flex items-start gap-3">
-                            <div class="relative flex-shrink-0">
-                              <div class={`w-3 h-3 rounded-full mt-1.5 ${
-                            (() => {
-                              // Find the corresponding node in the WebSocket state
-                              const stateNode = state.nodes.find(n => n.instance === node.name);
-                              // Check if the node has an unhealthy connection or is offline
-                              if (stateNode?.connectionHealth === 'unhealthy' || stateNode?.connectionHealth === 'error' || stateNode?.status === 'offline') {
-                                return 'bg-red-500';
-                              }
-                              // Check if connection is degraded (partial cluster connectivity)
-                              if (stateNode?.connectionHealth === 'degraded') {
-                                return 'bg-yellow-500';
-                              }
-                              // Check if we have a healthy connection
-                              if (stateNode && (stateNode.status === 'online' || stateNode.connectionHealth === 'healthy')) {
-                                return 'bg-green-500';
-                              }
-                              // Fall back to the last known config status if live data hasn't arrived yet
-                              if (node.status === 'connected') {
-                                return 'bg-green-500';
-                              }
-                              if (node.status === 'error') {
-                                return 'bg-red-500';
-                              }
-                              if (node.status === 'pending' || node.status === 'disconnected') {
-                                return 'bg-amber-500 animate-pulse';
-                              }
-                              return 'bg-gray-400';
-                            })()
+                            <div class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${
+                              (() => {
+                                // Find the corresponding node in the WebSocket state
+                                const stateNode = state.nodes.find(n => n.instance === node.name);
+                                // Check if the node has an unhealthy connection or is offline
+                                if (stateNode?.connectionHealth === 'unhealthy' || stateNode?.connectionHealth === 'error' || stateNode?.status === 'offline') {
+                                  return 'bg-red-500';
+                                }
+                                // Check if connection is degraded (partial cluster connectivity)
+                                if (stateNode?.connectionHealth === 'degraded') {
+                                  return 'bg-yellow-500';
+                                }
+                                // Check if we have a healthy connection
+                                if (stateNode && (stateNode.status === 'online' || stateNode.connectionHealth === 'healthy')) {
+                                  return 'bg-green-500';
+                                }
+                                // Fall back to the last known config status if live data hasn't arrived yet
+                                if (node.status === 'connected') {
+                                  return 'bg-green-500';
+                                }
+                                if (node.status === 'error') {
+                                  return 'bg-red-500';
+                                }
+                                if (node.status === 'pending' || node.status === 'disconnected') {
+                                  return 'bg-amber-500 animate-pulse';
+                                }
+                                return 'bg-gray-400';
+                              })()
                             }`}></div>
-                            </div>
                             <div class="flex-1 min-w-0">
                               <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">{node.name}</h4>
                               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">{node.host}</p>
                               <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
-                              <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                              </span>
-                              {node.type === 'pve' && 'monitorVMs' in node && node.monitorVMs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">VMs</span>}
-                              {node.type === 'pve' && 'monitorContainers' in node && node.monitorContainers && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Containers</span>}
-                              {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Storage</span>}
-                              {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Backups</span>}
-                            </div>
-                            <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                              <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center gap-2 mb-2">
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="text-gray-600 dark:text-gray-400">
-                                    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
-                                    <circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
-                                    <circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
-                                    <line x1="7" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2"/>
-                                    <line x1="15" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="2"/>
-                                  </svg>
-                                  <span class="font-semibold text-gray-700 dark:text-gray-300">
-                                    {'clusterName' in node ? node.clusterName : 'Unknown'} Cluster
-                                  </span>
-                                  <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full ml-auto">
-                                    {'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints.length : 0} nodes
-                                  </span>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
+                                  {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                                </span>
+                                {node.type === 'pve' && 'monitorVMs' in node && node.monitorVMs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">VMs</span>}
+                                {node.type === 'pve' && 'monitorContainers' in node && node.monitorContainers && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Containers</span>}
+                                {node.type === 'pve' && 'monitorStorage' in node && node.monitorStorage && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Storage</span>}
+                                {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Backups</span>}
+                              </div>
+                              <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
+                                <div class="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                  <div class="flex items-center gap-2 mb-2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="text-gray-600 dark:text-gray-400">
+                                      <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                                      <circle cx="4" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                                      <circle cx="20" cy="12" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                                      <line x1="7" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2"/>
+                                      <line x1="15" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="2"/>
+                                    </svg>
+                                    <span class="font-semibold text-gray-700 dark:text-gray-300">
+                                      {'clusterName' in node ? node.clusterName : 'Unknown'} Cluster
+                                    </span>
+                                    <span class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full ml-auto">
+                                      {'clusterEndpoints' in node && node.clusterEndpoints ? node.clusterEndpoints.length : 0} nodes
+                                    </span>
+                                  </div>
+                                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <For each={'clusterEndpoints' in node ? node.clusterEndpoints : []}>
                                     {(endpoint) => (
                                       <div class="flex items-center gap-2 text-xs bg-white dark:bg-gray-900 px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700">
@@ -1240,58 +1238,58 @@ const Settings: Component = () => {
                     </Show>
                     <For each={discoveredNodes().filter(n => n.type === 'pve')}>
                       {(server) => (
-                      <div 
-                        class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                        onClick={() => {
-                          // Pre-fill the modal with discovered server info
-                          setEditingNode({
-                            id: '',
-                            type: 'pve',
-                          name: server.hostname || `pve-${server.ip}`,
-                          host: `https://${server.ip}:${server.port}`,
-                          user: '',
-                          tokenName: '',
-                          tokenValue: '',
-                          verifySSL: false,
-                            monitorVMs: true,
-                            monitorContainers: true,
-                            monitorStorage: true,
-                            monitorBackups: true,
-                            status: 'pending'
-                          } as NodeConfigWithStatus);
-                          setCurrentNodeType('pve');
-                          setShowNodeModal(true);
-                        }}
-                      >
-                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                          <div class="flex-1 min-w-0">
-                            <div class="relative">
-                              <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
-                            </div>
-                            <div class="flex-1">
-                              <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                                {server.hostname || `Proxmox VE at ${server.ip}`}
-                              </h4>
-                              <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                {server.ip}:{server.port}
-                              </p>
-                              <div class="flex items-center gap-2 mt-2">
-                                <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                  Discovered
-                                </span>
-                                <span class="text-xs text-gray-500 dark:text-gray-400">
-                                  Click to configure
-                                </span>
+                        <div
+                          class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                          onClick={() => {
+                            // Pre-fill the modal with discovered server info
+                            setEditingNode({
+                              id: '',
+                              type: 'pve',
+                              name: server.hostname || `pve-${server.ip}`,
+                              host: `https://${server.ip}:${server.port}`,
+                              user: '',
+                              tokenName: '',
+                              tokenValue: '',
+                              verifySSL: false,
+                              monitorVMs: true,
+                              monitorContainers: true,
+                              monitorStorage: true,
+                              monitorBackups: true,
+                              status: 'pending'
+                            } as NodeConfigWithStatus);
+                            setCurrentNodeType('pve');
+                            setShowNodeModal(true);
+                          }}
+                        >
+                          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-start gap-3">
+                                <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                <div class="flex-1 min-w-0">
+                                  <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                    {server.hostname || `Proxmox VE at ${server.ip}`}
+                                  </h4>
+                                  <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                    {server.ip}:{server.port}
+                                  </p>
+                                  <div class="flex items-center gap-2 mt-2">
+                                    <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                      Discovered
+                                    </span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      Click to configure
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                              <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
                           </div>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
-                            <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
                         </div>
-                      </div>
-                    )}
-                  </For>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </div>
@@ -1398,46 +1396,48 @@ const Settings: Component = () => {
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
                       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                         <div class="flex-1 min-w-0">
-                          <div class={`w-3 h-3 rounded-full mt-1.5 ${
-                            (() => {
-                              // Find the corresponding PBS instance in the WebSocket state
-                              const statePBS = state.pbs.find(p => p.name === node.name);
-                              // Check if the PBS has an unhealthy connection or is offline
-                              if (statePBS?.connectionHealth === 'unhealthy' || statePBS?.connectionHealth === 'error' || statePBS?.status === 'offline') {
-                                return 'bg-red-500';
-                              }
-                              // Check if connection is degraded (not commonly used for PBS but keeping consistent)
-                              if (statePBS?.connectionHealth === 'degraded') {
-                                return 'bg-yellow-500';
-                              }
-                              // Check if we have a healthy connection
-                              if (statePBS && (statePBS.status === 'online' || statePBS.connectionHealth === 'healthy')) {
-                                return 'bg-green-500';
-                              }
-                              // Fall back to the last known config status if live data hasn't arrived yet
-                              if (node.status === 'connected') {
-                                return 'bg-green-500';
-                              }
-                              if (node.status === 'error') {
-                                return 'bg-red-500';
-                              }
-                              if (node.status === 'pending' || node.status === 'disconnected') {
-                                return 'bg-amber-500 animate-pulse';
-                              }
-                              return 'bg-gray-400';
-                            })()
-                          }`}></div>
-                          <div>
+                          <div class="flex items-start gap-3">
+                            <div class={`flex-shrink-0 w-3 h-3 mt-1.5 rounded-full ${
+                              (() => {
+                                // Find the corresponding PBS instance in the WebSocket state
+                                const statePBS = state.pbs.find(p => p.name === node.name);
+                                // Check if the PBS has an unhealthy connection or is offline
+                                if (statePBS?.connectionHealth === 'unhealthy' || statePBS?.connectionHealth === 'error' || statePBS?.status === 'offline') {
+                                  return 'bg-red-500';
+                                }
+                                // Check if connection is degraded (not commonly used for PBS but keeping consistent)
+                                if (statePBS?.connectionHealth === 'degraded') {
+                                  return 'bg-yellow-500';
+                                }
+                                // Check if we have a healthy connection
+                                if (statePBS && (statePBS.status === 'online' || statePBS.connectionHealth === 'healthy')) {
+                                  return 'bg-green-500';
+                                }
+                                // Fall back to the last known config status if live data hasn't arrived yet
+                                if (node.status === 'connected') {
+                                  return 'bg-green-500';
+                                }
+                                if (node.status === 'error') {
+                                  return 'bg-red-500';
+                                }
+                                if (node.status === 'pending' || node.status === 'disconnected') {
+                                  return 'bg-amber-500 animate-pulse';
+                                }
+                                return 'bg-gray-400';
+                              })()
+                            }`}></div>
+                            <div class="flex-1 min-w-0">
                               <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">{node.name}</h4>
                               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-all">{node.host}</p>
                               <div class="flex flex-wrap gap-1 sm:gap-2 mt-2">
-                              <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
-                                {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
-                              </span>
-                              {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Datastores</span>}
-                              {node.type === 'pbs' && 'monitorSyncJobs' in node && node.monitorSyncJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Sync Jobs</span>}
-                              {node.type === 'pbs' && 'monitorVerifyJobs' in node && node.monitorVerifyJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Verify Jobs</span>}
-                              {node.type === 'pbs' && 'monitorPruneJobs' in node && node.monitorPruneJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Prune Jobs</span>}
+                                <span class="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded">
+                                  {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
+                                </span>
+                                {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Datastores</span>}
+                                {node.type === 'pbs' && 'monitorSyncJobs' in node && node.monitorSyncJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Sync Jobs</span>}
+                                {node.type === 'pbs' && 'monitorVerifyJobs' in node && node.monitorVerifyJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Verify Jobs</span>}
+                                {node.type === 'pbs' && 'monitorPruneJobs' in node && node.monitorPruneJobs && <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Prune Jobs</span>}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1526,59 +1526,59 @@ const Settings: Component = () => {
                     </Show>
                     <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
                       {(server) => (
-                      <div 
-                        class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                        onClick={() => {
-                          // Pre-fill the modal with discovered server info
-                          setEditingNode({
-                            id: '',
-                            type: 'pbs',
-                          name: server.hostname || `pbs-${server.ip}`,
-                          host: `https://${server.ip}:${server.port}`,
-                          user: '',
-                          tokenName: '',
-                          tokenValue: '',
-                            verifySSL: false,
-                          monitorDatastores: true,
-                          monitorSyncJobs: true,
-                          monitorVerifyJobs: true,
-                          monitorPruneJobs: true,
-                          monitorGarbageJobs: true,
-                          status: 'pending'
-                        } as NodeConfigWithStatus);
-                          setCurrentNodeType('pbs');
-                          setShowNodeModal(true);
-                        }}
-                      >
-                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                          <div class="flex-1 min-w-0">
-                            <div class="relative">
-                              <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
-                            </div>
-                            <div class="flex-1">
-                              <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                                {server.hostname || `Backup Server at ${server.ip}`}
-                              </h4>
-                              <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                                {server.ip}:{server.port}
-                              </p>
-                              <div class="flex items-center gap-2 mt-2">
-                                <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                  Discovered
-                                </span>
-                                <span class="text-xs text-gray-500 dark:text-gray-400">
-                                  Click to configure
-                                </span>
+                        <div
+                          class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                          onClick={() => {
+                            // Pre-fill the modal with discovered server info
+                            setEditingNode({
+                              id: '',
+                              type: 'pbs',
+                              name: server.hostname || `pbs-${server.ip}`,
+                              host: `https://${server.ip}:${server.port}`,
+                              user: '',
+                              tokenName: '',
+                              tokenValue: '',
+                              verifySSL: false,
+                              monitorDatastores: true,
+                              monitorSyncJobs: true,
+                              monitorVerifyJobs: true,
+                              monitorPruneJobs: true,
+                              monitorGarbageJobs: true,
+                              status: 'pending'
+                            } as NodeConfigWithStatus);
+                            setCurrentNodeType('pbs');
+                            setShowNodeModal(true);
+                          }}
+                        >
+                          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-start gap-3">
+                                <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                <div class="flex-1 min-w-0">
+                                  <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                    {server.hostname || `Backup Server at ${server.ip}`}
+                                  </h4>
+                                  <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                    {server.ip}:{server.port}
+                                  </p>
+                                  <div class="flex items-center gap-2 mt-2">
+                                    <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                      Discovered
+                                    </span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      Click to configure
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                              <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
                           </div>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
-                            <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
                         </div>
-                      </div>
-                    )}
-                  </For>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </div>
