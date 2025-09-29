@@ -100,6 +100,9 @@ type Config struct {
 	ProxyAuthRoleSeparator string `envconfig:"PROXY_AUTH_ROLE_SEPARATOR" default:"|"`
 	ProxyAuthAdminRole     string `envconfig:"PROXY_AUTH_ADMIN_ROLE" default:"admin"`
 	ProxyAuthLogoutURL     string `envconfig:"PROXY_AUTH_LOGOUT_URL"`
+
+	// OIDC configuration
+	OIDC *OIDCConfig `json:"-"`
 	// HTTPS/TLS settings
 	HTTPSEnabled bool   `envconfig:"HTTPS_ENABLED" default:"false"`
 	TLSCertFile  string `envconfig:"TLS_CERT_FILE" default:""`
@@ -221,6 +224,7 @@ func Load() (*Config, error) {
 		DiscoveryEnabled:     true,
 		DiscoverySubnet:      "auto",
 		EnvOverrides:         make(map[string]bool),
+		OIDC:                 NewOIDCConfig(),
 	}
 
 	// Initialize persistence
@@ -286,6 +290,12 @@ func Load() (*Config, error) {
 			if err := persistence.SaveSystemSettings(defaultSettings); err != nil {
 				log.Warn().Err(err).Msg("Failed to create default system.json")
 			}
+		}
+
+		if oidcSettings, err := persistence.LoadOIDCConfig(); err == nil && oidcSettings != nil {
+			cfg.OIDC = oidcSettings
+		} else if err != nil {
+			log.Warn().Err(err).Msg("Failed to load OIDC configuration")
 		}
 	}
 
@@ -371,6 +381,47 @@ func Load() (*Config, error) {
 			cfg.ProxyAuthLogoutURL = logoutURL
 			log.Info().Str("url", logoutURL).Msg("Proxy auth logout URL configured")
 		}
+	}
+
+	oidcEnv := make(map[string]string)
+	if val := os.Getenv("OIDC_ENABLED"); val != "" {
+		oidcEnv["OIDC_ENABLED"] = val
+	}
+	if val := os.Getenv("OIDC_ISSUER_URL"); val != "" {
+		oidcEnv["OIDC_ISSUER_URL"] = val
+	}
+	if val := os.Getenv("OIDC_CLIENT_ID"); val != "" {
+		oidcEnv["OIDC_CLIENT_ID"] = val
+	}
+	if val := os.Getenv("OIDC_CLIENT_SECRET"); val != "" {
+		oidcEnv["OIDC_CLIENT_SECRET"] = val
+	}
+	if val := os.Getenv("OIDC_REDIRECT_URL"); val != "" {
+		oidcEnv["OIDC_REDIRECT_URL"] = val
+	}
+	if val := os.Getenv("OIDC_SCOPES"); val != "" {
+		oidcEnv["OIDC_SCOPES"] = val
+	}
+	if val := os.Getenv("OIDC_USERNAME_CLAIM"); val != "" {
+		oidcEnv["OIDC_USERNAME_CLAIM"] = val
+	}
+	if val := os.Getenv("OIDC_EMAIL_CLAIM"); val != "" {
+		oidcEnv["OIDC_EMAIL_CLAIM"] = val
+	}
+	if val := os.Getenv("OIDC_GROUPS_CLAIM"); val != "" {
+		oidcEnv["OIDC_GROUPS_CLAIM"] = val
+	}
+	if val := os.Getenv("OIDC_ALLOWED_GROUPS"); val != "" {
+		oidcEnv["OIDC_ALLOWED_GROUPS"] = val
+	}
+	if val := os.Getenv("OIDC_ALLOWED_DOMAINS"); val != "" {
+		oidcEnv["OIDC_ALLOWED_DOMAINS"] = val
+	}
+	if val := os.Getenv("OIDC_ALLOWED_EMAILS"); val != "" {
+		oidcEnv["OIDC_ALLOWED_EMAILS"] = val
+	}
+	if len(oidcEnv) > 0 {
+		cfg.OIDC.MergeFromEnv(oidcEnv)
 	}
 	if authUser := os.Getenv("PULSE_AUTH_USER"); authUser != "" {
 		cfg.AuthUser = authUser
@@ -477,6 +528,8 @@ func Load() (*Config, error) {
 		}
 	}
 
+	cfg.OIDC.ApplyDefaults(cfg.PublicURL)
+
 	// Set log level
 	switch cfg.LogLevel {
 	case "debug":
@@ -529,6 +582,23 @@ func SaveConfig(cfg *Config) error {
 	return nil
 }
 
+// SaveOIDCConfig persists OIDC settings using the shared config persistence layer.
+func SaveOIDCConfig(settings *OIDCConfig) error {
+	if globalPersistence == nil {
+		return fmt.Errorf("config persistence not initialized")
+	}
+	if settings == nil {
+		return fmt.Errorf("oidc settings cannot be nil")
+	}
+
+	clone := settings.Clone()
+	if clone == nil {
+		return fmt.Errorf("failed to clone oidc settings")
+	}
+
+	return globalPersistence.SaveOIDCConfig(*clone)
+}
+
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	// Validate server settings
@@ -579,6 +649,10 @@ func (c *Config) Validate() error {
 		validPBS = append(validPBS, pbs)
 	}
 	c.PBSInstances = validPBS
+
+	if err := c.OIDC.Validate(); err != nil {
+		return err
+	}
 
 	return nil
 }

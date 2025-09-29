@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
+import { Component, createSignal, Show, onMount, lazy, Suspense, createEffect } from 'solid-js';
 import { setBasicAuth } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/constants';
 
@@ -9,13 +9,46 @@ interface LoginProps {
   onLogin: () => void;
 }
 
+interface SecurityStatus {
+  hasAuthentication: boolean;
+  oidcEnabled?: boolean;
+  oidcIssuer?: string;
+  oidcClientId?: string;
+  oidcEnvOverrides?: Record<string, boolean>;
+}
+
 export const Login: Component<LoginProps> = (props) => {
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
-  const [authStatus, setAuthStatus] = createSignal<{ hasAuthentication: boolean } | null>(null);
+  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(null);
   const [loadingAuth, setLoadingAuth] = createSignal(true);
+  const [oidcLoading, setOidcLoading] = createSignal(false);
+  const [oidcError, setOidcError] = createSignal('');
+  const [oidcMessage, setOidcMessage] = createSignal('');
+  const [autoOidcTriggered, setAutoOidcTriggered] = createSignal(false);
+
+  const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
+
+  const resolveOidcError = (reason?: string | null) => {
+    switch (reason) {
+      case 'email_restricted':
+        return 'Your account email is not permitted to access Pulse.';
+      case 'domain_restricted':
+        return 'Your email domain is not allowed for Pulse access.';
+      case 'group_restricted':
+        return 'Your account is not part of an authorized group to use Pulse.';
+      case 'invalid_state':
+        return 'The sign-in attempt expired. Please try again.';
+      case 'exchange_failed':
+        return 'We could not complete the sign-in request. Please try again shortly.';
+      case 'session_failed':
+        return 'Login succeeded but we could not create a session. Try again.';
+      default:
+        return 'Single sign-on failed. Please try again or contact an administrator.';
+    }
+  };
   
   onMount(async () => {
     // Apply saved theme preference from localStorage
@@ -32,7 +65,25 @@ export const Login: Component<LoginProps> = (props) => {
         document.documentElement.classList.remove('dark');
       }
     }
-    
+
+    const params = new URLSearchParams(window.location.search);
+    const oidcStatus = params.get('oidc');
+    if (oidcStatus === 'error') {
+      const reason = params.get('oidc_error');
+      setOidcError(resolveOidcError(reason));
+      setError('');
+    } else if (oidcStatus === 'success') {
+      setOidcMessage('Signed in successfully. Loading Pulse…');
+      setError('');
+    }
+    if (oidcStatus) {
+      params.delete('oidc');
+      params.delete('oidc_error');
+      const newQuery = params.toString();
+      const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+
     console.log('[Login] Starting auth check...');
     try {
       const response = await fetch('/api/security/status');
@@ -57,6 +108,56 @@ export const Login: Component<LoginProps> = (props) => {
     } finally {
       console.log('[Login] Auth check complete, setting loading to false');
       setLoadingAuth(false);
+    }
+  });
+
+  const startOidcLogin = async () => {
+    if (!supportsOIDC()) return;
+
+    setOidcError('');
+    setOidcMessage('');
+    setError('');
+    setOidcLoading(true);
+
+    let redirecting = false;
+    try {
+      const response = await fetch('/api/oidc/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          returnTo: `${window.location.pathname}${window.location.search}`
+        })
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Failed to initiate OIDC login');
+      }
+
+      const data = await response.json();
+      if (data.authorizationUrl) {
+        redirecting = true;
+        window.location.href = data.authorizationUrl;
+        return;
+      }
+
+      throw new Error('OIDC response missing authorization URL');
+    } catch (err) {
+      console.error('[Login] Failed to start OIDC login:', err);
+      setOidcError('Failed to start single sign-on. Please try again.');
+    } finally {
+      if (!redirecting) {
+        setOidcLoading(false);
+      }
+    }
+  };
+
+  createEffect(() => {
+    if (!loadingAuth() && supportsOIDC() && !autoOidcTriggered()) {
+      setAutoOidcTriggered(true);
+      startOidcLogin();
     }
   });
 
@@ -161,7 +262,7 @@ export const Login: Component<LoginProps> = (props) => {
     >
       <Show
         when={authStatus()?.hasAuthentication === false}
-        fallback={<LoginForm {...{ username, setUsername, password, setPassword, error, loading, handleSubmit }} />}
+        fallback={<LoginForm {...{ username, setUsername, password, setPassword, error, loading, handleSubmit, supportsOIDC, startOidcLogin, oidcLoading, oidcError, oidcMessage }} />}
       >
         <Suspense fallback={
           <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
@@ -187,8 +288,13 @@ const LoginForm: Component<{
   error: () => string;
   loading: () => boolean;
   handleSubmit: (e: Event) => void;
+  supportsOIDC: () => boolean;
+  startOidcLogin: () => void | Promise<void>;
+  oidcLoading: () => boolean;
+  oidcError: () => string;
+  oidcMessage: () => string;
 }> = (props) => {
-  const { username, setUsername, password, setPassword, error, loading, handleSubmit } = props;
+  const { username, setUsername, password, setPassword, error, loading, handleSubmit, supportsOIDC, startOidcLogin, oidcLoading, oidcError, oidcMessage } = props;
 
   return (
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -212,6 +318,49 @@ const LoginForm: Component<{
           </p>
         </div>
         <form class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up" onSubmit={handleSubmit}>
+          <Show when={supportsOIDC()}>
+            <div class="space-y-3">
+              <button
+                type="button"
+                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                disabled={oidcLoading()}
+                onClick={() => startOidcLogin()}
+              >
+                <Show
+                  when={!oidcLoading()}
+                  fallback={
+                    <span class="inline-flex items-center gap-2">
+                      <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Redirecting…
+                    </span>
+                  }
+                >
+                  <span class="inline-flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9" />
+                    </svg>
+                    Continue with Single Sign-On
+                  </span>
+                </Show>
+              </button>
+              <Show when={oidcError()}>
+                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                  {oidcError()}
+                </div>
+              </Show>
+              <Show when={oidcMessage()}>
+                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                  {oidcMessage()}
+                </div>
+              </Show>
+              <div class="flex items-center gap-3 pt-2">
+                <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">or</span>
+                <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              </div>
+              <p class="text-xs text-center text-gray-500 dark:text-gray-400">Use your admin credentials to sign in below.</p>
+            </div>
+          </Show>
           <input type="hidden" name="remember" value="true" />
           <div class="space-y-4">
             <div class="relative">
