@@ -89,12 +89,14 @@ pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
 Pulse includes a diagnostic script that can identify why a VM isn't showing disk usage:
 
 ```bash
-# Run on your Proxmox host
+# Run on your Proxmox host (latest version from GitHub)
 curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/test-vm-disk.sh | bash
 
-# Or if Pulse is installed locally:
+# Or use the bundled copy installed with Pulse
 /opt/pulse/scripts/test-vm-disk.sh
 ```
+
+> **Tip:** The helper script is shipped with Pulse releases under `/opt/pulse/scripts/test-vm-disk.sh`, so you no longer need to download it manually on managed hosts.
 
 Enter the VM ID when prompted. The script will check:
 - VM running status
