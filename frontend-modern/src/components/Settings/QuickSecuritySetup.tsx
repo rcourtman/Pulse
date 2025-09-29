@@ -12,15 +12,19 @@ interface SecurityCredentials {
 
 interface QuickSecuritySetupProps {
   onConfigured?: () => void;
+  defaultUsername?: string;
+  mode?: 'initial' | 'rotate';
 }
 
 export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) => {
+  const mode = props.mode ?? 'initial';
+  const isRotation = mode === 'rotate';
   const [isSettingUp, setIsSettingUp] = createSignal(false);
   const [credentials, setCredentials] = createSignal<SecurityCredentials | null>(null);
   const [showCredentials, setShowCredentials] = createSignal(false);
   const [copied, setCopied] = createSignal<'username' | 'password' | 'token' | null>(null);
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
-  const [customUsername, setCustomUsername] = createSignal('admin');
+  const [customUsername, setCustomUsername] = createSignal(props.defaultUsername ?? 'admin');
   const [customPassword, setCustomPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
 
@@ -83,7 +87,10 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(newCredentials),
+        body: JSON.stringify({
+          ...newCredentials,
+          force: isRotation,
+        }),
         credentials: 'include'  // Include cookies for CSRF
       });
 
@@ -97,7 +104,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       
       if (result.skipped) {
         // Security was already configured, don't show credentials
-        showError('Security is already configured. Please remove existing security first if you want to reconfigure.');
+        showError(result.message || 'Security is already configured. Please remove existing security first if you want to reconfigure.');
         if (props.onConfigured) {
           props.onConfigured();
         }
@@ -109,7 +116,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       setShowCredentials(true);
       
       // Show success message
-      showSuccess('Security configured! Save your credentials before continuing.');
+      showSuccess(isRotation ? 'Admin credentials generated. Save them before continuing.' : 'Security configured. Save your credentials before continuing.');
       
       // DON'T notify parent yet - wait until user dismisses credentials
       // if (props.onConfigured) {
@@ -125,7 +132,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   const downloadCredentials = () => {
     if (!credentials()) return;
     
-    const content = `Pulse Security Credentials
+    const content = `Pulse Admin Credentials ${isRotation ? '(Rotated)' : ''}
 Generated: ${new Date().toISOString()}
 
 Basic Authentication:
@@ -162,8 +169,8 @@ Important:
             </div>
             <div class="flex-1">
               <SectionHeader
-                title="Quick security setup"
-                description="Enable authentication with one click. This will:"
+                title={isRotation ? 'Generate new admin credentials' : 'Quick security setup'}
+                description={isRotation ? 'Create a fresh password and API token. This will:' : 'Enable authentication with one click. This will:'}
                 size="sm"
                 titleClass="text-gray-900 dark:text-gray-100"
                 descriptionClass="!text-xs text-gray-600 dark:text-gray-400"
@@ -171,15 +178,15 @@ Important:
               <ul class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                 <li class="flex items-center">
                   <span class="text-green-500 mr-2">✓</span>
-                  Generate secure random password
+                  {isRotation ? 'Generate a new secure password' : 'Generate secure random password'}
                 </li>
                 <li class="flex items-center">
                   <span class="text-green-500 mr-2">✓</span>
-                  Enable basic authentication
+                  {isRotation ? 'Replace the stored admin password' : 'Enable basic authentication'}
                 </li>
                 <li class="flex items-center">
                   <span class="text-green-500 mr-2">✓</span>
-                  Create API token for automation
+                  {isRotation ? 'Create a new API token for automation' : 'Create API token for automation'}
                 </li>
                 <li class="flex items-center">
                   <span class="text-green-500 mr-2">✓</span>
@@ -276,6 +283,11 @@ Important:
                 <p>{useCustomPassword() 
                   ? 'Your password will be hashed before storage' 
                   : 'Credentials will be shown only once. Save them immediately!'}</p>
+                <Show when={isRotation}>
+                  <p class="mt-1">
+                    Existing sessions will be logged out once Pulse restarts with the new credentials.
+                  </p>
+                </Show>
               </div>
             </div>
           </div>
@@ -291,10 +303,10 @@ Important:
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Setting up security...
+                {isRotation ? 'Rotating credentials...' : 'Setting up security...'}
               </span>
             ) : (
-              'Enable Security Now'
+              (isRotation ? 'Rotate credentials' : 'Enable Security Now')
             )}
           </button>
         </div>
@@ -304,7 +316,7 @@ Important:
         <div class="space-y-4">
           <div class="flex items-center justify-between">
             <SectionHeader
-              title="🎉 Security enabled successfully!"
+              title={isRotation ? 'Admin credentials generated' : 'Security enabled successfully'}
               size="md"
               class="flex-1"
               titleClass="text-gray-900 dark:text-gray-100"
@@ -313,7 +325,7 @@ Important:
               onClick={downloadCredentials}
               class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
-              Download Credentials
+              Download credentials
             </button>
           </div>
 
@@ -377,14 +389,14 @@ Important:
                 Use this token with the X-API-Token header for automation.
               </p>
               <p class="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">
-                ⚠️ This token will never be shown again. Save it now!
+                This token is only shown once. Save it now.
               </p>
             </div>
           </div>
 
           <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
-              ✅ Security configured successfully!
+              Credentials saved
             </p>
             <p class="text-xs text-green-700 dark:text-green-300">
               The service needs to be restarted for security settings to take effect.
