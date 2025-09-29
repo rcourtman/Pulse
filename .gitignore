@@ -102,6 +102,7 @@ test-config.json
 
 # Local test scripts
 scripts/test-*.sh
+!scripts/test-vm-disk.sh
 scripts/run-tests.sh
 scripts/TEST_*.md
 

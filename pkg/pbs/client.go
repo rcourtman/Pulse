@@ -1,6 +1,7 @@
 package pbs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -134,9 +135,48 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 // authenticate performs password-based authentication
 func (c *Client) authenticate(ctx context.Context) error {
+	username := c.auth.user + "@" + c.auth.realm
+	password := c.config.Password
+
+	if err := c.authenticateJSON(ctx, username, password); err == nil {
+		return nil
+	} else if shouldFallbackToForm(err) {
+		return c.authenticateForm(ctx, username, password)
+	} else {
+		return err
+	}
+}
+
+func (c *Client) authenticateJSON(ctx context.Context, username, password string) error {
+	payload := map[string]string{
+		"username": username,
+		"password": password,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return c.handleAuthResponse(resp)
+}
+
+func (c *Client) authenticateForm(ctx context.Context, username, password string) error {
 	data := url.Values{
-		"username": {c.auth.user + "@" + c.auth.realm},
-		"password": {c.config.Password},
+		"username": {username},
+		"password": {password},
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", strings.NewReader(data.Encode()))
@@ -151,17 +191,18 @@ func (c *Client) authenticate(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 
+	return c.handleAuthResponse(resp)
+}
+
+func (c *Client) handleAuthResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return fmt.Errorf("authentication failed (status %d): %s", resp.StatusCode, string(body))
-		}
-		return fmt.Errorf("authentication failed: %s", string(body))
+		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	var result struct {
 		Data struct {
-			Ticket            string `json:"ticket"`
+			Ticket              string `json:"ticket"`
 			CSRFPreventionToken string `json:"CSRFPreventionToken"`
 		} `json:"data"`
 	}
@@ -175,6 +216,28 @@ func (c *Client) authenticate(ctx context.Context) error {
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PBS tickets expire after 2 hours
 
 	return nil
+}
+
+type authHTTPError struct {
+	status int
+	body   string
+}
+
+func (e *authHTTPError) Error() string {
+	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
+		return fmt.Sprintf("authentication failed (status %d): %s", e.status, e.body)
+	}
+	return fmt.Sprintf("authentication failed: %s", e.body)
+}
+
+func shouldFallbackToForm(err error) bool {
+	if authErr, ok := err.(*authHTTPError); ok {
+		switch authErr.status {
+		case http.StatusBadRequest, http.StatusUnsupportedMediaType:
+			return true
+		}
+	}
+	return false
 }
 
 // request performs an API request

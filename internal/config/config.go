@@ -659,6 +659,13 @@ func (c *Config) Validate() error {
 
 // detectPublicURL attempts to automatically detect the public URL for Pulse
 func detectPublicURL(port int) string {
+	// When running inside Docker we can't reliably determine an externally reachable address.
+	// Returning an empty string avoids surfacing container-only IPs (e.g., 172.x) in notifications.
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		log.Info().Msg("Docker environment detected - skipping public URL auto-detect. Set PULSE_PUBLIC_URL to expose external links.")
+		return ""
+	}
+
 	// Method 1: Check if we're in a Proxmox container (most common deployment)
 	if _, err := os.Stat("/etc/pve"); err == nil {
 		// We're likely in a ProxmoxVE container
@@ -679,25 +686,7 @@ func detectPublicURL(port int) string {
 		return fmt.Sprintf("http://%s:%d", ip, port)
 	}
 
-	// Method 3: Check if running in Docker (check for .dockerenv)
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		// In Docker, try to get the host IP from default route
-		if output, err := exec.Command("ip", "route", "show", "default").Output(); err == nil {
-			// Parse output like "default via 172.17.0.1 dev eth0"
-			fields := strings.Fields(string(output))
-			for i, field := range fields {
-				if field == "via" && i+1 < len(fields) {
-					// gatewayIP := fields[i+1]
-					// The gateway is usually .1, so we need our actual IP
-					// Better to use the outbound IP method above
-					_ = fields[i+1] // acknowledge but don't use
-					break
-				}
-			}
-		}
-	}
-
-	// Method 4: Get all non-loopback IPs and use the first private one
+	// Method 3: Get all non-loopback IPs and use the first private one
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, addr := range addrs {
 			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
