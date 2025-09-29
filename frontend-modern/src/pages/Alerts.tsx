@@ -66,6 +66,75 @@ interface UIEmailConfig {
   rateLimit: number;
 }
 
+interface QuietHoursConfig {
+  enabled: boolean;
+  start: string;
+  end: string;
+  timezone: string;
+  days: Record<string, boolean>;
+}
+
+interface CooldownConfig {
+  enabled: boolean;
+  minutes: number;
+  maxAlerts: number;
+}
+
+interface GroupingConfig {
+  enabled: boolean;
+  window: number;
+  maxGroupSize?: number;
+  byNode?: boolean;
+  byGuest?: boolean;
+}
+
+interface EscalationConfig {
+  enabled: boolean;
+  timeToEscalate?: number;
+  levels: Array<{
+    level?: number;
+    destinations?: string[];
+    after?: number;
+    notify?: string;
+  }>;
+}
+
+const getLocalTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+const createDefaultQuietHours = (): QuietHoursConfig => ({
+  enabled: false,
+  start: '22:00',
+  end: '08:00',
+  timezone: getLocalTimezone(),
+  days: {
+    monday: true,
+    tuesday: true,
+    wednesday: true,
+    thursday: true,
+    friday: true,
+    saturday: false,
+    sunday: false
+  }
+});
+
+const createDefaultCooldown = (): CooldownConfig => ({
+  enabled: true,
+  minutes: 30,
+  maxAlerts: 3
+});
+
+const createDefaultGrouping = (): GroupingConfig => ({
+  enabled: true,
+  window: 5,
+  byNode: true,
+  byGuest: false
+});
+
+const createDefaultEscalation = (): EscalationConfig => ({
+  enabled: false,
+  levels: []
+});
+
 export function Alerts() {
   const { state, activeAlerts, updateAlert } = useWebSocket();
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
@@ -107,39 +176,13 @@ export function Alerts() {
   });
 
   // Schedule configuration state moved to parent to persist across tab changes
-  const [scheduleQuietHours, setScheduleQuietHours] = createSignal({
-    enabled: false,
-    start: '22:00',
-    end: '08:00',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    days: {
-      monday: true,
-      tuesday: true,
-      wednesday: true,
-      thursday: true,
-      friday: true,
-      saturday: false,
-      sunday: false
-    } as Record<string, boolean>
-  });
+  const [scheduleQuietHours, setScheduleQuietHours] = createSignal<QuietHoursConfig>(createDefaultQuietHours());
   
-  const [scheduleCooldown, setScheduleCooldown] = createSignal({
-    enabled: true,
-    minutes: 30,
-    maxAlerts: 3
-  });
+  const [scheduleCooldown, setScheduleCooldown] = createSignal<CooldownConfig>(createDefaultCooldown());
   
-  const [scheduleGrouping, setScheduleGrouping] = createSignal({
-    enabled: true,
-    window: 5,
-    byNode: true,
-    byGuest: false
-  });
+  const [scheduleGrouping, setScheduleGrouping] = createSignal<GroupingConfig>(createDefaultGrouping());
   
-  const [scheduleEscalation, setScheduleEscalation] = createSignal({
-    enabled: false,
-    levels: [] as Array<{ after: number; notify: string }>
-  });
+  const [scheduleEscalation, setScheduleEscalation] = createSignal<EscalationConfig>(createDefaultEscalation());
   
   // Set up destinationsRef.emailConfig function immediately
   destinationsRef.emailConfig = () => {
@@ -1211,39 +1254,6 @@ function DestinationsTab(props: DestinationsTabProps) {
 
 // History Tab - Alert history
 
-interface QuietHoursConfig {
-  enabled: boolean;
-  start: string;
-  end: string;
-  timezone: string;
-  days: Record<string, boolean>;
-}
-
-interface CooldownConfig {
-  enabled: boolean;
-  minutes: number;
-  maxAlerts: number;
-}
-
-interface GroupingConfig {
-  enabled: boolean;
-  window: number;
-  maxGroupSize?: number;
-  byNode?: boolean;
-  byGuest?: boolean;
-}
-
-interface EscalationConfig {
-  enabled: boolean;
-  timeToEscalate?: number;
-  levels: Array<{
-    level?: number;
-    destinations?: string[];
-    after?: number;
-    notify?: string;
-  }>;
-}
-
 // Schedule Tab - Quiet hours, cooldown, and grouping
 interface ScheduleTabProps {
   hasUnsavedChanges: () => boolean;
@@ -1268,6 +1278,13 @@ function ScheduleTab(props: ScheduleTabProps) {
   const setGrouping = props.setGrouping;
   const escalation = props.escalation;
   const setEscalation = props.setEscalation;
+  const resetToDefaults = () => {
+    setQuietHours(createDefaultQuietHours());
+    setCooldown(createDefaultCooldown());
+    setGrouping(createDefaultGrouping());
+    setEscalation(createDefaultEscalation());
+    props.setHasUnsavedChanges(true);
+  };
   
   const timezones = [
     'UTC',
@@ -1295,10 +1312,23 @@ function ScheduleTab(props: ScheduleTabProps) {
   
   return (
     <div class="space-y-6">
-      <SectionHeader
-        label="Notification Schedule"
-        title="Control when alerts are allowed to fire and how they are grouped."
-      />
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <SectionHeader
+          label="Notification Schedule"
+          title="Control when alerts are allowed to fire and how they are grouped."
+        />
+        <button
+          type="button"
+          onClick={resetToDefaults}
+          class="inline-flex items-center gap-1 self-start rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
+        >
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Reset defaults
+        </button>
+      </div>
 
       <div class="grid gap-6 lg:grid-cols-2">
         {/* Quiet Hours */}

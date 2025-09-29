@@ -1,4 +1,4 @@
-import { Show, createSignal, createContext, useContext, createEffect, onMount, onCleanup } from 'solid-js';
+import { Show, createSignal, createContext, useContext, createEffect, onMount, onCleanup, getOwner, runWithOwner } from 'solid-js';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import StorageComponent from './components/Storage/Storage';
@@ -46,6 +46,9 @@ export const useDarkMode = () => {
 };
 
 function App() {
+  const owner = getOwner();
+  const acquireWsStore = () => (owner ? runWithOwner(owner, () => getGlobalWebSocketStore()) : getGlobalWebSocketStore());
+
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
@@ -189,7 +192,7 @@ function App() {
         setHasAuth(false);
         setNeedsAuth(false);
         // Initialize WebSocket immediately since no auth needed
-        setWsStore(getGlobalWebSocketStore());
+        setWsStore(acquireWsStore());
         
         // Load theme preference from server for cross-device sync
         // Only use server preference if no local preference exists
@@ -237,7 +240,7 @@ function App() {
         });
         setNeedsAuth(false);
         // Initialize WebSocket for proxy auth users
-        setWsStore(getGlobalWebSocketStore());
+        setWsStore(acquireWsStore());
         
         // Load theme preference from server for cross-device sync
         // Only use server preference if no local preference exists
@@ -294,7 +297,7 @@ function App() {
       } else {
         setNeedsAuth(false);
         // Only initialize WebSocket after successful auth check
-        setWsStore(getGlobalWebSocketStore());
+        setWsStore(acquireWsStore());
         
         // Load theme preference from server for cross-device sync
         // Only use server preference if no local preference exists
@@ -324,7 +327,7 @@ function App() {
       console.error('Auth check error:', error);
       // On error, try to proceed without auth
       setNeedsAuth(false);
-      setWsStore(getGlobalWebSocketStore());
+      setWsStore(acquireWsStore());
       
       // Theme is already applied on initialization, no need to reapply
     } finally {
