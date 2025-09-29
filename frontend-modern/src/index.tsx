@@ -19,7 +19,6 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 console.log('[Index] Starting Pulse app...');
 logger.info('Pulse monitoring dashboard starting');
 
-
 if (root) {
   console.log('[Index] Root element found, rendering App...');
   try {

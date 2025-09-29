@@ -18,7 +18,7 @@ export const AnimatedMetric: Component<AnimatedMetricProps> = (props) => {
   createEffect(() => {
     const newVal = props.value;
     const prevVal = displayValue();
-    
+
     // Skip first render
     if (!hasInitialized) {
       hasInitialized = true;
@@ -26,15 +26,15 @@ export const AnimatedMetric: Component<AnimatedMetricProps> = (props) => {
       setOldValue(newVal);
       return;
     }
-    
+
     // Only animate if value changed
     if (newVal !== prevVal) {
       clearTimeout(timeoutId);
-      
+
       // Store old value for ghost
       setOldValue(prevVal);
       setShowGhost(true);
-      
+
       // Set animation direction
       if (newVal > prevVal) {
         setAnimClass('up');
@@ -43,10 +43,10 @@ export const AnimatedMetric: Component<AnimatedMetricProps> = (props) => {
         setAnimClass('down');
         console.log('[AnimatedMetric] Going DOWN:', prevVal, '->', newVal);
       }
-      
+
       // Update to new value
       setDisplayValue(newVal);
-      
+
       // Remove ghost after animation
       timeoutId = window.setTimeout(() => {
         setShowGhost(false);
@@ -60,16 +60,19 @@ export const AnimatedMetric: Component<AnimatedMetricProps> = (props) => {
   const format = props.formatter || ((v: number) => formatBytes(v) + '/s');
 
   return (
-    <div class="metric-container" style="position: relative; display: inline-block; overflow: visible;">
+    <div
+      class="metric-container"
+      style="position: relative; display: inline-block; overflow: visible;"
+    >
       {showGhost() && (
-        <span 
+        <span
           class={`metric-ghost metric-ghost-${animClass()}`}
           style="position: absolute; top: 0; left: 0; z-index: 1;"
         >
           {format(oldValue())}
         </span>
       )}
-      <span 
+      <span
         class={`metric-value ${showGhost() ? `metric-entering-${animClass()}` : ''}`}
         style="position: relative; z-index: 2; display: inline-block;"
       >

@@ -11,19 +11,20 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
   const diskStats = createMemo(() => {
     const disks = props.disks || [];
     const total = disks.length;
-    const healthy = disks.filter(d => d.health === 'PASSED').length;
-    const failing = disks.filter(d => d.health === 'FAILED').length;
-    const unknown = disks.filter(d => d.health === 'UNKNOWN' || !d.health).length;
-    const lowLife = disks.filter(d => d.wearout > 0 && d.wearout < 10).length;
-    const avgWearout = disks.filter(d => d.wearout > 0).reduce((sum, d) => sum + d.wearout, 0) / 
-                       disks.filter(d => d.wearout > 0).length || 0;
-    
+    const healthy = disks.filter((d) => d.health === 'PASSED').length;
+    const failing = disks.filter((d) => d.health === 'FAILED').length;
+    const unknown = disks.filter((d) => d.health === 'UNKNOWN' || !d.health).length;
+    const lowLife = disks.filter((d) => d.wearout > 0 && d.wearout < 10).length;
+    const avgWearout =
+      disks.filter((d) => d.wearout > 0).reduce((sum, d) => sum + d.wearout, 0) /
+        disks.filter((d) => d.wearout > 0).length || 0;
+
     // Group by node
     const byNode: Record<string, number> = {};
-    disks.forEach(d => {
+    disks.forEach((d) => {
       byNode[d.node] = (byNode[d.node] || 0) + 1;
     });
-    
+
     return {
       total,
       healthy,
@@ -31,10 +32,10 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
       unknown,
       lowLife,
       avgWearout,
-      byNode
+      byNode,
     };
   });
-  
+
   const healthColor = createMemo(() => {
     const stats = diskStats();
     if (stats.failing > 0) return 'text-red-600 dark:text-red-400';
@@ -42,14 +43,15 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
     if (stats.unknown > 0) return 'text-gray-600 dark:text-gray-400';
     return 'text-green-600 dark:text-green-400';
   });
-  
+
   const healthBg = createMemo(() => {
     const stats = diskStats();
     if (stats.failing > 0) return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800';
-    if (stats.lowLife > 0) return 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800';
+    if (stats.lowLife > 0)
+      return 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800';
     return 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700';
   });
-  
+
   return (
     <Show when={diskStats().total > 0}>
       <Card padding="md" border={false} class={`${healthBg()}`}>
@@ -64,7 +66,7 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
             {diskStats().healthy}/{diskStats().total}
           </span>
         </div>
-        
+
         <div class="space-y-2">
           {/* Health Status */}
           <div class="flex items-center justify-between text-xs">
@@ -92,19 +94,22 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
               </Show>
             </div>
           </div>
-          
+
           {/* Average SSD Life */}
           <Show when={diskStats().avgWearout > 0}>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-600 dark:text-gray-400">Avg SSD Life</span>
               <div class="flex items-center gap-2">
                 <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                  <div 
+                  <div
                     class={`h-1.5 rounded-full transition-all ${
-                      diskStats().avgWearout >= 50 ? 'bg-green-500' :
-                      diskStats().avgWearout >= 20 ? 'bg-yellow-500' :
-                      diskStats().avgWearout >= 10 ? 'bg-orange-500' :
-                      'bg-red-500'
+                      diskStats().avgWearout >= 50
+                        ? 'bg-green-500'
+                        : diskStats().avgWearout >= 20
+                          ? 'bg-yellow-500'
+                          : diskStats().avgWearout >= 10
+                            ? 'bg-orange-500'
+                            : 'bg-red-500'
                     }`}
                     style={`width: ${diskStats().avgWearout}%`}
                   />
@@ -115,7 +120,7 @@ export const DiskHealthSummary: Component<DiskHealthSummaryProps> = (props) => {
               </div>
             </div>
           </Show>
-          
+
           {/* Disk Distribution */}
           <div class="pt-2 mt-2 border-t border-gray-200 dark:border-gray-700">
             <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">Distribution</div>

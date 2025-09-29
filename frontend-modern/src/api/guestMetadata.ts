@@ -11,7 +11,6 @@ export interface GuestMetadata {
 export class GuestMetadataAPI {
   private static baseUrl = '/api/guests/metadata';
 
-
   // Get metadata for a specific guest
   static async getMetadata(guestId: string): Promise<GuestMetadata> {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(guestId)}`);
@@ -23,7 +22,10 @@ export class GuestMetadataAPI {
   }
 
   // Update metadata for a guest
-  static async updateMetadata(guestId: string, metadata: Partial<GuestMetadata>): Promise<GuestMetadata> {
+  static async updateMetadata(
+    guestId: string,
+    metadata: Partial<GuestMetadata>,
+  ): Promise<GuestMetadata> {
     return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(guestId)}`, {
       method: 'PUT',
       body: JSON.stringify(metadata),

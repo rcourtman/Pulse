@@ -17,7 +17,10 @@ export class NodesAPI {
     });
   }
 
-  static async updateNode(nodeId: string, node: NodeConfig): Promise<{ success: boolean; message?: string }> {
+  static async updateNode(
+    nodeId: string,
+    node: NodeConfig,
+  ): Promise<{ success: boolean; message?: string }> {
     return apiFetchJSON(`${this.baseUrl}/${nodeId}`, {
       method: 'PUT',
       body: JSON.stringify(node),
@@ -30,9 +33,9 @@ export class NodesAPI {
     });
   }
 
-  static async testConnection(node: NodeConfig): Promise<{ 
+  static async testConnection(node: NodeConfig): Promise<{
     status: string;
-    message?: string; 
+    message?: string;
     isCluster?: boolean;
     nodeCount?: number;
     clusterNodeCount?: number;
@@ -44,9 +47,9 @@ export class NodesAPI {
     });
   }
 
-  static async testExistingNode(nodeId: string): Promise<{ 
+  static async testExistingNode(nodeId: string): Promise<{
     status: string;
-    message?: string; 
+    message?: string;
     latency?: number;
   }> {
     return apiFetchJSON(`${this.baseUrl}/${nodeId}/test`, {

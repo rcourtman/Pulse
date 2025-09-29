@@ -29,7 +29,11 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
   const [tokenName, setTokenName] = createSignal('');
   const [tokenValue, setTokenValue] = createSignal('');
   const [isAdding, setIsAdding] = createSignal(false);
-  const [progress, setProgress] = createSignal<{ current: number; total: number; currentServer?: string }>({ current: 0, total: 0 });
+  const [progress, setProgress] = createSignal<{
+    current: number;
+    total: number;
+    currentServer?: string;
+  }>({ current: 0, total: 0 });
 
   const handleBatchAdd = async () => {
     // Validate inputs
@@ -63,24 +67,24 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
           name: server.hostname || server.ip,
           host: `https://${server.ip}:${server.port}`,
           verifySSL: false,
-          ...(authType() === 'password' 
+          ...(authType() === 'password'
             ? { user: username(), password: password() }
             : { tokenName: tokenName(), tokenValue: tokenValue() }),
           // Add default monitoring options based on type
-          ...(server.type === 'pve' 
+          ...(server.type === 'pve'
             ? {
                 monitorVMs: true,
                 monitorContainers: true,
                 monitorStorage: true,
-                monitorBackups: true
+                monitorBackups: true,
               }
             : {
                 monitorDatastores: true,
                 monitorSyncJobs: true,
                 monitorVerifyJobs: true,
                 monitorPruneJobs: true,
-                monitorGarbageJobs: false
-              })
+                monitorGarbageJobs: false,
+              }),
         } as NodeConfig;
 
         await NodesAPI.addNode(nodeData);
@@ -111,11 +115,11 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
         <div class="fixed inset-0 z-50 overflow-y-auto">
           <div class="flex min-h-screen items-center justify-center p-4">
             {/* Backdrop */}
-            <div 
+            <div
               class="fixed inset-0 bg-black/50 transition-opacity"
               onClick={!isAdding() ? props.onClose : undefined}
             />
-            
+
             {/* Modal */}
             <div class="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-lg shadow-xl">
               {/* Header */}
@@ -126,29 +130,41 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                   class="flex-1"
                 />
                 <Show when={!isAdding()}>
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={props.onClose}
                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                   </button>
                 </Show>
               </div>
-              
+
               {/* Body */}
               <div class="p-6 space-y-6">
                 {/* Server List */}
                 <div>
-                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Servers to Add</h4>
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Servers to Add
+                  </h4>
                   <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 max-h-32 overflow-y-auto">
                     <div class="flex flex-wrap gap-2">
                       <For each={props.servers}>
                         {(server) => (
                           <span class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded">
-                            <span class={`w-2 h-2 rounded-full ${server.type === 'pve' ? 'bg-orange-500' : 'bg-green-500'}`}></span>
+                            <span
+                              class={`w-2 h-2 rounded-full ${server.type === 'pve' ? 'bg-orange-500' : 'bg-green-500'}`}
+                            ></span>
                             {server.hostname || server.ip}
                           </span>
                         )}
@@ -179,7 +195,9 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           disabled={isAdding()}
                           class="mr-2"
                         />
-                        <span class="text-sm text-gray-700 dark:text-gray-300">API Token (Recommended)</span>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">
+                          API Token (Recommended)
+                        </span>
                       </label>
                       <label class="flex items-center">
                         <input
@@ -191,7 +209,9 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           disabled={isAdding()}
                           class="mr-2"
                         />
-                        <span class="text-sm text-gray-700 dark:text-gray-300">Username & Password</span>
+                        <span class="text-sm text-gray-700 dark:text-gray-300">
+                          Username & Password
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -215,7 +235,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           Example: pulse-monitor@pam!pulse-token or pulse-monitor@pbs!pulse-token
                         </p>
                       </div>
-                      
+
                       <div class={formField}>
                         <label class={labelClass()}>
                           Token Value <span class="text-red-500">*</span>
@@ -248,7 +268,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                           class={controlClass()}
                         />
                       </div>
-                      
+
                       <div class={formField}>
                         <label class={labelClass()}>
                           Password <span class="text-red-500">*</span>
@@ -270,9 +290,24 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                 <Show when={isAdding()}>
                   <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div class="flex items-center gap-3 mb-2">
-                      <svg class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          class="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          stroke-width="4"
+                        ></circle>
+                        <path
+                          class="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       <div>
                         <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -286,7 +321,7 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                       </div>
                     </div>
                     <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                      <div 
+                      <div
                         class="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all"
                         style={`width: ${(progress().current / progress().total) * 100}%`}
                       ></div>
@@ -294,17 +329,19 @@ export const BatchCredentialModal: Component<BatchCredentialModalProps> = (props
                   </div>
                 </Show>
               </div>
-              
+
               {/* Footer */}
               <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={props.onClose}
                   disabled={isAdding()}
                   class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleBatchAdd}
                   disabled={isAdding()}
                   class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

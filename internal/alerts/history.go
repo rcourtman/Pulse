@@ -134,7 +134,7 @@ func (hm *HistoryManager) loadHistory() error {
 		if !os.IsNotExist(err) {
 			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
 		}
-		
+
 		// Try backup file
 		data, err = os.ReadFile(hm.backupFile)
 		if err != nil {
@@ -196,7 +196,7 @@ func (hm *HistoryManager) saveHistory() error {
 // startPeriodicSave starts the periodic save routine
 func (hm *HistoryManager) startPeriodicSave() {
 	hm.saveTicker = time.NewTicker(hm.saveInterval)
-	
+
 	go func() {
 		for {
 			select {
@@ -264,7 +264,7 @@ func (hm *HistoryManager) RemoveAlert(alertID string) {
 
 	newHistory := make([]HistoryEntry, 0, len(hm.history))
 	removed := false
-	
+
 	for _, entry := range hm.history {
 		if entry.Alert.ID != alertID {
 			newHistory = append(newHistory, entry)
@@ -272,7 +272,7 @@ func (hm *HistoryManager) RemoveAlert(alertID string) {
 			removed = true
 		}
 	}
-	
+
 	if removed {
 		hm.history = newHistory
 		log.Debug().Str("alertID", alertID).Msg("Removed alert from history")
@@ -286,11 +286,11 @@ func (hm *HistoryManager) ClearAllHistory() error {
 
 	// Clear the in-memory history
 	hm.history = make([]HistoryEntry, 0)
-	
+
 	// Remove the history files
 	_ = os.Remove(hm.historyFile)
 	_ = os.Remove(hm.backupFile)
-	
+
 	log.Info().Msg("Cleared all alert history")
 	return nil
 }

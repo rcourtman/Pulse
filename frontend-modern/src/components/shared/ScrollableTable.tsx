@@ -14,7 +14,7 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
 
   const checkScroll = () => {
     if (!scrollContainer) return;
-    
+
     const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
     setShowLeftFade(scrollLeft > 0);
     setShowRightFade(scrollLeft < scrollWidth - clientWidth - 1);
@@ -38,9 +38,9 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
       <Show when={showLeftFade()}>
         <div class="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />
       </Show>
-      
+
       {/* Scrollable container */}
-      <div 
+      <div
         ref={scrollContainer}
         class="overflow-x-auto"
         style="scrollbar-width: none; -ms-overflow-style: none;"
@@ -48,11 +48,9 @@ export const ScrollableTable: Component<ScrollableTableProps> = (props) => {
         <style>{`
           .overflow-x-auto::-webkit-scrollbar { display: none; }
         `}</style>
-        <div style={{ "min-width": props.minWidth || 'auto' }}>
-          {props.children}
-        </div>
+        <div style={{ 'min-width': props.minWidth || 'auto' }}>{props.children}</div>
       </div>
-      
+
       {/* Right fade */}
       <Show when={showRightFade()}>
         <div class="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />

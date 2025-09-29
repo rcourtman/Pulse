@@ -3,7 +3,7 @@ package monitoring
 import (
 	"sync"
 	"time"
-	
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
 
@@ -31,12 +31,12 @@ type StorageMetrics struct {
 
 // MetricsHistory maintains historical metrics for all guests and nodes
 type MetricsHistory struct {
-	mu            sync.RWMutex
-	guestMetrics  map[string]*GuestMetrics   // key: guestID
-	nodeMetrics   map[string]*GuestMetrics   // key: nodeID
+	mu             sync.RWMutex
+	guestMetrics   map[string]*GuestMetrics   // key: guestID
+	nodeMetrics    map[string]*GuestMetrics   // key: nodeID
 	storageMetrics map[string]*StorageMetrics // key: storageID
-	maxDataPoints int
-	retentionTime time.Duration
+	maxDataPoints  int
+	retentionTime  time.Duration
 }
 
 // NewMetricsHistory creates a new metrics history tracker
@@ -345,7 +345,7 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
 	}
-	
+
 	// Cleanup storage metrics
 	for _, metrics := range mh.storageMetrics {
 		metrics.Usage = mh.cleanupMetrics(metrics.Usage, cutoffTime)

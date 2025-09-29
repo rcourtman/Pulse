@@ -13,6 +13,7 @@ export const showToast = (type: ToastType, title: string, message?: string, dura
 };
 
 // Convenience functions - only export what's used
-export const showSuccess = (title: string, message?: string) => showToast('success', title, message);
+export const showSuccess = (title: string, message?: string) =>
+  showToast('success', title, message);
 export const showError = (title: string, message?: string) => showToast('error', title, message);
 export const showInfo = (title: string, message?: string) => showToast('info', title, message);

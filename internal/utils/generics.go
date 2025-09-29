@@ -115,10 +115,10 @@ func NewCircularBuffer[T any](capacity int) *CircularBuffer[T] {
 func (cb *CircularBuffer[T]) Push(item T) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	cb.data[cb.tail] = item
 	cb.tail = (cb.tail + 1) % cb.capacity
-	
+
 	if cb.size < cb.capacity {
 		cb.size++
 	} else {
@@ -130,11 +130,11 @@ func (cb *CircularBuffer[T]) Push(item T) {
 func (cb *CircularBuffer[T]) GetAll() []T {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	
+
 	if cb.size == 0 {
 		return []T{}
 	}
-	
+
 	result := make([]T, cb.size)
 	if cb.head < cb.tail {
 		copy(result, cb.data[cb.head:cb.tail])
@@ -142,7 +142,7 @@ func (cb *CircularBuffer[T]) GetAll() []T {
 		n := copy(result, cb.data[cb.head:])
 		copy(result[n:], cb.data[:cb.tail])
 	}
-	
+
 	return result
 }
 

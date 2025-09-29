@@ -12,14 +12,14 @@ import (
 
 // ReloadableMonitor wraps a Monitor with reload capability
 type ReloadableMonitor struct {
-	mu          sync.RWMutex
-	monitor     *Monitor
-	config      *config.Config
-	wsHub       *websocket.Hub
-	ctx         context.Context
-	cancel      context.CancelFunc
-	parentCtx   context.Context
-	reloadChan  chan struct{}
+	mu         sync.RWMutex
+	monitor    *Monitor
+	config     *config.Config
+	wsHub      *websocket.Hub
+	ctx        context.Context
+	cancel     context.CancelFunc
+	parentCtx  context.Context
+	reloadChan chan struct{}
 }
 
 // NewReloadableMonitor creates a new reloadable monitor
@@ -96,7 +96,7 @@ func (rm *ReloadableMonitor) doReload() error {
 
 	// For other changes, do a full reload
 	log.Info().Msg("Performing full monitor reload")
-	
+
 	// Cancel current monitor
 	if rm.cancel != nil {
 		rm.cancel()
@@ -143,11 +143,11 @@ func (rm *ReloadableMonitor) GetState() interface{} {
 func (rm *ReloadableMonitor) Stop() {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
-	
+
 	if rm.cancel != nil {
 		rm.cancel()
 	}
-	
+
 	if rm.monitor != nil {
 		rm.monitor.Stop()
 	}

@@ -4,9 +4,10 @@ const baseHelp = 'text-xs text-gray-500 dark:text-gray-400';
 const baseControl = [
   'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm',
   'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-  'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+  'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100',
 ].join(' ');
-const baseCheckbox = 'rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-blue-400';
+const baseCheckbox =
+  'rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-blue-400';
 
 const join = (base: string, extra?: string) => (extra ? `${base} ${extra}`.trim() : base);
 
@@ -53,5 +54,5 @@ export default {
   formCheckbox,
   labelClass,
   controlClass,
-  helpTextClass
+  helpTextClass,
 };

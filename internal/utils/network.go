@@ -11,26 +11,26 @@ func IsPrivateIP(ip string) bool {
 	if idx := strings.LastIndex(ip, ":"); idx != -1 {
 		ip = ip[:idx]
 	}
-	
+
 	// Remove brackets from IPv6
 	ip = strings.Trim(ip, "[]")
-	
+
 	// Parse the IP
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
 	}
-	
+
 	// Check if it's loopback
 	if parsedIP.IsLoopback() {
 		return true
 	}
-	
+
 	// Check if it's link-local
 	if parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast() {
 		return true
 	}
-	
+
 	// Define private IP ranges (RFC1918)
 	privateRanges := []string{
 		"10.0.0.0/8",     // Class A private
@@ -41,7 +41,7 @@ func IsPrivateIP(ip string) bool {
 		"fc00::/7",       // IPv6 unique local
 		"fe80::/10",      // IPv6 link-local
 	}
-	
+
 	for _, cidr := range privateRanges {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -51,7 +51,7 @@ func IsPrivateIP(ip string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -65,12 +65,12 @@ func GetClientIP(remoteAddr string, xForwardedFor string, xRealIP string) string
 		}
 		return strings.TrimSpace(xForwardedFor)
 	}
-	
+
 	// Check X-Real-IP
 	if xRealIP != "" {
 		return strings.TrimSpace(xRealIP)
 	}
-	
+
 	// Fall back to RemoteAddr
 	return remoteAddr
 }
@@ -81,18 +81,18 @@ func IsTrustedNetwork(ip string, trustedNetworks []string) bool {
 	if len(trustedNetworks) == 0 {
 		return IsPrivateIP(ip)
 	}
-	
+
 	// Extract IP without port
 	if idx := strings.LastIndex(ip, ":"); idx != -1 {
 		ip = ip[:idx]
 	}
 	ip = strings.Trim(ip, "[]")
-	
+
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
 	}
-	
+
 	// Check against trusted networks
 	for _, cidr := range trustedNetworks {
 		_, network, err := net.ParseCIDR(cidr)
@@ -103,6 +103,6 @@ func IsTrustedNetwork(ip string, trustedNetworks []string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }

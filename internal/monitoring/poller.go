@@ -29,12 +29,12 @@ type PollTask struct {
 
 // PollerPool manages concurrent polling with channels
 type PollerPool struct {
-	workers    int
-	tasksChan  chan PollTask
+	workers     int
+	tasksChan   chan PollTask
 	resultsChan chan PollResult
-	monitor    *Monitor
-	done       chan struct{}
-	closed     bool
+	monitor     *Monitor
+	done        chan struct{}
+	closed      bool
 }
 
 // NewPollerPool creates a new poller pool
@@ -63,7 +63,7 @@ func (p *PollerPool) Start(ctx context.Context) {
 // worker processes polling tasks
 func (p *PollerPool) worker(ctx context.Context, id int) {
 	log.Debug().Int("worker", id).Msg("Poller worker started")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -74,9 +74,9 @@ func (p *PollerPool) worker(ctx context.Context, id int) {
 				log.Debug().Int("worker", id).Msg("Task channel closed, worker stopping")
 				return
 			}
-			
+
 			result := p.executeTask(ctx, task)
-			
+
 			// Send result if context is still active and channel is open
 			select {
 			case <-ctx.Done():
@@ -104,7 +104,7 @@ func (p *PollerPool) executeTask(ctx context.Context, task PollTask) PollResult 
 		StartTime:    time.Now(),
 		Success:      true,
 	}
-	
+
 	switch task.InstanceType {
 	case "pve":
 		if task.PVEClient != nil {
@@ -124,7 +124,7 @@ func (p *PollerPool) executeTask(ctx context.Context, task PollTask) PollResult 
 		result.Success = false
 		result.Error = errors.NewMonitorError(errors.ErrorTypeValidation, "poll_unknown", task.InstanceName, errors.ErrInvalidInput)
 	}
-	
+
 	result.EndTime = time.Now()
 	return result
 }
@@ -139,7 +139,7 @@ func (p *PollerPool) collectResults(ctx context.Context) {
 			if !ok {
 				return
 			}
-			
+
 			duration := result.EndTime.Sub(result.StartTime)
 			if result.Success {
 				log.Debug().
@@ -178,13 +178,13 @@ func (p *PollerPool) Close() {
 		return
 	}
 	p.closed = true
-	
+
 	// Signal shutdown
 	close(p.done)
-	
+
 	// Close task channel to signal workers to stop
 	close(p.tasksChan)
-	
+
 	// Don't close resultsChan here - let it drain naturally
 	// The collectors will exit when context is done
 }
@@ -199,21 +199,21 @@ func (m *Monitor) pollWithChannels(ctx context.Context) {
 	if workerCount < 2 {
 		workerCount = 2 // Minimum 2 workers
 	}
-	
+
 	pool := NewPollerPool(workerCount, m)
-	
+
 	// Create a context with timeout for this polling cycle
 	// Hardcoded to 10s minus 200ms (matches polling interval)
 	timeout := 10*time.Second - 200*time.Millisecond
 	pollCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	
+
 	// Start the pool
 	pool.Start(pollCtx)
-	
+
 	// Submit all tasks
 	var taskCount int
-	
+
 	// Submit PVE tasks
 	for name, client := range m.pveClients {
 		task := PollTask{
@@ -227,7 +227,7 @@ func (m *Monitor) pollWithChannels(ctx context.Context) {
 			taskCount++
 		}
 	}
-	
+
 	// Submit PBS tasks
 	for name, client := range m.pbsClients {
 		task := PollTask{
@@ -241,12 +241,12 @@ func (m *Monitor) pollWithChannels(ctx context.Context) {
 			taskCount++
 		}
 	}
-	
+
 	// Wait for all tasks to complete or timeout
 	<-pollCtx.Done()
-	
+
 	// Clean up
 	pool.Close()
-	
+
 	log.Debug().Int("tasks", taskCount).Msg("Channel-based polling cycle completed")
 }

@@ -3,7 +3,9 @@ import { setBasicAuth } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/constants';
 
 // Force include FirstRunSetup with lazy loading
-const FirstRunSetup = lazy(() => import('./FirstRunSetup').then(m => ({ default: m.FirstRunSetup })));
+const FirstRunSetup = lazy(() =>
+  import('./FirstRunSetup').then((m) => ({ default: m.FirstRunSetup })),
+);
 
 interface LoginProps {
   onLogin: () => void;
@@ -49,7 +51,7 @@ export const Login: Component<LoginProps> = (props) => {
         return 'Single sign-on failed. Please try again or contact an administrator.';
     }
   };
-  
+
   onMount(async () => {
     // Apply saved theme preference from localStorage
     const savedTheme = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
@@ -101,7 +103,7 @@ export const Login: Component<LoginProps> = (props) => {
         // On error, assume no auth configured
         setAuthStatus({ hasAuthentication: false });
       }
-    } catch (err) {
+    } catch (_err) {
       console.error('[Login] Failed to check auth status:', err);
       // On error, assume no auth configured
       setAuthStatus({ hasAuthentication: false });
@@ -124,11 +126,11 @@ export const Login: Component<LoginProps> = (props) => {
       const response = await fetch('/api/oidc/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          returnTo: `${window.location.pathname}${window.location.search}`
-        })
+          returnTo: `${window.location.pathname}${window.location.search}`,
+        }),
       });
 
       if (!response.ok) {
@@ -144,7 +146,7 @@ export const Login: Component<LoginProps> = (props) => {
       }
 
       throw new Error('OIDC response missing authorization URL');
-    } catch (err) {
+    } catch (_err) {
       console.error('[Login] Failed to start OIDC login:', err);
       setOidcError('Failed to start single sign-on. Please try again.');
     } finally {
@@ -172,13 +174,13 @@ export const Login: Component<LoginProps> = (props) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           username: username(),
-          password: password()
+          password: password(),
         }),
-        credentials: 'include' // Important for session cookie
+        credentials: 'include', // Important for session cookie
       });
 
       const data = await response.json();
@@ -190,7 +192,9 @@ export const Login: Component<LoginProps> = (props) => {
       } else if (response.status === 403) {
         // Account is locked
         if (data.remainingMinutes) {
-          setError(`Account locked. Please try again in ${data.remainingMinutes} ${data.remainingMinutes === 1 ? 'minute' : 'minutes'}.`);
+          setError(
+            `Account locked. Please try again in ${data.remainingMinutes} ${data.remainingMinutes === 1 ? 'minute' : 'minutes'}.`,
+          );
         } else {
           setError(data.message || 'Account temporarily locked due to too many failed attempts.');
         }
@@ -203,7 +207,9 @@ export const Login: Component<LoginProps> = (props) => {
       } else if (response.status === 401) {
         // Invalid credentials with attempt information
         if (data.remaining !== undefined && data.remaining > 0) {
-          setError(`${data.message || 'Invalid username or password.'} (${data.remaining} ${data.remaining === 1 ? 'attempt' : 'attempts'} remaining)`);
+          setError(
+            `${data.message || 'Invalid username or password.'} (${data.remaining} ${data.remaining === 1 ? 'attempt' : 'attempts'} remaining)`,
+          );
         } else if (data.locked) {
           setError(data.message || 'Invalid username or password. Account is now locked.');
         } else {
@@ -215,16 +221,16 @@ export const Login: Component<LoginProps> = (props) => {
       } else {
         setError(data.message || 'Server error. Please try again.');
       }
-    } catch (err) {
+    } catch (_err) {
       // Try the old method as fallback
       try {
         const response = await fetch('/api/state', {
           headers: {
-            'Authorization': `Basic ${btoa(`${username()}:${password()}`)}`,
+            Authorization: `Basic ${btoa(`${username()}:${password()}`)}`,
             'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
+            Accept: 'application/json',
           },
-          credentials: 'include'
+          credentials: 'include',
         });
 
         if (response.ok) {
@@ -237,7 +243,7 @@ export const Login: Component<LoginProps> = (props) => {
         } else {
           setError('Server error. Please try again.');
         }
-      } catch (fallbackErr) {
+      } catch (_fallbackErr) {
         setError('Failed to connect to server');
       }
     } finally {
@@ -247,7 +253,7 @@ export const Login: Component<LoginProps> = (props) => {
 
   // Debug logging
   console.log('[Login] Render - loadingAuth:', loadingAuth(), 'authStatus:', authStatus());
-  
+
   return (
     <Show
       when={!loadingAuth()}
@@ -262,16 +268,35 @@ export const Login: Component<LoginProps> = (props) => {
     >
       <Show
         when={authStatus()?.hasAuthentication === false}
-        fallback={<LoginForm {...{ username, setUsername, password, setPassword, error, loading, handleSubmit, supportsOIDC, startOidcLogin, oidcLoading, oidcError, oidcMessage }} />}
+        fallback={
+          <LoginForm
+            {...{
+              username,
+              setUsername,
+              password,
+              setPassword,
+              error,
+              loading,
+              handleSubmit,
+              supportsOIDC,
+              startOidcLogin,
+              oidcLoading,
+              oidcError,
+              oidcMessage,
+            }}
+          />
+        }
       >
-        <Suspense fallback={
-          <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
-            <div class="text-center">
-              <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+        <Suspense
+          fallback={
+            <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900">
+              <div class="text-center">
+                <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+              </div>
             </div>
-          </div>
-        }>
+          }
+        >
           <FirstRunSetup />
         </Suspense>
       </Show>
@@ -294,7 +319,20 @@ const LoginForm: Component<{
   oidcError: () => string;
   oidcMessage: () => string;
 }> = (props) => {
-  const { username, setUsername, password, setPassword, error, loading, handleSubmit, supportsOIDC, startOidcLogin, oidcLoading, oidcError, oidcMessage } = props;
+  const {
+    username,
+    setUsername,
+    password,
+    setPassword,
+    error,
+    loading,
+    handleSubmit,
+    supportsOIDC,
+    startOidcLogin,
+    oidcLoading,
+    oidcError,
+    oidcMessage,
+  } = props;
 
   return (
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -303,9 +341,9 @@ const LoginForm: Component<{
           <div class="flex justify-center mb-4">
             <div class="relative group">
               <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
-              <img 
-                src="/logo.svg" 
-                alt="Pulse Logo" 
+              <img
+                src="/logo.svg"
+                alt="Pulse Logo"
                 class="relative w-24 h-24 transform transition duration-500 group-hover:scale-110"
               />
             </div>
@@ -317,7 +355,10 @@ const LoginForm: Component<{
             Enter your credentials to continue
           </p>
         </div>
-        <form class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up" onSubmit={handleSubmit}>
+        <form
+          class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up"
+          onSubmit={handleSubmit}
+        >
           <Show when={supportsOIDC()}>
             <div class="space-y-3">
               <button
@@ -337,7 +378,12 @@ const LoginForm: Component<{
                 >
                   <span class="inline-flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.8"
+                        d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9"
+                      />
                     </svg>
                     Continue with Single Sign-On
                   </span>
@@ -355,10 +401,14 @@ const LoginForm: Component<{
               </Show>
               <div class="flex items-center gap-3 pt-2">
                 <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">or</span>
+                <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  or
+                </span>
                 <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
               </div>
-              <p class="text-xs text-center text-gray-500 dark:text-gray-400">Use your admin credentials to sign in below.</p>
+              <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                Use your admin credentials to sign in below.
+              </p>
             </div>
           </Show>
           <input type="hidden" name="remember" value="true" />
@@ -368,8 +418,18 @@ const LoginForm: Component<{
                 Username
               </label>
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <svg
+                  class="h-5 w-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
                 </svg>
               </div>
               <input
@@ -389,8 +449,18 @@ const LoginForm: Component<{
                 Password
               </label>
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <svg
+                  class="h-5 w-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
                 </svg>
               </div>
               <input
@@ -408,31 +478,50 @@ const LoginForm: Component<{
           </div>
 
           <Show when={error()}>
-            <div class={`rounded-md p-4 ${
-              error().includes('locked') ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-red-50 dark:bg-red-900/20'
-            }`}>
+            <div
+              class={`rounded-md p-4 ${
+                error().includes('locked')
+                  ? 'bg-orange-50 dark:bg-orange-900/20'
+                  : 'bg-red-50 dark:bg-red-900/20'
+              }`}
+            >
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <Show 
+                  <Show
                     when={error().includes('locked')}
                     fallback={
                       <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        <path
+                          fill-rule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                          clip-rule="evenodd"
+                        />
                       </svg>
                     }
                   >
                     <svg class="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                      <path
+                        fill-rule="evenodd"
+                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                        clip-rule="evenodd"
+                      />
                     </svg>
                   </Show>
                 </div>
                 <div class="ml-3">
-                  <p class={`text-sm ${
-                    error().includes('locked') ? 'text-orange-800 dark:text-orange-200' : 'text-red-800 dark:text-red-200'
-                  }`}>{error()}</p>
+                  <p
+                    class={`text-sm ${
+                      error().includes('locked')
+                        ? 'text-orange-800 dark:text-orange-200'
+                        : 'text-red-800 dark:text-red-200'
+                    }`}
+                  >
+                    {error()}
+                  </p>
                   <Show when={error().includes('locked') && error().includes('minute')}>
                     <p class="text-xs mt-1 text-orange-700 dark:text-orange-300">
-                      Lockouts automatically expire after the specified time. If you need immediate access, contact your administrator.
+                      Lockouts automatically expire after the specified time. If you need immediate
+                      access, contact your administrator.
                     </p>
                   </Show>
                 </div>
@@ -447,9 +536,24 @@ const LoginForm: Component<{
               class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
             >
               <Show when={loading()}>
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
               </Show>
               <Show when={loading()} fallback="Sign in to Pulse">

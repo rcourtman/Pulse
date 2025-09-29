@@ -19,13 +19,13 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 	if poolInfo == nil {
 		return nil
 	}
-	
+
 	// Use the converter from the proxmox package
 	proxmoxPool := poolInfo.ConvertToModelZFSPool()
 	if proxmoxPool == nil {
 		return nil
 	}
-	
+
 	// Convert to our internal model
 	modelPool := &models.ZFSPool{
 		Name:           proxmoxPool.Name,
@@ -37,7 +37,7 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 		ChecksumErrors: proxmoxPool.ChecksumErrors,
 		Devices:        make([]models.ZFSDevice, 0, len(proxmoxPool.Devices)),
 	}
-	
+
 	// Convert devices
 	for _, dev := range proxmoxPool.Devices {
 		modelPool.Devices = append(modelPool.Devices, models.ZFSDevice{
@@ -49,24 +49,24 @@ func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 			ChecksumErrors: dev.ChecksumErrors,
 		})
 	}
-	
+
 	return modelPool
 }
 
 // pollVMsWithNodesOptimized polls VMs from all nodes in parallel using goroutines
 func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
-	
+
 	// Channel to collect VM results from each node
 	type nodeResult struct {
 		node string
 		vms  []models.VM
 		err  error
 	}
-	
+
 	resultChan := make(chan nodeResult, len(nodes))
 	var wg sync.WaitGroup
-	
+
 	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
@@ -74,13 +74,13 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 			onlineNodes++
 		}
 	}
-	
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel VM polling")
-	
+
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes
@@ -91,13 +91,13 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				Msg("Skipping offline node for VM polling")
 			continue
 		}
-		
+
 		wg.Add(1)
 		go func(n proxmox.Node) {
 			defer wg.Done()
-			
+
 			nodeStart := time.Now()
-			
+
 			// Fetch VMs for this node
 			vms, err := client.GetVMs(ctx, n.Node)
 			if err != nil {
@@ -106,22 +106,22 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
-			
+
 			var nodeVMs []models.VM
-			
+
 			// Process each VM
 			for _, vm := range vms {
 				// Skip templates
 				if vm.Template == 1 {
 					continue
 				}
-				
+
 				// Parse tags
 				var tags []string
 				if vm.Tags != "" {
 					tags = strings.Split(vm.Tags, ";")
 				}
-				
+
 				// Create guest ID
 				var guestID string
 				if instanceName == n.Node {
@@ -129,18 +129,18 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				} else {
 					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, vm.VMID)
 				}
-				
+
 				// Initialize metrics from VM listing (may be 0 for disk I/O)
 				diskReadBytes := int64(vm.DiskRead)
 				diskWriteBytes := int64(vm.DiskWrite)
 				networkInBytes := int64(vm.NetIn)
 				networkOutBytes := int64(vm.NetOut)
-				
+
 				// Get memory info for running VMs (and agent status for disk)
 				memUsed := uint64(0)
 				memTotal := vm.MaxMem
 				var vmStatus *proxmox.VMStatus
-				
+
 				if vm.Status == "running" {
 					// Try to get detailed VM status (but don't wait too long)
 					statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -162,7 +162,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					}
 					cancel()
 				}
-				
+
 				// Calculate I/O rates after we have the actual values
 				currentMetrics := IOMetrics{
 					DiskRead:   diskReadBytes,
@@ -172,7 +172,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					Timestamp:  time.Now(),
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-				
+
 				// Debug log disk I/O rates
 				if diskReadRate > 0 || diskWriteRate > 0 {
 					log.Debug().
@@ -184,13 +184,13 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						Int64("diskWriteBytes", diskWriteBytes).
 						Msg("VM disk I/O rates calculated")
 				}
-				
+
 				// Set CPU to 0 for non-running VMs
 				cpuUsage := safeFloat(vm.CPU)
 				if vm.Status != "running" {
 					cpuUsage = 0
 				}
-				
+
 				// Calculate disk usage - start with allocated disk size
 				// NOTE: The Proxmox cluster/resources API always returns 0 for VM disk usage
 				// We must query the guest agent to get actual disk usage
@@ -199,7 +199,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				diskFree := diskTotal - diskUsed
 				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
 				diskStatusReason := ""
-				
+
 				// For stopped VMs, we can't get guest agent data
 				if vm.Status != "running" {
 					// Show allocated disk size for stopped VMs
@@ -208,7 +208,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						diskStatusReason = "vm-stopped"
 					}
 				}
-				
+
 				// For running VMs, ALWAYS try to get filesystem info from guest agent
 				// The cluster/resources endpoint always returns 0 for disk usage
 				if vm.Status == "running" && vmStatus != nil && diskTotal > 0 {
@@ -221,7 +221,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						Uint64("diskUsed", diskUsed).
 						Uint64("diskTotal", diskTotal).
 						Msg("VM has 0 disk usage, checking guest agent")
-					
+
 					// Check if agent is enabled
 					if vmStatus.Agent == 0 {
 						diskStatusReason = "agent-disabled"
@@ -235,7 +235,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
 							Msg("Guest agent enabled, fetching filesystem info")
-						
+
 						statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 						if fsInfo, err := client.GetVMFSInfo(statusCtx, n.Node, vm.VMID); err != nil {
 							// Handle errors
@@ -246,7 +246,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 								Int("vmid", vm.VMID).
 								Str("error", errStr).
 								Msg("Failed to get VM filesystem info from guest agent")
-							
+
 							if strings.Contains(errStr, "QEMU guest agent is not running") {
 								diskStatusReason = "agent-not-running"
 								log.Info().
@@ -269,112 +269,112 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 								Int("vmid", vm.VMID).
 								Msg("Guest agent returned empty filesystem list")
 						} else {
-								log.Info().
-									Str("instance", instanceName).
+							log.Info().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Int("vmid", vm.VMID).
+								Int("filesystems", len(fsInfo)).
+								Msg("Got filesystem info from guest agent")
+							// Aggregate disk usage from all filesystems
+							// Fix for #425: Track seen devices to avoid counting duplicates
+							var totalBytes, usedBytes uint64
+							seenDevices := make(map[string]bool)
+
+							for _, fs := range fsInfo {
+								// Log each filesystem for debugging
+								log.Debug().
 									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Int("filesystems", len(fsInfo)).
-									Msg("Got filesystem info from guest agent")
-								// Aggregate disk usage from all filesystems
-								// Fix for #425: Track seen devices to avoid counting duplicates
-								var totalBytes, usedBytes uint64
-								seenDevices := make(map[string]bool)
-								
-								for _, fs := range fsInfo {
-									// Log each filesystem for debugging
+									Str("mountpoint", fs.Mountpoint).
+									Str("type", fs.Type).
+									Str("disk", fs.Disk).
+									Uint64("total", fs.TotalBytes).
+									Uint64("used", fs.UsedBytes).
+									Msg("Processing filesystem from guest agent")
+
+								// Skip special filesystems and Windows System Reserved
+								// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
+								isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
+
+								if !isWindowsDrive && (fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
+									strings.HasPrefix(fs.Mountpoint, "/dev") ||
+									strings.HasPrefix(fs.Mountpoint, "/proc") ||
+									strings.HasPrefix(fs.Mountpoint, "/sys") ||
+									strings.HasPrefix(fs.Mountpoint, "/run") ||
+									fs.Mountpoint == "/boot/efi" ||
+									fs.Mountpoint == "System Reserved" ||
+									strings.Contains(fs.Mountpoint, "System Reserved") ||
+									strings.HasPrefix(fs.Mountpoint, "/snap")) { // Skip snap mounts
 									log.Debug().
 										Str("vm", vm.Name).
 										Str("mountpoint", fs.Mountpoint).
 										Str("type", fs.Type).
-										Str("disk", fs.Disk).
-										Uint64("total", fs.TotalBytes).
-										Uint64("used", fs.UsedBytes).
-										Msg("Processing filesystem from guest agent")
-									
-									// Skip special filesystems and Windows System Reserved
-									// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
-									isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
-									
-									if !isWindowsDrive && (fs.Type == "tmpfs" || fs.Type == "devtmpfs" || 
-									   strings.HasPrefix(fs.Mountpoint, "/dev") ||
-									   strings.HasPrefix(fs.Mountpoint, "/proc") ||
-									   strings.HasPrefix(fs.Mountpoint, "/sys") ||
-									   strings.HasPrefix(fs.Mountpoint, "/run") ||
-									   fs.Mountpoint == "/boot/efi" ||
-									   fs.Mountpoint == "System Reserved" ||
-									   strings.Contains(fs.Mountpoint, "System Reserved") ||
-									   strings.HasPrefix(fs.Mountpoint, "/snap")) { // Skip snap mounts
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Msg("Skipping special filesystem")
-										continue
-									}
-									
-									// Skip if we've already seen this device (duplicate mount point)
-									if fs.Disk != "" && seenDevices[fs.Disk] {
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("disk", fs.Disk).
-											Msg("Skipping duplicate mount of same device")
-										continue
-									}
-									
-									// Only count real filesystems with valid data
-									if fs.TotalBytes > 0 {
-										// Mark this device as seen
-										if fs.Disk != "" {
-											seenDevices[fs.Disk] = true
-										}
-										
-										totalBytes += fs.TotalBytes
-										usedBytes += fs.UsedBytes
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("disk", fs.Disk).
-											Uint64("added_total", fs.TotalBytes).
-											Uint64("added_used", fs.UsedBytes).
-											Msg("Adding filesystem to total")
-									} else {
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Msg("Skipping filesystem with 0 total bytes")
-									}
+										Msg("Skipping special filesystem")
+									continue
 								}
-								
-								// If we got valid data from guest agent, use it
-								if totalBytes > 0 {
-									diskTotal = totalBytes
-									diskUsed = usedBytes
-									diskFree = totalBytes - usedBytes
-									diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
-									diskStatusReason = "" // Clear reason on success
-									
-									log.Info().
-										Str("instance", instanceName).
+
+								// Skip if we've already seen this device (duplicate mount point)
+								if fs.Disk != "" && seenDevices[fs.Disk] {
+									log.Debug().
 										Str("vm", vm.Name).
-										Int("vmid", vm.VMID).
-										Uint64("totalBytes", totalBytes).
-										Uint64("usedBytes", usedBytes).
-										Float64("usage", diskUsage).
-										Msg("✓ Successfully retrieved disk usage from guest agent")
-								} else {
-									// Only special filesystems found - show allocated disk size instead
-									diskStatusReason = "special-filesystems-only"
-									if diskTotal > 0 {
-										diskUsage = -1 // Show as allocated size
+										Str("mountpoint", fs.Mountpoint).
+										Str("disk", fs.Disk).
+										Msg("Skipping duplicate mount of same device")
+									continue
+								}
+
+								// Only count real filesystems with valid data
+								if fs.TotalBytes > 0 {
+									// Mark this device as seen
+									if fs.Disk != "" {
+										seenDevices[fs.Disk] = true
 									}
-									log.Info().
-										Str("instance", instanceName).
+
+									totalBytes += fs.TotalBytes
+									usedBytes += fs.UsedBytes
+									log.Debug().
 										Str("vm", vm.Name).
-										Int("filesystems_found", len(fsInfo)).
-										Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+										Str("mountpoint", fs.Mountpoint).
+										Str("disk", fs.Disk).
+										Uint64("added_total", fs.TotalBytes).
+										Uint64("added_used", fs.UsedBytes).
+										Msg("Adding filesystem to total")
+								} else {
+									log.Debug().
+										Str("vm", vm.Name).
+										Str("mountpoint", fs.Mountpoint).
+										Msg("Skipping filesystem with 0 total bytes")
 								}
 							}
+
+							// If we got valid data from guest agent, use it
+							if totalBytes > 0 {
+								diskTotal = totalBytes
+								diskUsed = usedBytes
+								diskFree = totalBytes - usedBytes
+								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+								diskStatusReason = "" // Clear reason on success
+
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("vmid", vm.VMID).
+									Uint64("totalBytes", totalBytes).
+									Uint64("usedBytes", usedBytes).
+									Float64("usage", diskUsage).
+									Msg("✓ Successfully retrieved disk usage from guest agent")
+							} else {
+								// Only special filesystems found - show allocated disk size instead
+								diskStatusReason = "special-filesystems-only"
+								if diskTotal > 0 {
+									diskUsage = -1 // Show as allocated size
+								}
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", vm.Name).
+									Int("filesystems_found", len(fsInfo)).
+									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+							}
+						}
 						cancel()
 					} else {
 						// No vmStatus available or agent disabled - show allocated disk
@@ -388,18 +388,18 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					diskUsage = -1
 					diskStatusReason = "no-status"
 				}
-				
+
 				// Create VM model
 				modelVM := models.VM{
-					ID:               guestID,
-					VMID:             vm.VMID,
-					Name:             vm.Name,
-					Node:             n.Node,
-					Instance:         instanceName,
-					Status:           vm.Status,
-					Type:             "qemu",
-					CPU:              cpuUsage,
-					CPUs:             int(vm.CPUs),
+					ID:       guestID,
+					VMID:     vm.VMID,
+					Name:     vm.Name,
+					Node:     n.Node,
+					Instance: instanceName,
+					Status:   vm.Status,
+					Type:     "qemu",
+					CPU:      cpuUsage,
+					CPUs:     int(vm.CPUs),
 					Memory: models.Memory{
 						Total: int64(memTotal),
 						Used:  int64(memUsed),
@@ -422,7 +422,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					LastSeen:         time.Now(),
 					Tags:             tags,
 				}
-				
+
 				// Zero out metrics for non-running VMs
 				if vm.Status != "running" {
 					modelVM.CPU = 0
@@ -433,35 +433,35 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					modelVM.DiskRead = 0
 					modelVM.DiskWrite = 0
 				}
-				
+
 				nodeVMs = append(nodeVMs, modelVM)
-				
+
 				// Check alerts
 				m.alertManager.CheckGuest(modelVM, instanceName)
 			}
-			
+
 			nodeDuration := time.Since(nodeStart)
 			log.Debug().
 				Str("node", n.Node).
 				Int("vms", len(nodeVMs)).
 				Dur("duration", nodeDuration).
 				Msg("Node VM polling completed")
-			
+
 			resultChan <- nodeResult{node: n.Node, vms: nodeVMs}
 		}(node)
 	}
-	
+
 	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Collect results from all nodes
 	var allVMs []models.VM
 	successfulNodes := 0
 	failedNodes := 0
-	
+
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
@@ -470,10 +470,10 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 			allVMs = append(allVMs, result.vms...)
 		}
 	}
-	
+
 	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
-	
+
 	duration := time.Since(startTime)
 	log.Info().
 		Str("instance", instanceName).
@@ -487,17 +487,17 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 // pollContainersWithNodesOptimized polls containers from all nodes in parallel using goroutines
 func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
-	
+
 	// Channel to collect container results from each node
 	type nodeResult struct {
 		node       string
 		containers []models.Container
 		err        error
 	}
-	
+
 	resultChan := make(chan nodeResult, len(nodes))
 	var wg sync.WaitGroup
-	
+
 	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
@@ -505,13 +505,13 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 			onlineNodes++
 		}
 	}
-	
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel container polling")
-	
+
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes
@@ -522,13 +522,13 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 				Msg("Skipping offline node for container polling")
 			continue
 		}
-		
+
 		wg.Add(1)
 		go func(n proxmox.Node) {
 			defer wg.Done()
-			
+
 			nodeStart := time.Now()
-			
+
 			// Fetch containers for this node
 			containers, err := client.GetContainers(ctx, n.Node)
 			if err != nil {
@@ -537,22 +537,22 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
-			
+
 			var nodeContainers []models.Container
-			
+
 			// Process each container
 			for _, container := range containers {
 				// Skip templates
 				if container.Template == 1 {
 					continue
 				}
-				
+
 				// Parse tags
 				var tags []string
 				if container.Tags != "" {
 					tags = strings.Split(container.Tags, ";")
 				}
-				
+
 				// Create guest ID
 				var guestID string
 				if instanceName == n.Node {
@@ -560,7 +560,7 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 				} else {
 					guestID = fmt.Sprintf("%s-%s-%d", instanceName, n.Node, container.VMID)
 				}
-				
+
 				// Calculate I/O rates
 				currentMetrics := IOMetrics{
 					DiskRead:   int64(container.DiskRead),
@@ -570,24 +570,24 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					Timestamp:  time.Now(),
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-				
+
 				// Set CPU to 0 for non-running containers
 				cpuUsage := safeFloat(container.CPU)
 				if container.Status != "running" {
 					cpuUsage = 0
 				}
-				
+
 				// Create container model
 				modelContainer := models.Container{
-					ID:         guestID,
-					VMID:       int(container.VMID),
-					Name:       container.Name,
-					Node:       n.Node,
-					Instance:   instanceName,
-					Status:     container.Status,
-					Type:       "lxc",
-					CPU:        cpuUsage,
-					CPUs:       int(container.CPUs),
+					ID:       guestID,
+					VMID:     int(container.VMID),
+					Name:     container.Name,
+					Node:     n.Node,
+					Instance: instanceName,
+					Status:   container.Status,
+					Type:     "lxc",
+					CPU:      cpuUsage,
+					CPUs:     int(container.CPUs),
 					Memory: models.Memory{
 						Total: int64(container.MaxMem),
 						Used:  int64(container.Mem),
@@ -609,7 +609,7 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					LastSeen:   time.Now(),
 					Tags:       tags,
 				}
-				
+
 				// Zero out metrics for non-running containers
 				if container.Status != "running" {
 					modelContainer.CPU = 0
@@ -620,35 +620,35 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 					modelContainer.DiskRead = 0
 					modelContainer.DiskWrite = 0
 				}
-				
+
 				nodeContainers = append(nodeContainers, modelContainer)
-				
+
 				// Check alerts
 				m.alertManager.CheckGuest(modelContainer, instanceName)
 			}
-			
+
 			nodeDuration := time.Since(nodeStart)
 			log.Debug().
 				Str("node", n.Node).
 				Int("containers", len(nodeContainers)).
 				Dur("duration", nodeDuration).
 				Msg("Node container polling completed")
-			
+
 			resultChan <- nodeResult{node: n.Node, containers: nodeContainers}
 		}(node)
 	}
-	
+
 	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Collect results from all nodes
 	var allContainers []models.Container
 	successfulNodes := 0
 	failedNodes := 0
-	
+
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
@@ -657,10 +657,10 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 			allContainers = append(allContainers, result.containers...)
 		}
 	}
-	
+
 	// Update state with all containers
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
-	
+
 	duration := time.Since(startTime)
 	log.Info().
 		Str("instance", instanceName).
@@ -674,14 +674,14 @@ func (m *Monitor) pollContainersWithNodesOptimized(ctx context.Context, instance
 // pollStorageWithNodesOptimized polls storage from all nodes in parallel using goroutines
 func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node) {
 	startTime := time.Now()
-	
+
 	// Get cluster storage configuration first (single call)
 	clusterStorages, err := client.GetAllStorage(ctx)
 	clusterStorageAvailable := err == nil
 	if err != nil {
 		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to get cluster storage config - will continue with node storage only")
 	}
-	
+
 	// Create a map for quick lookup of cluster storage config
 	clusterStorageMap := make(map[string]proxmox.Storage)
 	if clusterStorageAvailable {
@@ -689,17 +689,17 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			clusterStorageMap[cs.Storage] = cs
 		}
 	}
-	
+
 	// Channel to collect storage results from each node
 	type nodeResult struct {
 		node    string
 		storage []models.Storage
 		err     error
 	}
-	
+
 	resultChan := make(chan nodeResult, len(nodes))
 	var wg sync.WaitGroup
-	
+
 	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
@@ -707,13 +707,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			onlineNodes++
 		}
 	}
-	
+
 	log.Info().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel storage polling")
-	
+
 	// Get existing storage from state to preserve data for offline nodes
 	currentState := m.state.GetSnapshot()
 	existingStorageMap := make(map[string]models.Storage)
@@ -722,10 +722,10 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			existingStorageMap[storage.ID] = storage
 		}
 	}
-	
+
 	// Track which nodes we successfully polled
 	polledNodes := make(map[string]bool)
-	
+
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes but preserve their existing storage data
@@ -736,13 +736,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				Msg("Skipping offline node for storage polling - preserving existing data")
 			continue
 		}
-		
+
 		wg.Add(1)
 		go func(n proxmox.Node) {
 			defer wg.Done()
-			
+
 			nodeStart := time.Now()
-			
+
 			// Fetch storage for this node
 			nodeStorage, err := client.GetStorage(ctx, n.Node)
 			if err != nil {
@@ -765,14 +765,14 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
-			
+
 			var nodeStorageList []models.Storage
-			
+
 			// Get ZFS pool status for this node if any storage is ZFS
 			// This is now production-ready with proper API integration
 			var zfsPoolMap = make(map[string]*models.ZFSPool)
 			enableZFSMonitoring := os.Getenv("PULSE_DISABLE_ZFS_MONITORING") != "true" // Enabled by default
-			
+
 			if enableZFSMonitoring {
 				hasZFSStorage := false
 				for _, storage := range nodeStorage {
@@ -781,14 +781,14 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 						break
 					}
 				}
-				
+
 				if hasZFSStorage {
 					if poolInfos, err := client.GetZFSPoolsWithDetails(ctx, n.Node); err == nil {
 						log.Debug().
 							Str("node", n.Node).
 							Int("pools", len(poolInfos)).
 							Msg("Successfully fetched ZFS pool details")
-						
+
 						// Convert to our model format
 						for _, poolInfo := range poolInfos {
 							modelPool := convertPoolInfoToModel(&poolInfo)
@@ -806,10 +806,10 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					}
 				}
 			}
-			
+
 			// Process each storage
 			for _, storage := range nodeStorage {
-				
+
 				// Create storage ID
 				var storageID string
 				if instanceName == n.Node {
@@ -817,13 +817,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				} else {
 					storageID = fmt.Sprintf("%s-%s-%s", instanceName, n.Node, storage.Storage)
 				}
-				
+
 				// Get cluster config for this storage
 				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
-				
+
 				// Determine if shared
 				shared := hasClusterConfig && clusterConfig.Shared == 1
-				
+
 				// Create storage model
 				modelStorage := models.Storage{
 					ID:       storageID,
@@ -841,17 +841,17 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					Enabled:  true,
 					Active:   true,
 				}
-				
+
 				// If this is ZFS storage, attach pool status information
 				if storage.Type == "zfspool" || storage.Type == "zfs" || storage.Type == "local-zfs" {
 					// Try to match by storage name or by common ZFS pool names
 					poolName := storage.Storage
-					
+
 					// Common mappings
 					if poolName == "local-zfs" {
 						poolName = "rpool/data" // Common default
 					}
-					
+
 					// Look for exact match first
 					if pool, found := zfsPoolMap[poolName]; found {
 						modelStorage.ZFSPool = pool
@@ -868,13 +868,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 						}
 					}
 				}
-				
+
 				// Override with cluster config if available
 				if hasClusterConfig {
 					modelStorage.Enabled = clusterConfig.Enabled == 1
 					modelStorage.Active = clusterConfig.Active == 1
 				}
-				
+
 				// Determine status based on active/enabled flags
 				if storage.Active == 1 || modelStorage.Active {
 					modelStorage.Status = "available"
@@ -883,17 +883,17 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				} else {
 					modelStorage.Status = "disabled"
 				}
-				
+
 				nodeStorageList = append(nodeStorageList, modelStorage)
 			}
-			
+
 			nodeDuration := time.Since(nodeStart)
 			log.Debug().
 				Str("node", n.Node).
 				Int("storage", len(nodeStorageList)).
 				Dur("duration", nodeDuration).
 				Msg("Node storage polling completed")
-			
+
 			// If we got empty storage but have existing storage for this node, don't mark as successfully polled
 			// This allows preservation logic to keep the existing storage
 			if len(nodeStorageList) == 0 {
@@ -914,23 +914,23 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					return
 				}
 			}
-			
+
 			resultChan <- nodeResult{node: n.Node, storage: nodeStorageList}
 		}(node)
 	}
-	
+
 	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Collect results from all nodes
 	var allStorage []models.Storage
 	sharedStorageMap := make(map[string]models.Storage) // Map to keep best shared storage entry
 	successfulNodes := 0
 	failedNodes := 0
-	
+
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
@@ -942,7 +942,7 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 					// For shared storage, use just the storage name as key
 					// This ensures consistent deduplication regardless of which node reports first
 					key := storage.Name
-					
+
 					// Keep the entry with the most complete data (highest usage)
 					// or the first one if all are equal
 					if existing, exists := sharedStorageMap[key]; !exists || storage.Used > existing.Used {
@@ -957,12 +957,12 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			}
 		}
 	}
-	
+
 	// Add deduplicated shared storage to results
 	for _, storage := range sharedStorageMap {
 		allStorage = append(allStorage, storage)
 	}
-	
+
 	// Preserve existing storage data for nodes that weren't polled (offline or error)
 	preservedCount := 0
 	for _, existingStorage := range existingStorageMap {
@@ -976,17 +976,17 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 				Msg("Preserving existing storage data for unpolled node")
 		}
 	}
-	
+
 	// Check alerts for all storage devices
 	for _, storage := range allStorage {
 		m.alertManager.CheckStorage(storage)
 	}
-	
+
 	// Update state with all storage
 	m.state.UpdateStorageForInstance(instanceName, allStorage)
-	
+
 	duration := time.Since(startTime)
-	
+
 	// Warn if all nodes failed to get storage
 	if successfulNodes == 0 && failedNodes > 0 {
 		log.Error().

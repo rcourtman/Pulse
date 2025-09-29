@@ -15,7 +15,7 @@ export class SystemAPI {
   static async getSystemSettings(): Promise<SystemSettings> {
     return apiFetchJSON('/api/system/settings');
   }
-  
+
   static async updateSystemSettings(settings: Partial<SystemSettings>): Promise<void> {
     await apiFetchJSON('/api/system/settings/update', {
       method: 'POST',

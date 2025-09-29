@@ -3,12 +3,12 @@ package notifications
 // WebhookTemplate represents a webhook template for popular services
 type WebhookTemplate struct {
 	Service         string            `json:"service"`
-	Name           string            `json:"name"`
-	URLPattern     string            `json:"urlPattern"`
-	Method         string            `json:"method"`
-	Headers        map[string]string `json:"headers"`
-	PayloadTemplate string           `json:"payloadTemplate"`
-	Instructions   string            `json:"instructions"`
+	Name            string            `json:"name"`
+	URLPattern      string            `json:"urlPattern"`
+	Method          string            `json:"method"`
+	Headers         map[string]string `json:"headers"`
+	PayloadTemplate string            `json:"payloadTemplate"`
+	Instructions    string            `json:"instructions"`
 }
 
 // GetWebhookTemplates returns templates for popular webhook services

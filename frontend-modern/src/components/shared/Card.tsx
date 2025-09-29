@@ -16,18 +16,21 @@ const toneClassMap: Record<Tone, string> = {
   info: 'bg-blue-50/70 dark:bg-blue-900/20',
   success: 'bg-green-50/70 dark:bg-green-900/20',
   warning: 'bg-amber-50/80 dark:bg-amber-900/20',
-  danger: 'bg-red-50/80 dark:bg-red-900/20'
+  danger: 'bg-red-50/80 dark:bg-red-900/20',
 };
 
 const paddingClassMap: Record<Padding, string> = {
   none: 'p-0',
   sm: 'p-3',
   md: 'p-4',
-  lg: 'p-6'
+  lg: 'p-6',
 };
 
 export function Card(props: CardProps) {
-  const merged = mergeProps({ tone: 'default' as Tone, padding: 'md' as Padding, hoverable: false, border: true }, props);
+  const merged = mergeProps(
+    { tone: 'default' as Tone, padding: 'md' as Padding, hoverable: false, border: true },
+    props,
+  );
   const [local, rest] = splitProps(merged, ['tone', 'padding', 'hoverable', 'border', 'class']);
 
   const baseClass = 'rounded-lg shadow-sm transition-shadow duration-200';

@@ -36,7 +36,7 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 
 	// Check if requesting specific guest
 	path := r.URL.Path
-	// Handle both /api/guests/metadata and /api/guests/metadata/ 
+	// Handle both /api/guests/metadata and /api/guests/metadata/
 	if path == "/api/guests/metadata" || path == "/api/guests/metadata/" {
 		// Get all metadata
 		w.Header().Set("Content-Type", "application/json")
@@ -49,12 +49,12 @@ func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.
 		}
 		return
 	}
-	
+
 	// Get specific guest ID from path
 	guestID := strings.TrimPrefix(path, "/api/guests/metadata/")
-	
+
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if guestID != "" {
 		// Get specific guest metadata
 		meta := h.store.Get(guestID)
@@ -97,19 +97,19 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Check scheme
 		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
 			return
 		}
-		
+
 		// Check host is present and valid
 		if parsedURL.Host == "" {
 			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:8006 or https://emby.local)", http.StatusBadRequest)
 			return
 		}
-		
+
 		// Check for incomplete URLs like "https://emby."
 		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
 			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
@@ -131,7 +131,7 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 	}
 
 	log.Info().Str("guestID", guestID).Str("url", meta.CustomURL).Msg("Updated guest metadata")
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&meta)
 }
@@ -156,6 +156,6 @@ func (h *GuestMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *ht
 	}
 
 	log.Info().Str("guestID", guestID).Msg("Deleted guest metadata")
-	
+
 	w.WriteHeader(http.StatusNoContent)
 }

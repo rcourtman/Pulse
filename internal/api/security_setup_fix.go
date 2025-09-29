@@ -182,7 +182,11 @@ PULSE_AUDIT_LOG=true
 `, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 
 			// Ensure directory exists
-			os.MkdirAll(r.config.ConfigPath, 0755)
+			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
+				log.Error().Err(err).Str("path", r.config.ConfigPath).Msg("Failed to create config directory")
+				http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
+				return
+			}
 
 			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 				log.Error().Err(err).Str("path", envPath).Msg("Failed to write .env file in Docker")
@@ -218,12 +222,20 @@ PULSE_AUDIT_LOG=true
 `, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 
 			// Save to config directory (usually /etc/pulse)
-			os.MkdirAll(r.config.ConfigPath, 0755)
+			if err := os.MkdirAll(r.config.ConfigPath, 0755); err != nil {
+				log.Error().Err(err).Str("path", r.config.ConfigPath).Msg("Failed to create config directory")
+				http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
+				return
+			}
 
 			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 				// Try data directory as fallback
 				envPath = filepath.Join(r.config.DataPath, ".env")
-				os.MkdirAll(r.config.DataPath, 0755)
+				if err := os.MkdirAll(r.config.DataPath, 0755); err != nil {
+					log.Error().Err(err).Str("path", r.config.DataPath).Msg("Failed to create data directory")
+					http.Error(w, "Failed to prepare configuration directory", http.StatusInternalServerError)
+					return
+				}
 				if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 					log.Error().Err(err).Msg("Failed to write .env file")
 					http.Error(w, "Failed to save security configuration", http.StatusInternalServerError)
@@ -275,7 +287,9 @@ Environment="PULSE_AUDIT_LOG=true"
 			}
 
 			// Reload systemd
-			exec.Command("systemctl", "daemon-reload").Run()
+			if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+				log.Warn().Err(err).Msg("Failed to reload systemd daemon")
+			}
 
 			response := map[string]interface{}{
 				"success":               true,
@@ -307,7 +321,10 @@ PULSE_AUDIT_LOG=true
 `, time.Now().Format(time.RFC3339), setupRequest.Username, hashedPassword, hashedAPIToken)
 
 			// Try to create directory if needed
-			os.MkdirAll(filepath.Dir(envPath), 0755)
+			if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
+				log.Error().Err(err).Str("path", filepath.Dir(envPath)).Msg("Failed to create env directory")
+				// Continue to attempt writing; error will be caught below
+			}
 
 			if err := os.WriteFile(envPath, []byte(envContent), 0600); err != nil {
 				log.Error().Err(err).Msg("Failed to write .env file")

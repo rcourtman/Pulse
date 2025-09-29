@@ -1,6 +1,12 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import { NotificationsAPI } from '@/api/notifications';
-import { formField, labelClass, controlClass, formHelpText, formCheckbox } from '@/components/shared/Form';
+import {
+  formField,
+  labelClass,
+  controlClass,
+  formHelpText,
+  formCheckbox,
+} from '@/components/shared/Form';
 
 interface EmailProvider {
   name: string;
@@ -152,7 +158,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <input
             type="number"
             value={props.config.port}
-            onInput={(e) => props.onChange({ ...props.config, port: parseInt(e.currentTarget.value) || 587 })}
+            onInput={(e) =>
+              props.onChange({ ...props.config, port: parseInt(e.currentTarget.value) || 587 })
+            }
             placeholder="587"
             class={controlClass('px-2 py-1.5')}
           />
@@ -241,7 +249,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 <input
                   type="checkbox"
                   checked={props.config.tls}
-                  onChange={(e) => props.onChange({ ...props.config, tls: e.currentTarget.checked })}
+                  onChange={(e) =>
+                    props.onChange({ ...props.config, tls: e.currentTarget.checked })
+                  }
                   class={`${formCheckbox} h-4 w-4`}
                 />
                 <span>Use TLS</span>
@@ -250,7 +260,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 <input
                   type="checkbox"
                   checked={props.config.startTLS}
-                  onChange={(e) => props.onChange({ ...props.config, startTLS: e.currentTarget.checked })}
+                  onChange={(e) =>
+                    props.onChange({ ...props.config, startTLS: e.currentTarget.checked })
+                  }
                   class={`${formCheckbox} h-4 w-4`}
                 />
                 <span>Use STARTTLS</span>
@@ -260,7 +272,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 <input
                   type="number"
                   value={props.config.rateLimit || 60}
-                  onInput={(e) => props.onChange({ ...props.config, rateLimit: parseInt(e.currentTarget.value) })}
+                  onInput={(e) =>
+                    props.onChange({ ...props.config, rateLimit: parseInt(e.currentTarget.value) })
+                  }
                   class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                 />
                 <span class={formHelpText}>/min</span>
@@ -275,18 +289,24 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                   value={props.config.maxRetries || 3}
                   min={0}
                   max={5}
-                  onInput={(e) => props.onChange({ ...props.config, maxRetries: parseInt(e.currentTarget.value) })}
+                  onInput={(e) =>
+                    props.onChange({ ...props.config, maxRetries: parseInt(e.currentTarget.value) })
+                  }
                   class={controlClass('px-2 py-1 text-sm')}
                 />
               </div>
               <div class={formField}>
-                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Retry delay (seconds)</label>
+                <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  Retry delay (seconds)
+                </label>
                 <input
                   type="number"
                   value={props.config.retryDelay || 5}
                   min={1}
                   max={60}
-                  onInput={(e) => props.onChange({ ...props.config, retryDelay: parseInt(e.currentTarget.value) })}
+                  onInput={(e) =>
+                    props.onChange({ ...props.config, retryDelay: parseInt(e.currentTarget.value) })
+                  }
                   class={controlClass('px-2 py-1 text-sm')}
                 />
               </div>

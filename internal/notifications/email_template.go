@@ -38,8 +38,8 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	default:
 		alertType = strings.Title(alertType)
 	}
-	
-	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s", 
+
+	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
 		strings.Title(string(alert.Level)), alertType, alert.ResourceName)
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
@@ -211,7 +211,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		if alert.Level == "warning" {
 			levelColor = "#ffd93d"
 		}
-		
+
 		alertRows.WriteString(fmt.Sprintf(`
                 <tr>
                     <td style="padding: 12px; border-bottom: 1px solid #e9ecef;">
@@ -294,7 +294,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
                         <div class="summary-label">Critical</div>
                     </div>`, critical)
 	}
-	
+
 	if warning > 0 {
 		htmlBody += fmt.Sprintf(`
                     <div class="summary-item">
@@ -340,7 +340,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 	}
 	textBuilder.WriteString("\nAlert Details:\n")
 	textBuilder.WriteString("─────────────────────────────────────────────────────────────\n")
-	
+
 	for i, alert := range alertList {
 		textBuilder.WriteString(fmt.Sprintf("\n%d. %s (%s)\n", i+1, alert.ResourceName, alert.ResourceID))
 		textBuilder.WriteString(fmt.Sprintf("   Level: %s | Type: %s\n", strings.ToUpper(string(alert.Level)), alert.Type))
@@ -348,11 +348,11 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		textBuilder.WriteString(fmt.Sprintf("   Node: %s | Started: %s ago\n", alert.Node, formatDuration(time.Since(alert.StartTime))))
 		textBuilder.WriteString(fmt.Sprintf("   Message: %s\n", alert.Message))
 	}
-	
+
 	textBuilder.WriteString("\n─────────────────────────────────────────────────────────────\n")
 	textBuilder.WriteString("This is an automated notification from Pulse Monitoring.\n")
 	textBuilder.WriteString("Configure alert settings in the Pulse dashboard.")
-	
+
 	textBody = textBuilder.String()
 	return subject, htmlBody, textBody
 }
