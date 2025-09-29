@@ -5,6 +5,7 @@ import { NodeModal } from './NodeModal';
 import { GenerateAPIToken } from './GenerateAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { GuestURLs } from './GuestURLs';
+import { OIDCPanel } from './OIDCPanel';
 import { SettingsAPI } from '@/api/settings';
 import { NodesAPI } from '@/api/nodes';
 import { UpdatesAPI } from '@/api/updates';
@@ -1873,6 +1874,15 @@ const Settings: Component = () => {
                 </div>
               </Show>
               
+              <div class="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-900/10 p-4 mb-6">
+                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">Single Sign-On</h4>
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                  Enable OIDC to add an SSO button alongside the existing password login. Disable password auth later by setting <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">DISABLE_AUTH=true</code> once SSO is verified.
+                </p>
+              </div>
+
+              <OIDCPanel onConfigUpdated={loadSecurityStatus} />
+
               {/* Security setup now handled by first-run wizard */}
 
               {/* API Token - Show always to allow API access even when auth is disabled */}
