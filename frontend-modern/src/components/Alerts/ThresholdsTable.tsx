@@ -1,6 +1,7 @@
 import { createSignal, createMemo, Show, onMount, onCleanup } from 'solid-js';
 import type { VM, Container, Node, Alert, Storage, PBSInstance } from '@/types/api';
-import { ResourceTable } from './ResourceTable';
+import type { RawOverrideConfig } from '@/types/alerts';
+import { ResourceTable, Resource } from './ResourceTable';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
@@ -41,8 +42,8 @@ interface SimpleThresholds {
 interface ThresholdsTableProps {
   overrides: () => Override[];
   setOverrides: (overrides: Override[]) => void;
-  rawOverridesConfig: () => Record<string, unknown>;
-  setRawOverridesConfig: (config: Record<string, unknown>) => void;
+  rawOverridesConfig: () => Record<string, RawOverrideConfig>;
+  setRawOverridesConfig: (config: Record<string, RawOverrideConfig>) => void;
   allGuests: () => (VM | Container)[];
   nodes: Node[];
   storage: Storage[];
@@ -64,7 +65,7 @@ interface ThresholdsTableProps {
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [editingThresholds, setEditingThresholds] = createSignal<Record<string, number>>({});
+  const [editingThresholds, setEditingThresholds] = createSignal<Record<string, number | undefined>>({});
   
   let searchInputRef: HTMLInputElement | undefined;
   
@@ -135,10 +136,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
   
   // Process nodes with their overrides
-  const nodesWithOverrides = createMemo((prev) => {
+  const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
-      return prev || [];
+      return prev;
     }
     
     const search = searchTerm().toLowerCase();
@@ -173,13 +174,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       return nodes.filter(n => n.name.toLowerCase().includes(search));
     }
     return nodes;
-  });
+  }, []);
   
   // Process guests with their overrides and group by node
-  const guestsGroupedByNode = createMemo((prev) => {
+  const guestsGroupedByNode = createMemo<Record<string, Resource[]>>((prev = {}) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
-      return prev || {};
+      return prev;
     }
     
     const search = searchTerm().toLowerCase();
@@ -225,7 +226,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       : guests;
     
     // Group by node
-    const grouped: Record<string, typeof filteredGuests> = {};
+    const grouped: Record<string, Resource[]> = {};
     filteredGuests.forEach(guest => {
       const node = guest.node || 'Unknown';
       if (!grouped[node]) {
@@ -243,13 +244,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     });
     
     return grouped;
-  });
+  }, {});
   
   // Process PBS servers with their overrides
-  const pbsServersWithOverrides = createMemo((prev) => {
+  const pbsServersWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
-      return prev || [];
+      return prev;
     }
     
     const search = searchTerm().toLowerCase();
@@ -258,7 +259,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Get PBS instances from props
     const pbsInstances = props.pbsInstances || [];
     
-    const pbsServers = pbsInstances.filter((pbs) => (pbs.cpu || 0) > 0 || (pbs.memory?.usage || 0) > 0).map((pbs) => {
+    const pbsServers = pbsInstances
+      .filter((pbs) => (pbs.cpu || 0) > 0 || (pbs.memory || 0) > 0)
+      .map((pbs) => {
       // PBS IDs already have "pbs-" prefix from backend, don't double it
       const pbsId = pbs.id;
       const override = overridesMap.get(pbsId);
@@ -302,13 +305,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       );
     }
     return pbsServers;
-  });
+  }, []);
   
   // Process storage with their overrides
-  const storageWithOverrides = createMemo((prev) => {
+  const storageWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
-      return prev || [];
+      return prev;
     }
     
     const search = searchTerm().toLowerCase();
@@ -346,10 +349,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       );
     }
     return storageDevices;
-  });
+  }, []);
   
   
-  const startEditing = (resourceId: string, currentThresholds: Record<string, number>, defaults: Record<string, number>) => {
+  const startEditing = (
+    resourceId: string,
+    currentThresholds: Record<string, number | undefined>,
+    defaults: Record<string, number | undefined>
+  ) => {
     setEditingId(resourceId);
     // Merge defaults with overrides for editing
     const mergedThresholds = { ...defaults, ...currentThresholds };
@@ -364,14 +371,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (!resource) return;
     
     const editedThresholds = editingThresholds();
-    const defaultThresholds = resource.defaults;
+    const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
     
     // Only include values that differ from defaults
     const overrideThresholds: Record<string, number> = {};
     Object.keys(editedThresholds).forEach(key => {
       const editedValue = editedThresholds[key];
       const defaultValue = defaultThresholds[key as keyof typeof defaultThresholds];
-      if (editedValue !== defaultValue && editedValue !== undefined && editedValue !== '') {
+      if (editedValue !== undefined && editedValue !== defaultValue) {
         overrideThresholds[key] = editedValue;
       }
     });
@@ -417,13 +424,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     }
     
     // Update raw config
-    const newRawConfig = { ...props.rawOverridesConfig() };
-    const hysteresisThresholds: Record<string, any> = {};
+    const newRawConfig: Record<string, RawOverrideConfig> = { ...props.rawOverridesConfig() };
+    const hysteresisThresholds: RawOverrideConfig = {};
     Object.entries(overrideThresholds).forEach(([metric, value]) => {
       if (value !== undefined && value !== null) {
         hysteresisThresholds[metric] = { 
           trigger: value, 
-          clear: Math.max(0, (value as number) - 5) 
+          clear: Math.max(0, value - 5) 
         };
       }
     });
@@ -505,15 +512,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       }
       
       // Update raw config
-      const newRawConfig = { ...props.rawOverridesConfig() };
-      const hysteresisThresholds: Record<string, any> = {};
+    const newRawConfig: Record<string, RawOverrideConfig> = { ...props.rawOverridesConfig() };
+    const hysteresisThresholds: RawOverrideConfig = {};
       
       // Only add threshold overrides that differ from defaults
       Object.entries(override.thresholds).forEach(([metric, value]) => {
-        if (value !== undefined && value !== null) {
+        if (typeof value === 'number') {
           hysteresisThresholds[metric] = { 
             trigger: value, 
-            clear: Math.max(0, (value as number) - 5) 
+            clear: Math.max(0, value - 5) 
           };
         }
       });

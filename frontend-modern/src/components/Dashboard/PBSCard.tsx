@@ -2,7 +2,6 @@ import { Component, Show, createMemo } from 'solid-js';
 import type { PBSInstance } from '@/types/api';
 import { formatUptime, formatBytes } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface PBSCardProps {
   instance: PBSInstance;

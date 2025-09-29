@@ -1,7 +1,7 @@
 import { Component, createSignal, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
-import type { Node, VM, Container, Storage, PBSBackup } from '@/types/api';
+import type { Node, VM, Container, Storage } from '@/types/api';
 
 interface UnifiedNodeSelectorProps {
   currentTab: 'dashboard' | 'storage' | 'backups';
@@ -11,7 +11,6 @@ interface UnifiedNodeSelectorProps {
   filteredVms?: VM[];
   filteredContainers?: Container[];
   filteredStorage?: Storage[];
-  filteredBackups?: PBSBackup[];
   searchTerm?: string;
 }
 

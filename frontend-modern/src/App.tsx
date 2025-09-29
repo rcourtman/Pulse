@@ -99,7 +99,7 @@ function App() {
     ? savedDarkMode === 'true'
     : window.matchMedia('(prefers-color-scheme: dark)').matches;
   const [darkMode, setDarkMode] = createSignal(initialDarkMode);
-  const [hasLoadedServerTheme, setHasLoadedServerTheme] = createSignal(false);
+  const [, setHasLoadedServerTheme] = createSignal(false);
   
   // Apply dark mode immediately on initialization
   if (initialDarkMode) {

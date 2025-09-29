@@ -10,7 +10,7 @@ export function Toggle(props: ToggleProps) {
   const merged = mergeProps({ containerClass: '' }, props);
   const [local, rest] = splitProps(merged, ['label', 'description', 'containerClass', 'class', 'disabled']);
 
-  const isDisabled = () => Boolean(local.disabled ?? rest.disabled);
+  const isDisabled = () => Boolean(local.disabled);
   const isChecked = () => {
     const value = rest.checked as unknown;
     if (typeof value === 'function') {
@@ -26,7 +26,7 @@ export function Toggle(props: ToggleProps) {
   return (
     <label class={`flex items-center gap-3 ${local.containerClass ?? ''} ${local.class ?? ''}`.trim()}>
       <span class={`relative inline-flex h-6 w-11 flex-shrink-0 items-center ${isDisabled() ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
-        <input type="checkbox" class="sr-only" {...rest} />
+        <input type="checkbox" class="sr-only" disabled={local.disabled} {...rest} />
         <span
           class={`absolute inset-0 rounded-full transition ${
             isChecked()

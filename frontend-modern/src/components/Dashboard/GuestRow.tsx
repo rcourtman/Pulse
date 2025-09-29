@@ -31,11 +31,6 @@ interface GuestRowProps {
 export function GuestRow(props: GuestRowProps) {
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
   
-  // Create guest ID for metadata
-  const guestId = createMemo(() => {
-    return props.guest.id || `${props.guest.node}-${props.guest.vmid}`;
-  });
-  
   // Update custom URL when prop changes
   createEffect(() => {
     setCustomUrl(props.customUrl);
@@ -146,7 +141,7 @@ export function GuestRow(props: GuestRowProps) {
           
           {/* Tag badges */}
           <TagBadges 
-            tags={props.guest.tags} 
+            tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
             maxVisible={3} 
             onTagClick={props.onTagClick}
             activeSearch={props.activeSearch}
