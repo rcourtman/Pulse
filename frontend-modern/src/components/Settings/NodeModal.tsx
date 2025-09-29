@@ -35,19 +35,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     tokenName: '',
     tokenValue: '',
     fingerprint: '',
-    verifySSL: true,
-    // PVE specific
-    monitorVMs: true,
-    monitorContainers: true,
-    monitorStorage: true,
-    monitorBackups: true,
-    enableBackupManagement: true, // New field for backup write permissions
-    // PBS specific
-    monitorDatastores: true,
-    monitorSyncJobs: true,
-    monitorVerifyJobs: true,
-    monitorPruneJobs: true,
-    monitorGarbageJobs: false
+    verifySSL: true
   });
   
   const [formData, setFormData] = createSignal(getCleanFormData());
@@ -121,17 +109,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         tokenName: tokenName,
         tokenValue: '', // Don't show existing token
         fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
-        verifySSL: node.verifySSL ?? true,
-        monitorVMs: (node.type === 'pve' && 'monitorVMs' in node ? node.monitorVMs : true) ?? true,
-        monitorContainers: (node.type === 'pve' && 'monitorContainers' in node ? node.monitorContainers : true) ?? true,
-        monitorStorage: (node.type === 'pve' && 'monitorStorage' in node ? node.monitorStorage : true) ?? true,
-        monitorBackups: (node.type === 'pve' && 'monitorBackups' in node ? node.monitorBackups : true) ?? true,
-        enableBackupManagement: true, // Default to true for existing nodes
-        monitorDatastores: (node.type === 'pbs' && 'monitorDatastores' in node ? node.monitorDatastores : true) ?? true,
-        monitorSyncJobs: (node.type === 'pbs' && 'monitorSyncJobs' in node ? node.monitorSyncJobs : true) ?? true,
-        monitorVerifyJobs: (node.type === 'pbs' && 'monitorVerifyJobs' in node ? node.monitorVerifyJobs : true) ?? true,
-        monitorPruneJobs: (node.type === 'pbs' && 'monitorPruneJobs' in node ? node.monitorPruneJobs : true) ?? true,
-        monitorGarbageJobs: (node.type === 'pbs' && 'monitorGarbageJobs' in node ? node.monitorGarbageJobs : false) ?? false
+        verifySSL: node.verifySSL ?? true
       });
     }
   });
@@ -165,18 +143,18 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Add monitor settings based on type
     if (props.nodeType === 'pve') {
       Object.assign(nodeData, {
-        monitorVMs: data.monitorVMs,
-        monitorContainers: data.monitorContainers,
-        monitorStorage: data.monitorStorage,
-        monitorBackups: data.monitorBackups
+        monitorVMs: true,
+        monitorContainers: true,
+        monitorStorage: true,
+        monitorBackups: true
       });
     } else {
       Object.assign(nodeData, {
-        monitorDatastores: data.monitorDatastores,
-        monitorSyncJobs: data.monitorSyncJobs,
-        monitorVerifyJobs: data.monitorVerifyJobs,
-        monitorPruneJobs: data.monitorPruneJobs,
-        monitorGarbageJobs: data.monitorGarbageJobs
+        monitorDatastores: true,
+        monitorSyncJobs: true,
+        monitorVerifyJobs: true,
+        monitorPruneJobs: true,
+        monitorGarbageJobs: true
       });
     }
 
@@ -476,26 +454,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                               {/* Quick Setup Tab */}
                               <Show when={formData().setupMode === 'auto' || !formData().setupMode}>
-                                {/* Backup Management Checkbox */}
-                                <div class="mb-3">
-                                  <label class="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={formData().enableBackupManagement}
-                                      onChange={(e) => setFormData({ ...formData(), enableBackupManagement: e.currentTarget.checked })}
-                                      class={formCheckbox}
-                                    />
-                                    <span class="text-gray-700 dark:text-gray-300">
-                                      Enable storage permissions for backup visibility
-                                    </span>
-                                  </label>
-                                  <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">
-                                    {formData().enableBackupManagement 
-                                      ? 'Required to read PVE backup files and display them in the Backups tab (Proxmox API limitation)'
-                                      : 'Backups tab will not show PVE backups without these permissions'}
-                                  </p>
-                                </div>
-
+                                <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                                  The command below creates the monitoring user, applies read-only access, and adds the storage permissions Pulse needs to display backups.
+                                </p>
                                 <p class="text-blue-800 dark:text-blue-200">Just copy and run this one command on your Proxmox VE server:</p>
                                 
                                 {/* One-line command */}
@@ -518,7 +479,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             body: JSON.stringify({
                                               type: 'pve',
                                               host: formData().host,
-                                              backupPerms: formData().enableBackupManagement
+                                              backupPerms: true
                                             })
                                           });
                                           
@@ -611,8 +572,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const hostValue = formData().host || '';
                                             const encodedHost = encodeURIComponent(hostValue);
                                             const pulseUrl = encodeURIComponent(window.location.origin);
-                                            const backupPerms = formData().enableBackupManagement ? '&backup_perms=true' : '';
-                                            const scriptUrl = `/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}${backupPerms}`;
+                                            const scriptUrl = `/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}&backup_perms=true`;
                                             
                                             // Fetch the script using the current session
                                             const response = await fetch(scriptUrl);
@@ -664,7 +624,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </li>
                                   <li class="flex items-start">
                                     <span class="text-green-500 mr-2 mt-0.5">✓</span>
-                                    <span>Sets up monitoring permissions (PVEAuditor + guest agent access{formData().enableBackupManagement ? ' + backup access' : ''})</span>
+                                    <span>Sets up monitoring permissions (PVEAuditor + guest agent access + backup visibility)</span>
                                   </li>
                                   <li class="flex items-start">
                                     <span class="text-green-500 mr-2 mt-0.5">✓</span>
@@ -1193,104 +1153,17 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     </div>
                   </div>
                   
-                  {/* Monitoring Options */}
+                  {/* Monitoring Overview */}
                   <div>
                     <SectionHeader
-                      title="Monitoring options"
+                      title="Monitoring coverage"
                       size="sm"
-                      class="mb-4"
+                      class="mb-2"
                       titleClass="text-gray-900 dark:text-gray-100"
                     />
-                    <div class="space-y-2">
-                      {props.nodeType === 'pve' ? (
-                        <>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorVMs}
-                              onChange={(e) => updateField('monitorVMs', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Virtual Machines</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorContainers}
-                              onChange={(e) => updateField('monitorContainers', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Containers</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorStorage}
-                              onChange={(e) => updateField('monitorStorage', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Storage</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorBackups}
-                              onChange={(e) => updateField('monitorBackups', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Backups</span>
-                          </label>
-                        </>
-                      ) : (
-                        <>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorDatastores}
-                              onChange={(e) => updateField('monitorDatastores', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Datastores</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorSyncJobs}
-                              onChange={(e) => updateField('monitorSyncJobs', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Sync Jobs</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorVerifyJobs}
-                              onChange={(e) => updateField('monitorVerifyJobs', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Verify Jobs</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorPruneJobs}
-                              onChange={(e) => updateField('monitorPruneJobs', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Prune Jobs</span>
-                          </label>
-                          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={formData().monitorGarbageJobs}
-                              onChange={(e) => updateField('monitorGarbageJobs', e.currentTarget.checked)}
-                              class={formCheckbox}
-                            />
-                            <span>Monitor Garbage Collection Jobs</span>
-                          </label>
-                        </>
-                      )}
-                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                      Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.
+                    </p>
                   </div>
                 </div>
                 

@@ -93,13 +93,21 @@ interface DiagnosticsData {
   errors: string[];
 }
 
+interface DiscoveryScanStatus {
+  scanning: boolean;
+  subnet?: string;
+  lastScanStartedAt?: number;
+  lastResultAt?: number;
+  errors?: string[];
+}
+
 type SettingsTab = 'pve' | 'pbs' | 'system' | 'urls' | 'security' | 'diagnostics';
 
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
   hasToken?: boolean;
-  status: 'connected' | 'disconnected' | 'error';
+  status: 'connected' | 'disconnected' | 'error' | 'pending';
 };
 
 const Settings: Component = () => {
@@ -114,6 +122,7 @@ const Settings: Component = () => {
   const [modalResetKey, setModalResetKey] = createSignal(0);
   const [showPasswordModal, setShowPasswordModal] = createSignal(false);
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
+  const [discoveryScanStatus, setDiscoveryScanStatus] = createSignal<DiscoveryScanStatus>({ scanning: false });
   
   // System settings
   // PBS polling interval removed - fixed at 10 seconds
@@ -167,6 +176,34 @@ const Settings: Component = () => {
     return date.toLocaleString();
   };
 
+  const formatRelativeTime = (timestamp?: number) => {
+    if (!timestamp) {
+      return '';
+    }
+
+    const delta = Date.now() - timestamp;
+    if (delta < 0) {
+      return 'just now';
+    }
+
+    const seconds = Math.round(delta / 1000);
+    if (seconds < 60) {
+      return `${seconds}s ago`;
+    }
+
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    }
+
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) {
+      return `${hours}h ago`;
+    }
+
+    return new Date(timestamp).toLocaleString();
+  };
+
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { 
       id: 'pve', 
@@ -210,7 +247,7 @@ const Settings: Component = () => {
         // Use the hasPassword/hasToken from the API if available, otherwise check local fields
         hasPassword: node.hasPassword ?? !!node.password,
         hasToken: node.hasToken ?? !!node.tokenValue,
-        status: node.status || 'disconnected' as const
+        status: node.status || 'pending' as const
       }));
       setNodes(nodesWithStatus);
     } catch (error) {
@@ -324,6 +361,11 @@ const Settings: Component = () => {
     } else {
       setDiscoveredNodes(filtered);
     }
+
+    setDiscoveryScanStatus(prev => ({
+      ...prev,
+      lastResultAt: Date.now()
+    }));
   };
 
   const loadDiscoveredNodes = async () => {
@@ -334,12 +376,61 @@ const Settings: Component = () => {
         const data = await response.json();
         if (Array.isArray(data.servers)) {
           updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
+          setDiscoveryScanStatus(prev => ({
+            ...prev,
+            lastResultAt: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
+            errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined
+          }));
         } else {
           updateDiscoveredNodesFromServers([]);
+          setDiscoveryScanStatus(prev => ({
+            ...prev,
+            lastResultAt: typeof data?.timestamp === 'number' ? data.timestamp : prev.lastResultAt,
+            errors: Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors : undefined
+          }));
         }
       }
     } catch (error) {
       console.error('Failed to load discovered nodes:', error);
+    }
+  };
+
+  const triggerDiscoveryScan = async (options: { quiet?: boolean } = {}) => {
+    const { quiet = false } = options;
+
+    setDiscoveryScanStatus(prev => ({
+      ...prev,
+      scanning: true,
+      subnet: discoverySubnet() || prev.subnet,
+      lastScanStartedAt: Date.now(),
+      errors: undefined
+    }));
+
+    try {
+      const { apiFetch } = await import('@/utils/apiClient');
+      const response = await apiFetch('/api/discover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ subnet: discoverySubnet() || 'auto' })
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Discovery request failed');
+      }
+
+      if (!quiet) {
+        notificationStore.info('Discovery scan started', 2000);
+      }
+    } catch (error) {
+      console.error('Failed to start discovery scan:', error);
+      notificationStore.error('Failed to start discovery scan');
+      setDiscoveryScanStatus(prev => ({
+        ...prev,
+        scanning: false
+      }));
     }
   };
 
@@ -362,15 +453,59 @@ const Settings: Component = () => {
     const unsubscribeDiscovery = eventBus.on('discovery_updated', (data) => {
       if (!data) {
         updateDiscoveredNodesFromServers([]);
+        setDiscoveryScanStatus(prev => ({
+          ...prev,
+          scanning: false
+        }));
         return;
       }
 
       if (Array.isArray(data.servers)) {
         updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[], { merge: !!data.immediate });
+        setDiscoveryScanStatus(prev => ({
+          ...prev,
+          scanning: data.scanning ?? prev.scanning,
+          lastResultAt: data.timestamp ?? Date.now(),
+          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined
+        }));
       } else if (!data.immediate) {
         // Ensure we clear stale results when the update explicitly reports no servers
         updateDiscoveredNodesFromServers([]);
+        setDiscoveryScanStatus(prev => ({
+          ...prev,
+          scanning: data.scanning ?? prev.scanning,
+          lastResultAt: data.timestamp ?? prev.lastResultAt,
+          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined
+        }));
+      } else {
+        setDiscoveryScanStatus(prev => ({
+          ...prev,
+          scanning: data.scanning ?? prev.scanning,
+          errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined
+        }));
       }
+    });
+
+    const unsubscribeDiscoveryStatus = eventBus.on('discovery_status', (data) => {
+      if (!data) {
+        setDiscoveryScanStatus(prev => ({
+          ...prev,
+          scanning: false
+        }));
+        return;
+      }
+
+      setDiscoveryScanStatus(prev => ({
+        ...prev,
+        scanning: !!data.scanning,
+        subnet: data.subnet || prev.subnet,
+        lastScanStartedAt: data.scanning
+          ? (data.timestamp ?? Date.now())
+          : prev.lastScanStartedAt,
+        lastResultAt: !data.scanning && data.timestamp
+          ? data.timestamp
+          : prev.lastResultAt
+      }));
     });
     
     // Poll for node updates when modal is open
@@ -401,6 +536,7 @@ const Settings: Component = () => {
       unsubscribeAutoRegister();
       unsubscribeRefresh();
       unsubscribeDiscovery();
+      unsubscribeDiscoveryStatus();
       if (pollInterval) {
         clearInterval(pollInterval);
       }
@@ -866,15 +1002,21 @@ const Settings: Component = () => {
                             discoverySubnet: discoverySubnet()
                           });
                           if (newValue) {
-                            loadDiscoveredNodes();
-                            notificationStore.success('Discovery enabled', 2000);
+                            await triggerDiscoveryScan({ quiet: true });
+                            notificationStore.success('Discovery enabled — scanning network...', 2000);
                           } else {
                             notificationStore.info('Discovery disabled', 2000);
+                            setDiscoveryScanStatus(prev => ({
+                              ...prev,
+                              scanning: false
+                            }));
                           }
                         } catch (error) {
                           console.error('Failed to update discovery setting:', error);
                           notificationStore.error('Failed to update discovery setting');
                           setDiscoveryEnabled(!newValue);
+                        } finally {
+                          await loadDiscoveredNodes();
                         }
                       }}
                       disabled={envOverrides().discoveryEnabled}
@@ -885,9 +1027,13 @@ const Settings: Component = () => {
                   
                   <Show when={discoveryEnabled()}>
                     <button type="button" 
-                      onClick={() => {
-                        loadDiscoveredNodes();
+                      onClick={async () => {
                         notificationStore.info('Refreshing discovery...', 2000);
+                        try {
+                          await triggerDiscoveryScan({ quiet: true });
+                        } finally {
+                          await loadDiscoveredNodes();
+                        }
                       }}
                       class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
                       title="Refresh discovered servers"
@@ -948,7 +1094,13 @@ const Settings: Component = () => {
                               if (node.status === 'connected') {
                                 return 'bg-green-500';
                               }
-                              return 'bg-red-500';
+                              if (node.status === 'error') {
+                                return 'bg-red-500';
+                              }
+                              if (node.status === 'pending' || node.status === 'disconnected') {
+                                return 'bg-amber-500 animate-pulse';
+                              }
+                              return 'bg-gray-400';
                             })()
                             }`}></div>
                             </div>
@@ -1050,59 +1202,97 @@ const Settings: Component = () => {
                 
                 {/* Discovered PVE nodes - only show when discovery is enabled */}
                 <Show when={discoveryEnabled()}>
-                  <For each={discoveredNodes().filter(n => n.type === 'pve')}>
-                    {(server) => (
-                    <div 
-                      class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                      onClick={() => {
-                        // Pre-fill the modal with discovered server info
-                        setEditingNode({
-                          id: '',
-                          type: 'pve',
+                  <div class="space-y-3">
+                    <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Show when={discoveryScanStatus().scanning}>
+                        <span class="flex items-center gap-2">
+                          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                            <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
+                          </svg>
+                          <span>Scanning your network for Proxmox VE servers…</span>
+                        </span>
+                      </Show>
+                      <Show when={!discoveryScanStatus().scanning && (discoveryScanStatus().lastResultAt || discoveryScanStatus().lastScanStartedAt)}>
+                        <span>
+                          Last scan {formatRelativeTime(discoveryScanStatus().lastResultAt ?? discoveryScanStatus().lastScanStartedAt)}
+                        </span>
+                      </Show>
+                    </div>
+                    <Show when={discoveryScanStatus().errors && discoveryScanStatus().errors!.length}>
+                      <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                        <span class="font-medium">Discovery issues:</span>
+                        <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                          <For each={discoveryScanStatus().errors || []}>
+                            {(err) => <li>{err}</li>}
+                          </For>
+                        </ul>
+                      </div>
+                    </Show>
+                    <Show when={discoveryScanStatus().scanning && discoveredNodes().filter(n => n.type === 'pve').length === 0}>
+                      <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                          <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
+                        </svg>
+                        <span>Waiting for responses… this can take up to a minute depending on your network size.</span>
+                      </div>
+                    </Show>
+                    <For each={discoveredNodes().filter(n => n.type === 'pve')}>
+                      {(server) => (
+                      <div 
+                        class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                        onClick={() => {
+                          // Pre-fill the modal with discovered server info
+                          setEditingNode({
+                            id: '',
+                            type: 'pve',
                           name: server.hostname || `pve-${server.ip}`,
                           host: `https://${server.ip}:${server.port}`,
+                          user: '',
                           tokenName: '',
                           tokenValue: '',
                           verifySSL: false,
-                          monitorVMs: true,
-                          monitorContainers: true,
-                          monitorStorage: true,
-                          monitorBackups: true,
-                          status: 'disconnected'
-                        } as NodeConfigWithStatus);
-                        setCurrentNodeType('pve');
-                        setShowNodeModal(true);
-                      }}
-                    >
-                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                        <div class="flex-1 min-w-0">
-                          <div class="relative">
-                            <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
-                          </div>
-                          <div class="flex-1">
-                            <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                              {server.hostname || `Proxmox VE at ${server.ip}`}
-                            </h4>
-                            <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                              {server.ip}:{server.port}
-                            </p>
-                            <div class="flex items-center gap-2 mt-2">
-                              <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                Discovered
-                              </span>
-                              <span class="text-xs text-gray-500 dark:text-gray-400">
-                                Click to configure
-                              </span>
+                            monitorVMs: true,
+                            monitorContainers: true,
+                            monitorStorage: true,
+                            monitorBackups: true,
+                            status: 'pending'
+                          } as NodeConfigWithStatus);
+                          setCurrentNodeType('pve');
+                          setShowNodeModal(true);
+                        }}
+                      >
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                          <div class="flex-1 min-w-0">
+                            <div class="relative">
+                              <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                {server.hostname || `Proxmox VE at ${server.ip}`}
+                              </h4>
+                              <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                {server.ip}:{server.port}
+                              </p>
+                              <div class="flex items-center gap-2 mt-2">
+                                <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                  Discovered
+                                </span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                  Click to configure
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                            <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          </svg>
                         </div>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
-                          <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
                       </div>
-                    </div>
-                  )}
-                </For>
+                    )}
+                  </For>
+                  </div>
                 </Show>
               </div>
               </Show>
@@ -1138,15 +1328,21 @@ const Settings: Component = () => {
                             discoverySubnet: discoverySubnet()
                           });
                           if (newValue) {
-                            loadDiscoveredNodes();
-                            notificationStore.success('Discovery enabled', 2000);
+                            await triggerDiscoveryScan({ quiet: true });
+                            notificationStore.success('Discovery enabled — scanning network...', 2000);
                           } else {
                             notificationStore.info('Discovery disabled', 2000);
+                            setDiscoveryScanStatus(prev => ({
+                              ...prev,
+                              scanning: false
+                            }));
                           }
                         } catch (error) {
                           console.error('Failed to update discovery setting:', error);
                           notificationStore.error('Failed to update discovery setting');
                           setDiscoveryEnabled(!newValue);
+                        } finally {
+                          await loadDiscoveredNodes();
                         }
                       }}
                       disabled={envOverrides().discoveryEnabled}
@@ -1157,9 +1353,13 @@ const Settings: Component = () => {
                   
                   <Show when={discoveryEnabled()}>
                     <button type="button" 
-                      onClick={() => {
-                        loadDiscoveredNodes();
+                      onClick={async () => {
                         notificationStore.info('Refreshing discovery...', 2000);
+                        try {
+                          await triggerDiscoveryScan({ quiet: true });
+                        } finally {
+                          await loadDiscoveredNodes();
+                        }
                       }}
                       class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
                       title="Refresh discovered servers"
@@ -1218,7 +1418,13 @@ const Settings: Component = () => {
                               if (node.status === 'connected') {
                                 return 'bg-green-500';
                               }
-                              return 'bg-red-500';
+                              if (node.status === 'error') {
+                                return 'bg-red-500';
+                              }
+                              if (node.status === 'pending' || node.status === 'disconnected') {
+                                return 'bg-amber-500 animate-pulse';
+                              }
+                              return 'bg-gray-400';
                             })()
                           }`}></div>
                           <div>
@@ -1282,59 +1488,98 @@ const Settings: Component = () => {
                 
                 {/* Discovered PBS nodes - only show when discovery is enabled */}
                 <Show when={discoveryEnabled()}>
-                  <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
-                    {(server) => (
-                    <div 
-                      class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                      onClick={() => {
-                        // Pre-fill the modal with discovered server info
-                        setEditingNode({
-                          id: '',
-                          type: 'pbs',
+                  <div class="space-y-3">
+                    <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Show when={discoveryScanStatus().scanning}>
+                        <span class="flex items-center gap-2">
+                          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                            <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
+                          </svg>
+                          <span>Scanning your network for Proxmox Backup Servers…</span>
+                        </span>
+                      </Show>
+                      <Show when={!discoveryScanStatus().scanning && (discoveryScanStatus().lastResultAt || discoveryScanStatus().lastScanStartedAt)}>
+                        <span>
+                          Last scan {formatRelativeTime(discoveryScanStatus().lastResultAt ?? discoveryScanStatus().lastScanStartedAt)}
+                        </span>
+                      </Show>
+                    </div>
+                    <Show when={discoveryScanStatus().errors && discoveryScanStatus().errors!.length}>
+                      <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                        <span class="font-medium">Discovery issues:</span>
+                        <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                          <For each={discoveryScanStatus().errors || []}>
+                            {(err) => <li>{err}</li>}
+                          </For>
+                        </ul>
+                      </div>
+                    </Show>
+                    <Show when={discoveryScanStatus().scanning && discoveredNodes().filter(n => n.type === 'pbs').length === 0}>
+                      <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                          <path d="M22 12a10 10 0 00-10-10" stroke-linecap="round"></path>
+                        </svg>
+                        <span>Waiting for responses… this can take up to a minute depending on your network size.</span>
+                      </div>
+                    </Show>
+                    <For each={discoveredNodes().filter(n => n.type === 'pbs')}>
+                      {(server) => (
+                      <div 
+                        class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                        onClick={() => {
+                          // Pre-fill the modal with discovered server info
+                          setEditingNode({
+                            id: '',
+                            type: 'pbs',
                           name: server.hostname || `pbs-${server.ip}`,
                           host: `https://${server.ip}:${server.port}`,
+                          user: '',
                           tokenName: '',
                           tokenValue: '',
-                          verifySSL: false,
+                            verifySSL: false,
                           monitorDatastores: true,
                           monitorSyncJobs: true,
                           monitorVerifyJobs: true,
                           monitorPruneJobs: true,
-                          status: 'disconnected'
+                          monitorGarbageJobs: true,
+                          status: 'pending'
                         } as NodeConfigWithStatus);
-                        setCurrentNodeType('pbs');
-                        setShowNodeModal(true);
-                      }}
-                    >
-                      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                        <div class="flex-1 min-w-0">
-                          <div class="relative">
-                            <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
-                          </div>
-                          <div class="flex-1">
-                            <h4 class="font-medium text-gray-700 dark:text-gray-300">
-                              {server.hostname || `Backup Server at ${server.ip}`}
-                            </h4>
-                            <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                              {server.ip}:{server.port}
-                            </p>
-                            <div class="flex items-center gap-2 mt-2">
-                              <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                                Discovered
-                              </span>
-                              <span class="text-xs text-gray-500 dark:text-gray-400">
-                                Click to configure
-                              </span>
+                          setCurrentNodeType('pbs');
+                          setShowNodeModal(true);
+                        }}
+                      >
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                          <div class="flex-1 min-w-0">
+                            <div class="relative">
+                              <div class="w-3 h-3 rounded-full mt-1.5 bg-gray-400 animate-pulse"></div>
+                            </div>
+                            <div class="flex-1">
+                              <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                {server.hostname || `Backup Server at ${server.ip}`}
+                              </h4>
+                              <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                {server.ip}:{server.port}
+                              </p>
+                              <div class="flex items-center gap-2 mt-2">
+                                <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                  Discovered
+                                </span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                  Click to configure
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
+                            <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          </svg>
                         </div>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-gray-400 mt-1">
-                          <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
                       </div>
-                    </div>
-                  )}
-                </For>
+                    )}
+                  </For>
+                  </div>
                 </Show>
               </div>
               </Show>
@@ -2605,7 +2850,8 @@ const Settings: Component = () => {
                       ...nodeData, 
                       // Update hasPassword/hasToken based on whether credentials were provided
                       hasPassword: nodeData.password ? true : n.hasPassword,
-                      hasToken: nodeData.tokenValue ? true : n.hasToken
+                      hasToken: nodeData.tokenValue ? true : n.hasToken,
+                      status: 'pending'
                     }
                   : n
               ));
@@ -2621,7 +2867,7 @@ const Settings: Component = () => {
                 // Use the hasPassword/hasToken from the API if available, otherwise check local fields
                 hasPassword: node.hasPassword ?? !!node.password,
                 hasToken: node.hasToken ?? !!node.tokenValue,
-                status: node.status || 'disconnected' as const
+                status: node.status || 'pending' as const
               }));
               setNodes(nodesWithStatus);
               showSuccess('Node added successfully');
@@ -2664,7 +2910,7 @@ const Settings: Component = () => {
                       ...nodeData,
                       hasPassword: nodeData.password ? true : n.hasPassword,
                       hasToken: nodeData.tokenValue ? true : n.hasToken,
-                      status: n.status
+                      status: 'pending'
                     } 
                   : n
               ));
@@ -2680,7 +2926,7 @@ const Settings: Component = () => {
                 // Use the hasPassword/hasToken from the API if available, otherwise check local fields
                 hasPassword: node.hasPassword ?? !!node.password,
                 hasToken: node.hasToken ?? !!node.tokenValue,
-                status: node.status || 'disconnected' as const
+                status: node.status || 'pending' as const
               }));
               setNodes(nodesWithStatus);
               showSuccess('Node added successfully');
