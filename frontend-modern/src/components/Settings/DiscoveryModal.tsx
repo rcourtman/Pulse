@@ -61,12 +61,12 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // If we have cached results, show them immediately
         if (data.servers && data.servers.length > 0) {
           setDiscoveryResult({
             servers: data.servers,
-            errors: data.errors || []
+            errors: data.errors || [],
           });
         } else {
           // No cached results, start a background scan
@@ -96,12 +96,12 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // If we have cached results, show them immediately
         if (data.servers && data.servers.length > 0) {
           setDiscoveryResult({
             servers: data.servers,
-            errors: data.errors || []
+            errors: data.errors || [],
           });
           showSuccess(`Showing ${data.servers.length} cached server(s)`);
           return; // Don't start a new scan
@@ -110,7 +110,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
     } catch (error) {
       console.error('Failed to load cached results:', error);
     }
-    
+
     // If no cached results or error, start a new scan
     handleScan();
   };
@@ -144,7 +144,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
 
       const result: DiscoveryResult = await response.json();
       setDiscoveryResult(result);
-      
+
       if (result.servers.length === 0) {
         showError('No Proxmox/PBS servers found on the network');
       } else {
@@ -152,7 +152,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error && error.name === 'AbortError') {
         showError('Scan timeout - try a smaller subnet range');
       } else {
@@ -170,7 +170,14 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
   const getServerIcon = (type: string) => {
     if (type === 'pve') {
       return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
           <rect x="9" y="9" width="6" height="6"></rect>
           <line x1="9" y1="1" x2="9" y2="4"></line>
@@ -185,7 +192,14 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
       );
     }
     return (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 01-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 011-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 011.52 0C14.51 3.81 17 5 19 5a1 1 0 011 1v7z"></path>
         <path d="M9 12l2 2 4-4"></path>
       </svg>
@@ -198,27 +212,32 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
         <div class="fixed inset-0 z-50 overflow-y-auto">
           <div class="flex min-h-screen items-center justify-center p-4">
             {/* Backdrop */}
-            <div 
-              class="fixed inset-0 bg-black/50 transition-opacity"
-              onClick={props.onClose}
-            />
-            
+            <div class="fixed inset-0 bg-black/50 transition-opacity" onClick={props.onClose} />
+
             {/* Modal */}
             <div class="relative w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-xl">
               {/* Header */}
               <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <SectionHeader title="Network discovery" size="md" class="flex-1" />
-                <button type="button"
+                <button
+                  type="button"
                   onClick={props.onClose}
                   class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
                 </button>
               </div>
-              
+
               {/* Body */}
               <div class="p-6">
                 {/* Quick Actions Bar */}
@@ -235,7 +254,7 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                       </span>
                     </Show>
                   </div>
-                  
+
                   <div class="flex items-center gap-2">
                     {/* Subnet selector */}
                     <select
@@ -254,24 +273,46 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                       <option value="10.0.0.0/24">10.0.0.x</option>
                       <option value="172.16.0.0/24">172.16.0.x</option>
                     </select>
-                    
+
                     {/* Refresh button */}
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={handleRefresh}
                       disabled={isScanning()}
                       title="Refresh scan"
                       class="p-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Show when={isScanning()} fallback={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="23 4 23 10 17 10"></polyline>
-                          <polyline points="1 20 1 14 7 14"></polyline>
-                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                      }>
+                      <Show
+                        when={isScanning()}
+                        fallback={
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                          </svg>
+                        }
+                      >
                         <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"
+                          ></circle>
+                          <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
                         </svg>
                       </Show>
                     </button>
@@ -309,17 +350,30 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                 <Show when={discoveryResult() && !isScanning()}>
                   <div class="space-y-4">
                     {/* Server Cards */}
-                    <Show when={discoveryResult()!.servers.length > 0} fallback={
-                      <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 opacity-50">
-                          <circle cx="11" cy="11" r="8"></circle>
-                          <path d="m21 21-4.35-4.35"></path>
-                          <path d="M11 8v3m0 4h.01"></path>
-                        </svg>
-                        <p>No Proxmox servers found on this network</p>
-                        <p class="text-xs mt-2">Try a different subnet or check if servers are online</p>
-                      </div>
-                    }>
+                    <Show
+                      when={discoveryResult()!.servers.length > 0}
+                      fallback={
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <svg
+                            width="48"
+                            height="48"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            class="mx-auto mb-3 opacity-50"
+                          >
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                            <path d="M11 8v3m0 4h.01"></path>
+                          </svg>
+                          <p>No Proxmox servers found on this network</p>
+                          <p class="text-xs mt-2">
+                            Try a different subnet or check if servers are online
+                          </p>
+                        </div>
+                      }
+                    >
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <For each={discoveryResult()!.servers}>
                           {(server) => (
@@ -330,10 +384,12 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                               <div class="flex items-start justify-between">
                                 <div class="flex items-start gap-3">
                                   {/* Server Icon */}
-                                  <div class={`mt-0.5 ${server.type === 'pve' ? 'text-orange-500' : 'text-green-500'}`}>
+                                  <div
+                                    class={`mt-0.5 ${server.type === 'pve' ? 'text-orange-500' : 'text-green-500'}`}
+                                  >
                                     {getServerIcon(server.type)}
                                   </div>
-                                  
+
                                   {/* Server Details */}
                                   <div class="flex-1">
                                     <div class="font-medium text-gray-900 dark:text-gray-100">
@@ -354,10 +410,17 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 {/* Add Arrow */}
                                 <div class="text-gray-400 group-hover:text-blue-500 transition-colors">
-                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                  >
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                   </svg>
@@ -372,7 +435,9 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                     {/* Errors */}
                     <Show when={discoveryResult()!.errors && discoveryResult()!.errors!.length > 0}>
                       <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                        <h5 class="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Discovery Warnings</h5>
+                        <h5 class="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                          Discovery Warnings
+                        </h5>
                         <ul class="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
                           <For each={discoveryResult()!.errors}>
                             {(error) => <li>• {error}</li>}
@@ -383,10 +448,11 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                   </div>
                 </Show>
               </div>
-              
+
               {/* Footer */}
               <div class="flex items-center justify-center px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={props.onClose}
                   class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >

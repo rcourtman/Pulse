@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean dev-hot
+.PHONY: build run dev frontend backend all clean dev-hot lint lint-backend lint-frontend format format-backend format-frontend
 
 # Build everything
 all: frontend backend
@@ -43,3 +43,21 @@ clean:
 # Quick rebuild and restart for development
 restart: frontend backend
 	sudo systemctl restart pulse-backend
+
+# Run linters for both backend and frontend
+lint: lint-backend lint-frontend
+
+lint-backend:
+	golangci-lint run ./...
+
+lint-frontend:
+	cd frontend-modern && npm run lint
+
+# Apply formatters
+format: format-backend format-frontend
+
+format-backend:
+	gofmt -w cmd internal pkg
+
+format-frontend:
+	cd frontend-modern && npm run format

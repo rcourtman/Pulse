@@ -15,9 +15,9 @@ interface CompactNodeCardProps {
 
 const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   const { activeAlerts } = useWebSocket();
-  
+
   const isOnline = () => props.node.status === 'online' && props.node.uptime > 0;
-  
+
   const cpuPercent = createMemo(() => Math.round(props.node.cpu * 100));
   const memPercent = createMemo(() => Math.round(props.node.memory?.usage || 0));
   const diskPercent = createMemo(() => {
@@ -26,14 +26,16 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   });
 
   const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
-  const nodeAlerts = createMemo(() => getResourceAlerts(props.node.id || props.node.name, activeAlerts));
+  const nodeAlerts = createMemo(() =>
+    getResourceAlerts(props.node.id || props.node.name, activeAlerts),
+  );
 
   // Get status color
   const getMetricColor = (value: number, type: 'cpu' | 'mem' | 'disk') => {
     const thresholds = {
       cpu: { high: 90, warn: 80 },
       mem: { high: 85, warn: 75 },
-      disk: { high: 90, warn: 80 }
+      disk: { high: 90, warn: 80 },
     };
     const t = thresholds[type];
     if (value >= t.high) return 'text-red-500';
@@ -44,11 +46,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   // Mini progress bar for compact mode
   const MiniProgressBar = (props: { value: number; type: 'cpu' | 'mem' | 'disk' }) => (
     <div class="w-[80px] h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-      <div 
+      <div
         class={`h-full transition-all ${
-          props.value >= 90 ? 'bg-red-500' :
-          props.value >= 75 ? 'bg-yellow-500' :
-          'bg-green-500'
+          props.value >= 90 ? 'bg-red-500' : props.value >= 75 ? 'bg-yellow-500' : 'bg-green-500'
         }`}
         style={{ width: `${props.value}%` }}
       />
@@ -63,24 +63,29 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         border={false}
         hoverable
         class={`flex items-center gap-2 px-3 py-1.5 ${
-          props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
-          !isOnline() ? 'border-red-500' :
-          alertStyles.hasAlert ? 'border-orange-500' :
-          'border-gray-200 dark:border-gray-700'
+          props.isSelected
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : !isOnline()
+              ? 'border-red-500'
+              : alertStyles.hasAlert
+                ? 'border-orange-500'
+                : 'border-gray-200 dark:border-gray-700'
         } border transition-all cursor-pointer hover:scale-[1.01]`}
         onClick={props.onClick}
       >
         {/* Status dot */}
-        <span class={`w-2 h-2 rounded-full ${
-          props.node.connectionHealth === 'degraded' 
-            ? 'bg-yellow-500' 
-            : isOnline() 
-              ? 'bg-green-500' 
-              : 'bg-red-500'
-        }`} />
-        
+        <span
+          class={`w-2 h-2 rounded-full ${
+            props.node.connectionHealth === 'degraded'
+              ? 'bg-yellow-500'
+              : isOnline()
+                ? 'bg-green-500'
+                : 'bg-red-500'
+          }`}
+        />
+
         {/* Node name */}
-        <a 
+        <a
           href={props.node.host || `https://${props.node.name}:8006`}
           target="_blank"
           class="font-medium text-sm w-24 truncate hover:text-blue-600 dark:hover:text-blue-400"
@@ -88,14 +93,16 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         >
           {props.node.name}
         </a>
-        
+
         {/* Cluster/Standalone indicator */}
         <Show when={props.node.isClusterMember !== undefined}>
-          <span class={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
-            props.node.isClusterMember 
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
-          }`}>
+          <span
+            class={`text-[9px] px-1 py-0.5 rounded-full font-medium ${
+              props.node.isClusterMember
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+            }`}
+          >
             {props.node.isClusterMember ? props.node.clusterName?.slice(0, 3).toUpperCase() : 'SA'}
           </span>
         </Show>
@@ -133,23 +140,28 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
       border={false}
       hoverable
       class={`border ${
-        props.isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' :
-        !isOnline() ? 'border-red-500' :
-        alertStyles.hasAlert ? 'border-orange-500' :
-        'border-gray-200 dark:border-gray-700'
+        props.isSelected
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+          : !isOnline()
+            ? 'border-red-500'
+            : alertStyles.hasAlert
+              ? 'border-orange-500'
+              : 'border-gray-200 dark:border-gray-700'
       } cursor-pointer transition-all hover:scale-[1.02]`}
       onClick={props.onClick}
     >
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <span class={`w-2 h-2 rounded-full ${
-            props.node.connectionHealth === 'degraded' 
-              ? 'bg-yellow-500' 
-              : isOnline() 
-                ? 'bg-green-500' 
-                : 'bg-red-500'
-          }`} />
-          <a 
+          <span
+            class={`w-2 h-2 rounded-full ${
+              props.node.connectionHealth === 'degraded'
+                ? 'bg-yellow-500'
+                : isOnline()
+                  ? 'bg-green-500'
+                  : 'bg-red-500'
+            }`}
+          />
+          <a
             href={props.node.host || `https://${props.node.name}:8006`}
             target="_blank"
             class="font-semibold text-sm hover:text-blue-600 dark:hover:text-blue-400"
@@ -158,11 +170,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           </a>
           {/* Cluster/Standalone indicator */}
           <Show when={props.node.isClusterMember !== undefined}>
-            <span class={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-              props.node.isClusterMember 
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
-                : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
-            }`}>
+            <span
+              class={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                props.node.isClusterMember
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+              }`}
+            >
               {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
             </span>
           </Show>
@@ -180,23 +194,17 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         <div class="flex items-center gap-2">
           <span class="text-xs w-8 text-gray-600 dark:text-gray-400">CPU</span>
           <MiniProgressBar value={cpuPercent()} type="cpu" />
-          <span class={`text-xs ${getMetricColor(cpuPercent(), 'cpu')}`}>
-            {cpuPercent()}%
-          </span>
+          <span class={`text-xs ${getMetricColor(cpuPercent(), 'cpu')}`}>{cpuPercent()}%</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs w-8 text-gray-600 dark:text-gray-400">Mem</span>
           <MiniProgressBar value={memPercent()} type="mem" />
-          <span class={`text-xs ${getMetricColor(memPercent(), 'mem')}`}>
-            {memPercent()}%
-          </span>
+          <span class={`text-xs ${getMetricColor(memPercent(), 'mem')}`}>{memPercent()}%</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs w-8 text-gray-600 dark:text-gray-400">Disk</span>
           <MiniProgressBar value={diskPercent()} type="disk" />
-          <span class={`text-xs ${getMetricColor(diskPercent(), 'disk')}`}>
-            {diskPercent()}%
-          </span>
+          <span class={`text-xs ${getMetricColor(diskPercent(), 'disk')}`}>{diskPercent()}%</span>
         </div>
       </div>
     </Card>

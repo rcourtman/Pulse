@@ -23,12 +23,12 @@ type Version struct {
 
 // VersionInfo contains detailed version information
 type VersionInfo struct {
-	Version       string `json:"version"`
-	Build         string `json:"build"`
-	Runtime       string `json:"runtime"`
-	Channel       string `json:"channel,omitempty"`
-	IsDocker      bool   `json:"isDocker"`
-	IsDevelopment bool   `json:"isDevelopment"`
+	Version        string `json:"version"`
+	Build          string `json:"build"`
+	Runtime        string `json:"runtime"`
+	Channel        string `json:"channel,omitempty"`
+	IsDocker       bool   `json:"isDocker"`
+	IsDevelopment  bool   `json:"isDevelopment"`
 	DeploymentType string `json:"deploymentType"`
 }
 
@@ -36,19 +36,19 @@ type VersionInfo struct {
 func ParseVersion(versionStr string) (*Version, error) {
 	// Remove 'v' prefix if present
 	versionStr = strings.TrimPrefix(versionStr, "v")
-	
+
 	// Regular expression for semantic versioning
 	re := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
 	matches := re.FindStringSubmatch(versionStr)
-	
+
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("invalid version format: %s", versionStr)
 	}
-	
+
 	major, _ := strconv.Atoi(matches[1])
 	minor, _ := strconv.Atoi(matches[2])
 	patch, _ := strconv.Atoi(matches[3])
-	
+
 	return &Version{
 		Major:      major,
 		Minor:      minor,
@@ -72,9 +72,10 @@ func (v *Version) String() string {
 
 // Compare compares two versions
 // Returns:
-//   -1 if v < other
-//    0 if v == other
-//    1 if v > other
+//
+//	-1 if v < other
+//	 0 if v == other
+//	 1 if v > other
 func (v *Version) Compare(other *Version) int {
 	if v.Major != other.Major {
 		return compareInts(v.Major, other.Major)
@@ -85,7 +86,7 @@ func (v *Version) Compare(other *Version) int {
 	if v.Patch != other.Patch {
 		return compareInts(v.Patch, other.Patch)
 	}
-	
+
 	// Handle prerelease versions
 	if v.Prerelease == "" && other.Prerelease != "" {
 		return 1 // v is release, other is prerelease
@@ -102,7 +103,7 @@ func (v *Version) Compare(other *Version) int {
 		}
 		return strings.Compare(v.Prerelease, other.Prerelease)
 	}
-	
+
 	return 0
 }
 
@@ -136,14 +137,14 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			DeploymentType: GetDeploymentType(),
 		}, nil
 	}
-	
+
 	// Try to read from VERSION file in multiple locations
 	versionPaths := []string{
 		"VERSION",
 		"/opt/pulse/VERSION",
 		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
 	}
-	
+
 	for _, path := range versionPaths {
 		versionBytes, err := os.ReadFile(path)
 		if err == nil {
@@ -164,7 +165,7 @@ func GetCurrentVersion() (*VersionInfo, error) {
 			}, nil
 		}
 	}
-	
+
 	// Final fallback
 	version := "4.15.0-test.448"
 	channel := "stable"
@@ -190,12 +191,12 @@ func getGitVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	version := strings.TrimSpace(string(output))
 	if version == "" {
 		return "", fmt.Errorf("no version found")
 	}
-	
+
 	return version, nil
 }
 
@@ -205,17 +206,17 @@ func isDockerEnvironment() bool {
 	if fileExists("/.dockerenv") {
 		return true
 	}
-	
+
 	// Check cgroup for Docker - with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, "cat", "/proc/1/cgroup")
 	data, err := cmd.Output()
 	if err == nil && strings.Contains(string(data), "docker") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -232,7 +233,7 @@ func GetDeploymentType() string {
 	if isDockerEnvironment() {
 		return "docker"
 	}
-	
+
 	// Check for ProxmoxVE LXC installation (has update command)
 	if fileExists("/bin/update") {
 		// Read file directly instead of using exec.Command
@@ -241,7 +242,7 @@ func GetDeploymentType() string {
 			return "proxmoxve"
 		}
 	}
-	
+
 	// Check for systemd service to determine installation type
 	if fileExists("/etc/systemd/system/pulse-backend.service") {
 		// Read file directly instead of using exec.Command
@@ -254,16 +255,16 @@ func GetDeploymentType() string {
 		}
 		return "systemd"
 	}
-	
+
 	if fileExists("/etc/systemd/system/pulse.service") {
 		return "systemd"
 	}
-	
+
 	// Development or manual run
 	if strings.Contains(os.Args[0], "go-build") || fileExists(".git") {
 		return "development"
 	}
-	
+
 	return "manual"
 }
 

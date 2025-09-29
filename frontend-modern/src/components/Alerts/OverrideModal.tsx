@@ -4,13 +4,13 @@ import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
 interface Override {
-  id?: string;  // Full guest ID (e.g. "Main-node1-105")
+  id?: string; // Full guest ID (e.g. "Main-node1-105")
   guestName: string;
   vmid: number;
   type: string;
   node: string;
   instance?: string;
-  disabled?: boolean;  // Completely disable alerts for this guest
+  disabled?: boolean; // Completely disable alerts for this guest
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -27,14 +27,21 @@ interface OverrideModalProps {
   onClose: () => void;
   onSave: (override: Override) => void;
   existingOverride?: Override;
-  guests: Array<{ id: string; name: string; vmid: number; type: string; node: string; instance: string }>;
+  guests: Array<{
+    id: string;
+    name: string;
+    vmid: number;
+    type: string;
+    node: string;
+    instance: string;
+  }>;
 }
 
 export function OverrideModal(props: OverrideModalProps) {
   // Initialize state only when modal opens, not on every render
   const [selectedGuest, setSelectedGuest] = createSignal<string>('');
   const [alertsDisabled, setAlertsDisabled] = createSignal(false);
-  
+
   // Store the select element ref
   let selectRef: HTMLSelectElement | undefined;
   const [thresholds, setThresholds] = createSignal({
@@ -44,9 +51,9 @@ export function OverrideModal(props: OverrideModalProps) {
     diskRead: 0,
     diskWrite: 0,
     networkIn: 0,
-    networkOut: 0
+    networkOut: 0,
   });
-  
+
   const [enabledMetrics, setEnabledMetrics] = createSignal({
     cpu: false,
     memory: false,
@@ -54,9 +61,9 @@ export function OverrideModal(props: OverrideModalProps) {
     diskRead: false,
     diskWrite: false,
     networkIn: false,
-    networkOut: false
+    networkOut: false,
   });
-  
+
   // Maintain select value when guests change
   createEffect(() => {
     if (selectRef && selectedGuest()) {
@@ -69,7 +76,7 @@ export function OverrideModal(props: OverrideModalProps) {
       });
     }
   });
-  
+
   // Reset state when modal opens
   createEffect(() => {
     if (props.isOpen) {
@@ -83,7 +90,7 @@ export function OverrideModal(props: OverrideModalProps) {
           diskRead: props.existingOverride.thresholds.diskRead || 0,
           diskWrite: props.existingOverride.thresholds.diskWrite || 0,
           networkIn: props.existingOverride.thresholds.networkIn || 0,
-          networkOut: props.existingOverride.thresholds.networkOut || 0
+          networkOut: props.existingOverride.thresholds.networkOut || 0,
         });
         setEnabledMetrics({
           cpu: props.existingOverride.thresholds.cpu !== undefined,
@@ -92,7 +99,7 @@ export function OverrideModal(props: OverrideModalProps) {
           diskRead: props.existingOverride.thresholds.diskRead !== undefined,
           diskWrite: props.existingOverride.thresholds.diskWrite !== undefined,
           networkIn: props.existingOverride.thresholds.networkIn !== undefined,
-          networkOut: props.existingOverride.thresholds.networkOut !== undefined
+          networkOut: props.existingOverride.thresholds.networkOut !== undefined,
         });
       } else {
         // Reset to defaults for new override
@@ -105,7 +112,7 @@ export function OverrideModal(props: OverrideModalProps) {
           diskRead: 0,
           diskWrite: 0,
           networkIn: 0,
-          networkOut: 0
+          networkOut: 0,
         });
         setEnabledMetrics({
           cpu: false,
@@ -114,20 +121,20 @@ export function OverrideModal(props: OverrideModalProps) {
           diskRead: false,
           diskWrite: false,
           networkIn: false,
-          networkOut: false
+          networkOut: false,
         });
       }
     }
   });
-  
+
   const handleSave = () => {
-    const guest = props.guests.find(g => g.vmid.toString() === selectedGuest());
+    const guest = props.guests.find((g) => g.vmid.toString() === selectedGuest());
     if (!guest) return;
-    
+
     const enabledThresholds: Override['thresholds'] = {};
     const enabled = enabledMetrics();
     const thresh = thresholds();
-    
+
     if (enabled.cpu && thresh.cpu !== undefined) enabledThresholds.cpu = thresh.cpu;
     if (enabled.memory && thresh.memory !== undefined) enabledThresholds.memory = thresh.memory;
     if (enabled.disk && thresh.disk !== undefined) enabledThresholds.disk = thresh.disk;
@@ -135,19 +142,19 @@ export function OverrideModal(props: OverrideModalProps) {
     if (enabled.diskWrite && thresh.diskWrite) enabledThresholds.diskWrite = thresh.diskWrite;
     if (enabled.networkIn && thresh.networkIn) enabledThresholds.networkIn = thresh.networkIn;
     if (enabled.networkOut && thresh.networkOut) enabledThresholds.networkOut = thresh.networkOut;
-    
+
     props.onSave({
-      id: guest.id,  // Pass the full guest ID
+      id: guest.id, // Pass the full guest ID
       guestName: guest.name,
       vmid: guest.vmid,
       type: guest.type,
       node: guest.node,
       instance: guest.instance,
       disabled: alertsDisabled(),
-      thresholds: enabledThresholds
+      thresholds: enabledThresholds,
     });
   };
-  
+
   return (
     <Show when={props.isOpen}>
       <Portal>
@@ -161,7 +168,7 @@ export function OverrideModal(props: OverrideModalProps) {
                 titleClass="text-gray-800 dark:text-gray-200"
               />
             </div>
-            
+
             {/* Content */}
             <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
               {/* Guest Selection */}
@@ -191,7 +198,7 @@ export function OverrideModal(props: OverrideModalProps) {
                   </select>
                 </div>
               </Show>
-              
+
               {/* Disable Alerts Option */}
               <div class="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                 <input
@@ -210,7 +217,7 @@ export function OverrideModal(props: OverrideModalProps) {
                   </p>
                 </label>
               </div>
-              
+
               {/* Threshold Overrides */}
               <div class={`space-y-4 ${alertsDisabled() ? 'opacity-50 pointer-events-none' : ''}`}>
                 <SectionHeader
@@ -218,13 +225,15 @@ export function OverrideModal(props: OverrideModalProps) {
                   size="sm"
                   titleClass="text-gray-700 dark:text-gray-300"
                 />
-                
+
                 {/* CPU */}
                 <div class="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={enabledMetrics().cpu}
-                    onChange={(e) => setEnabledMetrics({...enabledMetrics(), cpu: e.currentTarget.checked})}
+                    onChange={(e) =>
+                      setEnabledMetrics({ ...enabledMetrics(), cpu: e.currentTarget.checked })
+                    }
                     class="mt-1 rounded border-gray-300 dark:border-gray-600"
                   />
                   <div class="flex-1 space-y-2">
@@ -233,7 +242,7 @@ export function OverrideModal(props: OverrideModalProps) {
                       <div class="flex-1">
                         <ThresholdSlider
                           value={thresholds().cpu || 80}
-                          onChange={(v) => setThresholds({...thresholds(), cpu: v})}
+                          onChange={(v) => setThresholds({ ...thresholds(), cpu: v })}
                           type="cpu"
                         />
                       </div>
@@ -243,13 +252,15 @@ export function OverrideModal(props: OverrideModalProps) {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Memory */}
                 <div class="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={enabledMetrics().memory}
-                    onChange={(e) => setEnabledMetrics({...enabledMetrics(), memory: e.currentTarget.checked})}
+                    onChange={(e) =>
+                      setEnabledMetrics({ ...enabledMetrics(), memory: e.currentTarget.checked })
+                    }
                     class="mt-1 rounded border-gray-300 dark:border-gray-600"
                   />
                   <div class="flex-1 space-y-2">
@@ -258,7 +269,7 @@ export function OverrideModal(props: OverrideModalProps) {
                       <div class="flex-1">
                         <ThresholdSlider
                           value={thresholds().memory || 85}
-                          onChange={(v) => setThresholds({...thresholds(), memory: v})}
+                          onChange={(v) => setThresholds({ ...thresholds(), memory: v })}
                           type="memory"
                         />
                       </div>
@@ -268,13 +279,15 @@ export function OverrideModal(props: OverrideModalProps) {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Disk */}
                 <div class="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={enabledMetrics().disk}
-                    onChange={(e) => setEnabledMetrics({...enabledMetrics(), disk: e.currentTarget.checked})}
+                    onChange={(e) =>
+                      setEnabledMetrics({ ...enabledMetrics(), disk: e.currentTarget.checked })
+                    }
                     class="mt-1 rounded border-gray-300 dark:border-gray-600"
                   />
                   <div class="flex-1 space-y-2">
@@ -283,7 +296,7 @@ export function OverrideModal(props: OverrideModalProps) {
                       <div class="flex-1">
                         <ThresholdSlider
                           value={thresholds().disk || 90}
-                          onChange={(v) => setThresholds({...thresholds(), disk: v})}
+                          onChange={(v) => setThresholds({ ...thresholds(), disk: v })}
                           type="disk"
                         />
                       </div>
@@ -293,21 +306,31 @@ export function OverrideModal(props: OverrideModalProps) {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* I/O Metrics */}
                 <div class="grid grid-cols-2 gap-4">
                   <div class="flex items-start gap-3">
                     <input
                       type="checkbox"
                       checked={enabledMetrics().diskRead}
-                      onChange={(e) => setEnabledMetrics({...enabledMetrics(), diskRead: e.currentTarget.checked})}
+                      onChange={(e) =>
+                        setEnabledMetrics({
+                          ...enabledMetrics(),
+                          diskRead: e.currentTarget.checked,
+                        })
+                      }
                       class="mt-1 rounded border-gray-300 dark:border-gray-600"
                     />
                     <div class="flex-1 space-y-2">
                       <label class="text-sm text-gray-600 dark:text-gray-400">Disk Read</label>
                       <select
                         value={thresholds().diskRead}
-                        onChange={(e) => setThresholds({...thresholds(), diskRead: parseInt(e.currentTarget.value)})}
+                        onChange={(e) =>
+                          setThresholds({
+                            ...thresholds(),
+                            diskRead: parseInt(e.currentTarget.value),
+                          })
+                        }
                         class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
                       >
                         <option value="0">Off</option>
@@ -318,19 +341,29 @@ export function OverrideModal(props: OverrideModalProps) {
                       </select>
                     </div>
                   </div>
-                  
+
                   <div class="flex items-start gap-3">
                     <input
                       type="checkbox"
                       checked={enabledMetrics().diskWrite}
-                      onChange={(e) => setEnabledMetrics({...enabledMetrics(), diskWrite: e.currentTarget.checked})}
+                      onChange={(e) =>
+                        setEnabledMetrics({
+                          ...enabledMetrics(),
+                          diskWrite: e.currentTarget.checked,
+                        })
+                      }
                       class="mt-1 rounded border-gray-300 dark:border-gray-600"
                     />
                     <div class="flex-1 space-y-2">
                       <label class="text-sm text-gray-600 dark:text-gray-400">Disk Write</label>
                       <select
                         value={thresholds().diskWrite}
-                        onChange={(e) => setThresholds({...thresholds(), diskWrite: parseInt(e.currentTarget.value)})}
+                        onChange={(e) =>
+                          setThresholds({
+                            ...thresholds(),
+                            diskWrite: parseInt(e.currentTarget.value),
+                          })
+                        }
                         class="w-full px-2 py-1 text-sm border rounded dark:bg-gray-700 dark:border-gray-600"
                       >
                         <option value="0">Off</option>
@@ -344,16 +377,18 @@ export function OverrideModal(props: OverrideModalProps) {
                 </div>
               </div>
             </div>
-            
+
             {/* Footer */}
             <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-              <button type="button"
+              <button
+                type="button"
                 onClick={props.onClose}
                 class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Cancel
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleSave}
                 disabled={!selectedGuest() && !props.existingOverride}
                 class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

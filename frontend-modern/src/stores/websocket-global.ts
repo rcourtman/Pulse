@@ -12,9 +12,9 @@ export function getGlobalWebSocketStore() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Use relative URL that works behind proxies
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
+
     window.__pulseWsStore = createWebSocketStore(wsUrl);
   }
-  
+
   return window.__pulseWsStore;
 }

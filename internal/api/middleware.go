@@ -35,16 +35,16 @@ func ErrorHandler(next http.Handler) http.Handler {
 		if r.URL.Path == "" {
 			r.URL.Path = "/"
 		}
-		
+
 		// Skip error handling for WebSocket endpoints
 		if r.Header.Get("Upgrade") == "websocket" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		
+
 		// Create a custom response writer to capture status codes
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		// Recover from panics
 		defer func() {
 			if err := recover(); err != nil {
@@ -54,18 +54,18 @@ func ErrorHandler(next http.Handler) http.Handler {
 					Str("method", r.Method).
 					Bytes("stack", debug.Stack()).
 					Msg("Panic recovered in API handler")
-				
-				writeErrorResponse(w, http.StatusInternalServerError, "internal_error", 
+
+				writeErrorResponse(w, http.StatusInternalServerError, "internal_error",
 					"An unexpected error occurred", nil)
 			}
 		}()
-		
+
 		// Add request ID to context
 		requestID := fmt.Sprintf("%d", time.Now().UnixNano())
-		
+
 		// Call the next handler
 		next.ServeHTTP(rw, r)
-		
+
 		// Log errors (4xx and 5xx)
 		if rw.statusCode >= 400 {
 			log.Warn().
@@ -87,7 +87,7 @@ func TimeoutHandler(timeout time.Duration) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			
+
 			http.TimeoutHandler(next, timeout, "Request timeout").ServeHTTP(w, r)
 		})
 	}
@@ -97,21 +97,21 @@ func TimeoutHandler(timeout time.Duration) func(http.Handler) http.Handler {
 func JSONHandler(handler func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err := handler(w, r); err != nil {
 			// Check if it's already an APIError
 			if apiErr, ok := err.(*APIError); ok {
 				writeErrorResponse(w, apiErr.StatusCode, apiErr.Code, apiErr.ErrorMessage, apiErr.Details)
 				return
 			}
-			
+
 			// Generic error
 			log.Error().Err(err).
 				Str("path", r.URL.Path).
 				Str("method", r.Method).
 				Msg("Handler error")
-			
-			writeErrorResponse(w, http.StatusInternalServerError, "internal_error", 
+
+			writeErrorResponse(w, http.StatusInternalServerError, "internal_error",
 				"An error occurred processing the request", nil)
 		}
 	}
@@ -121,7 +121,7 @@ func JSONHandler(handler func(w http.ResponseWriter, r *http.Request) error) htt
 func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	resp := APIError{
 		ErrorMessage: message,
 		Code:         code,
@@ -129,7 +129,7 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 		Timestamp:    time.Now().Unix(),
 		Details:      details,
 	}
-	
+
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Error().Err(err).Msg("Failed to encode error response")
 	}

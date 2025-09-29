@@ -2,7 +2,7 @@ package monitoring
 
 import (
 	"sync"
-	
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
 
@@ -39,7 +39,7 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	defer rt.mu.Unlock()
 
 	prev, exists := rt.previous[guestID]
-	
+
 	if !exists {
 		// No previous data, store it and return -1 to indicate no data available
 		rt.previous[guestID] = current
@@ -48,10 +48,10 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 
 	// Check if the values have actually changed (detect stale data)
 	// If all cumulative values are the same, we're getting cached data from Proxmox
-	if current.DiskRead == prev.DiskRead && 
-	   current.DiskWrite == prev.DiskWrite && 
-	   current.NetworkIn == prev.NetworkIn && 
-	   current.NetworkOut == prev.NetworkOut {
+	if current.DiskRead == prev.DiskRead &&
+		current.DiskWrite == prev.DiskWrite &&
+		current.NetworkIn == prev.NetworkIn &&
+		current.NetworkOut == prev.NetworkOut {
 		// Data hasn't changed - return last known good rates
 		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
 			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.NetInRate, lastRate.NetOutRate
@@ -59,7 +59,7 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 		// No last rates available, return 0
 		return 0, 0, 0, 0
 	}
-	
+
 	// Data has changed, update our cache
 	rt.previous[guestID] = current
 

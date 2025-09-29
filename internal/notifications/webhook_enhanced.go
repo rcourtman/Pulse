@@ -15,13 +15,13 @@ import (
 // EnhancedWebhookConfig extends WebhookConfig with template support
 type EnhancedWebhookConfig struct {
 	WebhookConfig
-	Service          string                 `json:"service"`          // discord, slack, teams, pagerduty, generic
-	PayloadTemplate  string                 `json:"payloadTemplate"`  // Go template for payload
-	RetryEnabled     bool                   `json:"retryEnabled"`
-	RetryCount       int                    `json:"retryCount"`
-	FilterRules      WebhookFilterRules     `json:"filterRules"`
-	CustomFields     map[string]interface{} `json:"customFields"`     // For template variables
-	ResponseLogging  bool                   `json:"responseLogging"`  // Log response for debugging
+	Service         string                 `json:"service"`         // discord, slack, teams, pagerduty, generic
+	PayloadTemplate string                 `json:"payloadTemplate"` // Go template for payload
+	RetryEnabled    bool                   `json:"retryEnabled"`
+	RetryCount      int                    `json:"retryCount"`
+	FilterRules     WebhookFilterRules     `json:"filterRules"`
+	CustomFields    map[string]interface{} `json:"customFields"`    // For template variables
+	ResponseLogging bool                   `json:"responseLogging"` // Log response for debugging
 }
 
 // WebhookFilterRules defines filtering for this webhook
@@ -48,12 +48,12 @@ type WebhookPayloadData struct {
 	StartTime    string
 	Duration     string
 	Timestamp    string
-	
+
 	// Additional context
 	CustomFields map[string]interface{}
 	AlertCount   int
 	Alerts       []*alerts.Alert // For grouped alerts
-	ChatID       string           // For Telegram webhooks
+	ChatID       string          // For Telegram webhooks
 }
 
 // SendEnhancedWebhook sends a webhook with template support
@@ -69,7 +69,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 
 	// Prepare template data
 	data := n.prepareWebhookData(alert, webhook.CustomFields)
-	
+
 	// Generate payload from template with service-specific handling
 	payload, err := n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	if err != nil {
@@ -80,7 +80,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	if webhook.RetryEnabled {
 		return n.sendWebhookWithRetry(webhook, payload)
 	}
-	
+
 	return n.sendWebhookOnce(webhook, payload)
 }
 
@@ -89,7 +89,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 /*
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
-	
+
 	return WebhookPayloadData{
 		ID:           alert.ID,
 		Level:        string(alert.Level),
@@ -116,7 +116,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 // shouldSendWebhook checks if alert matches webhook filter rules
 func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, alert *alerts.Alert) bool {
 	rules := webhook.FilterRules
-	
+
 	// Check level filter
 	if len(rules.Levels) > 0 {
 		found := false
@@ -130,7 +130,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 			return false
 		}
 	}
-	
+
 	// Check type filter
 	if len(rules.Types) > 0 {
 		found := false
@@ -144,7 +144,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 			return false
 		}
 	}
-	
+
 	// Check node filter
 	if len(rules.Nodes) > 0 {
 		found := false
@@ -158,7 +158,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 			return false
 		}
 	}
-	
+
 	// Check resource type filter
 	if len(rules.ResourceTypes) > 0 {
 		resourceType, ok := alert.Metadata["resourceType"].(string)
@@ -176,7 +176,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -186,11 +186,11 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 	if maxRetries <= 0 {
 		maxRetries = 3
 	}
-	
+
 	var lastErr error
 	backoff := time.Second
 	retryableErrors := 0
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			log.Debug().
@@ -205,7 +205,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				backoff = 30 * time.Second
 			}
 		}
-		
+
 		err := n.sendWebhookOnce(webhook, payload)
 		if err == nil {
 			if attempt > 0 {
@@ -221,7 +221,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				Str("service", webhook.Service).
 				Int("payloadSize", len(payload)).
 				Msg("Webhook delivered successfully")
-			
+
 			// Track successful delivery
 			delivery := WebhookDelivery{
 				WebhookName:   webhook.Name,
@@ -235,18 +235,18 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				PayloadSize:   len(payload),
 			}
 			n.addWebhookDelivery(delivery)
-			
+
 			return nil
 		}
-		
+
 		lastErr = err
-		
+
 		// Determine if error is retryable
 		isRetryable := isRetryableWebhookError(err)
 		if isRetryable {
 			retryableErrors++
 		}
-		
+
 		log.Warn().
 			Err(err).
 			Str("webhook", webhook.Name).
@@ -255,7 +255,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			Int("maxRetries", maxRetries+1).
 			Bool("retryable", isRetryable).
 			Msg("Webhook attempt failed")
-		
+
 		// If error is not retryable, break early
 		if !isRetryable && attempt == 0 {
 			log.Error().
@@ -265,7 +265,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			break
 		}
 	}
-	
+
 	// Final error logging with summary
 	log.Error().
 		Err(lastErr).
@@ -274,7 +274,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		Int("totalAttempts", maxRetries+1).
 		Int("retryableErrors", retryableErrors).
 		Msg("Webhook delivery failed after all retry attempts")
-	
+
 	// Track failed delivery
 	delivery := WebhookDelivery{
 		WebhookName:   webhook.Name,
@@ -289,45 +289,45 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		PayloadSize:   len(payload),
 	}
 	n.addWebhookDelivery(delivery)
-	
+
 	return fmt.Errorf("webhook failed after %d attempts: %w", maxRetries+1, lastErr)
 }
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry
 func isRetryableWebhookError(err error) bool {
 	errStr := strings.ToLower(err.Error())
-	
+
 	// Network-related errors that should be retried
 	if strings.Contains(errStr, "timeout") ||
-	   strings.Contains(errStr, "connection refused") ||
-	   strings.Contains(errStr, "connection reset") ||
-	   strings.Contains(errStr, "no such host") ||
-	   strings.Contains(errStr, "network unreachable") {
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network unreachable") {
 		return true
 	}
-	
+
 	// HTTP status codes that should be retried
 	if strings.Contains(errStr, "status 429") || // Rate limited
-	   strings.Contains(errStr, "status 502") || // Bad Gateway
-	   strings.Contains(errStr, "status 503") || // Service Unavailable
-	   strings.Contains(errStr, "status 504") {  // Gateway Timeout
+		strings.Contains(errStr, "status 502") || // Bad Gateway
+		strings.Contains(errStr, "status 503") || // Service Unavailable
+		strings.Contains(errStr, "status 504") { // Gateway Timeout
 		return true
 	}
-	
+
 	// 5xx server errors are generally retryable
 	for i := 500; i <= 599; i++ {
 		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
 			return true
 		}
 	}
-	
+
 	// 4xx client errors are generally not retryable
 	for i := 400; i <= 499; i++ {
 		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
 			return false
 		}
 	}
-	
+
 	// Default to retryable for unknown errors
 	return true
 }
@@ -366,7 +366,9 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 
 	// Read response body for error handling and logging
 	var respBody bytes.Buffer
-	respBody.ReadFrom(resp.Body)
+	if _, err := respBody.ReadFrom(resp.Body); err != nil {
+		return fmt.Errorf("failed to read webhook response body: %w", err)
+	}
 	responseBody := respBody.String()
 
 	// Log response if enabled or if there's an error
@@ -410,7 +412,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	if instanceURL == "" {
 		instanceURL = "https://192.168.1.100:8006"
 	}
-	
+
 	// Create test alert
 	testAlert := &alerts.Alert{
 		ID:           "test-" + time.Now().Format("20060102-150405"),
@@ -432,7 +434,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 
 	// Prepare data
 	data := n.prepareWebhookData(testAlert, webhook.CustomFields)
-	
+
 	// For Telegram, extract chat_id from URL if present
 	if webhook.Service == "telegram" {
 		if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
@@ -441,7 +443,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		// Note: For test webhooks, we don't fail if chat_id is missing
 		// as this may be intentional during testing
 	}
-	
+
 	// Generate payload with service-specific handling
 	payload, err := n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	if err != nil {
@@ -475,9 +477,9 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	if webhook.Service == "ntfy" {
 		// Set Content-Type for ntfy (plain text)
 		req.Header.Set("Content-Type", "text/plain")
-		
+
 		// Set dynamic headers based on alert level
-		title := fmt.Sprintf("%s: %s", 
+		title := fmt.Sprintf("%s: %s",
 			func() string {
 				switch testAlert.Level {
 				case alerts.AlertLevelCritical:
@@ -491,7 +493,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			testAlert.ResourceName,
 		)
 		req.Header.Set("Title", title)
-		
+
 		priority := func() string {
 			switch testAlert.Level {
 			case alerts.AlertLevelCritical:
@@ -503,7 +505,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			}
 		}()
 		req.Header.Set("Priority", priority)
-		
+
 		tags := fmt.Sprintf("%s,pulse,%s",
 			func() string {
 				switch testAlert.Level {
@@ -519,7 +521,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		)
 		req.Header.Set("Tags", tags)
 	}
-	
+
 	// Apply any custom headers from webhook config (these override defaults)
 	for key, value := range webhook.Headers {
 		// Skip template-like headers (those with {{)
@@ -527,7 +529,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			req.Header.Set(key, value)
 		}
 	}
-	
+
 	if webhook.Service != "ntfy" && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -546,7 +548,9 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 
 	// Read response
 	var respBody bytes.Buffer
-	respBody.ReadFrom(resp.Body)
+	if _, err := respBody.ReadFrom(resp.Body); err != nil {
+		return 0, "", fmt.Errorf("failed to read webhook response body: %w", err)
+	}
 
 	return resp.StatusCode, respBody.String(), nil
 }

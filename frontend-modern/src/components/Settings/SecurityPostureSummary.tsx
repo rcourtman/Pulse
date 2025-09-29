@@ -65,9 +65,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
       key: 'https',
       label: 'HTTPS',
       enabled: Boolean(props.status.hasHTTPS),
-      description: props.status.hasHTTPS
-        ? 'Connection is encrypted.'
-        : 'Serving over HTTP.',
+      description: props.status.hasHTTPS ? 'Connection is encrypted.' : 'Serving over HTTP.',
     },
     {
       key: 'audit',
@@ -102,7 +100,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                   : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
               } px-3 py-1 text-xs font-semibold rounded-full`}
             >
-              {props.status.publicAccess && !props.status.isPrivateNetwork ? 'Public network access' : 'Private network access'}
+              {props.status.publicAccess && !props.status.isPrivateNetwork
+                ? 'Public network access'
+                : 'Private network access'}
             </span>
             <Show when={props.status.clientIP}>
               <span class="hidden md:inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -114,11 +114,22 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
 
         <Show when={props.status.requiresAuth}>
           <div class="flex items-start gap-2 p-3 rounded-lg bg-green-50 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800">
-            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            <svg
+              class="w-4 h-4 mt-0.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 13l4 4L19 7"
+              />
             </svg>
             <span>
-              Authentication is required for this instance. Keep at least one trusted login path enabled before disabling password auth.
+              Authentication is required for this instance. Keep at least one trusted login path
+              enabled before disabling password auth.
             </span>
           </div>
         </Show>
@@ -128,14 +139,11 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
             {(item) => (
               <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800">
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.label}</span>
+                  <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {item.label}
+                  </span>
                   <span class={badgeClasses(item.enabled)}>
-                    <svg
-                      class="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -146,7 +154,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                     {item.enabled ? 'On' : 'Off'}
                   </span>
                 </div>
-                <p class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{item.description}</p>
+                <p class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  {item.description}
+                </p>
               </div>
             )}
           </For>

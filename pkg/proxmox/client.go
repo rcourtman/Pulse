@@ -26,26 +26,26 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 		*f = FlexInt(i)
 		return nil
 	}
-	
+
 	// Try as float (handles cpulimit like 1.5)
 	var fl float64
 	if err := json.Unmarshal(data, &fl); err == nil {
 		*f = FlexInt(int(fl))
 		return nil
 	}
-	
+
 	// If that fails, try as string
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	
+
 	// Parse string to float first (handles "1.5" format from cpulimit)
 	floatVal, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return err
 	}
-	
+
 	// Convert to int
 	*f = FlexInt(int(floatVal))
 	return nil
@@ -85,7 +85,7 @@ type auth struct {
 // NewClient creates a new Proxmox VE API client
 func NewClient(cfg ClientConfig) (*Client, error) {
 	var user, realm string
-	
+
 	// Log what auth method we're using
 	log.Debug().
 		Str("host", cfg.Host).
@@ -94,7 +94,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		Str("tokenName", cfg.TokenName).
 		Str("user", cfg.User).
 		Msg("Creating Proxmox client")
-	
+
 	// For token authentication, we don't need user@realm format
 	if cfg.TokenName != "" && cfg.TokenValue != "" {
 		// Extract user and realm from token name (format: user@realm!tokenname)
@@ -135,7 +135,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			tokenName = parts[1] // Just the token name part (e.g., "pulse-token")
 		}
 	}
-	
+
 	log.Debug().
 		Str("user", user).
 		Str("realm", realm).
@@ -325,7 +325,7 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		
+
 		// Create base error with helpful guidance for common issues
 		var err error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
@@ -345,7 +345,7 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 		} else {
 			err = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		}
-		
+
 		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
 		if resp.StatusCode == 595 || resp.StatusCode == 401 || resp.StatusCode == 403 {
 			log.Warn().
@@ -356,13 +356,13 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 				Str("tokenName", c.config.TokenName).
 				Msg("Proxmox authentication error")
 		}
-		
+
 		// Wrap with appropriate error type
 		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
 			// Import errors package at top of file
 			return nil, fmt.Errorf("authentication error: %w", err)
 		}
-		
+
 		return nil, err
 	}
 
@@ -381,33 +381,33 @@ func (c *Client) post(ctx context.Context, path string, data url.Values) (*http.
 
 // Node represents a Proxmox VE node
 type Node struct {
-	Node   string  `json:"node"`
-	Status string  `json:"status"`
-	CPU    float64 `json:"cpu"`
-	MaxCPU int     `json:"maxcpu"`
-	Mem    uint64  `json:"mem"`
-	MaxMem uint64  `json:"maxmem"`
-	Disk   uint64  `json:"disk"`
-	MaxDisk uint64 `json:"maxdisk"`
-	Uptime uint64  `json:"uptime"`
-	Level  string  `json:"level"`
+	Node    string  `json:"node"`
+	Status  string  `json:"status"`
+	CPU     float64 `json:"cpu"`
+	MaxCPU  int     `json:"maxcpu"`
+	Mem     uint64  `json:"mem"`
+	MaxMem  uint64  `json:"maxmem"`
+	Disk    uint64  `json:"disk"`
+	MaxDisk uint64  `json:"maxdisk"`
+	Uptime  uint64  `json:"uptime"`
+	Level   string  `json:"level"`
 }
 
 // NodeStatus represents detailed node status from /nodes/{node}/status endpoint
 // This endpoint provides real-time metrics that update every second
 type NodeStatus struct {
-	CPU           float64       `json:"cpu"`       // Real-time CPU usage (0-1)
-	Memory        *MemoryStatus `json:"memory"`    // Real-time memory stats
-	Swap          *SwapStatus   `json:"swap"`      // Swap usage
-	LoadAvg       []interface{} `json:"loadavg"`   // Can be float64 or string
+	CPU           float64       `json:"cpu"`     // Real-time CPU usage (0-1)
+	Memory        *MemoryStatus `json:"memory"`  // Real-time memory stats
+	Swap          *SwapStatus   `json:"swap"`    // Swap usage
+	LoadAvg       []interface{} `json:"loadavg"` // Can be float64 or string
 	KernelVersion string        `json:"kversion"`
 	PVEVersion    string        `json:"pveversion"`
 	CPUInfo       *CPUInfo      `json:"cpuinfo"`
 	RootFS        *RootFS       `json:"rootfs"`
-	Uptime        uint64        `json:"uptime"`    // Uptime in seconds
-	Wait          float64       `json:"wait"`      // IO wait
-	IODelay       float64       `json:"iodelay"`   // IO delay
-	Idle          float64       `json:"idle"`      // CPU idle time
+	Uptime        uint64        `json:"uptime"`  // Uptime in seconds
+	Wait          float64       `json:"wait"`    // IO wait
+	IODelay       float64       `json:"iodelay"` // IO delay
+	Idle          float64       `json:"idle"`    // CPU idle time
 }
 
 // MemoryStatus represents real-time memory information
@@ -497,62 +497,62 @@ func (c *Client) GetNodeStatus(ctx context.Context, node string) (*NodeStatus, e
 
 // VM represents a Proxmox VE virtual machine
 type VM struct {
-	VMID       int     `json:"vmid"`
-	Name       string  `json:"name"`
-	Node       string  `json:"node"`
-	Status     string  `json:"status"`
-	CPU        float64 `json:"cpu"`
-	CPUs       int     `json:"cpus"`
-	Mem        uint64  `json:"mem"`
-	MaxMem     uint64  `json:"maxmem"`
-	Disk       uint64  `json:"disk"`
-	MaxDisk    uint64  `json:"maxdisk"`
-	NetIn      uint64  `json:"netin"`
-	NetOut     uint64  `json:"netout"`
-	DiskRead   uint64  `json:"diskread"`
-	DiskWrite  uint64  `json:"diskwrite"`
-	Uptime     uint64  `json:"uptime"`
-	Template   int     `json:"template"`
-	Tags       string  `json:"tags"`
-	Lock       string  `json:"lock"`
-	Agent      int     `json:"agent"`
+	VMID      int     `json:"vmid"`
+	Name      string  `json:"name"`
+	Node      string  `json:"node"`
+	Status    string  `json:"status"`
+	CPU       float64 `json:"cpu"`
+	CPUs      int     `json:"cpus"`
+	Mem       uint64  `json:"mem"`
+	MaxMem    uint64  `json:"maxmem"`
+	Disk      uint64  `json:"disk"`
+	MaxDisk   uint64  `json:"maxdisk"`
+	NetIn     uint64  `json:"netin"`
+	NetOut    uint64  `json:"netout"`
+	DiskRead  uint64  `json:"diskread"`
+	DiskWrite uint64  `json:"diskwrite"`
+	Uptime    uint64  `json:"uptime"`
+	Template  int     `json:"template"`
+	Tags      string  `json:"tags"`
+	Lock      string  `json:"lock"`
+	Agent     int     `json:"agent"`
 }
 
 // Container represents a Proxmox VE LXC container
 type Container struct {
-	VMID       FlexInt `json:"vmid"`  // Changed to FlexInt to handle string VMIDs from some Proxmox versions
-	Name       string  `json:"name"`
-	Node       string  `json:"node"`
-	Status     string  `json:"status"`
-	CPU        float64 `json:"cpu"`
-	CPUs       FlexInt `json:"cpus"`
-	Mem        uint64  `json:"mem"`
-	MaxMem     uint64  `json:"maxmem"`
-	Swap       uint64  `json:"swap"`
-	MaxSwap    uint64  `json:"maxswap"`
-	Disk       uint64  `json:"disk"`
-	MaxDisk    uint64  `json:"maxdisk"`
-	NetIn      uint64  `json:"netin"`
-	NetOut     uint64  `json:"netout"`
-	DiskRead   uint64  `json:"diskread"`
-	DiskWrite  uint64  `json:"diskwrite"`
-	Uptime     uint64  `json:"uptime"`
-	Template   int     `json:"template"`
-	Tags       string  `json:"tags"`
-	Lock       string  `json:"lock"`
+	VMID      FlexInt `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
+	Name      string  `json:"name"`
+	Node      string  `json:"node"`
+	Status    string  `json:"status"`
+	CPU       float64 `json:"cpu"`
+	CPUs      FlexInt `json:"cpus"`
+	Mem       uint64  `json:"mem"`
+	MaxMem    uint64  `json:"maxmem"`
+	Swap      uint64  `json:"swap"`
+	MaxSwap   uint64  `json:"maxswap"`
+	Disk      uint64  `json:"disk"`
+	MaxDisk   uint64  `json:"maxdisk"`
+	NetIn     uint64  `json:"netin"`
+	NetOut    uint64  `json:"netout"`
+	DiskRead  uint64  `json:"diskread"`
+	DiskWrite uint64  `json:"diskwrite"`
+	Uptime    uint64  `json:"uptime"`
+	Template  int     `json:"template"`
+	Tags      string  `json:"tags"`
+	Lock      string  `json:"lock"`
 }
 
 // Storage represents a Proxmox VE storage
 type Storage struct {
-	Storage   string  `json:"storage"`
-	Type      string  `json:"type"`
-	Content   string  `json:"content"`
-	Active    int     `json:"active"`
-	Enabled   int     `json:"enabled"`
-	Shared    int     `json:"shared"`
-	Total     uint64  `json:"total"`
-	Used      uint64  `json:"used"`
-	Available uint64  `json:"avail"`
+	Storage   string `json:"storage"`
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Active    int    `json:"active"`
+	Enabled   int    `json:"enabled"`
+	Shared    int    `json:"shared"`
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+	Available uint64 `json:"avail"`
 }
 
 // StorageContent represents content in a storage
@@ -567,7 +567,7 @@ type StorageContent struct {
 	Protected    int                    `json:"protected"`
 	Encryption   string                 `json:"encryption"`
 	Verification map[string]interface{} `json:"verification"` // PBS verification info
-	Verified     int                    `json:"verified"`      // Simple verified flag
+	Verified     int                    `json:"verified"`     // Simple verified flag
 }
 
 // Snapshot represents a VM or container snapshot
@@ -629,7 +629,7 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
-	
+
 	resp, err := c.get(storageCtx, fmt.Sprintf("/nodes/%s/storage", node))
 	if err != nil {
 		return nil, err
@@ -659,7 +659,7 @@ func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
-	
+
 	resp, err := c.get(storageCtx, "/storage")
 	if err != nil {
 		return nil, err
@@ -677,19 +677,18 @@ func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 	return result.Data, nil
 }
 
-
 // Task represents a Proxmox task
 type Task struct {
-	UPID      string  `json:"upid"`
-	Node      string  `json:"node"`
-	PID       int     `json:"pid"`
-	PStart    int64   `json:"pstart"`
-	StartTime int64   `json:"starttime"`
-	Type      string  `json:"type"`
-	ID        string  `json:"id"`
-	User      string  `json:"user"`
-	Status    string  `json:"status,omitempty"`
-	EndTime   int64   `json:"endtime,omitempty"`
+	UPID      string `json:"upid"`
+	Node      string `json:"node"`
+	PID       int    `json:"pid"`
+	PStart    int64  `json:"pstart"`
+	StartTime int64  `json:"starttime"`
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	User      string `json:"user"`
+	Status    string `json:"status,omitempty"`
+	EndTime   int64  `json:"endtime,omitempty"`
 }
 
 // GetNodeTasks gets tasks for a specific node
@@ -754,7 +753,7 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 		storageCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
-	
+
 	resp, err := c.get(storageCtx, fmt.Sprintf("/nodes/%s/storage/%s/content", node, storage))
 	if err != nil {
 		return nil, err
@@ -955,12 +954,12 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 
 // VMFileSystem represents filesystem information from QEMU guest agent
 type VMFileSystem struct {
-	Name       string  `json:"name"`
-	Type       string  `json:"type"`
-	Mountpoint string  `json:"mountpoint"`
-	TotalBytes uint64  `json:"total-bytes"`
-	UsedBytes  uint64  `json:"used-bytes"`
-	Disk       string  // Extracted disk device name for duplicate detection
+	Name       string        `json:"name"`
+	Type       string        `json:"type"`
+	Mountpoint string        `json:"mountpoint"`
+	TotalBytes uint64        `json:"total-bytes"`
+	UsedBytes  uint64        `json:"used-bytes"`
+	Disk       string        // Extracted disk device name for duplicate detection
 	DiskRaw    []interface{} `json:"disk"` // Raw disk device info from API
 }
 
@@ -978,14 +977,14 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Log the raw response for debugging
 	log.Debug().
 		Str("node", node).
 		Int("vmid", vmid).
 		Str("response", string(bodyBytes)).
 		Msg("Raw response from guest agent get-fsinfo")
-	
+
 	// Try to unmarshal as an array first (expected format)
 	var arrayResult struct {
 		Data struct {
@@ -1025,7 +1024,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		}
 		return arrayResult.Data.Result, nil
 	}
-	
+
 	// If that fails, try as an object (might be an error response or different format)
 	var objectResult struct {
 		Data struct {
@@ -1050,7 +1049,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		// Return empty array to indicate no filesystem info available
 		return []VMFileSystem{}, nil
 	}
-	
+
 	// If both fail, return error
 	return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
 }
@@ -1095,25 +1094,25 @@ func (c *Client) GetContainerStatus(ctx context.Context, node string, vmid int) 
 
 // ClusterResource represents a resource from /cluster/resources
 type ClusterResource struct {
-	ID         string  `json:"id"`
-	Type       string  `json:"type"`
-	Node       string  `json:"node"`
-	Status     string  `json:"status"`
-	Name       string  `json:"name,omitempty"`
-	VMID       int     `json:"vmid,omitempty"`
-	CPU        float64 `json:"cpu,omitempty"`
-	MaxCPU     int     `json:"maxcpu,omitempty"`
-	Mem        uint64  `json:"mem,omitempty"`
-	MaxMem     uint64  `json:"maxmem,omitempty"`
-	Disk       uint64  `json:"disk,omitempty"`
-	MaxDisk    uint64  `json:"maxdisk,omitempty"`
-	NetIn      uint64  `json:"netin,omitempty"`
-	NetOut     uint64  `json:"netout,omitempty"`
-	DiskRead   uint64  `json:"diskread,omitempty"`
-	DiskWrite  uint64  `json:"diskwrite,omitempty"`
-	Uptime     uint64  `json:"uptime,omitempty"`
-	Template   int     `json:"template,omitempty"`
-	Tags       string  `json:"tags,omitempty"`
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Node      string  `json:"node"`
+	Status    string  `json:"status"`
+	Name      string  `json:"name,omitempty"`
+	VMID      int     `json:"vmid,omitempty"`
+	CPU       float64 `json:"cpu,omitempty"`
+	MaxCPU    int     `json:"maxcpu,omitempty"`
+	Mem       uint64  `json:"mem,omitempty"`
+	MaxMem    uint64  `json:"maxmem,omitempty"`
+	Disk      uint64  `json:"disk,omitempty"`
+	MaxDisk   uint64  `json:"maxdisk,omitempty"`
+	NetIn     uint64  `json:"netin,omitempty"`
+	NetOut    uint64  `json:"netout,omitempty"`
+	DiskRead  uint64  `json:"diskread,omitempty"`
+	DiskWrite uint64  `json:"diskwrite,omitempty"`
+	Uptime    uint64  `json:"uptime,omitempty"`
+	Template  int     `json:"template,omitempty"`
+	Tags      string  `json:"tags,omitempty"`
 }
 
 // GetClusterResources returns all resources (VMs, containers) across the cluster
@@ -1122,7 +1121,7 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	if resourceType != "" {
 		path = fmt.Sprintf("%s?type=%s", path, resourceType)
 	}
-	
+
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -1143,7 +1142,7 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 // ZFSPoolStatus represents the status of a ZFS pool (list endpoint)
 type ZFSPoolStatus struct {
 	Name   string  `json:"name"`
-	Health string  `json:"health"`  // ONLINE, DEGRADED, FAULTED, etc.
+	Health string  `json:"health"` // ONLINE, DEGRADED, FAULTED, etc.
 	Size   uint64  `json:"size"`
 	Alloc  uint64  `json:"alloc"`
 	Free   uint64  `json:"free"`
@@ -1154,11 +1153,11 @@ type ZFSPoolStatus struct {
 // ZFSPoolDetail represents detailed status of a ZFS pool
 type ZFSPoolDetail struct {
 	Name     string          `json:"name"`
-	State    string          `json:"state"`   // ONLINE, DEGRADED, FAULTED, etc.
-	Status   string          `json:"status"`  // Detailed status message
-	Action   string          `json:"action"`  // Recommended action
-	Scan     string          `json:"scan"`    // Scan status
-	Errors   string          `json:"errors"`  // Error summary
+	State    string          `json:"state"`    // ONLINE, DEGRADED, FAULTED, etc.
+	Status   string          `json:"status"`   // Detailed status message
+	Action   string          `json:"action"`   // Recommended action
+	Scan     string          `json:"scan"`     // Scan status
+	Errors   string          `json:"errors"`   // Error summary
 	Children []ZFSPoolDevice `json:"children"` // Top-level vdevs
 }
 
@@ -1189,14 +1188,14 @@ type VMStatus struct {
 		Free  uint64 `json:"free"`
 		Total uint64 `json:"total"`
 	} `json:"meminfo,omitempty"`
-	Disk       uint64  `json:"disk"`
-	MaxDisk    uint64  `json:"maxdisk"`
-	DiskRead   uint64  `json:"diskread"`
-	DiskWrite  uint64  `json:"diskwrite"`
-	NetIn      uint64  `json:"netin"`
-	NetOut     uint64  `json:"netout"`
-	Uptime     uint64  `json:"uptime"`
-	Agent      int     `json:"agent"`
+	Disk      uint64 `json:"disk"`
+	MaxDisk   uint64 `json:"maxdisk"`
+	DiskRead  uint64 `json:"diskread"`
+	DiskWrite uint64 `json:"diskwrite"`
+	NetIn     uint64 `json:"netin"`
+	NetOut    uint64 `json:"netout"`
+	Uptime    uint64 `json:"uptime"`
+	Agent     int    `json:"agent"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node
@@ -1239,25 +1238,25 @@ func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSP
 
 // Disk represents a physical disk on a Proxmox node
 type Disk struct {
-	DevPath  string  `json:"devpath"`
-	Model    string  `json:"model"`
-	Serial   string  `json:"serial"`
-	Type     string  `json:"type"`     // nvme, sata, sas
-	Health   string  `json:"health"`   // PASSED, FAILED, UNKNOWN
-	Wearout  int     `json:"wearout"`  // SSD wear percentage (0-100, 100 is best)
-	Size     int64   `json:"size"`     // Size in bytes
-	RPM      int     `json:"rpm"`      // 0 for SSDs
-	Used     string  `json:"used"`     // Filesystem or partition usage
-	Vendor   string  `json:"vendor"`
-	WWN      string  `json:"wwn"`      // World Wide Name
+	DevPath string `json:"devpath"`
+	Model   string `json:"model"`
+	Serial  string `json:"serial"`
+	Type    string `json:"type"`    // nvme, sata, sas
+	Health  string `json:"health"`  // PASSED, FAILED, UNKNOWN
+	Wearout int    `json:"wearout"` // SSD wear percentage (0-100, 100 is best)
+	Size    int64  `json:"size"`    // Size in bytes
+	RPM     int    `json:"rpm"`     // 0 for SSDs
+	Used    string `json:"used"`    // Filesystem or partition usage
+	Vendor  string `json:"vendor"`
+	WWN     string `json:"wwn"` // World Wide Name
 }
 
 // DiskSmart represents SMART data for a disk
 type DiskSmart struct {
-	Health  string `json:"health"`   // PASSED, FAILED, UNKNOWN
-	Wearout int    `json:"wearout"`  // SSD wear percentage
-	Type    string `json:"type"`     // Type of response (text, attributes)
-	Text    string `json:"text"`     // Raw SMART output text
+	Health  string `json:"health"`  // PASSED, FAILED, UNKNOWN
+	Wearout int    `json:"wearout"` // SSD wear percentage
+	Type    string `json:"type"`    // Type of response (text, attributes)
+	Text    string `json:"text"`    // Raw SMART output text
 }
 
 // GetDisks returns the list of physical disks on a node
@@ -1283,7 +1282,7 @@ func (c *Client) GetDiskSmart(ctx context.Context, node, disk string) (*DiskSmar
 	params := url.Values{
 		"disk": {disk},
 	}
-	
+
 	resp, err := c.request(ctx, "GET", fmt.Sprintf("/nodes/%s/disks/smart?%s", node, params.Encode()), nil)
 	if err != nil {
 		return nil, err

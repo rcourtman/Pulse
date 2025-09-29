@@ -24,7 +24,11 @@ interface OIDCConfigResponse {
 }
 
 const listToString = (values?: string[]) => (values && values.length > 0 ? values.join(', ') : '');
-const splitList = (input: string) => input.split(/[,\s]+/).map((v) => v.trim()).filter(Boolean);
+const splitList = (input: string) =>
+  input
+    .split(/[,\s]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
 
 interface Props {
   onConfigUpdated?: (config: OIDCConfigResponse) => void;
@@ -176,12 +180,26 @@ export const OIDCPanel: Component<Props> = (props) => {
   };
 
   return (
-    <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
+    <Card
+      padding="none"
+      class="overflow-hidden border border-gray-200 dark:border-gray-700"
+      border={false}
+    >
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center gap-3">
           <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-            <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9" />
+            <svg
+              class="w-5 h-5 text-blue-600 dark:text-blue-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                d="M21 12c0 4.97-4.03 9-9 9m9-9c0-4.97-4.03-9-9-9m9 9H3m9 9c-4.97 0-9-4.03-9-9m9 9c-1.5-1.35-3-4.5-3-9s1.5-7.65 3-9m0 18c1.5-1.35 3-4.5 3-9s-1.5-7.65-3-9"
+              />
             </svg>
           </div>
           <SectionHeader
@@ -197,7 +215,11 @@ export const OIDCPanel: Component<Props> = (props) => {
             }}
             disabled={isEnvLocked() || loading() || saving()}
             containerClass="items-center gap-2"
-            label={<span class="text-xs font-medium text-gray-600 dark:text-gray-300">{form.enabled ? 'Enabled' : 'Disabled'}</span>}
+            label={
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                {form.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            }
           />
         </div>
       </div>
@@ -205,9 +227,17 @@ export const OIDCPanel: Component<Props> = (props) => {
         <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-xs text-blue-800 dark:text-blue-200">
           <p class="font-semibold mb-2">Getting started</p>
           <ol class="space-y-1 list-decimal pl-5">
-            <li>Register a confidential client with your IdP and set the redirect URL shown below.</li>
+            <li>
+              Register a confidential client with your IdP and set the redirect URL shown below.
+            </li>
             <li>Copy the issuer, client ID, and client secret into the fields here.</li>
-            <li>Grant scopes such as <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">openid profile email</code>.</li>
+            <li>
+              Grant scopes such as{' '}
+              <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">
+                openid profile email
+              </code>
+              .
+            </li>
             <li>Optionally restrict access by domain, email, or groups.</li>
             <li>Save, then sign out to test the new SSO button.</li>
           </ol>
@@ -222,7 +252,8 @@ export const OIDCPanel: Component<Props> = (props) => {
         <Show when={!loading()}>
           <Show when={isEnvLocked()}>
             <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded p-3 text-xs text-amber-800 dark:text-amber-200">
-              <strong>Managed by environment variables:</strong> OIDC settings are currently defined through environment variables. Edit the deployment configuration to make changes.
+              <strong>Managed by environment variables:</strong> OIDC settings are currently defined
+              through environment variables. Edit the deployment configuration to make changes.
             </div>
           </Show>
 
@@ -281,11 +312,17 @@ export const OIDCPanel: Component<Props> = (props) => {
                     setForm('clearSecret', false);
                   }
                 }}
-                placeholder={config()?.clientSecretSet ? '•••••••• (leave blank to keep existing)' : 'Enter client secret'}
+                placeholder={
+                  config()?.clientSecretSet
+                    ? '•••••••• (leave blank to keep existing)'
+                    : 'Enter client secret'
+                }
                 class={controlClass()}
                 disabled={isEnvLocked() || saving()}
               />
-              <p class={formHelpText}>Leave blank to keep the existing secret. Use "Clear" to remove it from storage.</p>
+              <p class={formHelpText}>
+                Leave blank to keep the existing secret. Use "Clear" to remove it from storage.
+              </p>
             </div>
             <div class={formField}>
               <label class={labelClass()}>Redirect URL</label>
@@ -333,7 +370,9 @@ export const OIDCPanel: Component<Props> = (props) => {
                     class={controlClass()}
                     disabled={isEnvLocked() || saving()}
                   />
-                  <p class={formHelpText}>Claim used to populate the Pulse username (default: preferred_username).</p>
+                  <p class={formHelpText}>
+                    Claim used to populate the Pulse username (default: preferred_username).
+                  </p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass()}>Email claim</label>
@@ -354,7 +393,9 @@ export const OIDCPanel: Component<Props> = (props) => {
                     class={controlClass()}
                     disabled={isEnvLocked() || saving()}
                   />
-                  <p class={formHelpText}>Optional claim that lists group memberships. Used for group restrictions.</p>
+                  <p class={formHelpText}>
+                    Optional claim that lists group memberships. Used for group restrictions.
+                  </p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass()}>Allowed groups</label>
@@ -366,7 +407,9 @@ export const OIDCPanel: Component<Props> = (props) => {
                     class={controlClass('min-h-[70px]')}
                     disabled={isEnvLocked() || saving()}
                   />
-                  <p class={formHelpText}>Comma or space separated values. Leave empty to allow any group.</p>
+                  <p class={formHelpText}>
+                    Comma or space separated values. Leave empty to allow any group.
+                  </p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass()}>Allowed domains</label>
@@ -378,7 +421,9 @@ export const OIDCPanel: Component<Props> = (props) => {
                     class={controlClass('min-h-[70px]')}
                     disabled={isEnvLocked() || saving()}
                   />
-                  <p class={formHelpText}>Restrict access to email domains (without @). Leave empty to allow all.</p>
+                  <p class={formHelpText}>
+                    Restrict access to email domains (without @). Leave empty to allow all.
+                  </p>
                 </div>
                 <div class={formField}>
                   <label class={labelClass()}>Allowed email addresses</label>
@@ -398,7 +443,8 @@ export const OIDCPanel: Component<Props> = (props) => {
 
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
             <div class="text-xs text-gray-500 dark:text-gray-400">
-              Redirect URL registered with your IdP must match Pulse: {config()?.defaultRedirect || ''}
+              Redirect URL registered with your IdP must match Pulse:{' '}
+              {config()?.defaultRedirect || ''}
             </div>
             <div class="flex gap-3">
               <button

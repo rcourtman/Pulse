@@ -28,7 +28,7 @@ type PortSettings struct {
 
 // MonitoringSettings contains monitoring-related configuration
 type MonitoringSettings struct {
-	PollingInterval      int  `json:"pollingInterval" yaml:"pollingInterval" mapstructure:"pollingInterval"`           // milliseconds
+	PollingInterval      int  `json:"pollingInterval" yaml:"pollingInterval" mapstructure:"pollingInterval"` // milliseconds
 	ConcurrentPolling    bool `json:"concurrentPolling" yaml:"concurrentPolling" mapstructure:"concurrentPolling"`
 	BackupPollingCycles  int  `json:"backupPollingCycles" yaml:"backupPollingCycles" mapstructure:"backupPollingCycles"` // How often to poll backups
 	MetricsRetentionDays int  `json:"metricsRetentionDays" yaml:"metricsRetentionDays" mapstructure:"metricsRetentionDays"`
@@ -36,11 +36,11 @@ type MonitoringSettings struct {
 
 // LoggingSettings contains logging configuration
 type LoggingSettings struct {
-	Level      string `json:"level" yaml:"level" mapstructure:"level"`           // debug, info, warn, error
-	File       string `json:"file" yaml:"file" mapstructure:"file"`              // log file path
-	MaxSize    int    `json:"maxSize" yaml:"maxSize" mapstructure:"maxSize"`     // MB
+	Level      string `json:"level" yaml:"level" mapstructure:"level"`       // debug, info, warn, error
+	File       string `json:"file" yaml:"file" mapstructure:"file"`          // log file path
+	MaxSize    int    `json:"maxSize" yaml:"maxSize" mapstructure:"maxSize"` // MB
 	MaxBackups int    `json:"maxBackups" yaml:"maxBackups" mapstructure:"maxBackups"`
-	MaxAge     int    `json:"maxAge" yaml:"maxAge" mapstructure:"maxAge"`        // days
+	MaxAge     int    `json:"maxAge" yaml:"maxAge" mapstructure:"maxAge"` // days
 	Compress   bool   `json:"compress" yaml:"compress" mapstructure:"compress"`
 }
 

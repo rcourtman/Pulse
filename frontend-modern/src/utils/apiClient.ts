@@ -42,7 +42,7 @@ class ApiClient {
           this.apiToken = value;
         }
       }
-    } catch (e) {
+    } catch (_err) {
       // Invalid stored auth, ignore
     }
   }
@@ -51,13 +51,16 @@ class ApiClient {
   setBasicAuth(username: string, password: string) {
     const encoded = btoa(`${username}:${password}`);
     this.authHeader = `Basic ${encoded}`;
-    
+
     // Store in session storage
-    sessionStorage.setItem('pulse_auth', JSON.stringify({
-      type: 'basic',
-      value: this.authHeader
-    }));
-    
+    sessionStorage.setItem(
+      'pulse_auth',
+      JSON.stringify({
+        type: 'basic',
+        value: this.authHeader,
+      }),
+    );
+
     // Also store username for password change functionality
     sessionStorage.setItem('pulse_auth_user', username);
   }
@@ -65,12 +68,15 @@ class ApiClient {
   // Set API token
   setApiToken(token: string) {
     this.apiToken = token;
-    
+
     // Store in session storage
-    sessionStorage.setItem('pulse_auth', JSON.stringify({
-      type: 'token',
-      value: token
-    }));
+    sessionStorage.setItem(
+      'pulse_auth',
+      JSON.stringify({
+        type: 'token',
+        value: token,
+      }),
+    );
   }
 
   // Clear all authentication
@@ -121,7 +127,7 @@ class ApiClient {
     const finalOptions: RequestInit = {
       ...fetchOptions,
       headers: finalHeaders,
-      credentials: 'include' // Important for session cookies
+      credentials: 'include', // Important for session cookies
     };
 
     const response = await fetch(url, finalOptions);
@@ -144,7 +150,7 @@ class ApiClient {
           const retryResponse = await fetch(url, {
             ...fetchOptions,
             headers: finalHeaders,
-            credentials: 'include'
+            credentials: 'include',
           });
           return retryResponse;
         }
@@ -155,18 +161,18 @@ class ApiClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
       const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
-      
+
       console.warn(`Rate limit hit, retrying after ${waitTime}ms`);
-      
+
       // Wait and retry once
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+
       const retryResponse = await fetch(url, {
         ...fetchOptions,
         headers: finalHeaders,
-        credentials: 'include'
+        credentials: 'include',
       });
-      
+
       return retryResponse;
     }
 
@@ -179,21 +185,21 @@ class ApiClient {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers
-      }
+        ...options.headers,
+      },
     });
 
     if (!response.ok) {
       const text = await response.text();
       // Try to extract just the error message without HTTP status codes
       let errorMessage = text;
-      
+
       // If it looks like an HTML error page, try to extract the message
       if (text.includes('<pre>') && text.includes('</pre>')) {
         const match = text.match(/<pre>(.*?)<\/pre>/s);
         if (match) errorMessage = match[1];
       }
-      
+
       // If the backend sent a plain text error, use it directly
       if (!text.includes('<') && text.length < 200) {
         errorMessage = text;
@@ -201,16 +207,16 @@ class ApiClient {
         // For long responses, just use a generic message
         errorMessage = `Request failed with status ${response.status}`;
       }
-      
+
       throw new Error(errorMessage || `Request failed with status ${response.status}`);
     }
 
     const text = await response.text();
     if (!text) return null as T;
-    
+
     try {
       return JSON.parse(text) as T;
-    } catch (e) {
+    } catch (_err) {
       console.error('Failed to parse JSON response:', text);
       throw new Error('Invalid JSON response from server');
     }
@@ -220,25 +226,25 @@ class ApiClient {
   async checkAuthRequired(): Promise<boolean> {
     try {
       // Try to access a protected endpoint without auth
-      const response = await fetch('/api/state', { 
+      const response = await fetch('/api/state', {
         method: 'GET',
-        credentials: 'omit' // Don't send cookies or auth
+        credentials: 'omit', // Don't send cookies or auth
       });
-      
+
       // If we get 401, auth is required
       if (response.status === 401) {
         return true;
       }
-      
+
       // If we get 200, no auth required
       return false;
-    } catch (e) {
+    } catch (_err) {
       // Network error - try the security status endpoint
       try {
         const response = await fetch('/api/security/status');
         const data = await response.json();
         return data.hasAuthentication || data.requiresAuth || false;
-      } catch (err) {
+      } catch (_fallbackErr) {
         // Can't determine, assume no auth
         return false;
       }
@@ -251,8 +257,10 @@ export const apiClient = new ApiClient();
 
 // Export convenience functions
 export const apiFetch = (url: string, options?: FetchOptions) => apiClient.fetch(url, options);
-export const apiFetchJSON = <T = unknown>(url: string, options?: FetchOptions) => apiClient.fetchJSON<T>(url, options);
-export const setBasicAuth = (username: string, password: string) => apiClient.setBasicAuth(username, password);
+export const apiFetchJSON = <T = unknown>(url: string, options?: FetchOptions) =>
+  apiClient.fetchJSON<T>(url, options);
+export const setBasicAuth = (username: string, password: string) =>
+  apiClient.setBasicAuth(username, password);
 export const setApiToken = (token: string) => apiClient.setApiToken(token);
 export const clearAuth = () => apiClient.clearAuth();
 export const hasAuth = () => apiClient.hasAuth();

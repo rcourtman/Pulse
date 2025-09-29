@@ -22,11 +22,11 @@ import (
 
 // UpdateStatus represents the current status of an update
 type UpdateStatus struct {
-	Status    string  `json:"status"`
-	Progress  int     `json:"progress"`
-	Message   string  `json:"message"`
-	Error     string  `json:"error,omitempty"`
-	UpdatedAt string  `json:"updatedAt"`
+	Status    string `json:"status"`
+	Progress  int    `json:"progress"`
+	Message   string `json:"message"`
+	Error     string `json:"error,omitempty"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // ReleaseInfo represents a GitHub release
@@ -44,24 +44,24 @@ type ReleaseInfo struct {
 
 // UpdateInfo represents available update information
 type UpdateInfo struct {
-	Available      bool       `json:"available"`
-	CurrentVersion string     `json:"currentVersion"`
-	LatestVersion  string     `json:"latestVersion"`
-	ReleaseNotes   string     `json:"releaseNotes"`
-	ReleaseDate    time.Time  `json:"releaseDate"`
-	DownloadURL    string     `json:"downloadUrl"`
-	IsPrerelease   bool       `json:"isPrerelease"`
+	Available      bool      `json:"available"`
+	CurrentVersion string    `json:"currentVersion"`
+	LatestVersion  string    `json:"latestVersion"`
+	ReleaseNotes   string    `json:"releaseNotes"`
+	ReleaseDate    time.Time `json:"releaseDate"`
+	DownloadURL    string    `json:"downloadUrl"`
+	IsPrerelease   bool      `json:"isPrerelease"`
 }
 
 // Manager handles update operations
 type Manager struct {
-	config       *config.Config
-	status       UpdateStatus
-	statusMu     sync.RWMutex
-	checkCache   *UpdateInfo
-	cacheTime    time.Time
+	config        *config.Config
+	status        UpdateStatus
+	statusMu      sync.RWMutex
+	checkCache    *UpdateInfo
+	cacheTime     time.Time
 	cacheDuration time.Duration
-	progressChan chan UpdateStatus
+	progressChan  chan UpdateStatus
 }
 
 // NewManager creates a new update manager
@@ -96,10 +96,10 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	if channel == "" {
 		channel = "stable"
 	}
-	
+
 	// Don't use cache when channel is explicitly provided (UI might have changed it)
 	useCache := channel == m.config.UpdateChannel || channel == ""
-	
+
 	// Check cache first (only if using saved channel)
 	if useCache && m.checkCache != nil && time.Since(m.cacheTime) < m.cacheDuration {
 		return m.checkCache, nil
@@ -158,12 +158,12 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		"arm64": "arm64",
 		"arm":   "armv7",
 	}
-	
+
 	targetArch, ok := archMap[arch]
 	if !ok {
 		targetArch = arch // Use as-is if not in map
 	}
-	
+
 	// Look for architecture-specific binary
 	targetName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", release.TagName, targetArch)
 	for _, asset := range release.Assets {
@@ -172,13 +172,13 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 			break
 		}
 	}
-	
+
 	// Fallback to any pulse tarball if exact match not found
 	if downloadURL == "" {
 		for _, asset := range release.Assets {
-			if strings.HasPrefix(asset.Name, "pulse-") && 
-			   strings.Contains(asset.Name, "linux") && 
-			   strings.HasSuffix(asset.Name, ".tar.gz") {
+			if strings.HasPrefix(asset.Name, "pulse-") &&
+				strings.Contains(asset.Name, "linux") &&
+				strings.HasSuffix(asset.Name, ".tar.gz") {
 				downloadURL = asset.BrowserDownloadURL
 				break
 			}
@@ -238,13 +238,13 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Try multiple locations in order of preference
 	var tempDir string
 	var err error
-	
+
 	// Try data directory first
 	dataDir := os.Getenv("PULSE_DATA_DIR")
 	if dataDir == "" {
 		dataDir = "/etc/pulse"
 	}
-	
+
 	// Try to create temp dir in data directory
 	tempDir, err = os.MkdirTemp(dataDir, "pulse-update-*")
 	if err != nil {
@@ -304,7 +304,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, downloadURL string) error {
 	// Apply the update files
 	// With the new directory structure (/opt/pulse/bin/), the pulse user has write access
 	log.Info().Msg("Applying update files")
-	
+
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		m.updateStatus("error", 80, "Failed to apply update")
 		// Attempt to restore backup
@@ -348,7 +348,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	if channel == "" {
 		channel = "stable"
 	}
-	
+
 	log.Info().Str("channel", channel).Msg("Checking for updates")
 
 	// GitHub API URL (can be overridden for testing)
@@ -475,18 +475,18 @@ func (m *Manager) extractTarball(src, dest string) error {
 
 		// Sanitize the path to prevent directory traversal attacks
 		cleanName := filepath.Clean(header.Name)
-		
+
 		// Check for path traversal attempts
 		if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
 			return fmt.Errorf("unsafe path in archive: %s", header.Name)
 		}
-		
+
 		// Ensure the target path is within the destination directory
 		target := filepath.Join(dest, cleanName)
 		if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) && target != filepath.Clean(dest) {
 			return fmt.Errorf("path escapes destination directory: %s", header.Name)
 		}
-		
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
@@ -496,12 +496,12 @@ func (m *Manager) extractTarball(src, dest string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-			
+
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err
 			}
-			
+
 			if _, err := io.Copy(out, tr); err != nil {
 				out.Close()
 				return err
@@ -516,15 +516,15 @@ func (m *Manager) extractTarball(src, dest string) error {
 // createBackup creates a backup of the current installation
 func (m *Manager) createBackup() (string, error) {
 	timestamp := time.Now().Format("20060102-150405")
-	
+
 	// Try to create backup in a writable location
 	dataDir := os.Getenv("PULSE_DATA_DIR")
 	if dataDir == "" {
 		dataDir = "/etc/pulse"
 	}
-	
+
 	backupDir := filepath.Join(dataDir, fmt.Sprintf("backup-%s", timestamp))
-	
+
 	// Create backup directory
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		// Fallback to /tmp if data dir fails
@@ -541,7 +541,7 @@ func (m *Manager) createBackup() (string, error) {
 	for _, dir := range dirsToBackup {
 		src := filepath.Join(pulseDir, dir)
 		dest := filepath.Join(backupDir, dir)
-		
+
 		if _, err := os.Stat(src); err == nil {
 			cmd := exec.Command("cp", "-r", src, dest)
 			if err := cmd.Run(); err != nil {
@@ -555,7 +555,9 @@ func (m *Manager) createBackup() (string, error) {
 	if _, err := os.Stat(envSrc); err == nil {
 		envDest := filepath.Join(backupDir, ".env")
 		cmd := exec.Command("cp", envSrc, envDest)
-		cmd.Run()
+		if err := cmd.Run(); err != nil {
+			log.Warn().Err(err).Msg("Failed to backup .env file")
+		}
 	}
 
 	return backupDir, nil
@@ -564,13 +566,13 @@ func (m *Manager) createBackup() (string, error) {
 // restoreBackup restores from a backup
 func (m *Manager) restoreBackup(backupDir string) error {
 	pulseDir := "/opt/pulse"
-	
+
 	// Restore directories
 	dirsToRestore := []string{"data", "config"}
 	for _, dir := range dirsToRestore {
 		src := filepath.Join(backupDir, dir)
 		dest := filepath.Join(pulseDir, dir)
-		
+
 		if _, err := os.Stat(src); err == nil {
 			cmd := exec.Command("cp", "-r", src, dest)
 			if err := cmd.Run(); err != nil {
@@ -603,26 +605,26 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 			return fmt.Errorf("pulse binary not found in extract (checked both / and /bin/): %w", err)
 		}
 	}
-	
+
 	// Detect where the current binary is running from
 	binaryPath, err := os.Executable()
 	if err != nil {
 		// Fallback to default location
 		binaryPath = "/usr/local/bin/pulse"
 	}
-	
+
 	// Copy the pulse binary to a temporary location first, then move atomically
 	tempBinary := binaryPath + ".new"
 	cmd := exec.Command("cp", pulseBinary, tempBinary)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy pulse binary: %w", err)
 	}
-	
+
 	// Make it executable
 	if err := os.Chmod(tempBinary, 0755); err != nil {
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
-	
+
 	// Atomically replace the old binary with the new one
 	if err := os.Rename(tempBinary, binaryPath); err != nil {
 		// If rename fails (cross-device), try mv command
@@ -631,18 +633,20 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 			return fmt.Errorf("failed to replace pulse binary: %w", err)
 		}
 	}
-	
+
 	// Frontend is now embedded in the binary as of v4.2.2+
 	// No need to copy frontend files separately
 	// The new binary contains everything needed
-	
+
 	// Copy VERSION file if it exists (to both locations for compatibility)
 	versionSrc := filepath.Join(extractDir, "VERSION")
 	if _, err := os.Stat(versionSrc); err == nil {
 		// Copy to /opt/pulse
 		cmd = exec.Command("cp", versionSrc, "/opt/pulse/VERSION")
-		cmd.Run() // Ignore error, this location might not exist
-		
+		if err := cmd.Run(); err != nil {
+			log.Debug().Err(err).Msg("Failed to copy VERSION to /opt/pulse")
+		}
+
 		// Copy to binary directory
 		binaryDir := filepath.Dir(binaryPath)
 		cmd = exec.Command("cp", versionSrc, filepath.Join(binaryDir, "VERSION"))
@@ -650,7 +654,7 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 			log.Warn().Err(err).Msg("Failed to copy VERSION file")
 		}
 	}
-	
+
 	// Set ownership if /opt/pulse exists
 	if _, err := os.Stat("/opt/pulse"); err == nil {
 		cmd = exec.Command("chown", "-R", "pulse:pulse", "/opt/pulse")
@@ -661,7 +665,6 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 
 	return nil
 }
-
 
 // updateStatus updates the current status
 func (m *Manager) updateStatus(status string, progress int, message string) {
@@ -688,10 +691,10 @@ func isPreV4Installation() bool {
 	if _, err := os.Stat("/opt/pulse/.env"); err == nil {
 		return true
 	}
-	
+
 	// Note: pulse-backend.service is used by both v4 and pre-v4, so we can't use it as an indicator
 	// Only check for Node.js artifacts which are exclusive to pre-v4
-	
+
 	// Check for Node.js artifacts
 	nodeArtifacts := []string{
 		"/opt/pulse/package.json",
@@ -700,12 +703,12 @@ func isPreV4Installation() bool {
 		"/opt/pulse/backend",
 		"/opt/pulse/frontend",
 	}
-	
+
 	for _, artifact := range nodeArtifacts {
 		if _, err := os.Stat(artifact); err == nil {
 			return true
 		}
 	}
-	
+
 	return false
 }

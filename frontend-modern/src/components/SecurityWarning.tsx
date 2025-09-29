@@ -37,17 +37,17 @@ export const SecurityWarning: Component = () => {
       const response = await fetch('/api/security/status');
       if (response.ok) {
         const data = await response.json();
-        
+
         // Calculate security score
         let score = 0;
         const maxScore = 5;
-        
+
         if (data.credentialsEncrypted !== false) score++; // Always true currently
         if (data.exportProtected) score++;
         if (data.apiTokenConfigured) score++;
         if (data.hasHTTPS || window.location.protocol === 'https:') score++;
         if (data.hasAuthentication) score++;
-        
+
         setStatus({
           hasAuthentication: data.hasAuthentication || false,
           hasHTTPS: window.location.protocol === 'https:',
@@ -59,7 +59,7 @@ export const SecurityWarning: Component = () => {
           maxScore,
           publicAccess: data.publicAccess || false,
           isPrivateNetwork: data.isPrivateNetwork,
-          clientIP: data.clientIP
+          clientIP: data.clientIP,
         });
       }
     } catch (error) {
@@ -99,27 +99,29 @@ export const SecurityWarning: Component = () => {
   const shouldShow = () => {
     if (dismissed()) return false;
     if (!status()) return false;
-    
+
     // Always show if public access without auth
     if (status()!.publicAccess && !status()!.hasAuthentication) {
       return true;
     }
-    
+
     // Show if score is low
     return status()!.score < 4;
   };
-  
+
   if (!shouldShow()) {
     return null;
   }
 
   return (
     <Portal>
-      <div class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
-        status()!.publicAccess && !status()!.hasAuthentication
-          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-      }`}>
+      <div
+        class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${
+          status()!.publicAccess && !status()!.hasAuthentication
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+        }`}
+      >
         <div class="max-w-7xl mx-auto px-4 py-3">
           <div class="flex items-start justify-between">
             <div class="flex items-start space-x-3">
@@ -127,23 +129,32 @@ export const SecurityWarning: Component = () => {
               <div>
                 <div class="flex items-center gap-3">
                   <SectionHeader
-                    title={<span>Security score: <span class={getScoreColor(status()!.score, status()!.maxScore)}>{status()!.score}/{status()!.maxScore}</span></span>}
+                    title={
+                      <span>
+                        Security score:{' '}
+                        <span class={getScoreColor(status()!.score, status()!.maxScore)}>
+                          {status()!.score}/{status()!.maxScore}
+                        </span>
+                      </span>
+                    }
                     size="sm"
                     class="flex-1"
                     titleClass="text-gray-900 dark:text-gray-100"
                   />
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setShowDetails(!showDetails())}
                     class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {showDetails() ? 'Hide' : 'Show'} Details
                   </button>
                 </div>
-                
+
                 <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
                   {status()!.publicAccess ? (
                     <span class="font-semibold text-red-700 dark:text-red-300">
-                      ⚠️ PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to the internet!
+                      ⚠️ PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to
+                      the internet!
                     </span>
                   ) : (
                     'Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.'
@@ -154,7 +165,9 @@ export const SecurityWarning: Component = () => {
                   <div class="mt-3 space-y-1">
                     <div class="text-xs space-y-1">
                       <div class="flex items-center gap-2">
-                        <span class={status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'}>
+                        <span
+                          class={status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'}
+                        >
                           {status()!.credentialsEncrypted ? '✅' : '❌'}
                         </span>
                         <span>Credentials encrypted at rest</span>
@@ -166,7 +179,9 @@ export const SecurityWarning: Component = () => {
                         <span>Export requires authentication</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class={status()!.hasAuthentication ? 'text-green-600' : 'text-red-600'}>
+                        <span
+                          class={status()!.hasAuthentication ? 'text-green-600' : 'text-red-600'}
+                        >
                           {status()!.hasAuthentication ? '✅' : '❌'}
                         </span>
                         <span>Authentication enabled</span>
@@ -202,26 +217,30 @@ export const SecurityWarning: Component = () => {
                     Learn More
                   </a>
                   <div class="relative group">
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => handleDismiss('day')}
                       class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                     >
                       Dismiss ▼
                     </button>
                     <div class="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-                      <button type="button"
+                      <button
+                        type="button"
                         onClick={() => handleDismiss('day')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         For 1 day
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         onClick={() => handleDismiss('week')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         For 1 week
                       </button>
-                      <button type="button"
+                      <button
+                        type="button"
                         onClick={() => handleDismiss('forever')}
                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                       >

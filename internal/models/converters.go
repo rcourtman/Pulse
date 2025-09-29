@@ -68,17 +68,17 @@ func (n Node) ToFrontend() NodeFrontend {
 		LastSeen:         n.LastSeen.Unix() * 1000,
 		ConnectionHealth: n.ConnectionHealth,
 	}
-	
+
 	// Include full Memory object if it has data
 	if n.Memory.Total > 0 {
 		nf.Memory = &n.Memory
 	}
-	
-	// Include full Disk object if it has data  
+
+	// Include full Disk object if it has data
 	if n.Disk.Total > 0 {
 		nf.Disk = &n.Disk
 	}
-	
+
 	return nf
 }
 
@@ -117,7 +117,7 @@ func (v VM) ToFrontend() VMFrontend {
 	if !v.LastBackup.IsZero() {
 		vm.LastBackup = v.LastBackup.Unix() * 1000
 	}
-	
+
 	// Include full Memory object if it has data
 	if v.Memory.Total > 0 {
 		vm.Memory = &v.Memory
@@ -161,7 +161,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 	if !c.LastBackup.IsZero() {
 		ct.LastBackup = c.LastBackup.Unix() * 1000
 	}
-	
+
 	// Include full Memory object if it has data
 	if c.Memory.Total > 0 {
 		ct.Memory = &c.Memory

@@ -50,7 +50,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
   const now = Date.now();
 
   // Skip if checked recently (unless forced)
-  if (!force && state.lastCheck && (now - state.lastCheck) < CHECK_INTERVAL) {
+  if (!force && state.lastCheck && now - state.lastCheck < CHECK_INTERVAL) {
     // Use cached data if available
     if (state.updateInfo) {
       // First check if version matches (in case user updated)
@@ -67,7 +67,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
           // Version matches, use cached data
           setUpdateInfo(state.updateInfo);
           setUpdateAvailable(state.updateInfo.available);
-          
+
           // Check if this version was dismissed
           if (state.dismissedVersion === state.updateInfo.latestVersion) {
             setIsDismissed(true);
@@ -90,7 +90,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     // First get version info to check deployment type
     const version = await UpdatesAPI.getVersion();
     setVersionInfo(version);
-    
+
     // Clear cache if version has changed (user updated)
     if (state.updateInfo && state.updateInfo.currentVersion !== version.version) {
       // Version changed, clear the cache
@@ -104,10 +104,10 @@ const checkForUpdates = async (force = false): Promise<void> => {
       setUpdateAvailable(false);
       return;
     }
-    
+
     // Skip dev builds unless forcing (contains -dirty or commit hash after version)
-    const isDirtyBuild = version.version.includes('-dirty') || 
-                         /v\d+\.\d+\.\d+.*-g[0-9a-f]+/.test(version.version);
+    const isDirtyBuild =
+      version.version.includes('-dirty') || /v\d+\.\d+\.\d+.*-g[0-9a-f]+/.test(version.version);
     if (isDirtyBuild && !force) {
       setUpdateAvailable(false);
       return;
@@ -115,7 +115,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
 
     // Get the saved update channel from system settings
     const info = await UpdatesAPI.checkForUpdates();
-    
+
     setUpdateInfo(info);
     setUpdateAvailable(info.available);
 
@@ -130,7 +130,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     saveState({
       ...state,
       lastCheck: now,
-      updateInfo: info
+      updateInfo: info,
     });
   } catch (error) {
     console.error('Failed to check for updates:', error);
@@ -149,7 +149,7 @@ const dismissUpdate = () => {
   const state = loadState();
   saveState({
     ...state,
-    dismissedVersion: info.latestVersion
+    dismissedVersion: info.latestVersion,
   });
 
   setIsDismissed(true);
@@ -176,12 +176,12 @@ export const updateStore = {
   isDismissed,
   lastError,
   isUpdateVisible,
-  
+
   // Actions
   checkForUpdates,
   dismissUpdate,
   clearDismissed,
-  
+
   // Manual testing helpers
   simulateUpdate: (version: string = 'v5.0.0') => {
     setUpdateInfo({
@@ -191,11 +191,11 @@ export const updateStore = {
       releaseNotes: 'Test update notification',
       releaseDate: new Date().toISOString(),
       downloadUrl: '#',
-      isPrerelease: false
+      isPrerelease: false,
     });
     setUpdateAvailable(true);
     setIsDismissed(false);
-  }
+  },
 };
 
 // Expose for testing in development
@@ -205,6 +205,10 @@ declare global {
   }
 }
 
-if (import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168')) {
+if (
+  import.meta.env.DEV ||
+  window.location.hostname === 'localhost' ||
+  window.location.hostname.startsWith('192.168')
+) {
   window.updateStore = updateStore;
 }

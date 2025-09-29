@@ -2,6 +2,7 @@ package api
 
 import (
 	"time"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
@@ -39,26 +40,26 @@ type SuccessResponse struct {
 
 // StateResponse represents the full state response
 type StateResponse struct {
-	Nodes            []models.Node           `json:"nodes"`
-	VMs              []models.VM             `json:"vms"`
-	Containers       []models.Container      `json:"containers"`
-	Storage          []models.Storage        `json:"storage"`
-	PBSInstances     []models.PBSInstance    `json:"pbs"`
-	PBSBackups       []models.PBSBackup      `json:"pbsBackups"`
-	Metrics          []models.Metric         `json:"metrics"`
-	PVEBackups       models.PVEBackups       `json:"pveBackups"`
-	Performance      models.Performance      `json:"performance"`
-	ConnectionHealth map[string]bool         `json:"connectionHealth"`
-	Stats            models.Stats            `json:"stats"`
-	ActiveAlerts     []models.Alert          `json:"activeAlerts"`
-	RecentlyResolved []models.ResolvedAlert  `json:"recentlyResolved"`
-	LastUpdate       time.Time               `json:"lastUpdate"`
+	Nodes            []models.Node          `json:"nodes"`
+	VMs              []models.VM            `json:"vms"`
+	Containers       []models.Container     `json:"containers"`
+	Storage          []models.Storage       `json:"storage"`
+	PBSInstances     []models.PBSInstance   `json:"pbs"`
+	PBSBackups       []models.PBSBackup     `json:"pbsBackups"`
+	Metrics          []models.Metric        `json:"metrics"`
+	PVEBackups       models.PVEBackups      `json:"pveBackups"`
+	Performance      models.Performance     `json:"performance"`
+	ConnectionHealth map[string]bool        `json:"connectionHealth"`
+	Stats            models.Stats           `json:"stats"`
+	ActiveAlerts     []models.Alert         `json:"activeAlerts"`
+	RecentlyResolved []models.ResolvedAlert `json:"recentlyResolved"`
+	LastUpdate       time.Time              `json:"lastUpdate"`
 }
 
 // ConfigResponse represents configuration response
 type ConfigResponse struct {
-	Nodes    []NodeConfig    `json:"nodes"`
-	Settings SettingsConfig  `json:"settings"`
+	Nodes    []NodeConfig   `json:"nodes"`
+	Settings SettingsConfig `json:"settings"`
 }
 
 // NodeConfig represents a node configuration
@@ -116,16 +117,16 @@ type BackupResponse struct {
 
 // BackupInfo represents a single backup
 type BackupInfo struct {
-	ID       string    `json:"id"`
-	VMID     string    `json:"vmid"`
-	Name     string    `json:"name"`
-	Type     string    `json:"type"`
-	Size     int64     `json:"size"`
-	Time     time.Time `json:"time"`
-	Node     string    `json:"node"`
-	Storage  string    `json:"storage,omitempty"`
-	Status   string    `json:"status"`
-	Notes    string    `json:"notes,omitempty"`
+	ID      string    `json:"id"`
+	VMID    string    `json:"vmid"`
+	Name    string    `json:"name"`
+	Type    string    `json:"type"`
+	Size    int64     `json:"size"`
+	Time    time.Time `json:"time"`
+	Node    string    `json:"node"`
+	Storage string    `json:"storage,omitempty"`
+	Status  string    `json:"status"`
+	Notes   string    `json:"notes,omitempty"`
 }
 
 // MetricsResponse represents metrics data
@@ -162,19 +163,19 @@ type StorageInfo struct {
 
 // StorageTotals represents aggregate storage metrics
 type StorageTotals struct {
-	Total     int64   `json:"total"`
-	Used      int64   `json:"used"`
-	Available int64   `json:"available"`
+	Total      int64   `json:"total"`
+	Used       int64   `json:"used"`
+	Available  int64   `json:"available"`
 	Percentage float64 `json:"percentage"`
 }
 
 // ChartResponse represents chart data
 type ChartResponse struct {
-	ChartData       map[string]VMChartData      `json:"data"`
-	NodeData        map[string]NodeChartData    `json:"nodeData"`
-	StorageData     map[string]StorageChartData `json:"storageData"`
-	Timestamp       int64                       `json:"timestamp"`
-	Stats           ChartStats                  `json:"stats"`
+	ChartData   map[string]VMChartData      `json:"data"`
+	NodeData    map[string]NodeChartData    `json:"nodeData"`
+	StorageData map[string]StorageChartData `json:"storageData"`
+	Timestamp   int64                       `json:"timestamp"`
+	Stats       ChartStats                  `json:"stats"`
 }
 
 // ChartStats represents chart statistics
@@ -210,8 +211,8 @@ type MetricPoint struct {
 
 // ChartData represents data for a single chart
 type ChartData struct {
-	Labels   []string    `json:"labels"`
-	Datasets []Dataset   `json:"datasets"`
+	Labels   []string  `json:"labels"`
+	Datasets []Dataset `json:"datasets"`
 }
 
 // Dataset represents a chart dataset
@@ -224,7 +225,7 @@ type Dataset struct {
 
 // DiagnosticsResponse represents system diagnostics
 type DiagnosticsResponse struct {
-	System      SystemInfo      `json:"system"`
+	System      SystemInfo       `json:"system"`
 	Connections []ConnectionInfo `json:"connections"`
 	Errors      []ErrorInfo      `json:"errors"`
 	Performance PerformanceInfo  `json:"performance"`
@@ -272,16 +273,16 @@ type PerformanceInfo struct {
 
 // SecurityStatusResponse represents security configuration status
 type SecurityStatusResponse struct {
-	Configured      bool   `json:"configured"`
-	Method          string `json:"method"`
-	RequiresSetup   bool   `json:"requiresSetup"`
-	DeploymentType  string `json:"deploymentType,omitempty"`
+	Configured     bool   `json:"configured"`
+	Method         string `json:"method"`
+	RequiresSetup  bool   `json:"requiresSetup"`
+	DeploymentType string `json:"deploymentType,omitempty"`
 }
 
 // ExportRequest represents a configuration export request
 type ExportRequest struct {
-	Passphrase string `json:"passphrase" validate:"required,min=8"`
-	IncludeCredentials bool `json:"includeCredentials,omitempty"`
+	Passphrase         string `json:"passphrase" validate:"required,min=8"`
+	IncludeCredentials bool   `json:"includeCredentials,omitempty"`
 }
 
 // ImportRequest represents a configuration import request
@@ -346,19 +347,19 @@ type NodeConnectionResponse struct {
 // DiscoveryResponse represents discovery results
 type DiscoveryResponse struct {
 	Servers   []DiscoveredServer `json:"servers"`
-	Errors    []string          `json:"errors"`
-	Cached    bool              `json:"cached"`
-	UpdatedAt time.Time         `json:"updatedAt,omitempty"`
+	Errors    []string           `json:"errors"`
+	Cached    bool               `json:"cached"`
+	UpdatedAt time.Time          `json:"updatedAt,omitempty"`
 }
 
 // DiscoveredServer represents a discovered server
 type DiscoveredServer struct {
-	IP       string `json:"ip"`
-	Port     int    `json:"port"`
-	Type     string `json:"type"`
-	Name     string `json:"name,omitempty"`
-	Version  string `json:"version,omitempty"`
-	Status   string `json:"status,omitempty"`
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	Type    string `json:"type"`
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+	Status  string `json:"status,omitempty"`
 }
 
 // AutoRegisterResponse represents auto-registration response

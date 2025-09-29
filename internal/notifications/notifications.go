@@ -37,18 +37,18 @@ type WebhookDelivery struct {
 
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu           sync.RWMutex
-	emailConfig  EmailConfig
-	webhooks     []WebhookConfig
-	enabled      bool
-	cooldown     time.Duration
-	lastNotified map[string]notificationRecord
-	groupWindow  time.Duration
-	pendingAlerts []*alerts.Alert
-	groupTimer   *time.Timer
-	groupByNode  bool
-	publicURL    string // Full URL to access Pulse
-	groupByGuest bool
+	mu             sync.RWMutex
+	emailConfig    EmailConfig
+	webhooks       []WebhookConfig
+	enabled        bool
+	cooldown       time.Duration
+	lastNotified   map[string]notificationRecord
+	groupWindow    time.Duration
+	pendingAlerts  []*alerts.Alert
+	groupTimer     *time.Timer
+	groupByNode    bool
+	publicURL      string // Full URL to access Pulse
+	groupByGuest   bool
 	webhookHistory []WebhookDelivery // Keep last 100 webhook deliveries for debugging
 }
 
@@ -73,16 +73,16 @@ type Alert interface {
 
 // EmailConfig holds email notification settings
 type EmailConfig struct {
-	Enabled    bool     `json:"enabled"`
-	Provider   string   `json:"provider"`  // Email provider name (Gmail, SendGrid, etc.)
-	SMTPHost   string   `json:"server"`    // Changed from smtpHost to server for frontend consistency
-	SMTPPort   int      `json:"port"`      // Changed from smtpPort to port for frontend consistency
-	Username   string   `json:"username"`
-	Password   string   `json:"password"`
-	From       string   `json:"from"`
-	To         []string `json:"to"`
-	TLS        bool     `json:"tls"`
-	StartTLS   bool     `json:"startTLS"`  // STARTTLS support
+	Enabled  bool     `json:"enabled"`
+	Provider string   `json:"provider"` // Email provider name (Gmail, SendGrid, etc.)
+	SMTPHost string   `json:"server"`   // Changed from smtpHost to server for frontend consistency
+	SMTPPort int      `json:"port"`     // Changed from smtpPort to port for frontend consistency
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	From     string   `json:"from"`
+	To       []string `json:"to"`
+	TLS      bool     `json:"tls"`
+	StartTLS bool     `json:"startTLS"` // STARTTLS support
 }
 
 // WebhookConfig holds webhook settings
@@ -161,7 +161,7 @@ func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
 func (n *NotificationManager) UpdateWebhook(id string, webhook WebhookConfig) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	for i, w := range n.webhooks {
 		if w.ID == id {
 			n.webhooks[i] = webhook
@@ -175,7 +175,7 @@ func (n *NotificationManager) UpdateWebhook(id string, webhook WebhookConfig) er
 func (n *NotificationManager) DeleteWebhook(id string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	for i, w := range n.webhooks {
 		if w.ID == id {
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
@@ -189,7 +189,7 @@ func (n *NotificationManager) DeleteWebhook(id string) error {
 func (n *NotificationManager) GetWebhooks() []WebhookConfig {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-	
+
 	if len(n.webhooks) == 0 {
 		return []WebhookConfig{}
 	}
@@ -210,19 +210,19 @@ func (n *NotificationManager) GetEmailConfig() EmailConfig {
 func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	log.Info().
 		Str("alertID", alert.ID).
 		Bool("enabled", n.enabled).
 		Int("webhooks", len(n.webhooks)).
 		Bool("emailEnabled", n.emailConfig.Enabled).
 		Msg("SendAlert called")
-	
+
 	if !n.enabled {
 		log.Debug().Msg("Notifications disabled, skipping")
 		return
 	}
-	
+
 	// Check cooldown
 	record, exists := n.lastNotified[alert.ID]
 	if exists && record.alertStart.Equal(alert.StartTime) && time.Since(record.lastSent) < n.cooldown {
@@ -233,10 +233,10 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 			Msg("Alert notification in cooldown for active alert")
 		return
 	}
-	
+
 	// Add to pending alerts for grouping
 	n.pendingAlerts = append(n.pendingAlerts, alert)
-	
+
 	// If this is the first alert in the group, start the timer
 	if n.groupTimer == nil {
 		n.groupTimer = time.AfterFunc(n.groupWindow, func() {
@@ -253,37 +253,37 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 func (n *NotificationManager) sendGroupedAlerts() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	if len(n.pendingAlerts) == 0 {
 		return
 	}
-	
+
 	// Copy alerts to send
 	alertsToSend := make([]*alerts.Alert, len(n.pendingAlerts))
 	copy(alertsToSend, n.pendingAlerts)
-	
+
 	// Clear pending alerts
 	n.pendingAlerts = n.pendingAlerts[:0]
 	n.groupTimer = nil
-	
+
 	log.Info().
 		Int("alertCount", len(alertsToSend)).
 		Msg("Sending grouped alert notifications")
-	
+
 	// Send notifications
 	if n.emailConfig.Enabled {
 		go n.sendGroupedEmail(alertsToSend)
 	}
-	
+
 	webhooks := make([]WebhookConfig, len(n.webhooks))
 	copy(webhooks, n.webhooks)
-	
+
 	for _, webhook := range webhooks {
 		if webhook.Enabled {
 			go n.sendGroupedWebhook(webhook, alertsToSend)
 		}
 	}
-	
+
 	// Update last notified time for all alerts
 	now := time.Now()
 	for _, alert := range alertsToSend {
@@ -297,13 +297,13 @@ func (n *NotificationManager) sendGroupedAlerts() {
 // sendGroupedEmail sends a grouped email notification
 func (n *NotificationManager) sendGroupedEmail(alertList []*alerts.Alert) {
 	config := n.emailConfig
-	
+
 	// Don't check for recipients here - sendHTMLEmail handles empty recipients
 	// by using the From address as the recipient
-	
+
 	// Generate email using template
 	subject, htmlBody, textBody := EmailTemplate(alertList, false)
-	
+
 	// Send using HTML-aware method
 	n.sendHTMLEmail(subject, htmlBody, textBody, config)
 }
@@ -313,13 +313,13 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 	n.mu.RLock()
 	config := n.emailConfig
 	n.mu.RUnlock()
-	
+
 	// Don't check for recipients here - sendHTMLEmail handles empty recipients
 	// by using the From address as the recipient
-	
+
 	// Generate email using template
 	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
-	
+
 	// Send using HTML-aware method
 	n.sendHTMLEmail(subject, htmlBody, textBody, config)
 }
@@ -334,7 +334,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			Str("from", config.From).
 			Msg("Using From address as recipient since To is empty")
 	}
-	
+
 	// Create enhanced email configuration with proper STARTTLS support
 	enhancedConfig := EmailProviderConfig{
 		EmailConfig: EmailConfig{
@@ -352,10 +352,10 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		SkipTLSVerify: false,
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
-	
+
 	// Use enhanced email manager for better compatibility
 	enhancedManager := NewEnhancedEmailManager(enhancedConfig)
-	
+
 	log.Info().
 		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
@@ -363,9 +363,9 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		Bool("hasAuth", config.Username != "" && config.Password != "").
 		Bool("startTLS", enhancedConfig.StartTLS).
 		Msg("Attempting to send email via SMTP with enhanced support")
-	
+
 	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
-	
+
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -374,7 +374,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			Msg("Failed to send email notification")
 		return fmt.Errorf("failed to send email: %w", err)
 	}
-	
+
 	log.Info().
 		Strs("recipients", recipients).
 		Int("recipientCount", len(recipients)).
@@ -392,7 +392,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 			Str("from", config.From).
 			Msg("Using From address as recipient since To is empty")
 	}
-	
+
 	// Create enhanced email configuration with proper STARTTLS support
 	enhancedConfig := EmailProviderConfig{
 		EmailConfig: EmailConfig{
@@ -410,10 +410,10 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 		SkipTLSVerify: false,
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
-	
+
 	// Use enhanced email manager for better compatibility
 	enhancedManager := NewEnhancedEmailManager(enhancedConfig)
-	
+
 	log.Info().
 		Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 		Str("from", config.From).
@@ -421,9 +421,9 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 		Bool("hasAuth", config.Username != "" && config.Password != "").
 		Bool("startTLS", enhancedConfig.StartTLS).
 		Msg("Attempting to send email via SMTP with enhanced support")
-	
+
 	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
-	
+
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -448,7 +448,7 @@ func (n *NotificationManager) sendEmailWithContent(subject, body string, config 
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) {
 	var jsonData []byte
 	var err error
-	
+
 	// Check if webhook has a custom template first
 	// Only use custom template if it's not empty
 	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" && len(alertList) > 0 {
@@ -467,21 +467,21 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				alert.Message = fmt.Sprintf("%s\\n\\n🔔 All %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
 			}
 		}
-		
+
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
 			Service:         webhook.Service,
 			PayloadTemplate: webhook.Template,
 		}
-		
+
 		data := n.prepareWebhookData(alert, nil)
-		
+
 		// For Telegram webhooks (check URL pattern since service might be empty)
 		if strings.Contains(webhook.URL, "api.telegram.org") {
 			// Don't need to extract chat_id from URL since it's in the template
 			// The template already has the chat_id embedded
 		}
-		
+
 		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 		if err != nil {
 			log.Error().
@@ -496,13 +496,13 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		// For simplicity, send the first alert with a note about others
 		// Most webhook services work better with single structured payloads
 		alert := alertList[0]
-		
+
 		// Convert to enhanced webhook to use template
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
 		}
-		
+
 		// Get service template
 		templates := GetWebhookTemplates()
 		templateFound := false
@@ -513,7 +513,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				break
 			}
 		}
-		
+
 		if templateFound {
 			// Modify message if multiple alerts - but format differently for Discord
 			if len(alertList) > 1 {
@@ -534,10 +534,10 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					}
 				}
 			}
-			
+
 			// Prepare data and generate payload
 			data := n.prepareWebhookData(alert, nil)
-			
+
 			// Handle service-specific requirements
 			if webhook.Service == "telegram" {
 				if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
@@ -557,7 +557,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					data.CustomFields["routing_key"] = routingKey
 				}
 			}
-			
+
 			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
@@ -572,19 +572,19 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			webhook.Service = "generic"
 		}
 	}
-	
+
 	// Use generic payload if no service or template not found
 	// But ONLY if jsonData hasn't been set yet (from custom template)
 	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
-			"alerts": alertList,
-			"count": len(alertList),
+			"alerts":    alertList,
+			"count":     len(alertList),
 			"timestamp": time.Now().Unix(),
-			"source": "pulse-monitoring",
-			"grouped": true,
+			"source":    "pulse-monitoring",
+			"grouped":   true,
 		}
-		
+
 		jsonData, err = json.Marshal(payload)
 		if err != nil {
 			log.Error().
@@ -595,7 +595,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			return
 		}
 	}
-	
+
 	// Send using same request logic
 	n.sendWebhookRequest(webhook, jsonData, "grouped")
 }
@@ -637,14 +637,14 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
-	
+
 	// Special handling for ntfy service
 	if webhook.Service == "ntfy" {
 		// Set Content-Type for ntfy (plain text)
 		req.Header.Set("Content-Type", "text/plain")
 		// Note: Dynamic headers for ntfy are set in sendWebhook for individual alerts
 	}
-	
+
 	// Apply any custom headers from webhook config
 	for key, value := range webhook.Headers {
 		// Skip template-like headers (those with {{) to prevent errors
@@ -681,7 +681,14 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 
 	// Read response body for logging
 	var respBody bytes.Buffer
-	respBody.ReadFrom(resp.Body)
+	if _, err := respBody.ReadFrom(resp.Body); err != nil {
+		log.Warn().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Str("type", alertType).
+			Msg("Failed to read webhook response body")
+		return
+	}
 	responseBody := respBody.String()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -692,7 +699,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Int("status", resp.StatusCode).
 			Int("payloadSize", len(jsonData)).
 			Msg("Webhook notification sent successfully")
-		
+
 		// Log response body only in debug mode for successful requests
 		if len(responseBody) > 0 {
 			log.Debug().
@@ -715,7 +722,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.Alert) {
 	var jsonData []byte
 	var err error
-	
+
 	// Check if webhook has a custom template first
 	// Only use custom template if it's not empty
 	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" {
@@ -725,10 +732,10 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			Service:         webhook.Service,
 			PayloadTemplate: webhook.Template,
 		}
-		
+
 		// Prepare data and generate payload
 		data := n.prepareWebhookData(alert, nil)
-		
+
 		// For Telegram, still extract chat_id from URL if present
 		if webhook.Service == "telegram" {
 			if chatID, err := extractTelegramChatID(webhook.URL); err == nil && chatID != "" {
@@ -741,7 +748,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 				return // Skip this webhook
 			}
 		}
-		
+
 		jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 		if err != nil {
 			log.Error().
@@ -758,7 +765,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
 		}
-		
+
 		// Get service template
 		templates := GetWebhookTemplates()
 		templateFound := false
@@ -769,12 +776,12 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 				break
 			}
 		}
-		
+
 		// Only use template if found, otherwise fall back to generic
 		if templateFound {
 			// Prepare data and generate payload
 			data := n.prepareWebhookData(alert, nil)
-			
+
 			// For Telegram, extract chat_id from URL if present
 			if webhook.Service == "telegram" {
 				chatID, err := extractTelegramChatID(webhook.URL)
@@ -794,7 +801,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 						Msg("Extracted Telegram chat_id from URL")
 				}
 			}
-			
+
 			// For PagerDuty, add routing key if present in URL or headers
 			if webhook.Service == "pagerduty" {
 				if data.CustomFields == nil {
@@ -805,7 +812,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 					data.CustomFields["routing_key"] = routingKey
 				}
 			}
-			
+
 			jsonData, err = n.generatePayloadFromTemplateWithService(enhanced.PayloadTemplate, data, webhook.Service)
 			if err != nil {
 				log.Error().
@@ -821,17 +828,17 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			webhook.Service = "generic"
 		}
 	}
-	
+
 	// Use generic payload if no service or template not found
 	// But ONLY if jsonData hasn't been set yet (from custom template)
 	if jsonData == nil && (webhook.Service == "" || webhook.Service == "generic") {
 		// Use generic payload for other services
 		payload := map[string]interface{}{
-			"alert": alert,
+			"alert":     alert,
 			"timestamp": time.Now().Unix(),
-			"source": "pulse-monitoring",
+			"source":    "pulse-monitoring",
 		}
-		
+
 		jsonData, err = json.Marshal(payload)
 		if err != nil {
 			log.Error().
@@ -842,7 +849,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			return
 		}
 	}
-	
+
 	// Send using common request logic
 	n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID))
 }
@@ -850,7 +857,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 // prepareWebhookData prepares data for template rendering
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
-	
+
 	// Construct full Pulse URL if publicURL is configured
 	// The Instance field should contain the full URL to the Pulse dashboard
 	instance := ""
@@ -861,7 +868,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		// If publicURL is not set but alert.Instance contains a full URL, use it
 		instance = alert.Instance
 	}
-	
+
 	return WebhookPayloadData{
 		ID:           alert.ID,
 		Level:        string(alert.Level),
@@ -897,11 +904,11 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 			}
 			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 		},
-		"upper": strings.ToUpper,
-		"lower": strings.ToLower,
+		"upper":  strings.ToUpper,
+		"lower":  strings.ToLower,
 		"printf": fmt.Sprintf,
 	}
-	
+
 	tmpl, err := template.New("webhook").Funcs(funcMap).Parse(templateStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid template: %w", err)
@@ -946,23 +953,22 @@ func formatWebhookDuration(d time.Duration) string {
 	}
 }
 
-
 // extractTelegramChatID extracts and validates the chat_id from a Telegram webhook URL
 func extractTelegramChatID(webhookURL string) (string, error) {
 	if !strings.Contains(webhookURL, "chat_id=") {
 		return "", fmt.Errorf("Telegram webhook URL missing chat_id parameter")
 	}
-	
+
 	u, err := url.Parse(webhookURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid URL format: %w", err)
 	}
-	
+
 	chatID := u.Query().Get("chat_id")
 	if chatID == "" {
 		return "", fmt.Errorf("chat_id parameter is empty")
 	}
-	
+
 	// Validate that chat_id is numeric (Telegram chat IDs are always numeric)
 	// Handle negative IDs (group chats) and positive IDs (private chats)
 	if strings.HasPrefix(chatID, "-") {
@@ -972,7 +978,7 @@ func extractTelegramChatID(webhookURL string) (string, error) {
 	} else if !isNumeric(chatID) {
 		return "", fmt.Errorf("chat_id must be numeric, got: %s", chatID)
 	}
-	
+
 	return chatID, nil
 }
 
@@ -991,17 +997,17 @@ func ValidateWebhookURL(webhookURL string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("webhook URL cannot be empty")
 	}
-	
+
 	u, err := url.Parse(webhookURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL format: %w", err)
 	}
-	
+
 	// Must be HTTP or HTTPS
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("webhook URL must use http or https protocol")
 	}
-	
+
 	// Block localhost and private network ranges for security
 	// Allow them only if explicitly configured (for testing)
 	host := u.Hostname()
@@ -1010,16 +1016,16 @@ func ValidateWebhookURL(webhookURL string) error {
 			Str("url", webhookURL).
 			Msg("Webhook URL points to localhost - this may be intentional for testing")
 	}
-	
+
 	// Check for private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
-	if strings.HasPrefix(host, "10.") || 
-	   strings.HasPrefix(host, "192.168.") ||
-	   (strings.HasPrefix(host, "172.") && isPrivateRange172(host)) {
+	if strings.HasPrefix(host, "10.") ||
+		strings.HasPrefix(host, "192.168.") ||
+		(strings.HasPrefix(host, "172.") && isPrivateRange172(host)) {
 		log.Warn().
 			Str("url", webhookURL).
 			Msg("Webhook URL points to private network - ensure this is intentional")
 	}
-	
+
 	return nil
 }
 
@@ -1032,12 +1038,12 @@ func isPrivateRange172(host string) bool {
 	if parts[0] != "172" {
 		return false
 	}
-	
+
 	// Check if second octet is between 16 and 31
 	if len(parts[1]) == 0 {
 		return false
 	}
-	
+
 	second := 0
 	for _, char := range parts[1] {
 		if char < '0' || char > '9' {
@@ -1045,7 +1051,7 @@ func isPrivateRange172(host string) bool {
 		}
 		second = second*10 + int(char-'0')
 	}
-	
+
 	return second >= 16 && second <= 31
 }
 
@@ -1053,10 +1059,10 @@ func isPrivateRange172(host string) bool {
 func (n *NotificationManager) addWebhookDelivery(delivery WebhookDelivery) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	// Add to history
 	n.webhookHistory = append(n.webhookHistory, delivery)
-	
+
 	// Keep only last 100 entries
 	if len(n.webhookHistory) > 100 {
 		// Remove oldest entry
@@ -1068,7 +1074,7 @@ func (n *NotificationManager) addWebhookDelivery(delivery WebhookDelivery) {
 func (n *NotificationManager) GetWebhookHistory() []WebhookDelivery {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-	
+
 	// Return a copy to avoid concurrent access issues
 	history := make([]WebhookDelivery, len(n.webhookHistory))
 	copy(history, n.webhookHistory)
@@ -1078,16 +1084,16 @@ func (n *NotificationManager) GetWebhookHistory() []WebhookDelivery {
 // groupAlerts groups alerts based on configuration
 func (n *NotificationManager) groupAlerts(alertList []*alerts.Alert) map[string][]*alerts.Alert {
 	groups := make(map[string][]*alerts.Alert)
-	
+
 	if !n.groupByNode && !n.groupByGuest {
 		// No grouping - all alerts in one group
 		groups["all"] = alertList
 		return groups
 	}
-	
+
 	for _, alert := range alertList {
 		var key string
-		
+
 		if n.groupByNode && n.groupByGuest {
 			// Group by both node and guest type
 			guestType := "unknown"
@@ -1106,10 +1112,10 @@ func (n *NotificationManager) groupAlerts(alertList []*alerts.Alert) map[string]
 				key = "unknown"
 			}
 		}
-		
+
 		groups[key] = append(groups[key], alert)
 	}
-	
+
 	return groups
 }
 
@@ -1132,7 +1138,7 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 			"resourceType": "vm",
 		},
 	}
-	
+
 	switch method {
 	case "email":
 		log.Info().
@@ -1176,7 +1182,7 @@ func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 	if instanceURL == "" {
 		instanceURL = "http://your-pulse-instance:7655"
 	}
-	
+
 	testAlert := &alerts.Alert{
 		ID:           "test-webhook-" + webhook.ID,
 		Type:         "cpu",
@@ -1196,7 +1202,7 @@ func (n *NotificationManager) SendTestWebhook(webhook WebhookConfig) error {
 			"testTime":    time.Now().Format(time.RFC3339),
 		},
 	}
-	
+
 	// Send the test webhook
 	n.sendWebhook(webhook, testAlert)
 	return nil
@@ -1218,7 +1224,7 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			instanceURL = nodeInfo.InstanceURL
 		}
 	}
-	
+
 	testAlert := &alerts.Alert{
 		ID:           "test-alert",
 		Type:         "cpu",
@@ -1236,13 +1242,13 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			"resourceType": "test",
 		},
 	}
-	
+
 	switch method {
 	case "email":
 		if config == nil {
 			return fmt.Errorf("email configuration is required")
 		}
-		
+
 		log.Info().
 			Bool("enabled", config.Enabled).
 			Str("smtp", config.SMTPHost).
@@ -1253,21 +1259,21 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			Bool("smtpEmpty", config.SMTPHost == "").
 			Bool("fromEmpty", config.From == "").
 			Msg("Testing email notification with provided config")
-			
+
 		if !config.Enabled {
 			return fmt.Errorf("email notifications are not enabled in the provided configuration")
 		}
-		
+
 		if config.SMTPHost == "" || config.From == "" {
 			return fmt.Errorf("email configuration is incomplete: SMTP host and from address are required")
 		}
-		
+
 		// Generate email using template
 		subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{testAlert}, true)
-		
+
 		// Send using provided config and return any error
 		return n.sendHTMLEmailWithError(subject, htmlBody, textBody, *config)
-		
+
 	default:
 		return fmt.Errorf("unsupported method for config-based testing: %s", method)
 	}
@@ -1277,15 +1283,15 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 func (n *NotificationManager) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	// Cancel any pending group timer
 	if n.groupTimer != nil {
 		n.groupTimer.Stop()
 		n.groupTimer = nil
 	}
-	
+
 	// Clear pending alerts
 	n.pendingAlerts = nil
-	
+
 	log.Info().Msg("NotificationManager stopped")
 }

@@ -3,6 +3,7 @@ package proxmox
 import (
 	"context"
 	"fmt"
+
 	"github.com/rs/zerolog/log"
 )
 
@@ -14,7 +15,7 @@ func (c *Client) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]ZFS
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ZFS pools: %w", err)
 	}
-	
+
 	// Now get details for each pool
 	var poolInfos []ZFSPoolInfo
 	for _, pool := range pools {
@@ -27,7 +28,7 @@ func (c *Client) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]ZFS
 			Frag:   pool.Frag,
 			Dedup:  pool.Dedup,
 		}
-		
+
 		// Try to get detailed info, but don't fail if it's not available
 		detail, err := c.GetZFSPoolDetail(ctx, node, pool.Name)
 		if err != nil {
@@ -44,10 +45,10 @@ func (c *Client) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]ZFS
 			info.Errors = detail.Errors
 			info.Devices = detail.Children
 		}
-		
+
 		poolInfos = append(poolInfos, info)
 	}
-	
+
 	return poolInfos, nil
 }
 
@@ -61,7 +62,7 @@ type ZFSPoolInfo struct {
 	Free   uint64  `json:"free"`
 	Frag   int     `json:"frag"`
 	Dedup  float64 `json:"dedup"`
-	
+
 	// From detail endpoint (may be empty if not available)
 	State   string          `json:"state,omitempty"`
 	Status  string          `json:"status,omitempty"`
@@ -75,13 +76,13 @@ func (p *ZFSPoolInfo) ConvertToModelZFSPool() *ZFSPool {
 	if p == nil {
 		return nil
 	}
-	
+
 	// Use State if available, otherwise fall back to Health
 	state := p.State
 	if state == "" {
 		state = p.Health
 	}
-	
+
 	pool := &ZFSPool{
 		Name:   p.Name,
 		State:  state,
@@ -90,20 +91,20 @@ func (p *ZFSPoolInfo) ConvertToModelZFSPool() *ZFSPool {
 		Scan:   p.Scan,
 		Errors: p.Errors,
 	}
-	
+
 	// Extract error counts from devices if available
 	pool.Devices = make([]ZFSDevice, 0)
 	for _, dev := range p.Devices {
 		pool.Devices = append(pool.Devices, convertDeviceRecursive(dev)...)
 	}
-	
+
 	// Calculate total errors from all devices
 	for _, dev := range pool.Devices {
 		pool.ReadErrors += dev.ReadErrors
 		pool.WriteErrors += dev.WriteErrors
 		pool.ChecksumErrors += dev.ChecksumErrors
 	}
-	
+
 	return pool
 }
 
@@ -135,7 +136,7 @@ type ZFSDevice struct {
 // convertDeviceRecursive flattens the device tree into a list
 func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 	var devices []ZFSDevice
-	
+
 	// Determine device type based on name and structure
 	deviceType := "disk"
 	if dev.Leaf == 0 && len(dev.Children) > 0 {
@@ -148,7 +149,7 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 			deviceType = "vdev"
 		}
 	}
-	
+
 	// Add this device if it has errors or is not healthy
 	if dev.State != "ONLINE" || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
 		devices = append(devices, ZFSDevice{
@@ -161,11 +162,11 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 			IsLeaf:         dev.Leaf == 1,
 		})
 	}
-	
+
 	// Process children
 	for _, child := range dev.Children {
 		devices = append(devices, convertDeviceRecursive(child)...)
 	}
-	
+
 	return devices
 }

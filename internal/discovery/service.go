@@ -13,16 +13,16 @@ import (
 
 // Service handles background network discovery
 type Service struct {
-	scanner        *discovery.Scanner
-	wsHub          *websocket.Hub
-	cache          *DiscoveryCache
-	interval       time.Duration
-	subnet         string
-	mu             sync.RWMutex
-	lastScan       time.Time
-	isScanning     bool
-	stopChan       chan struct{}
-	ctx            context.Context
+	scanner    *discovery.Scanner
+	wsHub      *websocket.Hub
+	cache      *DiscoveryCache
+	interval   time.Duration
+	subnet     string
+	mu         sync.RWMutex
+	lastScan   time.Time
+	isScanning bool
+	stopChan   chan struct{}
+	ctx        context.Context
 }
 
 // DiscoveryCache stores the latest discovery results
@@ -106,13 +106,13 @@ func (s *Service) performScan() {
 		s.isScanning = false
 		s.lastScan = time.Now()
 		s.mu.Unlock()
-		
+
 		// Send scan complete notification
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_complete",
 				Data: map[string]interface{}{
-					"scanning": false,
+					"scanning":  false,
 					"timestamp": time.Now().Unix(),
 				},
 			})
@@ -120,14 +120,14 @@ func (s *Service) performScan() {
 	}()
 
 	log.Info().Str("subnet", s.subnet).Msg("Starting background discovery scan")
-	
+
 	// Send scan started notification
 	if s.wsHub != nil {
 		s.wsHub.Broadcast(websocket.Message{
 			Type: "discovery_started",
 			Data: map[string]interface{}{
-				"scanning": true,
-				"subnet": s.subnet,
+				"scanning":  true,
+				"subnet":    s.subnet,
 				"timestamp": time.Now().Unix(),
 			},
 		})
@@ -183,14 +183,14 @@ func (s *Service) performScan() {
 func (s *Service) GetCachedResult() (*discovery.DiscoveryResult, time.Time) {
 	s.cache.mu.RLock()
 	defer s.cache.mu.RUnlock()
-	
+
 	if s.cache.result == nil {
 		return &discovery.DiscoveryResult{
 			Servers: []discovery.DiscoveredServer{},
 			Errors:  []string{},
 		}, time.Time{}
 	}
-	
+
 	return s.cache.result, s.cache.updated
 }
 
@@ -220,7 +220,7 @@ func (s *Service) SetSubnet(subnet string) {
 	defer s.mu.Unlock()
 	s.subnet = subnet
 	log.Info().Str("subnet", subnet).Msg("Updated discovery subnet")
-	
+
 	// Trigger immediate rescan with new subnet
 	go s.performScan()
 }

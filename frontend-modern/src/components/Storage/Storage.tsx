@@ -10,7 +10,6 @@ import { DiskList } from './DiskList';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 
-
 const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
   const [viewMode, setViewMode] = createSignal<'node' | 'storage'>('node');
@@ -20,18 +19,18 @@ const Storage: Component = () => {
   type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
   const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  
+
   // Create a mapping from node name to host URL
   const nodeHostMap = createMemo(() => {
     const map: Record<string, string> = {};
-    (state.nodes || []).forEach(node => {
+    (state.nodes || []).forEach((node) => {
       if (node.host) {
         map[node.name] = node.host;
       }
     });
     return map;
   });
-  
+
   const sortKeyOptions: { value: StorageSortKey; label: string }[] = [
     { value: 'name', label: 'Name' },
     { value: 'node', label: 'Node' },
@@ -39,16 +38,16 @@ const Storage: Component = () => {
     { value: 'status', label: 'Status' },
     { value: 'usage', label: 'Usage %' },
     { value: 'free', label: 'Free Capacity' },
-    { value: 'total', label: 'Total Capacity' }
+    { value: 'total', label: 'Total Capacity' },
   ];
-  
+
   // Load preferences from localStorage
   onMount(() => {
     const savedViewMode = localStorage.getItem('storageViewMode');
     if (savedViewMode === 'storage') setViewMode('storage');
 
     const savedSortKey = localStorage.getItem('storageSortKey') as StorageSortKey | null;
-    if (savedSortKey && sortKeyOptions.some(option => option.value === savedSortKey)) {
+    if (savedSortKey && sortKeyOptions.some((option) => option.value === savedSortKey)) {
       setSortKey(savedSortKey);
     }
 
@@ -57,7 +56,7 @@ const Storage: Component = () => {
       setSortDirection(savedSortDirection);
     }
   });
-  
+
   // Persist preferences
   createEffect(() => {
     localStorage.setItem('storageViewMode', viewMode());
@@ -70,22 +69,21 @@ const Storage: Component = () => {
   createEffect(() => {
     localStorage.setItem('storageSortDirection', sortDirection());
   });
-  
-  
+
   // Filter storage - in storage view, filter out 0 capacity and deduplicate
   const filteredStorage = createMemo(() => {
     let storage = state.storage || [];
-    
+
     // In storage view, deduplicate identical storage and filter out 0 capacity
     if (viewMode() === 'storage') {
       // Filter out 0 capacity first
-      storage = storage.filter(s => s.total > 0);
-      
+      storage = storage.filter((s) => s.total > 0);
+
       // Deduplicate storage entries that are identical
       const storageMap = new Map();
-      storage.forEach(s => {
+      storage.forEach((s) => {
         let key;
-        
+
         // For PBS storage, group by capacity since they're the same PBS server
         // PBS namespaces (pbs-node1, pbs-node2) pointing to same server should be grouped
         if (s.type === 'pbs' && s.shared) {
@@ -99,7 +97,7 @@ const Storage: Component = () => {
           // Each node has its own physical storage
           key = `${s.node}-${s.name}-${s.type}`;
         }
-        
+
         if (!storageMap.has(key)) {
           // First occurrence - store it with node list
           storageMap.set(key, {
@@ -107,7 +105,7 @@ const Storage: Component = () => {
             name: s.type === 'pbs' ? 'PBS Storage' : s.name, // Generic name for PBS
             nodes: [s.node],
             nodeCount: 1,
-            pbsNames: s.type === 'pbs' ? [s.name] : undefined // Track individual PBS names
+            pbsNames: s.type === 'pbs' ? [s.name] : undefined, // Track individual PBS names
           });
         } else {
           // Duplicate - just add to node list
@@ -122,29 +120,29 @@ const Storage: Component = () => {
           }
         }
       });
-      
+
       // Convert back to array
       storage = Array.from(storageMap.values());
     }
-    
+
     return storage;
   });
-  
+
   // Sort and filter storage
   const sortedStorage = createMemo(() => {
     let storage = [...filteredStorage()];
-    
+
     // Apply node selection filter
     const nodeFilter = selectedNode();
     if (nodeFilter) {
       const normalizedNode = nodeFilter.toLowerCase();
-      storage = storage.filter(s => {
+      storage = storage.filter((s) => {
         const primary = s.node?.toLowerCase();
-        const extraNodes = s.nodes?.map(node => node.toLowerCase()) || [];
+        const extraNodes = s.nodes?.map((node) => node.toLowerCase()) || [];
         return primary === normalizedNode || extraNodes.includes(normalizedNode);
       });
     }
-    
+
     // Apply search filter
     let search = searchTerm().toLowerCase().trim();
     if (search) {
@@ -158,16 +156,16 @@ const Storage: Component = () => {
       }
 
       if (nodeQuery) {
-        storage = storage.filter(s => {
+        storage = storage.filter((s) => {
           const primary = s.node?.toLowerCase();
-          const extraNodes = s.nodes?.map(node => node.toLowerCase()) || [];
+          const extraNodes = s.nodes?.map((node) => node.toLowerCase()) || [];
           return primary === nodeQuery || extraNodes.includes(nodeQuery);
         });
       }
 
       if (search) {
         const terms = search.split(/\s+/).filter(Boolean);
-        storage = storage.filter(s => {
+        storage = storage.filter((s) => {
           const haystack = [
             s.name,
             s.node,
@@ -175,14 +173,16 @@ const Storage: Component = () => {
             s.content,
             s.status,
             ...(s.nodes ?? []),
-            ...(s.pbsNames ?? [])
-          ].filter(Boolean).map(value => value!.toLowerCase());
+            ...(s.pbsNames ?? []),
+          ]
+            .filter(Boolean)
+            .map((value) => value!.toLowerCase());
 
-          return terms.every(term => haystack.some(entry => entry.includes(term)));
+          return terms.every((term) => haystack.some((entry) => entry.includes(term)));
         });
       }
     }
-    
+
     const numericCompare = (a: number, b: number) => {
       const normalizedA = Number.isFinite(a) ? a : -Infinity;
       const normalizedB = Number.isFinite(b) ? b : -Infinity;
@@ -201,10 +201,14 @@ const Storage: Component = () => {
           break;
         }
         case 'type':
-          comparison = (a.type ?? '').localeCompare(b.type ?? '', undefined, { sensitivity: 'base' });
+          comparison = (a.type ?? '').localeCompare(b.type ?? '', undefined, {
+            sensitivity: 'base',
+          });
           break;
         case 'status':
-          comparison = (a.status ?? '').localeCompare(b.status ?? '', undefined, { sensitivity: 'base' });
+          comparison = (a.status ?? '').localeCompare(b.status ?? '', undefined, {
+            sensitivity: 'base',
+          });
           break;
         case 'usage':
           comparison = numericCompare(a.usage ?? 0, b.usage ?? 0);
@@ -217,7 +221,9 @@ const Storage: Component = () => {
           break;
         case 'name':
         default:
-          comparison = (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+          comparison = (a.name ?? '').localeCompare(b.name ?? '', undefined, {
+            sensitivity: 'base',
+          });
           break;
       }
 
@@ -230,15 +236,15 @@ const Storage: Component = () => {
 
     return result;
   });
-  
+
   // Group storage by node or storage
   const groupedStorage = createMemo(() => {
     const storage = sortedStorage();
     const mode = viewMode();
-    
+
     if (mode === 'node') {
       const groups: Record<string, StorageType[]> = {};
-      storage.forEach(s => {
+      storage.forEach((s) => {
         if (!groups[s.node]) groups[s.node] = [];
         groups[s.node].push(s);
       });
@@ -246,23 +252,23 @@ const Storage: Component = () => {
     } else {
       // Group by storage name - show all storage as-is for maximum compatibility
       const groups: Record<string, StorageType[]> = {};
-      
-      storage.forEach(s => {
+
+      storage.forEach((s) => {
         if (!groups[s.name]) groups[s.name] = [];
         groups[s.name].push(s);
       });
-      
+
       return groups;
     }
   });
-  
+
   const getProgressBarColor = (usage: number) => {
     // Match MetricBar component styling exactly - disk type thresholds
     if (usage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
     if (usage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
     return 'bg-green-500/60 dark:bg-green-500/50';
   };
-  
+
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedNode(null);
@@ -270,26 +276,26 @@ const Storage: Component = () => {
     setSortKey('name');
     setSortDirection('asc');
   };
-  
-  
+
   // Handle keyboard shortcuts
   let searchInputRef: HTMLInputElement | undefined;
-  
+
   createEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in an input
       const target = e.target as HTMLElement;
-      const isInputField = target.tagName === 'INPUT' || 
-                          target.tagName === 'TEXTAREA' || 
-                          target.tagName === 'SELECT' ||
-                          target.contentEditable === 'true';
-      
+      const isInputField =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.contentEditable === 'true';
+
       // Escape key behavior
       if (e.key === 'Escape') {
         // Clear search and reset filters
         if (searchTerm().trim() || selectedNode() || viewMode() !== 'node') {
           resetFilters();
-          
+
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
             searchInputRef.blur();
@@ -307,7 +313,7 @@ const Storage: Component = () => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
-  
+
   const handleNodeSelect = (nodeId: string | null) => {
     setSelectedNode(nodeId);
   };
@@ -315,13 +321,13 @@ const Storage: Component = () => {
   return (
     <div>
       {/* Node Selector */}
-      <UnifiedNodeSelector 
-        currentTab="storage" 
+      <UnifiedNodeSelector
+        currentTab="storage"
         onNodeSelect={handleNodeSelect}
         filteredStorage={sortedStorage()}
         searchTerm={searchTerm()}
       />
-      
+
       {/* Tab Toggle */}
       <div class="mb-4">
         <nav class="flex space-x-8" aria-label="Tabs">
@@ -347,7 +353,7 @@ const Storage: Component = () => {
           </button>
         </nav>
       </div>
-      
+
       {/* Show Storage Filter only for pools */}
       <Show when={tabView() === 'pools'}>
         <StorageFilter
@@ -360,10 +366,10 @@ const Storage: Component = () => {
           setSortKey={setSortKey}
           sortDirection={sortDirection}
           setSortDirection={setSortDirection}
-          searchInputRef={(el) => searchInputRef = el}
+          searchInputRef={(el) => (searchInputRef = el)}
         />
       </Show>
-      
+
       {/* Show simple search for disks */}
       <Show when={tabView() === 'disks'}>
         <Card class="mb-3" padding="sm">
@@ -373,30 +379,51 @@ const Storage: Component = () => {
               placeholder="Search disks by model, path, or serial..."
               value={searchTerm()}
               onInput={(e) => setSearchTerm(e.currentTarget.value)}
-              ref={(el) => searchInputRef = el}
+              ref={(el) => (searchInputRef = el)}
               class="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
             />
-            <svg class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg
+              class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </div>
         </Card>
       </Show>
-      
+
       {/* Loading State */}
       <Show when={connected() && !initialDataReceived()}>
         <Card padding="lg">
           <EmptyState
-            icon={(
+            icon={
               <div class="mx-auto flex h-12 w-12 items-center justify-center">
                 <svg class="h-8 w-8 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
               </div>
-            )}
+            }
             title="Loading storage data..."
             description="Connecting to monitoring service"
           />
@@ -404,279 +431,410 @@ const Storage: Component = () => {
       </Show>
 
       {/* Helpful hint for no PVE nodes but still show content */}
-      <Show when={connected() && initialDataReceived() && (state.nodes || []).filter((n) => n.type === 'pve').length === 0 && sortedStorage().length === 0 && searchTerm().trim() === ''}>
+      <Show
+        when={
+          connected() &&
+          initialDataReceived() &&
+          (state.nodes || []).filter((n) => n.type === 'pve').length === 0 &&
+          sortedStorage().length === 0 &&
+          searchTerm().trim() === ''
+        }
+      >
         <Card padding="lg">
           <EmptyState
-            icon={(
-              <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            icon={
+              <svg
+                class="h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
-            )}
+            }
             title="No storage configured"
             description="Add a Proxmox VE or PBS node in the Settings tab to start monitoring storage."
-            actions={(
+            actions={
               <button
                 type="button"
                 onClick={() => {
-                  const settingsTab = document.querySelector('[role=\"tab\"]:last-child') as HTMLElement;
+                  const settingsTab = document.querySelector(
+                    '[role=\"tab\"]:last-child',
+                  ) as HTMLElement;
                   settingsTab?.click();
                 }}
                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Go to Settings
               </button>
-            )}
+            }
           />
         </Card>
       </Show>
-      
+
       {/* Conditional rendering based on tab */}
       <Show when={tabView() === 'pools'}>
         {/* No results found message for storage pools */}
-        <Show when={connected() && initialDataReceived() && sortedStorage().length === 0 && searchTerm().trim() !== ''}>
+        <Show
+          when={
+            connected() &&
+            initialDataReceived() &&
+            sortedStorage().length === 0 &&
+            searchTerm().trim() !== ''
+          }
+        >
           <Card padding="lg">
             <EmptyState
-              icon={(
-                <svg class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              icon={
+                <svg
+                  class="h-12 w-12 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
                 </svg>
-              )}
+              }
               title="No storage found"
               description={`No storage matches your search "${searchTerm()}"`}
             />
           </Card>
         </Show>
-        
+
         {/* Storage Table - shows for both PVE and PBS storage */}
         <Show when={connected() && initialDataReceived() && sortedStorage().length > 0}>
-        <ComponentErrorBoundary name="Storage Table">
-          <Card padding="none" class="mb-4 overflow-hidden">
-            <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
-              <style>{`
+          <ComponentErrorBoundary name="Storage Table">
+            <Card padding="none" class="mb-4 overflow-hidden">
+              <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+                <style>{`
                 .overflow-x-auto::-webkit-scrollbar { display: none; }
               `}</style>
-            <table class="w-full">
-              <thead>
-                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Storage</th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Content</th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Status</th>
-                  <Show when={viewMode() === 'node'}>
-                    <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">Shared</th>
-                  </Show>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[200px]">Usage</th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">Free</th>
-                  <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Total</th>
-                  <th class="px-2 py-1.5 w-8"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <For each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))}>
-                  {([groupName, storages]) => (
-                    <>
-                      {/* Group Header */}
+                <table class="w-full">
+                  <thead>
+                    <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                        Storage
+                      </th>
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">
+                        Type
+                      </th>
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
+                        Content
+                      </th>
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
+                        Status
+                      </th>
                       <Show when={viewMode() === 'node'}>
-                        <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                          <td class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400" colspan="9">
-                            <a 
-                              href={nodeHostMap()[groupName] || (groupName.includes(':') ? `https://${groupName}` : `https://${groupName}:8006`)} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                              title={`Open ${groupName} web interface`}
-                            >
-                              {groupName}
-                            </a>
-                          </td>
-                        </tr>
+                        <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
+                          Shared
+                        </th>
                       </Show>
-                      
-                      {/* Storage Rows */}
-                      <For each={storages} fallback={<></>}>
-                        {(storage) => {
-                          const usagePercent = storage.total > 0 ? (storage.used / storage.total * 100) : 0;
-                          const isDisabled = storage.status !== 'available';
-                          
-                          const alertStyles = getAlertStyles(storage.id || `${storage.instance}-${storage.name}`, activeAlerts);
-                          const alertBg = alertStyles.hasAlert 
-                            ? (alertStyles.severity === 'critical' 
-                              ? 'bg-red-50 dark:bg-red-950/30' 
-                              : 'bg-yellow-50 dark:bg-yellow-950/20')
-                            : '';
-                          const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
-                          
-                          // Create row style with inset box-shadow for alert border
-                        const rowStyle = createMemo(() => {
-                          const styles: Record<string, string> = {};
-                          if (alertStyles.hasAlert) {
-                            const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
-                            styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
-                          }
-                          return styles;
-                        });
-
-                        const zfsPool = storage.zfsPool;
-                          
-                          return (
-                            <>
-                              <tr 
-                                class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`} 
-                                style={rowStyle()}
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-[200px]">
+                        Usage
+                      </th>
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
+                        Free
+                      </th>
+                      <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">
+                        Total
+                      </th>
+                      <th class="px-2 py-1.5 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <For
+                      each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))}
+                    >
+                      {([groupName, storages]) => (
+                        <>
+                          {/* Group Header */}
+                          <Show when={viewMode() === 'node'}>
+                            <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                              <td
+                                class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                                colspan="9"
                               >
-                                <td class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}>
-                                <div class="flex items-center gap-2">
-                                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {storage.name}
-                                  </span>
-                                  {/* ZFS Health Badge */}
-                                  <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
-                                    <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      zfsPool?.state === 'DEGRADED'
-                                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                                    }`}>
-                                      {zfsPool?.state}
-                                    </span>
-                                  </Show>
-                                  {/* ZFS Error Badge */}
-                                  <Show when={zfsPool && (zfsPool.readErrors > 0 || zfsPool.writeErrors > 0 || zfsPool.checksumErrors > 0)}>
-                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                                      ERRORS
-                                    </span>
-                                  </Show>
-                                  <Show when={viewMode() === 'storage'}>
-                                    <Show when={storage.pbsNames}>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                                        ({storage.pbsNames?.sort().join(', ')})
-                                      </span>
-                                    </Show>
-                                    <Show when={!storage.pbsNames}>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                                        ({storage.nodes ? storage.nodes.join(', ') : storage.node})
-                                      </span>
-                                    </Show>
-                                  </Show>
-                                </div>
+                                <a
+                                  href={
+                                    nodeHostMap()[groupName] ||
+                                    (groupName.includes(':')
+                                      ? `https://${groupName}`
+                                      : `https://${groupName}:8006`)
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+                                  title={`Open ${groupName} web interface`}
+                                >
+                                  {groupName}
+                                </a>
                               </td>
-                              <td class="p-0.5 px-1.5 hidden md:table-cell">
-                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                  {storage.type}
-                                </span>
-                              </td>
-                              <td class="p-0.5 px-1.5 hidden lg:table-cell">
-                                <span class="text-xs text-gray-600 dark:text-gray-400">
-                                  {storage.content || '-'}
-                                </span>
-                              </td>
-                              <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
-                                <span class={`${
-                                  storage.status === 'available' ? 'text-green-600 dark:text-green-400' : 
-                                  'text-red-600 dark:text-red-400'
-                                }`}>
-                                  {storage.status || 'unknown'}
-                                </span>
-                              </td>
-                              <Show when={viewMode() === 'node'}>
-                                <td class="p-0.5 px-1.5 hidden lg:table-cell">
-                                  <span class="text-xs text-gray-600 dark:text-gray-400">
-                                    {storage.shared ? '✓' : '-'}
-                                  </span>
-                                </td>
-                              </Show>
-                              
-                              <td class="p-0.5 px-1.5">
-                                <div class="relative min-w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
-                                  <div 
-                                    class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
-                                    style={{ width: `${usagePercent}%` }}
-                                  />
-                                  <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                    <span class="whitespace-nowrap px-0.5">
-                                      {usagePercent.toFixed(0)}% ({formatBytes(storage.used || 0)}/{formatBytes(storage.total || 0)})
-                                    </span>
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">{formatBytes(storage.free || 0)}</td>
-                              <td class="p-0.5 px-1.5 text-xs">{formatBytes(storage.total || 0)}</td>
-                              <td class="p-0.5 px-1.5"></td>
                             </tr>
-                            <Show when={storage.zfsPool && (
-                              storage.zfsPool.state !== 'ONLINE' || 
-                              storage.zfsPool.readErrors > 0 || 
-                              storage.zfsPool.writeErrors > 0 || 
-                              storage.zfsPool.checksumErrors > 0
-                            )}>
-                              <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
-                                <td colspan="9" class="p-2">
-                                  <div class="text-xs space-y-1">
-                                    <div class="flex items-center gap-2">
-                                      <span class="font-semibold text-yellow-700 dark:text-yellow-400">
-                                        ZFS Pool Status:
-                                      </span>
-                                      <span class={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                        storage.zfsPool!.state === 'ONLINE' 
-                                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                          : storage.zfsPool!.state === 'DEGRADED'
-                                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                          : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                                      }`}>
-                                        {storage.zfsPool!.state}
-                                      </span>
-                                      <Show when={storage.zfsPool!.readErrors > 0 || storage.zfsPool!.writeErrors > 0 || storage.zfsPool!.checksumErrors > 0}>
-                                        <span class="text-red-600 dark:text-red-400">
-                                          Errors: {storage.zfsPool!.readErrors} read, {storage.zfsPool!.writeErrors} write, {storage.zfsPool!.checksumErrors} checksum
+                          </Show>
+
+                          {/* Storage Rows */}
+                          <For each={storages} fallback={<></>}>
+                            {(storage) => {
+                              const usagePercent =
+                                storage.total > 0 ? (storage.used / storage.total) * 100 : 0;
+                              const isDisabled = storage.status !== 'available';
+
+                              const alertStyles = getAlertStyles(
+                                storage.id || `${storage.instance}-${storage.name}`,
+                                activeAlerts,
+                              );
+                              const alertBg = alertStyles.hasAlert
+                                ? alertStyles.severity === 'critical'
+                                  ? 'bg-red-50 dark:bg-red-950/30'
+                                  : 'bg-yellow-50 dark:bg-yellow-950/20'
+                                : '';
+                              const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
+
+                              // Create row style with inset box-shadow for alert border
+                              const rowStyle = createMemo(() => {
+                                const styles: Record<string, string> = {};
+                                if (alertStyles.hasAlert) {
+                                  const color =
+                                    alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                                  styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
+                                }
+                                return styles;
+                              });
+
+                              const zfsPool = storage.zfsPool;
+
+                              return (
+                                <>
+                                  <tr
+                                    class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`}
+                                    style={rowStyle()}
+                                  >
+                                    <td
+                                      class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}
+                                    >
+                                      <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {storage.name}
                                         </span>
-                                      </Show>
-                                    </div>
-                                    <Show when={storage.zfsPool!.devices.some(d => d.state !== 'ONLINE' || d.readErrors > 0 || d.writeErrors > 0 || d.checksumErrors > 0)}>
-                                      <div class="ml-4 space-y-0.5">
-                                        <For each={storage.zfsPool!.devices.filter(d => d.state !== 'ONLINE' || d.readErrors > 0 || d.writeErrors > 0 || d.checksumErrors > 0)}>
-                                          {(device) => (
-                                            <div class="flex items-center gap-2 text-xs">
-                                              <span class="text-gray-600 dark:text-gray-400">Device {device.name}:</span>
-                                              <span class={`${device.state !== 'ONLINE' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                                                {device.state}
-                                                <Show when={device.readErrors > 0 || device.writeErrors > 0 || device.checksumErrors > 0}>
-                                                  <span class="ml-1">
-                                                    ({device.readErrors}R/{device.writeErrors}W/{device.checksumErrors}C errors)
-                                                  </span>
-                                                </Show>
-                                              </span>
-                                            </div>
-                                          )}
-                                        </For>
+                                        {/* ZFS Health Badge */}
+                                        <Show when={zfsPool && zfsPool.state !== 'ONLINE'}>
+                                          <span
+                                            class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                              zfsPool?.state === 'DEGRADED'
+                                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                            }`}
+                                          >
+                                            {zfsPool?.state}
+                                          </span>
+                                        </Show>
+                                        {/* ZFS Error Badge */}
+                                        <Show
+                                          when={
+                                            zfsPool &&
+                                            (zfsPool.readErrors > 0 ||
+                                              zfsPool.writeErrors > 0 ||
+                                              zfsPool.checksumErrors > 0)
+                                          }
+                                        >
+                                          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                                            ERRORS
+                                          </span>
+                                        </Show>
+                                        <Show when={viewMode() === 'storage'}>
+                                          <Show when={storage.pbsNames}>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                              ({storage.pbsNames?.sort().join(', ')})
+                                            </span>
+                                          </Show>
+                                          <Show when={!storage.pbsNames}>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                              (
+                                              {storage.nodes
+                                                ? storage.nodes.join(', ')
+                                                : storage.node}
+                                              )
+                                            </span>
+                                          </Show>
+                                        </Show>
                                       </div>
+                                    </td>
+                                    <td class="p-0.5 px-1.5 hidden md:table-cell">
+                                      <span class="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                        {storage.type}
+                                      </span>
+                                    </td>
+                                    <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                                        {storage.content || '-'}
+                                      </span>
+                                    </td>
+                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
+                                      <span
+                                        class={`${
+                                          storage.status === 'available'
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                        }`}
+                                      >
+                                        {storage.status || 'unknown'}
+                                      </span>
+                                    </td>
+                                    <Show when={viewMode() === 'node'}>
+                                      <td class="p-0.5 px-1.5 hidden lg:table-cell">
+                                        <span class="text-xs text-gray-600 dark:text-gray-400">
+                                          {storage.shared ? '✓' : '-'}
+                                        </span>
+                                      </td>
                                     </Show>
-                                  </div>
-                                </td>
-                              </tr>
-                            </Show>
-                            </>
-                          );
-                        }}
-                      </For>
-                    </>
-                  )}
-                </For>
-              </tbody>
-            </table>
-            </div>
-        </Card>
-        </ComponentErrorBoundary>
+
+                                    <td class="p-0.5 px-1.5">
+                                      <div class="relative min-w-[200px] h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                                        <div
+                                          class={`absolute top-0 left-0 h-full ${getProgressBarColor(usagePercent)}`}
+                                          style={{ width: `${usagePercent}%` }}
+                                        />
+                                        <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                                          <span class="whitespace-nowrap px-0.5">
+                                            {usagePercent.toFixed(0)}% (
+                                            {formatBytes(storage.used || 0)}/
+                                            {formatBytes(storage.total || 0)})
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
+                                      {formatBytes(storage.free || 0)}
+                                    </td>
+                                    <td class="p-0.5 px-1.5 text-xs">
+                                      {formatBytes(storage.total || 0)}
+                                    </td>
+                                    <td class="p-0.5 px-1.5"></td>
+                                  </tr>
+                                  <Show
+                                    when={
+                                      storage.zfsPool &&
+                                      (storage.zfsPool.state !== 'ONLINE' ||
+                                        storage.zfsPool.readErrors > 0 ||
+                                        storage.zfsPool.writeErrors > 0 ||
+                                        storage.zfsPool.checksumErrors > 0)
+                                    }
+                                  >
+                                    <tr class="bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500">
+                                      <td colspan="9" class="p-2">
+                                        <div class="text-xs space-y-1">
+                                          <div class="flex items-center gap-2">
+                                            <span class="font-semibold text-yellow-700 dark:text-yellow-400">
+                                              ZFS Pool Status:
+                                            </span>
+                                            <span
+                                              class={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                                storage.zfsPool!.state === 'ONLINE'
+                                                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                  : storage.zfsPool!.state === 'DEGRADED'
+                                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                              }`}
+                                            >
+                                              {storage.zfsPool!.state}
+                                            </span>
+                                            <Show
+                                              when={
+                                                storage.zfsPool!.readErrors > 0 ||
+                                                storage.zfsPool!.writeErrors > 0 ||
+                                                storage.zfsPool!.checksumErrors > 0
+                                              }
+                                            >
+                                              <span class="text-red-600 dark:text-red-400">
+                                                Errors: {storage.zfsPool!.readErrors} read,{' '}
+                                                {storage.zfsPool!.writeErrors} write,{' '}
+                                                {storage.zfsPool!.checksumErrors} checksum
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <Show
+                                            when={storage.zfsPool!.devices.some(
+                                              (d) =>
+                                                d.state !== 'ONLINE' ||
+                                                d.readErrors > 0 ||
+                                                d.writeErrors > 0 ||
+                                                d.checksumErrors > 0,
+                                            )}
+                                          >
+                                            <div class="ml-4 space-y-0.5">
+                                              <For
+                                                each={storage.zfsPool!.devices.filter(
+                                                  (d) =>
+                                                    d.state !== 'ONLINE' ||
+                                                    d.readErrors > 0 ||
+                                                    d.writeErrors > 0 ||
+                                                    d.checksumErrors > 0,
+                                                )}
+                                              >
+                                                {(device) => (
+                                                  <div class="flex items-center gap-2 text-xs">
+                                                    <span class="text-gray-600 dark:text-gray-400">
+                                                      Device {device.name}:
+                                                    </span>
+                                                    <span
+                                                      class={`${device.state !== 'ONLINE' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}
+                                                    >
+                                                      {device.state}
+                                                      <Show
+                                                        when={
+                                                          device.readErrors > 0 ||
+                                                          device.writeErrors > 0 ||
+                                                          device.checksumErrors > 0
+                                                        }
+                                                      >
+                                                        <span class="ml-1">
+                                                          ({device.readErrors}R/{device.writeErrors}
+                                                          W/{device.checksumErrors}C errors)
+                                                        </span>
+                                                      </Show>
+                                                    </span>
+                                                  </div>
+                                                )}
+                                              </For>
+                                            </div>
+                                          </Show>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </Show>
+                                </>
+                              );
+                            }}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </ComponentErrorBoundary>
         </Show>
       </Show>
-      
+
       {/* Physical Disks Tab */}
       <Show when={tabView() === 'disks'}>
-        <DiskList 
+        <DiskList
           disks={state.physicalDisks || []}
           selectedNode={selectedNode()}
           searchTerm={searchTerm()}
         />
       </Show>
-      
     </div>
   );
 };

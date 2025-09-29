@@ -2,11 +2,11 @@
 
 export function formatBytes(bytes: number, decimals = 0): string {
   if (!bytes || bytes < 0) return '0 B';
-  
+
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return `${(bytes / Math.pow(k, i)).toFixed(decimals)} ${sizes[i]}`;
 }
 
@@ -17,11 +17,11 @@ export function formatSpeed(bytesPerSecond: number, decimals = 0): string {
 
 export function formatUptime(seconds: number): string {
   if (!seconds || seconds < 0) return '0s';
-  
+
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  
+
   if (days > 0) {
     return `${days}d ${hours}h`;
   } else if (hours > 0) {
@@ -31,25 +31,36 @@ export function formatUptime(seconds: number): string {
   }
 }
 
-
 export function formatAbsoluteTime(timestamp: number): string {
   if (!timestamp) return '';
   const date = new Date(timestamp);
-  
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
+
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
   const month = months[date.getMonth()];
   const day = date.getDate();
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
-  
+
   return `${day} ${month} ${hours}:${minutes}`;
 }
 
 export function formatRelativeTime(timestamp: number): string {
   if (!timestamp) return '';
-  
+
   const now = Date.now();
   const diffMs = now - timestamp;
   const diffSeconds = Math.floor(diffMs / 1000);
@@ -58,7 +69,7 @@ export function formatRelativeTime(timestamp: number): string {
   const diffDays = Math.floor(diffHours / 24);
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
-  
+
   if (diffSeconds < 60) {
     return diffSeconds <= 1 ? 'just now' : `${diffSeconds}s ago`;
   } else if (diffMinutes < 60) {
