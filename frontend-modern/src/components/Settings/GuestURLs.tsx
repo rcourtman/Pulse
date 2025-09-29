@@ -194,7 +194,7 @@ export function GuestURLs(props: GuestURLsProps) {
   };
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-6 w-full">
       {/* Header */}
       <SectionHeader
         title="Guest URL management"
@@ -232,17 +232,17 @@ export function GuestURLs(props: GuestURLsProps) {
       </Show>
 
       {/* Guest URLs Table */}
-      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
         <Show when={!initialLoad()} fallback={
           <div class="flex items-center justify-center py-12">
             <div class="text-gray-500 dark:text-gray-400">Loading guest URLs...</div>
           </div>
         }>
-          <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
+          <div class="overflow-x-auto w-full" style="scrollbar-width: none; -ms-overflow-style: none;">
             <style>{`
               .overflow-x-auto::-webkit-scrollbar { display: none; }
             `}</style>
-            <table class="min-w-full" style="min-width: 768px;">
+            <table class="min-w-full w-full table-auto">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                   <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
