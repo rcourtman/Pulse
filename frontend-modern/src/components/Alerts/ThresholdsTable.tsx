@@ -624,210 +624,257 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </div>
         
         <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-            {/* Threshold table */}
+            {/* Threshold inputs in a responsive layout */}
             <div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 Default thresholds for all resources. Individual resources can override these values below.
                 <span class="ml-2 text-blue-600 dark:text-blue-400">Enter 0 or -1 to disable specific alerts.</span>
               </p>
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                  <thead>
-                    <tr class="border-b border-gray-200 dark:border-gray-700">
-                      <th class="text-left py-2 px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Resource Type</th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">CPU<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Memory<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Storage<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">%</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk Read<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Disk Write<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Net In<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
-                      <th class="text-center px-3 text-xs font-medium text-gray-600 dark:text-gray-400">Net Out<br/><span class="text-[10px] font-normal text-gray-500 dark:text-gray-500">MB/s</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
-                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">VMs & Containers</td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.guestDefaults.cpu || 0}
-                          title="Enter 0 or -1 to disable CPU alerts"
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.guestDefaults.memory || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.guestDefaults.disk || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="10000"
-                          value={props.guestDefaults.diskRead || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, diskRead: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="10000"
-                          value={props.guestDefaults.diskWrite || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, diskWrite: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="10000"
-                          value={props.guestDefaults.networkIn || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, networkIn: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="10000"
-                          value={props.guestDefaults.networkOut || 0}
-                          onInput={(e) => {
-                            props.setGuestDefaults((prev) => ({...prev, networkOut: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                    </tr>
-                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
-                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">Proxmox Nodes</td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.nodeDefaults.cpu || 0}
-                          onInput={(e) => {
-                            props.setNodeDefaults((prev) => ({...prev, cpu: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.nodeDefaults.memory || 0}
-                          onInput={(e) => {
-                            props.setNodeDefaults((prev) => ({...prev, memory: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.nodeDefaults.disk || 0}
-                          onInput={(e) => {
-                            props.setNodeDefaults((prev) => ({...prev, disk: parseInt(e.currentTarget.value) || 0}));
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                    </tr>
-                    <tr>
-                      <td class="p-1 px-2 font-medium text-gray-700 dark:text-gray-300 text-sm">Storage</td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2">
-                        <input
-                          type="number"
-                          min="-1"
-                          max="100"
-                          value={props.storageDefault()}
-                          onInput={(e) => {
-                            props.setStorageDefault(parseInt(e.currentTarget.value) || 0);
-                            props.setHasUnsavedChanges(true);
-                          }}
-                          class="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                      <td class="text-center p-1 px-2"><span class="text-gray-400 dark:text-gray-500">-</span></td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
+                  <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                    VMs & Containers
+                  </h4>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="space-y-1">
+                      <label for="guest-cpu" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>CPU</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="guest-cpu"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.guestDefaults.cpu ?? 0}
+                        title="Enter 0 or -1 to disable CPU alerts"
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, cpu: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-memory" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Memory</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="guest-memory"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.guestDefaults.memory ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, memory: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-disk" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Disk</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="guest-disk"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.guestDefaults.disk ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, disk: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-disk-read" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Disk Read</span>
+                        <span class="text-[10px] font-normal text-gray-400">MB/s</span>
+                      </label>
+                      <input
+                        id="guest-disk-read"
+                        type="number"
+                        min="-1"
+                        max="10000"
+                        value={props.guestDefaults.diskRead ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, diskRead: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-disk-write" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Disk Write</span>
+                        <span class="text-[10px] font-normal text-gray-400">MB/s</span>
+                      </label>
+                      <input
+                        id="guest-disk-write"
+                        type="number"
+                        min="-1"
+                        max="10000"
+                        value={props.guestDefaults.diskWrite ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, diskWrite: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-network-in" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Net In</span>
+                        <span class="text-[10px] font-normal text-gray-400">MB/s</span>
+                      </label>
+                      <input
+                        id="guest-network-in"
+                        type="number"
+                        min="-1"
+                        max="10000"
+                        value={props.guestDefaults.networkIn ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, networkIn: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="guest-network-out" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Net Out</span>
+                        <span class="text-[10px] font-normal text-gray-400">MB/s</span>
+                      </label>
+                      <input
+                        id="guest-network-out"
+                        type="number"
+                        min="-1"
+                        max="10000"
+                        value={props.guestDefaults.networkOut ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setGuestDefaults((prev) => ({ ...prev, networkOut: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
+                  <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                    Proxmox Nodes
+                  </h4>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="space-y-1">
+                      <label for="node-cpu" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>CPU</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="node-cpu"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.nodeDefaults.cpu ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setNodeDefaults((prev) => ({ ...prev, cpu: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <label for="node-memory" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Memory</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="node-memory"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.nodeDefaults.memory ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setNodeDefaults((prev) => ({ ...prev, memory: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div class="space-y-1 sm:col-span-2">
+                      <label for="node-disk" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Disk</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="node-disk"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.nodeDefaults.disk ?? 0}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setNodeDefaults((prev) => ({ ...prev, disk: Number.isNaN(value) ? 0 : value }));
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3 md:col-span-2">
+                  <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                    Storage
+                  </h4>
+                  <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    <div class="space-y-1">
+                      <label for="storage-usage" class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between">
+                        <span>Usage</span>
+                        <span class="text-[10px] font-normal text-gray-400">%</span>
+                      </label>
+                      <input
+                        id="storage-usage"
+                        type="number"
+                        min="-1"
+                        max="100"
+                        value={props.storageDefault()}
+                        onInput={(e) => {
+                          const value = parseInt(e.currentTarget.value, 10);
+                          props.setStorageDefault(Number.isNaN(value) ? 0 : value);
+                          props.setHasUnsavedChanges(true);
+                        }}
+                        class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            
             {/* Alert delay settings per resource type */}
             <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
               <div class="mb-2">
