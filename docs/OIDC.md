@@ -39,6 +39,15 @@ This exposes an issuer at `http://127.0.0.1:5556/dex` with:
 
 Point the OIDC settings screen at that issuer, save, and use the SSO button to exercise the full login flow.
 
+## Classic password login stays
+
+OIDC is optional. Pulse continues to ship with the familiar username/password flow:
+
+- First-run setup still prompts you to create an admin credential or you can pre-seed it via `PULSE_AUTH_USER` / `PULSE_AUTH_PASS`.
+- If OIDC is **enabled**, the login page shows both the password form and the **Continue with Single Sign-On** button. Either path issues the same session cookie (`pulse_session`).
+- To run **password-only**, leave OIDC disabled (the default). To go **OIDC-only**, set `DISABLE_AUTH=true` after you confirm SSO works.
+- The `allowedGroups`, `allowedDomains`, and `allowedEmails` settings only affect OIDC logins; password authentication continues to honour the account you created locally.
+
 ## Provider Cheat-Sheet
 
 You do not need to ship per-provider templates. Pulse speaks standard OIDC, so administrators bring their own identity provider and supply the issuer URL, client ID, and client secret they created for Pulse. Below are the high-level steps we tested against three common providers—share these with users who ask “what do I enter?”
