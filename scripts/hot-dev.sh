@@ -1,199 +1,182 @@
 #!/bin/bash
+set -euo pipefail
 
-# Load development environment variables
-if [ -f /opt/pulse/.env.dev ]; then
-    export $(cat /opt/pulse/.env.dev | grep -v '^#' | xargs)
-fi
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
 
-# Hot-reload development setup
-# Frontend runs on Vite dev server on port 7655 with instant hot-reload
-# Backend API runs on port 7656 (one port up)
-# Just change frontend code and see changes instantly!
-
-echo "========================================="
-echo "Starting HOT-RELOAD development mode"
-echo "========================================="
-echo ""
-echo "Frontend: http://192.168.0.123:7655 (with hot-reload)"
-echo "Backend API: http://localhost:7656"
-echo ""
-echo "Just edit frontend files and see changes instantly!"
-echo "Press Ctrl+C to stop"
-echo "========================================="
-
-# Function to kill processes on a specific port
-kill_port() {
-    local port=$1
-    echo "Cleaning up port $port..."
-    lsof -i :$port | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null
+load_env_file() {
+    local env_file=$1
+    if [[ -f ${env_file} ]]; then
+        printf "[hot-dev] Loading %s\n" "${env_file}"
+        set +u
+        set -a
+        # shellcheck disable=SC1090
+        source "${env_file}"
+        set +a
+        set -u
+    fi
 }
 
-# AGGRESSIVE CLEANUP - We need to ensure ports are free
-echo ""
-echo "Cleaning up existing processes..."
+load_env_file "${ROOT_DIR}/.env"
+load_env_file "${ROOT_DIR}/.env.local"
+load_env_file "${ROOT_DIR}/.env.dev"
 
-# Stop systemd services first
-sudo systemctl stop pulse-backend 2>/dev/null
-sudo systemctl stop pulse 2>/dev/null
-sudo systemctl stop pulse-frontend 2>/dev/null  # Stop the frontend service that runs on 7655!
+FRONTEND_PORT=${FRONTEND_PORT:-${PORT:-7655}}
+PORT=${PORT:-${FRONTEND_PORT}}
 
-# Kill any backend-watch scripts
-pkill -f "backend-watch.sh" 2>/dev/null
+FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
+FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
+PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-127.0.0.1}
+PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-${FRONTEND_PORT}}
 
-# Kill all Vite/npm dev processes
-pkill -f vite 2>/dev/null
-pkill -f "npm run dev" 2>/dev/null
-pkill -f "npm exec" 2>/dev/null
+if [[ -z ${PULSE_DEV_API_URL:-} ]]; then
+    PULSE_DEV_API_URL="http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}"
+fi
 
-# Kill Pulse binary - first try gracefully, then force
-pkill -x "pulse" 2>/dev/null
+if [[ -z ${PULSE_DEV_WS_URL:-} ]]; then
+    if [[ ${PULSE_DEV_API_URL} == http://* ]]; then
+        PULSE_DEV_WS_URL="ws://${PULSE_DEV_API_URL#http://}"
+    elif [[ ${PULSE_DEV_API_URL} == https://* ]]; then
+        PULSE_DEV_WS_URL="wss://${PULSE_DEV_API_URL#https://}"
+    else
+        PULSE_DEV_WS_URL=${PULSE_DEV_API_URL}
+    fi
+fi
+
+export FRONTEND_PORT PORT
+export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
+export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
+
+EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
+
+cat <<BANNER
+=========================================
+Starting HOT-RELOAD development mode
+=========================================
+
+Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (with hot-reload)
+Backend API: ${PULSE_DEV_API_URL}
+
+Just edit frontend files and see changes instantly!
+Press Ctrl+C to stop
+=========================================
+BANNER
+
+kill_port() {
+    local port=$1
+    printf "[hot-dev] Cleaning up port %s...\n" "${port}"
+    lsof -i :"${port}" | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null
+}
+
+printf "[hot-dev] Cleaning up existing processes...\n"
+
+sudo systemctl stop pulse-backend 2>/dev/null || true
+sudo systemctl stop pulse 2>/dev/null || true
+sudo systemctl stop pulse-frontend 2>/dev/null || true
+
+pkill -f "backend-watch.sh" 2>/dev/null || true
+pkill -f vite 2>/dev/null || true
+pkill -f "npm run dev" 2>/dev/null || true
+pkill -f "npm exec" 2>/dev/null || true
+
+pkill -x "pulse" 2>/dev/null || true
 sleep 1
-# Force kill if still running
-pkill -9 -x "pulse" 2>/dev/null
+pkill -9 -x "pulse" 2>/dev/null || true
 
-# Force-kill ANYTHING on our ports
-kill_port 7655
-kill_port 7656
-kill_port 7657  # Also clean up the port Vite wrongly used
+kill_port "${FRONTEND_DEV_PORT}"
+kill_port "${PULSE_DEV_API_PORT}"
+kill_port "${EXTRA_CLEANUP_PORT}"
 
-# Wait for everything to properly die
 sleep 3
 
-# Double-check ports are free
-if lsof -i :7655 | grep -q LISTEN; then
-    echo "ERROR: Port 7655 is still in use after cleanup!"
-    echo "Attempting more aggressive cleanup..."
-    kill_port 7655
+if lsof -i :"${FRONTEND_DEV_PORT}" | grep -q LISTEN; then
+    echo "ERROR: Port ${FRONTEND_DEV_PORT} is still in use after cleanup!"
+    kill_port "${FRONTEND_DEV_PORT}"
     sleep 2
-    if lsof -i :7655 | grep -q LISTEN; then
-        echo "FATAL: Cannot free port 7655. Please manually kill the process:"
-        lsof -i :7655
+    if lsof -i :"${FRONTEND_DEV_PORT}" | grep -q LISTEN; then
+        echo "FATAL: Cannot free port ${FRONTEND_DEV_PORT}. Please manually kill the process:"
+        lsof -i :"${FRONTEND_DEV_PORT}"
         exit 1
     fi
 fi
 
-if lsof -i :7656 | grep -q LISTEN; then
-    echo "ERROR: Port 7656 is still in use after cleanup!"
-    echo "Attempting more aggressive cleanup..."
-    kill_port 7656
+if lsof -i :"${PULSE_DEV_API_PORT}" | grep -q LISTEN; then
+    echo "ERROR: Port ${PULSE_DEV_API_PORT} is still in use after cleanup!"
+    kill_port "${PULSE_DEV_API_PORT}"
     sleep 2
-    if lsof -i :7656 | grep -q LISTEN; then
-        echo "FATAL: Cannot free port 7656. Please manually kill the process:"
-        lsof -i :7656
+    if lsof -i :"${PULSE_DEV_API_PORT}" | grep -q LISTEN; then
+        echo "FATAL: Cannot free port ${PULSE_DEV_API_PORT}. Please manually kill the process:"
+        lsof -i :"${PULSE_DEV_API_PORT}"
         exit 1
     fi
 fi
 
 echo "Ports are clean!"
-echo ""
 
-# Load mock environment if it exists
-if [ -f /opt/pulse/mock.env ]; then
-    source /opt/pulse/mock.env
-    if [ "$PULSE_MOCK_MODE" = "true" ]; then
+if [[ -f "${ROOT_DIR}/mock.env" ]]; then
+    set +u
+    # shellcheck disable=SC1090
+    source "${ROOT_DIR}/mock.env"
+    set -u
+    if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
         TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
-        echo "Mock mode ENABLED with $PULSE_MOCK_NODES nodes ($TOTAL_GUESTS total guests)"
+        echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"
     fi
 fi
 
-# Load auth environment if it exists
-if [ -f /etc/pulse/.env ]; then
+if [[ -f /etc/pulse/.env ]]; then
+    set +u
+    # shellcheck disable=SC1091
     source /etc/pulse/.env
+    set -u
     echo "Auth configuration loaded from /etc/pulse/.env"
 fi
 
-# Start backend on port 7656 (one port up from normal)
-echo "Starting backend on port 7656..."
-cd /opt/pulse
-echo "Building backend (API-only mode for development)..."
-# Always rebuild in dev mode to ensure we have the right build
-echo "Building with PULSE_MOCK_MODE=${PULSE_MOCK_MODE}"
+printf "[hot-dev] Starting backend on port %s...\n" "${PULSE_DEV_API_PORT}"
+cd "${ROOT_DIR}"
+
 go build -o pulse ./cmd/pulse
-# Export all PULSE_MOCK_* variables for the backend
+
 export PULSE_MOCK_MODE PULSE_MOCK_NODES PULSE_MOCK_VMS_PER_NODE PULSE_MOCK_LXCS_PER_NODE PULSE_MOCK_RANDOM_METRICS PULSE_MOCK_STOPPED_PERCENT
-# Export auth variables if set
 export PULSE_AUTH_USER PULSE_AUTH_PASS
-# Export PORT as well
-export PORT=7656
+FRONTEND_PORT=${PULSE_DEV_API_PORT}
+PORT=${PULSE_DEV_API_PORT}
+export FRONTEND_PORT PULSE_DEV_API_PORT PORT
 ./pulse &
 BACKEND_PID=$!
 
-# Wait for backend to start
 sleep 2
 
-# Verify backend is running
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
+if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
     echo "ERROR: Backend failed to start!"
     exit 1
 fi
 
-# Create temporary vite config for development with strictPort
-cd /opt/pulse/frontend-modern
-cat > vite.config.dev.ts << 'EOF'
-import { defineConfig } from 'vite';
-import solid from 'vite-plugin-solid';
-import path from 'path';
-
-export default defineConfig({
-  plugins: [solid()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    port: 7655,
-    host: '0.0.0.0',
-    strictPort: true,  // FAIL if port 7655 is not available
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:7656',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://127.0.0.1:7656',
-        ws: true,
-        changeOrigin: true,
-      },
-    },
-  },
-  build: {
-    target: 'esnext',
-  },
-});
-EOF
-
-# Cleanup on exit
 cleanup() {
     echo ""
     echo "Stopping services..."
-    # Try graceful shutdown first
-    if [ -n "$BACKEND_PID" ] && kill -0 $BACKEND_PID 2>/dev/null; then
-        kill $BACKEND_PID 2>/dev/null
+    if [[ -n ${BACKEND_PID:-} ]] && kill -0 "${BACKEND_PID}" 2>/dev/null; then
+        kill "${BACKEND_PID}" 2>/dev/null || true
         sleep 1
-        # Force kill if still running
-        if kill -0 $BACKEND_PID 2>/dev/null; then
+        if kill -0 "${BACKEND_PID}" 2>/dev/null; then
             echo "Backend not responding to SIGTERM, force killing..."
-            kill -9 $BACKEND_PID 2>/dev/null
+            kill -9 "${BACKEND_PID}" 2>/dev/null || true
         fi
     fi
-    rm -f vite.config.dev.ts
-    # Clean up any leftover Vite processes
-    pkill -f vite 2>/dev/null
-    pkill -f "npm run dev" 2>/dev/null
-    # Final cleanup of any stuck pulse processes
-    pkill -9 -x "pulse" 2>/dev/null
+    pkill -f vite 2>/dev/null || true
+    pkill -f "npm run dev" 2>/dev/null || true
+    pkill -9 -x "pulse" 2>/dev/null || true
     echo "Hot-dev stopped. To restart normal service, run: sudo systemctl start pulse-backend"
-    exit
 }
 trap cleanup INT TERM EXIT
 
-# Start vite dev server with hot-reload
-echo "Starting frontend with hot-reload on port 7655..."
-echo "If this fails, port 7655 is still in use!"
-npx vite --config vite.config.dev.ts --clearScreen false
+printf "[hot-dev] Starting frontend with hot-reload on port %s...\n" "${FRONTEND_DEV_PORT}"
+echo "If this fails, port ${FRONTEND_DEV_PORT} is still in use!"
 
-# If we get here, Vite exited unexpectedly
+cd "${ROOT_DIR}/frontend-modern"
+
+npx vite --config vite.config.ts --host "${FRONTEND_DEV_HOST}" --port "${FRONTEND_DEV_PORT}" --clearScreen false
+
 echo "ERROR: Vite exited unexpectedly!"
 echo "Dev mode will auto-restart in 5 seconds via systemd..."
 cleanup

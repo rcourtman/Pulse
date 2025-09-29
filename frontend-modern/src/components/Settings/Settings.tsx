@@ -938,7 +938,10 @@ const Settings: Component = () => {
                               if (stateNode && (stateNode.status === 'online' || stateNode.connectionHealth === 'healthy')) {
                                 return 'bg-green-500';
                               }
-                              // Default to red if no state data (node is offline/unreachable)
+                              // Fall back to the last known config status if live data hasn't arrived yet
+                              if (node.status === 'connected') {
+                                return 'bg-green-500';
+                              }
                               return 'bg-red-500';
                             })()
                             }`}></div>
@@ -1205,7 +1208,10 @@ const Settings: Component = () => {
                               if (statePBS && (statePBS.status === 'online' || statePBS.connectionHealth === 'healthy')) {
                                 return 'bg-green-500';
                               }
-                              // Default to red if no state data (server is offline/unreachable)
+                              // Fall back to the last known config status if live data hasn't arrived yet
+                              if (node.status === 'connected') {
+                                return 'bg-green-500';
+                              }
                               return 'bg-red-500';
                             })()
                           }`}></div>
