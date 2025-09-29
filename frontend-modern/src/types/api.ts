@@ -35,8 +35,8 @@ export interface Node {
   cpuInfo: CPUInfo;
   lastSeen: string;
   connectionHealth: string;
-  isClusterMember?: boolean;  // True if part of a cluster
-  clusterName?: string;        // Name of cluster (empty if standalone)
+  isClusterMember?: boolean; // True if part of a cluster
+  clusterName?: string; // Name of cluster (empty if standalone)
 }
 
 export interface VM {
@@ -113,9 +113,9 @@ export interface Storage {
 
 export interface ZFSPool {
   name: string;
-  state: string;      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
-  status: string;     // Healthy, Degraded, Faulted, etc.
-  scan: string;       // Current scan status (scrub, resilver, none)
+  state: string; // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+  status: string; // Healthy, Degraded, Faulted, etc.
+  scan: string; // Current scan status (scrub, resilver, none)
   readErrors: number;
   writeErrors: number;
   checksumErrors: number;
@@ -124,8 +124,8 @@ export interface ZFSPool {
 
 export interface ZFSDevice {
   name: string;
-  type: string;       // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
-  state: string;      // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+  type: string; // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+  state: string; // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
   readErrors: number;
   writeErrors: number;
   checksumErrors: number;
@@ -374,7 +374,7 @@ export interface ResolvedAlert extends Alert {
 }
 
 // WebSocket message types
-export type WSMessage = 
+export type WSMessage =
   | { type: 'initialState'; data: State }
   | { type: 'rawData'; data: State }
   | { type: 'error'; error: string }
@@ -384,47 +384,61 @@ export type WSMessage =
   | { type: 'alert'; data: Alert }
   | { type: 'alertResolved'; data: { alertId: string } }
   | { type: 'settingsUpdate'; data: { theme?: string } }
-  | { type: 'update:progress'; data: {
-      phase: string;
-      progress: number;
-      message: string;
+  | {
+      type: 'update:progress';
+      data: {
+        phase: string;
+        progress: number;
+        message: string;
+      };
     }
-  }
-  | { type: 'node_auto_registered'; data: {
-      type: string;
-      host: string;
-      name: string;
-      tokenId: string;
-      hasToken: boolean;
-      verifySSL?: boolean;
-      status?: string;
-    }}
+  | {
+      type: 'node_auto_registered';
+      data: {
+        type: string;
+        host: string;
+        name: string;
+        tokenId: string;
+        hasToken: boolean;
+        verifySSL?: boolean;
+        status?: string;
+      };
+    }
   | { type: 'node_deleted'; data: { nodeType: string } }
   | { type: 'nodes_changed'; data?: unknown }
-  | { type: 'discovery_update'; data: {
-      servers: Array<{
-        ip: string;
-        port: number;
-        type: string;
-        version: string;
-        hostname?: string;
-        release?: string;
-      }>;
-      errors?: string[];
-      timestamp?: number;
-      immediate?: boolean;
-      scanning?: boolean;
-      cached?: boolean;
-    }}
-  | { type: 'discovery_started'; data?: {
-      subnet?: string;
-      timestamp?: number;
-      scanning?: boolean;
-    }}
-  | { type: 'discovery_complete'; data?: {
-      timestamp?: number;
-      scanning?: boolean;
-    }};
+  | {
+      type: 'discovery_update';
+      data: {
+        servers: Array<{
+          ip: string;
+          port: number;
+          type: string;
+          version: string;
+          hostname?: string;
+          release?: string;
+        }>;
+        errors?: string[];
+        timestamp?: number;
+        immediate?: boolean;
+        scanning?: boolean;
+        cached?: boolean;
+      };
+    }
+  | {
+      type: 'discovery_started';
+      data?: {
+        subnet?: string;
+        timestamp?: number;
+        scanning?: boolean;
+      };
+    }
+  | {
+      type: 'discovery_complete';
+      data?: {
+        timestamp?: number;
+        scanning?: boolean;
+      };
+    };
 
 // Utility types
 export type Status = 'running' | 'stopped' | 'paused' | 'unknown';

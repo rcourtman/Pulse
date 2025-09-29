@@ -23,25 +23,22 @@ export function handleError(error: unknown, context: ErrorContext = {}): void {
     logger.error(`[${context.component || 'Unknown'}] ${error.message}`, {
       ...error.context,
       ...context,
-      error: error.stack
+      error: error.stack,
     });
   } else if (error instanceof Error) {
     logger.error(`[${context.component || 'Unknown'}] ${error.message}`, {
       ...context,
-      error: error.stack
+      error: error.stack,
     });
   } else {
     logger.error(`[${context.component || 'Unknown'}] Unknown error`, {
       ...context,
-      error: String(error)
+      error: String(error),
     });
   }
 }
 
-export function handleAsyncError<T>(
-  promise: Promise<T>,
-  context: ErrorContext = {}
-): Promise<T> {
+export function handleAsyncError<T>(promise: Promise<T>, context: ErrorContext = {}): Promise<T> {
   return promise.catch((error) => {
     handleError(error, context);
     throw error;

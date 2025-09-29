@@ -350,7 +350,9 @@ func (r *Router) setupRoutes() {
 			// Write a recovery flag file before restarting
 			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
 			recoveryContent := fmt.Sprintf("Auth setup at %s\nIf locked out, delete this file and restart to disable auth temporarily\n", time.Now().Format(time.RFC3339))
-			os.WriteFile(recoveryFile, []byte(recoveryContent), 0600)
+			if err := os.WriteFile(recoveryFile, []byte(recoveryContent), 0600); err != nil {
+				log.Warn().Err(err).Str("path", recoveryFile).Msg("Failed to write recovery flag file")
+			}
 
 			// Schedule restart with full service restart to pick up new config
 			go func() {
@@ -996,7 +998,9 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		Uptime:    time.Since(r.monitor.GetStartTime()).Seconds(),
 	}
 
-	utils.WriteJSONResponse(w, response)
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write health response")
+	}
 }
 
 // handleChangePassword handles password change requests
@@ -1917,7 +1921,9 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	rangeMinutes := 60 // default 1 hour
 	if rangeStr := query.Get("range"); rangeStr != "" {
-		fmt.Sscanf(rangeStr, "%d", &rangeMinutes)
+		if _, err := fmt.Sscanf(rangeStr, "%d", &rangeMinutes); err != nil {
+			log.Warn().Err(err).Str("range", rangeStr).Msg("Invalid range parameter; using default")
+		}
 	}
 
 	duration := time.Duration(rangeMinutes) * time.Minute

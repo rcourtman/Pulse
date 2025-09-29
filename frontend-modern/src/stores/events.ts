@@ -1,7 +1,12 @@
 // Event bus for cross-component communication
 
 // Event types
-export type EventType = 'node_auto_registered' | 'refresh_nodes' | 'discovery_updated' | 'discovery_status' | 'theme_changed';
+export type EventType =
+  | 'node_auto_registered'
+  | 'refresh_nodes'
+  | 'discovery_updated'
+  | 'discovery_status'
+  | 'theme_changed';
 
 // Event data types
 export interface NodeAutoRegisteredData {
@@ -41,12 +46,12 @@ export interface DiscoveryStatusData {
 
 // Map event types to their data types
 export type EventDataMap = {
-  'node_auto_registered': NodeAutoRegisteredData;
-  'refresh_nodes': void;
-  'discovery_updated': DiscoveryUpdatedData;
-  'discovery_status': DiscoveryStatusData;
-  'theme_changed': string;  // 'light' or 'dark'
-}
+  node_auto_registered: NodeAutoRegisteredData;
+  refresh_nodes: void;
+  discovery_updated: DiscoveryUpdatedData;
+  discovery_status: DiscoveryStatusData;
+  theme_changed: string; // 'light' or 'dark'
+};
 
 // Generic event handler
 type EventHandler<T = unknown> = (data?: T) => void;
@@ -59,7 +64,7 @@ class EventBus {
       this.handlers.set(event, new Set());
     }
     this.handlers.get(event)!.add(handler as EventHandler<unknown>);
-    
+
     // Return unsubscribe function
     return () => {
       this.handlers.get(event)?.delete(handler as EventHandler<unknown>);
@@ -73,7 +78,7 @@ class EventBus {
   emit<T extends EventType>(event: T, data?: EventDataMap[T]) {
     const handlers = this.handlers.get(event);
     if (handlers) {
-      handlers.forEach(handler => handler(data));
+      handlers.forEach((handler) => handler(data));
     }
   }
 }

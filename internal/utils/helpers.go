@@ -27,7 +27,7 @@ func WriteJSONResponse(w http.ResponseWriter, data interface{}) error {
 func WriteJSONError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 // DecodeJSONBody decodes a JSON request body into the given interface
@@ -37,4 +37,3 @@ func DecodeJSONBody(r *http.Request, v interface{}) error {
 	}
 	return nil
 }
-

@@ -30,9 +30,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "pulse",
-	Short: "Pulse - Proxmox VE and PBS monitoring system",
-	Long:  `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
+	Use:     "pulse",
+	Short:   "Pulse - Proxmox VE and PBS monitoring system",
+	Long:    `Pulse is a real-time monitoring system for Proxmox Virtual Environment (PVE) and Proxmox Backup Server (PBS)`,
 	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
 		runServer()
@@ -151,7 +151,7 @@ func runServer() {
 		}
 		defer configWatcher.Stop()
 	}
-	
+
 	// Start server
 	go func() {
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
@@ -181,23 +181,23 @@ func runServer() {
 	// Setup signal handlers
 	sigChan := make(chan os.Signal, 1)
 	reloadChan := make(chan os.Signal, 1)
-	
+
 	// SIGTERM and SIGINT for shutdown
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	// SIGHUP for config reload
 	signal.Notify(reloadChan, syscall.SIGHUP)
-	
+
 	// Handle signals
 	for {
 		select {
 		case <-reloadChan:
 			log.Info().Msg("Received SIGHUP, reloading configuration...")
-			
+
 			// Reload .env manually (watcher will also pick it up)
 			if configWatcher != nil {
 				configWatcher.ReloadConfig()
 			}
-			
+
 			// Reload system.json
 			persistence := config.NewConfigPersistence(cfg.DataPath)
 			if persistence != nil {
@@ -210,17 +210,17 @@ func runServer() {
 					log.Error().Err(err).Msg("Failed to reload system.json")
 				}
 			}
-			
+
 			// Could reload other configs here (alerts.json, webhooks.json, etc.)
-			
+
 			log.Info().Msg("Configuration reload complete")
-			
+
 		case <-sigChan:
 			log.Info().Msg("Shutting down server...")
 			goto shutdown
 		}
 	}
-	
+
 shutdown:
 
 	// Graceful shutdown
@@ -234,7 +234,7 @@ shutdown:
 	// Stop monitoring
 	cancel()
 	reloadableMonitor.Stop()
-	
+
 	// Stop config watcher
 	if configWatcher != nil {
 		configWatcher.Stop()
@@ -250,15 +250,15 @@ func shouldAutoImport() bool {
 	if configPath == "" {
 		configPath = "/etc/pulse"
 	}
-	
+
 	// If nodes.enc already exists, skip auto-import
 	if _, err := os.Stat(filepath.Join(configPath, "nodes.enc")); err == nil {
 		return false
 	}
-	
+
 	// Check for auto-import environment variables
-	return os.Getenv("PULSE_INIT_CONFIG_DATA") != "" || 
-	       os.Getenv("PULSE_INIT_CONFIG_FILE") != ""
+	return os.Getenv("PULSE_INIT_CONFIG_DATA") != "" ||
+		os.Getenv("PULSE_INIT_CONFIG_FILE") != ""
 }
 
 // performAutoImport imports configuration from environment variables
@@ -266,13 +266,13 @@ func performAutoImport() error {
 	configData := os.Getenv("PULSE_INIT_CONFIG_DATA")
 	configFile := os.Getenv("PULSE_INIT_CONFIG_FILE")
 	configPass := os.Getenv("PULSE_INIT_CONFIG_PASSPHRASE")
-	
+
 	if configPass == "" {
 		return fmt.Errorf("PULSE_INIT_CONFIG_PASSPHRASE is required for auto-import")
 	}
-	
+
 	var encryptedData string
-	
+
 	// Get data from file or direct data
 	if configFile != "" {
 		data, err := os.ReadFile(configFile)
@@ -290,21 +290,21 @@ func performAutoImport() error {
 	} else {
 		return fmt.Errorf("no config data provided")
 	}
-	
+
 	// Load configuration path
 	configPath := os.Getenv("PULSE_DATA_DIR")
 	if configPath == "" {
 		configPath = "/etc/pulse"
 	}
-	
+
 	// Create persistence manager
 	persistence := config.NewConfigPersistence(configPath)
-	
+
 	// Import configuration
 	if err := persistence.ImportConfig(encryptedData, configPass); err != nil {
 		return fmt.Errorf("failed to import configuration: %w", err)
 	}
-	
+
 	log.Info().Msg("Configuration auto-imported successfully")
 	return nil
 }

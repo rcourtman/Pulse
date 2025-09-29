@@ -52,60 +52,64 @@
     overflow-y: auto;
     overflow-x: hidden;
   }
-  
+
   /* Hide scrollbars during transitions to prevent flicker */
   html {
     overflow-y: scroll;
     scroll-behavior: smooth;
   }
-  
+
   /* Threshold slider styles */
   .threshold-slider-container {
     @apply relative w-full;
   }
-  
+
   .threshold-slider {
     @apply w-full h-3.5 appearance-none bg-transparent relative z-10;
   }
-  
+
   /* Slider track styles - match progress bar height */
   .threshold-slider::-webkit-slider-runnable-track {
     @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
   }
-  
+
   .threshold-slider::-moz-range-track {
     @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
   }
-  
+
   /* Slider thumb styles with value display */
   .threshold-slider::-webkit-slider-thumb {
     @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative;
     margin-top: -2.5px; /* Center thumb on track */
     background: white;
     border: 2px solid currentColor;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06);
   }
-  
+
   .threshold-slider::-moz-range-thumb {
     @apply appearance-none w-12 h-5 rounded-full cursor-pointer relative border-0;
     background: white;
     border: 2px solid currentColor;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 1px 3px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.06);
   }
-  
+
   /* Color coding for different metrics */
   .threshold-slider.slider-cpu {
     color: #3b82f6; /* blue-500 */
   }
-  
+
   .threshold-slider.slider-memory {
     color: #10b981; /* green-500 */
   }
-  
+
   .threshold-slider.slider-disk {
     color: #f59e0b; /* amber-500 */
   }
-  
+
   /* Value display inside thumb */
   .threshold-value {
     @apply absolute inset-0 flex items-center justify-center text-[10px] font-semibold pointer-events-none;
@@ -150,19 +154,19 @@
     @apply h-full;
     transition: width 300ms ease-out;
   }
-  
+
   /* Stable chart containers */
   .chart-stable-container {
     contain: layout style;
     will-change: contents;
   }
-  
+
   /* Prevent chart SVG flicker */
   .sparkline {
     backface-visibility: hidden;
     transform: translateZ(0);
   }
-  
+
   /* Disable animations in charts mode to prevent blinking */
   .charts-mode .sparkline path {
     transition: none !important;
@@ -173,7 +177,7 @@
     scrollbar-width: thin;
     scrollbar-color: theme('colors.gray.300') theme('colors.gray.100');
   }
-  
+
   .dark .custom-scrollbar {
     scrollbar-color: theme('colors.gray.700') theme('colors.gray.800');
   }
@@ -272,7 +276,10 @@ body,
 .dark\:text-gray-400,
 .dark\:border-gray-600,
 .dark\:border-gray-700 {
-  transition: background-color 150ms ease-in-out, color 150ms ease-in-out, border-color 150ms ease-in-out;
+  transition:
+    background-color 150ms ease-in-out,
+    color 150ms ease-in-out,
+    border-color 150ms ease-in-out;
 }
 
 /* Pulse logo animation - subtle ripple effect */
@@ -289,7 +296,8 @@ body,
 }
 
 @keyframes pulse-ring {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.92;
     transform: scale(1);
   }
@@ -363,7 +371,8 @@ body,
 }
 
 @keyframes pulse-slow {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.25;
   }
   50% {
@@ -382,4 +391,3 @@ body,
 .animate-pulse-slow {
   animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
-

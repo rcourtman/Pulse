@@ -10,35 +10,35 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version     string                    `json:"version"`
-	Runtime     string                    `json:"runtime"`
-	Uptime      float64                  `json:"uptime"`
-	Nodes       []NodeDiagnostic         `json:"nodes"`
-	PBS         []PBSDiagnostic          `json:"pbs"`
-	System      SystemDiagnostic         `json:"system"`
-	Errors      []string                 `json:"errors"`
+	Version string           `json:"version"`
+	Runtime string           `json:"runtime"`
+	Uptime  float64          `json:"uptime"`
+	Nodes   []NodeDiagnostic `json:"nodes"`
+	PBS     []PBSDiagnostic  `json:"pbs"`
+	System  SystemDiagnostic `json:"system"`
+	Errors  []string         `json:"errors"`
 }
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
 type NodeDiagnostic struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Host         string            `json:"host"`
-	Type         string            `json:"type"`
-	AuthMethod   string            `json:"authMethod"`
-	Connected    bool              `json:"connected"`
-	Error        string            `json:"error,omitempty"`
-	Details      *NodeDetails      `json:"details,omitempty"`
-	LastPoll     string            `json:"lastPoll,omitempty"`
-	ClusterInfo  *ClusterInfo      `json:"clusterInfo,omitempty"`
-	VMDiskCheck  *VMDiskCheckResult `json:"vmDiskCheck,omitempty"`
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Host          string             `json:"host"`
+	Type          string             `json:"type"`
+	AuthMethod    string             `json:"authMethod"`
+	Connected     bool               `json:"connected"`
+	Error         string             `json:"error,omitempty"`
+	Details       *NodeDetails       `json:"details,omitempty"`
+	LastPoll      string             `json:"lastPoll,omitempty"`
+	ClusterInfo   *ClusterInfo       `json:"clusterInfo,omitempty"`
+	VMDiskCheck   *VMDiskCheckResult `json:"vmDiskCheck,omitempty"`
 	PhysicalDisks *PhysicalDiskCheck `json:"physicalDisks,omitempty"`
 }
 
@@ -80,12 +80,12 @@ type FilesystemDetail struct {
 
 // PhysicalDiskCheck contains diagnostic results for physical disk detection
 type PhysicalDiskCheck struct {
-	NodesChecked   int              `json:"nodesChecked"`
-	NodesWithDisks int              `json:"nodesWithDisks"`
-	TotalDisks     int              `json:"totalDisks"`
-	NodeResults    []NodeDiskResult `json:"nodeResults"`
-	TestResult     string           `json:"testResult,omitempty"`
-	Recommendations []string        `json:"recommendations,omitempty"`
+	NodesChecked    int              `json:"nodesChecked"`
+	NodesWithDisks  int              `json:"nodesWithDisks"`
+	TotalDisks      int              `json:"totalDisks"`
+	NodeResults     []NodeDiskResult `json:"nodeResults"`
+	TestResult      string           `json:"testResult,omitempty"`
+	Recommendations []string         `json:"recommendations,omitempty"`
 }
 
 type NodeDiskResult struct {
@@ -103,12 +103,12 @@ type ClusterInfo struct {
 
 // PBSDiagnostic contains diagnostic info for a PBS instance
 type PBSDiagnostic struct {
-	ID         string        `json:"id"`
-	Name       string        `json:"name"`
-	Host       string        `json:"host"`
-	Connected  bool          `json:"connected"`
-	Error      string        `json:"error,omitempty"`
-	Details    *PBSDetails   `json:"details,omitempty"`
+	ID        string      `json:"id"`
+	Name      string      `json:"name"`
+	Host      string      `json:"host"`
+	Connected bool        `json:"connected"`
+	Error     string      `json:"error,omitempty"`
+	Details   *PBSDetails `json:"details,omitempty"`
 }
 
 // PBSDetails contains PBS-specific details
@@ -118,12 +118,12 @@ type PBSDetails struct {
 
 // SystemDiagnostic contains system-level diagnostic info
 type SystemDiagnostic struct {
-	OS           string  `json:"os"`
-	Arch         string  `json:"arch"`
-	GoVersion    string  `json:"goVersion"`
-	NumCPU       int     `json:"numCPU"`
-	NumGoroutine int     `json:"numGoroutine"`
-	MemoryMB     uint64  `json:"memoryMB"`
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	GoVersion    string `json:"goVersion"`
+	NumCPU       int    `json:"numCPU"`
+	NumGoroutine int    `json:"numGoroutine"`
+	MemoryMB     uint64 `json:"memoryMB"`
 }
 
 // handleDiagnostics returns comprehensive diagnostic information
@@ -180,62 +180,62 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 
 		// Test connection
 		testCfg := proxmox.ClientConfig{
-			Host:         node.Host,
-			User:         node.User,
-			Password:     node.Password,
-			TokenName:    node.TokenName,
-			TokenValue:   node.TokenValue,
-			VerifySSL:    node.VerifySSL,
+			Host:       node.Host,
+			User:       node.User,
+			Password:   node.Password,
+			TokenName:  node.TokenName,
+			TokenValue: node.TokenValue,
+			VerifySSL:  node.VerifySSL,
 		}
 
-			client, err := proxmox.NewClient(testCfg)
+		client, err := proxmox.NewClient(testCfg)
+		if err != nil {
+			nodeDiag.Connected = false
+			nodeDiag.Error = err.Error()
+		} else {
+			// Try to get nodes first (this should work for both clustered and standalone)
+			nodes, err := client.GetNodes(ctx)
 			if err != nil {
 				nodeDiag.Connected = false
-				nodeDiag.Error = err.Error()
+				nodeDiag.Error = "Failed to connect to Proxmox API: " + err.Error()
 			} else {
-				// Try to get nodes first (this should work for both clustered and standalone)
-				nodes, err := client.GetNodes(ctx)
-				if err != nil {
-					nodeDiag.Connected = false
-					nodeDiag.Error = "Failed to connect to Proxmox API: " + err.Error()
-				} else {
-					nodeDiag.Connected = true
-					
-					// Set node details
-					if len(nodes) > 0 {
-						nodeDiag.Details = &NodeDetails{
-							NodeCount: len(nodes),
-						}
-						
-						// Get version from first node
-						if status, err := client.GetNodeStatus(ctx, nodes[0].Node); err == nil && status != nil {
-							if status.PVEVersion != "" {
-								nodeDiag.Details.Version = status.PVEVersion
-							}
+				nodeDiag.Connected = true
+
+				// Set node details
+				if len(nodes) > 0 {
+					nodeDiag.Details = &NodeDetails{
+						NodeCount: len(nodes),
+					}
+
+					// Get version from first node
+					if status, err := client.GetNodeStatus(ctx, nodes[0].Node); err == nil && status != nil {
+						if status.PVEVersion != "" {
+							nodeDiag.Details.Version = status.PVEVersion
 						}
 					}
-					
-					// Try to get cluster status (this may fail for standalone nodes, which is OK)
-					if clusterStatus, err := client.GetClusterStatus(ctx); err == nil {
-						nodeDiag.ClusterInfo = &ClusterInfo{
-							Nodes: len(clusterStatus),
-						}
-					} else {
-						// Standalone node or cluster status not available
-						// This is not an error - standalone nodes don't have cluster status
-						log.Debug().Str("node", node.Name).Msg("Cluster status not available (likely standalone node)")
-						nodeDiag.ClusterInfo = &ClusterInfo{
-							Nodes: 1, // Standalone node
-						}
-					}
-					
-					// Run VM disk monitoring check
-					nodeDiag.VMDiskCheck = r.checkVMDiskMonitoring(ctx, client, node.Name)
-					
-					// Run physical disk check
-					nodeDiag.PhysicalDisks = r.checkPhysicalDisks(ctx, client, node.Name)
 				}
+
+				// Try to get cluster status (this may fail for standalone nodes, which is OK)
+				if clusterStatus, err := client.GetClusterStatus(ctx); err == nil {
+					nodeDiag.ClusterInfo = &ClusterInfo{
+						Nodes: len(clusterStatus),
+					}
+				} else {
+					// Standalone node or cluster status not available
+					// This is not an error - standalone nodes don't have cluster status
+					log.Debug().Str("node", node.Name).Msg("Cluster status not available (likely standalone node)")
+					nodeDiag.ClusterInfo = &ClusterInfo{
+						Nodes: 1, // Standalone node
+					}
+				}
+
+				// Run VM disk monitoring check
+				nodeDiag.VMDiskCheck = r.checkVMDiskMonitoring(ctx, client, node.Name)
+
+				// Run physical disk check
+				nodeDiag.PhysicalDisks = r.checkPhysicalDisks(ctx, client, node.Name)
 			}
+		}
 
 		diag.Nodes = append(diag.Nodes, nodeDiag)
 	}
@@ -250,13 +250,13 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 
 		// Test connection
 		testCfg := pbs.ClientConfig{
-			Host:         pbsNode.Host,
-			User:         pbsNode.User,
-			Password:     pbsNode.Password,
-			TokenName:    pbsNode.TokenName,
-			TokenValue:   pbsNode.TokenValue,
-			Fingerprint:  pbsNode.Fingerprint,
-			VerifySSL:    pbsNode.VerifySSL,
+			Host:        pbsNode.Host,
+			User:        pbsNode.User,
+			Password:    pbsNode.Password,
+			TokenName:   pbsNode.TokenName,
+			TokenValue:  pbsNode.TokenValue,
+			Fingerprint: pbsNode.Fingerprint,
+			VerifySSL:   pbsNode.VerifySSL,
 		}
 
 		client, err := pbs.NewClient(testCfg)
@@ -293,21 +293,21 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Client, nodeName string) *VMDiskCheckResult {
 	result := &VMDiskCheckResult{
 		Recommendations: []string{},
-		Permissions: []string{},
+		Permissions:     []string{},
 	}
-	
+
 	// Get all nodes to check
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
 		result.TestResult = "Failed to get nodes: " + err.Error()
 		return result
 	}
-	
+
 	if len(nodes) == 0 {
 		result.TestResult = "No nodes found"
 		return result
 	}
-	
+
 	// Check all nodes for VMs
 	var allVMs []proxmox.VM
 	for _, node := range nodes {
@@ -318,16 +318,16 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		}
 		allVMs = append(allVMs, vms...)
 	}
-	
+
 	result.VMsFound = len(allVMs)
 	vms := allVMs
-	
+
 	if len(vms) == 0 {
 		result.TestResult = "No VMs found to test"
 		result.Recommendations = append(result.Recommendations, "Create a test VM to verify disk monitoring")
 		return result
 	}
-	
+
 	// Check VMs for agent and disk data
 	var testVM *proxmox.VM
 	var testVMNode string
@@ -348,11 +348,11 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					break
 				}
 			}
-			
+
 			if vmNode == "" {
 				continue
 			}
-			
+
 			// Check if agent is configured
 			vmStatus, err := client.GetVMStatus(ctx, vmNode, vm.VMID)
 			if err != nil {
@@ -364,7 +364,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 				})
 			} else if vmStatus != nil && vmStatus.Agent > 0 {
 				result.VMsWithAgent++
-				
+
 				// Try to get filesystem info
 				fsInfo, err := client.GetVMFSInfo(ctx, vmNode, vm.VMID)
 				if err != nil {
@@ -393,16 +393,16 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 					// Check if we get usable disk data
 					hasUsableFS := false
 					for _, fs := range fsInfo {
-						if fs.Type != "tmpfs" && fs.Type != "devtmpfs" && 
-						   !strings.HasPrefix(fs.Mountpoint, "/dev") &&
-						   !strings.HasPrefix(fs.Mountpoint, "/proc") &&
-						   !strings.HasPrefix(fs.Mountpoint, "/sys") &&
-						   fs.TotalBytes > 0 {
+						if fs.Type != "tmpfs" && fs.Type != "devtmpfs" &&
+							!strings.HasPrefix(fs.Mountpoint, "/dev") &&
+							!strings.HasPrefix(fs.Mountpoint, "/proc") &&
+							!strings.HasPrefix(fs.Mountpoint, "/sys") &&
+							fs.TotalBytes > 0 {
 							hasUsableFS = true
 							break
 						}
 					}
-					
+
 					if hasUsableFS {
 						result.VMsWithDiskData++
 					} else {
@@ -413,7 +413,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 							Issue:  fmt.Sprintf("Agent returned %d filesystems but none are usable for disk metrics", len(fsInfo)),
 						})
 					}
-					
+
 					if testVM == nil {
 						testVM = &vm
 						testVMNode = vmNode
@@ -430,12 +430,12 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			}
 		}
 	}
-	
+
 	// Perform detailed test on one VM
 	if testVM != nil {
 		result.TestVMID = testVM.VMID
 		result.TestVMName = testVM.Name
-		
+
 		// Check VM status for agent
 		vmStatus, err := client.GetVMStatus(ctx, testVMNode, testVM.VMID)
 		if err != nil {
@@ -443,7 +443,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			result.Recommendations = append(result.Recommendations, "Check API token has PVEAuditor role")
 		} else if vmStatus == nil || vmStatus.Agent == 0 {
 			result.TestResult = "Guest agent not enabled in VM configuration"
-			result.Recommendations = append(result.Recommendations, 
+			result.Recommendations = append(result.Recommendations,
 				"Enable QEMU Guest Agent in VM Options",
 				"Install qemu-guest-agent package in the VM")
 		} else {
@@ -475,7 +475,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 				// Calculate disk usage from filesystem info
 				var totalBytes, usedBytes uint64
 				result.FilesystemsFound = []FilesystemDetail{}
-				
+
 				for _, fs := range fsInfo {
 					fsDetail := FilesystemDetail{
 						Mountpoint: fs.Mountpoint,
@@ -483,16 +483,16 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						Total:      fs.TotalBytes,
 						Used:       fs.UsedBytes,
 					}
-					
+
 					// Check if this filesystem should be filtered
 					if fs.Type == "tmpfs" || fs.Type == "devtmpfs" {
 						fsDetail.Filtered = true
 						fsDetail.Reason = "Special filesystem type"
 					} else if strings.HasPrefix(fs.Mountpoint, "/dev") ||
-					          strings.HasPrefix(fs.Mountpoint, "/proc") ||
-					          strings.HasPrefix(fs.Mountpoint, "/sys") ||
-					          strings.HasPrefix(fs.Mountpoint, "/run") ||
-					          fs.Mountpoint == "/boot/efi" {
+						strings.HasPrefix(fs.Mountpoint, "/proc") ||
+						strings.HasPrefix(fs.Mountpoint, "/sys") ||
+						strings.HasPrefix(fs.Mountpoint, "/run") ||
+						fs.Mountpoint == "/boot/efi" {
 						fsDetail.Filtered = true
 						fsDetail.Reason = "System mount point"
 					} else if fs.TotalBytes == 0 {
@@ -503,13 +503,13 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						totalBytes += fs.TotalBytes
 						usedBytes += fs.UsedBytes
 					}
-					
+
 					result.FilesystemsFound = append(result.FilesystemsFound, fsDetail)
 				}
-				
+
 				if totalBytes > 0 {
 					percent := float64(usedBytes) / float64(totalBytes) * 100
-					result.TestResult = fmt.Sprintf("SUCCESS: Guest agent working! Disk usage: %.1f%% (%d/%d bytes)", 
+					result.TestResult = fmt.Sprintf("SUCCESS: Guest agent working! Disk usage: %.1f%% (%d/%d bytes)",
 						percent, usedBytes, totalBytes)
 				} else {
 					result.TestResult = fmt.Sprintf("Guest agent returned %d filesystems but no usable disk data (all filtered out)", len(fsInfo))
@@ -520,7 +520,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		result.TestResult = "No running VMs found to test"
 		result.Recommendations = append(result.Recommendations, "Start a VM to test disk monitoring")
 	}
-	
+
 	// Add general recommendations based on results
 	if result.VMsWithAgent > 0 && result.VMsWithDiskData == 0 {
 		result.Recommendations = append(result.Recommendations,
@@ -528,7 +528,7 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 			"Check guest agent is running inside VMs",
 			"Verify API token permissions")
 	}
-	
+
 	return result
 }
 
@@ -538,40 +538,40 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 		Recommendations: []string{},
 		NodeResults:     []NodeDiskResult{},
 	}
-	
+
 	// Get all nodes
 	nodes, err := client.GetNodes(ctx)
 	if err != nil {
 		result.TestResult = "Failed to get nodes: " + err.Error()
 		return result
 	}
-	
+
 	result.NodesChecked = len(nodes)
-	
+
 	// Check each node for physical disks
 	for _, node := range nodes {
 		nodeResult := NodeDiskResult{
 			NodeName: node.Node,
 		}
-		
+
 		// Skip offline nodes
 		if node.Status != "online" {
 			nodeResult.Error = "Node is offline"
 			result.NodeResults = append(result.NodeResults, nodeResult)
 			continue
 		}
-		
+
 		// Try to get disk list
 		disks, err := client.GetDisks(ctx, node.Node)
 		if err != nil {
 			errStr := err.Error()
 			nodeResult.Error = errStr
-			
+
 			// Provide specific recommendations based on error
 			if strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {
 				nodeResult.APIResponse = "Permission denied"
 				if !contains(result.Recommendations, "Check API token has sufficient permissions for disk monitoring") {
-					result.Recommendations = append(result.Recommendations, 
+					result.Recommendations = append(result.Recommendations,
 						"Check API token has sufficient permissions for disk monitoring",
 						"Token needs at least PVEAuditor role on the node")
 				}
@@ -590,7 +590,7 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 			if len(disks) > 0 {
 				result.NodesWithDisks++
 				result.TotalDisks += len(disks)
-				
+
 				// List disk devices
 				for _, disk := range disks {
 					nodeResult.DiskDevices = append(nodeResult.DiskDevices, disk.DevPath)
@@ -605,20 +605,20 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 				}
 			}
 		}
-		
+
 		result.NodeResults = append(result.NodeResults, nodeResult)
 	}
-	
+
 	// Generate summary
 	if result.NodesChecked == 0 {
 		result.TestResult = "No nodes found to check"
 	} else if result.NodesWithDisks == 0 {
 		result.TestResult = fmt.Sprintf("Checked %d nodes, none returned physical disks", result.NodesChecked)
 	} else {
-		result.TestResult = fmt.Sprintf("Found %d disks across %d of %d nodes", 
+		result.TestResult = fmt.Sprintf("Found %d disks across %d of %d nodes",
 			result.TotalDisks, result.NodesWithDisks, result.NodesChecked)
 	}
-	
+
 	return result
 }
 

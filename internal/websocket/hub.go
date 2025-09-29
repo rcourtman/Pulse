@@ -21,14 +21,14 @@ func isValidPrivateOrigin(host string) bool {
 	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
 		return true
 	}
-	
+
 	// Check if it's a valid IP address
 	ip := net.ParseIP(host)
 	if ip != nil {
 		// Check if it's a private IP
 		return ip.IsLoopback() || ip.IsPrivate()
 	}
-	
+
 	// Allow common local domain patterns but be more restrictive
 	// Only allow if it's clearly a local domain
 	if strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".lan") {
@@ -38,7 +38,7 @@ func isValidPrivateOrigin(host string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -56,34 +56,34 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		// No origin header, allow for non-browser clients
 		return true
 	}
-	
+
 	h.mu.RLock()
 	allowedOrigins := h.allowedOrigins
 	h.mu.RUnlock()
-	
+
 	// Determine the actual origin based on proxy headers
 	scheme := "http"
 	host := r.Host
-	
+
 	// Check if we're behind a reverse proxy
 	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
 		scheme = forwardedProto
 	} else if r.TLS != nil {
 		scheme = "https"
 	}
-	
+
 	// Use X-Forwarded-Host if available (for reverse proxy scenarios)
 	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
 		host = forwardedHost
 	}
-	
+
 	requestOrigin := scheme + "://" + host
-	
+
 	// Allow same-origin requests (accounting for proxy headers)
 	if origin == requestOrigin {
 		return true
 	}
-	
+
 	// Check if wildcard is allowed
 	for _, allowed := range allowedOrigins {
 		if allowed == "*" {
@@ -93,7 +93,7 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 			return true
 		}
 	}
-	
+
 	// If no origins configured, only allow from truly private networks
 	if len(allowedOrigins) == 0 {
 		// Parse the origin URL to validate it properly
@@ -103,12 +103,12 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		} else if strings.HasPrefix(origin, "https://") {
 			originHost = strings.TrimPrefix(origin, "https://")
 		}
-		
+
 		// Extract just the hostname/IP part (remove port)
 		if colonIdx := strings.IndexByte(originHost, ':'); colonIdx != -1 {
 			originHost = originHost[:colonIdx]
 		}
-		
+
 		// Check if it's a valid private IP or localhost
 		if isValidPrivateOrigin(originHost) {
 			log.Debug().
@@ -117,25 +117,25 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 				Msg("Allowing WebSocket connection from private network")
 			return true
 		}
-		
+
 		// Still check for exact same-origin match
 		if origin == requestOrigin {
 			return true
 		}
-		
+
 		log.Warn().
 			Str("origin", origin).
 			Str("requestOrigin", requestOrigin).
 			Msg("WebSocket connection rejected - not from allowed local/private network")
 		return false
 	}
-	
+
 	log.Warn().
 		Str("origin", origin).
 		Str("requestOrigin", requestOrigin).
 		Strs("allowedOrigins", allowedOrigins).
 		Msg("WebSocket connection rejected due to CORS")
-	
+
 	return false
 }
 
@@ -197,7 +197,7 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			h.mu.Unlock()
 			log.Info().Str("client", client.id).Msg("WebSocket client connected")
-			
+
 			// Send initial state to the new client immediately
 			log.Debug().Bool("hasGetState", h.getState != nil).Msg("Checking getState function for new client")
 			if h.getState != nil {
@@ -205,7 +205,7 @@ func (h *Hub) Run() {
 				go func() {
 					log.Debug().Str("client", client.id).Msg("Starting initial state goroutine")
 					time.Sleep(500 * time.Millisecond)
-					
+
 					// First send a small welcome message
 					welcomeMsg := Message{
 						Type: "welcome",
@@ -225,24 +225,24 @@ func (h *Hub) Run() {
 							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
 						}
 					}
-					
+
 					// Then send the initial state after another delay
 					time.Sleep(100 * time.Millisecond)
 					log.Debug().Str("client", client.id).Msg("About to get state")
-					
+
 					// Get the state
 					stateData := h.getState()
 					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("Got state for initial message")
-					
+
 					initialMsg := Message{
-						Type: "initialState", 
+						Type: "initialState",
 						Data: sanitizeData(stateData),
 					}
 					if data, err := json.Marshal(initialMsg); err == nil {
 						// Check if client is still registered before sending
 						if _, ok := h.clients[client]; ok {
 							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
-							
+
 							select {
 							case client.send <- data:
 								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
@@ -278,7 +278,7 @@ func (h *Hub) Run() {
 				clients = append(clients, client)
 			}
 			h.mu.RUnlock()
-			
+
 			for _, client := range clients {
 				select {
 				case client.send <- message:
@@ -304,14 +304,14 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("host", r.Host).
 		Str("userAgent", r.Header.Get("User-Agent")).
 		Msg("WebSocket upgrade request")
-	
+
 	// Create upgrader with our origin check
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 1024 * 4,  // 4MB to handle large state messages
-		WriteBufferSize: 1024 * 1024 * 4,  // 4MB to handle large state messages
+		ReadBufferSize:  1024 * 1024 * 4, // 4MB to handle large state messages
+		WriteBufferSize: 1024 * 1024 * 4, // 4MB to handle large state messages
 		CheckOrigin:     h.checkOrigin,
 	}
-		
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
@@ -375,8 +375,8 @@ func (h *Hub) GetClientCount() int {
 // Broadcast sends a custom message to all connected clients
 func (h *Hub) Broadcast(data interface{}) {
 	h.BroadcastMessage(Message{
-		Type: "custom",
-		Data: data,
+		Type:      "custom",
+		Data:      data,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
 }
@@ -385,7 +385,7 @@ func (h *Hub) Broadcast(data interface{}) {
 func (h *Hub) BroadcastMessage(msg Message) {
 	// Sanitize the message data to handle NaN values
 	msg.Data = sanitizeData(msg.Data)
-	
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal WebSocket message")
@@ -421,9 +421,13 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		log.Warn().Err(err).Str("client", c.id).Msg("Failed to set initial read deadline")
+	}
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+			log.Warn().Err(err).Str("client", c.id).Msg("Failed to refresh read deadline on pong")
+		}
 		c.lastPing = time.Now()
 		return nil
 	})
@@ -492,10 +496,14 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline before message send")
+			}
 			if !ok {
 				log.Debug().Str("client", c.id).Msg("Send channel closed")
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					log.Warn().Err(err).Str("client", c.id).Msg("Failed to send close message")
+				}
 				return
 			}
 
@@ -511,6 +519,7 @@ func (c *Client) writePump() {
 				select {
 				case msg := <-c.send:
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+						log.Error().Err(err).Str("client", c.id).Msg("Failed to flush queued message")
 						return
 					}
 				default:
@@ -519,14 +528,16 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline for ping")
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Debug().Err(err).Str("client", c.id).Msg("Failed to send ping; closing connection")
 				return
 			}
 		}
 	}
 }
-
 
 // sanitizeData recursively sanitizes data to replace NaN/Inf values with nil
 func sanitizeData(data interface{}) interface{} {
@@ -535,12 +546,12 @@ func sanitizeData(data interface{}) interface{} {
 	if err != nil {
 		return data
 	}
-	
+
 	var jsonData interface{}
 	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
 		return data
 	}
-	
+
 	return sanitizeValue(jsonData)
 }
 

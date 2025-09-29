@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/rs/zerolog/log"
 )
 
@@ -35,17 +35,17 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS" {
 		return true
 	}
-	
+
 	// Skip CSRF for API token auth (API clients don't have sessions)
 	if r.Header.Get("X-API-Token") != "" {
 		return true
 	}
-	
+
 	// Skip CSRF for Basic Auth (doesn't use sessions, not vulnerable to CSRF)
 	if r.Header.Get("Authorization") != "" {
 		return true
 	}
-	
+
 	// Get session from cookie
 	cookie, err := r.Cookie("pulse_session")
 	if err != nil {
@@ -53,13 +53,13 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		// (either no auth configured or using basic auth which doesn't use sessions)
 		return true
 	}
-	
+
 	// Get CSRF token from header or form
 	csrfToken := r.Header.Get("X-CSRF-Token")
 	if csrfToken == "" {
 		csrfToken = r.FormValue("csrf_token")
 	}
-	
+
 	// If no CSRF token is provided, check if this is a valid session
 	// This handles the case where the server restarted and lost CSRF tokens
 	if csrfToken == "" {
@@ -70,7 +70,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Msg("Missing CSRF token")
 		return false
 	}
-	
+
 	// Check if the CSRF token validates
 	if !validateCSRFToken(cookie.Value, csrfToken) {
 		// CSRF validation failed, but check if session is still valid
@@ -79,20 +79,20 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			// Valid session but mismatched CSRF - likely server restart
 			// Generate a new CSRF token for this session
 			newToken := generateCSRFToken(cookie.Value)
-			
+
 			// Detect if we're behind a proxy/tunnel
-			isProxied := r.Header.Get("X-Forwarded-For") != "" || 
+			isProxied := r.Header.Get("X-Forwarded-For") != "" ||
 				r.Header.Get("X-Real-IP") != "" ||
 				r.Header.Get("CF-Ray") != "" ||
 				r.Header.Get("X-Forwarded-Proto") != ""
-			
+
 			sameSitePolicy := http.SameSiteStrictMode
 			if isProxied {
 				sameSitePolicy = http.SameSiteNoneMode
 			}
-			
+
 			isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-			
+
 			// Set the new CSRF token as a cookie
 			http.SetCookie(w, &http.Cookie{
 				Name:     "pulse_csrf",
@@ -109,7 +109,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 				Msg("Regenerated CSRF token after server restart")
 			return true
 		}
-		
+
 		log.Warn().
 			Str("path", r.URL.Path).
 			Str("session", cookie.Value[:8]+"...").
@@ -117,7 +117,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 			Msg("Invalid CSRF token")
 		return false
 	}
-	
+
 	return true
 }
 
@@ -125,7 +125,7 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 var (
 	// Auth endpoints: 10 attempts per minute
 	authLimiter = NewRateLimiter(10, 1*time.Minute)
-	
+
 	// General API: 500 requests per minute (increased for metadata endpoints)
 	apiLimiter = NewRateLimiter(500, 1*time.Minute)
 )
@@ -141,13 +141,13 @@ func GetClientIP(r *http.Request) string {
 			return strings.TrimSpace(parts[0])
 		}
 	}
-	
+
 	// Check X-Real-IP header
 	xri := r.Header.Get("X-Real-IP")
 	if xri != "" {
 		return xri
 	}
-	
+
 	// Fall back to RemoteAddr
 	addr := r.RemoteAddr
 	if idx := strings.LastIndex(addr, ":"); idx != -1 {
@@ -158,7 +158,7 @@ func GetClientIP(r *http.Request) string {
 
 // Failed Login Tracking
 type FailedLogin struct {
-	Count      int
+	Count       int
 	LastAttempt time.Time
 	LockedUntil time.Time
 }
@@ -166,7 +166,7 @@ type FailedLogin struct {
 var (
 	failedLogins = make(map[string]*FailedLogin)
 	failedMu     sync.RWMutex
-	
+
 	maxFailedAttempts = 5
 	lockoutDuration   = 15 * time.Minute
 )
@@ -175,16 +175,16 @@ var (
 func RecordFailedLogin(identifier string) {
 	failedMu.Lock()
 	defer failedMu.Unlock()
-	
+
 	failed, exists := failedLogins[identifier]
 	if !exists {
 		failed = &FailedLogin{}
 		failedLogins[identifier] = failed
 	}
-	
+
 	failed.Count++
 	failed.LastAttempt = time.Now()
-	
+
 	if failed.Count >= maxFailedAttempts {
 		failed.LockedUntil = time.Now().Add(lockoutDuration)
 		log.Warn().
@@ -206,17 +206,17 @@ func ClearFailedLogins(identifier string) {
 func IsLockedOut(identifier string) bool {
 	failedMu.RLock()
 	defer failedMu.RUnlock()
-	
+
 	failed, exists := failedLogins[identifier]
 	if !exists {
 		return false
 	}
-	
+
 	if time.Now().After(failed.LockedUntil) {
 		// Lockout expired
 		return false
 	}
-	
+
 	return failed.Count >= maxFailedAttempts
 }
 
@@ -224,18 +224,18 @@ func IsLockedOut(identifier string) bool {
 func GetLockoutInfo(identifier string) (attempts int, lockedUntil time.Time, isLocked bool) {
 	failedMu.RLock()
 	defer failedMu.RUnlock()
-	
+
 	failed, exists := failedLogins[identifier]
 	if !exists {
 		return 0, time.Time{}, false
 	}
-	
+
 	// Check if lockout has expired
 	if time.Now().After(failed.LockedUntil) && failed.Count >= maxFailedAttempts {
 		// Lockout expired, treat as no attempts
 		return 0, time.Time{}, false
 	}
-	
+
 	isLocked = failed.Count >= maxFailedAttempts && time.Now().Before(failed.LockedUntil)
 	return failed.Count, failed.LockedUntil, isLocked
 }
@@ -245,7 +245,7 @@ func ResetLockout(identifier string) {
 	failedMu.Lock()
 	defer failedMu.Unlock()
 	delete(failedLogins, identifier)
-	
+
 	log.Info().
 		Str("identifier", identifier).
 		Msg("Lockout manually reset")
@@ -268,23 +268,23 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 			// Deny all embedding when not explicitly allowed
 			w.Header().Set("X-Frame-Options", "DENY")
 		}
-		
+
 		// Prevent MIME type sniffing
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		
+
 		// Enable XSS protection
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
-		
+
 		// Build Content Security Policy
 		cspDirectives := []string{
 			"default-src 'self'",
 			"script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Needed for React
-			"style-src 'self' 'unsafe-inline'", // Needed for inline styles
+			"style-src 'self' 'unsafe-inline'",                // Needed for inline styles
 			"img-src 'self' data: blob:",
 			"connect-src 'self' ws: wss:", // WebSocket support
 			"font-src 'self' data:",
 		}
-		
+
 		// Add frame-ancestors based on embedding settings
 		if allowEmbedding {
 			if allowedOrigins != "" {
@@ -306,15 +306,15 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 			// Deny all embedding
 			cspDirectives = append(cspDirectives, "frame-ancestors 'none'")
 		}
-		
+
 		w.Header().Set("Content-Security-Policy", strings.Join(cspDirectives, "; "))
-		
+
 		// Referrer Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		
+
 		// Permissions Policy (formerly Feature Policy)
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -363,7 +363,7 @@ var (
 func TrackUserSession(user, sessionID string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
-	
+
 	if allSessions[user] == nil {
 		allSessions[user] = []string{}
 	}
@@ -374,18 +374,18 @@ func TrackUserSession(user, sessionID string) {
 func InvalidateUserSessions(user string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
-	
+
 	sessionIDs := allSessions[user]
 	for _, sid := range sessionIDs {
 		// Delete from persistent session store
 		GetSessionStore().DeleteSession(sid)
-		
+
 		// Delete CSRF tokens
 		GetCSRFStore().DeleteCSRFToken(sid)
 	}
-	
+
 	delete(allSessions, user)
-	
+
 	log.Info().
 		Str("user", user).
 		Int("sessions_invalidated", len(sessionIDs)).

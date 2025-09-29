@@ -1,6 +1,12 @@
 import { createSignal, createEffect, Show, For, Index } from 'solid-js';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { formField, labelClass, controlClass, formHelpText, formCheckbox } from '@/components/shared/Form';
+import {
+  formField,
+  labelClass,
+  controlClass,
+  formHelpText,
+  formCheckbox,
+} from '@/components/shared/Form';
 
 interface WebhookTemplate {
   service: string;
@@ -24,21 +30,25 @@ interface WebhookConfigProps {
 export function WebhookConfig(props: WebhookConfigProps) {
   const [adding, setAdding] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [formData, setFormData] = createSignal<Omit<Webhook, 'id'> & { service: string; payloadTemplate?: string }>({
+  const [formData, setFormData] = createSignal<
+    Omit<Webhook, 'id'> & { service: string; payloadTemplate?: string }
+  >({
     name: '',
     url: '',
     method: 'POST',
     service: 'generic',
     headers: { 'Content-Type': 'application/json' },
     enabled: true,
-    payloadTemplate: ''
+    payloadTemplate: '',
   });
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
-  
+
   // Track header inputs separately to avoid focus loss
-  const [headerInputs, setHeaderInputs] = createSignal<Array<{id: string; key: string; value: string}>>([]);
-  
+  const [headerInputs, setHeaderInputs] = createSignal<
+    Array<{ id: string; key: string; value: string }>
+  >([]);
+
   // Load webhook templates
   createEffect(async () => {
     try {
@@ -48,26 +58,26 @@ export function WebhookConfig(props: WebhookConfigProps) {
       console.error('Failed to load webhook templates:', err);
     }
   });
-  
+
   const saveWebhook = () => {
     const data = formData();
     if (!data.name || !data.url) return;
-    
+
     // Build headers from headerInputs
     const headers: Record<string, string> = {};
-    headerInputs().forEach(input => {
+    headerInputs().forEach((input) => {
       if (input.key) {
         headers[input.key] = input.value;
       }
     });
-    
+
     if (editingId()) {
-      props.onUpdate({ 
-        ...data, 
-        id: editingId()!, 
+      props.onUpdate({
+        ...data,
+        id: editingId()!,
         headers,
         service: data.service,
-        template: data.payloadTemplate 
+        template: data.payloadTemplate,
       });
       setEditingId(null);
       setAdding(false);
@@ -81,7 +91,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers,
         enabled: data.enabled,
         service: data.service,
-        template: data.payloadTemplate
+        template: data.payloadTemplate,
       };
       props.onAdd(newWebhook);
       // Reset form and close the adding panel
@@ -92,13 +102,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
         service: 'generic',
         headers: { 'Content-Type': 'application/json' },
         enabled: true,
-        payloadTemplate: ''
+        payloadTemplate: '',
       });
       setHeaderInputs([]);
       setAdding(false);
     }
   };
-  
+
   const cancelForm = () => {
     setAdding(false);
     setEditingId(null);
@@ -109,11 +119,11 @@ export function WebhookConfig(props: WebhookConfigProps) {
       service: 'generic',
       headers: { 'Content-Type': 'application/json' },
       enabled: true,
-      payloadTemplate: ''
+      payloadTemplate: '',
     });
     setHeaderInputs([]);
   };
-  
+
   const editWebhook = (webhook: Webhook) => {
     if (webhook.id) {
       setEditingId(webhook.id);
@@ -121,7 +131,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
     setFormData({
       ...webhook,
       service: webhook.service || 'generic',
-      payloadTemplate: webhook.template || ''
+      payloadTemplate: webhook.template || '',
     });
     // Set up header inputs for editing
     const headers = webhook.headers || {};
@@ -129,14 +139,14 @@ export function WebhookConfig(props: WebhookConfigProps) {
       Object.entries(headers).map(([key, value], index) => ({
         id: `header-${Date.now()}-${index}`,
         key,
-        value
-      }))
+        value,
+      })),
     );
     setAdding(true);
   };
-  
+
   const selectService = (service: string) => {
-    const template = templates().find(t => t.service === service);
+    const template = templates().find((t) => t.service === service);
     if (template) {
       setFormData({
         ...formData(),
@@ -146,7 +156,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         name: formData().name || template.name,
         // Clear the payload template when switching services
         // Only generic service should have custom payloads
-        payloadTemplate: service === 'generic' ? formData().payloadTemplate : ''
+        payloadTemplate: service === 'generic' ? formData().payloadTemplate : '',
       });
       // Update header inputs when switching services
       const headers = template.headers || {};
@@ -154,14 +164,14 @@ export function WebhookConfig(props: WebhookConfigProps) {
         Object.entries(headers).map(([key, value], index) => ({
           id: `header-${Date.now()}-${index}`,
           key,
-          value
-        }))
+          value,
+        })),
       );
     }
     setShowServiceDropdown(false);
   };
-  
-  const currentTemplate = () => templates().find(t => t.service === formData().service);
+
+  const currentTemplate = () => templates().find((t) => t.service === formData().service);
   const serviceName = (service: string) => {
     const names: Record<string, string> = {
       generic: 'Generic',
@@ -173,19 +183,19 @@ export function WebhookConfig(props: WebhookConfigProps) {
       pagerduty: 'PagerDuty',
       pushover: 'Pushover',
       gotify: 'Gotify',
-      ntfy: 'ntfy'
+      ntfy: 'ntfy',
     };
     return names[service] || service;
   };
-  
+
   const toggleAllWebhooks = (enabled: boolean) => {
-    props.webhooks.forEach(webhook => {
+    props.webhooks.forEach((webhook) => {
       props.onUpdate({ ...webhook, enabled });
     });
   };
 
-  const allEnabled = () => props.webhooks.every(w => w.enabled);
-  const someEnabled = () => props.webhooks.some(w => w.enabled);
+  const allEnabled = () => props.webhooks.every((w) => w.enabled);
+  const someEnabled = () => props.webhooks.some((w) => w.enabled);
 
   return (
     <div class="space-y-6 min-w-0 w-full">
@@ -195,19 +205,22 @@ export function WebhookConfig(props: WebhookConfigProps) {
           {/* Quick Actions Bar */}
           <div class="flex flex-col gap-2 rounded border border-gray-200 px-3 py-3 text-xs dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-gray-600 dark:text-gray-400 sm:text-sm">
-              {props.webhooks.filter(w => w.enabled).length} of {props.webhooks.length} webhooks enabled
+              {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
+              enabled
             </div>
             <div class="flex flex-wrap gap-2 sm:flex-nowrap">
               <button
                 onClick={() => toggleAllWebhooks(false)}
                 disabled={!someEnabled()}
-                class="w-full rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 sm:w-auto">
+                class="w-full rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 sm:w-auto"
+              >
                 Disable All
               </button>
               <button
                 onClick={() => toggleAllWebhooks(true)}
                 disabled={allEnabled()}
-                class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20 sm:w-auto">
+                class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20 sm:w-auto"
+              >
                 Enable All
               </button>
             </div>
@@ -216,9 +229,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             {(webhook) => (
               <div class="w-full px-3 py-3 border border-gray-200 text-xs dark:border-gray-700 sm:text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <span class="font-medium text-gray-800 dark:text-gray-200">
-                    {webhook.name}
-                  </span>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{webhook.name}</span>
                   <button
                     onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
                     class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${
@@ -270,7 +281,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           </For>
         </div>
       </Show>
-      
+
       {/* Add/Edit Form */}
       <Show when={adding()}>
         <div class="space-y-4 text-sm">
@@ -280,19 +291,34 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Service Type
               </label>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowServiceDropdown(!showServiceDropdown())}
                 class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
               >
                 {serviceName(formData().service)} →
               </button>
             </div>
-            
+
             <Show when={showServiceDropdown()}>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-gray-200 dark:border-gray-700 px-3 py-2 mb-3 text-xs">
-                <For each={['generic', 'discord', 'slack', 'telegram', 'teams', 'teams-adaptive', 'pagerduty', 'pushover', 'gotify', 'ntfy']}>
+                <For
+                  each={[
+                    'generic',
+                    'discord',
+                    'slack',
+                    'telegram',
+                    'teams',
+                    'teams-adaptive',
+                    'pagerduty',
+                    'pushover',
+                    'gotify',
+                    'ntfy',
+                  ]}
+                >
                   {(service) => (
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => selectService(service)}
                       class={`px-2 py-1.5 text-left border transition-colors text-xs ${
                         formData().service === service
@@ -304,23 +330,32 @@ export function WebhookConfig(props: WebhookConfigProps) {
                         {serviceName(service)}
                       </div>
                       <div class="text-[11px] text-gray-600 dark:text-gray-400 mt-1">
-                        {service === 'generic' ? 'Custom webhook endpoint' :
-                         service === 'discord' ? 'Discord server webhook' :
-                         service === 'slack' ? 'Slack incoming webhook' :
-                         service === 'telegram' ? 'Telegram bot notifications' :
-                         service === 'teams' ? 'Microsoft Teams webhook' :
-                         service === 'teams-adaptive' ? 'Teams with Adaptive Cards' :
-                         service === 'pushover' ? 'Mobile push notifications' :
-                         service === 'gotify' ? 'Self-hosted push notifications' :
-                         service === 'ntfy' ? 'Push notifications via ntfy.sh' :
-                         'PagerDuty Events API v2'}
+                        {service === 'generic'
+                          ? 'Custom webhook endpoint'
+                          : service === 'discord'
+                            ? 'Discord server webhook'
+                            : service === 'slack'
+                              ? 'Slack incoming webhook'
+                              : service === 'telegram'
+                                ? 'Telegram bot notifications'
+                                : service === 'teams'
+                                  ? 'Microsoft Teams webhook'
+                                  : service === 'teams-adaptive'
+                                    ? 'Teams with Adaptive Cards'
+                                    : service === 'pushover'
+                                      ? 'Mobile push notifications'
+                                      : service === 'gotify'
+                                        ? 'Self-hosted push notifications'
+                                        : service === 'ntfy'
+                                          ? 'Push notifications via ntfy.sh'
+                                          : 'PagerDuty Events API v2'}
                       </div>
                     </button>
                   )}
                 </For>
               </div>
             </Show>
-            
+
             <Show when={currentTemplate()?.instructions}>
               <div class="mb-3 border-l-2 border-blue-300 pl-3 text-xs leading-relaxed text-blue-800 dark:border-blue-700 dark:text-blue-200">
                 <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
@@ -330,13 +365,11 @@ export function WebhookConfig(props: WebhookConfigProps) {
               </div>
             </Show>
           </div>
-          
+
           {/* Basic Configuration */}
           <div class="grid w-full grid-cols-1 gap-3 md:grid-cols-2">
             <div class={formField}>
-              <label class={labelClass()}>
-                Name
-              </label>
+              <label class={labelClass()}>Name</label>
               <input
                 type="text"
                 value={formData().name}
@@ -345,11 +378,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 class={controlClass('px-2 py-1.5')}
               />
             </div>
-            
+
             <div class={formField}>
-              <label class={labelClass()}>
-                HTTP method
-              </label>
+              <label class={labelClass()}>HTTP method</label>
               <select
                 value={formData().method}
                 onChange={(e) => setFormData({ ...formData(), method: e.currentTarget.value })}
@@ -361,11 +392,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
               </select>
             </div>
           </div>
-          
+
           <div class={formField}>
-            <label class={labelClass()}>
-              Webhook URL
-            </label>
+            <label class={labelClass()}>Webhook URL</label>
             <input
               type="url"
               value={formData().url}
@@ -374,7 +403,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               class={controlClass('px-2 py-1.5 font-mono')}
             />
           </div>
-          
+
           {/* Custom Payload Template - only show for generic service */}
           <Show when={formData().service === 'generic'}>
             <div class={formField}>
@@ -386,7 +415,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
               </label>
               <textarea
                 value={formData().payloadTemplate || ''}
-                onInput={(e) => setFormData({ ...formData(), payloadTemplate: e.currentTarget.value })}
+                onInput={(e) =>
+                  setFormData({ ...formData(), payloadTemplate: e.currentTarget.value })
+                }
                 placeholder={`{
   "text": "Alert: {{.Level}} - {{.Message}}",
   "resource": "{{.ResourceName}}",
@@ -397,11 +428,14 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 class={controlClass('px-2 py-1.5 text-xs font-mono min-h-[160px]')}
               />
               <p class={formHelpText + ' mt-1'}>
-                Available variables: {"{{.ID}}, {{.Level}}, {{.Type}}, {{.ResourceName}}, {{.Node}}, {{.Message}}, {{.Value}}, {{.Threshold}}, {{.Duration}}, {{.Timestamp}}"}
+                Available variables:{' '}
+                {
+                  '{{.ID}}, {{.Level}}, {{.Type}}, {{.ResourceName}}, {{.Node}}, {{.Message}}, {{.Value}}, {{.Threshold}}, {{.Duration}}, {{.Timestamp}}'
+                }
               </p>
             </div>
           </Show>
-          
+
           {/* Custom Headers Section */}
           <div class={formField}>
             <label class={labelClass('flex items-center gap-2')}>
@@ -419,7 +453,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       value={header().key}
                       onInput={(e) => {
                         const newKey = e.currentTarget.value;
-                        setHeaderInputs(inputs => {
+                        setHeaderInputs((inputs) => {
                           const newInputs = [...inputs];
                           newInputs[index] = { ...newInputs[index], key: newKey };
                           return newInputs;
@@ -433,7 +467,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       value={header().value}
                       onInput={(e) => {
                         const newValue = e.currentTarget.value;
-                        setHeaderInputs(inputs => {
+                        setHeaderInputs((inputs) => {
                           const newInputs = [...inputs];
                           newInputs[index] = { ...newInputs[index], value: newValue };
                           return newInputs;
@@ -445,7 +479,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        setHeaderInputs(inputs => inputs.filter((_, i) => i !== index));
+                        setHeaderInputs((inputs) => inputs.filter((_, i) => i !== index));
                       }}
                       class="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400"
                     >
@@ -458,11 +492,14 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 type="button"
                 onClick={() => {
                   const newId = `header-${Date.now()}-${Math.random()}`;
-                  setHeaderInputs([...headerInputs(), { 
-                    id: newId, 
-                    key: '', 
-                    value: '' 
-                  }]);
+                  setHeaderInputs([
+                    ...headerInputs(),
+                    {
+                      id: newId,
+                      key: '',
+                      value: '',
+                    },
+                  ]);
                 }}
                 class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
               >
@@ -473,7 +510,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
             </p>
           </div>
-          
+
           <div>
             <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -485,21 +522,21 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <span>Enable this webhook</span>
             </label>
           </div>
-          
+
           <div class="flex justify-end gap-2 text-xs">
-            <button 
+            <button
               onClick={cancelForm}
               class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
             >
               Cancel
             </button>
             <Show when={formData().url && formData().name}>
-              <button 
+              <button
                 onClick={() => {
                   // Test the webhook with current form data
                   // Build headers from headerInputs
                   const headers: Record<string, string> = {};
-                  headerInputs().forEach(input => {
+                  headerInputs().forEach((input) => {
                     if (input.key) {
                       headers[input.key] = input.value;
                     }
@@ -514,7 +551,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 {props.testing === (editingId() || 'temp-new-webhook') ? 'Testing...' : 'Test'}
               </button>
             </Show>
-            <button 
+            <button
               onClick={saveWebhook}
               disabled={!formData().name || !formData().url}
               class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -524,18 +561,20 @@ export function WebhookConfig(props: WebhookConfigProps) {
           </div>
         </div>
       </Show>
-      
+
       {/* Add Webhook Button */}
       <Show when={!adding()}>
-        <button 
+        <button
           onClick={() => {
             setAdding(true);
             // Initialize with default Content-Type header
-            setHeaderInputs([{
-              id: `header-${Date.now()}-0`,
-              key: 'Content-Type',
-              value: 'application/json'
-            }]);
+            setHeaderInputs([
+              {
+                id: `header-${Date.now()}-0`,
+                key: 'Content-Type',
+                value: 'application/json',
+              },
+            ]);
           }}
           class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
         >

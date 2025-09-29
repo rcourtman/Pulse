@@ -12,7 +12,16 @@ type SettingsPanelProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 export function SettingsPanel(props: SettingsPanelProps) {
-  const [local, rest] = splitProps(props, ['title', 'description', 'action', 'bodyClass', 'children', 'class', 'tone', 'padding']);
+  const [local, rest] = splitProps(props, [
+    'title',
+    'description',
+    'action',
+    'bodyClass',
+    'children',
+    'class',
+    'tone',
+    'padding',
+  ]);
 
   return (
     <Card
@@ -32,9 +41,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <div class="md:ml-6">{local.action}</div>
         </Show>
       </div>
-      <div class={local.bodyClass ?? 'space-y-4'}>
-        {local.children}
-      </div>
+      <div class={local.bodyClass ?? 'space-y-4'}>{local.children}</div>
     </Card>
   );
 }

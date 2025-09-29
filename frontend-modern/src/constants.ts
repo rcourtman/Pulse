@@ -2,18 +2,18 @@
 
 // Polling and update intervals (in milliseconds)
 export const POLLING_INTERVALS = {
-  DEFAULT: 5000,           // 5 seconds - default polling interval
-  RECONNECT_BASE: 1000,    // 1 second - base reconnect delay
-  RECONNECT_MAX: 30000,    // 30 seconds - max reconnect delay
-  DATA_FLASH: 1000,        // 1 second - data update indicator flash duration
-  TOAST_DURATION: 5000,    // 5 seconds - default toast notification duration
+  DEFAULT: 5000, // 5 seconds - default polling interval
+  RECONNECT_BASE: 1000, // 1 second - base reconnect delay
+  RECONNECT_MAX: 30000, // 30 seconds - max reconnect delay
+  DATA_FLASH: 1000, // 1 second - data update indicator flash duration
+  TOAST_DURATION: 5000, // 5 seconds - default toast notification duration
 } as const;
 
 // Display thresholds (percentages)
 export const THRESHOLDS = {
-  WARNING: 60,   // Yellow warning threshold
-  CRITICAL: 80,  // Orange critical threshold
-  DANGER: 90,    // Red danger threshold
+  WARNING: 60, // Yellow warning threshold
+  CRITICAL: 80, // Orange critical threshold
+  DANGER: 90, // Red danger threshold
 } as const;
 
 // Network and I/O metrics thresholds (MB/s)
@@ -26,17 +26,17 @@ export const IO_THRESHOLDS = {
 
 // Animation durations (in milliseconds)
 export const ANIMATIONS = {
-  TOAST_SLIDE: 300,      // Toast slide in/out animation
+  TOAST_SLIDE: 300, // Toast slide in/out animation
 } as const;
 
 // UI configuration
 export const UI = {
-  DEBOUNCE_DELAY: 300,   // 300ms - input debounce delay
+  DEBOUNCE_DELAY: 300, // 300ms - input debounce delay
 } as const;
 
 // WebSocket configuration
 export const WEBSOCKET = {
-  PING_INTERVAL: 25000,  // 25 seconds - WebSocket ping interval
+  PING_INTERVAL: 25000, // 25 seconds - WebSocket ping interval
   MESSAGE_TYPES: {
     INITIAL_STATE: 'initialState',
     RAW_DATA: 'rawData',
@@ -67,4 +67,3 @@ export const LOG_LEVELS = {
 } as const;
 
 export type LogLevel = keyof typeof LOG_LEVELS;
-

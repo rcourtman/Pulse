@@ -55,7 +55,7 @@ var commonTags = []string{
 
 func GenerateMockData(config MockConfig) models.StateSnapshot {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	data := models.StateSnapshot{
 		Nodes:            generateNodes(config),
 		VMs:              []models.VM{},
@@ -71,7 +71,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	for _, node := range data.Nodes {
 		data.PhysicalDisks = append(data.PhysicalDisks, generateDisksForNode(node)...)
 	}
-	
+
 	// Generate VMs and containers for each node
 	vmidCounter := 100
 	for nodeIdx, node := range data.Nodes {
@@ -80,35 +80,35 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		if nodeIdx > 0 {
 			roleRand := rand.Float64()
 			if roleRand < 0.3 {
-				nodeRole = "vm-heavy"  // 30% chance of being VM-focused
+				nodeRole = "vm-heavy" // 30% chance of being VM-focused
 			} else if roleRand < 0.5 {
-				nodeRole = "container-heavy"  // 20% chance of being container-focused
+				nodeRole = "container-heavy" // 20% chance of being container-focused
 			} else if roleRand < 0.6 {
-				nodeRole = "light"  // 10% chance of having few guests
+				nodeRole = "light" // 10% chance of having few guests
 			}
 			// 40% remain mixed
 		}
-		
+
 		// Calculate VM count based on node role
 		vmCount := config.VMsPerNode
 		lxcCount := config.LXCsPerNode
-		
+
 		switch nodeRole {
 		case "vm-heavy":
-			vmCount = config.VMsPerNode + rand.Intn(config.VMsPerNode) // 100-200% of base
-			lxcCount = config.LXCsPerNode / 2 + rand.Intn(config.LXCsPerNode/2) // 50-75% of base
+			vmCount = config.VMsPerNode + rand.Intn(config.VMsPerNode)        // 100-200% of base
+			lxcCount = config.LXCsPerNode/2 + rand.Intn(config.LXCsPerNode/2) // 50-75% of base
 		case "container-heavy":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1) // 0-50% of base
+			vmCount = rand.Intn(config.VMsPerNode/2 + 1)                    // 0-50% of base
 			lxcCount = config.LXCsPerNode*2 + rand.Intn(config.LXCsPerNode) // 200-300% of base
 		case "light":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1) // 0-50% of base
+			vmCount = rand.Intn(config.VMsPerNode/2 + 1)   // 0-50% of base
 			lxcCount = rand.Intn(config.LXCsPerNode/2 + 1) // 0-50% of base
 		default: // mixed
 			// Add some variation
-			vmCount = config.VMsPerNode + rand.Intn(5) - 2 // +/- 2
+			vmCount = config.VMsPerNode + rand.Intn(5) - 2   // +/- 2
 			lxcCount = config.LXCsPerNode + rand.Intn(7) - 3 // +/- 3
 		}
-		
+
 		// Ensure at least some activity on most nodes
 		if nodeIdx < 3 && vmCount == 0 && lxcCount == 0 {
 			if rand.Float64() < 0.5 {
@@ -117,37 +117,37 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 				lxcCount = 2 + rand.Intn(3)
 			}
 		}
-		
+
 		// Generate VMs
 		for i := 0; i < vmCount; i++ {
 			vm := generateVM(node.Name, vmidCounter, config)
 			data.VMs = append(data.VMs, vm)
 			vmidCounter++
 		}
-		
+
 		// Generate containers
 		for i := 0; i < lxcCount; i++ {
 			lxc := generateContainer(node.Name, vmidCounter, config)
 			data.Containers = append(data.Containers, lxc)
 			vmidCounter++
 		}
-		
+
 		// Set connection health
 		data.ConnectionHealth[fmt.Sprintf("pve-%s", node.Name)] = true
 	}
-	
+
 	// Generate storage for each node
 	data.Storage = generateStorage(data.Nodes)
-	
+
 	// Generate PBS instances and backups
 	data.PBSInstances = generatePBSInstances()
 	data.PBSBackups = generatePBSBackups(data.VMs, data.Containers)
-	
+
 	// Set PBS connection health
 	for _, pbs := range data.PBSInstances {
 		data.ConnectionHealth[fmt.Sprintf("pbs-%s", pbs.Name)] = true
 	}
-	
+
 	// Generate backups for VMs and containers
 	data.PVEBackups = models.PVEBackups{
 		BackupTasks:    []models.BackupTask{},
@@ -159,19 +159,19 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	data.Stats.StartTime = time.Now()
 	data.Stats.Uptime = 0
 	data.Stats.Version = "v4.9.0-mock"
-	
+
 	return data
 }
 
 func generateNodes(config MockConfig) []models.Node {
 	nodes := make([]models.Node, 0, config.NodeCount)
-	
+
 	// First 5 nodes are part of the cluster
 	clusterNodeCount := 5
 	if config.NodeCount < 5 {
 		clusterNodeCount = config.NodeCount
 	}
-	
+
 	// Generate clustered nodes
 	for i := 0; i < clusterNodeCount; i++ {
 		nodeName := fmt.Sprintf("pve%d", i+1)
@@ -182,12 +182,12 @@ func generateNodes(config MockConfig) []models.Node {
 				break
 			}
 		}
-		
+
 		node := generateNode(nodeName, isHighLoad, config)
 		node.Instance = "mock-cluster" // Part of cluster
 		node.IsClusterMember = true
 		node.ClusterName = "mock-cluster"
-		
+
 		// Make pve3 offline to test offline node handling
 		if nodeName == "pve3" {
 			node.Status = "offline"
@@ -199,10 +199,10 @@ func generateNodes(config MockConfig) []models.Node {
 			// For cluster nodes, since one is offline, the cluster is degraded
 			node.ConnectionHealth = "degraded"
 		}
-		
+
 		nodes = append(nodes, node)
 	}
-	
+
 	// Generate standalone nodes (if we have more than 5 nodes)
 	for i := clusterNodeCount; i < config.NodeCount; i++ {
 		nodeName := fmt.Sprintf("standalone%d", i-clusterNodeCount+1)
@@ -213,15 +213,15 @@ func generateNodes(config MockConfig) []models.Node {
 				break
 			}
 		}
-		
+
 		node := generateNode(nodeName, isHighLoad, config)
 		node.Instance = nodeName // Standalone - instance matches name
 		node.IsClusterMember = false
-		node.ClusterName = "" // Empty for standalone
+		node.ClusterName = ""             // Empty for standalone
 		node.ConnectionHealth = "healthy" // Standalone nodes are healthy if online
 		nodes = append(nodes, node)
 	}
-	
+
 	return nodes
 }
 
@@ -230,34 +230,34 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 	if highLoad {
 		baseLoad = 0.75
 	}
-	
+
 	cpu := baseLoad + rand.Float64()*0.2
 	if !config.RandomMetrics {
 		cpu = baseLoad
 	}
-	
+
 	// Memory in GB
 	totalMem := int64(32 + rand.Intn(96)) // 32-128 GB
 	usedMem := int64(float64(totalMem) * (baseLoad + rand.Float64()*0.3))
-	
-	// Disk in GB  
+
+	// Disk in GB
 	totalDisk := int64(500 + rand.Intn(2000)) // 500-2500 GB
 	usedDisk := int64(float64(totalDisk) * (0.3 + rand.Float64()*0.4))
-	
+
 	// Generate CPU info
 	coreCounts := []int{4, 8, 12, 16, 24, 32, 48, 64}
 	cores := coreCounts[rand.Intn(len(coreCounts))]
-	
+
 	// Generate realistic version information
 	pveVersions := []string{"8.2.4", "8.2.2", "8.1.10", "8.0.12", "7.4-18"}
 	kernelVersions := []string{
-		"6.8.12-1-pve", 
-		"6.8.8-2-pve", 
-		"6.5.13-5-pve", 
+		"6.8.12-1-pve",
+		"6.8.8-2-pve",
+		"6.5.13-5-pve",
 		"6.2.16-20-pve",
 		"5.15.143-1-pve",
 	}
-	
+
 	return models.Node{
 		Name:          name,
 		Instance:      "", // Set by generateNodes based on cluster/standalone
@@ -294,7 +294,7 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 // Most systems are idle or have very low I/O
 func generateRealisticIO(ioType string) int64 {
 	chance := rand.Float64()
-	
+
 	switch ioType {
 	case "disk-read":
 		if chance < 0.60 { // 60% are idle
@@ -302,44 +302,44 @@ func generateRealisticIO(ioType string) int64 {
 		} else if chance < 0.85 { // 25% have low activity
 			return int64(rand.Intn(5)) * 1024 * 1024 // 0-5 MB/s
 		} else if chance < 0.95 { // 10% moderate
-			return int64(5 + rand.Intn(20)) * 1024 * 1024 // 5-25 MB/s
+			return int64(5+rand.Intn(20)) * 1024 * 1024 // 5-25 MB/s
 		} else { // 5% high activity
-			return int64(25 + rand.Intn(75)) * 1024 * 1024 // 25-100 MB/s
+			return int64(25+rand.Intn(75)) * 1024 * 1024 // 25-100 MB/s
 		}
-		
+
 	case "disk-write":
 		if chance < 0.70 { // 70% are idle (writes are less common)
 			return 0
 		} else if chance < 0.90 { // 20% have low activity
 			return int64(rand.Intn(3)) * 1024 * 1024 // 0-3 MB/s
 		} else if chance < 0.97 { // 7% moderate
-			return int64(3 + rand.Intn(15)) * 1024 * 1024 // 3-18 MB/s
+			return int64(3+rand.Intn(15)) * 1024 * 1024 // 3-18 MB/s
 		} else { // 3% high activity
-			return int64(18 + rand.Intn(32)) * 1024 * 1024 // 18-50 MB/s
+			return int64(18+rand.Intn(32)) * 1024 * 1024 // 18-50 MB/s
 		}
-		
+
 	case "network-in":
 		if chance < 0.50 { // 50% are idle
 			return 0
 		} else if chance < 0.80 { // 30% have low activity
 			return int64(rand.Intn(10)) * 1024 * 1024 / 8 // 0-10 Mbps
 		} else if chance < 0.93 { // 13% moderate
-			return int64(10 + rand.Intn(90)) * 1024 * 1024 / 8 // 10-100 Mbps
+			return int64(10+rand.Intn(90)) * 1024 * 1024 / 8 // 10-100 Mbps
 		} else { // 7% high activity
-			return int64(100 + rand.Intn(400)) * 1024 * 1024 / 8 // 100-500 Mbps
+			return int64(100+rand.Intn(400)) * 1024 * 1024 / 8 // 100-500 Mbps
 		}
-		
+
 	case "network-out":
 		if chance < 0.55 { // 55% are idle
 			return 0
 		} else if chance < 0.82 { // 27% have low activity
 			return int64(rand.Intn(5)) * 1024 * 1024 / 8 // 0-5 Mbps
 		} else if chance < 0.94 { // 12% moderate
-			return int64(5 + rand.Intn(45)) * 1024 * 1024 / 8 // 5-50 Mbps
+			return int64(5+rand.Intn(45)) * 1024 * 1024 / 8 // 5-50 Mbps
 		} else { // 6% high activity
-			return int64(50 + rand.Intn(200)) * 1024 * 1024 / 8 // 50-250 Mbps
+			return int64(50+rand.Intn(200)) * 1024 * 1024 / 8 // 50-250 Mbps
 		}
-		
+
 	// Container I/O (generally lower than VMs)
 	case "disk-read-ct":
 		if chance < 0.65 { // 65% are idle
@@ -347,45 +347,45 @@ func generateRealisticIO(ioType string) int64 {
 		} else if chance < 0.90 { // 25% have low activity
 			return int64(rand.Intn(3)) * 1024 * 1024 // 0-3 MB/s
 		} else if chance < 0.97 { // 7% moderate
-			return int64(3 + rand.Intn(12)) * 1024 * 1024 // 3-15 MB/s
+			return int64(3+rand.Intn(12)) * 1024 * 1024 // 3-15 MB/s
 		} else { // 3% high activity
-			return int64(15 + rand.Intn(35)) * 1024 * 1024 // 15-50 MB/s
+			return int64(15+rand.Intn(35)) * 1024 * 1024 // 15-50 MB/s
 		}
-		
+
 	case "disk-write-ct":
 		if chance < 0.75 { // 75% are idle
 			return 0
 		} else if chance < 0.92 { // 17% have low activity
 			return int64(rand.Intn(2)) * 1024 * 1024 // 0-2 MB/s
 		} else if chance < 0.98 { // 6% moderate
-			return int64(2 + rand.Intn(8)) * 1024 * 1024 // 2-10 MB/s
+			return int64(2+rand.Intn(8)) * 1024 * 1024 // 2-10 MB/s
 		} else { // 2% high activity
-			return int64(10 + rand.Intn(20)) * 1024 * 1024 // 10-30 MB/s
+			return int64(10+rand.Intn(20)) * 1024 * 1024 // 10-30 MB/s
 		}
-		
+
 	case "network-in-ct":
 		if chance < 0.55 { // 55% are idle
 			return 0
 		} else if chance < 0.85 { // 30% have low activity
 			return int64(rand.Intn(5)) * 1024 * 1024 / 8 // 0-5 Mbps
 		} else if chance < 0.96 { // 11% moderate
-			return int64(5 + rand.Intn(25)) * 1024 * 1024 / 8 // 5-30 Mbps
+			return int64(5+rand.Intn(25)) * 1024 * 1024 / 8 // 5-30 Mbps
 		} else { // 4% high activity
-			return int64(30 + rand.Intn(70)) * 1024 * 1024 / 8 // 30-100 Mbps
+			return int64(30+rand.Intn(70)) * 1024 * 1024 / 8 // 30-100 Mbps
 		}
-		
+
 	case "network-out-ct":
 		if chance < 0.60 { // 60% are idle
 			return 0
 		} else if chance < 0.87 { // 27% have low activity
 			return int64(rand.Intn(3)) * 1024 * 1024 / 8 // 0-3 Mbps
 		} else if chance < 0.96 { // 9% moderate
-			return int64(3 + rand.Intn(17)) * 1024 * 1024 / 8 // 3-20 Mbps
+			return int64(3+rand.Intn(17)) * 1024 * 1024 / 8 // 3-20 Mbps
 		} else { // 4% high activity
-			return int64(20 + rand.Intn(80)) * 1024 * 1024 / 8 // 20-100 Mbps
+			return int64(20+rand.Intn(80)) * 1024 * 1024 / 8 // 20-100 Mbps
 		}
 	}
-	
+
 	return 0
 }
 
@@ -395,11 +395,11 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 	if rand.Float64() < config.StoppedPercent {
 		status = "stopped"
 	}
-	
+
 	cpu := float64(0)
 	mem := models.Memory{}
 	uptime := int64(0)
-	
+
 	if status == "running" {
 		// More realistic CPU usage: mostly low with occasional spikes
 		cpuRand := rand.Float64()
@@ -410,7 +410,7 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 		} else { // 10% high CPU (0.9-1.0 range)
 			cpu = 0.7 + rand.Float64()*0.3 // 70-100% (can trigger alerts at 80%)
 		}
-		
+
 		totalMem := int64((4 + rand.Intn(28)) * 1024 * 1024 * 1024) // 4-32 GB
 		// More realistic memory usage: most VMs use 20-60% memory
 		var memUsage float64
@@ -431,21 +431,21 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
 	}
-	
+
 	// Disk stats
 	totalDisk := int64((32 + rand.Intn(468)) * 1024 * 1024 * 1024) // 32-500 GB
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.8))
-	
+
 	return models.VM{
-		Name:       name,
-		VMID:       vmid,
-		Node:       nodeName,
-		Type:       "qemu",
-		Status:     status,
-		CPU:        cpu,
-		CPUs:       2 + rand.Intn(6), // 2-8 cores
-		Memory:     mem,
-		Disk:       models.Disk{
+		Name:   name,
+		VMID:   vmid,
+		Node:   nodeName,
+		Type:   "qemu",
+		Status: status,
+		CPU:    cpu,
+		CPUs:   2 + rand.Intn(6), // 2-8 cores
+		Memory: mem,
+		Disk: models.Disk{
 			Total: totalDisk,
 			Used:  usedDisk,
 			Free:  totalDisk - usedDisk,
@@ -467,11 +467,11 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 	if rand.Float64() < config.StoppedPercent {
 		status = "stopped"
 	}
-	
+
 	cpu := float64(0)
 	mem := models.Memory{}
 	uptime := int64(0)
-	
+
 	if status == "running" {
 		// More realistic CPU for containers: mostly very low
 		cpuRand := rand.Float64()
@@ -482,7 +482,7 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 		} else { // 5% higher CPU (0.95-1.0 range)
 			cpu = 0.4 + rand.Float64()*0.5 // 40-90% (can trigger alerts at 80%)
 		}
-		
+
 		totalMem := int64((512 + rand.Intn(7680)) * 1024 * 1024) // 512 MB - 8 GB
 		// More realistic memory for containers
 		var memUsage float64
@@ -503,21 +503,21 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
 	}
-	
+
 	// Disk stats - containers typically smaller
 	totalDisk := int64((8 + rand.Intn(120)) * 1024 * 1024 * 1024) // 8-128 GB
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.6))
-	
+
 	return models.Container{
-		Name:       name,
-		VMID:       vmid,
-		Node:       nodeName,
-		Type:       "lxc",
-		Status:     status,
-		CPU:        cpu,
-		CPUs:       1 + rand.Intn(4), // 1-4 cores
-		Memory:     mem,
-		Disk:       models.Disk{
+		Name:   name,
+		VMID:   vmid,
+		Node:   nodeName,
+		Type:   "lxc",
+		Status: status,
+		CPU:    cpu,
+		CPUs:   1 + rand.Intn(4), // 1-4 cores
+		Memory: mem,
+		Disk: models.Disk{
 			Total: totalDisk,
 			Used:  usedDisk,
 			Free:  totalDisk - usedDisk,
@@ -543,12 +543,12 @@ func generateTags() []string {
 	if rand.Float64() < 0.3 {
 		return []string{}
 	}
-	
+
 	// Generate 1-4 tags
 	numTags := 1 + rand.Intn(4)
 	tags := make([]string, 0, numTags)
 	usedTags := make(map[string]bool)
-	
+
 	for len(tags) < numTags {
 		tag := commonTags[rand.Intn(len(commonTags))]
 		// Avoid duplicate tags
@@ -557,14 +557,14 @@ func generateTags() []string {
 			usedTags[tag] = true
 		}
 	}
-	
+
 	return tags
 }
 
 // GenerateAlerts generates random alerts for testing
 func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Container) []models.Alert {
 	alerts := []models.Alert{}
-	
+
 	// Generate some node alerts
 	for _, node := range nodes {
 		// Add offline alert for offline nodes
@@ -583,7 +583,7 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 			})
 			continue // Skip other checks for offline nodes
 		}
-		
+
 		if node.CPU > 0.8 {
 			alerts = append(alerts, models.Alert{
 				ID:           fmt.Sprintf("alert-%s-cpu", node.Name),
@@ -599,7 +599,7 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 			})
 		}
 	}
-	
+
 	// Generate some VM/container alerts
 	allGuests := make([]interface{}, 0, len(vms)+len(containers))
 	for _, vm := range vms {
@@ -608,16 +608,16 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 	for _, ct := range containers {
 		allGuests = append(allGuests, ct)
 	}
-	
+
 	// Pick random guests to have alerts
 	numAlerts := rand.Intn(5) + 1
 	for i := 0; i < numAlerts && i < len(allGuests); i++ {
 		guestIdx := rand.Intn(len(allGuests))
-		
+
 		var name, id string
 		var cpu float64
 		var memUsage float64
-		
+
 		switch g := allGuests[guestIdx].(type) {
 		case models.VM:
 			name = g.Name
@@ -630,7 +630,7 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 			cpu = g.CPU
 			memUsage = g.Memory.Usage
 		}
-		
+
 		// Randomly choose alert type
 		switch rand.Intn(3) {
 		case 0: // CPU alert
@@ -676,7 +676,7 @@ func GenerateAlerts(nodes []models.Node, vms []models.VM, containers []models.Co
 			})
 		}
 	}
-	
+
 	return alerts
 }
 
@@ -774,7 +774,7 @@ func generateZFSPoolWithIssues(poolName string) *models.ZFSPool {
 			}
 		},
 	}
-	
+
 	// Pick a random scenario
 	return scenarios[rand.Intn(len(scenarios))]()
 }
@@ -784,7 +784,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	var storage []models.Storage
 	storageTypes := []string{"dir", "zfspool", "lvm", "nfs", "cephfs"}
 	contentTypes := []string{"images", "vztmpl,iso", "rootdir", "backup", "snippets"}
-	
+
 	for _, node := range nodes {
 		// Local storage (always present)
 		localTotal := int64(500 * 1024 * 1024 * 1024) // 500GB
@@ -805,11 +805,11 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Enabled:  true,
 			Active:   true,
 		})
-		
+
 		// Local-zfs (common)
 		zfsTotal := int64(2 * 1024 * 1024 * 1024 * 1024) // 2TB
 		zfsUsed := int64(float64(zfsTotal) * (0.2 + rand.Float64()*0.6))
-		
+
 		// Generate ZFS pool status
 		var zfsPool *models.ZFSPool
 		if rand.Float64() < 0.15 { // 15% chance of ZFS pool with issues
@@ -835,7 +835,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 				},
 			}
 		}
-		
+
 		storage = append(storage, models.Storage{
 			ID:       fmt.Sprintf("%s-local-zfs", node.Name),
 			Name:     "local-zfs",
@@ -853,14 +853,14 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Active:   true,
 			ZFSPool:  zfsPool,
 		})
-		
+
 		// Add one more random storage per node
 		if rand.Float64() > 0.3 {
 			storageType := storageTypes[rand.Intn(len(storageTypes))]
 			storageName := fmt.Sprintf("storage-%s-%d", node.Name, rand.Intn(100))
 			total := int64((1 + rand.Intn(10)) * 1024 * 1024 * 1024 * 1024) // 1-10TB
 			used := int64(float64(total) * rand.Float64())
-			
+
 			storage = append(storage, models.Storage{
 				ID:       fmt.Sprintf("%s-%s", node.Name, storageName),
 				Name:     storageName,
@@ -879,7 +879,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			})
 		}
 	}
-	
+
 	// Add PBS storage for each node (simulating node-specific PBS namespaces)
 	// In real clusters, each node reports ALL PBS storage entries but with node-specific namespaces
 	// This matches real behavior where each node sees all PBS configurations
@@ -889,13 +889,13 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			clusterNodes = append(clusterNodes, n)
 		}
 	}
-	
+
 	// Each cluster node reports ALL PBS storage entries (one for each node)
 	for _, node := range clusterNodes {
 		// Each node sees ALL PBS storage configurations
 		for _, pbsTargetNode := range clusterNodes {
 			pbsTotal := int64(950 * 1024 * 1024 * 1024) // ~950GB matching real PBS
-			pbsUsed := int64(float64(pbsTotal) * 0.14) // ~14% usage matching real data
+			pbsUsed := int64(float64(pbsTotal) * 0.14)  // ~14% usage matching real data
 			storage = append(storage, models.Storage{
 				ID:       fmt.Sprintf("%s-pbs-%s", node.Name, pbsTargetNode.Name),
 				Name:     fmt.Sprintf("pbs-%s", pbsTargetNode.Name),
@@ -914,7 +914,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			})
 		}
 	}
-	
+
 	// Add a shared storage (NFS or CephFS)
 	if len(nodes) > 1 {
 		sharedTotal := int64(10 * 1024 * 1024 * 1024 * 1024) // 10TB
@@ -936,7 +936,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Active:   true,
 		})
 	}
-	
+
 	return storage
 }
 
@@ -944,19 +944,19 @@ func generateStorage(nodes []models.Node) []models.Storage {
 func generateBackups(vms []models.VM, containers []models.Container) []models.StorageBackup {
 	var backups []models.StorageBackup
 	backupFormats := []string{"vma.zst", "vma.lzo", "tar.zst", "tar.gz"}
-	
+
 	// Generate backups for ~60% of VMs
 	for _, vm := range vms {
 		if rand.Float64() > 0.4 {
 			continue
 		}
-		
+
 		// Generate 1-3 backups per VM
 		numBackups := 1 + rand.Intn(3)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
 			backupSize := int64(vm.Disk.Total/10 + rand.Int63n(vm.Disk.Total/5)) // 10-30% of disk size
-			
+
 			backup := models.StorageBackup{
 				ID:        fmt.Sprintf("backup-%s-vm-%d-%d", vm.Node, vm.VMID, i),
 				Storage:   "local",
@@ -973,27 +973,27 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 				IsPBS:     false,
 				Verified:  rand.Float64() > 0.3, // 70% verified
 			}
-			
+
 			if backup.Verified {
 				backup.Verification = "OK"
 			}
-			
+
 			backups = append(backups, backup)
 		}
 	}
-	
+
 	// Generate backups for ~70% of containers
 	for _, ct := range containers {
 		if rand.Float64() > 0.3 {
 			continue
 		}
-		
+
 		// Generate 1-2 backups per container
 		numBackups := 1 + rand.Intn(2)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
 			backupSize := int64(ct.Disk.Total/20 + rand.Int63n(ct.Disk.Total/10)) // 5-15% of disk size
-			
+
 			backup := models.StorageBackup{
 				ID:        fmt.Sprintf("backup-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
 				Storage:   "local",
@@ -1010,15 +1010,15 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 				IsPBS:     false,
 				Verified:  rand.Float64() > 0.2, // 80% verified
 			}
-			
+
 			if backup.Verified {
 				backup.Verification = "OK"
 			}
-			
+
 			backups = append(backups, backup)
 		}
 	}
-	
+
 	// Generate PMG host config backups (VMID=0)
 	// Add 2-4 PMG host backups
 	numPMGBackups := 2 + rand.Intn(3)
@@ -1026,13 +1026,13 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 	for i := 0; i < numPMGBackups; i++ {
 		backupTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
 		nodeIdx := rand.Intn(len(pmgNodes))
-		
+
 		backup := models.StorageBackup{
 			ID:        fmt.Sprintf("backup-pmg-host-%d", i),
 			Storage:   "local",
 			Node:      pmgNodes[nodeIdx],
-			Type:      "host",  // This will now display as "Host" in the UI
-			VMID:      0,       // Host backups have VMID=0
+			Type:      "host", // This will now display as "Host" in the UI
+			VMID:      0,      // Host backups have VMID=0
 			Time:      backupTime,
 			CTime:     backupTime.Unix(),
 			Size:      int64(50*1024*1024 + rand.Intn(200*1024*1024)), // 50-250 MB
@@ -1043,19 +1043,19 @@ func generateBackups(vms []models.VM, containers []models.Container) []models.St
 			IsPBS:     false,
 			Verified:  rand.Float64() > 0.2, // 80% verified
 		}
-		
+
 		if backup.Verified {
-			backup.Verification = "OK"  
+			backup.Verification = "OK"
 		}
-		
+
 		backups = append(backups, backup)
 	}
-	
+
 	// Sort backups by time (newest first)
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Time.After(backups[j].Time)
 	})
-	
+
 	return backups
 }
 
@@ -1070,9 +1070,9 @@ func generatePBSInstances() []models.PBSInstance {
 			Version:     "3.2.1",
 			CPU:         15.5 + rand.Float64()*10,
 			Memory:      45.2 + rand.Float64()*20,
-			MemoryUsed:  int64(8 * 1024 * 1024 * 1024), // 8GB
+			MemoryUsed:  int64(8 * 1024 * 1024 * 1024),  // 8GB
 			MemoryTotal: int64(16 * 1024 * 1024 * 1024), // 16GB
-			Uptime:      int64(86400 * 30), // 30 days
+			Uptime:      int64(86400 * 30),              // 30 days
 			Datastores: []models.PBSDatastore{
 				{
 					Name:   "backup-store",
@@ -1092,10 +1092,10 @@ func generatePBSInstances() []models.PBSInstance {
 				},
 			},
 			ConnectionHealth: "healthy",
-			LastSeen:        time.Now(),
+			LastSeen:         time.Now(),
 		},
 	}
-	
+
 	// Add a secondary PBS if we have enough nodes
 	if rand.Float64() > 0.4 {
 		pbsInstances = append(pbsInstances, models.PBSInstance{
@@ -1107,8 +1107,8 @@ func generatePBSInstances() []models.PBSInstance {
 			CPU:         10.2 + rand.Float64()*8,
 			Memory:      35.5 + rand.Float64()*15,
 			MemoryUsed:  int64(4 * 1024 * 1024 * 1024), // 4GB
-			MemoryTotal: int64(8 * 1024 * 1024 * 1024),  // 8GB
-			Uptime:      int64(86400 * 15), // 15 days
+			MemoryTotal: int64(8 * 1024 * 1024 * 1024), // 8GB
+			Uptime:      int64(86400 * 15),             // 15 days
 			Datastores: []models.PBSDatastore{
 				{
 					Name:   "replica-store",
@@ -1120,10 +1120,10 @@ func generatePBSInstances() []models.PBSInstance {
 				},
 			},
 			ConnectionHealth: "healthy",
-			LastSeen:        time.Now(),
+			LastSeen:         time.Now(),
 		})
 	}
-	
+
 	return pbsInstances
 }
 
@@ -1133,24 +1133,24 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 	pbsInstances := []string{"pbs-main"}
 	datastores := []string{"backup-store", "offsite-backup"}
 	owners := []string{"admin@pbs", "backup@pbs", "root@pam", "automation@pbs", "user1@pve", "service@pbs"}
-	
+
 	// Add secondary PBS to list if it might exist
 	if rand.Float64() > 0.4 {
 		pbsInstances = append(pbsInstances, "pbs-secondary")
 		datastores = append(datastores, "replica-store")
 	}
-	
+
 	// Generate PBS backups for ~50% of VMs
 	for _, vm := range vms {
 		if rand.Float64() > 0.5 {
 			continue
 		}
-		
+
 		// Generate 2-4 PBS backups per VM
 		numBackups := 2 + rand.Intn(3)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
-			
+
 			backup := models.PBSBackup{
 				ID:         fmt.Sprintf("pbs-backup-vm-%d-%d", vm.VMID, i),
 				Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
@@ -1165,22 +1165,22 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 				Comment:    fmt.Sprintf("Automated backup of %s", vm.Name),
 				Owner:      owners[rand.Intn(len(owners))],
 			}
-			
+
 			backups = append(backups, backup)
 		}
 	}
-	
+
 	// Generate PBS backups for ~60% of containers
 	for _, ct := range containers {
 		if rand.Float64() > 0.4 {
 			continue
 		}
-		
+
 		// Generate 1-3 PBS backups per container
 		numBackups := 1 + rand.Intn(3)
 		for i := 0; i < numBackups; i++ {
 			backupTime := time.Now().Add(-time.Duration(rand.Intn(45*24)) * time.Hour)
-			
+
 			backup := models.PBSBackup{
 				ID:         fmt.Sprintf("pbs-backup-ct-%d-%d", int(ct.VMID), i),
 				Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
@@ -1190,45 +1190,45 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 				VMID:       fmt.Sprintf("%d", int(ct.VMID)),
 				BackupTime: backupTime,
 				Size:       int64(ct.Disk.Total/15 + rand.Int63n(ct.Disk.Total/8)),
-				Protected:  rand.Float64() > 0.9, // 10% protected
+				Protected:  rand.Float64() > 0.9,  // 10% protected
 				Verified:   rand.Float64() > 0.15, // 85% verified
 				Comment:    fmt.Sprintf("Daily backup of %s", ct.Name),
 				Owner:      owners[rand.Intn(len(owners))],
 			}
-			
+
 			backups = append(backups, backup)
 		}
 	}
-	
+
 	// Generate host config backups (VMID 0) - PMG/PVE host configs
 	// These are common when backing up Proxmox Mail Gateway hosts
 	hostBackupCount := 2 + rand.Intn(3) // 2-4 host backups
 	for i := 0; i < hostBackupCount; i++ {
 		backupTime := time.Now().Add(-time.Duration(rand.Intn(30*24)) * time.Hour)
-		
+
 		backup := models.PBSBackup{
 			ID:         fmt.Sprintf("pbs-backup-host-0-%d", i),
 			Instance:   pbsInstances[rand.Intn(len(pbsInstances))],
 			Datastore:  datastores[rand.Intn(len(datastores))],
 			Namespace:  "root",
 			BackupType: "ct", // Host configs are stored as 'ct' type in PBS
-			VMID:       "0",   // VMID 0 indicates host config
+			VMID:       "0",  // VMID 0 indicates host config
 			BackupTime: backupTime,
 			Size:       int64(50*1024*1024 + rand.Int63n(100*1024*1024)), // 50-150MB for host configs
-			Protected:  rand.Float64() > 0.7, // 30% protected
-			Verified:   rand.Float64() > 0.1,  // 90% verified
+			Protected:  rand.Float64() > 0.7,                             // 30% protected
+			Verified:   rand.Float64() > 0.1,                             // 90% verified
 			Comment:    "PMG host configuration backup",
 			Owner:      "root@pam",
 		}
-		
+
 		backups = append(backups, backup)
 	}
-	
+
 	// Sort by time (newest first)
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].BackupTime.After(backups[j].BackupTime)
 	})
-	
+
 	return backups
 }
 
@@ -1236,18 +1236,18 @@ func generatePBSBackups(vms []models.VM, containers []models.Container) []models
 func generateSnapshots(vms []models.VM, containers []models.Container) []models.GuestSnapshot {
 	var snapshots []models.GuestSnapshot
 	snapshotNames := []string{"before-upgrade", "production", "testing", "stable", "rollback-point", "pre-maintenance", "weekly-snapshot"}
-	
+
 	// Generate snapshots for ~40% of VMs
 	for _, vm := range vms {
 		if rand.Float64() > 0.6 {
 			continue
 		}
-		
+
 		// Generate 1-3 snapshots per VM
 		numSnapshots := 1 + rand.Intn(3)
 		for i := 0; i < numSnapshots; i++ {
 			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(90*24)) * time.Hour)
-			
+
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("snapshot-%s-vm-%d-%d", vm.Node, vm.VMID, i),
 				Name:        snapshotNames[rand.Intn(len(snapshotNames))],
@@ -1258,27 +1258,27 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 				Description: fmt.Sprintf("Snapshot of %s taken on %s", vm.Name, snapshotTime.Format("2006-01-02")),
 				VMState:     rand.Float64() > 0.5, // 50% include VM state
 			}
-			
+
 			// Add parent relationship for some snapshots
 			if i > 0 && rand.Float64() > 0.5 {
 				snapshot.Parent = fmt.Sprintf("snapshot-%s-vm-%d-%d", vm.Node, vm.VMID, i-1)
 			}
-			
+
 			snapshots = append(snapshots, snapshot)
 		}
 	}
-	
+
 	// Generate snapshots for ~30% of containers
 	for _, ct := range containers {
 		if rand.Float64() > 0.7 {
 			continue
 		}
-		
+
 		// Generate 1-2 snapshots per container
 		numSnapshots := 1 + rand.Intn(2)
 		for i := 0; i < numSnapshots; i++ {
 			snapshotTime := time.Now().Add(-time.Duration(rand.Intn(60*24)) * time.Hour)
-			
+
 			snapshot := models.GuestSnapshot{
 				ID:          fmt.Sprintf("snapshot-%s-ct-%d-%d", ct.Node, int(ct.VMID), i),
 				Name:        snapshotNames[rand.Intn(len(snapshotNames))],
@@ -1289,16 +1289,16 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 				Description: fmt.Sprintf("Container snapshot for %s", ct.Name),
 				VMState:     false, // Containers don't have VM state
 			}
-			
+
 			snapshots = append(snapshots, snapshot)
 		}
 	}
-	
+
 	// Sort by time (newest first)
 	sort.Slice(snapshots, func(i, j int) bool {
 		return snapshots[i].Time.After(snapshots[j].Time)
 	})
-	
+
 	return snapshots
 }
 
@@ -1307,14 +1307,14 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 	if !config.RandomMetrics {
 		return
 	}
-	
+
 	// Update node metrics
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
 		// Small random walk for CPU
 		node.CPU += (rand.Float64() - 0.5) * 0.1
 		node.CPU = math.Max(0.05, math.Min(0.95, node.CPU))
-		
+
 		// Update memory
 		change := (rand.Float64() - 0.5) * 0.05
 		node.Memory.Usage += change * 100
@@ -1322,25 +1322,25 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 		node.Memory.Used = int64(float64(node.Memory.Total) * (node.Memory.Usage / 100))
 		node.Memory.Free = node.Memory.Total - node.Memory.Used
 	}
-	
+
 	// Update VM metrics
 	for i := range data.VMs {
 		vm := &data.VMs[i]
 		if vm.Status != "running" {
 			continue
 		}
-		
+
 		// Random walk for CPU
 		vm.CPU += (rand.Float64() - 0.5) * 0.15
 		vm.CPU = math.Max(0.01, math.Min(0.99, vm.CPU))
-		
+
 		// Update memory with realistic fluctuations
 		memChange := (rand.Float64() - 0.5) * 0.08 // 8% swing
 		vm.Memory.Usage += memChange * 100
 		vm.Memory.Usage = math.Max(10, math.Min(99, vm.Memory.Usage))
 		vm.Memory.Used = int64(float64(vm.Memory.Total) * (vm.Memory.Usage / 100))
 		vm.Memory.Free = vm.Memory.Total - vm.Memory.Used
-		
+
 		// Update disk usage very slowly (disks fill up gradually)
 		if rand.Float64() < 0.1 { // 10% chance to change disk usage
 			diskChange := (rand.Float64() - 0.4) * 0.5 // Slight bias toward filling
@@ -1349,7 +1349,7 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			vm.Disk.Used = int64(float64(vm.Disk.Total) * (vm.Disk.Usage / 100))
 			vm.Disk.Free = vm.Disk.Total - vm.Disk.Used
 		}
-		
+
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.2 { // 20% chance of I/O change
 			vm.NetworkIn = generateRealisticIO("network-in")
@@ -1357,29 +1357,29 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			vm.DiskRead = generateRealisticIO("disk-read")
 			vm.DiskWrite = generateRealisticIO("disk-write")
 		}
-		
+
 		// Update uptime
 		vm.Uptime += 2 // Add 2 seconds per update
 	}
-	
+
 	// Update container metrics
 	for i := range data.Containers {
 		ct := &data.Containers[i]
 		if ct.Status != "running" {
 			continue
 		}
-		
+
 		// Random walk for CPU (smaller changes for containers)
 		ct.CPU += (rand.Float64() - 0.5) * 0.05
 		ct.CPU = math.Max(0.01, math.Min(0.50, ct.CPU))
-		
+
 		// Update memory (containers are generally more stable)
 		memChange := (rand.Float64() - 0.5) * 0.05 // 5% swing
 		ct.Memory.Usage += memChange * 100
 		ct.Memory.Usage = math.Max(5, math.Min(98, ct.Memory.Usage))
 		ct.Memory.Used = int64(float64(ct.Memory.Total) * (ct.Memory.Usage / 100))
 		ct.Memory.Free = ct.Memory.Total - ct.Memory.Used
-		
+
 		// Update disk usage very slowly
 		if rand.Float64() < 0.05 { // 5% chance (containers change disk less)
 			diskChange := (rand.Float64() - 0.45) * 0.3 // Very slight bias toward filling
@@ -1388,7 +1388,7 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			ct.Disk.Used = int64(float64(ct.Disk.Total) * (ct.Disk.Usage / 100))
 			ct.Disk.Free = ct.Disk.Total - ct.Disk.Used
 		}
-		
+
 		// Update network/disk I/O with small chance of changing
 		if rand.Float64() < 0.15 { // 15% chance of I/O change (containers change less often)
 			ct.NetworkIn = generateRealisticIO("network-in-ct")
@@ -1396,15 +1396,15 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 			ct.DiskRead = generateRealisticIO("disk-read-ct")
 			ct.DiskWrite = generateRealisticIO("disk-write-ct")
 		}
-		
+
 		// Update uptime
 		ct.Uptime += 2
 	}
-	
+
 	// Update disk metrics occasionally
 	for i := range data.PhysicalDisks {
 		disk := &data.PhysicalDisks[i]
-		
+
 		// Occasionally change temperature
 		if rand.Float64() < 0.1 {
 			disk.Temperature += rand.Intn(5) - 2
@@ -1415,7 +1415,7 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 				disk.Temperature = 85
 			}
 		}
-		
+
 		// Occasionally degrade SSD life
 		if disk.Wearout > 0 && rand.Float64() < 0.01 {
 			disk.Wearout = disk.Wearout - 1
@@ -1423,23 +1423,23 @@ func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
 				disk.Wearout = 0
 			}
 		}
-		
+
 		disk.LastChecked = time.Now()
 	}
-	
+
 	data.LastUpdate = time.Now()
 }
 
 func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 	disks := []models.PhysicalDisk{}
-	
+
 	// Generate 1-3 disks per node
 	diskCount := rand.Intn(3) + 1
-	
+
 	diskModels := []struct {
-		model string
+		model    string
 		diskType string
-		size int64
+		size     int64
 	}{
 		{"Samsung SSD 970 EVO Plus 1TB", "nvme", 1000204886016},
 		{"WD Blue SN570 500GB", "nvme", 500107862016},
@@ -1451,10 +1451,10 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 		{"Intel SSD 660p 1TB", "nvme", 1000204886016},
 		{"Toshiba X300 6TB", "sata", 6001175126016},
 	}
-	
+
 	for i := 0; i < diskCount; i++ {
 		diskModel := diskModels[rand.Intn(len(diskModels))]
-		
+
 		// Generate health status - most are healthy
 		health := "PASSED"
 		if rand.Float64() < 0.05 { // 5% chance of failure
@@ -1462,42 +1462,42 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 		} else if rand.Float64() < 0.1 { // 10% chance of unknown
 			health = "UNKNOWN"
 		}
-		
+
 		// Generate wearout for SSDs (100 is new, 0 is dead)
 		wearout := 0
 		if diskModel.diskType == "nvme" || diskModel.diskType == "sata" {
 			if rand.Float64() < 0.7 { // 70% chance it's an SSD with wearout data
 				wearout = rand.Intn(50) + 50 // 50-100% life remaining
-				if rand.Float64() < 0.1 { // 10% chance of low life
+				if rand.Float64() < 0.1 {    // 10% chance of low life
 					wearout = rand.Intn(15) + 5 // 5-20% life remaining
 				}
 			}
 		}
-		
+
 		// Generate temperature
 		temp := rand.Intn(20) + 35 // 35-55°C normal range
-		if rand.Float64() < 0.1 { // 10% chance of high temp
+		if rand.Float64() < 0.1 {  // 10% chance of high temp
 			temp = rand.Intn(15) + 65 // 65-80°C hot
 		}
-		
+
 		disk := models.PhysicalDisk{
-			ID:        fmt.Sprintf("%s-%s-/dev/%s%d", node.Instance, node.Name, []string{"nvme", "sd"}[i%2], i),
-			Node:      node.Name,
-			Instance:  node.Instance,
-			DevPath:   fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i),
-			Model:     diskModel.model,
-			Serial:    fmt.Sprintf("SERIAL%d%d%d", rand.Intn(9999), rand.Intn(9999), rand.Intn(9999)),
-			Type:      diskModel.diskType,
-			Size:      diskModel.size,
-			Health:    health,
-			Wearout:   wearout,
+			ID:          fmt.Sprintf("%s-%s-/dev/%s%d", node.Instance, node.Name, []string{"nvme", "sd"}[i%2], i),
+			Node:        node.Name,
+			Instance:    node.Instance,
+			DevPath:     fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i),
+			Model:       diskModel.model,
+			Serial:      fmt.Sprintf("SERIAL%d%d%d", rand.Intn(9999), rand.Intn(9999), rand.Intn(9999)),
+			Type:        diskModel.diskType,
+			Size:        diskModel.size,
+			Health:      health,
+			Wearout:     wearout,
 			Temperature: temp,
-			Used:      []string{"ext4", "zfs", "btrfs", "xfs"}[rand.Intn(4)],
+			Used:        []string{"ext4", "zfs", "btrfs", "xfs"}[rand.Intn(4)],
 			LastChecked: time.Now(),
 		}
-		
+
 		disks = append(disks, disk)
 	}
-	
+
 	return disks
 }

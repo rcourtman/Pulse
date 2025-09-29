@@ -5,7 +5,15 @@ export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '=' | '==';
 export type LogicalOperator = 'AND' | 'OR';
 
 export interface MetricCondition {
-  field: 'cpu' | 'memory' | 'disk' | 'diskRead' | 'diskWrite' | 'networkIn' | 'networkOut' | 'uptime';
+  field:
+    | 'cpu'
+    | 'memory'
+    | 'disk'
+    | 'diskRead'
+    | 'diskWrite'
+    | 'networkIn'
+    | 'networkOut'
+    | 'uptime';
   operator: ComparisonOperator;
   value: number;
 }
@@ -38,11 +46,10 @@ export interface FilterStack {
   logicalOperator?: LogicalOperator; // Deprecated, kept for compatibility
 }
 
-
 // Parse a single filter from a search term
 export function parseFilter(term: string): ParsedFilter {
   term = term.trim();
-  
+
   // Try to parse metric condition (e.g., "cpu>80", "size>1000000000")
   const metricMatch = term.match(/^(\w+)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i);
   if (metricMatch) {
@@ -51,15 +58,15 @@ export function parseFilter(term: string): ParsedFilter {
     if (isNaN(parsedValue)) {
       return {
         type: 'raw',
-        rawText: term
+        rawText: term,
       };
     }
-    
+
     return {
       type: 'metric',
       field: field.toLowerCase(),
       operator: operator as ComparisonOperator,
-      value: parsedValue
+      value: parsedValue,
     };
   }
 
@@ -70,14 +77,14 @@ export function parseFilter(term: string): ParsedFilter {
     return {
       type: 'text',
       field: field.toLowerCase(),
-      value: value.trim()
+      value: value.trim(),
     };
   }
 
   // Otherwise treat as raw text search
   return {
     type: 'raw',
-    rawText: term
+    rawText: term,
   };
 }
 
@@ -93,12 +100,12 @@ export function parseFilterStack(searchString: string): FilterStack {
   const parts = trimmed.split(regex);
   const filters: ParsedFilter[] = [];
   const operators: LogicalOperator[] = [];
-  
+
   // Process the parts
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i].trim();
     if (!part) continue;
-    
+
     if (i % 2 === 0) {
       // Even indices are filter expressions
       const filter = parseFilter(part);
@@ -108,16 +115,18 @@ export function parseFilterStack(searchString: string): FilterStack {
       operators.push(part.toUpperCase() as LogicalOperator);
     }
   }
-  
+
   // For backward compatibility, include logicalOperator as the first operator
   const logicalOperator = operators.length > 0 ? operators[0] : 'AND';
-  
+
   return { filters, operators, logicalOperator };
 }
 
 function parseCondition(conditionStr: string): Condition | null {
   // Try to parse metric condition (e.g., "cpu>80")
-  const metricMatch = conditionStr.match(/^(cpu|memory|disk|diskRead|diskWrite|networkIn|networkOut)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i);
+  const metricMatch = conditionStr.match(
+    /^(cpu|memory|disk|diskRead|diskWrite|networkIn|networkOut)\s*(>|<|>=|<=|=|==)\s*(\d+(?:\.\d+)?)$/i,
+  );
   if (metricMatch) {
     const [, field, operator, value] = metricMatch;
     return {
@@ -126,7 +135,7 @@ function parseCondition(conditionStr: string): Condition | null {
       value: (() => {
         const parsed = parseFloat(value);
         return isNaN(parsed) ? 0 : parsed;
-      })()
+      })(),
     } as MetricCondition;
   }
 
@@ -136,7 +145,7 @@ function parseCondition(conditionStr: string): Condition | null {
     const [, field, value] = textMatch;
     return {
       field: field.toLowerCase() as 'name' | 'node' | 'vmid' | 'tags',
-      value: value.trim()
+      value: value.trim(),
     } as TextCondition;
   }
 
@@ -145,26 +154,26 @@ function parseCondition(conditionStr: string): Condition | null {
 
 export function parseSearchQuery(query: string): ParsedQuery {
   query = query.trim();
-  
+
   // Check for logical operators
   const hasAnd = /\bAND\b/i.test(query);
   const hasOr = /\bOR\b/i.test(query);
-  
+
   // If no operators or invalid query, treat as simple text search
   if (!hasAnd && !hasOr && !query.match(/[><=:]/)) {
     return {
       conditions: [],
       logicalOperator: 'AND',
-      rawText: query
+      rawText: query,
     };
   }
 
   // Split by logical operator
   const logicalOperator: LogicalOperator = hasAnd ? 'AND' : 'OR';
   const parts = query.split(hasAnd ? /\bAND\b/i : /\bOR\b/i);
-  
+
   const conditions: Condition[] = [];
-  
+
   for (const part of parts) {
     const condition = parseCondition(part.trim());
     if (condition) {
@@ -177,13 +186,13 @@ export function parseSearchQuery(query: string): ParsedQuery {
     return {
       conditions: [],
       logicalOperator: 'AND',
-      rawText: query
+      rawText: query,
     };
   }
 
   return {
     conditions,
-    logicalOperator
+    logicalOperator,
   };
 }
 
@@ -191,11 +200,11 @@ type FilterableItem = VM | Container | PBSBackup | StorageBackup | BackupTask | 
 
 function evaluateMetricCondition(guest: FilterableItem, condition: MetricCondition): boolean {
   let value: number;
-  
+
   switch (condition.field) {
     case 'cpu':
       // CPU is stored as decimal (0-1), convert to percentage
-      value = ('cpu' in guest ? (guest.cpu || 0) : 0) * 100;
+      value = ('cpu' in guest ? guest.cpu || 0 : 0) * 100;
       break;
     case 'memory':
       value = 'memory' in guest && guest.memory ? guest.memory.usage : 0;
@@ -205,7 +214,10 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
       break;
     case 'uptime':
       // Uptime in seconds (only for running VMs/containers)
-      value = 'status' in guest && guest.status === 'running' && 'uptime' in guest ? (guest.uptime || 0) : 0;
+      value =
+        'status' in guest && guest.status === 'running' && 'uptime' in guest
+          ? guest.uptime || 0
+          : 0;
       break;
     default:
       // For backup-specific numeric fields like 'size'
@@ -240,7 +252,7 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
 
 function evaluateTextCondition(guest: FilterableItem, condition: TextCondition): boolean {
   const searchValue = condition.value.toLowerCase();
-  
+
   switch (condition.field) {
     case 'name':
       return 'name' in guest && guest.name ? guest.name.toLowerCase().includes(searchValue) : false;
@@ -254,13 +266,19 @@ function evaluateTextCondition(guest: FilterableItem, condition: TextCondition):
       const tagsArray = Array.isArray(guest.tags)
         ? guest.tags.filter((tag): tag is string => typeof tag === 'string')
         : typeof guest.tags === 'string'
-          ? guest.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+          ? guest.tags
+              .split(',')
+              .map((tag) => tag.trim())
+              .filter((tag) => tag.length > 0)
           : [];
       if (tagsArray.length === 0) return false;
       // Support comma-separated tag searches (OR logic)
-      const searchTags = searchValue.split(',').map(t => t.trim()).filter(t => t.length > 0);
-      return searchTags.some(searchTag =>
-        tagsArray.some(tag => tag.toLowerCase().includes(searchTag.toLowerCase()))
+      const searchTags = searchValue
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+      return searchTags.some((searchTag) =>
+        tagsArray.some((tag) => tag.toLowerCase().includes(searchTag.toLowerCase())),
       );
     default:
       // For backup-specific fields
@@ -283,12 +301,17 @@ function evaluateTextCondition(guest: FilterableItem, condition: TextCondition):
 export function evaluateSearchQuery(guest: FilterableItem, query: ParsedQuery): boolean {
   // If it's a simple text search
   if (query.rawText) {
-    const searchTerms = query.rawText.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
-    return searchTerms.some(term => 
-      ('name' in guest && guest.name && guest.name.toLowerCase().includes(term)) ||
-      ('vmid' in guest && guest.vmid && guest.vmid.toString().includes(term)) ||
-      ('node' in guest && guest.node && guest.node.toLowerCase().includes(term)) ||
-      ('status' in guest && guest.status && guest.status.toLowerCase().includes(term))
+    const searchTerms = query.rawText
+      .toLowerCase()
+      .split(',')
+      .map((term) => term.trim())
+      .filter((term) => term.length > 0);
+    return searchTerms.some(
+      (term) =>
+        ('name' in guest && guest.name && guest.name.toLowerCase().includes(term)) ||
+        ('vmid' in guest && guest.vmid && guest.vmid.toString().includes(term)) ||
+        ('node' in guest && guest.node && guest.node.toLowerCase().includes(term)) ||
+        ('status' in guest && guest.status && guest.status.toLowerCase().includes(term)),
     );
   }
 
@@ -298,7 +321,7 @@ export function evaluateSearchQuery(guest: FilterableItem, query: ParsedQuery): 
   }
 
   // Evaluate conditions
-  const results = query.conditions.map(condition => {
+  const results = query.conditions.map((condition) => {
     if ('operator' in condition) {
       return evaluateMetricCondition(guest, condition);
     } else {
@@ -308,9 +331,9 @@ export function evaluateSearchQuery(guest: FilterableItem, query: ParsedQuery): 
 
   // Apply logical operator
   if (query.logicalOperator === 'AND') {
-    return results.every(result => result);
+    return results.every((result) => result);
   } else {
-    return results.some(result => result);
+    return results.some((result) => result);
   }
 }
 
@@ -320,12 +343,12 @@ export function evaluateFilterStack(guest: FilterableItem, stack: FilterStack): 
     return true;
   }
 
-  const results = stack.filters.map(filter => {
+  const results = stack.filters.map((filter) => {
     if (filter.type === 'metric' && filter.field && filter.operator && filter.value !== undefined) {
       const condition: MetricCondition = {
         field: filter.field as MetricCondition['field'],
         operator: filter.operator,
-        value: filter.value as number
+        value: filter.value as number,
       };
       return evaluateMetricCondition(guest, condition);
     } else if (filter.type === 'text' && filter.field && filter.value) {
@@ -333,27 +356,39 @@ export function evaluateFilterStack(guest: FilterableItem, stack: FilterStack): 
       if (filter.field === 'tags') {
         const condition: TextCondition = {
           field: 'tags',
-          value: filter.value as string
+          value: filter.value as string,
         };
         return evaluateTextCondition(guest, condition);
       }
       const condition: TextCondition = {
         field: filter.field as TextCondition['field'],
-        value: filter.value as string
+        value: filter.value as string,
       };
       return evaluateTextCondition(guest, condition);
     } else if (filter.type === 'raw' && filter.rawText) {
       const term = filter.rawText.toLowerCase();
       // Check name, vmid, node, status, and tags for raw text matches
-      const nameMatch = 'name' in guest && typeof guest.name === 'string' && guest.name.toLowerCase().includes(term);
+      const nameMatch =
+        'name' in guest &&
+        typeof guest.name === 'string' &&
+        guest.name.toLowerCase().includes(term);
       const vmidMatch = 'vmid' in guest && !!guest.vmid && guest.vmid.toString().includes(term);
-      const nodeMatch = 'node' in guest && typeof guest.node === 'string' && guest.node.toLowerCase().includes(term);
-      const statusMatch = 'status' in guest && typeof guest.status === 'string' && guest.status.toLowerCase().includes(term);
+      const nodeMatch =
+        'node' in guest &&
+        typeof guest.node === 'string' &&
+        guest.node.toLowerCase().includes(term);
+      const statusMatch =
+        'status' in guest &&
+        typeof guest.status === 'string' &&
+        guest.status.toLowerCase().includes(term);
 
       // Also check if any tags contain the search term
-      const tagMatch = 'tags' in guest && Array.isArray(guest.tags)
-        ? guest.tags.filter((tag): tag is string => typeof tag === 'string').some(tag => tag.toLowerCase().includes(term))
-        : false;
+      const tagMatch =
+        'tags' in guest && Array.isArray(guest.tags)
+          ? guest.tags
+              .filter((tag): tag is string => typeof tag === 'string')
+              .some((tag) => tag.toLowerCase().includes(term))
+          : false;
 
       return nameMatch || vmidMatch || nodeMatch || statusMatch || tagMatch;
     }
@@ -370,13 +405,13 @@ export function evaluateFilterStack(guest: FilterableItem, stack: FilterStack): 
   for (let i = 0; i < stack.operators.length && i < results.length - 1; i++) {
     const operator = stack.operators[i];
     const nextResult = results[i + 1];
-    
+
     if (operator === 'AND') {
       result = result && nextResult;
     } else {
       result = result || nextResult;
     }
   }
-  
+
   return result;
 }

@@ -41,7 +41,6 @@ type MetricsStore interface {
 	Cleanup()
 }
 
-
 // Monitor defines the interface for the monitoring system
 type Monitor interface {
 	Start(ctx context.Context, hub WebSocketHub)
@@ -56,5 +55,3 @@ type Monitor interface {
 type RateTracker interface {
 	CalculateRates(guestID string, current types.IOMetrics) (diskRead, diskWrite, netIn, netOut float64)
 }
-
-

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -25,24 +25,24 @@ const (
 
 // Alert represents an active alert
 type Alert struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"` // cpu, memory, disk, etc.
-	Level       AlertLevel             `json:"level"`
-	ResourceID  string                 `json:"resourceId"`  // guest or node ID
-	ResourceName string                `json:"resourceName"`
-	Node        string                 `json:"node"`
-	Instance    string                 `json:"instance"`
-	Message     string                 `json:"message"`
-	Value       float64                `json:"value"`
-	Threshold   float64                `json:"threshold"`
-	StartTime   time.Time              `json:"startTime"`
-	LastSeen    time.Time              `json:"lastSeen"`
-	Acknowledged bool                  `json:"acknowledged"`
-	AckTime     *time.Time             `json:"ackTime,omitempty"`
-	AckUser     string                 `json:"ackUser,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID           string                 `json:"id"`
+	Type         string                 `json:"type"` // cpu, memory, disk, etc.
+	Level        AlertLevel             `json:"level"`
+	ResourceID   string                 `json:"resourceId"` // guest or node ID
+	ResourceName string                 `json:"resourceName"`
+	Node         string                 `json:"node"`
+	Instance     string                 `json:"instance"`
+	Message      string                 `json:"message"`
+	Value        float64                `json:"value"`
+	Threshold    float64                `json:"threshold"`
+	StartTime    time.Time              `json:"startTime"`
+	LastSeen     time.Time              `json:"lastSeen"`
+	Acknowledged bool                   `json:"acknowledged"`
+	AckTime      *time.Time             `json:"ackTime,omitempty"`
+	AckUser      string                 `json:"ackUser,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	// Escalation tracking
-	LastEscalation  int       `json:"lastEscalation,omitempty"`  // Last escalation level notified
+	LastEscalation  int         `json:"lastEscalation,omitempty"`  // Last escalation level notified
 	EscalationTimes []time.Time `json:"escalationTimes,omitempty"` // Times when escalations were sent
 }
 
@@ -60,7 +60,7 @@ type HysteresisThreshold struct {
 
 // ThresholdConfig represents threshold configuration
 type ThresholdConfig struct {
-	Disabled            bool                 `json:"disabled,omitempty"`   // Completely disable alerts for this guest
+	Disabled            bool                 `json:"disabled,omitempty"`            // Completely disable alerts for this guest
 	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity alerts
 	CPU                 *HysteresisThreshold `json:"cpu,omitempty"`
 	Memory              *HysteresisThreshold `json:"memory,omitempty"`
@@ -82,11 +82,11 @@ type ThresholdConfig struct {
 
 // QuietHours represents quiet hours configuration
 type QuietHours struct {
-	Enabled  bool              `json:"enabled"`
-	Start    string            `json:"start"`    // 24-hour format "HH:MM"
-	End      string            `json:"end"`      // 24-hour format "HH:MM"
-	Timezone string            `json:"timezone"`
-	Days     map[string]bool   `json:"days"`     // monday, tuesday, etc.
+	Enabled  bool            `json:"enabled"`
+	Start    string          `json:"start"` // 24-hour format "HH:MM"
+	End      string          `json:"end"`   // 24-hour format "HH:MM"
+	Timezone string          `json:"timezone"`
+	Days     map[string]bool `json:"days"` // monday, tuesday, etc.
 }
 
 // EscalationLevel represents an escalation rule
@@ -121,30 +121,30 @@ type ScheduleConfig struct {
 
 // FilterCondition represents a single filter condition
 type FilterCondition struct {
-	Type     string  `json:"type"`     // "metric", "text", or "raw"
-	Field    string  `json:"field,omitempty"`
-	Operator string  `json:"operator,omitempty"`
+	Type     string      `json:"type"` // "metric", "text", or "raw"
+	Field    string      `json:"field,omitempty"`
+	Operator string      `json:"operator,omitempty"`
 	Value    interface{} `json:"value,omitempty"`
-	RawText  string  `json:"rawText,omitempty"`
+	RawText  string      `json:"rawText,omitempty"`
 }
 
 // FilterStack represents a collection of filters with logical operator
 type FilterStack struct {
 	Filters         []FilterCondition `json:"filters"`
-	LogicalOperator string           `json:"logicalOperator"` // "AND" or "OR"
+	LogicalOperator string            `json:"logicalOperator"` // "AND" or "OR"
 }
 
 // CustomAlertRule represents a custom alert rule with filter conditions
 type CustomAlertRule struct {
-	ID               string                 `json:"id"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	FilterConditions FilterStack            `json:"filterConditions"`
-	Thresholds       ThresholdConfig        `json:"thresholds"`
-	Priority         int                    `json:"priority"`
-	Enabled          bool                   `json:"enabled"`
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description,omitempty"`
+	FilterConditions FilterStack     `json:"filterConditions"`
+	Thresholds       ThresholdConfig `json:"thresholds"`
+	Priority         int             `json:"priority"`
+	Enabled          bool            `json:"enabled"`
 	Notifications    struct {
-		Email   *struct {
+		Email *struct {
 			Enabled    bool     `json:"enabled"`
 			Recipients []string `json:"recipients"`
 		} `json:"email,omitempty"`
@@ -153,64 +153,64 @@ type CustomAlertRule struct {
 			URL     string `json:"url"`
 		} `json:"webhook,omitempty"`
 	} `json:"notifications"`
-	CreatedAt        time.Time              `json:"createdAt"`
-	UpdatedAt        time.Time              `json:"updatedAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
-	Enabled           bool                        `json:"enabled"`
-	GuestDefaults     ThresholdConfig             `json:"guestDefaults"`
-	NodeDefaults      ThresholdConfig             `json:"nodeDefaults"`
-	StorageDefault    HysteresisThreshold         `json:"storageDefault"`
-	Overrides         map[string]ThresholdConfig  `json:"overrides"` // keyed by resource ID
-	CustomRules       []CustomAlertRule           `json:"customRules,omitempty"`
-	Schedule          ScheduleConfig              `json:"schedule"`
+	Enabled        bool                       `json:"enabled"`
+	GuestDefaults  ThresholdConfig            `json:"guestDefaults"`
+	NodeDefaults   ThresholdConfig            `json:"nodeDefaults"`
+	StorageDefault HysteresisThreshold        `json:"storageDefault"`
+	Overrides      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
+	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
+	Schedule       ScheduleConfig             `json:"schedule"`
 	// New configuration options
-	MinimumDelta      float64                     `json:"minimumDelta"`      // Minimum % change to trigger new alert
-	SuppressionWindow int                         `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
-	HysteresisMargin  float64                     `json:"hysteresisMargin"`  // Default margin for legacy thresholds
-	TimeThreshold     int                         `json:"timeThreshold"`     // Legacy: Seconds that threshold must be exceeded before triggering
-	TimeThresholds    map[string]int              `json:"timeThresholds"`    // Per-type delays: guest, node, storage, pbs
+	MinimumDelta      float64        `json:"minimumDelta"`      // Minimum % change to trigger new alert
+	SuppressionWindow int            `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
+	HysteresisMargin  float64        `json:"hysteresisMargin"`  // Default margin for legacy thresholds
+	TimeThreshold     int            `json:"timeThreshold"`     // Legacy: Seconds that threshold must be exceeded before triggering
+	TimeThresholds    map[string]int `json:"timeThresholds"`    // Per-type delays: guest, node, storage, pbs
 }
 
 // Manager handles alert monitoring and state
 type Manager struct {
-	mu              sync.RWMutex
-	config          AlertConfig
-	activeAlerts    map[string]*Alert
-	historyManager  *HistoryManager
-	onAlert         func(alert *Alert)
-	onResolved      func(alertID string)
-	onEscalate      func(alert *Alert, level int)
-	escalationStop  chan struct{}
-	alertRateLimit  map[string][]time.Time // Track alert times for rate limiting
+	mu             sync.RWMutex
+	config         AlertConfig
+	activeAlerts   map[string]*Alert
+	historyManager *HistoryManager
+	onAlert        func(alert *Alert)
+	onResolved     func(alertID string)
+	onEscalate     func(alert *Alert, level int)
+	escalationStop chan struct{}
+	alertRateLimit map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
-	recentAlerts    map[string]*Alert     // Track recent alerts for deduplication
-	suppressedUntil map[string]time.Time  // Track suppression windows
+	recentAlerts    map[string]*Alert    // Track recent alerts for deduplication
+	suppressedUntil map[string]time.Time // Track suppression windows
 	// Recently resolved alerts (kept for 5 minutes)
 	recentlyResolved map[string]*ResolvedAlert
 	resolvedMutex    sync.RWMutex
 	// Time threshold tracking
-	pendingAlerts    map[string]time.Time  // Track when thresholds were first exceeded
+	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Offline confirmation tracking
-	nodeOfflineCount map[string]int        // Track consecutive offline counts for nodes (legacy)
-	offlineConfirmations map[string]int    // Track consecutive offline counts for all resources
+	nodeOfflineCount     map[string]int // Track consecutive offline counts for nodes (legacy)
+	offlineConfirmations map[string]int // Track consecutive offline counts for all resources
 }
 
 // NewManager creates a new alert manager
 func NewManager() *Manager {
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	m := &Manager{
-		activeAlerts:   make(map[string]*Alert),
-		historyManager: NewHistoryManager(alertsDir),
-		escalationStop: make(chan struct{}),
-		alertRateLimit: make(map[string][]time.Time),
-		recentAlerts:   make(map[string]*Alert),
-		suppressedUntil: make(map[string]time.Time),
-		recentlyResolved: make(map[string]*ResolvedAlert),
-		pendingAlerts:  make(map[string]time.Time),
-		nodeOfflineCount: make(map[string]int),
+		activeAlerts:         make(map[string]*Alert),
+		historyManager:       NewHistoryManager(alertsDir),
+		escalationStop:       make(chan struct{}),
+		alertRateLimit:       make(map[string][]time.Time),
+		recentAlerts:         make(map[string]*Alert),
+		suppressedUntil:      make(map[string]time.Time),
+		recentlyResolved:     make(map[string]*ResolvedAlert),
+		pendingAlerts:        make(map[string]time.Time),
+		nodeOfflineCount:     make(map[string]int),
 		offlineConfirmations: make(map[string]int),
 		config: AlertConfig{
 			Enabled: true,
@@ -232,10 +232,10 @@ func NewManager() *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
-			Overrides: make(map[string]ThresholdConfig),
+			Overrides:         make(map[string]ThresholdConfig),
 			Schedule: ScheduleConfig{
 				QuietHours: QuietHours{
-					Enabled:  false,  // OFF - users should opt-in to quiet hours
+					Enabled:  false, // OFF - users should opt-in to quiet hours
 					Start:    "22:00",
 					End:      "08:00",
 					Timezone: "America/New_York",
@@ -253,7 +253,7 @@ func NewManager() *Manager {
 				GroupingWindow: 30, // ON - 30 seconds groups related alerts
 				MaxAlertsHour:  10, // ON - 10 alerts/hour prevents flooding
 				Escalation: EscalationConfig{
-					Enabled: false,  // OFF - requires user configuration
+					Enabled: false, // OFF - requires user configuration
 					Levels: []EscalationLevel{
 						{After: 15, Notify: "email"},
 						{After: 30, Notify: "webhook"},
@@ -261,26 +261,26 @@ func NewManager() *Manager {
 					},
 				},
 				Grouping: GroupingConfig{
-					Enabled: true,   // ON - reduces notification noise
-					Window:  30,     // 30 second window for grouping
-					ByNode:  true,   // Group by node for mass node issues
-					ByGuest: false,  // Don't group by guest by default
+					Enabled: true,  // ON - reduces notification noise
+					Window:  30,    // 30 second window for grouping
+					ByNode:  true,  // Group by node for mass node issues
+					ByGuest: false, // Don't group by guest by default
 				},
 			},
 		},
 	}
-	
+
 	// Load saved active alerts
 	if err := m.LoadActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("Failed to load active alerts")
 	}
-	
+
 	// Start escalation checker
 	go m.escalationChecker()
-	
+
 	// Start periodic save of active alerts
 	go m.periodicSaveAlerts()
-	
+
 	return m
 }
 
@@ -309,13 +309,13 @@ func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Preserve defaults for zero values
 	if config.StorageDefault.Trigger <= 0 {
 		config.StorageDefault.Trigger = 85
 		config.StorageDefault.Clear = 80
 	}
-	
+
 	// Ensure minimums for other important fields
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -326,7 +326,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	if config.HysteresisMargin <= 0 {
 		config.HysteresisMargin = 5.0
 	}
-	
+
 	m.config = config
 	for id, override := range m.config.Overrides {
 		if override.Usage != nil {
@@ -355,7 +355,7 @@ func (m *Manager) isInQuietHours() bool {
 
 	now := time.Now().In(loc)
 	dayName := strings.ToLower(now.Format("Monday"))
-	
+
 	// Check if today is enabled for quiet hours
 	if enabled, ok := m.config.Schedule.QuietHours.Days[dayName]; !ok || !enabled {
 		return false
@@ -367,7 +367,7 @@ func (m *Manager) isInQuietHours() bool {
 		log.Warn().Err(err).Str("start", m.config.Schedule.QuietHours.Start).Msg("Failed to parse quiet hours start time")
 		return false
 	}
-	
+
 	endTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
 	if err != nil {
 		log.Warn().Err(err).Str("end", m.config.Schedule.QuietHours.End).Msg("Failed to parse quiet hours end time")
@@ -430,7 +430,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
-		
+
 		// Debug logging for high memory VMs
 		if memUsage > 85 {
 			log.Info().
@@ -458,7 +458,6 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 			Msg("CheckGuest: unsupported guest type")
 		return
 	}
-	
 
 	// Clear any alerts for non-running guests and skip threshold checks
 	// Proxmox VM states: running, stopped, paused, suspended
@@ -479,7 +478,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 			}
 		}
 		m.mu.Unlock()
-		
+
 		if alertsCleared > 0 {
 			log.Info().
 				Str("guest", name).
@@ -519,12 +518,12 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Float64("disk", diskUsage).
 		Interface("thresholds", thresholds).
 		Msg("Checking guest thresholds")
-	
+
 	// Check thresholds
 	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk)
-	
+
 	// Check I/O metrics (convert bytes/s to MB/s)
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
 		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead)
@@ -573,10 +572,10 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		m.mu.RUnlock()
 		return
 	}
-	
+
 	// Check if there's an override for this PBS instance
 	override, hasOverride := m.config.Overrides[pbs.ID]
-	
+
 	// Use node defaults for PBS (same as nodes: CPU, Memory)
 	cpuThreshold := m.config.NodeDefaults.CPU
 	memoryThreshold := m.config.NodeDefaults.Memory
@@ -650,11 +649,11 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.RUnlock()
 		return
 	}
-	
+
 	// Check if there's an override for this storage device
 	override, hasOverride := m.config.Overrides[storage.ID]
 	threshold := m.config.StorageDefault
-	
+
 	// Apply override if it exists for usage threshold
 	if hasOverride && override.Usage != nil {
 		threshold = *override.Usage
@@ -707,11 +706,11 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		Float64("clear", threshold.Clear).
 		Bool("hasOverride", hasOverride).
 		Msg("Checking storage thresholds")
-	
+
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
 		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
 	}
-	
+
 	// Check ZFS pool status if this is ZFS storage
 	if storage.ZFSPool != nil {
 		m.checkZFSPoolHealth(storage)
@@ -724,20 +723,20 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	if pool == nil {
 		return
 	}
-	
+
 	// Check pool state (DEGRADED, FAULTED, etc.)
 	if pool.State != "ONLINE" {
 		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
-		
+
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		
+
 		if _, exists := m.activeAlerts[alertID]; !exists {
 			level := AlertLevelWarning
 			if pool.State == "FAULTED" || pool.State == "UNAVAIL" {
 				level = AlertLevelCritical
 			}
-			
+
 			alert := &Alert{
 				ID:           alertID,
 				Type:         "zfs-pool-state",
@@ -756,15 +755,15 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 					"pool_state": pool.State,
 				},
 			}
-			
+
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			if m.onAlert != nil {
 				m.onAlert(alert)
 			}
-			
+
 			log.Warn().
 				Str("pool", pool.Name).
 				Str("state", pool.State).
@@ -776,17 +775,17 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
 		m.clearAlert(alertID)
 	}
-	
+
 	// Check for read/write/checksum errors
 	totalErrors := pool.ReadErrors + pool.WriteErrors + pool.ChecksumErrors
 	if totalErrors > 0 {
 		alertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
-		
+
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		
+
 		existingAlert, exists := m.activeAlerts[alertID]
-		
+
 		// Only create new alert or update if error count increased
 		if !exists || (exists && float64(totalErrors) > existingAlert.Value) {
 			alert := &Alert{
@@ -797,12 +796,12 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				ResourceName: fmt.Sprintf("%s (%s)", storage.Name, pool.Name),
 				Node:         storage.Node,
 				Instance:     storage.Instance,
-				Message:      fmt.Sprintf("ZFS pool '%s' has errors: %d read, %d write, %d checksum", 
+				Message: fmt.Sprintf("ZFS pool '%s' has errors: %d read, %d write, %d checksum",
 					pool.Name, pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors),
-				Value:        float64(totalErrors),
-				Threshold:    0,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
+				Value:     float64(totalErrors),
+				Threshold: 0,
+				StartTime: time.Now(),
+				LastSeen:  time.Now(),
 				Metadata: map[string]interface{}{
 					"pool_name":       pool.Name,
 					"read_errors":     pool.ReadErrors,
@@ -810,20 +809,20 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 					"checksum_errors": pool.ChecksumErrors,
 				},
 			}
-			
+
 			if exists {
 				// Update existing alert
 				alert.StartTime = existingAlert.StartTime
 			}
-			
+
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			if m.onAlert != nil {
 				m.onAlert(alert)
 			}
-			
+
 			log.Error().
 				Str("pool", pool.Name).
 				Int64("read_errors", pool.ReadErrors).
@@ -833,30 +832,30 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				Msg("ZFS pool has I/O errors")
 		}
 	}
-	
+
 	// Check individual devices for errors
 	for _, device := range pool.Devices {
 		if device.State != "ONLINE" || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
 			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
-			
+
 			m.mu.Lock()
 			defer m.mu.Unlock()
-			
+
 			if _, exists := m.activeAlerts[alertID]; !exists {
 				level := AlertLevelWarning
 				if device.State == "FAULTED" || device.State == "UNAVAIL" {
 					level = AlertLevelCritical
 				}
-				
+
 				message := fmt.Sprintf("ZFS device '%s' in pool '%s'", device.Name, pool.Name)
 				if device.State != "ONLINE" {
 					message += fmt.Sprintf(" is %s", device.State)
 				}
 				if device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
-					message += fmt.Sprintf(" has errors: %d read, %d write, %d checksum", 
+					message += fmt.Sprintf(" has errors: %d read, %d write, %d checksum",
 						device.ReadErrors, device.WriteErrors, device.ChecksumErrors)
 				}
-				
+
 				alert := &Alert{
 					ID:           alertID,
 					Type:         "zfs-device",
@@ -879,20 +878,20 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 						"checksum_errors": device.ChecksumErrors,
 					},
 				}
-				
+
 				m.activeAlerts[alertID] = alert
 				m.recentAlerts[alertID] = alert
 				m.historyManager.AddAlert(*alert)
-				
+
 				if m.onAlert != nil {
 					m.onAlert(alert)
 				}
-				
+
 				log.Warn().
 					Str("pool", pool.Name).
 					Str("device", device.Name).
 					Str("state", device.State).
-					Int64("errors", device.ReadErrors + device.WriteErrors + device.ChecksumErrors).
+					Int64("errors", device.ReadErrors+device.WriteErrors+device.ChecksumErrors).
 					Str("node", storage.Node).
 					Msg("ZFS device has issues")
 			}
@@ -908,22 +907,22 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if alert, exists := m.activeAlerts[alertID]; exists {
 		delete(m.activeAlerts, alertID)
-		
+
 		// Add to recently resolved
 		resolvedAlert := &ResolvedAlert{
 			Alert:        alert,
 			ResolvedTime: time.Now(),
 		}
 		m.recentlyResolved[alertID] = resolvedAlert
-		
+
 		// Send recovery notification
 		if m.onResolved != nil {
 			m.onResolved(alertID)
 		}
-		
+
 		log.Info().
 			Str("alertID", alertID).
 			Msg("Alert cleared")
@@ -953,7 +952,7 @@ func (m *Manager) getTimeThresholdForType(resourceType string) int {
 			}
 		}
 	}
-	
+
 	// Fall back to legacy single threshold
 	return m.config.TimeThreshold
 }
@@ -963,7 +962,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	if threshold == nil || threshold.Trigger <= 0 {
 		return
 	}
-	
+
 	log.Debug().
 		Str("resource", resourceName).
 		Str("metric", metricType).
@@ -974,7 +973,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Msg("Checking metric threshold")
 
 	alertID := fmt.Sprintf("%s-%s", resourceID, metricType)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -994,7 +993,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		if !exists {
 			// Determine the appropriate time threshold based on resource type
 			timeThreshold := m.getTimeThresholdForType(resourceType)
-			
+
 			// Check if we have a time threshold configured
 			if timeThreshold > 0 {
 				// Check if this threshold was already pending
@@ -1027,21 +1026,21 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					return
 				}
 			}
-			
+
 			// Check for recent similar alert to prevent spam
 			if recent, hasRecent := m.recentAlerts[alertID]; hasRecent {
 				// Check minimum delta
-				if m.config.MinimumDelta > 0 && 
-				   time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
-				   abs(recent.Value - value) < m.config.MinimumDelta {
+				if m.config.MinimumDelta > 0 &&
+					time.Since(recent.StartTime) < time.Duration(m.config.SuppressionWindow)*time.Minute &&
+					abs(recent.Value-value) < m.config.MinimumDelta {
 					log.Debug().
 						Str("alertID", alertID).
 						Float64("recentValue", recent.Value).
 						Float64("currentValue", value).
-						Float64("delta", abs(recent.Value - value)).
+						Float64("delta", abs(recent.Value-value)).
 						Float64("minimumDelta", m.config.MinimumDelta).
 						Msg("Alert suppressed due to minimum delta")
-					
+
 					// Set suppression window
 					m.suppressedUntil[alertID] = time.Now().Add(time.Duration(m.config.SuppressionWindow) * time.Minute)
 					return
@@ -1062,33 +1061,32 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 						return fmt.Sprintf("%s at %.1f%%", resourceType, value)
 					}
 					// For I/O metrics (diskRead, diskWrite, networkIn, networkOut), show MB/s not percentage
-					if metricType == "diskRead" || metricType == "diskWrite" || 
-					   metricType == "networkIn" || metricType == "networkOut" {
+					if metricType == "diskRead" || metricType == "diskWrite" ||
+						metricType == "networkIn" || metricType == "networkOut" {
 						return fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
 					}
 					// For CPU, memory, disk metrics show percentage
 					return fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
 				}(),
-				Value:        value,
-				Threshold:    threshold.Trigger,
-				StartTime:    time.Now(),
-				LastSeen:     time.Now(),
+				Value:     value,
+				Threshold: threshold.Trigger,
+				StartTime: time.Now(),
+				LastSeen:  time.Now(),
 				Metadata: map[string]interface{}{
-					"resourceType": resourceType,
+					"resourceType":   resourceType,
 					"clearThreshold": threshold.Clear,
-		
 				},
 			}
 
 			// Set level based on how much over threshold
-			if value >= threshold.Trigger + 10 {
+			if value >= threshold.Trigger+10 {
 				alert.Level = AlertLevelCritical
 			}
 
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			// Save active alerts after adding new one
 			go func() {
 				if err := m.SaveActiveAlerts(); err != nil {
@@ -1106,7 +1104,6 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Int("activeAlerts", len(m.activeAlerts)).
 				Msg("Alert triggered")
 
-
 			// Check rate limit (but don't remove alert from tracking)
 			if !m.checkRateLimit(alertID) {
 				log.Debug().
@@ -1116,7 +1113,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				// Don't delete the alert, just suppress notifications
 				return
 			}
-			
+
 			// Check if we should suppress notifications due to quiet hours
 			if m.isInQuietHours() && alert.Level != AlertLevelCritical {
 				log.Debug().
@@ -1135,9 +1132,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Update existing alert
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
-			
+
 			// Update level if needed
-			if value >= threshold.Trigger + 10 {
+			if value >= threshold.Trigger+10 {
 				existingAlert.Level = AlertLevelCritical
 			} else {
 				existingAlert.Level = AlertLevelWarning
@@ -1152,41 +1149,41 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Str("alertID", alertID).
 				Msg("Value dropped below threshold, clearing pending alert")
 		}
-		
+
 		if exists {
 			// Use hysteresis for resolution - only resolve if below clear threshold
 			clearThreshold := threshold.Clear
 			if clearThreshold <= 0 {
 				clearThreshold = threshold.Trigger // Fallback to trigger if clear not set
 			}
-			
+
 			if value <= clearThreshold {
 				// Threshold cleared with hysteresis - auto resolve
 				resolvedAlert := &ResolvedAlert{
 					Alert:        existingAlert,
 					ResolvedTime: time.Now(),
 				}
-				
+
 				// Remove from active alerts
 				delete(m.activeAlerts, alertID)
-				
+
 				// Save active alerts after resolution
 				go func() {
 					if err := m.SaveActiveAlerts(); err != nil {
 						log.Error().Err(err).Msg("Failed to save active alerts after resolution")
 					}
 				}()
-				
+
 				// Add to recently resolved
 				m.resolvedMutex.Lock()
 				m.recentlyResolved[alertID] = resolvedAlert
 				m.resolvedMutex.Unlock()
-				
+
 				log.Info().
 					Str("alertID", alertID).
 					Int("totalRecentlyResolved", len(m.recentlyResolved)).
 					Msg("Added alert to recently resolved")
-				
+
 				// Schedule cleanup after 5 minutes
 				go func() {
 					time.Sleep(5 * time.Minute)
@@ -1194,7 +1191,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					delete(m.recentlyResolved, alertID)
 					m.resolvedMutex.Unlock()
 				}()
-				
+
 				log.Info().
 					Str("resource", resourceName).
 					Str("metric", metricType).
@@ -1233,7 +1230,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	now := time.Now()
 	alert.AckTime = &now
 	alert.AckUser = user
-	
+
 	// Write the modified alert back to the map
 	m.activeAlerts[alertID] = alert
 
@@ -1253,7 +1250,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	alert.Acknowledged = false
 	alert.AckTime = nil
 	alert.AckUser = ""
-	
+
 	// Write the modified alert back to the map
 	m.activeAlerts[alertID] = alert
 
@@ -1322,10 +1319,10 @@ func (m *Manager) ClearAlertHistory() error {
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if node connectivity alerts are disabled
 	if override, exists := m.config.Overrides[node.ID]; exists && override.DisableConnectivity {
 		// Node connectivity alerts are disabled, clear any existing alert and return
@@ -1338,24 +1335,24 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		delete(m.nodeOfflineCount, node.ID)
 		return
 	}
-	
+
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {
 		// Alert already exists, just update time
 		m.activeAlerts[alertID].StartTime = time.Now()
 		return
 	}
-	
+
 	// Increment offline count
 	m.nodeOfflineCount[node.ID]++
 	offlineCount := m.nodeOfflineCount[node.ID]
-	
+
 	log.Debug().
 		Str("node", node.Name).
 		Str("instance", node.Instance).
 		Int("offlineCount", offlineCount).
 		Msg("Node offline detection count")
-	
+
 	// Require 3 consecutive offline polls (~15 seconds) before alerting
 	// This prevents false positives from transient cluster communication issues
 	const requiredOfflineCount = 3
@@ -1367,7 +1364,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 			Msg("Node appears offline, waiting for confirmation")
 		return
 	}
-	
+
 	// Create new offline alert after confirmation
 	alert := &Alert{
 		ID:           alertID,
@@ -1383,18 +1380,18 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		StartTime:    time.Now(),
 		Acknowledged: false,
 	}
-	
+
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
-	
+
 	// Add to history
 	m.historyManager.AddAlert(*alert)
-	
+
 	// Send notification after confirmation
 	if m.onAlert != nil {
 		m.onAlert(alert)
 	}
-	
+
 	// Log the critical event
 	log.Error().
 		Str("node", node.Name).
@@ -1408,10 +1405,10 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 // clearNodeOfflineAlert removes offline alert when node comes back online
 func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Reset offline count when node comes back online
 	if m.nodeOfflineCount[node.ID] > 0 {
 		log.Debug().
@@ -1420,28 +1417,28 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 			Msg("Node back online, resetting offline count")
 		delete(m.nodeOfflineCount, node.ID)
 	}
-	
+
 	// Check if offline alert exists
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
 	}
-	
+
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
-	
-	// Add to recently resolved  
+
+	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
 		ResolvedTime: time.Now(),
 	}
 	resolvedAlert.Alert = alert
 	m.recentlyResolved[alertID] = resolvedAlert
-	
+
 	// Send recovery notification
 	if m.onResolved != nil {
 		m.onResolved(alertID)
 	}
-	
+
 	// Log recovery
 	log.Info().
 		Str("node", node.Name).
@@ -1453,10 +1450,10 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 // checkPBSOffline creates an alert for offline PBS instances
 func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if PBS offline alerts are disabled via disableConnectivity flag
 	if override, exists := m.config.Overrides[pbs.ID]; exists && (override.Disabled || override.DisableConnectivity) {
 		// PBS connectivity alerts are disabled, clear any existing alert and return
@@ -1468,10 +1465,10 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 		}
 		return
 	}
-	
+
 	// Track confirmation count for this PBS
 	m.offlineConfirmations[pbs.ID]++
-	
+
 	// Require 3 consecutive offline polls (~15 seconds) before alerting
 	if m.offlineConfirmations[pbs.ID] < 3 {
 		log.Debug().
@@ -1480,14 +1477,14 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 			Msg("PBS offline detected, waiting for confirmation")
 		return
 	}
-	
+
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {
 		// Update last seen time
 		m.activeAlerts[alertID].LastSeen = time.Now()
 		return
 	}
-	
+
 	// Create new offline alert after confirmation
 	alert := &Alert{
 		ID:           alertID,
@@ -1503,16 +1500,16 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 	}
-	
+
 	m.activeAlerts[alertID] = alert
-	
+
 	// Log and notify
 	log.Error().
 		Str("pbs", pbs.Name).
 		Str("host", pbs.Host).
 		Int("confirmations", m.offlineConfirmations[pbs.ID]).
 		Msg("PBS instance is offline")
-	
+
 	if m.onAlert != nil {
 		go m.onAlert(alert)
 	}
@@ -1521,10 +1518,10 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 // clearPBSOfflineAlert removes offline alert when PBS comes back online
 func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Reset offline confirmation count
 	if count, exists := m.offlineConfirmations[pbs.ID]; exists && count > 0 {
 		log.Debug().
@@ -1533,28 +1530,28 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 			Msg("PBS is online, resetting offline confirmation count")
 		delete(m.offlineConfirmations, pbs.ID)
 	}
-	
+
 	// Check if offline alert exists
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
 	}
-	
+
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
-	
-	// Add to recently resolved  
+
+	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
 		ResolvedTime: time.Now(),
 	}
 	resolvedAlert.Alert = alert
 	m.recentlyResolved[alertID] = resolvedAlert
-	
+
 	// Send recovery notification
 	if m.onResolved != nil {
 		m.onResolved(alertID)
 	}
-	
+
 	// Log recovery
 	log.Info().
 		Str("pbs", pbs.Name).
@@ -1566,10 +1563,10 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 // checkStorageOffline creates an alert for offline/unavailable storage
 func (m *Manager) checkStorageOffline(storage models.Storage) {
 	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if storage offline alerts are disabled
 	if override, exists := m.config.Overrides[storage.ID]; exists && override.Disabled {
 		// Storage alerts are disabled, clear any existing alert and return
@@ -1581,10 +1578,10 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		}
 		return
 	}
-	
+
 	// Track confirmation count for this storage
 	m.offlineConfirmations[storage.ID]++
-	
+
 	// Require 2 consecutive offline polls (~10 seconds) before alerting for storage
 	// (less than nodes since storage status can be more transient)
 	if m.offlineConfirmations[storage.ID] < 2 {
@@ -1594,14 +1591,14 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 			Msg("Storage offline detected, waiting for confirmation")
 		return
 	}
-	
+
 	// Check if alert already exists
 	if _, exists := m.activeAlerts[alertID]; exists {
 		// Update last seen time
 		m.activeAlerts[alertID].LastSeen = time.Now()
 		return
 	}
-	
+
 	// Create new offline alert after confirmation
 	alert := &Alert{
 		ID:           alertID,
@@ -1617,16 +1614,16 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 	}
-	
+
 	m.activeAlerts[alertID] = alert
-	
+
 	// Log and notify
 	log.Warn().
 		Str("storage", storage.Name).
 		Str("node", storage.Node).
 		Int("confirmations", m.offlineConfirmations[storage.ID]).
 		Msg("Storage is offline/unavailable")
-	
+
 	if m.onAlert != nil {
 		go m.onAlert(alert)
 	}
@@ -1635,10 +1632,10 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 // clearStorageOfflineAlert removes offline alert when storage comes back online
 func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Reset offline confirmation count
 	if count, exists := m.offlineConfirmations[storage.ID]; exists && count > 0 {
 		log.Debug().
@@ -1647,28 +1644,28 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 			Msg("Storage is online, resetting offline confirmation count")
 		delete(m.offlineConfirmations, storage.ID)
 	}
-	
+
 	// Check if offline alert exists
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		return
 	}
-	
+
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
-	
-	// Add to recently resolved  
+
+	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
 		ResolvedTime: time.Now(),
 	}
 	resolvedAlert.Alert = alert
 	m.recentlyResolved[alertID] = resolvedAlert
-	
+
 	// Send recovery notification
 	if m.onResolved != nil {
 		m.onResolved(alertID)
 	}
-	
+
 	// Log recovery
 	log.Info().
 		Str("storage", storage.Name).
@@ -1684,7 +1681,7 @@ func (m *Manager) ClearAlert(alertID string) {
 
 	// Remove from active alerts only
 	delete(m.activeAlerts, alertID)
-	
+
 	if m.onResolved != nil {
 		go m.onResolved(alertID)
 	}
@@ -1696,26 +1693,26 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	defer m.mu.Unlock()
 
 	now := time.Now()
-	
+
 	// Clean up acknowledged alerts
 	for id, alert := range m.activeAlerts {
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
 			delete(m.activeAlerts, id)
 		}
 	}
-	
+
 	// Clean up recent alerts older than suppression window
 	suppressionWindow := time.Duration(m.config.SuppressionWindow) * time.Minute
 	if suppressionWindow == 0 {
 		suppressionWindow = 5 * time.Minute // Default
 	}
-	
+
 	for id, alert := range m.recentAlerts {
 		if now.Sub(alert.StartTime) > suppressionWindow {
 			delete(m.recentAlerts, id)
 		}
 	}
-	
+
 	// Clean up expired suppressions
 	for id, suppressUntil := range m.suppressedUntil {
 		if now.After(suppressUntil) {
@@ -1723,7 +1720,6 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 }
-
 
 // convertLegacyThreshold converts a legacy float64 threshold to HysteresisThreshold
 func (m *Manager) convertLegacyThreshold(legacy *float64) *HysteresisThreshold {
@@ -1786,7 +1782,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		default:
 			return false
 		}
-		
+
 		condValue, ok := condition.Value.(float64)
 		if !ok {
 			// Try to convert from int
@@ -1796,7 +1792,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 				return false
 			}
 		}
-		
+
 		switch condition.Operator {
 		case ">":
 			return value > condValue
@@ -1807,9 +1803,9 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		case "<=":
 			return value <= condValue
 		case "=", "==":
-			return value >= condValue - 0.5 && value <= condValue + 0.5
+			return value >= condValue-0.5 && value <= condValue+0.5
 		}
-		
+
 	case "text":
 		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
 		switch strings.ToLower(condition.Field) {
@@ -1820,7 +1816,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 		case "vmid":
 			return strings.Contains(vm.ID, searchValue)
 		}
-		
+
 	case "raw":
 		if condition.RawText != "" {
 			term := strings.ToLower(condition.RawText)
@@ -1830,7 +1826,7 @@ func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) b
 				strings.Contains(strings.ToLower(vm.Status), term)
 		}
 	}
-	
+
 	return false
 }
 
@@ -1858,7 +1854,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		default:
 			return false
 		}
-		
+
 		condValue, ok := condition.Value.(float64)
 		if !ok {
 			if intVal, ok := condition.Value.(int); ok {
@@ -1867,7 +1863,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 				return false
 			}
 		}
-		
+
 		switch condition.Operator {
 		case ">":
 			return value > condValue
@@ -1878,9 +1874,9 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		case "<=":
 			return value <= condValue
 		case "=", "==":
-			return value >= condValue - 0.5 && value <= condValue + 0.5
+			return value >= condValue-0.5 && value <= condValue+0.5
 		}
-		
+
 	case "text":
 		searchValue := strings.ToLower(fmt.Sprintf("%v", condition.Value))
 		switch strings.ToLower(condition.Field) {
@@ -1891,7 +1887,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 		case "vmid":
 			return strings.Contains(ct.ID, searchValue)
 		}
-		
+
 	case "raw":
 		if condition.RawText != "" {
 			term := strings.ToLower(condition.RawText)
@@ -1901,7 +1897,7 @@ func (m *Manager) evaluateContainerCondition(ct models.Container, condition Filt
 				strings.Contains(strings.ToLower(ct.Status), term)
 		}
 	}
-	
+
 	return false
 }
 
@@ -1910,12 +1906,12 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 	if len(stack.Filters) == 0 {
 		return true
 	}
-	
+
 	results := make([]bool, len(stack.Filters))
 	for i, filter := range stack.Filters {
 		results[i] = m.evaluateFilterCondition(guest, filter)
 	}
-	
+
 	// Apply logical operator
 	if stack.LogicalOperator == "AND" {
 		for _, result := range results {
@@ -1939,17 +1935,17 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 func (m *Manager) getGuestThresholds(guest interface{}, guestID string) ThresholdConfig {
 	// Start with defaults
 	thresholds := m.config.GuestDefaults
-	
+
 	// Check custom rules (sorted by priority, highest first)
 	var applicableRule *CustomAlertRule
 	highestPriority := -1
-	
+
 	for i := range m.config.CustomRules {
 		rule := &m.config.CustomRules[i]
 		if !rule.Enabled {
 			continue
 		}
-		
+
 		// Check if this rule applies to the guest
 		if m.evaluateFilterStack(guest, rule.FilterConditions) {
 			if rule.Priority > highestPriority {
@@ -1958,7 +1954,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			}
 		}
 	}
-	
+
 	// Apply custom rule thresholds if found
 	if applicableRule != nil {
 		if applicableRule.Thresholds.CPU != nil {
@@ -1996,21 +1992,21 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 		} else if applicableRule.Thresholds.NetworkOutLegacy != nil {
 			thresholds.NetworkOut = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkOutLegacy)
 		}
-		
+
 		log.Debug().
 			Str("guest", guestID).
 			Str("rule", applicableRule.Name).
 			Int("priority", applicableRule.Priority).
 			Msg("Applied custom alert rule")
 	}
-	
+
 	// Finally check guest-specific overrides (highest priority)
 	if override, exists := m.config.Overrides[guestID]; exists {
 		// Apply the disabled flag if set
 		if override.Disabled {
 			thresholds.Disabled = true
 		}
-		
+
 		if override.CPU != nil {
 			thresholds.CPU = ensureHysteresisThreshold(override.CPU)
 		} else if override.CPULegacy != nil {
@@ -2047,7 +2043,7 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 			thresholds.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
 		}
 	}
-	
+
 	return thresholds
 }
 
@@ -2059,7 +2055,7 @@ func (m *Manager) checkRateLimit(alertID string) bool {
 
 	now := time.Now()
 	cutoff := now.Add(-1 * time.Hour)
-	
+
 	// Clean old entries and count recent alerts
 	var recentAlerts []time.Time
 	if times, exists := m.alertRateLimit[alertID]; exists {
@@ -2069,16 +2065,16 @@ func (m *Manager) checkRateLimit(alertID string) bool {
 			}
 		}
 	}
-	
+
 	// Check if we've hit the limit
 	if len(recentAlerts) >= m.config.Schedule.MaxAlertsHour {
 		return false
 	}
-	
+
 	// Add current time
 	recentAlerts = append(recentAlerts, now)
 	m.alertRateLimit[alertID] = recentAlerts
-	
+
 	return true
 }
 
@@ -2088,7 +2084,7 @@ func (m *Manager) escalationChecker() {
 	cleanupTicker := time.NewTicker(10 * time.Minute) // Run cleanup every 10 minutes
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -2105,38 +2101,38 @@ func (m *Manager) escalationChecker() {
 func (m *Manager) checkEscalations() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if !m.config.Schedule.Escalation.Enabled {
 		return
 	}
-	
+
 	now := time.Now()
 	for _, alert := range m.activeAlerts {
 		// Skip acknowledged alerts
 		if alert.Acknowledged {
 			continue
 		}
-		
+
 		// Check each escalation level
 		for i, level := range m.config.Schedule.Escalation.Levels {
 			// Skip if we've already escalated to this level
 			if alert.LastEscalation >= i+1 {
 				continue
 			}
-			
+
 			// Check if it's time to escalate
 			escalateTime := alert.StartTime.Add(time.Duration(level.After) * time.Minute)
 			if now.After(escalateTime) {
 				// Update alert escalation state
 				alert.LastEscalation = i + 1
 				alert.EscalationTimes = append(alert.EscalationTimes, now)
-				
+
 				log.Info().
 					Str("alertID", alert.ID).
 					Int("level", i+1).
 					Str("notify", level.Notify).
 					Msg("Alert escalated")
-				
+
 				// Trigger escalation callback
 				if m.onEscalate != nil {
 					go m.onEscalate(alert, i+1)
@@ -2160,36 +2156,36 @@ func (m *Manager) Stop() {
 func (m *Manager) SaveActiveAlerts() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// Create directory if it doesn't exist
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	if err := os.MkdirAll(alertsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
 	}
-	
+
 	// Convert map to slice for JSON encoding
 	alerts := make([]*Alert, 0, len(m.activeAlerts))
 	for _, alert := range m.activeAlerts {
 		alerts = append(alerts, alert)
 	}
-	
+
 	data, err := json.MarshalIndent(alerts, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal active alerts: %w", err)
 	}
-	
+
 	// Write to temporary file first, then rename (atomic operation)
 	tmpFile := filepath.Join(alertsDir, "active-alerts.json.tmp")
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")
-	
+
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
-	
+
 	if err := os.Rename(tmpFile, finalFile); err != nil {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
 	}
-	
+
 	log.Info().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil
 }
@@ -2198,7 +2194,7 @@ func (m *Manager) SaveActiveAlerts() error {
 func (m *Manager) LoadActiveAlerts() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	alertsFile := filepath.Join(utils.GetDataDir(), "alerts", "active-alerts.json")
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
@@ -2208,12 +2204,12 @@ func (m *Manager) LoadActiveAlerts() error {
 		}
 		return fmt.Errorf("failed to read active alerts: %w", err)
 	}
-	
+
 	var alerts []*Alert
 	if err := json.Unmarshal(data, &alerts); err != nil {
 		return fmt.Errorf("failed to unmarshal active alerts: %w", err)
 	}
-	
+
 	// Restore alerts to the map
 	now := time.Now()
 	restoredCount := 0
@@ -2223,17 +2219,17 @@ func (m *Manager) LoadActiveAlerts() error {
 			log.Debug().Str("alertID", alert.ID).Msg("Skipping old alert during restore")
 			continue
 		}
-		
+
 		// Skip acknowledged alerts older than 1 hour
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > time.Hour {
 			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert")
 			continue
 		}
-		
+
 		m.activeAlerts[alert.ID] = alert
 		restoredCount++
 	}
-	
+
 	log.Info().Int("restored", restoredCount).Int("total", len(alerts)).Msg("Restored active alerts from disk")
 	return nil
 }
@@ -2242,18 +2238,18 @@ func (m *Manager) LoadActiveAlerts() error {
 func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	log.Info().
 		Int("totalAlerts", len(m.activeAlerts)).
 		Int("existingNodes", len(existingNodes)).
 		Interface("nodes", existingNodes).
 		Msg("Starting alert cleanup for non-existent nodes")
-	
+
 	removedCount := 0
 	for alertID, alert := range m.activeAlerts {
 		// Use the Node field from the alert itself, which is more reliable
 		node := alert.Node
-		
+
 		// If we couldn't get a node or the node doesn't exist, remove the alert
 		if node == "" || !existingNodes[node] {
 			delete(m.activeAlerts, alertID)
@@ -2261,7 +2257,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 			log.Debug().Str("alertID", alertID).Str("node", node).Msg("Removed alert for non-existent node")
 		}
 	}
-	
+
 	if removedCount > 0 {
 		log.Info().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
 		// Save the cleaned up state
@@ -2279,7 +2275,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 func (m *Manager) periodicSaveAlerts() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -2296,10 +2292,10 @@ func (m *Manager) periodicSaveAlerts() {
 func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Create unique alert ID for this disk
 	alertID := fmt.Sprintf("disk-health-%s-%s-%s", instance, node, disk.DevPath)
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Check if disk health is not PASSED
 	if disk.Health != "PASSED" && disk.Health != "" {
 		// Check if alert already exists
@@ -2327,15 +2323,15 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 					"disk_size":   disk.Size,
 				},
 			}
-			
+
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			if m.onAlert != nil {
 				m.onAlert(alert)
 			}
-			
+
 			log.Error().
 				Str("node", node).
 				Str("disk", disk.DevPath).
@@ -2347,11 +2343,11 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		// Disk is healthy, clear alert if it exists
 		m.clearAlertNoLock(alertID)
 	}
-	
+
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout > 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
-		
+
 		if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
 			// Create wearout alert
 			alert := &Alert{
@@ -2368,22 +2364,22 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				StartTime:    time.Now(),
 				LastSeen:     time.Now(),
 				Metadata: map[string]interface{}{
-					"disk_path":   disk.DevPath,
-					"disk_model":  disk.Model,
-					"disk_serial": disk.Serial,
-					"disk_type":   disk.Type,
+					"disk_path":    disk.DevPath,
+					"disk_model":   disk.Model,
+					"disk_serial":  disk.Serial,
+					"disk_type":    disk.Type,
 					"disk_wearout": disk.Wearout,
 				},
 			}
-			
+
 			m.activeAlerts[wearoutAlertID] = alert
 			m.recentAlerts[wearoutAlertID] = alert
 			m.historyManager.AddAlert(*alert)
-			
+
 			if m.onAlert != nil {
 				m.onAlert(alert)
 			}
-			
+
 			log.Warn().
 				Str("node", node).
 				Str("disk", disk.DevPath).
@@ -2402,19 +2398,19 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 func (m *Manager) clearAlertNoLock(alertID string) {
 	if alert, exists := m.activeAlerts[alertID]; exists {
 		delete(m.activeAlerts, alertID)
-		
+
 		// Add to recently resolved
 		resolvedAlert := &ResolvedAlert{
 			Alert:        alert,
 			ResolvedTime: time.Now(),
 		}
 		m.recentlyResolved[alertID] = resolvedAlert
-		
+
 		// Send recovery notification
 		if m.onResolved != nil {
 			m.onResolved(alertID)
 		}
-		
+
 		log.Info().
 			Str("alertID", alertID).
 			Msg("Alert cleared")

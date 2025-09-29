@@ -43,7 +43,7 @@ func InitRecoveryTokenStore(dataPath string) {
 			dataPath: dataPath,
 		}
 		recoveryStore.load()
-		
+
 		// Start cleanup routine
 		go recoveryStore.cleanupRoutine()
 	})
@@ -64,27 +64,27 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", err
 	}
-	
+
 	tokenStr := hex.EncodeToString(tokenBytes)
-	
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	token := &RecoveryToken{
 		Token:     tokenStr,
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(duration),
 		Used:      false,
 	}
-	
+
 	r.tokens[tokenStr] = token
 	r.saveUnsafe()
-	
+
 	log.Info().
 		Str("token", tokenStr[:8]+"...").
 		Time("expires", token.ExpiresAt).
 		Msg("Recovery token generated")
-	
+
 	return tokenStr, nil
 }
 
@@ -92,19 +92,19 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 func (r *RecoveryTokenStore) ValidateRecoveryToken(tokenStr string, ip string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	token, exists := r.tokens[tokenStr]
 	if !exists {
 		log.Warn().Str("ip", ip).Msg("Invalid recovery token attempted")
 		return false
 	}
-	
+
 	// Check if expired
 	if time.Now().After(token.ExpiresAt) {
 		log.Warn().Str("token", tokenStr[:8]+"...").Msg("Expired recovery token attempted")
 		return false
 	}
-	
+
 	// Check if already used
 	if token.Used {
 		log.Warn().
@@ -113,18 +113,18 @@ func (r *RecoveryTokenStore) ValidateRecoveryToken(tokenStr string, ip string) b
 			Msg("Already used recovery token attempted")
 		return false
 	}
-	
+
 	// Mark as used
 	token.Used = true
 	token.UsedAt = time.Now()
 	token.IP = ip
 	r.saveUnsafe()
-	
+
 	log.Info().
 		Str("token", tokenStr[:8]+"...").
 		Str("ip", ip).
 		Msg("Recovery token successfully used")
-	
+
 	return true
 }
 
@@ -132,20 +132,20 @@ func (r *RecoveryTokenStore) ValidateRecoveryToken(tokenStr string, ip string) b
 func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken string, ip string) bool {
 	// Use constant-time comparison to prevent timing attacks
 	providedBytes := []byte(providedToken)
-	
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	for tokenStr, token := range r.tokens {
 		tokenBytes := []byte(tokenStr)
-		
+
 		// Constant-time comparison
 		if subtle.ConstantTimeCompare(providedBytes, tokenBytes) == 1 {
 			// Token matches
 			if time.Now().After(token.ExpiresAt) || token.Used {
 				return false
 			}
-			
+
 			// Need to upgrade to write lock to mark as used
 			r.mu.RUnlock()
 			r.mu.Lock()
@@ -155,16 +155,16 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 			r.saveUnsafe()
 			r.mu.Unlock()
 			r.mu.RLock()
-			
+
 			log.Info().
 				Str("token", tokenStr[:8]+"...").
 				Str("ip", ip).
 				Msg("Recovery token successfully validated")
-			
+
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -172,7 +172,7 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 func (r *RecoveryTokenStore) cleanupRoutine() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		r.cleanup()
 	}
@@ -182,10 +182,10 @@ func (r *RecoveryTokenStore) cleanupRoutine() {
 func (r *RecoveryTokenStore) cleanup() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	now := time.Now()
 	cleaned := 0
-	
+
 	for tokenStr, token := range r.tokens {
 		// Remove if expired or used more than 24 hours ago
 		if now.After(token.ExpiresAt) || (token.Used && now.Sub(token.UsedAt) > 24*time.Hour) {
@@ -193,7 +193,7 @@ func (r *RecoveryTokenStore) cleanup() {
 			cleaned++
 		}
 	}
-	
+
 	if cleaned > 0 {
 		r.saveUnsafe()
 		log.Info().Int("count", cleaned).Msg("Cleaned up recovery tokens")
@@ -210,27 +210,27 @@ func (r *RecoveryTokenStore) save() {
 // saveUnsafe saves without locking (caller must hold lock)
 func (r *RecoveryTokenStore) saveUnsafe() {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
-	
+
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(r.dataPath, 0700); err != nil {
 		log.Error().Err(err).Msg("Failed to create recovery tokens directory")
 		return
 	}
-	
+
 	// Marshal tokens
 	data, err := json.MarshalIndent(r.tokens, "", "  ")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal recovery tokens")
 		return
 	}
-	
+
 	// Write to temporary file first
 	tmpFile := tokensFile + ".tmp"
 	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		log.Error().Err(err).Msg("Failed to write recovery tokens file")
 		return
 	}
-	
+
 	// Atomic rename
 	if err := os.Rename(tmpFile, tokensFile); err != nil {
 		log.Error().Err(err).Msg("Failed to rename recovery tokens file")
@@ -241,7 +241,7 @@ func (r *RecoveryTokenStore) saveUnsafe() {
 // load reads tokens from disk
 func (r *RecoveryTokenStore) load() {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
-	
+
 	data, err := os.ReadFile(tokensFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -249,13 +249,13 @@ func (r *RecoveryTokenStore) load() {
 		}
 		return
 	}
-	
+
 	var tokens map[string]*RecoveryToken
 	if err := json.Unmarshal(data, &tokens); err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal recovery tokens")
 		return
 	}
-	
+
 	// Filter out expired tokens
 	now := time.Now()
 	loaded := 0
@@ -266,7 +266,7 @@ func (r *RecoveryTokenStore) load() {
 			loaded++
 		}
 	}
-	
+
 	log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("Recovery tokens loaded from disk")
 }
 
@@ -274,7 +274,7 @@ func (r *RecoveryTokenStore) load() {
 func (r *RecoveryTokenStore) GetActiveTokenCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	count := 0
 	now := time.Now()
 	for _, token := range r.tokens {

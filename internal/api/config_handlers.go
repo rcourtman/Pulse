@@ -1577,7 +1577,14 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		if len(parts) > 0 {
 			targetIP = parts[0]
 			if len(parts) > 1 {
-				fmt.Sscanf(parts[1], "%d", &targetPort)
+				if _, err := fmt.Sscanf(parts[1], "%d", &targetPort); err != nil {
+					log.Warn().Err(err).Str("host", deletedNodeHost).Msg("Failed to parse port from host; using default")
+					if deletedNodeType == "pve" {
+						targetPort = 8006
+					} else {
+						targetPort = 8007
+					}
+				}
 			} else {
 				if deletedNodeType == "pve" {
 					targetPort = 8006
@@ -2277,7 +2284,9 @@ func (h *ConfigHandlers) HandleImportConfig(w http.ResponseWriter, r *http.Reque
 			notificationMgr := h.monitor.GetNotificationManager()
 			// Get current webhooks to clear them
 			for _, webhook := range notificationMgr.GetWebhooks() {
-				notificationMgr.DeleteWebhook(webhook.ID)
+				if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
+					log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
+				}
 			}
 			// Add imported webhooks
 			for _, webhook := range webhooks {

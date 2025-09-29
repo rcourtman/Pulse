@@ -6,7 +6,6 @@ import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
-
 interface GuestURLsProps {
   hasUnsavedChanges: () => boolean;
   setHasUnsavedChanges: (value: boolean) => void;
@@ -31,30 +30,31 @@ export function GuestURLs(props: GuestURLsProps) {
   const groupedGuests = createMemo(() => {
     const search = searchTerm().toLowerCase();
     let guests = allGuests();
-    
+
     // Apply search filter
     if (search) {
-      guests = guests.filter(guest => 
-        guest.name.toLowerCase().includes(search) ||
-        guest.vmid.toString().includes(search) ||
-        guest.node.toLowerCase().includes(search)
+      guests = guests.filter(
+        (guest) =>
+          guest.name.toLowerCase().includes(search) ||
+          guest.vmid.toString().includes(search) ||
+          guest.node.toLowerCase().includes(search),
       );
     }
-    
+
     // Group by node
     const groups: Record<string, (VM | Container)[]> = {};
-    guests.forEach(guest => {
+    guests.forEach((guest) => {
       if (!groups[guest.node]) {
         groups[guest.node] = [];
       }
       groups[guest.node].push(guest);
     });
-    
+
     // Sort guests within each node by VMID
-    Object.keys(groups).forEach(node => {
+    Object.keys(groups).forEach((node) => {
       groups[node] = groups[node].sort((a, b) => a.vmid - b.vmid);
     });
-    
+
     return groups;
   });
 
@@ -79,7 +79,7 @@ export function GuestURLs(props: GuestURLsProps) {
     try {
       const metadata = guestMetadata();
       const errors: string[] = [];
-      
+
       // Update each guest that has changes
       for (const [guestId, meta] of Object.entries(metadata)) {
         if (meta.customUrl !== undefined) {
@@ -93,7 +93,7 @@ export function GuestURLs(props: GuestURLsProps) {
           }
         }
       }
-      
+
       if (errors.length > 0) {
         // Show specific validation errors
         showError(errors.join('\n'));
@@ -112,32 +112,32 @@ export function GuestURLs(props: GuestURLsProps) {
   // Validate URL format
   const validateURL = (url: string): string | null => {
     if (!url) return null; // Empty is valid
-    
+
     // Check for incomplete URLs like "https://emby."
     if (url.endsWith('.') && !url.includes('..')) {
       return 'URL appears incomplete - please enter a complete domain or IP address';
     }
-    
+
     // Check for missing protocol
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       return 'URL must start with http:// or https://';
     }
-    
+
     try {
       const parsed = new URL(url);
-      
+
       // Check for valid host
       if (!parsed.hostname) {
         return 'URL must include a valid hostname or IP address';
       }
-      
+
       // Check for incomplete hostnames
       if (parsed.hostname.endsWith('.') && !parsed.hostname.includes('..')) {
         return 'Hostname appears incomplete';
       }
-      
+
       return null; // Valid
-    } catch (e) {
+    } catch (_err) {
       return 'Invalid URL format';
     }
   };
@@ -152,16 +152,16 @@ export function GuestURLs(props: GuestURLsProps) {
 
   // Update a guest's URL configuration
   const updateGuestURL = (guestId: string, url: string) => {
-    setGuestMetadata(prev => ({
+    setGuestMetadata((prev) => ({
       ...prev,
       [guestId]: {
         ...(prev[guestId] || { id: guestId }),
-        customUrl: url
-      }
+        customUrl: url,
+      },
     }));
 
     const error = validateURL(url);
-    setUrlErrors(prev => {
+    setUrlErrors((prev) => {
       const next = { ...prev };
       if (error) {
         next[guestId] = error;
@@ -176,15 +176,15 @@ export function GuestURLs(props: GuestURLsProps) {
 
   // Clear a guest's URL configuration
   const clearGuestURL = (guestId: string) => {
-    setGuestMetadata(prev => ({
+    setGuestMetadata((prev) => ({
       ...prev,
       [guestId]: {
         ...(prev[guestId] || { id: guestId }),
-        customUrl: ''
-      }
+        customUrl: '',
+      },
     }));
 
-    setUrlErrors(prev => {
+    setUrlErrors((prev) => {
       const next = { ...prev };
       delete next[guestId];
       return next;
@@ -213,15 +213,26 @@ export function GuestURLs(props: GuestURLsProps) {
                  bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
                  focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
-        <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <svg
+          class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
         </svg>
       </div>
 
       {/* Save Button */}
       <Show when={props.hasUnsavedChanges() && Object.keys(urlErrors()).length === 0}>
         <div class="flex justify-end">
-          <button type="button"
+          <button
+            type="button"
             onClick={saveURLs}
             disabled={loading()}
             class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -233,12 +244,18 @@ export function GuestURLs(props: GuestURLsProps) {
 
       {/* Guest URLs Table */}
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
-        <Show when={!initialLoad()} fallback={
-          <div class="flex items-center justify-center py-12">
-            <div class="text-gray-500 dark:text-gray-400">Loading guest URLs...</div>
-          </div>
-        }>
-          <div class="overflow-x-auto w-full" style="scrollbar-width: none; -ms-overflow-style: none;">
+        <Show
+          when={!initialLoad()}
+          fallback={
+            <div class="flex items-center justify-center py-12">
+              <div class="text-gray-500 dark:text-gray-400">Loading guest URLs...</div>
+            </div>
+          }
+        >
+          <div
+            class="overflow-x-auto w-full"
+            style="scrollbar-width: none; -ms-overflow-style: none;"
+          >
             <style>{`
               .overflow-x-auto::-webkit-scrollbar { display: none; }
             `}</style>
@@ -254,7 +271,10 @@ export function GuestURLs(props: GuestURLsProps) {
                   <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
                     VMID
                   </th>
-                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style="min-width: 350px;">
+                  <th
+                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    style="min-width: 350px;"
+                  >
                     Custom URL
                   </th>
                   <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20">
@@ -263,121 +283,159 @@ export function GuestURLs(props: GuestURLsProps) {
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <Show when={Object.keys(groupedGuests()).length === 0} fallback={
-                <For each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))}>
-                  {([node, guests]) => (
-                    <>
-                      {/* Node header row */}
-                      <tr class="node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
-                        <td colspan="5" class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                          {node}
-                        </td>
-                      </tr>
-                      {/* Guest rows for this node */}
-                      <For each={guests}>
-                        {(guest) => {
-                          const guestId = guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
-                          const fallbackId = `${guest.node}-${guest.vmid}`;
+                <Show
+                  when={Object.keys(groupedGuests()).length === 0}
+                  fallback={
+                    <For
+                      each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))}
+                    >
+                      {([node, guests]) => (
+                        <>
+                          {/* Node header row */}
+                          <tr class="node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
+                            <td
+                              colspan="5"
+                              class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"
+                            >
+                              {node}
+                            </td>
+                          </tr>
+                          {/* Guest rows for this node */}
+                          <For each={guests}>
+                            {(guest) => {
+                              const guestId =
+                                guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
+                              const fallbackId = `${guest.node}-${guest.vmid}`;
 
-                          const metadataKey = createMemo(() => resolveMetadataKey(guestId, fallbackId));
-                          const meta = createMemo(() => guestMetadata()[metadataKey()]);
-                          const url = createMemo(() => meta()?.customUrl || '');
-                          const hasUrl = createMemo(() => url().trim().length > 0);
-                          const urlError = createMemo(() => urlErrors()[metadataKey()]);
+                              const metadataKey = createMemo(() =>
+                                resolveMetadataKey(guestId, fallbackId),
+                              );
+                              const meta = createMemo(() => guestMetadata()[metadataKey()]);
+                              const url = createMemo(() => meta()?.customUrl || '');
+                              const hasUrl = createMemo(() => url().trim().length > 0);
+                              const urlError = createMemo(() => urlErrors()[metadataKey()]);
 
-                          return (
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
-                              <td class="p-1 px-2">
-                                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {guest.name}
-                                </div>
-                              </td>
-                              <td class="p-1 px-2">
-                                <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                  guest.type === 'qemu' 
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                                }`}>
-                                  {guest.type === 'qemu' ? 'VM' : 'LXC'}
-                                </span>
-                              </td>
-                              <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
-                                {guest.vmid}
-                              </td>
-                              <td class="p-1 px-2">
-                                <div>
-                                  <input
-                                    type="text"
-                                    placeholder="https://192.168.1.100:8006"
-                                    value={url()}
-                                    onInput={(e) => updateGuestURL(metadataKey(), e.currentTarget.value)}
-                                    class={`w-full min-w-[300px] px-2 py-1 text-sm border rounded
+                              return (
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                                  <td class="p-1 px-2">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                      {guest.name}
+                                    </div>
+                                  </td>
+                                  <td class="p-1 px-2">
+                                    <span
+                                      class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                        guest.type === 'qemu'
+                                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                                          : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                                      }`}
+                                    >
+                                      {guest.type === 'qemu' ? 'VM' : 'LXC'}
+                                    </span>
+                                  </td>
+                                  <td class="p-1 px-2 text-sm text-gray-600 dark:text-gray-400">
+                                    {guest.vmid}
+                                  </td>
+                                  <td class="p-1 px-2">
+                                    <div>
+                                      <input
+                                        type="text"
+                                        placeholder="https://192.168.1.100:8006"
+                                        value={url()}
+                                        onInput={(e) =>
+                                          updateGuestURL(metadataKey(), e.currentTarget.value)
+                                        }
+                                        class={`w-full min-w-[300px] px-2 py-1 text-sm border rounded
                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                                            focus:ring-2 focus:border-transparent ${
-                                           urlError() 
-                                             ? 'border-red-500 dark:border-red-400 focus:ring-red-500' 
-                                             : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                                             urlError()
+                                               ? 'border-red-500 dark:border-red-400 focus:ring-red-500'
+                                               : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
                                            }`}
-                                    style="min-width: 300px;"
-                                  />
-                                  <Show when={urlError()}>
-                                    <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                      {urlError()}
+                                        style="min-width: 300px;"
+                                      />
+                                      <Show when={urlError()}>
+                                        <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                          {urlError()}
+                                        </div>
+                                      </Show>
                                     </div>
-                                  </Show>
-                                </div>
-                              </td>
-                              <td class="p-1 px-2">
-                                <div class="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (hasUrl() && url()) {
-                                        window.open(url(), '_blank', 'noopener,noreferrer');
-                                      }
-                                    }}
-                                    class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
-                                      hasUrl()
-                                        ? 'text-blue-600 border-blue-500 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-400 dark:hover:bg-blue-900/30'
-                                        : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
-                                    }`}
-                                    disabled={!hasUrl()}
-                                  >
-                                    <svg class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                    </svg>
-                                    Test
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => clearGuestURL(metadataKey())}
-                                    class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
-                                      hasUrl()
-                                        ? 'text-red-600 border-red-500 hover:bg-red-50 dark:text-red-400 dark:border-red-500 dark:hover:bg-red-900/30'
-                                        : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
-                                    }`}
-                                    disabled={!hasUrl()}
-                                  >
-                                    <svg class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                    Clear
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </>
-                  )}
-                </For>
-              }>
-                <tr>
-                  <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No guests found
-                  </td>
-                </tr>
+                                  </td>
+                                  <td class="p-1 px-2">
+                                    <div class="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (hasUrl() && url()) {
+                                            window.open(url(), '_blank', 'noopener,noreferrer');
+                                          }
+                                        }}
+                                        class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                                          hasUrl()
+                                            ? 'text-blue-600 border-blue-500 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-400 dark:hover:bg-blue-900/30'
+                                            : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
+                                        }`}
+                                        disabled={!hasUrl()}
+                                      >
+                                        <svg
+                                          class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`}
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                          />
+                                        </svg>
+                                        Test
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => clearGuestURL(metadataKey())}
+                                        class={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
+                                          hasUrl()
+                                            ? 'text-red-600 border-red-500 hover:bg-red-50 dark:text-red-400 dark:border-red-500 dark:hover:bg-red-900/30'
+                                            : 'text-gray-400 border-gray-300 dark:text-gray-500 dark:border-gray-600 cursor-not-allowed'
+                                        }`}
+                                        disabled={!hasUrl()}
+                                      >
+                                        <svg
+                                          class={`w-3.5 h-3.5 ${hasUrl() ? 'text-current' : 'text-gray-400 dark:text-gray-500'}`}
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                          />
+                                        </svg>
+                                        Clear
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            }}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  }
+                >
+                  <tr>
+                    <td
+                      colspan="5"
+                      class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                    >
+                      No guests found
+                    </td>
+                  </tr>
                 </Show>
               </tbody>
             </table>

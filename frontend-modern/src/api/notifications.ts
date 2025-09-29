@@ -58,7 +58,7 @@ export interface Webhook {
 
 export interface NotificationTestRequest {
   type: 'email' | 'webhook';
-  config?: Record<string, unknown>;  // Backend expects different format than frontend types
+  config?: Record<string, unknown>; // Backend expects different format than frontend types
   webhookId?: string;
 }
 
@@ -68,7 +68,7 @@ export class NotificationsAPI {
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
     const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
-    
+
     // Backend already returns fields with correct names (server, port)
     return {
       enabled: (backendConfig.enabled as boolean) || false,
@@ -80,7 +80,7 @@ export class NotificationsAPI {
       from: (backendConfig.from as string) || '',
       to: (backendConfig.to as string[]) || [],
       tls: (backendConfig.tls as boolean) || false,
-      startTLS: (backendConfig.startTLS as boolean) || false
+      startTLS: (backendConfig.startTLS as boolean) || false,
     };
   }
 
@@ -96,9 +96,9 @@ export class NotificationsAPI {
       to: config.to,
       tls: config.tls || false,
       startTLS: config.startTLS || false,
-      provider: config.provider || ''
+      provider: config.provider || '',
     };
-    
+
     return apiFetchJSON(`${this.baseUrl}/email`, {
       method: 'PUT',
       body: JSON.stringify(backendConfig),
@@ -141,26 +141,32 @@ export class NotificationsAPI {
   }
 
   // Testing
-  static async testNotification(request: NotificationTestRequest): Promise<{ success: boolean; message?: string }> {
-    const body: { method: string; config?: Record<string, unknown>; webhookId?: string } = { method: request.type };
-    
+  static async testNotification(
+    request: NotificationTestRequest,
+  ): Promise<{ success: boolean; message?: string }> {
+    const body: { method: string; config?: Record<string, unknown>; webhookId?: string } = {
+      method: request.type,
+    };
+
     // Include config if provided for testing without saving
     if (request.config) {
       body.config = request.config;
     }
-    
+
     // Include webhookId for webhook testing
     if (request.webhookId) {
       body.webhookId = request.webhookId;
     }
-    
+
     return apiFetchJSON(`${this.baseUrl}/test`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
   }
 
-  static async testWebhook(webhook: Omit<Webhook, 'id'>): Promise<{ success: boolean; message?: string }> {
+  static async testWebhook(
+    webhook: Omit<Webhook, 'id'>,
+  ): Promise<{ success: boolean; message?: string }> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),

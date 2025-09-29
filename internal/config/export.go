@@ -19,14 +19,14 @@ import (
 
 // ExportData contains all configuration data for export
 type ExportData struct {
-	Version       string                           `json:"version"`
-	ExportedAt    time.Time                        `json:"exportedAt"`
-	Nodes         NodesConfig                      `json:"nodes"`
-	Alerts        alerts.AlertConfig               `json:"alerts"`
-	Email         notifications.EmailConfig        `json:"email"`
-	Webhooks      []notifications.WebhookConfig    `json:"webhooks"`
-	System        SystemSettings                   `json:"system"`
-	GuestMetadata map[string]*GuestMetadata        `json:"guestMetadata,omitempty"`
+	Version       string                        `json:"version"`
+	ExportedAt    time.Time                     `json:"exportedAt"`
+	Nodes         NodesConfig                   `json:"nodes"`
+	Alerts        alerts.AlertConfig            `json:"alerts"`
+	Email         notifications.EmailConfig     `json:"email"`
+	Webhooks      []notifications.WebhookConfig `json:"webhooks"`
+	System        SystemSettings                `json:"system"`
+	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
 }
 
 // ExportConfig exports all configuration with passphrase-based encryption
@@ -159,7 +159,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 			dataPath = "/etc/pulse"
 		}
 		guestMetadataStore := NewGuestMetadataStore(dataPath)
-		
+
 		// Import each guest metadata entry
 		for guestID, metadata := range exportData.GuestMetadata {
 			if metadata != nil {

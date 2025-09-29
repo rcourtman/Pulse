@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,18 +33,18 @@ type DiscoveryResult struct {
 
 // Scanner handles network scanning for Proxmox/PBS servers
 type Scanner struct {
-	timeout     time.Duration
-	concurrent  int
-	httpClient  *http.Client
+	timeout    time.Duration
+	concurrent int
+	httpClient *http.Client
 }
 
 // NewScanner creates a new network scanner
 func NewScanner() *Scanner {
 	return &Scanner{
-		timeout:    1 * time.Second,  // Reduced timeout for faster scanning
-		concurrent: 50, // Increased concurrent workers for faster scanning
+		timeout:    1 * time.Second, // Reduced timeout for faster scanning
+		concurrent: 50,              // Increased concurrent workers for faster scanning
 		httpClient: &http.Client{
-			Timeout: 2 * time.Second,  // Reduced HTTP timeout
+			Timeout: 2 * time.Second, // Reduced HTTP timeout
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 				MaxIdleConns:    100,
@@ -56,10 +57,10 @@ func NewScanner() *Scanner {
 // DiscoverServers scans the network for Proxmox VE and PBS servers
 func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*DiscoveryResult, error) {
 	log.Info().Str("subnet", subnet).Msg("Starting network discovery")
-	
+
 	// Parse subnet
 	var ipNets []*net.IPNet
-	
+
 	if subnet == "" || subnet == "auto" {
 		// Check if we're in Docker (detected subnet is Docker network)
 		autoDetected := s.getLocalSubnet()
@@ -84,7 +85,7 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 		}
 		ipNets = []*net.IPNet{parsedNet}
 	}
-	
+
 	// Collect all IPs to scan from all subnets
 	var allIPs []string
 	for _, ipNet := range ipNets {
@@ -95,7 +96,7 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 			// Convert to /24
 			ipNet.Mask = net.CIDRMask(24, 32)
 		}
-		
+
 		// Generate list of IPs for this subnet
 		ips := s.generateIPs(ipNet)
 		allIPs = append(allIPs, ips...)
@@ -193,7 +194,7 @@ func (s *Scanner) scanWorker(ctx context.Context, wg *sync.WaitGroup, ipChan <-c
 // checkServer checks if a server is running at the given IP and port
 func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverType string) *DiscoveredServer {
 	// First check if port is open
-	address := fmt.Sprintf("%s:%d", ip, port)
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", address, s.timeout)
 	if err != nil {
 		return nil // Port not open
@@ -203,7 +204,7 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 	// Port is open - this is likely a Proxmox/PBS server
 	// Since most installations require auth for version endpoint,
 	// we'll return it as a discovered server based on the port alone
-	
+
 	log.Info().
 		Str("ip", ip).
 		Int("port", port).
@@ -218,14 +219,14 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 	}
 
 	// Try to get version without auth (some installations allow it)
-	url := fmt.Sprintf("https://%s:%d/api2/json/version", ip, port)
-	
+	url := fmt.Sprintf("https://%s/api2/json/version", address)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err == nil {
 		resp, err := s.httpClient.Do(req)
 		if err == nil {
 			defer resp.Body.Close()
-			
+
 			// Only try to parse if we got a successful response
 			if resp.StatusCode == 200 {
 				var versionResp struct {
@@ -234,11 +235,11 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 						Release string `json:"release,omitempty"`
 					} `json:"data"`
 				}
-				
+
 				if err := json.NewDecoder(resp.Body).Decode(&versionResp); err == nil && versionResp.Data.Version != "" {
 					server.Version = versionResp.Data.Version
 					server.Release = versionResp.Data.Release
-					
+
 					log.Info().
 						Str("ip", ip).
 						Int("port", port).
@@ -263,8 +264,9 @@ func (s *Scanner) checkServer(ctx context.Context, ip string, port int, serverTy
 
 // getProxmoxHostname tries to get the hostname of a Proxmox VE server
 func (s *Scanner) getProxmoxHostname(ctx context.Context, ip string, port int) string {
-	url := fmt.Sprintf("https://%s:%d/api2/json/nodes", ip, port)
-	
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	url := fmt.Sprintf("https://%s/api2/json/nodes", address)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return ""
@@ -295,8 +297,9 @@ func (s *Scanner) getProxmoxHostname(ctx context.Context, ip string, port int) s
 
 // getPBSHostname tries to get the hostname of a PBS server
 func (s *Scanner) getPBSHostname(ctx context.Context, ip string, port int) string {
-	url := fmt.Sprintf("https://%s:%d/api2/json/nodes", ip, port)
-	
+	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	url := fmt.Sprintf("https://%s/api2/json/nodes", address)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return ""
@@ -328,15 +331,15 @@ func (s *Scanner) getPBSHostname(ctx context.Context, ip string, port int) strin
 // generateIPs generates all IPs in a subnet
 func (s *Scanner) generateIPs(ipNet *net.IPNet) []string {
 	var ips []string
-	
+
 	// Get the starting IP
 	ip := ipNet.IP.Mask(ipNet.Mask)
-	
+
 	// Calculate the number of hosts
 	ones, bits := ipNet.Mask.Size()
 	hostBits := bits - ones
 	numHosts := 1 << hostBits
-	
+
 	// Skip network and broadcast addresses for common subnets
 	start := 1
 	end := numHosts - 1
@@ -345,34 +348,34 @@ func (s *Scanner) generateIPs(ipNet *net.IPNet) []string {
 		start = 0
 		end = numHosts
 	}
-	
+
 	// Limit to maximum 1024 IPs to avoid scanning huge networks
 	if end-start > 1024 {
 		end = start + 1024
 		log.Warn().Int("limited_to", 1024).Msg("Limiting scan to first 1024 IPs")
 	}
-	
+
 	for i := start; i < end; i++ {
 		// Calculate IP
 		currIP := make(net.IP, len(ip))
 		copy(currIP, ip)
-		
+
 		// Add offset to IP address
 		offset := i
 		for j := len(currIP) - 1; j >= 0 && offset > 0; j-- {
 			currIP[j] += byte(offset & 0xFF)
 			offset >>= 8
 		}
-		
+
 		// Skip common non-server IPs
 		lastOctet := currIP[len(currIP)-1]
 		if lastOctet == 0 || lastOctet == 255 {
 			continue // Skip network and broadcast
 		}
-		
+
 		ips = append(ips, currIP.String())
 	}
-	
+
 	return ips
 }
 
@@ -423,14 +426,14 @@ func (s *Scanner) getLocalSubnet() *net.IPNet {
 func (s *Scanner) getCommonSubnets() []*net.IPNet {
 	// Ordered by likelihood - most common first for faster results
 	commonSubnets := []string{
-		"192.168.1.0/24",  // Most common home router default
-		"192.168.0.0/24",  // Very common alternative  
-		"10.0.0.0/24",     // Some routers use this
+		"192.168.1.0/24", // Most common home router default
+		"192.168.0.0/24", // Very common alternative
+		"10.0.0.0/24",    // Some routers use this
 		// Skip less common ones for speed:
 		// "192.168.88.0/24", // MikroTik default (uncommon)
 		// "172.16.0.0/24",   // Less common but used
 	}
-	
+
 	var nets []*net.IPNet
 	for _, subnet := range commonSubnets {
 		_, ipNet, err := net.ParseCIDR(subnet)
@@ -438,6 +441,6 @@ func (s *Scanner) getCommonSubnets() []*net.IPNet {
 			nets = append(nets, ipNet)
 		}
 	}
-	
+
 	return nets
 }

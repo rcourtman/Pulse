@@ -9,16 +9,17 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
-	config *config.Config
+	config      *config.Config
 	persistence *config.ConfigPersistence
-	wsHub *websocket.Hub
-	monitor interface {
+	wsHub       *websocket.Hub
+	monitor     interface {
 		GetDiscoveryService() *discovery.Service
 		StartDiscoveryService(ctx context.Context, wsHub *websocket.Hub, subnet string)
 		StopDiscoveryService()
@@ -32,10 +33,10 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 	StopDiscoveryService()
 }) *SystemSettingsHandler {
 	return &SystemSettingsHandler{
-		config: cfg,
+		config:      cfg,
 		persistence: persistence,
-		wsHub: wsHub,
-		monitor: monitor,
+		wsHub:       wsHub,
+		monitor:     monitor,
 	}
 }
 
@@ -43,7 +44,7 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 func validateSystemSettings(settings *config.SystemSettings, rawRequest map[string]interface{}) error {
 	// Note: PVE polling is hardcoded to 10s since Proxmox cluster/resources endpoint only updates every 10s
 	// Legacy polling interval fields are ignored if provided
-	
+
 	if val, ok := rawRequest["pbsPollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
 			if interval <= 0 {
@@ -59,26 +60,26 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 			return fmt.Errorf("PBS polling interval must be a number")
 		}
 	}
-	
+
 	// Validate boolean fields have correct type
 	if val, ok := rawRequest["autoUpdateEnabled"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("autoUpdateEnabled must be a boolean")
 		}
 	}
-	
+
 	if val, ok := rawRequest["discoveryEnabled"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("discoveryEnabled must be a boolean")
 		}
 	}
-	
+
 	if val, ok := rawRequest["allowEmbedding"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("allowEmbedding must be a boolean")
 		}
 	}
-	
+
 	// Validate auto-update check interval (min 1 hour, max 7 days)
 	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -95,7 +96,7 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 			return fmt.Errorf("auto-update check interval must be a number")
 		}
 	}
-	
+
 	// Validate connection timeout (min 1 second, max 5 minutes)
 	if val, ok := rawRequest["connectionTimeout"]; ok {
 		if timeout, ok := val.(float64); ok {
@@ -112,7 +113,7 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 			return fmt.Errorf("connection timeout must be a number")
 		}
 	}
-	
+
 	// Validate theme
 	if val, ok := rawRequest["theme"]; ok {
 		if theme, ok := val.(string); ok {
@@ -123,7 +124,7 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 			return fmt.Errorf("theme must be a string")
 		}
 	}
-	
+
 	// Validate update channel
 	if val, ok := rawRequest["updateChannel"]; ok {
 		if channel, ok := val.(string); ok {
@@ -134,7 +135,7 @@ func validateSystemSettings(settings *config.SystemSettings, rawRequest map[stri
 			return fmt.Errorf("update channel must be a string")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -150,7 +151,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		log.Error().Err(err).Msg("Failed to load system settings")
 		settings = &config.SystemSettings{}
 	}
-	
+
 	// Log loaded settings for debugging
 	if settings != nil {
 		log.Debug().
@@ -167,8 +168,9 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		EnvOverrides:   h.config.EnvOverrides,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write system settings response")
+	}
 }
 
 // HandleUpdateSystemSettings updates the system settings
@@ -182,7 +184,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if !CheckAuth(h.config, w, r) {
 		return
 	}
-	
+
 	// Check if using proxy auth and if so, verify admin status
 	if h.config.ProxyAuthSecret != "" {
 		if valid, username, isAdmin := CheckProxyAuth(h.config, r); valid {
@@ -194,11 +196,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 					Str("method", r.Method).
 					Str("username", username).
 					Msg("Non-admin user attempted to update system settings")
-				
-				// Return forbidden error
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(`{"error":"Admin privileges required"}`))
+
+					// Return forbidden error
+				utils.WriteJSONError(w, "Admin privileges required", http.StatusForbidden)
 				return
 			}
 		}
@@ -243,7 +243,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 
 	// Start with existing settings
 	settings := *existingSettings
-	
+
 	// Only update fields that were provided in the request
 	// Note: PVE polling is hardcoded to 10s, legacy polling fields are ignored
 	if _, ok := rawRequest["pbsPollingInterval"]; ok {
@@ -274,7 +274,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["allowedEmbedOrigins"]; ok {
 		settings.AllowedEmbedOrigins = updates.AllowedEmbedOrigins
 	}
-	
+
 	// Boolean fields need special handling since false is a valid value
 	if _, ok := rawRequest["autoUpdateEnabled"]; ok {
 		settings.AutoUpdateEnabled = updates.AutoUpdateEnabled
@@ -297,7 +297,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.UpdateChannel != "" {
 		h.config.UpdateChannel = settings.UpdateChannel
 	}
-	
+
 	// Update auto-update settings
 	h.config.AutoUpdateEnabled = settings.AutoUpdateEnabled
 	if settings.AutoUpdateCheckInterval > 0 {
@@ -306,20 +306,20 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.AutoUpdateTime != "" {
 		h.config.AutoUpdateTime = settings.AutoUpdateTime
 	}
-	
+
 	// Validate theme if provided
 	if settings.Theme != "" && settings.Theme != "light" && settings.Theme != "dark" {
 		http.Error(w, "Invalid theme value. Must be 'light', 'dark', or empty", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Update discovery settings and manage the service
 	prevDiscoveryEnabled := h.config.DiscoveryEnabled
 	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet
 	}
-	
+
 	// Start or stop discovery service based on setting change
 	if h.monitor != nil {
 		if settings.DiscoveryEnabled && !prevDiscoveryEnabled {
@@ -362,6 +362,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		log.Debug().Str("theme", settings.Theme).Msg("Broadcasting theme change to WebSocket clients")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	if err := utils.WriteJSONResponse(w, map[string]bool{"success": true}); err != nil {
+		log.Error().Err(err).Msg("Failed to write system settings update response")
+	}
 }

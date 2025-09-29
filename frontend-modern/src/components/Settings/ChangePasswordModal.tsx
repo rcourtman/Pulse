@@ -42,16 +42,16 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
       // Get CSRF token from cookie
       const csrfToken = document.cookie
         .split('; ')
-        .find(row => row.startsWith('pulse_csrf='))
+        .find((row) => row.startsWith('pulse_csrf='))
         ?.split('=')[1];
 
       // Get the actual username from sessionStorage or use 'admin' as fallback
       const authUser = sessionStorage.getItem('pulse_auth_user') || 'admin';
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${btoa(`${authUser}:${currentPassword()}`)}`,
+        Authorization: `Basic ${btoa(`${authUser}:${currentPassword()}`)}`,
       };
-      
+
       // Add CSRF token if available
       if (csrfToken) {
         headers['X-CSRF-Token'] = csrfToken;
@@ -76,20 +76,19 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
       }
 
       showSuccess('Password changed successfully. Please log in with your new password.');
-      
+
       // Clear form
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      
+
       // Close modal and trigger re-authentication
       props.onClose();
-      
+
       // Reload page to force re-login with new password
       setTimeout(() => {
         window.location.reload();
       }, 2000);
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
       setError(errorMessage);
@@ -112,17 +111,26 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
   return (
     <Show when={props.isOpen}>
       <Portal>
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style="z-index: 9999">
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          style="z-index: 9999"
+        >
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
             <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <SectionHeader title="Change password" size="lg" class="flex-1" />
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleClose}
                 disabled={loading()}
                 class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -157,9 +165,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   disabled={loading()}
                   minLength={8}
                 />
-                <p class={`${formHelpText} mt-1`}>
-                  Minimum 8 characters
-                </p>
+                <p class={`${formHelpText} mt-1`}>Minimum 8 characters</p>
               </div>
 
               <div class={formField}>
@@ -184,14 +190,16 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               </Show>
 
               <div class="flex justify-end space-x-3 pt-4">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleClose}
                   disabled={loading()}
                   class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
-                <button type="submit"
+                <button
+                  type="submit"
                   disabled={loading()}
                   class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                 >

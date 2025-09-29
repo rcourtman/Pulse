@@ -18,7 +18,7 @@ export const FirstRunSetup: Component = () => {
   const [savedToken, setSavedToken] = createSignal('');
   const [copied, setCopied] = createSignal<'password' | 'token' | null>(null);
   const [themeMode, setThemeMode] = createSignal<'system' | 'light' | 'dark'>('system');
-  
+
   const applyTheme = (mode: 'system' | 'light' | 'dark') => {
     if (mode === 'light') {
       document.documentElement.classList.remove('dark');
@@ -70,7 +70,7 @@ export const FirstRunSetup: Component = () => {
     // Generate 24 bytes (48 hex chars) to avoid hash detection issue
     const array = new Uint8Array(24);
     crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
   };
 
   const handleSetup = async () => {
@@ -91,17 +91,17 @@ export const FirstRunSetup: Component = () => {
     }
 
     setIsSettingUp(true);
-    
+
     // Generate password if not custom
     const finalPassword = useCustomPassword() ? password() : generatePassword();
     if (!useCustomPassword()) {
       setGeneratedPassword(finalPassword);
     }
-    
+
     // Generate API token
     const token = generateToken();
     setApiToken(token);
-    
+
     try {
       const response = await fetch('/api/security/quick-setup', {
         method: 'POST',
@@ -109,33 +109,31 @@ export const FirstRunSetup: Component = () => {
         body: JSON.stringify({
           username: username(),
           password: finalPassword,
-          apiToken: token
-        })
+          apiToken: token,
+        }),
       });
-      
+
       if (!response.ok) {
         const error = await response.text();
         throw new Error(error || 'Failed to setup security');
       }
-      
+
       const result = await response.json();
-      
+
       if (result.skipped) {
         // Shouldn't happen in first-run, but handle it
         window.location.reload();
         return;
       }
-      
+
       // Save credentials for display
       setSavedUsername(username());
       setSavedPassword(useCustomPassword() ? password() : generatedPassword());
       setSavedToken(token);
-      
-      
+
       // Show credentials
       setShowCredentials(true);
       showSuccess('Security configured successfully!');
-      
     } catch (error) {
       showError(`Failed to setup security: ${error}`);
     } finally {
@@ -190,23 +188,31 @@ IMPORTANT: Keep these credentials secure!
         {/* Logo/Header */}
         <div class="text-center mb-8">
           <div class="flex items-center justify-center gap-2 mb-4">
-            <svg 
-              width="48" 
-              height="48" 
-              viewBox="0 0 256 256" 
-              xmlns="http://www.w3.org/2000/svg" 
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 256 256"
+              xmlns="http://www.w3.org/2000/svg"
               class="pulse-logo"
             >
               <title>Pulse Logo</title>
-              <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122"/>
-              <circle class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]" cx="128" cy="128" r="84"/>
-              <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26"/>
+              <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122" />
+              <circle
+                class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
+                cx="128"
+                cy="128"
+                r="84"
+              />
+              <circle
+                class="pulse-center fill-white dark:fill-[#dbeafe]"
+                cx="128"
+                cy="128"
+                r="26"
+              />
             </svg>
             <span class="text-4xl font-bold text-gray-800 dark:text-gray-100">Pulse</span>
           </div>
-          <p class="text-gray-600 dark:text-gray-400">
-            Let's set up your monitoring dashboard
-          </p>
+          <p class="text-gray-600 dark:text-gray-400">Let's set up your monitoring dashboard</p>
         </div>
 
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden">
@@ -218,7 +224,7 @@ IMPORTANT: Keep these credentials secure!
                 class="mb-6"
                 titleClass="text-gray-800 dark:text-gray-100"
               />
-              
+
               <div class="space-y-6">
                 {/* Username */}
                 <div>
@@ -239,23 +245,25 @@ IMPORTANT: Keep these credentials secure!
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Admin Password
                   </label>
-                  
+
                   <div class="flex gap-2 mb-3">
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => setUseCustomPassword(false)}
                       class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        !useCustomPassword() 
-                          ? 'bg-blue-600 text-white' 
+                        !useCustomPassword()
+                          ? 'bg-blue-600 text-white'
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                       }`}
                     >
                       Generate Secure Password
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => setUseCustomPassword(true)}
                       class={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                        useCustomPassword() 
-                          ? 'bg-blue-600 text-white' 
+                        useCustomPassword()
+                          ? 'bg-blue-600 text-white'
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                       }`}
                     >
@@ -285,8 +293,8 @@ IMPORTANT: Keep these credentials secure!
                   <Show when={!useCustomPassword()}>
                     <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <p class="text-sm text-blue-700 dark:text-blue-300">
-                        A secure 16-character password will be generated for you. 
-                        Make sure to save it when shown!
+                        A secure 16-character password will be generated for you. Make sure to save
+                        it when shown!
                       </p>
                     </div>
                   </Show>
@@ -298,7 +306,8 @@ IMPORTANT: Keep these credentials secure!
                     Theme Preference
                   </label>
                   <div class="grid grid-cols-3 gap-2">
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => {
                         setThemeMode('system');
                         applyTheme('system');
@@ -311,7 +320,8 @@ IMPORTANT: Keep these credentials secure!
                     >
                       System
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => {
                         setThemeMode('light');
                         applyTheme('light');
@@ -324,7 +334,8 @@ IMPORTANT: Keep these credentials secure!
                     >
                       Light
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => {
                         setThemeMode('dark');
                         applyTheme('dark');
@@ -339,7 +350,7 @@ IMPORTANT: Keep these credentials secure!
                     </button>
                   </div>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    {themeMode() === 'system' 
+                    {themeMode() === 'system'
                       ? 'Using your operating system theme preference'
                       : `Using ${themeMode()} mode`}
                   </p>
@@ -373,7 +384,8 @@ IMPORTANT: Keep these credentials secure!
                 </div>
 
                 {/* Setup Button */}
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleSetup}
                   disabled={isSettingUp()}
                   class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
@@ -388,8 +400,18 @@ IMPORTANT: Keep these credentials secure!
             <div class="p-8">
               <div class="text-center mb-6">
                 <div class="w-16 h-16 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  <svg
+                    class="w-8 h-8 text-green-600 dark:text-green-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 </div>
                 <SectionHeader
@@ -424,18 +446,39 @@ IMPORTANT: Keep these credentials secure!
                     <code class="font-mono text-lg text-gray-900 dark:text-gray-100 break-all">
                       {savedPassword()}
                     </code>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => handleCopy('password')}
                       class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                       title="Copy password"
                     >
                       {copied() === 'password' ? (
-                        <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <svg
+                          class="w-5 h-5 text-green-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       ) : (
-                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        <svg
+                          class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                          />
                         </svg>
                       )}
                     </button>
@@ -451,18 +494,39 @@ IMPORTANT: Keep these credentials secure!
                     <code class="font-mono text-sm text-gray-900 dark:text-gray-100 break-all">
                       {savedToken()}
                     </code>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => handleCopy('token')}
                       class="ml-2 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                       title="Copy token"
                     >
                       {copied() === 'token' ? (
-                        <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        <svg
+                          class="w-5 h-5 text-green-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       ) : (
-                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        <svg
+                          class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                          />
                         </svg>
                       )}
                     </button>
@@ -475,22 +539,30 @@ IMPORTANT: Keep these credentials secure!
                     ⚠️ Important
                   </p>
                   <p class="text-xs text-amber-700 dark:text-amber-300">
-                    These credentials will never be shown again. Save them in a password manager now!
+                    These credentials will never be shown again. Save them in a password manager
+                    now!
                   </p>
                 </div>
 
                 {/* Action Buttons */}
                 <div class="flex gap-3">
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={downloadCredentials}
                     class="flex-1 py-3 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
                     </svg>
                     Download Credentials
                   </button>
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => window.location.reload()}
                     class="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   >

@@ -8,7 +8,7 @@ interface UseIntersectionObserverOptions {
 
 export function useIntersectionObserver(
   ref: () => HTMLElement | undefined,
-  options: UseIntersectionObserverOptions = {}
+  options: UseIntersectionObserverOptions = {},
 ) {
   const [isIntersecting, setIsIntersecting] = createSignal(false);
   let observer: IntersectionObserver | undefined;
@@ -28,8 +28,8 @@ export function useIntersectionObserver(
       {
         threshold: options.threshold || 0,
         rootMargin: options.rootMargin || '50px',
-        root: options.root || null
-      }
+        root: options.root || null,
+      },
     );
 
     observer.observe(element);

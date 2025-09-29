@@ -1,7 +1,4 @@
-import type { 
-  SettingsResponse, 
-  SettingsUpdateRequest
-} from '@/types/settings';
+import type { SettingsResponse, SettingsUpdateRequest } from '@/types/settings';
 import type { SystemConfig } from '@/types/config';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -27,7 +24,7 @@ export class SettingsAPI {
       body: JSON.stringify(settings),
     }) as Promise<ApiResponse>;
   }
-  
+
   // System settings update (preferred) - uses SystemConfig type from config.ts
   static async updateSystemSettings(settings: Partial<SystemConfig>): Promise<ApiResponse> {
     return apiFetchJSON(`${this.baseUrl}/system/settings/update`, {
@@ -35,7 +32,7 @@ export class SettingsAPI {
       body: JSON.stringify(settings),
     }) as Promise<ApiResponse>;
   }
-  
+
   // Get system settings - returns SystemConfig
   static async getSystemSettings(): Promise<SystemConfig> {
     return apiFetchJSON(`${this.baseUrl}/system/settings`) as Promise<SystemConfig>;

@@ -1,9 +1,9 @@
 /**
  * Configuration Type Definitions
- * 
+ *
  * This file defines the types for Pulse's configuration structure.
  * Configuration is split into three files:
- * 
+ *
  * 1. .env - Authentication credentials (AuthConfig)
  * 2. system.json - Application settings (SystemConfig)
  * 3. nodes.enc - Encrypted node credentials (NodesConfig)
@@ -14,11 +14,11 @@
  * These are environment variables for authentication ONLY
  */
 export interface AuthConfig {
-  PULSE_AUTH_USER: string;      // Admin username
-  PULSE_AUTH_PASS: string;      // Bcrypt hashed password
-  API_TOKEN: string;            // API authentication token
-  ENABLE_AUDIT_LOG?: boolean;   // @deprecated - use PULSE_AUDIT_LOG
-  PULSE_AUDIT_LOG?: boolean;    // Enable audit logging
+  PULSE_AUTH_USER: string; // Admin username
+  PULSE_AUTH_PASS: string; // Bcrypt hashed password
+  API_TOKEN: string; // API authentication token
+  ENABLE_AUDIT_LOG?: boolean; // @deprecated - use PULSE_AUDIT_LOG
+  PULSE_AUDIT_LOG?: boolean; // Enable audit logging
 }
 
 /**
@@ -27,20 +27,20 @@ export interface AuthConfig {
  */
 export interface SystemConfig {
   // Note: PVE polling is hardcoded to 10s (Proxmox cluster/resources updates every 10s)
-  pbsPollingInterval?: number;          // PBS polling interval in seconds
-  connectionTimeout?: number;            // Seconds before timeout (default: 10)
-  autoUpdateEnabled: boolean;           // Enable auto-updates
-  updateChannel?: string;                // Update channel: 'stable' | 'rc' | 'beta'
-  autoUpdateCheckInterval?: number;      // Hours between update checks
-  autoUpdateTime?: string;               // Time for updates (HH:MM format)
-  allowedOrigins?: string;               // CORS allowed origins
-  backendPort?: number;                  // Backend API port (default: 7655)
-  frontendPort?: number;                 // Frontend UI port (default: 7655)
-  theme?: string;                        // Theme preference: 'light' | 'dark' | undefined (system default)
-  discoveryEnabled?: boolean;            // Enable/disable network discovery
-  discoverySubnet?: string;              // Subnet to scan for discovery (default: 'auto')
-  allowEmbedding?: boolean;              // Allow iframe embedding
-  allowedEmbedOrigins?: string;          // Comma-separated list of allowed origins for embedding
+  pbsPollingInterval?: number; // PBS polling interval in seconds
+  connectionTimeout?: number; // Seconds before timeout (default: 10)
+  autoUpdateEnabled: boolean; // Enable auto-updates
+  updateChannel?: string; // Update channel: 'stable' | 'rc' | 'beta'
+  autoUpdateCheckInterval?: number; // Hours between update checks
+  autoUpdateTime?: string; // Time for updates (HH:MM format)
+  allowedOrigins?: string; // CORS allowed origins
+  backendPort?: number; // Backend API port (default: 7655)
+  frontendPort?: number; // Frontend UI port (default: 7655)
+  theme?: string; // Theme preference: 'light' | 'dark' | undefined (system default)
+  discoveryEnabled?: boolean; // Enable/disable network discovery
+  discoverySubnet?: string; // Subnet to scan for discovery (default: 'auto')
+  allowEmbedding?: boolean; // Allow iframe embedding
+  allowedEmbedOrigins?: string; // Comma-separated list of allowed origins for embedding
 }
 
 /**
@@ -50,8 +50,8 @@ export interface NodeInstance {
   name: string;
   url: string;
   username: string;
-  password?: string;    // Encrypted at rest
-  token?: string;       // Optional API token
+  password?: string; // Encrypted at rest
+  token?: string; // Optional API token
   fingerprint?: string; // TLS certificate fingerprint
 }
 
@@ -59,14 +59,14 @@ export interface NodeInstance {
  * PVE-specific node configuration
  */
 export interface PVENodeConfig extends NodeInstance {
-  realm?: string;       // Authentication realm (pam, pve, etc.)
+  realm?: string; // Authentication realm (pam, pve, etc.)
 }
 
 /**
  * PBS-specific node configuration
  */
 export interface PBSNodeConfig extends NodeInstance {
-  datastore?: string;   // Default datastore
+  datastore?: string; // Default datastore
 }
 
 /**
@@ -81,9 +81,9 @@ export interface NodesConfig {
  * Complete configuration structure
  */
 export interface PulseConfig {
-  auth: Partial<AuthConfig>;      // From .env
-  system: SystemConfig;           // From system.json
-  nodes: NodesConfig;             // From nodes.enc
+  auth: Partial<AuthConfig>; // From .env
+  system: SystemConfig; // From system.json
+  nodes: NodesConfig; // From nodes.enc
 }
 
 /**
@@ -149,5 +149,5 @@ export const DEFAULT_CONFIG: {
     allowedOrigins: '',
     backendPort: 7655,
     frontendPort: 7655,
-  }
+  },
 };

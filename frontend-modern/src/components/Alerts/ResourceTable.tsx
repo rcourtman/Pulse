@@ -28,7 +28,11 @@ interface ResourceTableProps {
   groupedResources?: Record<string, Resource[]>;
   columns: string[];
   activeAlerts?: Record<string, Alert>;
-  onEdit: (resourceId: string, thresholds: Record<string, number | undefined>, defaults: Record<string, number | undefined>) => void;
+  onEdit: (
+    resourceId: string,
+    thresholds: Record<string, number | undefined>,
+    defaults: Record<string, number | undefined>,
+  ) => void;
   onSaveEdit: (resourceId: string) => void;
   onCancelEdit: () => void;
   onRemoveOverride: (resourceId: string) => void;
@@ -42,32 +46,34 @@ interface ResourceTableProps {
 }
 
 export function ResourceTable(props: ResourceTableProps) {
-  
-  const MetricValueWithHeat = (metricProps: { 
-    resourceId: string; 
-    metric: string; 
-    value: number; 
-    isOverridden: boolean 
+  const MetricValueWithHeat = (metricProps: {
+    resourceId: string;
+    metric: string;
+    value: number;
+    isOverridden: boolean;
   }) => (
     <div class="flex items-center justify-center gap-1">
-      <span class={`text-sm ${
-        metricProps.isOverridden 
-          ? 'text-gray-900 dark:text-gray-100 font-medium' 
-          : 'text-gray-400 dark:text-gray-500'
-      }`}>
+      <span
+        class={`text-sm ${
+          metricProps.isOverridden
+            ? 'text-gray-900 dark:text-gray-100 font-medium'
+            : 'text-gray-400 dark:text-gray-500'
+        }`}
+      >
         {props.formatMetricValue(metricProps.metric, metricProps.value)}
       </span>
       <Show when={props.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
-        <div 
-          class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"
-          title="Active alert"
-        />
+        <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
       </Show>
     </div>
   );
 
   return (
-    <Card padding="none" class="overflow-hidden border border-gray-200 dark:border-gray-700" border={false}>
+    <Card
+      padding="none"
+      class="overflow-hidden border border-gray-200 dark:border-gray-700"
+      border={false}
+    >
       <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <SectionHeader title={props.title} size="sm" />
       </div>
@@ -101,12 +107,19 @@ export function ResourceTable(props: ResourceTableProps) {
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             <Show when={props.groupedResources}>
-              <For each={Object.entries(props.groupedResources || {}).sort(([a], [b]) => a.localeCompare(b))}>
+              <For
+                each={Object.entries(props.groupedResources || {}).sort(([a], [b]) =>
+                  a.localeCompare(b),
+                )}
+              >
                 {([nodeName, resources]) => (
                   <>
                     {/* Node group header */}
                     <tr class="bg-gray-50 dark:bg-gray-700/50">
-                      <td colspan={props.columns.length + 5} class="p-1 px-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                      <td
+                        colspan={props.columns.length + 5}
+                        class="p-1 px-2 text-xs font-medium text-gray-500 dark:text-gray-400"
+                      >
                         {nodeName}
                       </td>
                     </tr>
@@ -131,23 +144,37 @@ export function ResourceTable(props: ResourceTableProps) {
                           if (typeof liveValue === 'number') {
                             return liveValue;
                           }
-                          return typeof defaults[metric] === 'number' ? (defaults[metric] as number) : 0;
+                          return typeof defaults[metric] === 'number'
+                            ? (defaults[metric] as number)
+                            : 0;
                         };
                         const isOverridden = (metric: string) => {
-                          return resource.thresholds?.[metric] !== undefined && resource.thresholds?.[metric] !== null;
+                          return (
+                            resource.thresholds?.[metric] !== undefined &&
+                            resource.thresholds?.[metric] !== null
+                          );
                         };
-                        
+
                         return (
-                          <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
+                          <tr
+                            class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}
+                          >
                             <td class="p-1 px-2">
                               <div class="flex items-center gap-2">
-                                <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
+                                <span
+                                  class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                >
                                   {resource.name}
                                 </span>
                                 <Show when={'vmid' in resource && resource.vmid}>
                                   <span class="text-xs text-gray-500">({resource.vmid})</span>
                                 </Show>
-                                <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
+                                <Show
+                                  when={
+                                    resource.hasOverride ||
+                                    (resource.type === 'node' && resource.disableConnectivity)
+                                  }
+                                >
                                   <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
                                     Custom
                                   </span>
@@ -155,36 +182,56 @@ export function ResourceTable(props: ResourceTableProps) {
                               </div>
                             </td>
                             <td class="p-1 px-2">
-                              <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
-                                resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
-                                resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
-                                resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
-                                'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                              }`}>
+                              <span
+                                class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                  resource.type === 'pbs'
+                                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                                    : resource.type === 'node'
+                                      ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                      : resource.type === 'storage'
+                                        ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                        : resource.resourceType === 'VM'
+                                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                          : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                }`}
+                              >
                                 {resource.resourceType}
                               </span>
                             </td>
                             <td class="p-1 px-2">
-                              <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                resource.status === 'online' || resource.status === 'running' ?
-                                  'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                resource.status === 'offline' || resource.status === 'stopped' ?
-                                  'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                  'bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300'
-                              }`}>
+                              <span
+                                class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                  resource.status === 'online' || resource.status === 'running'
+                                    ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                    : resource.status === 'offline' || resource.status === 'stopped'
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                      : 'bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300'
+                                }`}
+                              >
                                 {resource.status}
                               </span>
                             </td>
-                            
+
                             {/* Metric columns - dynamically rendered based on resource type */}
                             <For each={props.columns}>
                               {(column) => {
-                                const metric = column.toLowerCase().replace(' %', '').replace(' mb/s', '').replace('disk r', 'diskRead').replace('disk w', 'diskWrite').replace('net in', 'networkIn').replace('net out', 'networkOut');
-                                
+                                const metric = column
+                                  .toLowerCase()
+                                  .replace(' %', '')
+                                  .replace(' mb/s', '')
+                                  .replace('disk r', 'diskRead')
+                                  .replace('disk w', 'diskWrite')
+                                  .replace('net in', 'networkIn')
+                                  .replace('net out', 'networkOut');
+
                                 // Check if this metric applies to this resource type
                                 const showMetric = () => {
-                                  if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+                                  if (
+                                    resource.type === 'node' &&
+                                    ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
+                                      metric,
+                                    )
+                                  ) {
                                     return false;
                                   }
                                   if (resource.type === 'pbs') {
@@ -196,31 +243,46 @@ export function ResourceTable(props: ResourceTableProps) {
                                   }
                                   return true;
                                 };
-                                
+
                                 return (
                                   <td class="p-1 px-2 text-center">
-                                    <Show when={showMetric()} fallback={
-                                      <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                                    }>
-                                      <Show when={isEditing()} fallback={
-                                        <MetricValueWithHeat 
-                                          resourceId={resource.id}
-                                          metric={metric}
-                                          value={displayValue(metric)}
-                                          isOverridden={isOverridden(metric)}
-                                        />
-                                      }>
+                                    <Show
+                                      when={showMetric()}
+                                      fallback={
+                                        <span class="text-sm text-gray-400 dark:text-gray-500">
+                                          -
+                                        </span>
+                                      }
+                                    >
+                                      <Show
+                                        when={isEditing()}
+                                        fallback={
+                                          <MetricValueWithHeat
+                                            resourceId={resource.id}
+                                            metric={metric}
+                                            value={displayValue(metric)}
+                                            isOverridden={isOverridden(metric)}
+                                          />
+                                        }
+                                      >
                                         <input
                                           type="number"
                                           min="-1"
-                                          max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
+                                          max={
+                                            metric.includes('disk') ||
+                                            metric.includes('memory') ||
+                                            metric.includes('cpu') ||
+                                            metric === 'usage'
+                                              ? 100
+                                              : 10000
+                                          }
                                           value={thresholds()?.[metric] || ''}
                                           onInput={(e) => {
                                             const val = parseInt(e.currentTarget.value);
                                             if (!isNaN(val)) {
                                               props.setEditingThresholds({
                                                 ...props.editingThresholds(),
-                                                [metric]: val
+                                                [metric]: val,
                                               });
                                             }
                                           }}
@@ -233,11 +295,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                 );
                               }}
                             </For>
-                            
+
                             {/* Alerts column */}
                             <td class="p-1 px-2 text-center">
                               <Show when={resource.type === 'guest' && props.onToggleDisabled}>
-                                <button type="button"
+                                <button
+                                  type="button"
                                   onClick={() => props.onToggleDisabled?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
@@ -248,8 +311,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                   {resource.disabled ? 'Disabled' : 'Enabled'}
                                 </button>
                               </Show>
-                              <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
-                                <button type="button"
+                              <Show
+                                when={resource.type === 'node' && props.onToggleNodeConnectivity}
+                              >
+                                <button
+                                  type="button"
                                   onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disableConnectivity
@@ -262,7 +328,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </button>
                               </Show>
                               <Show when={resource.type === 'storage'}>
-                                <button type="button"
+                                <button
+                                  type="button"
                                   onClick={() => props.onToggleDisabled?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disabled
@@ -273,8 +340,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                   {resource.disabled ? 'Disabled' : 'Enabled'}
                                 </button>
                               </Show>
-                              <Show when={resource.type === 'pbs' && props.onToggleNodeConnectivity}>
-                                <button type="button"
+                              <Show
+                                when={resource.type === 'pbs' && props.onToggleNodeConnectivity}
+                              >
+                                <button
+                                  type="button"
                                   onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
                                   class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                                     resource.disableConnectivity
@@ -287,53 +357,107 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </button>
                               </Show>
                             </td>
-                            
+
                             {/* Actions column */}
                             <td class="p-1 px-2">
                               <div class="flex items-center justify-center gap-1">
-                                <Show when={!isEditing()} fallback={
-                                  <>
-                                    <button type="button"
-                                      onClick={() => props.onSaveEdit(resource.id)}
-                                      class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                                      title="Save"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    </button>
-                                    <button type="button"
-                                      onClick={props.onCancelEdit}
-                                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                      title="Cancel"
-                                    >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    </button>
-                                  </>
-                                }>
-                                  <button type="button"
-                                    onClick={() => props.onEdit(
-                                      resource.id,
-                                      resource.thresholds ? { ...resource.thresholds } : {},
-                                      resource.defaults ? { ...resource.defaults } : {}
-                                    )}
+                                <Show
+                                  when={!isEditing()}
+                                  fallback={
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => props.onSaveEdit(resource.id)}
+                                        class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                                        title="Save"
+                                      >
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M5 13l4 4L19 7"
+                                          />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={props.onCancelEdit}
+                                        class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                        title="Cancel"
+                                      >
+                                        <svg
+                                          class="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                          />
+                                        </svg>
+                                      </button>
+                                    </>
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      props.onEdit(
+                                        resource.id,
+                                        resource.thresholds ? { ...resource.thresholds } : {},
+                                        resource.defaults ? { ...resource.defaults } : {},
+                                      )
+                                    }
                                     class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                     title="Edit thresholds"
                                   >
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    <svg
+                                      class="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                      />
                                     </svg>
                                   </button>
-                                  <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                                    <button type="button"
+                                  <Show
+                                    when={
+                                      resource.hasOverride ||
+                                      (resource.type === 'node' && resource.disableConnectivity)
+                                    }
+                                  >
+                                    <button
+                                      type="button"
                                       onClick={() => props.onRemoveOverride(resource.id)}
                                       class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                       title="Remove override"
                                     >
-                                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        />
                                       </svg>
                                     </button>
                                   </Show>
@@ -349,252 +473,373 @@ export function ResourceTable(props: ResourceTableProps) {
               </For>
             </Show>
             <Show when={!props.groupedResources && props.resources}>
-              <Show when={props.resources && props.resources.length === 0} fallback={
-                <For each={props.resources}>
-                  {(resource) => {
-                  const isEditing = () => props.editingId() === resource.id;
-                  const thresholds = (): Record<string, number | undefined> => {
-                    if (isEditing()) {
-                      return props.editingThresholds();
-                    }
-                    return resource.thresholds ?? {};
-                  };
-                  const displayValue = (metric: string): number => {
-                    const thresh = thresholds();
-                    const defaults = resource.defaults || {};
-                    if (isEditing()) {
-                      const val = thresh?.[metric] || defaults[metric];
-                      return typeof val === 'string' ? (parseFloat(val) || 0) : (val || 0);
-                    }
-                    return resource.thresholds?.[metric] || defaults[metric] || 0;
-                  };
-                  const isOverridden = (metric: string) => {
-                    return resource.thresholds?.[metric] !== undefined && resource.thresholds?.[metric] !== null;
-                  };
-                  
-                  return (
-                    <tr class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}>
-                      <td class="p-1 px-2">
-                        <div class="flex items-center gap-2">
-                          <span class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                            {resource.name}
-                          </span>
-                          <Show when={'vmid' in resource && resource.vmid}>
-                            <span class="text-xs text-gray-500">({resource.vmid})</span>
-                          </Show>
-                          <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
-                            <span class="text-xs text-gray-500">on {resource.node}</span>
-                          </Show>
-                          <Show when={resource.type === 'guest' && 'node' in resource && resource.node}>
-                            <span class="text-xs text-gray-500">on {resource.node}</span>
-                          </Show>
-                          <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                            <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
-                              Custom
-                            </span>
-                          </Show>
-                        </div>
-                      </td>
-                      <td class="p-1 px-2">
-                        <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                          resource.type === 'pbs' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' :
-                          resource.type === 'node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
-                          resource.type === 'storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
-                          resource.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
-                          'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                        }`}>
-                          {resource.resourceType}
-                        </span>
-                      </td>
-                      <td class="p-1 px-2">
-                        <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                          resource.status === 'online' || resource.status === 'running' ?
-                            'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                          resource.status === 'offline' || resource.status === 'stopped' ?
-                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                            'bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300'
-                        }`}>
-                          {resource.status}
-                        </span>
-                      </td>
-                      
-                      {/* Metric columns - dynamically rendered based on resource type */}
-                      <For each={props.columns}>
-                        {(column) => {
-                          const metric = column.toLowerCase().replace(' %', '').replace(' mb/s', '').replace('disk r', 'diskRead').replace('disk w', 'diskWrite').replace('net in', 'networkIn').replace('net out', 'networkOut');
-                          
-                          // Check if this metric applies to this resource type
-                          const showMetric = () => {
-                            if (resource.type === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-                              return false;
-                            }
-                            if (resource.type === 'pbs') {
-                              // PBS only has CPU and Memory metrics
-                              return ['cpu', 'memory'].includes(metric);
-                            }
-                            if (resource.type === 'storage') {
-                              return metric === 'usage';
-                            }
-                            return true;
-                          };
-                          
-                          return (
-                            <td class="p-1 px-2 text-center">
-                              <Show when={showMetric()} fallback={
-                                <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                              }>
-                                <Show when={isEditing()} fallback={
-                                  <MetricValueWithHeat 
-                                    resourceId={resource.id}
-                                    metric={metric}
-                                    value={displayValue(metric)}
-                                    isOverridden={isOverridden(metric)}
-                                  />
-                                }>
-                                  <input
-                                    type="number"
-                                    min="-1"
-                                    max={metric.includes('disk') || metric.includes('memory') || metric.includes('cpu') || metric === 'usage' ? 100 : 10000}
-                                    value={(() => {
-                                      const currentThresholds = thresholds();
-                                      const rawValue = currentThresholds[metric];
-                                      return rawValue ?? '';
-                                    })()}
-                                    onInput={(e) => {
-                                      const parsed = e.currentTarget.value.trim();
-                                      let nextValue: number | undefined;
-                                      if (parsed !== '') {
-                                        const numeric = Number(parsed);
-                                        nextValue = Number.isFinite(numeric) ? numeric : undefined;
-                                      }
-                                      props.setEditingThresholds({
-                                        ...props.editingThresholds(),
-                                        [metric]: nextValue
-                                      });
-                                    }}
-                                    class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                  />
-                                </Show>
+              <Show
+                when={props.resources && props.resources.length === 0}
+                fallback={
+                  <For each={props.resources}>
+                    {(resource) => {
+                      const isEditing = () => props.editingId() === resource.id;
+                      const thresholds = (): Record<string, number | undefined> => {
+                        if (isEditing()) {
+                          return props.editingThresholds();
+                        }
+                        return resource.thresholds ?? {};
+                      };
+                      const displayValue = (metric: string): number => {
+                        const thresh = thresholds();
+                        const defaults = resource.defaults || {};
+                        if (isEditing()) {
+                          const val = thresh?.[metric] || defaults[metric];
+                          return typeof val === 'string' ? parseFloat(val) || 0 : val || 0;
+                        }
+                        return resource.thresholds?.[metric] || defaults[metric] || 0;
+                      };
+                      const isOverridden = (metric: string) => {
+                        return (
+                          resource.thresholds?.[metric] !== undefined &&
+                          resource.thresholds?.[metric] !== null
+                        );
+                      };
+
+                      return (
+                        <tr
+                          class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled ? 'opacity-40' : ''}`}
+                        >
+                          <td class="p-1 px-2">
+                            <div class="flex items-center gap-2">
+                              <span
+                                class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                              >
+                                {resource.name}
+                              </span>
+                              <Show when={'vmid' in resource && resource.vmid}>
+                                <span class="text-xs text-gray-500">({resource.vmid})</span>
                               </Show>
-                            </td>
-                          );
-                        }}
-                      </For>
-                      
-                      {/* Alerts column */}
-                      <td class="p-1 px-2 text-center">
-                        <Show when={resource.type === 'guest' && props.onToggleDisabled}>
-                          <button type="button"
-                            onClick={() => props.onToggleDisabled?.(resource.id)}
-                            class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                              resource.disabled
-                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                            }`}
-                          >
-                            {resource.disabled ? 'Disabled' : 'Enabled'}
-                          </button>
-                        </Show>
-                        <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
-                          <button type="button"
-                            onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
-                            class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                              resource.disableConnectivity
-                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                            }`}
-                            title="Toggle connectivity alerts for this node"
-                          >
-                            {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
-                          </button>
-                        </Show>
-                        <Show when={resource.type === 'storage'}>
-                          <button type="button"
-                            onClick={() => props.onToggleDisabled?.(resource.id)}
-                            class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                              resource.disabled
-                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                            }`}
-                          >
-                            {resource.disabled ? 'Disabled' : 'Enabled'}
-                          </button>
-                        </Show>
-                        <Show when={resource.type === 'pbs' && props.onToggleNodeConnectivity}>
-                          <button type="button"
-                            onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
-                            class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                              resource.disableConnectivity
-                                ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
-                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                            }`}
-                            title="Toggle connectivity alerts for this PBS server"
-                          >
-                            {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
-                          </button>
-                        </Show>
-                      </td>
-                      
-                      {/* Actions column */}
-                      <td class="p-1 px-2">
-                        <div class="flex items-center justify-center gap-1">
-                          <Show when={!isEditing()} fallback={
-                            <>
-                              <button type="button"
-                                onClick={() => props.onSaveEdit(resource.id)}
-                                class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                                title="Save"
+                              <Show
+                                when={
+                                  resource.type === 'storage' && 'node' in resource && resource.node
+                                }
                               >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                              </button>
-                              <button type="button"
-                                onClick={props.onCancelEdit}
-                                class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                title="Cancel"
+                                <span class="text-xs text-gray-500">on {resource.node}</span>
+                              </Show>
+                              <Show
+                                when={
+                                  resource.type === 'guest' && 'node' in resource && resource.node
+                                }
                               >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </>
-                          }>
-                            <button type="button"
-                            onClick={() => props.onEdit(
-                              resource.id,
-                              resource.thresholds ? { ...resource.thresholds } : {},
-                              resource.defaults ? { ...resource.defaults } : {}
-                            )}
-                              class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="Edit thresholds"
+                                <span class="text-xs text-gray-500">on {resource.node}</span>
+                              </Show>
+                              <Show
+                                when={
+                                  resource.hasOverride ||
+                                  (resource.type === 'node' && resource.disableConnectivity)
+                                }
+                              >
+                                <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                  Custom
+                                </span>
+                              </Show>
+                            </div>
+                          </td>
+                          <td class="p-1 px-2">
+                            <span
+                              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                resource.type === 'pbs'
+                                  ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                                  : resource.type === 'node'
+                                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                    : resource.type === 'storage'
+                                      ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                      : resource.resourceType === 'VM'
+                                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                        : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                              }`}
                             >
-                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                              <button type="button"
-                                onClick={() => props.onRemoveOverride(resource.id)}
-                                class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                title="Remove override"
+                              {resource.resourceType}
+                            </span>
+                          </td>
+                          <td class="p-1 px-2">
+                            <span
+                              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+                                resource.status === 'online' || resource.status === 'running'
+                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                  : resource.status === 'offline' || resource.status === 'stopped'
+                                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                    : 'bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {resource.status}
+                            </span>
+                          </td>
+
+                          {/* Metric columns - dynamically rendered based on resource type */}
+                          <For each={props.columns}>
+                            {(column) => {
+                              const metric = column
+                                .toLowerCase()
+                                .replace(' %', '')
+                                .replace(' mb/s', '')
+                                .replace('disk r', 'diskRead')
+                                .replace('disk w', 'diskWrite')
+                                .replace('net in', 'networkIn')
+                                .replace('net out', 'networkOut');
+
+                              // Check if this metric applies to this resource type
+                              const showMetric = () => {
+                                if (
+                                  resource.type === 'node' &&
+                                  ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
+                                    metric,
+                                  )
+                                ) {
+                                  return false;
+                                }
+                                if (resource.type === 'pbs') {
+                                  // PBS only has CPU and Memory metrics
+                                  return ['cpu', 'memory'].includes(metric);
+                                }
+                                if (resource.type === 'storage') {
+                                  return metric === 'usage';
+                                }
+                                return true;
+                              };
+
+                              return (
+                                <td class="p-1 px-2 text-center">
+                                  <Show
+                                    when={showMetric()}
+                                    fallback={
+                                      <span class="text-sm text-gray-400 dark:text-gray-500">
+                                        -
+                                      </span>
+                                    }
+                                  >
+                                    <Show
+                                      when={isEditing()}
+                                      fallback={
+                                        <MetricValueWithHeat
+                                          resourceId={resource.id}
+                                          metric={metric}
+                                          value={displayValue(metric)}
+                                          isOverridden={isOverridden(metric)}
+                                        />
+                                      }
+                                    >
+                                      <input
+                                        type="number"
+                                        min="-1"
+                                        max={
+                                          metric.includes('disk') ||
+                                          metric.includes('memory') ||
+                                          metric.includes('cpu') ||
+                                          metric === 'usage'
+                                            ? 100
+                                            : 10000
+                                        }
+                                        value={(() => {
+                                          const currentThresholds = thresholds();
+                                          const rawValue = currentThresholds[metric];
+                                          return rawValue ?? '';
+                                        })()}
+                                        onInput={(e) => {
+                                          const parsed = e.currentTarget.value.trim();
+                                          let nextValue: number | undefined;
+                                          if (parsed !== '') {
+                                            const numeric = Number(parsed);
+                                            nextValue = Number.isFinite(numeric)
+                                              ? numeric
+                                              : undefined;
+                                          }
+                                          props.setEditingThresholds({
+                                            ...props.editingThresholds(),
+                                            [metric]: nextValue,
+                                          });
+                                        }}
+                                        class="w-14 px-1 py-0.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                      />
+                                    </Show>
+                                  </Show>
+                                </td>
+                              );
+                            }}
+                          </For>
+
+                          {/* Alerts column */}
+                          <td class="p-1 px-2 text-center">
+                            <Show when={resource.type === 'guest' && props.onToggleDisabled}>
+                              <button
+                                type="button"
+                                onClick={() => props.onToggleDisabled?.(resource.id)}
+                                class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                  resource.disabled
+                                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                    : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                }`}
                               >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                {resource.disabled ? 'Disabled' : 'Enabled'}
                               </button>
                             </Show>
-                          </Show>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }}
-              </For>
-              }>
+                            <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
+                              <button
+                                type="button"
+                                onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
+                                class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                  resource.disableConnectivity
+                                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                    : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                }`}
+                                title="Toggle connectivity alerts for this node"
+                              >
+                                {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                              </button>
+                            </Show>
+                            <Show when={resource.type === 'storage'}>
+                              <button
+                                type="button"
+                                onClick={() => props.onToggleDisabled?.(resource.id)}
+                                class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                  resource.disabled
+                                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                    : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                }`}
+                              >
+                                {resource.disabled ? 'Disabled' : 'Enabled'}
+                              </button>
+                            </Show>
+                            <Show when={resource.type === 'pbs' && props.onToggleNodeConnectivity}>
+                              <button
+                                type="button"
+                                onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
+                                class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                  resource.disableConnectivity
+                                    ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                    : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                }`}
+                                title="Toggle connectivity alerts for this PBS server"
+                              >
+                                {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                              </button>
+                            </Show>
+                          </td>
+
+                          {/* Actions column */}
+                          <td class="p-1 px-2">
+                            <div class="flex items-center justify-center gap-1">
+                              <Show
+                                when={!isEditing()}
+                                fallback={
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => props.onSaveEdit(resource.id)}
+                                      class="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                                      title="Save"
+                                    >
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M5 13l4 4L19 7"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={props.onCancelEdit}
+                                      class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                      title="Cancel"
+                                    >
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </>
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    props.onEdit(
+                                      resource.id,
+                                      resource.thresholds ? { ...resource.thresholds } : {},
+                                      resource.defaults ? { ...resource.defaults } : {},
+                                    )
+                                  }
+                                  class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                  title="Edit thresholds"
+                                >
+                                  <svg
+                                    class="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                    />
+                                  </svg>
+                                </button>
+                                <Show
+                                  when={
+                                    resource.hasOverride ||
+                                    (resource.type === 'node' && resource.disableConnectivity)
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => props.onRemoveOverride(resource.id)}
+                                    class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                    title="Remove override"
+                                  >
+                                    <svg
+                                      class="w-4 h-4"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                      />
+                                    </svg>
+                                  </button>
+                                </Show>
+                              </Show>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }}
+                  </For>
+                }
+              >
                 <tr>
-                  <td colspan={props.columns.length + 5} class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td
+                    colspan={props.columns.length + 5}
+                    class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
                     No {props.title.toLowerCase()} found
                   </td>
                 </tr>

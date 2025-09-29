@@ -12,7 +12,6 @@ const isVM = (guest: Guest): guest is VM => {
   return guest.type === 'qemu';
 };
 
-
 interface GuestRowProps {
   guest: Guest;
   alertStyles?: {
@@ -30,12 +29,12 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
-  
+
   // Update custom URL when prop changes
   createEffect(() => {
     setCustomUrl(props.customUrl);
   });
-  
+
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
@@ -50,14 +49,14 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const isRunning = createMemo(() => props.guest.status === 'running');
-  
+
   // Get helpful tooltip for disk status
   const getDiskStatusTooltip = () => {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
-    
+
     const vm = props.guest as VM;
     const reason = vm.diskStatusReason;
-    
+
     switch (reason) {
       case 'agent-not-running':
         return 'Guest agent not running. Install and start qemu-guest-agent in the VM.';
@@ -85,12 +84,14 @@ export function GuestRow(props: GuestRowProps) {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
     // Extract only the background color from alert styles, not the border
-    const alertBg = props.alertStyles?.hasAlert 
-      ? (props.alertStyles.severity === 'critical' 
-        ? 'bg-red-50 dark:bg-red-950/30' 
-        : 'bg-yellow-50 dark:bg-yellow-950/20')
+    const alertBg = props.alertStyles?.hasAlert
+      ? props.alertStyles.severity === 'critical'
+        ? 'bg-red-50 dark:bg-red-950/30'
+        : 'bg-yellow-50 dark:bg-yellow-950/20'
       : '';
-    const defaultHover = props.alertStyles?.hasAlert ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+    const defaultHover = props.alertStyles?.hasAlert
+      ? ''
+      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
@@ -108,7 +109,7 @@ export function GuestRow(props: GuestRowProps) {
     if (!props.alertStyles?.hasAlert) return {};
     const color = props.alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
     return {
-      'box-shadow': `inset 4px 0 0 0 ${color}`
+      'box-shadow': `inset 4px 0 0 0 ${color}`,
     };
   });
 
@@ -118,17 +119,26 @@ export function GuestRow(props: GuestRowProps) {
       <td class={firstCellClass()}>
         <div class="flex items-center gap-2">
           {/* Status indicator */}
-          <span class={`h-2 w-2 rounded-full flex-shrink-0 ${
-            isRunning() ? 'bg-green-500' : 'bg-red-500'
-          }`} title={props.guest.status}></span>
-          
+          <span
+            class={`h-2 w-2 rounded-full flex-shrink-0 ${
+              isRunning() ? 'bg-green-500' : 'bg-red-500'
+            }`}
+            title={props.guest.status}
+          ></span>
+
           {/* Name - clickable if custom URL is set */}
-          <Show when={customUrl()} fallback={
-            <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={props.guest.name}>
-              {props.guest.name}
-            </span>
-          }>
-            <a 
+          <Show
+            when={customUrl()}
+            fallback={
+              <span
+                class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                title={props.guest.name}
+              >
+                {props.guest.name}
+              </span>
+            }
+          >
+            <a
               href={customUrl()}
               target="_blank"
               rel="noopener noreferrer"
@@ -138,11 +148,11 @@ export function GuestRow(props: GuestRowProps) {
               {props.guest.name}
             </a>
           </Show>
-          
+
           {/* Tag badges */}
-          <TagBadges 
+          <TagBadges
             tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-            maxVisible={3} 
+            maxVisible={3}
             onTagClick={props.onTagClick}
             activeSearch={props.activeSearch}
           />
@@ -151,11 +161,13 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Type */}
       <td class="py-0.5 px-2 whitespace-nowrap">
-        <span class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-          props.guest.type === 'qemu' 
-            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
-            : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-        }`}>
+        <span
+          class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+            props.guest.type === 'qemu'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+              : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+          }`}
+        >
           {isVM(props.guest) ? 'VM' : 'LXC'}
         </span>
       </td>
@@ -165,11 +177,12 @@ export function GuestRow(props: GuestRowProps) {
         {props.guest.vmid}
       </td>
 
-
       {/* Uptime */}
-      <td class={`py-0.5 px-2 text-sm whitespace-nowrap ${
-        props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
-      }`}>
+      <td
+        class={`py-0.5 px-2 text-sm whitespace-nowrap ${
+          props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
+        }`}
+      >
         <Show when={isRunning()} fallback="-">
           {formatUptime(props.guest.uptime)}
         </Show>
@@ -177,41 +190,50 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* CPU */}
       <td class="py-0.5 px-2 w-[140px]">
-        <MetricBar 
-          value={cpuPercent()} 
+        <MetricBar
+          value={cpuPercent()}
           label={`${cpuPercent().toFixed(0)}%`}
-          sublabel={props.guest.cpus ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores` : undefined}
+          sublabel={
+            props.guest.cpus
+              ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores`
+              : undefined
+          }
           type="cpu"
         />
       </td>
 
       {/* Memory */}
       <td class="py-0.5 px-2 w-[140px]">
-        <MetricBar 
-          value={memPercent()} 
+        <MetricBar
+          value={memPercent()}
           label={`${memPercent().toFixed(0)}%`}
-          sublabel={props.guest.memory ? `${formatBytes(props.guest.memory.used)}/${formatBytes(props.guest.memory.total)}` : undefined}
+          sublabel={
+            props.guest.memory
+              ? `${formatBytes(props.guest.memory.used)}/${formatBytes(props.guest.memory.total)}`
+              : undefined
+          }
           type="memory"
         />
       </td>
 
       {/* Disk */}
       <td class="py-0.5 px-2 w-[140px]">
-        <Show 
+        <Show
           when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
           fallback={
-            <span 
-              class="text-gray-400 text-sm cursor-help"
-              title={getDiskStatusTooltip()}
-            >
+            <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
               -
             </span>
           }
         >
-          <MetricBar 
-            value={diskPercent()} 
+          <MetricBar
+            value={diskPercent()}
             label={`${diskPercent().toFixed(0)}%`}
-            sublabel={props.guest.disk ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}` : undefined}
+            sublabel={
+              props.guest.disk
+                ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
+                : undefined
+            }
             type="disk"
           />
         </Show>
@@ -232,7 +254,6 @@ export function GuestRow(props: GuestRowProps) {
       <td class="py-0.5 px-2">
         <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
       </td>
-
     </tr>
   );
 }

@@ -12,11 +12,11 @@ import (
 
 // SessionStore handles persistent session storage
 type SessionStore struct {
-	sessions  map[string]*SessionData
-	mu        sync.RWMutex
-	dataPath  string
+	sessions   map[string]*SessionData
+	mu         sync.RWMutex
+	dataPath   string
 	saveTicker *time.Ticker
-	stopChan  chan bool
+	stopChan   chan bool
 }
 
 // SessionData represents a user session
@@ -31,9 +31,9 @@ type SessionData struct {
 // NewSessionStore creates a new persistent session store
 func NewSessionStore(dataPath string) *SessionStore {
 	store := &SessionStore{
-		sessions:  make(map[string]*SessionData),
-		dataPath:  dataPath,
-		stopChan:  make(chan bool),
+		sessions: make(map[string]*SessionData),
+		dataPath: dataPath,
+		stopChan: make(chan bool),
 	}
 
 	// Load existing sessions from disk

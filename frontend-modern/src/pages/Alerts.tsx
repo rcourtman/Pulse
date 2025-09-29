@@ -17,7 +17,13 @@ import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container } from '@/types/api';
 
-type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history' | 'custom-rules';
+type AlertTab =
+  | 'overview'
+  | 'thresholds'
+  | 'destinations'
+  | 'schedule'
+  | 'history'
+  | 'custom-rules';
 
 // Store reference interfaces
 interface DestinationsRef {
@@ -26,15 +32,15 @@ interface DestinationsRef {
 
 // Override interface for both guests and nodes
 interface Override {
-  id: string;  // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
-  name: string;  // Display name
+  id: string; // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
+  name: string; // Display name
   type: 'guest' | 'node' | 'storage' | 'pbs';
-  resourceType?: string;  // VM, CT, Node, Storage, or PBS
-  vmid?: number;  // Only for guests
-  node?: string;  // Node name (for guests and storage), undefined for nodes themselves
+  resourceType?: string; // VM, CT, Node, Storage, or PBS
+  vmid?: number; // Only for guests
+  node?: string; // Node name (for guests and storage), undefined for nodes themselves
   instance?: string;
-  disabled?: boolean;  // Completely disable alerts for this guest/storage
-  disableConnectivity?: boolean;  // For nodes - disable offline/connectivity alerts
+  disabled?: boolean; // Completely disable alerts for this guest/storage
+  disableConnectivity?: boolean; // For nodes - disable offline/connectivity alerts
   thresholds: {
     cpu?: number;
     memory?: number;
@@ -43,17 +49,16 @@ interface Override {
     diskWrite?: number;
     networkIn?: number;
     networkOut?: number;
-    usage?: number;  // For storage devices
+    usage?: number; // For storage devices
   };
 }
-
 
 // Local email config with UI-specific fields
 interface UIEmailConfig {
   enabled: boolean;
   provider: string;
-  server: string;    // Fixed: use 'server' not 'smtpHost'
-  port: number;      // Fixed: use 'port' not 'smtpPort'
+  server: string; // Fixed: use 'server' not 'smtpHost'
+  port: number; // Fixed: use 'port' not 'smtpPort'
   username: string;
   password: string;
   from: string;
@@ -114,26 +119,26 @@ const createDefaultQuietHours = (): QuietHoursConfig => ({
     thursday: true,
     friday: true,
     saturday: false,
-    sunday: false
-  }
+    sunday: false,
+  },
 });
 
 const createDefaultCooldown = (): CooldownConfig => ({
   enabled: true,
   minutes: 30,
-  maxAlerts: 3
+  maxAlerts: 3,
 });
 
 const createDefaultGrouping = (): GroupingConfig => ({
   enabled: true,
   window: 5,
   byNode: true,
-  byGuest: false
+  byGuest: false,
 });
 
 const createDefaultEscalation = (): EscalationConfig => ({
   enabled: false,
-  levels: []
+  levels: [],
 });
 
 export function Alerts() {
@@ -141,29 +146,31 @@ export function Alerts() {
   const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
-  
+
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
-    localStorage.getItem('hideAlertsQuickTip') !== 'true'
+    localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
-  
+
   const dismissQuickTip = () => {
     setShowQuickTip(false);
     localStorage.setItem('hideAlertsQuickTip', 'true');
   };
-  
+
   // Store references to child component data
   let destinationsRef: DestinationsRef = {};
-  
+
   const [overrides, setOverrides] = createSignal<Override[]>([]);
-  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<Record<string, RawOverrideConfig>>({});  // Store raw config
-  
+  const [rawOverridesConfig, setRawOverridesConfig] = createSignal<
+    Record<string, RawOverrideConfig>
+  >({}); // Store raw config
+
   // Email configuration state moved to parent to persist across tab changes
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>({
     enabled: false,
     provider: '',
-    server: '',       // Fixed: use 'server' not 'smtpHost'
-    port: 587,        // Fixed: use 'port' not 'smtpPort'
+    server: '', // Fixed: use 'server' not 'smtpHost'
+    port: 587, // Fixed: use 'port' not 'smtpPort'
     username: '',
     password: '',
     from: '',
@@ -173,47 +180,57 @@ export function Alerts() {
     replyTo: '',
     maxRetries: 3,
     retryDelay: 5,
-    rateLimit: 60
+    rateLimit: 60,
   });
 
   // Schedule configuration state moved to parent to persist across tab changes
-  const [scheduleQuietHours, setScheduleQuietHours] = createSignal<QuietHoursConfig>(createDefaultQuietHours());
-  
-  const [scheduleCooldown, setScheduleCooldown] = createSignal<CooldownConfig>(createDefaultCooldown());
-  
-  const [scheduleGrouping, setScheduleGrouping] = createSignal<GroupingConfig>(createDefaultGrouping());
-  
-  const [scheduleEscalation, setScheduleEscalation] = createSignal<EscalationConfig>(createDefaultEscalation());
-  
+  const [scheduleQuietHours, setScheduleQuietHours] =
+    createSignal<QuietHoursConfig>(createDefaultQuietHours());
+
+  const [scheduleCooldown, setScheduleCooldown] =
+    createSignal<CooldownConfig>(createDefaultCooldown());
+
+  const [scheduleGrouping, setScheduleGrouping] =
+    createSignal<GroupingConfig>(createDefaultGrouping());
+
+  const [scheduleEscalation, setScheduleEscalation] =
+    createSignal<EscalationConfig>(createDefaultEscalation());
+
   // Set up destinationsRef.emailConfig function immediately
   destinationsRef.emailConfig = () => {
     const config = emailConfig();
     return {
       enabled: config.enabled,
       provider: config.provider,
-      server: config.server,    // Fixed: use correct property name
-      port: config.port,        // Fixed: use correct property name
+      server: config.server, // Fixed: use correct property name
+      port: config.port, // Fixed: use correct property name
       username: config.username,
       password: config.password,
       from: config.from,
       to: config.to,
       tls: config.tls,
-      startTLS: config.startTLS
+      startTLS: config.startTLS,
     } as EmailConfig;
   };
-  
+
   // Process raw overrides config when state changes
   createEffect(() => {
     // Skip this effect if there are unsaved changes to prevent losing focus
     if (hasUnsavedChanges()) {
       return;
     }
-    
+
     const rawConfig = rawOverridesConfig();
-    if (Object.keys(rawConfig).length > 0 && state.nodes && state.vms && state.containers && state.storage) {
+    if (
+      Object.keys(rawConfig).length > 0 &&
+      state.nodes &&
+      state.vms &&
+      state.containers &&
+      state.storage
+    ) {
       // Convert overrides object to array format
       const overridesList: Override[] = [];
-      
+
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
         // Check if it's a PBS server override (starts with "pbs-")
         if (key.startsWith('pbs-')) {
@@ -225,7 +242,7 @@ export function Alerts() {
               type: 'pbs',
               resourceType: 'PBS',
               disableConnectivity: thresholds.disableConnectivity || false,
-              thresholds: extractTriggerValues(thresholds)
+              thresholds: extractTriggerValues(thresholds),
             });
           }
         } else {
@@ -238,7 +255,7 @@ export function Alerts() {
               type: 'node',
               resourceType: 'Node',
               disableConnectivity: thresholds.disableConnectivity || false,
-              thresholds: extractTriggerValues(thresholds)
+              thresholds: extractTriggerValues(thresholds),
             });
           } else {
             // Check if it's a storage device
@@ -252,7 +269,7 @@ export function Alerts() {
                 node: storage.node,
                 instance: storage.instance,
                 disabled: thresholds.disabled || false,
-                thresholds: extractTriggerValues(thresholds)
+                thresholds: extractTriggerValues(thresholds),
               });
             } else {
               // Find the guest by matching the full ID
@@ -269,27 +286,33 @@ export function Alerts() {
                   node: guest.node,
                   instance: guest.instance,
                   disabled: thresholds.disabled || false,
-                  thresholds: extractTriggerValues(thresholds)
+                  thresholds: extractTriggerValues(thresholds),
                 });
               }
             }
           }
         }
       });
-      
+
       // Only update if there's an actual change to prevent losing edit state
       const currentOverrides = overrides();
-      const hasChanged = overridesList.length !== currentOverrides.length ||
+      const hasChanged =
+        overridesList.length !== currentOverrides.length ||
         overridesList.some((newOverride) => {
-          const existing = currentOverrides.find(o => o.id === newOverride.id);
+          const existing = currentOverrides.find((o) => o.id === newOverride.id);
           if (!existing) return true;
           // Check both thresholds and disableConnectivity for nodes/PBS
-          const thresholdsChanged = JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
-          const connectivityChanged = (newOverride.type === 'node' || newOverride.type === 'pbs') && newOverride.disableConnectivity !== existing.disableConnectivity;
-          const disabledChanged = (newOverride.type === 'guest' || newOverride.type === 'storage') && newOverride.disabled !== existing.disabled;
+          const thresholdsChanged =
+            JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds);
+          const connectivityChanged =
+            (newOverride.type === 'node' || newOverride.type === 'pbs') &&
+            newOverride.disableConnectivity !== existing.disableConnectivity;
+          const disabledChanged =
+            (newOverride.type === 'guest' || newOverride.type === 'storage') &&
+            newOverride.disabled !== existing.disabled;
           return thresholdsChanged || connectivityChanged || disabledChanged;
         });
-        
+
       if (hasChanged) {
         setOverrides(overridesList);
       }
@@ -300,152 +323,158 @@ export function Alerts() {
   onMount(async () => {
     try {
       const config = await AlertsAPI.getConfig();
-        if (config.guestDefaults) {
-          // Extract trigger values from potentially hysteresis thresholds
-          setGuestDefaults({
-            cpu: getTriggerValue(config.guestDefaults.cpu) || 80,
-            memory: getTriggerValue(config.guestDefaults.memory) || 85,
-            disk: getTriggerValue(config.guestDefaults.disk) || 90,
-            diskRead: getTriggerValue(config.guestDefaults.diskRead) || 0,
-            diskWrite: getTriggerValue(config.guestDefaults.diskWrite) || 0,
-            networkIn: getTriggerValue(config.guestDefaults.networkIn) || 0,
-            networkOut: getTriggerValue(config.guestDefaults.networkOut) || 0
-          });
-        }
-        
-        if (config.nodeDefaults) {
-          setNodeDefaults({
-            cpu: getTriggerValue(config.nodeDefaults.cpu) || 80,
-            memory: getTriggerValue(config.nodeDefaults.memory) || 85,
-            disk: getTriggerValue(config.nodeDefaults.disk) || 90
-          });
-        }
-        
-        if (config.storageDefault) {
-          setStorageDefault(getTriggerValue(config.storageDefault) || 85);
-        }
-        if (config.timeThreshold !== undefined) {
-          setTimeThreshold(config.timeThreshold);
-        }
-        // Load per-type time thresholds if available
-        if (config.timeThresholds) {
-          setTimeThresholds({
-            guest: config.timeThresholds.guest ?? 10,
-            node: config.timeThresholds.node ?? 15,
-            storage: config.timeThresholds.storage ?? 30,
-            pbs: config.timeThresholds.pbs ?? 30
-          });
-        } else if (config.timeThreshold !== undefined && config.timeThreshold > 0) {
-          // Fallback to legacy single threshold for all types (only if it's non-zero)
-          setTimeThresholds({
-            guest: config.timeThreshold,
-            node: config.timeThreshold,
-            storage: config.timeThreshold,
-            pbs: config.timeThreshold
-          });
-        }
-        // If neither is set or legacy is 0, keep the defaults (10, 15, 30, 30)
-        if (config.overrides) {
-          // Store raw config to be processed when state is available
-          setRawOverridesConfig(config.overrides);
-        }
-        // Load schedule config into parent state
-        if (config.schedule) {
-          if (config.schedule.quietHours) {
-            const qh = config.schedule.quietHours;
-            // Convert days array to object if needed
-            let days: Record<string, boolean>;
-            if (Array.isArray(qh.days)) {
-              days = {
-                sunday: qh.days.includes(0),
-                monday: qh.days.includes(1),
-                tuesday: qh.days.includes(2),
-                wednesday: qh.days.includes(3),
-                thursday: qh.days.includes(4),
-                friday: qh.days.includes(5),
-                saturday: qh.days.includes(6)
-              };
-            } else {
-              days = qh.days as Record<string, boolean> || {
-                monday: true,
-                tuesday: true,
-                wednesday: true,
-                thursday: true,
-                friday: true,
-                saturday: false,
-                sunday: false
-              };
-            }
-            
-            setScheduleQuietHours({
-              enabled: qh.enabled || false,
-              start: qh.start || '22:00',
-              end: qh.end || '08:00',
-              timezone: qh.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-              days
-            });
+      if (config.guestDefaults) {
+        // Extract trigger values from potentially hysteresis thresholds
+        setGuestDefaults({
+          cpu: getTriggerValue(config.guestDefaults.cpu) || 80,
+          memory: getTriggerValue(config.guestDefaults.memory) || 85,
+          disk: getTriggerValue(config.guestDefaults.disk) || 90,
+          diskRead: getTriggerValue(config.guestDefaults.diskRead) || 0,
+          diskWrite: getTriggerValue(config.guestDefaults.diskWrite) || 0,
+          networkIn: getTriggerValue(config.guestDefaults.networkIn) || 0,
+          networkOut: getTriggerValue(config.guestDefaults.networkOut) || 0,
+        });
+      }
+
+      if (config.nodeDefaults) {
+        setNodeDefaults({
+          cpu: getTriggerValue(config.nodeDefaults.cpu) || 80,
+          memory: getTriggerValue(config.nodeDefaults.memory) || 85,
+          disk: getTriggerValue(config.nodeDefaults.disk) || 90,
+        });
+      }
+
+      if (config.storageDefault) {
+        setStorageDefault(getTriggerValue(config.storageDefault) || 85);
+      }
+      if (config.timeThreshold !== undefined) {
+        setTimeThreshold(config.timeThreshold);
+      }
+      // Load per-type time thresholds if available
+      if (config.timeThresholds) {
+        setTimeThresholds({
+          guest: config.timeThresholds.guest ?? 10,
+          node: config.timeThresholds.node ?? 15,
+          storage: config.timeThresholds.storage ?? 30,
+          pbs: config.timeThresholds.pbs ?? 30,
+        });
+      } else if (config.timeThreshold !== undefined && config.timeThreshold > 0) {
+        // Fallback to legacy single threshold for all types (only if it's non-zero)
+        setTimeThresholds({
+          guest: config.timeThreshold,
+          node: config.timeThreshold,
+          storage: config.timeThreshold,
+          pbs: config.timeThreshold,
+        });
+      }
+      // If neither is set or legacy is 0, keep the defaults (10, 15, 30, 30)
+      if (config.overrides) {
+        // Store raw config to be processed when state is available
+        setRawOverridesConfig(config.overrides);
+      }
+      // Load schedule config into parent state
+      if (config.schedule) {
+        if (config.schedule.quietHours) {
+          const qh = config.schedule.quietHours;
+          // Convert days array to object if needed
+          let days: Record<string, boolean>;
+          if (Array.isArray(qh.days)) {
+            days = {
+              sunday: qh.days.includes(0),
+              monday: qh.days.includes(1),
+              tuesday: qh.days.includes(2),
+              wednesday: qh.days.includes(3),
+              thursday: qh.days.includes(4),
+              friday: qh.days.includes(5),
+              saturday: qh.days.includes(6),
+            };
+          } else {
+            days = (qh.days as Record<string, boolean>) || {
+              monday: true,
+              tuesday: true,
+              wednesday: true,
+              thursday: true,
+              friday: true,
+              saturday: false,
+              sunday: false,
+            };
           }
-          
-          if (config.schedule.cooldown !== undefined) {
-            setScheduleCooldown({
-              enabled: config.schedule.cooldown > 0,
-              minutes: config.schedule.cooldown,
-              maxAlerts: config.schedule.maxAlertsHour || 3
-            });
-          }
-          
-          if (config.schedule.grouping) {
-            setScheduleGrouping({
-              enabled: config.schedule.grouping.enabled || false,
-              window: Math.floor((config.schedule.grouping.window || 300) / 60), // Convert seconds to minutes
-              byNode: config.schedule.grouping.byNode !== undefined ? config.schedule.grouping.byNode : true,
-              byGuest: config.schedule.grouping.byGuest !== undefined ? config.schedule.grouping.byGuest : false
-            });
-          } else if (config.schedule.groupingWindow !== undefined) {
-            // Handle legacy groupingWindow field
-            setScheduleGrouping({
-              enabled: config.schedule.groupingWindow > 0,
-              window: Math.floor(config.schedule.groupingWindow / 60),
-              byNode: true,
-              byGuest: false
-            });
-          }
-          
-          if (config.schedule.escalation) {
-            const rawLevels = config.schedule.escalation.levels || [];
-            const levels = rawLevels.map((level) => ({
-              after: typeof level.after === 'number' ? level.after : 15,
-              notify: (level.notify as EscalationNotifyTarget) || 'all'
-            }));
-            setScheduleEscalation({
-              enabled: Boolean(config.schedule.escalation.enabled),
-              levels
-            });
-          }
-        }
-        
-        // Load email configuration
-        try {
-          const emailConfigData = await NotificationsAPI.getEmailConfig();
-          setEmailConfig({
-            enabled: emailConfigData.enabled,
-            provider: emailConfigData.provider,
-            server: emailConfigData.server,    // Fixed: now correctly maps
-            port: emailConfigData.port,        // Fixed: now correctly maps
-            username: emailConfigData.username,
-            password: emailConfigData.password || '',
-            from: emailConfigData.from,
-            to: emailConfigData.to,
-            tls: emailConfigData.tls,
-            startTLS: emailConfigData.startTLS,
-            replyTo: '',
-            maxRetries: 3,
-            retryDelay: 5,
-            rateLimit: 60
+
+          setScheduleQuietHours({
+            enabled: qh.enabled || false,
+            start: qh.start || '22:00',
+            end: qh.end || '08:00',
+            timezone: qh.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            days,
           });
-        } catch (emailErr) {
-          console.error('Failed to load email configuration:', emailErr);
         }
+
+        if (config.schedule.cooldown !== undefined) {
+          setScheduleCooldown({
+            enabled: config.schedule.cooldown > 0,
+            minutes: config.schedule.cooldown,
+            maxAlerts: config.schedule.maxAlertsHour || 3,
+          });
+        }
+
+        if (config.schedule.grouping) {
+          setScheduleGrouping({
+            enabled: config.schedule.grouping.enabled || false,
+            window: Math.floor((config.schedule.grouping.window || 300) / 60), // Convert seconds to minutes
+            byNode:
+              config.schedule.grouping.byNode !== undefined
+                ? config.schedule.grouping.byNode
+                : true,
+            byGuest:
+              config.schedule.grouping.byGuest !== undefined
+                ? config.schedule.grouping.byGuest
+                : false,
+          });
+        } else if (config.schedule.groupingWindow !== undefined) {
+          // Handle legacy groupingWindow field
+          setScheduleGrouping({
+            enabled: config.schedule.groupingWindow > 0,
+            window: Math.floor(config.schedule.groupingWindow / 60),
+            byNode: true,
+            byGuest: false,
+          });
+        }
+
+        if (config.schedule.escalation) {
+          const rawLevels = config.schedule.escalation.levels || [];
+          const levels = rawLevels.map((level) => ({
+            after: typeof level.after === 'number' ? level.after : 15,
+            notify: (level.notify as EscalationNotifyTarget) || 'all',
+          }));
+          setScheduleEscalation({
+            enabled: Boolean(config.schedule.escalation.enabled),
+            levels,
+          });
+        }
+      }
+
+      // Load email configuration
+      try {
+        const emailConfigData = await NotificationsAPI.getEmailConfig();
+        setEmailConfig({
+          enabled: emailConfigData.enabled,
+          provider: emailConfigData.provider,
+          server: emailConfigData.server, // Fixed: now correctly maps
+          port: emailConfigData.port, // Fixed: now correctly maps
+          username: emailConfigData.username,
+          password: emailConfigData.password || '',
+          from: emailConfigData.from,
+          to: emailConfigData.to,
+          tls: emailConfigData.tls,
+          startTLS: emailConfigData.startTLS,
+          replyTo: '',
+          maxRetries: 3,
+          retryDelay: 5,
+          rateLimit: 60,
+        });
+      } catch (emailErr) {
+        console.error('Failed to load email configuration:', emailErr);
+      }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
     }
@@ -455,40 +484,48 @@ export function Alerts() {
   createEffect(() => {
     if (activeTab() === 'destinations') {
       // Reload email config from server when switching to destinations tab
-      NotificationsAPI.getEmailConfig().then(emailConfigData => {
-        setEmailConfig({
-          enabled: emailConfigData.enabled,
-          provider: emailConfigData.provider || '',
-          server: emailConfigData.server || '',
-          port: emailConfigData.port || 587,
-          username: emailConfigData.username || '',
-          password: emailConfigData.password || '',
-          from: emailConfigData.from || '',
-          to: emailConfigData.to || [],
-          tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
-          startTLS: emailConfigData.startTLS || false,
-          replyTo: '',
-          maxRetries: 3,
-          retryDelay: 5,
-          rateLimit: 60
+      NotificationsAPI.getEmailConfig()
+        .then((emailConfigData) => {
+          setEmailConfig({
+            enabled: emailConfigData.enabled,
+            provider: emailConfigData.provider || '',
+            server: emailConfigData.server || '',
+            port: emailConfigData.port || 587,
+            username: emailConfigData.username || '',
+            password: emailConfigData.password || '',
+            from: emailConfigData.from || '',
+            to: emailConfigData.to || [],
+            tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
+            startTLS: emailConfigData.startTLS || false,
+            replyTo: '',
+            maxRetries: 3,
+            retryDelay: 5,
+            rateLimit: 60,
+          });
+        })
+        .catch((err) => {
+          console.error('Failed to reload email configuration:', err);
         });
-      }).catch(err => {
-        console.error('Failed to reload email configuration:', err);
-      });
     }
   });
 
   // Get all guests from state - memoize to prevent unnecessary updates
-  const allGuests = createMemo(() => {
-    const vms = state.vms || [];
-    const containers = state.containers || [];
-    return [...vms, ...containers];
-  }, [], { equals: (prev, next) => {
-    // Only update if the actual guest list changed
-    if (prev.length !== next.length) return false;
-    return prev.every((p, i) => p.vmid === next[i].vmid && p.name === next[i].name);
-  }});
-  
+  const allGuests = createMemo(
+    () => {
+      const vms = state.vms || [];
+      const containers = state.containers || [];
+      return [...vms, ...containers];
+    },
+    [],
+    {
+      equals: (prev, next) => {
+        // Only update if the actual guest list changed
+        if (prev.length !== next.length) return false;
+        return prev.every((p, i) => p.vmid === next[i].vmid && p.name === next[i].name);
+      },
+    },
+  );
+
   // Helper function to extract trigger value from threshold
   const getTriggerValue = (threshold: number | HysteresisThreshold | undefined): number => {
     if (typeof threshold === 'number') {
@@ -519,13 +556,13 @@ export function Alerts() {
     diskRead: 0,
     diskWrite: 0,
     networkIn: 0,
-    networkOut: 0
+    networkOut: 0,
   });
 
   const [nodeDefaults, setNodeDefaults] = createSignal({
     cpu: 80,
     memory: 85,
-    disk: 90
+    disk: 90,
   });
 
   const [storageDefault, setStorageDefault] = createSignal(85);
@@ -534,37 +571,37 @@ export function Alerts() {
     guest: 10,
     node: 15,
     storage: 30,
-    pbs: 30
+    pbs: 30,
   });
-  
+
   const tabs: { id: AlertTab; label: string; icon: string }[] = [
-    { 
-      id: 'overview', 
+    {
+      id: 'overview',
       label: 'Overview',
-      icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'
+      icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
     },
-    { 
-      id: 'thresholds', 
+    {
+      id: 'thresholds',
       label: 'Thresholds',
-      icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
+      icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
     },
-    { 
-      id: 'destinations', 
+    {
+      id: 'destinations',
       label: 'Notifications',
-      icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'
+      icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
     },
-    { 
-      id: 'schedule', 
+    {
+      id: 'schedule',
       label: 'Schedule',
-      icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+      icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
     },
-    { 
-      id: 'history', 
+    {
+      id: 'history',
       label: 'History',
-      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-    }
+      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
   ];
-  
+
   return (
     <div class="space-y-6">
       {/* Header with better styling */}
@@ -581,7 +618,14 @@ export function Alerts() {
         <Card tone="warning" padding="sm" class="border-yellow-200 dark:border-yellow-800 sm:p-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
@@ -589,16 +633,19 @@ export function Alerts() {
               <span class="text-sm font-medium">You have unsaved changes</span>
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
-              <button 
+              <button
                 class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700"
                 onClick={async () => {
                   try {
                     // Save alert configuration with hysteresis format
-                    const createHysteresisThreshold = (trigger: number, clearMargin: number = 5) => ({
+                    const createHysteresisThreshold = (
+                      trigger: number,
+                      clearMargin: number = 5,
+                    ) => ({
                       trigger,
-                      clear: Math.max(0, trigger - clearMargin)
+                      clear: Math.max(0, trigger - clearMargin),
                     });
-                    
+
                     const alertConfig = {
                       enabled: true,
                       guestDefaults: {
@@ -608,12 +655,12 @@ export function Alerts() {
                         diskRead: createHysteresisThreshold(guestDefaults().diskRead),
                         diskWrite: createHysteresisThreshold(guestDefaults().diskWrite),
                         networkIn: createHysteresisThreshold(guestDefaults().networkIn),
-                        networkOut: createHysteresisThreshold(guestDefaults().networkOut)
+                        networkOut: createHysteresisThreshold(guestDefaults().networkOut),
                       },
                       nodeDefaults: {
                         cpu: createHysteresisThreshold(nodeDefaults().cpu),
                         memory: createHysteresisThreshold(nodeDefaults().memory),
-                        disk: createHysteresisThreshold(nodeDefaults().disk)
+                        disk: createHysteresisThreshold(nodeDefaults().disk),
                       },
                       storageDefault: createHysteresisThreshold(storageDefault()),
                       minimumDelta: 2.0,
@@ -626,46 +673,49 @@ export function Alerts() {
                       schedule: {
                         quietHours: scheduleQuietHours(),
                         cooldown: scheduleCooldown().enabled ? scheduleCooldown().minutes : 0,
-                        groupingWindow: scheduleGrouping().enabled && scheduleGrouping().window ? scheduleGrouping().window * 60 : 30, // Convert minutes to seconds
+                        groupingWindow:
+                          scheduleGrouping().enabled && scheduleGrouping().window
+                            ? scheduleGrouping().window * 60
+                            : 30, // Convert minutes to seconds
                         maxAlertsHour: scheduleCooldown().maxAlerts || 10,
                         escalation: scheduleEscalation(),
                         grouping: {
                           enabled: scheduleGrouping().enabled,
                           window: scheduleGrouping().window * 60, // Convert minutes to seconds
                           byNode: scheduleGrouping().byNode,
-                          byGuest: scheduleGrouping().byGuest
-                        }
+                          byGuest: scheduleGrouping().byGuest,
+                        },
                       },
                       // Add missing required fields
                       aggregation: {
                         enabled: true,
                         timeWindow: 10,
                         countThreshold: 3,
-                        similarityWindow: 5.0
+                        similarityWindow: 5.0,
                       },
                       flapping: {
                         enabled: true,
                         threshold: 5,
                         window: 10,
                         suppressionTime: 30,
-                        minStability: 0.8
+                        minStability: 0.8,
                       },
                       ioNormalization: {
                         enabled: true,
                         vmDiskMax: 500.0,
                         containerDiskMax: 300.0,
-                        networkMax: 1000.0
-                      }
+                        networkMax: 1000.0,
+                      },
                     };
-                    
+
                     await AlertsAPI.updateConfig(alertConfig);
-                    
+
                     // Save email config if it exists (regardless of active tab)
                     if (destinationsRef.emailConfig) {
                       const emailData = destinationsRef.emailConfig();
                       await NotificationsAPI.updateEmailConfig(emailData);
                     }
-                    
+
                     setHasUnsavedChanges(false);
                     showSuccess('Configuration saved successfully!');
                   } catch (err) {
@@ -676,7 +726,7 @@ export function Alerts() {
               >
                 Save Changes
               </button>
-              <button 
+              <button
                 class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial"
                 onClick={() => {
                   // Reset any changes made
@@ -689,14 +739,15 @@ export function Alerts() {
           </div>
         </Card>
       </Show>
-      
+
       {/* Tab Navigation - modern style */}
       <Card padding="none">
         <div class="p-1">
           <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
             <For each={tabs}>
               {(tab) => (
-                <button type="button"
+                <button
+                  type="button"
                   class={`flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                     activeTab() === tab.id
                       ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -711,12 +762,12 @@ export function Alerts() {
           </div>
         </div>
         <div class="border-t border-gray-200 dark:border-gray-700"></div>
-        
+
         {/* Tab Content */}
         <div class="p-3 sm:p-6">
           <Show when={activeTab() === 'overview'}>
-            <OverviewTab 
-              overrides={overrides()} 
+            <OverviewTab
+              overrides={overrides()}
               activeAlerts={activeAlerts}
               updateAlert={updateAlert}
               showQuickTip={showQuickTip}
@@ -725,9 +776,9 @@ export function Alerts() {
               setShowAcknowledged={setShowAcknowledged}
             />
           </Show>
-          
+
           <Show when={activeTab() === 'thresholds'}>
-            <ThresholdsTab 
+            <ThresholdsTab
               overrides={overrides}
               setOverrides={setOverrides}
               rawOverridesConfig={rawOverridesConfig}
@@ -748,9 +799,9 @@ export function Alerts() {
               setHasUnsavedChanges={setHasUnsavedChanges}
             />
           </Show>
-          
+
           <Show when={activeTab() === 'destinations'}>
-            <DestinationsTab 
+            <DestinationsTab
               ref={destinationsRef}
               hasUnsavedChanges={hasUnsavedChanges}
               setHasUnsavedChanges={setHasUnsavedChanges}
@@ -758,9 +809,9 @@ export function Alerts() {
               setEmailConfig={setEmailConfig}
             />
           </Show>
-          
+
           <Show when={activeTab() === 'schedule'}>
-            <ScheduleTab 
+            <ScheduleTab
               hasUnsavedChanges={hasUnsavedChanges}
               setHasUnsavedChanges={setHasUnsavedChanges}
               quietHours={scheduleQuietHours}
@@ -773,11 +824,11 @@ export function Alerts() {
               setEscalation={setScheduleEscalation}
             />
           </Show>
-          
+
           <Show when={activeTab() === 'history'}>
             <HistoryTab />
           </Show>
-          
+
           {/* Custom Rules Tab */}
           <Show when={activeTab() === 'custom-rules'}>
             <CustomRulesTab
@@ -788,14 +839,13 @@ export function Alerts() {
           </Show>
         </div>
       </Card>
-      
     </div>
   );
 }
 
 // Overview Tab - Shows current alert status
-function OverviewTab(props: { 
-  overrides: Override[]; 
+function OverviewTab(props: {
+  overrides: Override[];
   activeAlerts: Record<string, Alert>;
   updateAlert: (alertId: string, updates: Partial<Alert>) => void;
   showQuickTip: () => boolean;
@@ -805,17 +855,17 @@ function OverviewTab(props: {
 }) {
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  
+
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
     // Access the store properly for reactivity
     const alertIds = Object.keys(props.activeAlerts);
-    const alerts = alertIds.map(id => props.activeAlerts[id]);
+    const alerts = alertIds.map((id) => props.activeAlerts[id]);
     return {
-      active: alerts.filter(a => !a.acknowledged).length,
-      acknowledged: alerts.filter(a => a.acknowledged).length,
+      active: alerts.filter((a) => !a.acknowledged).length,
+      acknowledged: alerts.filter((a) => a.acknowledged).length,
       total24h: alerts.length, // In real app, would filter by time
-      overrides: props.overrides.length
+      overrides: props.overrides.length,
     };
   });
 
@@ -823,7 +873,7 @@ function OverviewTab(props: {
     const alerts = Object.values(props.activeAlerts);
     // Sort: unacknowledged first, then by start time (newest first)
     return alerts
-      .filter(alert => props.showAcknowledged() || !alert.acknowledged)
+      .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
       .sort((a, b) => {
         // Acknowledged status comparison first
         if (a.acknowledged !== b.acknowledged) {
@@ -833,9 +883,7 @@ function OverviewTab(props: {
         return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
       });
   });
-  
-  
-  
+
   return (
     <div class="space-y-6">
       {/* Stats Cards */}
@@ -844,55 +892,95 @@ function OverviewTab(props: {
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Active Alerts</p>
-              <p class="text-xl sm:text-2xl font-semibold text-gray-600 dark:text-gray-300">{alertStats().active}</p>
+              <p class="text-xl sm:text-2xl font-semibold text-gray-600 dark:text-gray-300">
+                {alertStats().active}
+              </p>
             </div>
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
-              <svg width="16" height="16" class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
             </div>
           </div>
         </Card>
-        
+
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Acknowledged</p>
-              <p class="text-xl sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">{alertStats().acknowledged}</p>
+              <p class="text-xl sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
+                {alertStats().acknowledged}
+              </p>
             </div>
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900/50 rounded-full flex items-center justify-center">
-              <svg width="16" height="16" class="sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                class="sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M9 11L12 14L22 4"></path>
                 <path d="M21 12V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H16"></path>
               </svg>
             </div>
           </div>
         </Card>
-        
+
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Last 24 Hours</p>
-              <p class="text-xl sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">{alertStats().total24h}</p>
+              <p class="text-xl sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">
+                {alertStats().total24h}
+              </p>
             </div>
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
-              <svg width="16" height="16" class="sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                class="sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
               </svg>
             </div>
           </div>
         </Card>
-        
+
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Guest Overrides</p>
-              <p class="text-xl sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">{alertStats().overrides}</p>
+              <p class="text-xl sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
+                {alertStats().overrides}
+              </p>
             </div>
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-              <svg width="16" height="16" class="sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                class="sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
               </svg>
@@ -900,11 +988,11 @@ function OverviewTab(props: {
           </div>
         </Card>
       </div>
-      
+
       {/* Recent Alerts */}
       <div>
         <SectionHeader title="Active Alerts" class="mb-3" />
-        <Show 
+        <Show
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
             <div class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -932,43 +1020,70 @@ function OverviewTab(props: {
             </Show>
             <For each={filteredAlerts()}>
               {(alert) => (
-                <div 
+                <div
                   class={`border rounded-lg p-4 transition-all ${
                     processingAlerts().has(alert.id) ? 'opacity-50' : ''
                   } ${
-                    alert.acknowledged 
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20' 
-                      : alert.level === 'critical' 
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20' 
+                    alert.acknowledged
+                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
+                      : alert.level === 'critical'
+                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
                         : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
-                  }`}>
+                  }`}
+                >
                   <div class="flex flex-col sm:flex-row sm:items-start">
                     <div class="flex items-start flex-1">
                       {/* Status icon */}
-                      <div class={`mr-3 mt-0.5 transition-all ${
-                        alert.acknowledged 
-                          ? 'text-green-600 dark:text-green-400'
-                          : alert.level === 'critical'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-yellow-600 dark:text-yellow-400'
-                      }`}>
+                      <div
+                        class={`mr-3 mt-0.5 transition-all ${
+                          alert.acknowledged
+                            ? 'text-green-600 dark:text-green-400'
+                            : alert.level === 'critical'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-yellow-600 dark:text-yellow-400'
+                        }`}
+                      >
                         {alert.acknowledged ? (
                           // Checkmark for acknowledged
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            class="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                         ) : (
                           // Warning/Alert icon
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          <svg
+                            class="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
                           </svg>
                         )}
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <span class={`text-sm font-medium truncate ${
-                            alert.level === 'critical' ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'
-                          }`}>
+                          <span
+                            class={`text-sm font-medium truncate ${
+                              alert.level === 'critical'
+                                ? 'text-red-700 dark:text-red-400'
+                                : 'text-yellow-700 dark:text-yellow-400'
+                            }`}
+                          >
                             {alert.resourceName}
                           </span>
                           <span class="text-xs text-gray-600 dark:text-gray-400">
@@ -989,7 +1104,7 @@ function OverviewTab(props: {
                       </div>
                     </div>
                     <div class="flex gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start">
-                      <button 
+                      <button
                         class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           alert.acknowledged
                             ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -999,15 +1114,15 @@ function OverviewTab(props: {
                         onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          
+
                           // Prevent double-clicks
                           if (processingAlerts().has(alert.id)) return;
-                          
-                          setProcessingAlerts(prev => new Set(prev).add(alert.id));
-                          
+
+                          setProcessingAlerts((prev) => new Set(prev).add(alert.id));
+
                           // Store current state to avoid race conditions
                           const wasAcknowledged = alert.acknowledged;
-                          
+
                           try {
                             if (wasAcknowledged) {
                               // Call API first, only update local state if successful
@@ -1023,13 +1138,18 @@ function OverviewTab(props: {
                               showSuccess('Alert acknowledged');
                             }
                           } catch (err) {
-                            console.error(`Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`, err);
-                            showError(`Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`);
+                            console.error(
+                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
+                              err,
+                            );
+                            showError(
+                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
+                            );
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
                             // Keep button disabled for longer to prevent race conditions with WebSocket updates
                             setTimeout(() => {
-                              setProcessingAlerts(prev => {
+                              setProcessingAlerts((prev) => {
                                 const next = new Set(prev);
                                 next.delete(alert.id);
                                 return next;
@@ -1038,10 +1158,10 @@ function OverviewTab(props: {
                           }
                         }}
                       >
-                        {processingAlerts().has(alert.id) 
-                          ? 'Processing...' 
-                          : alert.acknowledged 
-                            ? 'Unacknowledge' 
+                        {processingAlerts().has(alert.id)
+                          ? 'Processing...'
+                          : alert.acknowledged
+                            ? 'Unacknowledge'
                             : 'Acknowledge'}
                       </button>
                     </div>
@@ -1056,8 +1176,7 @@ function OverviewTab(props: {
   );
 }
 
-
-// Thresholds Tab - Improved design  
+// Thresholds Tab - Improved design
 interface ThresholdsTabProps {
   allGuests: () => (VM | Container)[];
   state: State;
@@ -1068,8 +1187,12 @@ interface ThresholdsTabProps {
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
   overrides: () => Override[];
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;
-  setGuestDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
-  setNodeDefaults: (value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setGuestDefaults: (
+    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+  ) => void;
+  setNodeDefaults: (
+    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+  ) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
   setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
@@ -1117,34 +1240,34 @@ interface DestinationsTabProps {
 }
 
 function DestinationsTab(props: DestinationsTabProps) {
-  
   const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
-  
-  
+
   // Load webhooks on mount (email config is now loaded in parent)
   onMount(async () => {
     try {
       const hooks = await NotificationsAPI.getWebhooks();
       // Map to local Webhook type - preserve the service type from backend
-      setWebhooks(hooks.map(h => ({
-        ...h,
-        service: h.service || 'generic' // Preserve service type or default to generic
-      })));
+      setWebhooks(
+        hooks.map((h) => ({
+          ...h,
+          service: h.service || 'generic', // Preserve service type or default to generic
+        })),
+      );
     } catch (err) {
       console.error('Failed to load webhooks:', err);
     }
   });
-  
+
   const testEmailConfig = async () => {
     setTestingEmail(true);
     try {
       // Send the current form config for testing (including unsaved changes)
       const config = props.emailConfig();
-      await NotificationsAPI.testNotification({ 
+      await NotificationsAPI.testNotification({
         type: 'email',
-        config: { ...config } as Record<string, unknown> // Send current form data, not saved config
+        config: { ...config } as Record<string, unknown>, // Send current form data, not saved config
       });
       showSuccess('Test email sent successfully!', 'Check your inbox.');
     } catch (err) {
@@ -1154,7 +1277,7 @@ function DestinationsTab(props: DestinationsTabProps) {
       setTestingEmail(false);
     }
   };
-  
+
   const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
     setTestingWebhook(webhookId);
     try {
@@ -1167,12 +1290,15 @@ function DestinationsTab(props: DestinationsTabProps) {
       }
       showSuccess('Test webhook sent successfully!');
     } catch (err) {
-      showError('Failed to send test webhook', err instanceof Error ? err.message : 'Unknown error');
+      showError(
+        'Failed to send test webhook',
+        err instanceof Error ? err.message : 'Unknown error',
+      );
     } finally {
       setTestingWebhook(null);
     }
   };
-  
+
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <SettingsPanel
@@ -1186,13 +1312,19 @@ function DestinationsTab(props: DestinationsTabProps) {
               props.setHasUnsavedChanges(true);
             }}
             containerClass="sm:self-start"
-            label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{props.emailConfig().enabled ? 'Enabled' : 'Disabled'}</span>}
+            label={
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            }
           />
         }
         class="min-w-0"
         bodyClass=""
       >
-        <div class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}>
+        <div
+          class={`${!props.emailConfig().enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
+        >
           <EmailProviderSelect
             config={props.emailConfig()}
             onChange={(config) => {
@@ -1231,9 +1363,7 @@ function DestinationsTab(props: DestinationsTabProps) {
           onUpdate={async (webhook) => {
             try {
               const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
-              setWebhooks(webhooks().map(w =>
-                w.id === webhook.id ? updated : w
-              ));
+              setWebhooks(webhooks().map((w) => (w.id === webhook.id ? updated : w)));
               showSuccess('Webhook updated successfully');
             } catch (err) {
               console.error('Failed to update webhook:', err);
@@ -1243,7 +1373,7 @@ function DestinationsTab(props: DestinationsTabProps) {
           onDelete={async (id) => {
             try {
               await NotificationsAPI.deleteWebhook(id);
-              setWebhooks(webhooks().filter(w => w.id !== id));
+              setWebhooks(webhooks().filter((w) => w.id !== id));
               showSuccess('Webhook deleted successfully');
             } catch (err) {
               console.error('Failed to delete webhook:', err);
@@ -1291,7 +1421,7 @@ function ScheduleTab(props: ScheduleTabProps) {
     setEscalation(createDefaultEscalation());
     props.setHasUnsavedChanges(true);
   };
-  
+
   const timezones = [
     'UTC',
     'America/New_York',
@@ -1303,9 +1433,9 @@ function ScheduleTab(props: ScheduleTabProps) {
     'Europe/Berlin',
     'Asia/Tokyo',
     'Asia/Shanghai',
-    'Australia/Sydney'
+    'Australia/Sydney',
   ];
-  
+
   const days = [
     { id: 'monday', label: 'M', fullLabel: 'Monday' },
     { id: 'tuesday', label: 'T', fullLabel: 'Tuesday' },
@@ -1313,9 +1443,9 @@ function ScheduleTab(props: ScheduleTabProps) {
     { id: 'thursday', label: 'T', fullLabel: 'Thursday' },
     { id: 'friday', label: 'F', fullLabel: 'Friday' },
     { id: 'saturday', label: 'S', fullLabel: 'Saturday' },
-    { id: 'sunday', label: 'S', fullLabel: 'Sunday' }
+    { id: 'sunday', label: 'S', fullLabel: 'Sunday' },
   ];
-  
+
   return (
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1329,8 +1459,18 @@ function ScheduleTab(props: ScheduleTabProps) {
           class="inline-flex items-center gap-1 self-start rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
         >
-          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <svg
+            class="h-3 w-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
           </svg>
           Reset defaults
         </button>
@@ -1349,7 +1489,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
-              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{quietHours().enabled ? 'Enabled' : 'Disabled'}</span>}
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {quietHours().enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              }
             />
           }
           class="space-y-4"
@@ -1372,9 +1516,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    End time
-                  </label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>End time</label>
                   <input
                     type="time"
                     value={quietHours().end}
@@ -1386,9 +1528,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   />
                 </div>
                 <div class={formField}>
-                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                    Timezone
-                  </label>
+                  <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Timezone</label>
                   <select
                     value={quietHours().timezone}
                     onChange={(e) => {
@@ -1397,9 +1537,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     }}
                     class={controlClass('pr-8')}
                   >
-                    <For each={timezones}>
-                      {(tz) => <option value={tz}>{tz}</option>}
-                    </For>
+                    <For each={timezones}>{(tz) => <option value={tz}>{tz}</option>}</For>
                   </select>
                 </div>
               </div>
@@ -1417,7 +1555,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                           const currentDays = quietHours().days;
                           setQuietHours({
                             ...quietHours(),
-                            days: { ...currentDays, [day.id]: !currentDays[day.id] }
+                            days: { ...currentDays, [day.id]: !currentDays[day.id] },
                           });
                           props.setHasUnsavedChanges(true);
                         }}
@@ -1434,10 +1572,30 @@ function ScheduleTab(props: ScheduleTabProps) {
                   </For>
                 </div>
                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  <Show when={quietHours().days.monday && quietHours().days.tuesday && quietHours().days.wednesday && quietHours().days.thursday && quietHours().days.friday && !quietHours().days.saturday && !quietHours().days.sunday}>
+                  <Show
+                    when={
+                      quietHours().days.monday &&
+                      quietHours().days.tuesday &&
+                      quietHours().days.wednesday &&
+                      quietHours().days.thursday &&
+                      quietHours().days.friday &&
+                      !quietHours().days.saturday &&
+                      !quietHours().days.sunday
+                    }
+                  >
                     Weekdays only
                   </Show>
-                  <Show when={!quietHours().days.monday && !quietHours().days.tuesday && !quietHours().days.wednesday && !quietHours().days.thursday && !quietHours().days.friday && quietHours().days.saturday && quietHours().days.sunday}>
+                  <Show
+                    when={
+                      !quietHours().days.monday &&
+                      !quietHours().days.tuesday &&
+                      !quietHours().days.wednesday &&
+                      !quietHours().days.thursday &&
+                      !quietHours().days.friday &&
+                      quietHours().days.saturday &&
+                      quietHours().days.sunday
+                    }
+                  >
                     Weekends only
                   </Show>
                 </p>
@@ -1458,7 +1616,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
-              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{cooldown().enabled ? 'Enabled' : 'Disabled'}</span>}
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {cooldown().enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              }
             />
           }
           class="space-y-4"
@@ -1482,11 +1644,15 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">minutes</span>
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                      minutes
+                    </span>
                   </div>
-                  <p class={`${formHelpText} mt-1`}>Minimum time between alerts for the same issue</p>
+                  <p class={`${formHelpText} mt-1`}>
+                    Minimum time between alerts for the same issue
+                  </p>
                 </div>
-                
+
                 <div class={formField}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                     Max alerts / hour
@@ -1503,7 +1669,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">alerts</span>
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                      alerts
+                    </span>
                   </div>
                   <p class={`${formHelpText} mt-1`}>Per guest/metric combination</p>
                 </div>
@@ -1524,7 +1692,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
-              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{grouping().enabled ? 'Enabled' : 'Disabled'}</span>}
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {grouping().enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              }
             />
           }
           class="space-y-4"
@@ -1551,7 +1723,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                     {grouping().window} min
                   </div>
                 </div>
-                <p class={`${formHelpText} mt-1`}>Alerts within this window are grouped together.</p>
+                <p class={`${formHelpText} mt-1`}>
+                  Alerts within this window are grouped together.
+                </p>
               </div>
 
               <div>
@@ -1559,11 +1733,13 @@ function ScheduleTab(props: ScheduleTabProps) {
                   Grouping strategy
                 </span>
                 <div class="grid grid-cols-2 gap-2">
-                  <label class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                    grouping().byNode
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                  }`}>
+                  <label
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
+                      grouping().byNode
+                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={grouping().byNode}
@@ -1573,25 +1749,37 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                      grouping().byNode
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}>
+                    <div
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
+                        grouping().byNode
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    >
                       <Show when={grouping().byNode}>
-                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <svg
+                          class="h-3 w-3 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        >
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">By Node</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      By Node
+                    </span>
                   </label>
 
-                  <label class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
-                    grouping().byGuest
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
-                  }`}>
+                  <label
+                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${
+                      grouping().byGuest
+                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                        : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={grouping().byGuest}
@@ -1601,18 +1789,28 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class="sr-only"
                     />
-                    <div class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                      grouping().byGuest
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}>
+                    <div
+                      class={`flex h-4 w-4 items-center justify-center rounded border-2 ${
+                        grouping().byGuest
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    >
                       <Show when={grouping().byGuest}>
-                        <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <svg
+                          class="h-3 w-3 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        >
                           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">By Guest</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      By Guest
+                    </span>
                   </label>
                 </div>
               </div>
@@ -1632,7 +1830,11 @@ function ScheduleTab(props: ScheduleTabProps) {
                 props.setHasUnsavedChanges(true);
               }}
               containerClass="sm:self-start"
-              label={<span class="text-xs font-medium text-gray-600 dark:text-gray-400">{escalation().enabled ? 'Enabled' : 'Disabled'}</span>}
+              label={
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  {escalation().enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              }
             />
           }
           class="space-y-4"
@@ -1645,7 +1847,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                   <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/40">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">After</span>
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                          After
+                        </span>
                         <input
                           type="number"
                           min="5"
@@ -1654,7 +1858,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           onChange={(e) => {
                             const newLevels = [...escalation().levels];
                             const parsed = Number.parseInt(e.currentTarget.value, 10);
-                            newLevels[index()] = { ...level, after: Number.isNaN(parsed) ? level.after : parsed };
+                            newLevels[index()] = {
+                              ...level,
+                              after: Number.isNaN(parsed) ? level.after : parsed,
+                            };
                             setEscalation({ ...escalation(), levels: newLevels });
                             props.setHasUnsavedChanges(true);
                           }}
@@ -1663,12 +1870,17 @@ function ScheduleTab(props: ScheduleTabProps) {
                         <span class="text-xs text-gray-600 dark:text-gray-400">min</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Notify</span>
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Notify
+                        </span>
                         <select
                           value={level.notify}
                           onChange={(e) => {
                             const newLevels = [...escalation().levels];
-                            newLevels[index()] = { ...level, notify: e.currentTarget.value as EscalationNotifyTarget };
+                            newLevels[index()] = {
+                              ...level,
+                              notify: e.currentTarget.value as EscalationNotifyTarget,
+                            };
                             setEscalation({ ...escalation(), levels: newLevels });
                             props.setHasUnsavedChanges(true);
                           }}
@@ -1691,7 +1903,12 @@ function ScheduleTab(props: ScheduleTabProps) {
                       title="Remove escalation level"
                     >
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -1705,14 +1922,22 @@ function ScheduleTab(props: ScheduleTabProps) {
                   const newAfter = typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
                   setEscalation({
                     ...escalation(),
-                    levels: [...escalation().levels, { after: newAfter, notify: 'all' as EscalationNotifyTarget }]
+                    levels: [
+                      ...escalation().levels,
+                      { after: newAfter, notify: 'all' as EscalationNotifyTarget },
+                    ],
                   });
                   props.setHasUnsavedChanges(true);
                 }}
                 class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
                 </svg>
                 Add Escalation Level
               </button>
@@ -1730,23 +1955,43 @@ function ScheduleTab(props: ScheduleTabProps) {
           class="lg:col-span-2"
         >
           <Show when={quietHours().enabled}>
-            <p>• Quiet hours active from {quietHours().start} to {quietHours().end} ({quietHours().timezone})</p>
+            <p>
+              • Quiet hours active from {quietHours().start} to {quietHours().end} (
+              {quietHours().timezone})
+            </p>
           </Show>
           <Show when={cooldown().enabled}>
-            <p>• {cooldown().minutes} minute cooldown between alerts, max {cooldown().maxAlerts} alerts per hour</p>
+            <p>
+              • {cooldown().minutes} minute cooldown between alerts, max {cooldown().maxAlerts}{' '}
+              alerts per hour
+            </p>
           </Show>
           <Show when={grouping().enabled}>
             <p>
               • Grouping alerts within {grouping().window} minute windows
               <Show when={grouping().byNode || grouping().byGuest}>
-                {' '}by {[grouping().byNode && 'node', grouping().byGuest && 'guest'].filter(Boolean).join(' and ')}
+                {' '}
+                by{' '}
+                {[grouping().byNode && 'node', grouping().byGuest && 'guest']
+                  .filter(Boolean)
+                  .join(' and ')}
               </Show>
             </p>
           </Show>
           <Show when={escalation().enabled && escalation().levels.length > 0}>
-            <p>• {escalation().levels.length} escalation level{escalation().levels.length > 1 ? 's' : ''} configured</p>
+            <p>
+              • {escalation().levels.length} escalation level
+              {escalation().levels.length > 1 ? 's' : ''} configured
+            </p>
           </Show>
-          <Show when={!quietHours().enabled && !cooldown().enabled && !grouping().enabled && !escalation().enabled}>
+          <Show
+            when={
+              !quietHours().enabled &&
+              !cooldown().enabled &&
+              !grouping().enabled &&
+              !escalation().enabled
+            }
+          >
             <p>• All notification controls are disabled - alerts will be sent immediately</p>
           </Show>
         </SettingsPanel>
@@ -1757,27 +2002,31 @@ function ScheduleTab(props: ScheduleTabProps) {
 // History Tab - Comprehensive alert table
 function HistoryTab() {
   const { state, activeAlerts } = useWebSocket();
-  
+
   // Filter states with localStorage persistence
-  const [timeFilter, setTimeFilter] = createSignal(localStorage.getItem('alertHistoryTimeFilter') || '7d');
-  const [severityFilter, setSeverityFilter] = createSignal(localStorage.getItem('alertHistorySeverityFilter') || 'all');
+  const [timeFilter, setTimeFilter] = createSignal(
+    localStorage.getItem('alertHistoryTimeFilter') || '7d',
+  );
+  const [severityFilter, setSeverityFilter] = createSignal(
+    localStorage.getItem('alertHistorySeverityFilter') || 'all',
+  );
   const [searchTerm, setSearchTerm] = createSignal('');
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
-  
+
   // Ref for search input
   let searchInputRef: HTMLInputElement | undefined;
-  
+
   // Persist filter changes to localStorage
   createEffect(() => {
     localStorage.setItem('alertHistoryTimeFilter', timeFilter());
   });
-  
+
   createEffect(() => {
     localStorage.setItem('alertHistorySeverityFilter', severityFilter());
   });
-  
+
   // Load alert history on mount
   onMount(async () => {
     try {
@@ -1788,16 +2037,17 @@ function HistoryTab() {
     } finally {
       setLoading(false);
     }
-    
+
     // Add keyboard event listeners
     const handleKeydown = (e: KeyboardEvent) => {
       // If already focused on an input, select, or textarea, don't interfere
       const activeElement = document.activeElement;
-      if (activeElement && (
-        activeElement.tagName === 'INPUT' || 
-        activeElement.tagName === 'TEXTAREA' || 
-        activeElement.tagName === 'SELECT'
-      )) {
+      if (
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.tagName === 'SELECT')
+      ) {
         // Handle Escape to clear and unfocus
         if (e.key === 'Escape' && activeElement === searchInputRef) {
           setSearchTerm('');
@@ -1805,36 +2055,36 @@ function HistoryTab() {
         }
         return;
       }
-      
+
       // If typing a letter, number, or space, focus the search input
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         searchInputRef?.focus();
       }
     };
-    
+
     document.addEventListener('keydown', handleKeydown);
-    
+
     // Cleanup on unmount
     return () => {
       document.removeEventListener('keydown', handleKeydown);
     };
   });
-  
+
   // Format duration for display
   const formatDuration = (startTime: string, endTime?: string) => {
     const start = new Date(startTime).getTime();
     const end = endTime ? new Date(endTime).getTime() : Date.now();
     const duration = end - start;
-    
+
     // Handle negative durations (clock skew or timezone issues)
     if (duration < 0) {
       return '0m';
     }
-    
+
     const minutes = Math.floor(duration / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days}d ${hours % 24}h`;
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
     return `${minutes}m`;
@@ -1845,18 +2095,18 @@ function HistoryTab() {
     // Check VMs and containers
     const vm = state.vms?.find((v) => v.name === resourceName);
     if (vm) return 'VM';
-    
+
     const container = state.containers?.find((c) => c.name === resourceName);
     if (container) return 'CT';
-    
+
     // Check nodes
     const node = state.nodes?.find((n) => n.name === resourceName);
     if (node) return 'Node';
-    
+
     // Check storage
     const storage = state.storage?.find((s) => s.name === resourceName || s.id === resourceName);
     if (storage) return 'Storage';
-    
+
     return 'Unknown';
   };
 
@@ -1871,50 +2121,50 @@ function HistoryTab() {
   const allAlertsData = createMemo(() => {
     // Combine active and historical alerts
     const allAlerts: ExtendedAlert[] = [];
-    
+
     // Add active alerts
     Object.values(activeAlerts || {}).forEach((alert) => {
       allAlerts.push({
         ...alert,
         status: 'active',
         duration: formatDuration(alert.startTime),
-        resourceType: getResourceType(alert.resourceName)
+        resourceType: getResourceType(alert.resourceName),
       });
     });
-    
+
     // Create a set of active alert IDs for quick lookup
     const activeAlertIds = new Set(Object.keys(activeAlerts || {}));
-    
+
     // Add historical alerts
-    alertHistory().forEach(alert => {
+    alertHistory().forEach((alert) => {
       // Skip if this alert is already in active alerts (avoid duplicates)
       if (activeAlertIds.has(alert.id)) {
         return;
       }
-      
+
       allAlerts.push({
         ...alert,
         status: alert.acknowledged ? 'acknowledged' : 'resolved',
         duration: formatDuration(alert.startTime, alert.lastSeen),
-        resourceType: getResourceType(alert.resourceName)
+        resourceType: getResourceType(alert.resourceName),
       });
     });
-    
+
     return allAlerts;
   });
 
   // Apply filters to get the final alert data
   const alertData = createMemo(() => {
     let filtered = allAlertsData();
-    
+
     // Selected bar filter (takes precedence over time filter)
     if (selectedBarIndex() !== null) {
       const trends = alertTrends();
       const index = selectedBarIndex()!;
       const bucketStart = trends.bucketTimes[index];
       const bucketEnd = bucketStart + trends.bucketSize * 60 * 60 * 1000;
-      
-      filtered = filtered.filter(alert => {
+
+      filtered = filtered.filter((alert) => {
         const alertTime = new Date(alert.startTime).getTime();
         return alertTime >= bucketStart && alertTime < bucketEnd;
       });
@@ -1925,93 +2175,100 @@ function HistoryTab() {
         const cutoff = {
           '24h': now - 24 * 60 * 60 * 1000,
           '7d': now - 7 * 24 * 60 * 60 * 1000,
-          '30d': now - 30 * 24 * 60 * 60 * 1000
+          '30d': now - 30 * 24 * 60 * 60 * 1000,
         }[timeFilter()];
-        
+
         if (cutoff) {
-          filtered = filtered.filter(a => new Date(a.startTime).getTime() > cutoff);
+          filtered = filtered.filter((a) => new Date(a.startTime).getTime() > cutoff);
         }
       }
     }
-    
+
     // Severity filter
     if (severityFilter() !== 'all') {
-      filtered = filtered.filter(a => a.level === severityFilter());
+      filtered = filtered.filter((a) => a.level === severityFilter());
     }
-    
+
     // Search filter
     if (searchTerm()) {
       const term = searchTerm().toLowerCase();
-      filtered = filtered.filter(alert => 
-        alert.resourceName.toLowerCase().includes(term) ||
-        alert.message.toLowerCase().includes(term) ||
-        alert.type.toLowerCase().includes(term) ||
-        alert.node.toLowerCase().includes(term)
+      filtered = filtered.filter(
+        (alert) =>
+          alert.resourceName.toLowerCase().includes(term) ||
+          alert.message.toLowerCase().includes(term) ||
+          alert.type.toLowerCase().includes(term) ||
+          alert.node.toLowerCase().includes(term),
       );
     }
-    
+
     // Sort by start time (newest first)
-    return filtered.sort((a, b) => 
-      new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+    return filtered.sort(
+      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
     );
   });
 
   // Group alerts by day for display
   const groupedAlerts = createMemo(() => {
     const groups = new Map();
-    
-    alertData().forEach(alert => {
+
+    alertData().forEach((alert) => {
       const date = new Date(alert.startTime);
       const dayKey = date.toLocaleDateString();
-      
+
       if (!groups.has(dayKey)) {
         groups.set(dayKey, {
           date: date,
-          alerts: []
+          alerts: [],
         });
       }
-      
+
       groups.get(dayKey).alerts.push(alert);
     });
-    
+
     // Convert to array and sort by date (newest first)
-    return Array.from(groups.values()).sort((a, b) => 
-      b.date.getTime() - a.date.getTime()
-    );
+    return Array.from(groups.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
   });
-  
+
   // Calculate alert trends for mini-chart
   const alertTrends = createMemo(() => {
     const now = Date.now();
-    const timeRange = timeFilter() === '24h' ? 24 : timeFilter() === '7d' ? 7 * 24 : timeFilter() === '30d' ? 30 * 24 : 90 * 24; // hours
-    const bucketSize = timeFilter() === '24h' ? 1 : timeFilter() === '7d' ? 6 : timeFilter() === '30d' ? 24 : 72; // hours per bucket
+    const timeRange =
+      timeFilter() === '24h'
+        ? 24
+        : timeFilter() === '7d'
+          ? 7 * 24
+          : timeFilter() === '30d'
+            ? 30 * 24
+            : 90 * 24; // hours
+    const bucketSize =
+      timeFilter() === '24h' ? 1 : timeFilter() === '7d' ? 6 : timeFilter() === '30d' ? 24 : 72; // hours per bucket
     const numBuckets = Math.min(Math.floor(timeRange / bucketSize), 30); // Limit to 30 buckets max
-    
+
     // Calculate start time for the chart
     const startTime = now - timeRange * 60 * 60 * 1000;
-    
+
     // Initialize buckets
     const buckets = new Array(numBuckets).fill(0);
     // bucketTimes represents the START of each bucket
-    const bucketTimes = new Array(numBuckets).fill(0).map((_, i) => 
-      startTime + i * bucketSize * 60 * 60 * 1000
-    );
-    
+    const bucketTimes = new Array(numBuckets)
+      .fill(0)
+      .map((_, i) => startTime + i * bucketSize * 60 * 60 * 1000);
+
     // Filter alerts based on current time filter
     let alertsToCount = allAlertsData();
     if (timeFilter() !== 'all') {
       const cutoff = {
         '24h': now - 24 * 60 * 60 * 1000,
         '7d': now - 7 * 24 * 60 * 60 * 1000,
-        '30d': now - 30 * 24 * 60 * 60 * 1000
+        '30d': now - 30 * 24 * 60 * 60 * 1000,
       }[timeFilter()];
-      
+
       if (cutoff) {
-        alertsToCount = alertsToCount.filter(a => new Date(a.startTime).getTime() > cutoff);
+        alertsToCount = alertsToCount.filter((a) => new Date(a.startTime).getTime() > cutoff);
       }
     }
-    
-    alertsToCount.forEach(alert => {
+
+    alertsToCount.forEach((alert) => {
       const alertTime = new Date(alert.startTime).getTime();
       if (alertTime >= startTime && alertTime <= now) {
         const bucketIndex = Math.floor((alertTime - startTime) / (bucketSize * 60 * 60 * 1000));
@@ -2020,18 +2277,18 @@ function HistoryTab() {
         }
       }
     });
-    
+
     // Find max for scaling
     const max = Math.max(...buckets, 1);
-    
+
     return {
       buckets,
       max,
       bucketSize,
-      bucketTimes
+      bucketTimes,
     };
   });
-  
+
   return (
     <div class="space-y-4">
       {/* Alert Trends Mini-Chart */}
@@ -2040,13 +2297,18 @@ function HistoryTab() {
           <SectionHeader
             label="Trends"
             title="Alert frequency"
-            description={<span class="text-xs text-gray-500 dark:text-gray-400">{alertData().length} alerts</span>}
+            description={
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {alertData().length} alerts
+              </span>
+            }
             size="sm"
             class="flex-1"
           />
           <div class="flex items-center gap-2">
             <Show when={selectedBarIndex() !== null}>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setSelectedBarIndex(null)}
                 class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
               >
@@ -2056,21 +2318,21 @@ function HistoryTab() {
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span class="flex items-center gap-1">
                 <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                {alertData().filter(a => a.level === 'warning').length} warnings
+                {alertData().filter((a) => a.level === 'warning').length} warnings
               </span>
               <span class="flex items-center gap-1">
                 <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                {alertData().filter(a => a.level === 'critical').length} critical
+                {alertData().filter((a) => a.level === 'critical').length} critical
               </span>
             </div>
           </div>
         </div>
-        
+
         {/* Mini sparkline chart */}
         <div class="text-[10px] text-gray-400 mb-1">
           Showing {alertTrends().buckets.length} time periods - Total: {alertData().length} alerts
         </div>
-        
+
         {/* Alert frequency chart */}
         <div class="h-12 bg-gray-100 dark:bg-gray-800 rounded p-1 flex items-end gap-1">
           {alertTrends().buckets.map((val, i) => {
@@ -2078,39 +2340,45 @@ function HistoryTab() {
             const pixelHeight = val > 0 ? Math.max(8, (scaledHeight / 100) * 40) : 0; // 40px is roughly the inner height
             const isSelected = selectedBarIndex() === i;
             return (
-              <div 
+              <div
                 class="flex-1 group relative flex items-end cursor-pointer"
                 onClick={() => setSelectedBarIndex(i === selectedBarIndex() ? null : i)}
               >
                 {/* Background track for all slots */}
                 <div class="absolute bottom-0 w-full h-1 bg-gray-300 dark:bg-gray-600 opacity-30 rounded-full"></div>
                 {/* Actual bar */}
-                <div 
+                <div
                   class="w-full group relative rounded-sm transition-all"
                   style={{
                     height: `${pixelHeight}px`,
-                    'background-color': val > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
-                    'opacity': isSelected ? '1' : '0.8',
-                    'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none'
+                    'background-color':
+                      val > 0 ? (isSelected ? '#2563eb' : '#3b82f6') : 'transparent',
+                    opacity: isSelected ? '1' : '0.8',
+                    'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none',
                   }}
                   title={`${val} alert${val !== 1 ? 's' : ''}`}
                 >
                   {/* Tooltip on hover */}
                   <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                     <div class="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                      <div class="font-semibold">{val} alert{val !== 1 ? 's' : ''}</div>
+                      <div class="font-semibold">
+                        {val} alert{val !== 1 ? 's' : ''}
+                      </div>
                       <div class="text-[10px] text-gray-300">
-                        {timeFilter() === '24h' ? `${alertTrends().bucketSize} hour period` : 
-                         timeFilter() === '7d' ? `${alertTrends().bucketSize / 24} day period` :
-                         timeFilter() === '30d' ? `${alertTrends().bucketSize / 24} day period` :
-                         `${alertTrends().bucketSize / 24} day period`}
+                        {timeFilter() === '24h'
+                          ? `${alertTrends().bucketSize} hour period`
+                          : timeFilter() === '7d'
+                            ? `${alertTrends().bucketSize / 24} day period`
+                            : timeFilter() === '30d'
+                              ? `${alertTrends().bucketSize / 24} day period`
+                              : `${alertTrends().bucketSize / 24} day period`}
                       </div>
                       <div class="text-[10px] text-gray-300">
                         {new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           hour: timeFilter() === '24h' ? 'numeric' : undefined,
-                          minute: timeFilter() === '24h' ? '2-digit' : undefined
+                          minute: timeFilter() === '24h' ? '2-digit' : undefined,
                         })}
                       </div>
                     </div>
@@ -2120,35 +2388,45 @@ function HistoryTab() {
             );
           })}
         </div>
-        
+
         {/* Time labels */}
         <div class="flex justify-between mt-1 text-[10px] text-gray-400 dark:text-gray-500">
-          <span>{timeFilter() === '24h' ? '24h ago' : timeFilter() === '7d' ? '7d ago' : timeFilter() === '30d' ? '30d ago' : '90d ago'}</span>
+          <span>
+            {timeFilter() === '24h'
+              ? '24h ago'
+              : timeFilter() === '7d'
+                ? '7d ago'
+                : timeFilter() === '30d'
+                  ? '30d ago'
+                  : '90d ago'}
+          </span>
           <span>Now</span>
         </div>
       </Card>
-      
+
       {/* Filters */}
       <div class="flex flex-wrap gap-2 mb-4">
-        <select 
+        <select
           value={timeFilter()}
           onChange={(e) => setTimeFilter(e.currentTarget.value)}
-          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+        >
           <option value="24h">Last 24h</option>
           <option value="7d">Last 7d</option>
           <option value="30d">Last 30d</option>
           <option value="all">All Time</option>
         </select>
-        
-        <select 
+
+        <select
           value={severityFilter()}
           onChange={(e) => setSeverityFilter(e.currentTarget.value)}
-          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+          class="px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+        >
           <option value="all">All Levels</option>
           <option value="critical">Critical Only</option>
           <option value="warning">Warning Only</option>
         </select>
-        
+
         <div class="flex-1 max-w-xs">
           <input
             ref={searchInputRef}
@@ -2167,12 +2445,12 @@ function HistoryTab() {
           />
         </div>
       </div>
-      
+
       {/* Alert History Table */}
-      <Show 
+      <Show
         when={loading()}
         fallback={
-          <Show 
+          <Show
             when={alertData().length > 0}
             fallback={
               <div class="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -2187,14 +2465,30 @@ function HistoryTab() {
                 <table class="w-full min-w-[900px] text-xs sm:text-sm">
                   <thead>
                     <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Timestamp</th>
-                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Resource</th>
-                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Type</th>
-                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Severity</th>
-                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Message</th>
-                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Duration</th>
-                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">Status</th>
-                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">Node</th>
+                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Timestamp
+                      </th>
+                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Resource
+                      </th>
+                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Severity
+                      </th>
+                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Message
+                      </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Duration
+                      </th>
+                      <th class="p-1 px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th class="p-1 px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                        Node
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2203,74 +2497,100 @@ function HistoryTab() {
                         <>
                           {/* Date divider */}
                           <tr class="bg-gray-50 dark:bg-gray-800">
-                            <td colspan="8" class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400">
-                              {group.date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            <td
+                              colspan="8"
+                              class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400"
+                            >
+                              {group.date.toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}
                             </td>
                           </tr>
-                          
+
                           {/* Alerts for this day */}
                           <For each={group.alerts}>
                             {(alert) => (
-                              <tr class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
-                              }`}>
+                              <tr
+                                class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                  alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                }`}
+                              >
                                 {/* Timestamp */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 font-mono">
-                                  {new Date(alert.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(alert.startTime).toLocaleTimeString('en-US', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
                                 </td>
-                                
+
                                 {/* Resource */}
                                 <td class="p-1 px-2 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
                                   {alert.resourceName}
                                 </td>
-                                
+
                                 {/* Type */}
                                 <td class="p-1 px-2">
-                                  <span class={`text-xs px-1 py-0.5 rounded ${
-                                    alert.resourceType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' :
-                                    alert.resourceType === 'CT' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                    alert.resourceType === 'Node' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' :
-                                    alert.resourceType === 'Storage' ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' :
-                                    'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                  }`}>
+                                  <span
+                                    class={`text-xs px-1 py-0.5 rounded ${
+                                      alert.resourceType === 'VM'
+                                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                        : alert.resourceType === 'CT'
+                                          ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                          : alert.resourceType === 'Node'
+                                            ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                                            : alert.resourceType === 'Storage'
+                                              ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                  >
                                     {alert.type}
                                   </span>
                                 </td>
-                                
+
                                 {/* Severity */}
                                 <td class="p-1 px-2 text-center">
-                                  <span class={`text-xs px-2 py-0.5 rounded font-medium ${
-                                    alert.level === 'critical' 
-                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' 
-                                      : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                  }`}>
+                                  <span
+                                    class={`text-xs px-2 py-0.5 rounded font-medium ${
+                                      alert.level === 'critical'
+                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                        : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                    }`}
+                                  >
                                     {alert.level}
                                   </span>
                                 </td>
-                                
+
                                 {/* Message */}
-                                <td class="p-1 px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]" title={alert.message}>
+                                <td
+                                  class="p-1 px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]"
+                                  title={alert.message}
+                                >
                                   {alert.message}
                                 </td>
-                                
+
                                 {/* Duration */}
                                 <td class="p-1 px-2 text-center text-gray-600 dark:text-gray-400">
                                   {alert.duration}
                                 </td>
-                                
+
                                 {/* Status */}
                                 <td class="p-1 px-2 text-center">
-                                  <span class={`text-xs px-2 py-0.5 rounded ${
-                                    alert.status === 'active' 
-                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium' 
-                                      : alert.status === 'acknowledged'
-                                      ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                  }`}>
+                                  <span
+                                    class={`text-xs px-2 py-0.5 rounded ${
+                                      alert.status === 'active'
+                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
+                                        : alert.status === 'acknowledged'
+                                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                  >
                                     {alert.status}
                                   </span>
                                 </td>
-                                
+
                                 {/* Node */}
                                 <td class="p-1 px-2 text-gray-600 dark:text-gray-400 truncate">
                                   {alert.node || '—'}
@@ -2292,7 +2612,7 @@ function HistoryTab() {
           <p class="text-sm">Loading alert history...</p>
         </div>
       </Show>
-      
+
       {/* Administrative Actions - Only show if there's history to clear */}
       <Show when={alertHistory().length > 0}>
         <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -2303,19 +2623,28 @@ function HistoryTab() {
                   Administrative Actions
                 </h4>
                 <p class="text-xs text-gray-600 dark:text-gray-400">
-                  Permanently clear all alert history. Use with caution - this action cannot be undone.
+                  Permanently clear all alert history. Use with caution - this action cannot be
+                  undone.
                 </p>
               </div>
-              <button type="button"
+              <button
+                type="button"
                 onClick={async () => {
-                  if (confirm('Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.')) {
+                  if (
+                    confirm(
+                      'Are you sure you want to clear all alert history?\n\nThis will permanently delete all historical alert data and cannot be undone.\n\nThis is typically only used for system maintenance or when starting fresh with a new monitoring setup.',
+                    )
+                  ) {
                     try {
                       await AlertsAPI.clearHistory();
                       setAlertHistory([]);
                       // Alert history cleared successfully
                     } catch (err) {
                       console.error('Error clearing alert history:', err);
-                      showError('Error clearing alert history', 'Please check your connection and try again.');
+                      showError(
+                        'Error clearing alert history',
+                        'Please check your connection and try again.',
+                      );
                     }
                   }
                 }}
