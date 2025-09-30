@@ -18,6 +18,7 @@ import (
 
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -620,7 +621,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI() []NodeResponse {
 // HandleGetNodes returns all configured nodes
 func (h *ConfigHandlers) HandleGetNodes(w http.ResponseWriter, r *http.Request) {
 	// Check if mock mode is enabled
-	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+	if mock.IsMockEnabled() {
 		// Return mock nodes for settings page
 		mockNodes := []NodeResponse{}
 
@@ -788,7 +789,7 @@ func extractHostAndPort(hostStr string) (string, string, error) {
 // HandleAddNode adds a new node
 func (h *ConfigHandlers) HandleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
-	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot modify nodes in mock mode. Please disable mock mode first: /opt/pulse/scripts/toggle-mock.sh off", http.StatusForbidden)
 		return
 	}
@@ -1270,7 +1271,7 @@ func (h *ConfigHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 // HandleUpdateNode updates an existing node
 func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
-	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
 		return
 	}
@@ -1511,7 +1512,7 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 // HandleDeleteNode deletes a node
 func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
-	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
 		return
 	}
@@ -3180,6 +3181,103 @@ func (h *ConfigHandlers) HandleSetupScriptURL(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// HandleGetMockMode returns the current mock mode state and configuration.
+func (h *ConfigHandlers) HandleGetMockMode(w http.ResponseWriter, r *http.Request) {
+	status := struct {
+		Enabled bool            `json:"enabled"`
+		Config  mock.MockConfig `json:"config"`
+	}{
+		Enabled: mock.IsMockEnabled(),
+		Config:  mock.GetConfig(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Error().Err(err).Msg("Failed to encode mock mode status")
+	}
+}
+
+type mockModeRequest struct {
+	Enabled *bool `json:"enabled"`
+	Config  struct {
+		NodeCount      *int     `json:"nodeCount"`
+		VMsPerNode     *int     `json:"vmsPerNode"`
+		LXCsPerNode    *int     `json:"lxcsPerNode"`
+		RandomMetrics  *bool    `json:"randomMetrics"`
+		HighLoadNodes  []string `json:"highLoadNodes"`
+		StoppedPercent *float64 `json:"stoppedPercent"`
+	} `json:"config"`
+}
+
+// HandleUpdateMockMode updates mock mode and optionally its configuration.
+func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Request) {
+	var req mockModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode mock mode request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Update configuration first if provided.
+	currentCfg := mock.GetConfig()
+	if req.Config.NodeCount != nil {
+		if *req.Config.NodeCount <= 0 {
+			http.Error(w, "nodeCount must be greater than zero", http.StatusBadRequest)
+			return
+		}
+		currentCfg.NodeCount = *req.Config.NodeCount
+	}
+	if req.Config.VMsPerNode != nil {
+		if *req.Config.VMsPerNode < 0 {
+			http.Error(w, "vmsPerNode cannot be negative", http.StatusBadRequest)
+			return
+		}
+		currentCfg.VMsPerNode = *req.Config.VMsPerNode
+	}
+	if req.Config.LXCsPerNode != nil {
+		if *req.Config.LXCsPerNode < 0 {
+			http.Error(w, "lxcsPerNode cannot be negative", http.StatusBadRequest)
+			return
+		}
+		currentCfg.LXCsPerNode = *req.Config.LXCsPerNode
+	}
+	if req.Config.RandomMetrics != nil {
+		currentCfg.RandomMetrics = *req.Config.RandomMetrics
+	}
+	if req.Config.HighLoadNodes != nil {
+		currentCfg.HighLoadNodes = req.Config.HighLoadNodes
+	}
+	if req.Config.StoppedPercent != nil {
+		if *req.Config.StoppedPercent < 0 || *req.Config.StoppedPercent > 1 {
+			http.Error(w, "stoppedPercent must be between 0 and 1", http.StatusBadRequest)
+			return
+		}
+		currentCfg.StoppedPercent = *req.Config.StoppedPercent
+	}
+
+	mock.SetMockConfig(currentCfg)
+
+	if req.Enabled != nil {
+		if h.monitor != nil {
+			h.monitor.SetMockMode(*req.Enabled)
+		} else {
+			mock.SetEnabled(*req.Enabled)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	status := struct {
+		Enabled bool            `json:"enabled"`
+		Config  mock.MockConfig `json:"config"`
+	}{
+		Enabled: mock.IsMockEnabled(),
+		Config:  mock.GetConfig(),
+	}
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Error().Err(err).Msg("Failed to encode mock mode response")
+	}
 }
 
 // AutoRegisterRequest represents a request from the setup script to auto-register a node

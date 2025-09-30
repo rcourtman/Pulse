@@ -2271,6 +2271,35 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 	}
 }
 
+// ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
+func (m *Manager) ClearActiveAlerts() {
+	m.mu.Lock()
+	if len(m.activeAlerts) == 0 && len(m.pendingAlerts) == 0 {
+		m.mu.Unlock()
+		return
+	}
+	m.activeAlerts = make(map[string]*Alert)
+	m.pendingAlerts = make(map[string]time.Time)
+	m.recentAlerts = make(map[string]*Alert)
+	m.suppressedUntil = make(map[string]time.Time)
+	m.alertRateLimit = make(map[string][]time.Time)
+	m.nodeOfflineCount = make(map[string]int)
+	m.offlineConfirmations = make(map[string]int)
+	m.mu.Unlock()
+
+	m.resolvedMutex.Lock()
+	m.recentlyResolved = make(map[string]*ResolvedAlert)
+	m.resolvedMutex.Unlock()
+
+	log.Info().Msg("Cleared all active and pending alerts")
+
+	go func() {
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().Err(err).Msg("Failed to persist cleared alerts")
+		}
+	}()
+}
+
 // periodicSaveAlerts saves active alerts to disk periodically
 func (m *Manager) periodicSaveAlerts() {
 	ticker := time.NewTicker(1 * time.Minute)
