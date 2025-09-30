@@ -216,11 +216,11 @@ export function Dashboard(props: DashboardProps) {
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
 
-    // Filter by selected node
-    const node = selectedNode();
-    console.log('Filtering guests - selected node:', node, 'total guests:', guests.length);
-    if (node) {
-      guests = guests.filter((g) => g.node === node);
+    // Filter by selected node (using instance ID to handle duplicate hostnames)
+    const selectedNodeId = selectedNode();
+    console.log('Filtering guests - selected node:', selectedNodeId, 'total guests:', guests.length);
+    if (selectedNodeId) {
+      guests = guests.filter((g) => g.instance === selectedNodeId);
       console.log('After node filter:', guests.length);
     }
 
