@@ -227,10 +227,11 @@ export const OIDCPanel: Component<Props> = (props) => {
         <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-xs text-blue-800 dark:text-blue-200">
           <p class="font-semibold mb-2">Getting started</p>
           <ol class="space-y-1 list-decimal pl-5">
+            <li>Set your PUBLIC_URL environment variable to match how users access Pulse.</li>
             <li>
-              Register a confidential client with your IdP and set the redirect URL shown below.
+              Register a public or confidential client with your IdP. Use the redirect URL shown below (auto-generated from PUBLIC_URL).
             </li>
-            <li>Copy the issuer, client ID, and client secret into the fields here.</li>
+            <li>Copy the issuer and client ID into the fields here. Client secret is optional (only needed if your IdP doesn't support PKCE).</li>
             <li>
               Grant scopes such as{' '}
               <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">
@@ -239,7 +240,7 @@ export const OIDCPanel: Component<Props> = (props) => {
               .
             </li>
             <li>Optionally restrict access by domain, email, or groups.</li>
-            <li>Save, then sign out to test the new SSO button.</li>
+            <li>Save, then test using the SSO button on the login page (password auth still works).</li>
           </ol>
         </div>
         <Show when={loading()}>
@@ -321,7 +322,7 @@ export const OIDCPanel: Component<Props> = (props) => {
                 disabled={isEnvLocked() || saving()}
               />
               <p class={formHelpText}>
-                Leave blank to keep the existing secret. Use "Clear" to remove it from storage.
+                Optional - Leave blank if your provider supports PKCE (Zitadel, Authentik, etc). Otherwise, enter your client secret.
               </p>
             </div>
             <div class={formField}>
