@@ -124,6 +124,10 @@ if [[ -f "${ROOT_DIR}/mock.env" ]]; then
     if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
         TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
         echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"
+    else
+        # Sync production config when not in mock mode
+        echo "Syncing production configuration..."
+        "${ROOT_DIR}/scripts/sync-production-config.sh"
     fi
 fi
 
