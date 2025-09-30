@@ -24,6 +24,7 @@ interface Override {
     networkIn?: number;
     networkOut?: number;
     usage?: number; // For storage devices
+    temperature?: number; // For nodes only - CPU temperature in °C
   };
 }
 
@@ -36,6 +37,7 @@ interface SimpleThresholds {
   diskWrite?: number;
   networkIn?: number;
   networkOut?: number;
+  temperature?: number; // For nodes only
   [key: string]: number | undefined; // Add index signature for compatibility
 }
 
@@ -127,6 +129,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Percentage-based metrics
     if (metric === 'cpu' || metric === 'memory' || metric === 'disk' || metric === 'usage') {
       return `${value}%`;
+    }
+
+    // Temperature in Celsius
+    if (metric === 'temperature') {
+      return `${value}°C`;
     }
 
     // MB/s metrics
@@ -910,7 +917,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                                bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                  <div class="space-y-1 sm:col-span-2">
+                  <div class="space-y-1">
                     <label
                       for="node-disk"
                       class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
@@ -929,6 +936,32 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                         props.setNodeDefaults((prev) => ({
                           ...prev,
                           disk: Number.isNaN(value) ? 0 : value,
+                        }));
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label
+                      for="node-temperature"
+                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
+                    >
+                      <span>Temperature</span>
+                      <span class="text-[10px] font-normal text-gray-400">°C</span>
+                    </label>
+                    <input
+                      id="node-temperature"
+                      type="number"
+                      min="-1"
+                      max="150"
+                      value={props.nodeDefaults.temperature ?? 0}
+                      onInput={(e) => {
+                        const value = parseInt(e.currentTarget.value, 10);
+                        props.setNodeDefaults((prev) => ({
+                          ...prev,
+                          temperature: Number.isNaN(value) ? 0 : value,
                         }));
                         props.setHasUnsavedChanges(true);
                       }}
@@ -1075,6 +1108,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     cpu: 80,
                     memory: 85,
                     disk: 90,
+                    temperature: 80,
                   });
                   props.setStorageDefault(85);
                   props.setTimeThreshold(0);
