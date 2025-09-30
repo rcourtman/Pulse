@@ -12,6 +12,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 )
 
@@ -44,10 +45,22 @@ func NewOIDCService(ctx context.Context, cfg *config.OIDCConfig) (*OIDCService, 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	log.Debug().
+		Str("issuer", cfg.IssuerURL).
+		Str("redirect_url", cfg.RedirectURL).
+		Strs("scopes", cfg.Scopes).
+		Msg("Initializing OIDC provider")
+
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover OIDC provider: %w", err)
 	}
+
+	log.Debug().
+		Str("issuer", cfg.IssuerURL).
+		Str("auth_endpoint", provider.Endpoint().AuthURL).
+		Str("token_endpoint", provider.Endpoint().TokenURL).
+		Msg("OIDC provider discovery successful")
 
 	oauth2Cfg := &oauth2.Config{
 		ClientID:     cfg.ClientID,
