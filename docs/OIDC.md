@@ -52,7 +52,30 @@ OIDC is optional. Pulse continues to ship with the familiar username/password fl
 
 You do not need to ship per-provider templates. Pulse speaks standard OIDC, so administrators bring their own identity provider and supply the issuer URL, client ID, and client secret they created for Pulse. Below are the high-level steps we tested against three common providers—share these with users who ask “what do I enter?”
 
-### Authentik / Dex / other self-hosted issuers
+### Authentik
+
+1. In Authentik, create a new **Provider** of type **OAuth2/OpenID**.
+   - **Name**: Pulse
+   - **Client type**: Confidential
+   - **Redirect URIs**: `https://pulse.example.com/api/oidc/callback` (replace with your Pulse URL)
+   - **Scopes**: Include `openid`, `profile`, and `email`
+   - Note the generated **Client ID** and **Client Secret**
+
+2. Create an **Application** and link it to the provider you just created.
+
+3. In Pulse, configure OIDC with:
+   - **Issuer URL**: `https://auth.example.com/application/o/pulse/` (the full path to your application)
+   - **Client ID**: The client ID from your Authentik provider
+   - **Client Secret**: The client secret from your Authentik provider
+   - **Scopes**: `openid profile email`
+
+4. For group-based access control:
+   - Set **Groups claim** to `groups` (Authentik's default)
+   - Add your allowed group names to **Allowed groups** (e.g., `admin`)
+
+**Important**: If you see "invalid_id_token" errors, the issuer URL might not match what Authentik puts in tokens. Check your Pulse logs with `LOG_LEVEL=debug` to see the exact error. The issuer claim in the token must match your configured `OIDC_ISSUER_URL` exactly.
+
+### Dex / other self-hosted issuers
 
 This matches the bundled Dex mock server:
 
@@ -97,11 +120,13 @@ All configuration can be provided via environment variables (see [`docs/CONFIGUR
 
 | Symptom | Resolution |
 | --- | --- |
-| Users see `single sign-on failed` | Check `journalctl -u pulse-dev-hot.service` (or `pulse.service`) for detailed OIDC audit logs. Common causes include mismatched client IDs, incorrect redirect URLs, or group/domain restrictions. |
-| Redirect loops back to login | Ensure clock skew between Pulse and the IdP is <5 minutes. Verify the redirect URL is reachable from the user's browser. |
+| `invalid_id_token` error | The issuer URL configured in Pulse doesn't match the `iss` claim in the ID token from your provider. Enable `LOG_LEVEL=debug` to see the exact verification error. For Authentik, try both `https://auth.domain.com` (base URL) and `https://auth.domain.com/application/o/pulse/` (application URL) to see which matches your provider's token issuer. |
+| Redirect loops back to login | After successful OIDC login, if you're redirected back to the login page, check that: (1) cookies are enabled in your browser, (2) if behind a proxy, ensure `X-Forwarded-Proto` header is set correctly, (3) check browser console for cookie errors. |
+| Users see `single sign-on failed` | Check `journalctl -u pulse.service` for detailed OIDC audit logs. Common causes include mismatched client IDs, incorrect redirect URLs, or group/domain restrictions. |
 | UI shows "OIDC settings are managed by environment variables" | Remove the relevant `OIDC_*` environment variables or update them directly in your deployment. |
 | Provider discovery fails | Verify the issuer URL is reachable from the Pulse server and returns valid OIDC discovery metadata at `/.well-known/openid-configuration`. |
 | Group restrictions not working | Enable debug logging to see which groups the IdP is sending and verify the `groups_claim` setting matches your IdP's claim name. |
+| Auto-redirect to OIDC when password auth still enabled | This is expected behavior when OIDC is enabled. Users can still use password auth by clicking "Use your admin credentials to sign in below" on the login page. To disable auto-redirect, comment out the auto-redirect code in the frontend. |
 
 ### Debug Logging
 
