@@ -134,6 +134,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
                 {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
               </th>
+              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20">
+                Temp
+              </th>
               <For each={getCountHeader()}>
                 {(header) => (
                   <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-16">
@@ -319,7 +322,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         value={cpuPercent()}
                         label={`${cpuPercent()}%`}
                         sublabel={
-                          isPVE && node!.cpuInfo?.cores ? `${node!.cpuInfo.cores} cores` : undefined
+                          isPVE && node!.cpuInfo?.cores
+                            ? `${node!.cpuInfo.cores} cores`
+                            : undefined
                         }
                         type="cpu"
                       />
@@ -345,6 +350,26 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         sublabel={getDiskSublabel()}
                         type="disk"
                       />
+                    </td>
+                    <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                      <Show
+                        when={isPVE && node!.temperature?.available}
+                        fallback={
+                          <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
+                        }
+                      >
+                        <span
+                          class={`text-xs font-medium ${
+                            (node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0) >= 80
+                              ? 'text-red-600 dark:text-red-400'
+                              : (node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0) >= 70
+                                ? 'text-yellow-600 dark:text-yellow-400'
+                                : 'text-green-600 dark:text-green-400'
+                          }`}
+                        >
+                          {Math.round(node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0)}°C
+                        </span>
+                      </Show>
                     </td>
                     <For each={getNodeCounts(item)}>
                       {(count) => (

@@ -341,6 +341,7 @@ export function Alerts() {
           cpu: getTriggerValue(config.nodeDefaults.cpu) || 80,
           memory: getTriggerValue(config.nodeDefaults.memory) || 85,
           disk: getTriggerValue(config.nodeDefaults.disk) || 90,
+          temperature: getTriggerValue(config.nodeDefaults.temperature) || 80,
         });
       }
 
@@ -563,6 +564,7 @@ export function Alerts() {
     cpu: 80,
     memory: 85,
     disk: 90,
+    temperature: 80,
   });
 
   const [storageDefault, setStorageDefault] = createSignal(85);
@@ -661,6 +663,7 @@ export function Alerts() {
                         cpu: createHysteresisThreshold(nodeDefaults().cpu),
                         memory: createHysteresisThreshold(nodeDefaults().memory),
                         disk: createHysteresisThreshold(nodeDefaults().disk),
+                        temperature: createHysteresisThreshold(nodeDefaults().temperature),
                       },
                       storageDefault: createHysteresisThreshold(storageDefault()),
                       minimumDelta: 2.0,

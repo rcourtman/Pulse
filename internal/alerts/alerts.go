@@ -69,7 +69,8 @@ type ThresholdConfig struct {
 	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
 	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
-	Usage               *HysteresisThreshold `json:"usage,omitempty"` // For storage devices
+	Usage               *HysteresisThreshold `json:"usage,omitempty"`   // For storage devices
+	Temperature         *HysteresisThreshold `json:"temperature,omitempty"` // For node CPU temperature
 	// Legacy fields for backward compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
 	MemoryLegacy     *float64 `json:"memoryLegacy,omitempty"`
@@ -237,9 +238,10 @@ func NewManager() *Manager {
 				NetworkOut: &HysteresisThreshold{Trigger: 0, Clear: 0}, // Off by default
 			},
 			NodeDefaults: ThresholdConfig{
-				CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
-				Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
-				Disk:   &HysteresisThreshold{Trigger: 90, Clear: 85},
+				CPU:         &HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory:      &HysteresisThreshold{Trigger: 85, Clear: 80},
+				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
+				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
@@ -575,6 +577,16 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU)
 		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory)
 		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk)
+
+		// Check temperature if available
+		if node.Temperature != nil && node.Temperature.Available && thresholds.Temperature != nil {
+			// Use CPU package temp if available, otherwise use max core temp
+			temp := node.Temperature.CPUPackage
+			if temp == 0 {
+				temp = node.Temperature.CPUMax
+			}
+			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature)
+		}
 	}
 }
 
