@@ -98,16 +98,15 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
-  // Create a mapping from node name to host URL
-  const nodeHostMap = createMemo(() => {
-    const map: Record<string, string> = {};
+  // Create a mapping from node instance ID to node object
+  const nodeByInstance = createMemo(() => {
+    const map: Record<string, Node> = {};
     props.nodes.forEach((node) => {
-      if (node.host) {
-        map[node.name] = node.host;
-      }
+      map[node.id] = node;
     });
     return map;
   });
+
 
   // Persist filter states to localStorage
   createEffect(() => {
@@ -356,13 +355,14 @@ export function Dashboard(props: DashboardProps) {
       return groups;
     }
 
-    // Original grouped by node logic
+    // Group by node instance ID (not hostname) to handle nodes with duplicate names
     const groups: Record<string, (VM | Container)[]> = {};
     guests.forEach((guest) => {
-      if (!groups[guest.node]) {
-        groups[guest.node] = [];
+      const instanceId = guest.instance; // Use unique instance ID instead of hostname
+      if (!groups[instanceId]) {
+        groups[instanceId] = [];
       }
-      groups[guest.node].push(guest);
+      groups[instanceId].push(guest);
     });
 
     // Sort within each node group
@@ -557,10 +557,10 @@ export function Dashboard(props: DashboardProps) {
                     const diskPercent = () =>
                       node.disk ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
 
-                    // Count VMs and containers for this node
-                    const nodeVMs = () => props.vms.filter((vm) => vm.node === node.name).length;
+                    // Count VMs and containers for this node (use instance ID to handle duplicate node names)
+                    const nodeVMs = () => props.vms.filter((vm) => vm.instance === node.id).length;
                     const nodeContainers = () =>
-                      props.containers.filter((ct) => ct.node === node.name).length;
+                      props.containers.filter((ct) => ct.instance === node.id).length;
 
                     const isSelected = () => search().includes(`node:${node.name}`);
 
@@ -915,25 +915,29 @@ export function Dashboard(props: DashboardProps) {
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For
-                    each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))}
+                    each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
+                      // Sort by node name for display, not instance ID
+                      const nodeA = nodeByInstance()[instanceIdA];
+                      const nodeB = nodeByInstance()[instanceIdB];
+                      return (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                    })}
                     fallback={<></>}
                   >
-                    {([node, guests]) => (
+                    {([instanceId, guests]) => {
+                      const node = nodeByInstance()[instanceId];
+                      return (
                       <>
                         <Show when={node && groupingMode() === 'grouped'}>
                           <tr class="bg-gray-50/50 dark:bg-gray-700/30">
                             <td class="py-0.5 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                               <a
-                                href={
-                                  nodeHostMap()[node] ||
-                                  (node.includes(':') ? `https://${node}` : `https://${node}:8006`)
-                                }
+                                href={node.host || `https://${node.name}:8006`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                                title={`Open ${node} web interface`}
+                                title={`Open ${node.name} web interface`}
                               >
-                                {node}
+                                {node.name}
                               </a>
                             </td>
                             <td colspan="10" class="py-0.5 px-2"></td>
@@ -962,7 +966,8 @@ export function Dashboard(props: DashboardProps) {
                           )}
                         </For>
                       </>
-                    )}
+                    );
+                    }}
                   </For>
                 </tbody>
               </table>

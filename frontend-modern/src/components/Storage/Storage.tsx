@@ -20,16 +20,15 @@ const Storage: Component = () => {
   const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
-  // Create a mapping from node name to host URL
-  const nodeHostMap = createMemo(() => {
-    const map: Record<string, string> = {};
+  // Create a mapping from node instance ID to node object
+  const nodeByInstance = createMemo(() => {
+    const map: Record<string, typeof state.nodes[0]> = {};
     (state.nodes || []).forEach((node) => {
-      if (node.host) {
-        map[node.name] = node.host;
-      }
+      map[node.id] = node;
     });
     return map;
   });
+
 
   const sortKeyOptions: { value: StorageSortKey; label: string }[] = [
     { value: 'name', label: 'Name' },
@@ -243,10 +242,12 @@ const Storage: Component = () => {
     const mode = viewMode();
 
     if (mode === 'node') {
+      // Group by instance ID (not node name) to handle duplicate node names
       const groups: Record<string, StorageType[]> = {};
       storage.forEach((s) => {
-        if (!groups[s.node]) groups[s.node] = [];
-        groups[s.node].push(s);
+        const key = s.instance; // Use unique instance ID instead of hostname
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(s);
       });
       return groups;
     } else {
@@ -553,34 +554,42 @@ const Storage: Component = () => {
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                     <For
-                      each={Object.entries(groupedStorage()).sort(([a], [b]) => a.localeCompare(b))}
+                      each={Object.entries(groupedStorage()).sort(([instanceIdA], [instanceIdB]) => {
+                        // Sort by node name for display when in node mode
+                        if (viewMode() === 'node') {
+                          const nodeA = nodeByInstance()[instanceIdA];
+                          const nodeB = nodeByInstance()[instanceIdB];
+                          return (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                        }
+                        // Sort by storage name when in storage mode
+                        return instanceIdA.localeCompare(instanceIdB);
+                      })}
                     >
-                      {([groupName, storages]) => (
-                        <>
-                          {/* Group Header */}
-                          <Show when={viewMode() === 'node'}>
-                            <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                              <td
-                                class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                                colspan="9"
-                              >
-                                <a
-                                  href={
-                                    nodeHostMap()[groupName] ||
-                                    (groupName.includes(':')
-                                      ? `https://${groupName}`
-                                      : `https://${groupName}:8006`)
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                                  title={`Open ${groupName} web interface`}
-                                >
-                                  {groupName}
-                                </a>
-                              </td>
-                            </tr>
-                          </Show>
+                      {([groupKey, storages]) => {
+                        const node = viewMode() === 'node' ? nodeByInstance()[groupKey] : null;
+                        return (
+                          <>
+                            {/* Group Header */}
+                            <Show when={viewMode() === 'node' && node}>
+                              {(validNode) => (
+                                <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                                  <td
+                                    class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                                    colspan="9"
+                                  >
+                                    <a
+                                      href={validNode().host || `https://${validNode().name}:8006`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
+                                      title={`Open ${validNode().name} web interface`}
+                                    >
+                                      {validNode().name}
+                                    </a>
+                                  </td>
+                                </tr>
+                              )}
+                            </Show>
 
                           {/* Storage Rows */}
                           <For each={storages} fallback={<></>}>
@@ -817,7 +826,8 @@ const Storage: Component = () => {
                             }}
                           </For>
                         </>
-                      )}
+                      );
+                      }}
                     </For>
                   </tbody>
                 </table>
