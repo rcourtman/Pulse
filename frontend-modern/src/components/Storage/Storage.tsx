@@ -131,14 +131,12 @@ const Storage: Component = () => {
   const sortedStorage = createMemo(() => {
     let storage = [...filteredStorage()];
 
-    // Apply node selection filter
+    // Apply node selection filter (using instance ID to handle duplicate hostnames)
     const nodeFilter = selectedNode();
     if (nodeFilter) {
-      const normalizedNode = nodeFilter.toLowerCase();
       storage = storage.filter((s) => {
-        const primary = s.node?.toLowerCase();
-        const extraNodes = s.nodes?.map((node) => node.toLowerCase()) || [];
-        return primary === normalizedNode || extraNodes.includes(normalizedNode);
+        // Check if storage's instance matches the selected node ID
+        return s.instance === nodeFilter;
       });
     }
 

@@ -210,7 +210,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   return undefined;
                 };
 
-                const nodeId = isPVE ? node!.name : pbs!.name;
+                // Use unique node ID (not hostname) to handle duplicate node names
+                const nodeId = isPVE ? node!.id : pbs!.name;
                 const isSelected = () => props.selectedNode === nodeId;
                 // Use the full resource ID for alert matching
                 const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;

@@ -193,6 +193,7 @@ const UnifiedBackups: Component = () => {
         name: guestName || `VM ${snapshot.vmid}`, // Use guest name if found, otherwise fallback to VMID
         type: snapshot.type === 'qemu' ? 'VM' : 'LXC',
         node: snapshot.node,
+        instance: snapshot.instance, // Unique instance ID for handling duplicate node names
         backupTime: snapshot.time ? new Date(snapshot.time).getTime() / 1000 : 0,
         backupName: snapshot.name, // This is the snapshot name like "current", "pre-upgrade"
         description: snapshot.description || '',
@@ -283,6 +284,7 @@ const UnifiedBackups: Component = () => {
         name: backup.comment || '',
         type: displayType,
         node: backup.instance || 'PBS',
+        instance: backup.instance || 'PBS',
         backupTime: backupTimeSeconds,
         backupName: backupName,
         description: backup.comment || '',
@@ -363,6 +365,7 @@ const UnifiedBackups: Component = () => {
         name: backup.notes || backup.volid?.split('/').pop() || '',
         type: displayType,
         node: backup.node || '', // Proxmox node that has access to this backup
+        instance: backup.instance || '', // Unique instance identifier
         backupTime: backup.ctime || 0,
         backupName: backup.volid?.split('/').pop() || '',
         description: backup.notes || '', // Use notes field for PBS backup descriptions
@@ -403,6 +406,7 @@ const UnifiedBackups: Component = () => {
             name: backup.guestName || '',
             type: displayType,
             node: pbsInstance.name || 'PBS',
+            instance: pbsInstance.id || 'PBS',
             backupTime: backup.ctime || backup.backupTime || 0,
             backupName: `${backup.vmid}/${new Date((backup.ctime || backup.backupTime || 0) * 1000).toISOString().split('T')[0]}`,
             description: backup.notes || backup.comment || '',
@@ -437,6 +441,7 @@ const UnifiedBackups: Component = () => {
                   ? 'Host'
                   : 'LXC',
                 node: pbsInstance.name || 'PBS',
+                instance: pbsInstance.id || 'PBS',
                 backupTime: backup['backup-time'] || 0,
                 backupName: `${backup['backup-id']}/${new Date((backup['backup-time'] || 0) * 1000).toISOString().split('T')[0]}`,
                 description: backup.comment || '',
@@ -480,9 +485,9 @@ const UnifiedBackups: Component = () => {
       );
     }
 
-    // Node selection filter
+    // Node selection filter (using instance ID to handle duplicate hostnames)
     if (nodeFilter) {
-      data = data.filter((item) => item.node.toLowerCase() === nodeFilter.toLowerCase());
+      data = data.filter((item) => item.instance === nodeFilter);
     }
 
     // Search filter - with advanced filtering support like Dashboard

@@ -7,6 +7,7 @@ export interface UnifiedBackup {
   name: string;
   type: GuestType;
   node: string;
+  instance: string; // Unique instance identifier for handling duplicate node names
   backupTime: number;
   backupName: string;
   description: string;
