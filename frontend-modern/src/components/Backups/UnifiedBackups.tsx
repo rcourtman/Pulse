@@ -431,7 +431,11 @@ const UnifiedBackups: Component = () => {
                 backupType: 'remote',
                 vmid: backup['backup-id'] || 0,
                 name: backup.comment || '',
-                type: backup['backup-type'] === 'vm' || backup['backup-type'] === 'qemu' ? 'VM' : 'LXC',
+                type: backup['backup-type'] === 'vm' || backup['backup-type'] === 'qemu'
+                  ? 'VM'
+                  : backup['backup-type'] === 'host'
+                  ? 'Host'
+                  : 'LXC',
                 node: pbsInstance.name || 'PBS',
                 backupTime: backup['backup-time'] || 0,
                 backupName: `${backup['backup-id']}/${new Date((backup['backup-time'] || 0) * 1000).toISOString().split('T')[0]}`,
