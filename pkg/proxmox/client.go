@@ -1243,12 +1243,44 @@ type Disk struct {
 	Serial  string `json:"serial"`
 	Type    string `json:"type"`    // nvme, sata, sas
 	Health  string `json:"health"`  // PASSED, FAILED, UNKNOWN
-	Wearout int    `json:"wearout"` // SSD wear percentage (0-100, 100 is best)
+	Wearout int    `json:"-"`       // SSD wear percentage (0-100, 100 is best) - handled by UnmarshalJSON
 	Size    int64  `json:"size"`    // Size in bytes
 	RPM     int    `json:"rpm"`     // 0 for SSDs
 	Used    string `json:"used"`    // Filesystem or partition usage
 	Vendor  string `json:"vendor"`
 	WWN     string `json:"wwn"` // World Wide Name
+}
+
+// UnmarshalJSON custom unmarshaler for Disk to handle non-numeric wearout values
+func (d *Disk) UnmarshalJSON(data []byte) error {
+	type Alias Disk
+	aux := &struct {
+		Wearout interface{} `json:"wearout"`
+		*Alias
+	}{
+		Alias: (*Alias)(d),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Handle wearout field which can be int, string ("N/A"), or null
+	switch v := aux.Wearout.(type) {
+	case float64:
+		d.Wearout = int(v)
+	case string:
+		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers
+		// Just leave it as 0 (default value)
+		d.Wearout = 0
+	case nil:
+		d.Wearout = 0
+	default:
+		// Unexpected type, log and set to 0
+		d.Wearout = 0
+	}
+
+	return nil
 }
 
 // DiskSmart represents SMART data for a disk
