@@ -2818,6 +2818,95 @@ else
 fi
 
 echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔑  SSH ACCESS FOR TEMPERATURE MONITORING"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Pulse can collect CPU and NVMe temperature data via SSH."
+echo "This requires SSH key authentication from your Pulse server."
+echo ""
+echo "Would you like to set up SSH access for temperature monitoring?"
+echo "Type 'y' for yes, 'n' for no (you can set this up later): "
+
+if [ -t 0 ]; then
+    read -p "> " -n 1 -r SSH_REPLY
+else
+    if read -p "> " -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
+        :
+    else
+        echo "(No terminal available - skipping SSH setup)"
+        SSH_REPLY="n"
+    fi
+fi
+echo ""
+echo ""
+
+if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
+    echo "📋 Please provide the SSH public key from your Pulse server."
+    echo "   You can get it by running this command on your Pulse server:"
+    echo ""
+    echo "   cat ~/.ssh/id_rsa.pub"
+    echo ""
+    echo "   (If the file doesn't exist, run 'ssh-keygen -t rsa -N \"\" -f ~/.ssh/id_rsa')"
+    echo ""
+    echo "Paste the public key here and press Enter:"
+
+    if [ -t 0 ]; then
+        read -r SSH_PUBLIC_KEY
+    else
+        if read -r SSH_PUBLIC_KEY </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "❌ Cannot read SSH public key (no terminal available)"
+            SSH_PUBLIC_KEY=""
+        fi
+    fi
+
+    if [ -n "$SSH_PUBLIC_KEY" ]; then
+        # Validate it looks like a public key
+        if echo "$SSH_PUBLIC_KEY" | grep -qE "^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp256)"; then
+            # Add key to root's authorized_keys
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+
+            # Check if key already exists
+            if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+                echo "✅ SSH key already present in authorized_keys"
+            else
+                echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+                echo "✅ SSH key added to /root/.ssh/authorized_keys"
+            fi
+
+            # Install lm-sensors if not present
+            echo ""
+            echo "📦 Installing lm-sensors for temperature monitoring..."
+            if ! command -v sensors &> /dev/null; then
+                apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
+                sensors-detect --auto > /dev/null 2>&1
+                echo "✅ lm-sensors installed"
+            else
+                echo "✅ lm-sensors already installed"
+            fi
+
+            echo ""
+            echo "✅ SSH access configured for temperature monitoring"
+        else
+            echo "❌ Invalid SSH public key format"
+            echo "   Key should start with 'ssh-rsa', 'ssh-ed25519', or 'ecdsa-sha2-nistp256'"
+        fi
+    else
+        echo "⚠️  No SSH key provided - skipping SSH setup"
+        echo "   You can manually add the Pulse server's public key to /root/.ssh/authorized_keys later"
+    fi
+else
+    echo "⏭️  Skipping SSH setup"
+    echo "   Note: Temperature monitoring will not be available without SSH access"
+    echo "   To set up later, add your Pulse server's public key to /root/.ssh/authorized_keys"
+    echo "   and install lm-sensors: apt-get install lm-sensors"
+fi
+
+echo ""
 echo "✅ Setup complete!"
 echo ""
 
