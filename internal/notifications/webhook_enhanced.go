@@ -3,8 +3,10 @@ package notifications
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,34 +86,8 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	return n.sendWebhookOnce(webhook, payload)
 }
 
-// prepareWebhookData prepares data for template rendering
-// NOTE: This function is now defined in notifications.go to be shared
-/*
-func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
-	duration := time.Since(alert.StartTime)
-
-	return WebhookPayloadData{
-		ID:           alert.ID,
-		Level:        string(alert.Level),
-		Type:         alert.Type,
-		ResourceName: alert.ResourceName,
-		ResourceID:   alert.ResourceID,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime.Format(time.RFC3339),
-		Duration:     formatWebhookDuration(duration),
-		Timestamp:    time.Now().Format(time.RFC3339),
-		CustomFields: customFields,
-		AlertCount:   1,
-	}
-}
-*/
-
-// generatePayloadFromTemplate renders the payload using Go templates
-// NOTE: This function is now defined in notifications.go to be shared
+// NOTE: prepareWebhookData is now defined in notifications.go to avoid duplication
+// NOTE: generatePayloadFromTemplate is now defined in notifications.go to avoid duplication
 
 // shouldSendWebhook checks if alert matches webhook filter rules
 func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, alert *alerts.Alert) bool {
@@ -184,11 +160,12 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig, payload []byte) error {
 	maxRetries := webhook.RetryCount
 	if maxRetries <= 0 {
-		maxRetries = 3
+		maxRetries = WebhookDefaultRetries
 	}
 
 	var lastErr error
-	backoff := time.Second
+	var lastResp *http.Response
+	backoff := WebhookInitialBackoff
 	retryableErrors := 0
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -200,13 +177,31 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 				Dur("backoff", backoff).
 				Msg("Retrying webhook after backoff")
 			time.Sleep(backoff)
-			backoff *= 2 // Exponential backoff
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
+
+			// Check for Retry-After header from previous response
+			if lastResp != nil && lastResp.StatusCode == 429 {
+				if retryAfter := lastResp.Header.Get("Retry-After"); retryAfter != "" {
+					if seconds, err := strconv.Atoi(retryAfter); err == nil {
+						customBackoff := time.Duration(seconds) * time.Second
+						log.Debug().
+							Str("webhook", webhook.Name).
+							Dur("retryAfter", customBackoff).
+							Msg("Using Retry-After header for backoff")
+						time.Sleep(customBackoff)
+						backoff = customBackoff
+					}
+				}
+			}
+
+			// Exponential backoff
+			backoff *= 2
+			if backoff > WebhookMaxBackoff {
+				backoff = WebhookMaxBackoff
 			}
 		}
 
-		err := n.sendWebhookOnce(webhook, payload)
+		resp, err := n.sendWebhookOnceWithResponse(webhook, payload)
+		lastResp = resp
 		if err == nil {
 			if attempt > 0 {
 				log.Info().
@@ -332,8 +327,8 @@ func isRetryableWebhookError(err error) bool {
 	return true
 }
 
-// sendWebhookOnce sends a single webhook request
-func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, payload []byte) error {
+// sendWebhookOnceWithResponse sends a single webhook request and returns the response
+func (n *NotificationManager) sendWebhookOnceWithResponse(webhook EnhancedWebhookConfig, payload []byte) (*http.Response, error) {
 	method := webhook.Method
 	if method == "" {
 		method = "POST"
@@ -341,7 +336,7 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 
 	req, err := http.NewRequest(method, webhook.URL, bytes.NewBuffer(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
@@ -353,22 +348,30 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 	}
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
 
-	// Send request
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	// Send request with secure client
+	client := createSecureWebhookClient(WebhookTimeout)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body for error handling and logging
+	// Read response body with size limit
+	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
 	var respBody bytes.Buffer
-	if _, err := respBody.ReadFrom(resp.Body); err != nil {
-		return fmt.Errorf("failed to read webhook response body: %w", err)
+	bytesRead, err := respBody.ReadFrom(limitedReader)
+	if err != nil {
+		return resp, fmt.Errorf("failed to read webhook response body: %w", err)
 	}
+
+	if bytesRead >= WebhookMaxResponseSize {
+		log.Warn().
+			Str("webhook", webhook.Name).
+			Int64("bytesRead", bytesRead).
+			Msg("Webhook response exceeded size limit")
+	}
+
 	responseBody := respBody.String()
 
 	// Log response if enabled or if there's an error
@@ -381,29 +384,19 @@ func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, pay
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, responseBody)
+		return resp, fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, responseBody)
 	}
 
-	return nil
+	return resp, nil
 }
 
-// formatWebhookDuration formats a duration in a human-readable way
-// NOTE: This function is now defined in notifications.go to be shared
-/*
-func formatWebhookDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	} else if d < time.Hour {
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	} else if d < 24*time.Hour {
-		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
-	} else {
-		days := int(d.Hours()) / 24
-		hours := int(d.Hours()) % 24
-		return fmt.Sprintf("%dd %dh", days, hours)
-	}
+// sendWebhookOnce sends a single webhook request (compatibility wrapper)
+func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, payload []byte) error {
+	_, err := n.sendWebhookOnceWithResponse(webhook, payload)
+	return err
 }
-*/
+
+// NOTE: formatWebhookDuration is now defined in notifications.go to avoid duplication
 
 // TestEnhancedWebhook tests a webhook with a specific payload
 func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig) (int, string, error) {
@@ -536,9 +529,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0 (Test)")
 
 	// Send with shorter timeout for testing
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	client := createSecureWebhookClient(WebhookTestTimeout)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -546,9 +537,10 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	}
 	defer resp.Body.Close()
 
-	// Read response
+	// Read response with size limit
+	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
 	var respBody bytes.Buffer
-	if _, err := respBody.ReadFrom(resp.Body); err != nil {
+	if _, err := respBody.ReadFrom(limitedReader); err != nil {
 		return 0, "", fmt.Errorf("failed to read webhook response body: %w", err)
 	}
 
