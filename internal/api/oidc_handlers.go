@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -26,7 +27,10 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	service, err := r.getOIDCService(req.Context())
+	// Build redirect URL from request (respects X-Forwarded-* headers)
+	redirectURL := buildRedirectURL(req, cfg.RedirectURL)
+
+	service, err := r.getOIDCService(req.Context(), redirectURL)
 	if err != nil {
 		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service")
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
@@ -72,7 +76,10 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	service, err := r.getOIDCService(req.Context())
+	// Build redirect URL from request (respects X-Forwarded-* headers)
+	redirectURL := buildRedirectURL(req, cfg.RedirectURL)
+
+	service, err := r.getOIDCService(req.Context(), redirectURL)
 	if err != nil {
 		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service for callback")
 		r.redirectOIDCError(w, req, "", "oidc_init_failed")
@@ -221,7 +228,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, target, http.StatusFound)
 }
 
-func (r *Router) getOIDCService(ctx context.Context) (*OIDCService, error) {
+func (r *Router) getOIDCService(ctx context.Context, redirectURL string) (*OIDCService, error) {
 	cfg := r.ensureOIDCConfig()
 	if cfg == nil || !cfg.Enabled {
 		return nil, errors.New("oidc disabled")
@@ -230,11 +237,15 @@ func (r *Router) getOIDCService(ctx context.Context) (*OIDCService, error) {
 	r.oidcMu.Lock()
 	defer r.oidcMu.Unlock()
 
-	if r.oidcService != nil && r.oidcService.Matches(cfg) {
+	// Create a config clone with the dynamic redirect URL
+	cfgWithRedirect := cfg.Clone()
+	cfgWithRedirect.RedirectURL = redirectURL
+
+	if r.oidcService != nil && r.oidcService.Matches(cfgWithRedirect) {
 		return r.oidcService, nil
 	}
 
-	service, err := NewOIDCService(ctx, cfg)
+	service, err := NewOIDCService(ctx, cfgWithRedirect)
 	if err != nil {
 		return nil, err
 	}
@@ -393,4 +404,42 @@ func (r *Router) ensureOIDCConfig() *config.OIDCConfig {
 		r.config.OIDC.ApplyDefaults(r.config.PublicURL)
 	}
 	return r.config.OIDC
+}
+
+// buildRedirectURL constructs the OIDC redirect URL from the incoming request,
+// respecting X-Forwarded-* headers when behind a reverse proxy
+func buildRedirectURL(req *http.Request, configuredURL string) string {
+	// If explicitly configured, use that
+	if strings.TrimSpace(configuredURL) != "" {
+		return configuredURL
+	}
+
+	// Build from request headers (respects reverse proxy headers)
+	scheme := "http"
+	if req.TLS != nil {
+		scheme = "https"
+	}
+	// Check X-Forwarded-Proto header (set by reverse proxies)
+	if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+
+	host := req.Host
+	// Check X-Forwarded-Host header (set by reverse proxies)
+	if fwdHost := req.Header.Get("X-Forwarded-Host"); fwdHost != "" {
+		host = fwdHost
+	}
+
+	redirectURL := fmt.Sprintf("%s://%s%s", scheme, host, config.DefaultOIDCCallbackPath)
+
+	log.Debug().
+		Str("scheme", scheme).
+		Str("host", host).
+		Str("x_forwarded_proto", req.Header.Get("X-Forwarded-Proto")).
+		Str("x_forwarded_host", req.Header.Get("X-Forwarded-Host")).
+		Str("redirect_url", redirectURL).
+		Bool("has_tls", req.TLS != nil).
+		Msg("Built OIDC redirect URL from request")
+
+	return redirectURL
 }
