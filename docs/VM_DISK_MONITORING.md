@@ -2,16 +2,27 @@
 
 Pulse can show actual disk usage for VMs (just like containers) when the QEMU Guest Agent is installed and configured properly.
 
-## What You See
+## Quick Summary
 
 **Without QEMU Guest Agent:**
-- VMs show allocated disk size only (e.g., 32GB allocated)
-- No visibility into actual disk usage inside the VM
+- VMs show "-" for disk usage (no data available)
+- Cannot monitor actual disk usage inside the VM
 
 **With QEMU Guest Agent:**
-- VMs show real disk usage like containers do (e.g., 5.2GB used of 32GB)
+- VMs show real disk usage like containers do (e.g., "5.2GB used of 32GB / 16%")
 - Accurate threshold alerts based on actual usage
 - Better capacity planning with real data
+
+## How It Works
+
+Proxmox doesn't track VM disk usage natively (unlike containers which share the host kernel). To get real disk usage from VMs:
+
+1. Proxmox API returns `disk=0` and `maxdisk=<allocated_size>` (this is normal)
+2. Pulse automatically queries the QEMU Guest Agent API to get filesystem info
+3. Guest agent reports all mounted filesystems from inside the VM
+4. Pulse aggregates the data (filtering out special filesystems) and displays it
+
+**Important**: This works with both API tokens and password authentication. API tokens work fine for guest agent queries when permissions are set correctly.
 
 ## Requirements
 
@@ -67,8 +78,15 @@ qm agent <vmid> get-fsinfo
 
 Pulse needs the right permissions to query the guest agent:
 
-**Proxmox 8 and below:** Requires `VM.Monitor` permission
-**Proxmox 9+:** Requires `VM.GuestAgent.Audit` permission
+**Proxmox VE 8 and below:**
+- Requires `VM.Monitor` permission
+- Setup script automatically adds this
+
+**Proxmox VE 9+:**
+- Requires `VM.GuestAgent.Audit` permission (included in `PVEAuditor` role)
+- Setup script automatically configures this
+
+**Both API tokens and passwords work** - tokens do NOT have any limitation accessing guest agent data.
 
 When you run the Pulse setup script, it automatically detects your Proxmox version and sets the correct permissions. If setting up manually:
 
@@ -96,14 +114,27 @@ curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/test-vm
 /opt/pulse/scripts/test-vm-disk.sh
 ```
 
-> **Tip:** The helper script is shipped with Pulse releases under `/opt/pulse/scripts/test-vm-disk.sh`, so you no longer need to download it manually on managed hosts.
-
 Enter the VM ID when prompted. The script will check:
 - VM running status
-- Guest agent configuration  
+- Guest agent configuration
 - Guest agent runtime status
 - Filesystem information
 - API permissions
+
+### Understanding Disk Display States
+
+**Shows percentage** (e.g., "45%")
+- Everything working correctly
+- Guest agent installed and accessible
+
+**Shows "-" with hover tooltip**
+- Hover to see the specific reason
+- Common reasons:
+  - "Guest agent not running" - Agent not installed or service not started
+  - "Guest agent disabled" - Not enabled in VM config
+  - "Permission denied" - Token/user lacks required permissions
+  - "Agent timeout" - Agent installed but not responding
+  - "No filesystems" - Agent returned no usable filesystem data
 
 ### Guest Agent Not Responding
 
@@ -128,21 +159,52 @@ qm config <vmid> | grep agent
 qm agent <vmid> ping
 ```
 
-### Disk Usage Not Showing
+### Permission Denied Errors
 
-If the agent is working but Pulse still shows allocated size:
+If you see "permission denied" in Pulse logs when querying guest agent:
 
-1. **Check Pulse permissions** - Ensure the Pulse user has VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+)
-2. **Check agent version** - Older agents might not support filesystem info
-3. **Windows VMs** - Ensure virtio-win drivers are up to date
-4. **Check Pulse logs** - Look for "GetVMFSInfo" errors
+1. **Verify token/user permissions:**
+   ```bash
+   pveum user permissions pulse-monitor@pam
+   ```
+
+2. **For Proxmox 9+:** Ensure user has `PVEAuditor` role or `VM.GuestAgent.Audit` permission
+
+3. **For Proxmox 8:** Ensure user has `VM.Monitor` permission
+
+4. **Re-run setup script** if you added the node before Pulse v4.7 (old scripts didn't add VM.Monitor)
+
+### Disk Usage Still Not Showing
+
+If the agent is working but Pulse still shows "-":
+
+1. **Check Pulse logs** for specific error messages:
+   ```bash
+   # Docker
+   docker logs pulse | grep -i "guest agent\|fsinfo"
+
+   # Systemd
+   journalctl -u pulse -f | grep -i "guest agent\|fsinfo"
+   ```
+
+2. **Test guest agent manually** from Proxmox host:
+   ```bash
+   qm agent <vmid> get-fsinfo
+   ```
+   If this works but Pulse doesn't show data, check Pulse permissions and logs
+
+3. **Check agent version** - Older agents might not support filesystem info
+
+4. **Windows VMs** - Ensure virtio-win drivers are up to date
 
 ### Network Filesystems
 
 The agent reports all mounted filesystems. Pulse automatically filters out:
 - Network mounts (NFS, CIFS, SMB)
-- Special filesystems (proc, sys, tmpfs, etc.)
+- Special filesystems (proc, sys, tmpfs, devtmpfs, etc.)
+- Special Windows partitions ("System Reserved")
 - Bind mounts and overlays
+- CD/DVD filesystems (iso9660, CDFS)
 
 Only local disk usage is counted toward the VM's total.
 
@@ -152,6 +214,7 @@ Only local disk usage is counted toward the VM's total.
 2. **Monitor agent status** - Set up alerts if critical VMs lose agent connectivity
 3. **Keep agents updated** - Update guest agents when updating VM operating systems
 4. **Test after VM migrations** - Verify agent still works after moving VMs between nodes
+5. **Check logs regularly** - Monitor Pulse logs for guest agent errors
 
 ## Platform-Specific Notes
 
@@ -177,3 +240,4 @@ With QEMU Guest Agent disk monitoring:
 - **Better planning** - See actual growth trends
 - **Prevent surprises** - Know when VMs are actually running out of space
 - **Optimize storage** - Identify over-provisioned VMs
+- **Consistent monitoring** - VMs and containers use the same metrics
