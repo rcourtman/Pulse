@@ -8,6 +8,8 @@
 
 Monitor your entire Proxmox infrastructure from a single dashboard. Get instant alerts when nodes go down, backups fail, or storage fills up. Supports email, Discord, Slack, Telegram, and more.
 
+**[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data)
+
 ![Dashboard](docs/images/01-dashboard.png)
 
 ## Support Pulse Development
