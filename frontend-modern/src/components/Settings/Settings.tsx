@@ -2704,82 +2704,40 @@ const Settings: Component = () => {
                             />
                           </svg>
                         </div>
-                        <SectionHeader
-                          title="Authentication"
-                          description="Manage your login credentials"
-                          size="sm"
-                          class="flex-1"
-                        />
+                        <SectionHeader title="Authentication" size="sm" class="flex-1" />
                       </div>
                     </div>
 
                     {/* Content */}
                     <div class="p-6">
-                      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="flex flex-wrap items-start gap-4">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setShowPasswordModal(true);
-                            }}
-                            class="flex items-center gap-3 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-all"
-                          >
-                            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                              <svg
-                                class="w-5 h-5 text-blue-600 dark:text-blue-400"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                                />
-                              </svg>
-                            </div>
-                            <div class="text-left">
-                              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                Change password
-                              </div>
-                              <div class="text-xs text-gray-500 dark:text-gray-400">
-                                Keep existing API token
-                              </div>
-                            </div>
-                          </button>
-                          <div class="flex flex-col gap-1">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                              Need to replace both the password and API token?
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
-                              class={`inline-flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors ${showQuickSecurityWizard() ? 'underline' : ''}`}
-                            >
-                              <svg
-                                class="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                                />
-                              </svg>
-                              <span>Generate new credentials</span>
-                            </button>
-                          </div>
+                      <div class="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowPasswordModal(true);
+                          }}
+                          class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Change password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickSecurityWizard(!showQuickSecurityWizard())}
+                          class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          Rotate credentials
+                        </button>
+                        <div class="flex-1"></div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400">
+                          <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
+                          {securityStatus()?.authUsername || 'Not configured'}
                         </div>
                       </div>
 
                       <Show when={showQuickSecurityWizard()}>
-                        <div class="mt-6">
+                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                           <QuickSecuritySetup
                             mode="rotate"
                             defaultUsername={securityStatus()?.authUsername || 'admin'}
@@ -2790,100 +2748,6 @@ const Settings: Component = () => {
                           />
                         </div>
                       </Show>
-
-                      <div class="mt-8 grid gap-3 text-xs text-gray-600 dark:text-gray-400 md:grid-cols-2">
-                        <div class="flex items-start gap-2">
-                          <svg
-                            class="w-4 h-4 mt-0.5 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                          </svg>
-                          <div>
-                            <div class="font-medium text-gray-800 dark:text-gray-200">
-                              Admin user
-                            </div>
-                            <div>{securityStatus()?.authUsername || 'Not configured'}</div>
-                          </div>
-                        </div>
-                        <div class="flex items-start gap-2">
-                          <svg
-                            class="w-4 h-4 mt-0.5 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 8v4l3 3"
-                            />
-                          </svg>
-                          <div>
-                            <div class="font-medium text-gray-800 dark:text-gray-200">
-                              Last updated
-                            </div>
-                            <div>{formatTimestamp(securityStatus()?.authLastModified)}</div>
-                          </div>
-                        </div>
-                        <div class="flex items-start gap-2">
-                          <svg
-                            class="w-4 h-4 mt-0.5 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 6v6l4 2"
-                            />
-                          </svg>
-                          <div>
-                            <div class="font-medium text-gray-800 dark:text-gray-200">
-                              Current coverage
-                            </div>
-                            <div>
-                              {securityStatus()?.hasAuthentication
-                                ? 'Password login required.'
-                                : 'Password login disabled.'}{' '}
-                              {securityStatus()?.oidcEnabled ? 'OIDC available.' : 'OIDC off.'}
-                            </div>
-                          </div>
-                        </div>
-                        <div class="flex items-start gap-2">
-                          <svg
-                            class="w-4 h-4 mt-0.5 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12h6m-3-3v6m9 3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                          <div>
-                            <div class="font-medium text-gray-800 dark:text-gray-200">
-                              Disable password auth
-                            </div>
-                            <div>
-                              Set DISABLE_AUTH=true after confirming SSO works
-                            </div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </Card>
                 </Show>
