@@ -90,6 +90,7 @@ type Config struct {
 	AuthUser             string `envconfig:"PULSE_AUTH_USER"`
 	AuthPass             string `envconfig:"PULSE_AUTH_PASS"`
 	DisableAuth          bool   `envconfig:"DISABLE_AUTH" default:"false"`
+	DemoMode             bool   `envconfig:"DEMO_MODE" default:"false"` // Read-only demo mode
 	AllowedOrigins       string `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	IframeEmbeddingAllow string `envconfig:"IFRAME_EMBEDDING_ALLOW" default:"SAMEORIGIN"`
 
@@ -353,6 +354,15 @@ func Load() (*Config, error) {
 		}
 	} else {
 		log.Debug().Bool("DisableAuth", cfg.DisableAuth).Msg("DISABLE_AUTH not set, DisableAuth remains")
+	}
+
+	// Check if demo mode is enabled
+	demoModeEnv := os.Getenv("DEMO_MODE")
+	if demoModeEnv != "" {
+		cfg.DemoMode = demoModeEnv == "true" || demoModeEnv == "1"
+		if cfg.DemoMode {
+			log.Warn().Msg("🎭 DEMO MODE - All modifications disabled (read-only)")
+		}
 	}
 
 	// Load proxy authentication settings
