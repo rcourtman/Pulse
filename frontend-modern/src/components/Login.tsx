@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, onMount, lazy, Suspense, createEffect } from 'solid-js';
+import { Component, createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import { setBasicAuth } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/constants';
 
@@ -29,7 +29,6 @@ export const Login: Component<LoginProps> = (props) => {
   const [oidcLoading, setOidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
-  const [autoOidcTriggered, setAutoOidcTriggered] = createSignal(false);
 
   const supportsOIDC = () => Boolean(authStatus()?.oidcEnabled);
 
