@@ -107,7 +107,7 @@ scripts/run-tests.sh
 scripts/TEST_*.md
 
 # Mock mode files (local development only)
-mock.env
+mock.env*
 internal/monitoring/mock_integration.go
 internal/monitoring/mock_stub.go
 scripts/mock-dev.sh
