@@ -28,10 +28,12 @@ func (r *Router) handleOIDCLogin(w http.ResponseWriter, req *http.Request) {
 
 	service, err := r.getOIDCService(req.Context())
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialise OIDC service")
+		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service")
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
 		return
 	}
+
+	log.Debug().Str("issuer", cfg.IssuerURL).Str("client_id", cfg.ClientID).Msg("Starting OIDC login flow")
 
 	var payload struct {
 		ReturnTo string `json:"returnTo"`
@@ -72,10 +74,12 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	service, err := r.getOIDCService(req.Context())
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialise OIDC service for callback")
+		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to initialise OIDC service for callback")
 		r.redirectOIDCError(w, req, "", "oidc_init_failed")
 		return
 	}
+
+	log.Debug().Str("issuer", cfg.IssuerURL).Msg("Processing OIDC callback")
 
 	query := req.URL.Query()
 	if errParam := query.Get("error"); errParam != "" {
@@ -111,11 +115,13 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	token, err := service.exchangeCode(ctx, code, entry)
 	if err != nil {
-		log.Error().Err(err).Msg("OIDC code exchange failed")
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Code exchange failed")
+		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("OIDC code exchange failed")
+		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "Code exchange failed: "+err.Error())
 		r.redirectOIDCError(w, req, entry.ReturnTo, "exchange_failed")
 		return
 	}
+
+	log.Debug().Msg("OIDC code exchange successful")
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || rawIDToken == "" {
@@ -126,11 +132,13 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	idToken, err := service.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to verify ID token")
-		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed")
+		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to verify ID token")
+		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
 		r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_id_token")
 		return
 	}
+
+	log.Debug().Str("subject", idToken.Subject).Msg("ID token verified successfully")
 
 	claims := make(map[string]any)
 	if err := idToken.Claims(&claims); err != nil {
@@ -152,13 +160,23 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 		username = idToken.Subject
 	}
 
+	log.Debug().
+		Str("username", username).
+		Str("email", email).
+		Str("subject", idToken.Subject).
+		Str("username_claim", cfg.UsernameClaim).
+		Str("email_claim", cfg.EmailClaim).
+		Msg("Extracted user identity from claims")
+
 	if len(cfg.AllowedEmails) > 0 && !matchesValue(email, cfg.AllowedEmails) {
+		log.Debug().Str("email", email).Strs("allowed_emails", cfg.AllowedEmails).Msg("Email not in allowed list")
 		LogAuditEvent("oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email not permitted")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "email_restricted")
 		return
 	}
 
 	if len(cfg.AllowedDomains) > 0 && !matchesDomain(email, cfg.AllowedDomains) {
+		log.Debug().Str("email", email).Strs("allowed_domains", cfg.AllowedDomains).Msg("Email domain not in allowed list")
 		LogAuditEvent("oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email domain restricted")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "domain_restricted")
 		return
@@ -166,11 +184,18 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	if len(cfg.AllowedGroups) > 0 {
 		groups := extractStringSliceClaim(claims, cfg.GroupsClaim)
+		log.Debug().
+			Strs("user_groups", groups).
+			Strs("allowed_groups", cfg.AllowedGroups).
+			Str("groups_claim", cfg.GroupsClaim).
+			Msg("Checking group membership")
 		if !intersects(groups, cfg.AllowedGroups) {
+			log.Debug().Msg("User not in any allowed groups")
 			LogAuditEvent("oidc_login", username, GetClientIP(req), req.URL.Path, false, "Group restriction failed")
 			r.redirectOIDCError(w, req, entry.ReturnTo, "group_restricted")
 			return
 		}
+		log.Debug().Msg("User group membership verified")
 	}
 
 	if err := r.establishSession(w, req, username); err != nil {
