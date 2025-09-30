@@ -224,23 +224,12 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </div>
       <form class="p-6 space-y-5" onSubmit={handleSave}>
-        <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-xs text-blue-800 dark:text-blue-200">
-          <p class="font-semibold mb-2">Getting started</p>
-          <ol class="space-y-1 list-decimal pl-5">
-            <li>Set your PUBLIC_URL environment variable to match how users access Pulse.</li>
-            <li>
-              Register a public or confidential client with your IdP. Use the redirect URL shown below (auto-generated from PUBLIC_URL).
-            </li>
-            <li>Copy the issuer and client ID into the fields here. Client secret is optional (only needed if your IdP doesn't support PKCE).</li>
-            <li>
-              Grant scopes such as{' '}
-              <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">
-                openid profile email
-              </code>
-              .
-            </li>
-            <li>Optionally restrict access by domain, email, or groups.</li>
-            <li>Save, then test using the SSO button on the login page (password auth still works).</li>
+        <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-200">
+          <ol class="space-y-1 list-decimal pl-4">
+            <li>Set PUBLIC_URL environment variable</li>
+            <li>Register client with your IdP using redirect URL below</li>
+            <li>Enter issuer and client ID (client secret optional for PKCE)</li>
+            <li>Save and test with SSO button on login page</li>
           </ol>
         </div>
         <Show when={loading()}>

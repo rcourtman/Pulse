@@ -23,57 +23,47 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   const items = () => [
     {
       key: 'password',
-      label: 'Password authentication',
+      label: 'Password login',
       enabled: props.status.hasAuthentication,
-      description: props.status.hasAuthentication
-        ? 'Login required for the UI.'
-        : 'Disabled or not configured.',
+      description: props.status.hasAuthentication ? 'Active' : 'Not configured',
     },
     {
       key: 'oidc',
-      label: 'Single sign-on (OIDC)',
+      label: 'Single sign-on',
       enabled: Boolean(props.status.oidcEnabled),
-      description: props.status.oidcEnabled
-        ? 'OIDC login available.'
-        : 'Add your identity provider to enable it.',
+      description: props.status.oidcEnabled ? 'OIDC configured' : 'Not configured',
     },
     {
       key: 'proxy',
-      label: 'Proxy authentication',
+      label: 'Proxy auth',
       enabled: Boolean(props.status.hasProxyAuth),
-      description: props.status.hasProxyAuth
-        ? 'Requests validated by upstream proxy.'
-        : 'Optional reverse-proxy auth.',
+      description: props.status.hasProxyAuth ? 'Active' : 'Not configured',
     },
     {
       key: 'token',
       label: 'API token',
       enabled: props.status.apiTokenConfigured,
-      description: props.status.apiTokenConfigured
-        ? 'Automation available via token.'
-        : 'Generate a token for scripts.',
+      description: props.status.apiTokenConfigured ? 'Active' : 'Not configured',
     },
     {
       key: 'export',
       label: 'Export protection',
       enabled: props.status.exportProtected && !props.status.unprotectedExportAllowed,
       description: props.status.unprotectedExportAllowed
-        ? 'Exports can bypass token checks.'
-        : 'Exports require token + passphrase.',
+        ? 'Unprotected'
+        : 'Token + passphrase required',
     },
     {
       key: 'https',
       label: 'HTTPS',
       enabled: Boolean(props.status.hasHTTPS),
-      description: props.status.hasHTTPS ? 'Connection is encrypted.' : 'Serving over HTTP.',
+      description: props.status.hasHTTPS ? 'Encrypted' : 'HTTP only',
     },
     {
       key: 'audit',
-      label: 'Audit logging',
+      label: 'Audit log',
       enabled: props.status.hasAuditLogging,
-      description: props.status.hasAuditLogging
-        ? 'Auth events logged for review.'
-        : 'Enable PULSE_AUDIT_LOG for trails.',
+      description: props.status.hasAuditLogging ? 'Active' : 'Not enabled',
     },
   ];
 
@@ -86,12 +76,7 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
     <Card padding="md" class="border border-gray-200 dark:border-gray-700">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-          <SectionHeader
-            title="Security posture"
-            description="Snapshot of authentication and hardening features"
-            size="sm"
-            class="flex-1"
-          />
+          <SectionHeader title="Security posture" size="sm" class="flex-1" />
           <div class="flex items-center gap-2">
             <span
               class={`${
@@ -112,27 +97,6 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
           </div>
         </div>
 
-        <Show when={props.status.requiresAuth}>
-          <div class="flex items-start gap-2 p-3 rounded-lg bg-green-50 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800">
-            <svg
-              class="w-4 h-4 mt-0.5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span>
-              Authentication is required for this instance. Keep at least one trusted login path
-              enabled before disabling password auth.
-            </span>
-          </div>
-        </Show>
 
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <For each={items()}>
