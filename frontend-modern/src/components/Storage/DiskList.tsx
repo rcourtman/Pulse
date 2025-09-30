@@ -14,9 +14,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
 
-    // Filter by node if selected
+    // Filter by node if selected (using instance ID to handle duplicate hostnames)
     if (props.selectedNode) {
-      disks = disks.filter((d) => d.node === props.selectedNode);
+      disks = disks.filter((d) => d.instance === props.selectedNode);
     }
 
     // Filter by search term
