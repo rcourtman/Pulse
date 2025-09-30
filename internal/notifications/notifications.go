@@ -19,22 +19,22 @@ import (
 // Webhook configuration constants
 const (
 	// HTTP client settings
-	WebhookTimeout          = 30 * time.Second
-	WebhookMaxResponseSize  = 1 * 1024 * 1024 // 1 MB max response size
-	WebhookMaxRedirects     = 3                // Maximum number of redirects to follow
-	WebhookTestTimeout      = 10 * time.Second
+	WebhookTimeout         = 30 * time.Second
+	WebhookMaxResponseSize = 1 * 1024 * 1024 // 1 MB max response size
+	WebhookMaxRedirects    = 3               // Maximum number of redirects to follow
+	WebhookTestTimeout     = 10 * time.Second
 
 	// Retry settings
-	WebhookInitialBackoff   = 1 * time.Second
-	WebhookMaxBackoff       = 30 * time.Second
-	WebhookDefaultRetries   = 3
+	WebhookInitialBackoff = 1 * time.Second
+	WebhookMaxBackoff     = 30 * time.Second
+	WebhookDefaultRetries = 3
 
 	// History settings
-	WebhookHistoryMaxSize   = 100
+	WebhookHistoryMaxSize = 100
 
 	// Rate limiting settings
-	WebhookRateLimitWindow  = 1 * time.Minute  // Time window for rate limiting
-	WebhookRateLimitMax     = 10                // Max requests per window per webhook
+	WebhookRateLimitWindow = 1 * time.Minute // Time window for rate limiting
+	WebhookRateLimitMax    = 10              // Max requests per window per webhook
 )
 
 // createSecureWebhookClient creates an HTTP client with security controls
@@ -100,19 +100,19 @@ type webhookRateLimit struct {
 
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu              sync.RWMutex
-	emailConfig     EmailConfig
-	webhooks        []WebhookConfig
-	enabled         bool
-	cooldown        time.Duration
-	lastNotified    map[string]notificationRecord
-	groupWindow     time.Duration
-	pendingAlerts   []*alerts.Alert
-	groupTimer      *time.Timer
-	groupByNode     bool
-	publicURL       string // Full URL to access Pulse
-	groupByGuest    bool
-	webhookHistory  []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
+	mu                sync.RWMutex
+	emailConfig       EmailConfig
+	webhooks          []WebhookConfig
+	enabled           bool
+	cooldown          time.Duration
+	lastNotified      map[string]notificationRecord
+	groupWindow       time.Duration
+	pendingAlerts     []*alerts.Alert
+	groupTimer        *time.Timer
+	groupByNode       bool
+	publicURL         string // Full URL to access Pulse
+	groupByGuest      bool
+	webhookHistory    []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
 	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
 }
 

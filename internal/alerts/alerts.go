@@ -69,7 +69,7 @@ type ThresholdConfig struct {
 	DiskWrite           *HysteresisThreshold `json:"diskWrite,omitempty"`
 	NetworkIn           *HysteresisThreshold `json:"networkIn,omitempty"`
 	NetworkOut          *HysteresisThreshold `json:"networkOut,omitempty"`
-	Usage               *HysteresisThreshold `json:"usage,omitempty"`   // For storage devices
+	Usage               *HysteresisThreshold `json:"usage,omitempty"`       // For storage devices
 	Temperature         *HysteresisThreshold `json:"temperature,omitempty"` // For node CPU temperature
 	// Legacy fields for backward compatibility
 	CPULegacy        *float64 `json:"cpuLegacy,omitempty"`
@@ -179,8 +179,8 @@ type AlertConfig struct {
 //
 // Lock Ordering Documentation:
 // The Manager uses two mutexes to prevent deadlocks:
-//   1. m.mu (primary lock) - protects most manager state
-//   2. m.resolvedMutex - protects only recentlyResolved map
+//  1. m.mu (primary lock) - protects most manager state
+//  2. m.resolvedMutex - protects only recentlyResolved map
 //
 // Lock Ordering Rules:
 //   - NEVER hold m.mu when acquiring resolvedMutex

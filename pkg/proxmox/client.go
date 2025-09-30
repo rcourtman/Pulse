@@ -1241,12 +1241,12 @@ type Disk struct {
 	DevPath string `json:"devpath"`
 	Model   string `json:"model"`
 	Serial  string `json:"serial"`
-	Type    string `json:"type"`    // nvme, sata, sas
-	Health  string `json:"health"`  // PASSED, FAILED, UNKNOWN
-	Wearout int    `json:"-"`       // SSD wear percentage (0-100, 100 is best) - handled by UnmarshalJSON
-	Size    int64  `json:"size"`    // Size in bytes
-	RPM     int    `json:"rpm"`     // 0 for SSDs
-	Used    string `json:"used"`    // Filesystem or partition usage
+	Type    string `json:"type"`   // nvme, sata, sas
+	Health  string `json:"health"` // PASSED, FAILED, UNKNOWN
+	Wearout int    `json:"-"`      // SSD wear percentage (0-100, 100 is best) - handled by UnmarshalJSON
+	Size    int64  `json:"size"`   // Size in bytes
+	RPM     int    `json:"rpm"`    // 0 for SSDs
+	Used    string `json:"used"`   // Filesystem or partition usage
 	Vendor  string `json:"vendor"`
 	WWN     string `json:"wwn"` // World Wide Name
 }
