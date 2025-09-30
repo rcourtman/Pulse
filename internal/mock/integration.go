@@ -3,6 +3,8 @@ package mock
 import (
 	"os"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -10,63 +12,175 @@ import (
 )
 
 var (
-	mockData models.StateSnapshot
-	// Removed mockAlerts - using real alert manager instead
-	mockAlertHistory []models.Alert
-	mockEnabled      bool
-	lastUpdate       time.Time
-	updateInterval   = 2 * time.Second
+	dataMu        sync.RWMutex
+	mockData      models.StateSnapshot
+	mockAlerts    []models.Alert
+	mockConfig    = DefaultConfig
+	enabled       atomic.Bool
+	updateTicker  *time.Ticker
+	stopUpdatesCh chan struct{}
 )
 
+const updateInterval = 2 * time.Second
+
 func init() {
-	// Check if mock mode is enabled
-	mockEnabled = os.Getenv("PULSE_MOCK_MODE") == "true"
+	initialEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
+	if initialEnabled {
+		log.Info().Msg("Mock mode enabled at startup")
+	}
+	setEnabled(initialEnabled, true)
+}
 
-	if mockEnabled {
-		log.Info().Msg("Mock mode enabled - using simulated data")
+// IsMockEnabled returns whether mock mode is enabled.
+func IsMockEnabled() bool {
+	return enabled.Load()
+}
 
-		// Load configuration from env vars or use defaults
-		config := LoadMockConfig()
+// SetEnabled enables or disables mock mode.
+func SetEnabled(enable bool) {
+	setEnabled(enable, false)
+}
 
-		// Generate initial mock data
-		mockData = GenerateMockData(config)
-		// Removed fake alert generation - real alert manager will handle this
-		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
-		lastUpdate = time.Now()
+// ToggleMockMode enables or disables mock mode at runtime (backwards-compatible helper).
+func ToggleMockMode(enable bool) {
+	SetEnabled(enable)
+}
 
-		// Start update ticker
-		go func() {
-			ticker := time.NewTicker(updateInterval)
-			defer ticker.Stop()
+func setEnabled(enable bool, fromInit bool) {
+	current := enabled.Load()
+	if current == enable {
+		// Still update env so other processes see the latest value when not invoked from init.
+		if !fromInit {
+			setEnvFlag(enable)
+		}
+		return
+	}
 
-			for range ticker.C {
-				if mockEnabled {
-					UpdateMetrics(&mockData, config)
-					// Removed fake alert regeneration
-				}
-			}
-		}()
+	if enable {
+		enableMockMode(fromInit)
+	} else {
+		disableMockMode()
+	}
+
+	if !fromInit {
+		setEnvFlag(enable)
 	}
 }
 
-// LoadMockConfig loads mock configuration from environment variables
+func setEnvFlag(enable bool) {
+	if enable {
+		_ = os.Setenv("PULSE_MOCK_MODE", "true")
+	} else {
+		_ = os.Setenv("PULSE_MOCK_MODE", "false")
+	}
+}
+
+func enableMockMode(fromInit bool) {
+	config := LoadMockConfig()
+
+	dataMu.Lock()
+	mockConfig = config
+	mockData = GenerateMockData(config)
+	mockAlerts = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
+	mockData.LastUpdate = time.Now()
+	enabled.Store(true)
+	startUpdateLoopLocked()
+	dataMu.Unlock()
+
+	log.Info().
+		Int("nodes", config.NodeCount).
+		Int("vms_per_node", config.VMsPerNode).
+		Int("lxcs_per_node", config.LXCsPerNode).
+		Bool("random_metrics", config.RandomMetrics).
+		Float64("stopped_percent", config.StoppedPercent).
+		Msg("Mock mode enabled")
+
+	if !fromInit {
+		log.Info().Msg("Mock data generator started")
+	}
+}
+
+func disableMockMode() {
+	dataMu.Lock()
+	if !enabled.Load() {
+		dataMu.Unlock()
+		return
+	}
+	enabled.Store(false)
+	stopUpdateLoopLocked()
+	mockData = models.StateSnapshot{}
+	mockAlerts = nil
+	dataMu.Unlock()
+
+	log.Info().Msg("Mock mode disabled")
+}
+
+func startUpdateLoopLocked() {
+	stopUpdateLoopLocked()
+	stopUpdatesCh = make(chan struct{})
+	updateTicker = time.NewTicker(updateInterval)
+
+	go func() {
+		for {
+			select {
+			case <-updateTicker.C:
+				cfg := GetConfig()
+				updateMetrics(cfg)
+			case <-stopUpdatesCh:
+				return
+			}
+		}
+	}()
+}
+
+func stopUpdateLoopLocked() {
+	if updateTicker != nil {
+		updateTicker.Stop()
+		updateTicker = nil
+	}
+	if stopUpdatesCh != nil {
+		close(stopUpdatesCh)
+		stopUpdatesCh = nil
+	}
+}
+
+func updateMetrics(cfg MockConfig) {
+	if !IsMockEnabled() {
+		return
+	}
+
+	dataMu.Lock()
+	defer dataMu.Unlock()
+
+	UpdateMetrics(&mockData, cfg)
+	mockData.LastUpdate = time.Now()
+}
+
+// GetConfig returns the current mock configuration.
+func GetConfig() MockConfig {
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+	return mockConfig
+}
+
+// LoadMockConfig loads mock configuration from environment variables.
 func LoadMockConfig() MockConfig {
 	config := DefaultConfig
 
 	if val := os.Getenv("PULSE_MOCK_NODES"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
 			config.NodeCount = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_VMS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
 			config.VMsPerNode = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_LXCS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
 			config.LXCsPerNode = n
 		}
 	}
@@ -81,84 +195,83 @@ func LoadMockConfig() MockConfig {
 		}
 	}
 
-	log.Info().
-		Int("nodes", config.NodeCount).
-		Int("vms_per_node", config.VMsPerNode).
-		Int("lxcs_per_node", config.LXCsPerNode).
-		Bool("random_metrics", config.RandomMetrics).
-		Float64("stopped_percent", config.StoppedPercent).
-		Msg("Mock configuration loaded")
-
 	return config
 }
 
-// IsMockEnabled returns whether mock mode is enabled
-func IsMockEnabled() bool {
-	return mockEnabled
-}
-
-// GetMockState returns the current mock state snapshot
-func GetMockState() models.StateSnapshot {
-	if !mockEnabled {
-		return models.StateSnapshot{}
+// SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.
+func SetMockConfig(cfg MockConfig) {
+	dataMu.Lock()
+	mockConfig = cfg
+	if enabled.Load() {
+		mockData = GenerateMockData(cfg)
+		mockAlerts = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
+		mockData.LastUpdate = time.Now()
 	}
-
-	// Return the current mock data
-	// Don't override alerts - let the real alert manager handle them
-	// mockData.ActiveAlerts = mockAlerts
-	return mockData
-}
-
-// ToggleMockMode enables or disables mock mode at runtime
-func ToggleMockMode(enable bool) {
-	if enable && !mockEnabled {
-		mockEnabled = true
-		config := LoadMockConfig()
-		mockData = GenerateMockData(config)
-		// Removed fake alert generation
-		mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
-		log.Info().
-			Int("history_count", len(mockAlertHistory)).
-			Msg("Mock mode enabled dynamically with alert history")
-	} else if !enable && mockEnabled {
-		mockEnabled = false
-		log.Info().Msg("Mock mode disabled dynamically")
-	}
-}
-
-// SetMockConfig updates the mock configuration dynamically
-func SetMockConfig(nodeCount, vmsPerNode, lxcsPerNode int) {
-	if !mockEnabled {
-		return
-	}
-
-	config := MockConfig{
-		NodeCount:      nodeCount,
-		VMsPerNode:     vmsPerNode,
-		LXCsPerNode:    lxcsPerNode,
-		RandomMetrics:  true,
-		StoppedPercent: 0.2,
-	}
-
-	mockData = GenerateMockData(config)
-	// Removed fake alert generation
-	mockAlertHistory = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
+	dataMu.Unlock()
 
 	log.Info().
-		Int("nodes", nodeCount).
-		Int("vms", vmsPerNode).
-		Int("lxcs", lxcsPerNode).
+		Int("nodes", cfg.NodeCount).
+		Int("vms_per_node", cfg.VMsPerNode).
+		Int("lxcs_per_node", cfg.LXCsPerNode).
+		Bool("random_metrics", cfg.RandomMetrics).
+		Float64("stopped_percent", cfg.StoppedPercent).
 		Msg("Mock configuration updated")
 }
 
-// GetMockAlertHistory returns mock alert history
+// GetMockState returns the current mock state snapshot.
+func GetMockState() models.StateSnapshot {
+	if !IsMockEnabled() {
+		return models.StateSnapshot{}
+	}
+
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+
+	return cloneState(mockData)
+}
+
+// GetMockAlertHistory returns mock alert history.
 func GetMockAlertHistory(limit int) []models.Alert {
-	if !mockEnabled {
+	if !IsMockEnabled() {
 		return []models.Alert{}
 	}
 
-	if limit > 0 && limit < len(mockAlertHistory) {
-		return mockAlertHistory[:limit]
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+
+	if limit > 0 && limit < len(mockAlerts) {
+		return append([]models.Alert(nil), mockAlerts[:limit]...)
 	}
-	return mockAlertHistory
+	return append([]models.Alert(nil), mockAlerts...)
+}
+
+func cloneState(state models.StateSnapshot) models.StateSnapshot {
+	copyState := models.StateSnapshot{
+		Nodes:            append([]models.Node(nil), state.Nodes...),
+		VMs:              append([]models.VM(nil), state.VMs...),
+		Containers:       append([]models.Container(nil), state.Containers...),
+		Storage:          append([]models.Storage(nil), state.Storage...),
+		PhysicalDisks:    append([]models.PhysicalDisk(nil), state.PhysicalDisks...),
+		PBSInstances:     append([]models.PBSInstance(nil), state.PBSInstances...),
+		PBSBackups:       append([]models.PBSBackup(nil), state.PBSBackups...),
+		Metrics:          append([]models.Metric(nil), state.Metrics...),
+		Performance:      state.Performance,
+		Stats:            state.Stats,
+		ActiveAlerts:     append([]models.Alert(nil), state.ActiveAlerts...),
+		RecentlyResolved: append([]models.ResolvedAlert(nil), state.RecentlyResolved...),
+		LastUpdate:       state.LastUpdate,
+		ConnectionHealth: make(map[string]bool, len(state.ConnectionHealth)),
+	}
+
+	copyState.PVEBackups = models.PVEBackups{
+		BackupTasks:    append([]models.BackupTask(nil), state.PVEBackups.BackupTasks...),
+		StorageBackups: append([]models.StorageBackup(nil), state.PVEBackups.StorageBackups...),
+		GuestSnapshots: append([]models.GuestSnapshot(nil), state.PVEBackups.GuestSnapshots...),
+	}
+
+	for k, v := range state.ConnectionHealth {
+		copyState.ConnectionHealth[k] = v
+	}
+
+	return copyState
 }

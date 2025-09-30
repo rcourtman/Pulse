@@ -184,6 +184,18 @@ func (r *Router) setupRoutes() {
 		}
 	})
 
+	// Mock mode toggle routes
+	r.mux.HandleFunc("/api/system/mock-mode", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			configHandlers.HandleGetMockMode(w, req)
+		case http.MethodPost, http.MethodPut:
+			RequireAdmin(configHandlers.config, configHandlers.HandleUpdateMockMode)(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Registration token routes removed - feature deprecated
 
 	// Security routes
@@ -884,13 +896,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// Also allow static assets without auth (JS, CSS, etc)
 			// These MUST be accessible for the login page to work
 			isStaticAsset := strings.HasPrefix(req.URL.Path, "/assets/") ||
+				strings.HasPrefix(req.URL.Path, "/@vite/") ||
+				strings.HasPrefix(req.URL.Path, "/@solid-refresh") ||
+				strings.HasPrefix(req.URL.Path, "/src/") ||
+				strings.HasPrefix(req.URL.Path, "/node_modules/") ||
 				req.URL.Path == "/" ||
 				req.URL.Path == "/index.html" ||
 				req.URL.Path == "/favicon.ico" ||
 				req.URL.Path == "/logo.svg" ||
 				strings.HasSuffix(req.URL.Path, ".js") ||
 				strings.HasSuffix(req.URL.Path, ".css") ||
-				strings.HasSuffix(req.URL.Path, ".map")
+				strings.HasSuffix(req.URL.Path, ".map") ||
+				strings.HasSuffix(req.URL.Path, ".ts") ||
+				strings.HasSuffix(req.URL.Path, ".tsx") ||
+				strings.HasSuffix(req.URL.Path, ".mjs") ||
+				strings.HasSuffix(req.URL.Path, ".jsx")
 
 			isPublic := isStaticAsset
 			for _, path := range publicPaths {
