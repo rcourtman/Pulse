@@ -45,8 +45,63 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
     }
   });
 
-  // Note: WebSocket updates for discovery will be handled separately
-  // The background service will update the cache and we'll fetch it when needed
+  // Listen for real-time WebSocket updates when modal is open and scanning
+  createEffect(() => {
+    if (!props.isOpen) return;
+
+    const handleWsMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Handle discovery server found (real-time updates)
+        if (message.type === 'discovery_server_found' && message.data?.server) {
+          const server: DiscoveredServer = message.data.server;
+
+          // Add server to results immediately
+          setDiscoveryResult((prev) => {
+            if (!prev) {
+              return { servers: [server], errors: [] };
+            }
+
+            // Check if server already exists (by IP and port)
+            const exists = prev.servers.some(
+              (s) => s.ip === server.ip && s.port === server.port
+            );
+
+            if (!exists) {
+              return {
+                ...prev,
+                servers: [...prev.servers, server],
+              };
+            }
+            return prev;
+          });
+        }
+
+        // Handle discovery started
+        if (message.type === 'discovery_started') {
+          setIsScanning(true);
+        }
+
+        // Handle discovery complete
+        if (message.type === 'discovery_complete') {
+          setIsScanning(false);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    // Get WebSocket from global state
+    const ws = (window as any).__pulseWs;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.addEventListener('message', handleWsMessage);
+
+      return () => {
+        ws.removeEventListener('message', handleWsMessage);
+      };
+    }
+  });
 
   const loadCachedResults = async () => {
     try {
@@ -319,35 +374,35 @@ export const DiscoveryModal: Component<DiscoveryModalProps> = (props) => {
                   </div>
                 </div>
 
-                {/* Loading skeleton cards */}
+                {/* Show loading message when scanning with no results yet */}
                 <Show when={isScanning() && !discoveryResult()}>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Show 4 skeleton cards */}
-                    <For each={[1, 2, 3, 4]}>
-                      {() => (
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 animate-pulse">
-                          <div class="flex items-start justify-between">
-                            <div class="flex items-start gap-3">
-                              <div class="w-5 h-5 bg-gray-300 dark:bg-gray-600 rounded"></div>
-                              <div class="flex-1">
-                                <div class="h-4 bg-gray-300 dark:bg-gray-600 rounded w-24 mb-2"></div>
-                                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-2"></div>
-                                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
-                              </div>
-                            </div>
-                            <div class="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                          </div>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                  <div class="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    Scanning network... This may take up to 30 seconds.
+                  <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <svg
+                      class="animate-spin h-12 w-12 mx-auto mb-4 text-blue-500"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <p>Scanning network...</p>
+                    <p class="text-xs mt-2">Servers will appear here as they're discovered</p>
                   </div>
                 </Show>
 
-                {/* Discovery Results */}
-                <Show when={discoveryResult() && !isScanning()}>
+                {/* Discovery Results - show even while scanning */}
+                <Show when={discoveryResult()}>
                   <div class="space-y-4">
                     {/* Server Cards */}
                     <Show

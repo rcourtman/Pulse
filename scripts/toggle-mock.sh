@@ -54,13 +54,18 @@ enable_mock() {
 
 disable_mock() {
     echo -e "${YELLOW}Disabling mock mode...${NC}"
-    
+
+    # Sync production config before switching back
+    echo "Syncing production configuration..."
+    /opt/pulse/scripts/sync-production-config.sh
+    echo ""
+
     # Update mock.env to disable mock mode
     sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=false/' "$MOCK_ENV_FILE"
-    
+
     # Restart dev service to pick up changes
     sudo systemctl restart pulse-dev
-    
+
     echo -e "${GREEN}✓ Mock mode disabled!${NC}"
     echo "Using real Proxmox nodes"
 }

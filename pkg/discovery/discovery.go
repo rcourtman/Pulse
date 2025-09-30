@@ -54,8 +54,16 @@ func NewScanner() *Scanner {
 	}
 }
 
+// ServerCallback is called when a server is discovered
+type ServerCallback func(server DiscoveredServer)
+
 // DiscoverServers scans the network for Proxmox VE and PBS servers
 func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*DiscoveryResult, error) {
+	return s.DiscoverServersWithCallback(ctx, subnet, nil)
+}
+
+// DiscoverServersWithCallback scans and calls callback for each discovered server
+func (s *Scanner) DiscoverServersWithCallback(ctx context.Context, subnet string, callback ServerCallback) (*DiscoveryResult, error) {
 	log.Info().Str("subnet", subnet).Msg("Starting network discovery")
 
 	// Parse subnet
@@ -151,6 +159,11 @@ func (s *Scanner) DiscoverServers(ctx context.Context, subnet string) (*Discover
 					Str("type", server.Type).
 					Str("hostname", server.Hostname).
 					Msg("🎯 Discovered server - adding to results")
+
+				// Call callback for real-time updates
+				if callback != nil {
+					callback(*server)
+				}
 			}
 		case errMsg, ok := <-errorChan:
 			if ok && errMsg != "" {
