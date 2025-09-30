@@ -117,11 +117,47 @@ ARM devices typically don't have the same sensor interfaces. Temperature monitor
 
 ## Security Notes
 
-- Temperature collection uses **read-only SSH access**
-- No passwords are transmitted
-- SSH keys should be protected (600 permissions)
-- Only the `sensors` command is executed
-- Data is collected every 10 seconds along with other metrics
+### What Access Is Granted
+
+Temperature monitoring requires SSH key authentication to run `sensors -j` on your Proxmox nodes. Here's exactly what this means:
+
+**Access Level**:
+- SSH access to `root@your-proxmox-node` from your Pulse server
+- Uses SSH key authentication (no passwords)
+- Pulse executes only: `sensors -j 2>/dev/null`
+- 5 second timeout per connection
+- No interactive shell, no other commands
+
+**Security Model**:
+- ✅ **SSH key stored on Pulse server only** - Private key never leaves your Pulse server
+- ✅ **Public key on Proxmox nodes** - Only the public key is added to authorized_keys
+- ✅ **Read-only operation** - sensors command only reads hardware data
+- ✅ **No write access** - Cannot modify any Proxmox configuration
+- ✅ **Revocable** - Remove the key from authorized_keys to revoke access instantly
+- ✅ **Auditable** - All SSH connections are logged in Proxmox auth logs
+
+**Best Practices**:
+1. Only enable if you trust your Pulse server's security
+2. Use a dedicated SSH key for Pulse (not your personal key)
+3. Protect the Pulse server with proper firewalls/security
+4. Regularly review `/var/log/auth.log` on Proxmox nodes
+5. Consider using firewall rules to restrict SSH to your Pulse server's IP
+
+**Risk Assessment**:
+- **If Pulse server is compromised**: Attacker gains SSH access to your Proxmox nodes as root
+- **Mitigation**: Secure your Pulse server, use dedicated SSH keys, monitor logs
+- **Alternative**: Skip SSH setup and manually check temperatures via Proxmox web UI
+
+### Restricting SSH Access (Advanced)
+
+If you want to limit SSH access to only the sensors command, you can use `authorized_keys` restrictions:
+
+```bash
+# In /root/.ssh/authorized_keys on Proxmox node:
+command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2E...
+```
+
+This forces the key to only run `sensors -j` and nothing else.
 
 ## Performance Impact
 
