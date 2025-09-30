@@ -481,6 +481,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
+	// Start connection retry mechanism for failed clients
+	// This handles cases where network/Proxmox isn't ready on initial startup
+	if !mock.IsMockEnabled() {
+		go m.retryFailedConnections(ctx)
+	}
+
 	// Do an immediate poll on start (only if not in mock mode)
 	if mock.IsMockEnabled() {
 		log.Info().Msg("Mock mode enabled - skipping real node polling")
@@ -517,6 +523,176 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		case <-ctx.Done():
 			log.Info().Msg("Monitoring loop stopped")
 			return
+		}
+	}
+}
+
+// retryFailedConnections attempts to recreate clients that failed during initialization
+// This handles cases where Proxmox/network isn't ready when Pulse starts
+func (m *Monitor) retryFailedConnections(ctx context.Context) {
+	// Retry schedule: 5s, 10s, 20s, 40s, 60s, then every 60s for up to 5 minutes total
+	retryDelays := []time.Duration{
+		5 * time.Second,
+		10 * time.Second,
+		20 * time.Second,
+		40 * time.Second,
+		60 * time.Second,
+	}
+
+	maxRetryDuration := 5 * time.Minute
+	startTime := time.Now()
+	retryIndex := 0
+
+	for {
+		// Stop retrying after max duration or if context is cancelled
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if time.Since(startTime) > maxRetryDuration {
+			log.Info().Msg("Connection retry period expired")
+			return
+		}
+
+		// Calculate next retry delay
+		var delay time.Duration
+		if retryIndex < len(retryDelays) {
+			delay = retryDelays[retryIndex]
+			retryIndex++
+		} else {
+			delay = 60 * time.Second // Continue retrying every 60s
+		}
+
+		// Wait before retry
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return
+		}
+
+		// Check for missing clients and try to recreate them
+		m.mu.Lock()
+		missingPVE := []config.PVEInstance{}
+		missingPBS := []config.PBSInstance{}
+
+		// Find PVE instances without clients
+		for _, pve := range m.config.PVEInstances {
+			if _, exists := m.pveClients[pve.Name]; !exists {
+				missingPVE = append(missingPVE, pve)
+			}
+		}
+
+		// Find PBS instances without clients
+		for _, pbs := range m.config.PBSInstances {
+			if _, exists := m.pbsClients[pbs.Name]; !exists {
+				missingPBS = append(missingPBS, pbs)
+			}
+		}
+		m.mu.Unlock()
+
+		// If no missing clients, we're done
+		if len(missingPVE) == 0 && len(missingPBS) == 0 {
+			log.Info().Msg("All client connections established successfully")
+			return
+		}
+
+		log.Info().
+			Int("missingPVE", len(missingPVE)).
+			Int("missingPBS", len(missingPBS)).
+			Dur("nextRetry", delay).
+			Msg("Attempting to reconnect failed clients")
+
+		// Try to recreate PVE clients
+		for _, pve := range missingPVE {
+			if pve.IsCluster && len(pve.ClusterEndpoints) > 0 {
+				// Create cluster client
+				hasValidEndpoints := false
+				endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+
+				for _, ep := range pve.ClusterEndpoints {
+					host := ep.IP
+					if host == "" {
+						host = ep.Host
+					}
+					if host == "" {
+						continue
+					}
+					if strings.Contains(host, ".") || net.ParseIP(host) != nil {
+						hasValidEndpoints = true
+					}
+					if !strings.HasPrefix(host, "http") {
+						host = fmt.Sprintf("https://%s:8006", host)
+					}
+					endpoints = append(endpoints, host)
+				}
+
+				if !hasValidEndpoints || len(endpoints) == 0 {
+					endpoints = []string{pve.Host}
+					if !strings.HasPrefix(endpoints[0], "http") {
+						endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
+					}
+				}
+
+				clientConfig := config.CreateProxmoxConfig(&pve)
+				clientConfig.Timeout = m.config.ConnectionTimeout
+				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints)
+
+				m.mu.Lock()
+				m.pveClients[pve.Name] = clusterClient
+				m.state.SetConnectionHealth(pve.Name, true)
+				m.mu.Unlock()
+
+				log.Info().
+					Str("instance", pve.Name).
+					Str("cluster", pve.ClusterName).
+					Msg("Successfully reconnected cluster client")
+			} else {
+				// Create regular client
+				clientConfig := config.CreateProxmoxConfig(&pve)
+				clientConfig.Timeout = m.config.ConnectionTimeout
+				client, err := proxmox.NewClient(clientConfig)
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("instance", pve.Name).
+						Msg("Failed to reconnect PVE client, will retry")
+					continue
+				}
+
+				m.mu.Lock()
+				m.pveClients[pve.Name] = client
+				m.state.SetConnectionHealth(pve.Name, true)
+				m.mu.Unlock()
+
+				log.Info().
+					Str("instance", pve.Name).
+					Msg("Successfully reconnected PVE client")
+			}
+		}
+
+		// Try to recreate PBS clients
+		for _, pbsInst := range missingPBS {
+			clientConfig := config.CreatePBSConfig(&pbsInst)
+			clientConfig.Timeout = 60 * time.Second
+			client, err := pbs.NewClient(clientConfig)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("instance", pbsInst.Name).
+					Msg("Failed to reconnect PBS client, will retry")
+				continue
+			}
+
+			m.mu.Lock()
+			m.pbsClients[pbsInst.Name] = client
+			m.state.SetConnectionHealth("pbs-"+pbsInst.Name, true)
+			m.mu.Unlock()
+
+			log.Info().
+				Str("instance", pbsInst.Name).
+				Msg("Successfully reconnected PBS client")
 		}
 	}
 }
