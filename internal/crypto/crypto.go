@@ -90,7 +90,29 @@ func getOrCreateKey() ([]byte, error) {
 		}
 	}
 
-	// Generate new key
+	// Before generating a new key, check if encrypted data exists
+	// This prevents silently orphaning existing encrypted configurations
+	encryptedFiles := []string{
+		filepath.Join(dataDir, "nodes.enc"),
+		filepath.Join(dataDir, "email.enc"),
+		filepath.Join(dataDir, "webhooks.enc"),
+	}
+
+	hasEncryptedData := false
+	for _, file := range encryptedFiles {
+		if info, err := os.Stat(file); err == nil && info.Size() > 0 {
+			hasEncryptedData = true
+			log.Warn().
+				Str("file", file).
+				Msg("Found encrypted data but no valid encryption key")
+		}
+	}
+
+	if hasEncryptedData {
+		return nil, fmt.Errorf("encryption key not found but encrypted data exists - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete the .enc files to start fresh")
+	}
+
+	// Generate new key (only if no encrypted data exists)
 	key := make([]byte, 32) // AES-256
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
