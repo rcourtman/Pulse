@@ -103,7 +103,7 @@ export const Login: Component<LoginProps> = (props) => {
         // On error, assume no auth configured
         setAuthStatus({ hasAuthentication: false });
       }
-    } catch (_err) {
+    } catch (err) {
       console.error('[Login] Failed to check auth status:', err);
       // On error, assume no auth configured
       setAuthStatus({ hasAuthentication: false });
@@ -146,7 +146,7 @@ export const Login: Component<LoginProps> = (props) => {
       }
 
       throw new Error('OIDC response missing authorization URL');
-    } catch (_err) {
+    } catch (err) {
       console.error('[Login] Failed to start OIDC login:', err);
       setOidcError('Failed to start single sign-on. Please try again.');
     } finally {
