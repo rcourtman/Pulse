@@ -33,6 +33,7 @@ export interface Node {
   kernelVersion: string;
   pveVersion: string;
   cpuInfo: CPUInfo;
+  temperature?: Temperature; // CPU/NVMe temperatures
   lastSeen: string;
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster
@@ -273,6 +274,25 @@ export interface CPUInfo {
   cores: number;
   sockets: number;
   mhz: string;
+}
+
+export interface Temperature {
+  cpuPackage?: number; // CPU package temperature (primary metric)
+  cpuMax?: number; // Highest core temperature
+  cores?: CoreTemp[]; // Individual core temperatures
+  nvme?: NVMeTemp[]; // NVMe drive temperatures
+  available: boolean; // Whether temperature data is available
+  lastUpdate: string; // When this data was collected
+}
+
+export interface CoreTemp {
+  core: number;
+  temp: number;
+}
+
+export interface NVMeTemp {
+  device: string;
+  temp: number;
 }
 
 export interface Metric {
