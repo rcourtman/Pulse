@@ -131,7 +131,7 @@ AGENT_METRICS_*.md
 tmp_*.py
 tmp_*.sh
 
-# Cloud relay development (separate repo)
+# Experimental/abandoned features (not part of main project)
 cloud-relay/
 scripts/agent/
 docs/internal/
