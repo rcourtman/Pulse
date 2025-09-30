@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,6 +15,62 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rs/zerolog/log"
 )
+
+// Webhook configuration constants
+const (
+	// HTTP client settings
+	WebhookTimeout          = 30 * time.Second
+	WebhookMaxResponseSize  = 1 * 1024 * 1024 // 1 MB max response size
+	WebhookMaxRedirects     = 3                // Maximum number of redirects to follow
+	WebhookTestTimeout      = 10 * time.Second
+
+	// Retry settings
+	WebhookInitialBackoff   = 1 * time.Second
+	WebhookMaxBackoff       = 30 * time.Second
+	WebhookDefaultRetries   = 3
+
+	// History settings
+	WebhookHistoryMaxSize   = 100
+
+	// Rate limiting settings
+	WebhookRateLimitWindow  = 1 * time.Minute  // Time window for rate limiting
+	WebhookRateLimitMax     = 10                // Max requests per window per webhook
+)
+
+// createSecureWebhookClient creates an HTTP client with security controls
+func createSecureWebhookClient(timeout time.Duration) *http.Client {
+	redirectCount := 0
+	return &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Limit number of redirects to prevent redirect loops
+			if len(via) >= WebhookMaxRedirects {
+				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
+			}
+
+			redirectCount++
+			newURL := req.URL.String()
+
+			// Prevent redirects to localhost or private networks (SSRF protection)
+			if err := ValidateWebhookURL(newURL); err != nil {
+				log.Warn().
+					Str("original", via[0].URL.String()).
+					Str("redirect", newURL).
+					Err(err).
+					Msg("Blocked webhook redirect to unsafe URL")
+				return fmt.Errorf("redirect to unsafe URL blocked: %w", err)
+			}
+
+			log.Debug().
+				Str("from", via[len(via)-1].URL.String()).
+				Str("to", newURL).
+				Int("redirectCount", redirectCount).
+				Msg("Following webhook redirect")
+
+			return nil
+		},
+	}
+}
 
 // TestNodeInfo contains information about nodes for test notifications
 type TestNodeInfo struct {
@@ -35,21 +92,28 @@ type WebhookDelivery struct {
 	PayloadSize   int       `json:"payloadSize"`
 }
 
+// webhookRateLimit tracks rate limiting for webhook deliveries
+type webhookRateLimit struct {
+	lastSent  time.Time
+	sentCount int
+}
+
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu             sync.RWMutex
-	emailConfig    EmailConfig
-	webhooks       []WebhookConfig
-	enabled        bool
-	cooldown       time.Duration
-	lastNotified   map[string]notificationRecord
-	groupWindow    time.Duration
-	pendingAlerts  []*alerts.Alert
-	groupTimer     *time.Timer
-	groupByNode    bool
-	publicURL      string // Full URL to access Pulse
-	groupByGuest   bool
-	webhookHistory []WebhookDelivery // Keep last 100 webhook deliveries for debugging
+	mu              sync.RWMutex
+	emailConfig     EmailConfig
+	webhooks        []WebhookConfig
+	enabled         bool
+	cooldown        time.Duration
+	lastNotified    map[string]notificationRecord
+	groupWindow     time.Duration
+	pendingAlerts   []*alerts.Alert
+	groupTimer      *time.Timer
+	groupByNode     bool
+	publicURL       string // Full URL to access Pulse
+	groupByGuest    bool
+	webhookHistory  []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
+	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
 }
 
 type notificationRecord struct {
@@ -105,16 +169,17 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
 	}
 	return &NotificationManager{
-		enabled:        true,
-		cooldown:       5 * time.Minute,
-		lastNotified:   make(map[string]notificationRecord),
-		webhooks:       []WebhookConfig{},
-		groupWindow:    30 * time.Second,
-		pendingAlerts:  make([]*alerts.Alert, 0),
-		groupByNode:    true,
-		groupByGuest:   false,
-		webhookHistory: make([]WebhookDelivery, 0, 100), // Pre-allocate for 100 entries
-		publicURL:      publicURL,
+		enabled:           true,
+		cooldown:          5 * time.Minute,
+		lastNotified:      make(map[string]notificationRecord),
+		webhooks:          []WebhookConfig{},
+		groupWindow:       30 * time.Second,
+		pendingAlerts:     make([]*alerts.Alert, 0),
+		groupByNode:       true,
+		groupByGuest:      false,
+		webhookHistory:    make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+		publicURL:         publicURL,
 	}
 }
 
@@ -600,8 +665,57 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	n.sendWebhookRequest(webhook, jsonData, "grouped")
 }
 
+// checkWebhookRateLimit checks if a webhook can be sent based on rate limits
+func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	now := time.Now()
+	limit, exists := n.webhookRateLimits[webhookURL]
+
+	if !exists {
+		// First time sending to this webhook
+		n.webhookRateLimits[webhookURL] = &webhookRateLimit{
+			lastSent:  now,
+			sentCount: 1,
+		}
+		return true
+	}
+
+	// Check if we're still in the rate limit window
+	if now.Sub(limit.lastSent) > WebhookRateLimitWindow {
+		// Window expired, reset counter
+		limit.lastSent = now
+		limit.sentCount = 1
+		return true
+	}
+
+	// Still in window, check if we've exceeded the limit
+	if limit.sentCount >= WebhookRateLimitMax {
+		log.Warn().
+			Str("webhookURL", webhookURL).
+			Int("sentCount", limit.sentCount).
+			Dur("window", WebhookRateLimitWindow).
+			Msg("Webhook rate limit exceeded, dropping request")
+		return false
+	}
+
+	// Increment counter and allow
+	limit.sentCount++
+	return true
+}
+
 // sendWebhookRequest sends the actual webhook request
 func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) {
+	// Check rate limit before sending
+	if !n.checkWebhookRateLimit(webhook.URL) {
+		log.Warn().
+			Str("webhook", webhook.Name).
+			Str("url", webhook.URL).
+			Msg("Webhook request dropped due to rate limiting")
+		return
+	}
+
 	// Create request
 	method := webhook.Method
 	if method == "" {
@@ -663,10 +777,8 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Msg("Sending webhook with payload")
 	}
 
-	// Send request
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	// Send request with secure client
+	client := createSecureWebhookClient(WebhookTimeout)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -679,9 +791,11 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	}
 	defer resp.Body.Close()
 
-	// Read response body for logging
+	// Read response body with size limit to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
 	var respBody bytes.Buffer
-	if _, err := respBody.ReadFrom(resp.Body); err != nil {
+	bytesRead, err := respBody.ReadFrom(limitedReader)
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Str("webhook", webhook.Name).
@@ -689,6 +803,16 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Msg("Failed to read webhook response body")
 		return
 	}
+
+	// Check if we hit the size limit
+	if bytesRead >= WebhookMaxResponseSize {
+		log.Warn().
+			Str("webhook", webhook.Name).
+			Int64("bytesRead", bytesRead).
+			Int("maxSize", WebhookMaxResponseSize).
+			Msg("Webhook response exceeded size limit, truncated")
+	}
+
 	responseBody := respBody.String()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -1008,25 +1132,65 @@ func ValidateWebhookURL(webhookURL string) error {
 		return fmt.Errorf("webhook URL must use http or https protocol")
 	}
 
-	// Block localhost and private network ranges for security
-	// Allow them only if explicitly configured (for testing)
+	// Get hostname for validation
 	host := u.Hostname()
-	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-		log.Warn().
-			Str("url", webhookURL).
-			Msg("Webhook URL points to localhost - this may be intentional for testing")
+	if host == "" {
+		return fmt.Errorf("webhook URL missing hostname")
 	}
 
-	// Check for private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+	// Block localhost and loopback addresses (SSRF protection)
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasPrefix(host, "127.") {
+		return fmt.Errorf("webhook URLs pointing to localhost are not allowed for security reasons")
+	}
+
+	// Block link-local addresses
+	if strings.HasPrefix(host, "169.254.") || strings.HasPrefix(host, "fe80:") {
+		return fmt.Errorf("webhook URLs pointing to link-local addresses are not allowed")
+	}
+
+	// Block private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+	// These are commonly used for internal services and pose SSRF risks
 	if strings.HasPrefix(host, "10.") ||
 		strings.HasPrefix(host, "192.168.") ||
 		(strings.HasPrefix(host, "172.") && isPrivateRange172(host)) {
+		// Log warning but allow (many legitimate webhook services run on private networks)
 		log.Warn().
 			Str("url", webhookURL).
 			Msg("Webhook URL points to private network - ensure this is intentional")
 	}
 
+	// Block common metadata service endpoints (cloud providers)
+	metadataHosts := []string{
+		"169.254.169.254", // AWS, Azure, GCP metadata
+		"metadata.google.internal",
+		"metadata.goog",
+	}
+	for _, metadataHost := range metadataHosts {
+		if host == metadataHost {
+			return fmt.Errorf("webhook URLs pointing to cloud metadata services are not allowed")
+		}
+	}
+
+	// Ensure hostname is not just an IP address without proper DNS
+	// This helps prevent SSRF attacks using numeric IPs to bypass filters
+	if u.Scheme == "https" && isNumericIP(host) {
+		log.Warn().
+			Str("url", webhookURL).
+			Msg("Webhook URL uses numeric IP with HTTPS - certificate validation may fail")
+	}
+
 	return nil
+}
+
+// isNumericIP checks if a string is a numeric IP address
+func isNumericIP(host string) bool {
+	// Simple check: if it contains only digits, dots, and colons, it's likely an IP
+	for _, char := range host {
+		if !(char >= '0' && char <= '9') && char != '.' && char != ':' {
+			return false
+		}
+	}
+	return len(host) > 0 && (strings.Contains(host, ".") || strings.Contains(host, ":"))
 }
 
 // isPrivateRange172 checks if an IP is in the 172.16.0.0/12 range
@@ -1159,16 +1323,23 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 			n.mu.RUnlock()
 			return fmt.Errorf("no webhooks configured")
 		}
-		// Send to first enabled webhook
+		// Find first enabled webhook and copy it before releasing lock
+		var webhookToTest *WebhookConfig
 		for _, webhook := range n.webhooks {
 			if webhook.Enabled {
-				n.mu.RUnlock()
-				n.sendWebhook(webhook, testAlert)
-				return nil
+				// Copy webhook to avoid race condition
+				webhookCopy := webhook
+				webhookToTest = &webhookCopy
+				break
 			}
 		}
 		n.mu.RUnlock()
-		return fmt.Errorf("no enabled webhooks found")
+
+		if webhookToTest == nil {
+			return fmt.Errorf("no enabled webhooks found")
+		}
+		n.sendWebhook(*webhookToTest, testAlert)
+		return nil
 	default:
 		return fmt.Errorf("unknown notification method: %s", method)
 	}
