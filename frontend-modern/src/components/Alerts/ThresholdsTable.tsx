@@ -671,7 +671,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             </p>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
-                <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
                   VMs & Containers
                 </h4>
                 <div class="grid gap-3 sm:grid-cols-2">
@@ -861,7 +861,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </div>
               </div>
               <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
-                <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
                   Proxmox Nodes
                 </h4>
                 <div class="grid gap-3 sm:grid-cols-2">
@@ -972,7 +972,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 </div>
               </div>
               <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3 md:col-span-2">
-                <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
                   Storage
                 </h4>
                 <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -1006,7 +1006,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           {/* Alert delay settings per resource type */}
           <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
             <div class="mb-2">
-              <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 Alert Delay (seconds before triggering)
               </h4>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
