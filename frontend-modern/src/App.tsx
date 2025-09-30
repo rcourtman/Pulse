@@ -29,6 +29,7 @@ import { SettingsAPI } from './api/settings';
 import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
+import { DemoBanner } from './components/DemoBanner';
 
 type TabType = 'main' | 'storage' | 'backups' | 'alerts' | 'settings';
 
@@ -435,6 +436,7 @@ function App() {
             <WebSocketContext.Provider value={enhancedStore()!}>
               <DarkModeContext.Provider value={darkMode}>
                 <SecurityWarning />
+                <DemoBanner />
                 <UpdateBanner />
                 <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
                   <div class="container w-[95%] max-w-screen-xl mx-auto">

@@ -70,11 +70,13 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, wsHub *websocket
 
 	// Apply middleware chain:
 	// 1. Universal rate limiting (outermost to stop attacks early)
-	// 2. Error handling
-	// 3. Security headers with embedding configuration
+	// 2. Demo mode (read-only protection)
+	// 3. Error handling
+	// 4. Security headers with embedding configuration
 	// Note: TimeoutHandler breaks WebSocket upgrades
 	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins)
 	handler = ErrorHandler(handler)
+	handler = DemoModeMiddleware(cfg, handler)
 	handler = UniversalRateLimitMiddleware(handler)
 	return handler
 }
