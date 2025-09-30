@@ -1390,20 +1390,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Int("vmid", res.VMID).
 									Msg("Guest agent timeout - agent may be installed but not responding")
 							} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-								// Permission error - check if it's the known PVE 9 limitation
+								// Permission error - user/token lacks required permissions
+								diskStatusReason = "permission-denied"
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
 									Int("vmid", res.VMID).
-									Msg("VM disk monitoring permission denied. This is a known limitation:")
+									Msg("VM disk monitoring permission denied. Check permissions:")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Check token has PVEAuditor role (includes VM.GuestAgent.Audit on PVE 9)")
+									Msg("• Proxmox 9: Ensure token/user has PVEAuditor role (includes VM.GuestAgent.Audit)")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
-									Msg("• Proxmox 8: Re-run setup script to add VM.Monitor permission if added before v4.7")
+									Msg("• Proxmox 8: Ensure token/user has VM.Monitor permission")
+								log.Info().
+									Str("instance", instanceName).
+									Str("vm", res.Name).
+									Msg("• Re-run Pulse setup script if node was added before v4.7")
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", res.Name).
@@ -1964,21 +1969,25 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 							Int("vmid", vm.VMID).
 							Msg("Guest agent timeout - agent may be installed but not responding (legacy API)")
 					} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-						// Permission error - check if it's the known PVE 9 limitation
+						// Permission error - user/token lacks required permissions
 						diskStatusReason = "permission-denied"
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
-							Msg("VM disk monitoring permission denied (legacy API). This is a known limitation:")
+							Msg("VM disk monitoring permission denied (legacy API). Check permissions:")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Check token has PVEAuditor role (includes VM.GuestAgent.Audit on PVE 9)")
+							Msg("• Proxmox 9: Ensure token/user has PVEAuditor role (includes VM.GuestAgent.Audit)")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
-							Msg("• Proxmox 8: Re-run setup script to add VM.Monitor permission if added before v4.7")
+							Msg("• Proxmox 8: Ensure token/user has VM.Monitor permission")
+						log.Info().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Msg("• Re-run Pulse setup script if node was added before v4.7")
 						log.Info().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).

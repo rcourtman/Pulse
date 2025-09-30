@@ -128,6 +128,142 @@ systemctl status pulse 2>/dev/null || systemctl status pulse-backend
 - Try a test service like webhook.site
 - Check logs for response codes
 
+### VM Disk Monitoring Issues
+
+#### VMs show "-" for disk usage
+
+**This is normal and expected** - VMs require QEMU Guest Agent to report disk usage.
+
+**Quick fix:**
+1. Install guest agent in VM: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)
+2. Enable in Proxmox: VM → Options → QEMU Guest Agent → Enable
+3. Restart the VM
+4. Wait 10 seconds for Pulse to poll again
+
+**Detailed troubleshooting:**
+
+See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for full setup instructions.
+
+#### How to diagnose VM disk issues
+
+**Step 1: Check if guest agent is running**
+
+On Proxmox host:
+```bash
+# Check if agent is enabled in VM config
+qm config <VMID> | grep agent
+
+# Test if agent responds
+qm agent <VMID> ping
+
+# Get filesystem info (what Pulse uses)
+qm agent <VMID> get-fsinfo
+```
+
+Inside the VM:
+```bash
+# Linux
+systemctl status qemu-guest-agent
+
+# Windows (PowerShell)
+Get-Service QEMU-GA
+```
+
+**Step 2: Run diagnostic script**
+
+```bash
+# On Proxmox host
+curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/test-vm-disk.sh | bash
+```
+
+Or if Pulse is installed:
+```bash
+/opt/pulse/scripts/test-vm-disk.sh
+```
+
+**Step 3: Check Pulse logs**
+
+```bash
+# Docker
+docker logs pulse | grep -i "guest agent\|fsinfo"
+
+# Systemd
+journalctl -u pulse -f | grep -i "guest agent\|fsinfo"
+```
+
+Look for specific error reasons:
+- `agent-not-running` - Agent service not started in VM
+- `agent-disabled` - Not enabled in VM config
+- `agent-timeout` - Agent not responding (may need restart)
+- `permission-denied` - Check permissions (see below)
+- `no-filesystems` - Agent returned no usable filesystem data
+
+#### Permission denied errors
+
+If Pulse logs show permission denied when querying guest agent:
+
+**Check permissions:**
+```bash
+# On Proxmox host
+pveum user permissions pulse-monitor@pam
+```
+
+**Required permissions:**
+- **Proxmox 9:** `PVEAuditor` role (includes `VM.GuestAgent.Audit`)
+- **Proxmox 8:** `VM.Monitor` permission
+
+**Fix permissions:**
+
+Re-run the Pulse setup script on the Proxmox node:
+```bash
+curl -sSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/setup-pve.sh | bash
+```
+
+Or manually:
+```bash
+# Proxmox 9
+pveum aclmod / -user pulse-monitor@pam -role PVEAuditor
+
+# Proxmox 8
+pveum role add PulseMonitor -privs VM.Monitor
+pveum aclmod / -user pulse-monitor@pam -role PulseMonitor
+```
+
+**Important:** Both API tokens and passwords work fine for guest agent access. If you see permission errors, it's a permission configuration issue, not an authentication method limitation.
+
+#### Guest agent installed but no disk data
+
+If agent responds to ping but returns no filesystem info:
+
+1. **Check agent version** - Update to latest:
+   ```bash
+   # Linux
+   apt update && apt install --only-upgrade qemu-guest-agent
+   systemctl restart qemu-guest-agent
+   ```
+
+2. **Check filesystem permissions** - Agent needs read access to filesystem data
+
+3. **Windows VMs** - Ensure VirtIO drivers are up to date from latest virtio-win ISO
+
+4. **Special filesystems only** - If VM only has special filesystems (tmpfs, ISO mounts), this is normal for Live systems
+
+#### Specific VM types
+
+**Cloud images:**
+- Most have guest agent pre-installed but disabled
+- Enable with: `systemctl enable --now qemu-guest-agent`
+
+**Windows VMs:**
+- Must install VirtIO guest tools
+- Ensure "QEMU Guest Agent" service is running
+- May need "QEMU Guest Agent VSS Provider" for full functionality
+
+**Container-based VMs (Docker/Kubernetes hosts):**
+- Will show high disk usage due to container layers
+- This is accurate - containers consume real disk space
+- Consider monitoring container disk separately
+
 ### Performance Issues
 
 #### High CPU usage

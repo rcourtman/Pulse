@@ -90,44 +90,45 @@ Reduce `metricsRetentionDays` in settings and restart
 
 ## Features
 
-### Why do VMs show 0% disk usage?
-This is usually one of these issues:
+### Why do VMs show "-" for disk usage?
 
-**Proxmox 9**: VM disk monitoring should work with proper setup:
-- API tokens CAN access guest agent data (confirmed working)
-- Ensure your token has proper permissions (PVEAuditor role includes VM.GuestAgent.Audit)
-- The `/cluster/resources` endpoint shows disk=0 but Pulse fetches actual data via guest agent API
-- If you see 0%, check: guest agent installed/running, token permissions, and Pulse logs for errors
-- Note: Container (LXC) disk usage always works fine
+VMs show "-" because the QEMU Guest Agent is not installed or not working. This is normal and expected.
 
-**Proxmox 8**: Check that:
-1. QEMU Guest Agent is installed and running in the VM
-2. Your API token has `VM.Monitor` permission
-   - If you added this node before Pulse v4.7, you need to re-run the setup script
-   - Or manually add: `pveum role add PulseMonitor -privs VM.Monitor && pveum aclmod / -user pulse-monitor@pam -role PulseMonitor`
+**How VM disk monitoring works:**
+- Proxmox API always returns `disk=0` for VMs (this is normal, not a bug)
+- To get real disk usage, Pulse queries the QEMU Guest Agent inside each VM
+- Both API tokens and passwords work fine for this (no authentication method limitation)
+- If guest agent is missing or not responding, Pulse shows "-" with a tooltip explaining why
 
-**All versions**: 
-- Guest agent must be installed: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)
-- Enable in VM Options → QEMU Guest Agent
-- The service should start automatically after install. To verify:
-  - Check status: `systemctl status qemu-guest-agent`
-  - If not running: `systemctl start qemu-guest-agent` (not `enable` - it's socket-activated)
-  - Alternative check: `ps aux | grep qemu-ga`
-- Restart the VM after installing/enabling in Proxmox options
+**To get VM disk usage showing:**
 
-**Still showing 0%?**
-- Verify from Proxmox host: `qm agent <VMID> get-fsinfo`
-- If that works but Pulse doesn't show it, check Pulse logs for errors
-- Some VMs may need: `systemctl restart qemu-guest-agent` inside the VM
-- Windows VMs: Ensure QEMU Guest Agent VSS Provider service is running
+1. **Install QEMU Guest Agent in the VM:**
+   - Linux: `apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent`
+   - Windows: Install virtio-win guest tools
+
+2. **Enable in VM config:**
+   - Proxmox UI: VM → Options → QEMU Guest Agent → Enable
+   - Or CLI: `qm set <VMID> --agent enabled=1`
+
+3. **Restart the VM** for changes to take effect
+
+4. **Verify it works:**
+   ```bash
+   qm agent <VMID> ping
+   qm agent <VMID> get-fsinfo
+   ```
+
+5. **Check Pulse has permissions:**
+   - Proxmox 9: `PVEAuditor` role (includes `VM.GuestAgent.Audit`)
+   - Proxmox 8: `VM.Monitor` permission
+   - The setup script adds these automatically
+
+**Note:** Container (LXC) disk usage always works without guest agent because containers share the host kernel.
+
+**Still not working?** See [Troubleshooting Guide - VM Disk Monitoring](TROUBLESHOOTING.md#vm-disk-monitoring-issues) for detailed diagnostics.
 
 ### How do I see real disk usage for VMs?
-Install QEMU Guest Agent in your VMs:
-- Linux: `apt install qemu-guest-agent` or `yum install qemu-guest-agent`
-- Windows: Install virtio-win guest tools
-- Enable in VM Options → QEMU Guest Agent
-- Restart the VM for changes to take effect
-See [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for details.
+See the previous question "Why do VMs show '-' for disk usage?" or the [VM Disk Monitoring Guide](VM_DISK_MONITORING.md) for full details.
 
 ### Multiple clusters?
 Yes, add multiple nodes in Settings
