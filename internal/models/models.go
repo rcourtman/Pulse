@@ -51,24 +51,25 @@ type ResolvedAlert struct {
 
 // Node represents a Proxmox VE node
 type Node struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Instance         string    `json:"instance"`
-	Host             string    `json:"host"` // Full host URL from config
-	Status           string    `json:"status"`
-	Type             string    `json:"type"`
-	CPU              float64   `json:"cpu"`
-	Memory           Memory    `json:"memory"`
-	Disk             Disk      `json:"disk"`
-	Uptime           int64     `json:"uptime"`
-	LoadAverage      []float64 `json:"loadAverage"`
-	KernelVersion    string    `json:"kernelVersion"`
-	PVEVersion       string    `json:"pveVersion"`
-	CPUInfo          CPUInfo   `json:"cpuInfo"`
-	LastSeen         time.Time `json:"lastSeen"`
-	ConnectionHealth string    `json:"connectionHealth"`
-	IsClusterMember  bool      `json:"isClusterMember"` // True if part of a cluster
-	ClusterName      string    `json:"clusterName"`     // Name of cluster (empty if standalone)
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	Instance         string       `json:"instance"`
+	Host             string       `json:"host"` // Full host URL from config
+	Status           string       `json:"status"`
+	Type             string       `json:"type"`
+	CPU              float64      `json:"cpu"`
+	Memory           Memory       `json:"memory"`
+	Disk             Disk         `json:"disk"`
+	Uptime           int64        `json:"uptime"`
+	LoadAverage      []float64    `json:"loadAverage"`
+	KernelVersion    string       `json:"kernelVersion"`
+	PVEVersion       string       `json:"pveVersion"`
+	CPUInfo          CPUInfo      `json:"cpuInfo"`
+	Temperature      *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
+	LastSeen         time.Time    `json:"lastSeen"`
+	ConnectionHealth string       `json:"connectionHealth"`
+	IsClusterMember  bool         `json:"isClusterMember"` // True if part of a cluster
+	ClusterName      string       `json:"clusterName"`     // Name of cluster (empty if standalone)
 }
 
 // VM represents a virtual machine
@@ -316,6 +317,28 @@ type CPUInfo struct {
 	Cores   int    `json:"cores"`
 	Sockets int    `json:"sockets"`
 	MHz     string `json:"mhz"`
+}
+
+// Temperature represents temperature sensors data
+type Temperature struct {
+	CPUPackage float64       `json:"cpuPackage,omitempty"` // CPU package temperature (primary metric)
+	CPUMax     float64       `json:"cpuMax,omitempty"`     // Highest core temperature
+	Cores      []CoreTemp    `json:"cores,omitempty"`      // Individual core temperatures
+	NVMe       []NVMeTemp    `json:"nvme,omitempty"`       // NVMe drive temperatures
+	Available  bool          `json:"available"`            // Whether temperature data is available
+	LastUpdate time.Time     `json:"lastUpdate"`           // When this data was collected
+}
+
+// CoreTemp represents a CPU core temperature
+type CoreTemp struct {
+	Core int     `json:"core"`
+	Temp float64 `json:"temp"`
+}
+
+// NVMeTemp represents an NVMe drive temperature
+type NVMeTemp struct {
+	Device string  `json:"device"`
+	Temp   float64 `json:"temp"`
 }
 
 // Metric represents a time-series metric

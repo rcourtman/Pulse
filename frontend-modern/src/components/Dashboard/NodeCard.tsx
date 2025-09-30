@@ -207,7 +207,23 @@ const NodeCard: Component<NodeCardProps> = (props) => {
         <span title={`Uptime: ${formatUptime(props.node.uptime)}`}>
           ↑{formatUptime(props.node.uptime)}
         </span>
-        <span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>
+        <Show
+          when={props.node.temperature?.available}
+          fallback={<span title={`Load: ${normalizedLoad()}`}>⚡{normalizedLoad()}</span>}
+        >
+          <span
+            class={`font-medium ${
+              (props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0) > 80
+                ? 'text-red-500'
+                : (props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0) > 60
+                  ? 'text-yellow-500'
+                  : 'text-green-500'
+            }`}
+            title={`CPU: ${Math.round(props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0)}°C${props.node.temperature!.nvme && props.node.temperature!.nvme.length > 0 ? ` | NVMe: ${props.node.temperature!.nvme.map((n) => `${n.device}: ${Math.round(n.temp)}°C`).join(', ')}` : ''}`}
+          >
+            🌡{Math.round(props.node.temperature!.cpuPackage || props.node.temperature!.cpuMax || 0)}°C
+          </span>
+        </Show>
       </div>
     </Card>
   );

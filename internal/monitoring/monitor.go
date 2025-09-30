@@ -53,6 +53,7 @@ type Monitor struct {
 	state            *models.State
 	pveClients       map[string]PVEClientInterface
 	pbsClients       map[string]*pbs.Client
+	tempCollector    *TemperatureCollector     // SSH-based temperature collector
 	mu               sync.RWMutex
 	startTime        time.Time
 	rateTracker      *RateTracker
@@ -175,11 +176,16 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 
 // New creates a new Monitor instance
 func New(cfg *config.Config) (*Monitor, error) {
+	// Initialize temperature collector with default SSH settings
+	// Will use root user for now - can be made configurable later
+	tempCollector := NewTemperatureCollector("root", "")
+
 	m := &Monitor{
 		config:           cfg,
 		state:            models.NewState(),
 		pveClients:       make(map[string]PVEClientInterface),
 		pbsClients:       make(map[string]*pbs.Client),
+		tempCollector:    tempCollector,
 		startTime:        time.Now(),
 		rateTracker:      NewRateTracker(),
 		metricsHistory:   NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points or 24 hours
@@ -1094,6 +1100,25 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						MHz:     mhzStr,
 					}
 				}
+			}
+		}
+
+		// Collect temperature data via SSH (non-blocking, best effort)
+		// Only attempt for online nodes
+		if node.Status == "online" && m.tempCollector != nil {
+			tempCtx, tempCancel := context.WithTimeout(ctx, 5*time.Second)
+			// Use node name as hostname (works for both cluster and standalone)
+			temp, err := m.tempCollector.CollectTemperature(tempCtx, node.Node, node.Node)
+			tempCancel()
+
+			if err == nil && temp != nil && temp.Available {
+				modelNode.Temperature = temp
+				log.Debug().
+					Str("node", node.Node).
+					Float64("cpuPackage", temp.CPUPackage).
+					Float64("cpuMax", temp.CPUMax).
+					Int("nvmeCount", len(temp.NVMe)).
+					Msg("Collected temperature data")
 			}
 		}
 

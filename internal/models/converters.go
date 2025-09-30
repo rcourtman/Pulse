@@ -79,6 +79,11 @@ func (n Node) ToFrontend() NodeFrontend {
 		nf.Disk = &n.Disk
 	}
 
+	// Include temperature data if available
+	if n.Temperature != nil && n.Temperature.Available {
+		nf.Temperature = n.Temperature
+	}
+
 	return nf
 }
 
