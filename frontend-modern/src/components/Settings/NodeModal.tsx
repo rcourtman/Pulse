@@ -529,19 +529,15 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                           if (response.ok) {
                                             const data = await response.json();
-                                            const cmd = `curl -sSL "${data.url}" | bash`;
 
                                             // Store setup code for display along with the URL
+                                            // Show it to the user BEFORE copying
                                             if (data.setupCode) {
                                               setSetupCode({
                                                 code: data.setupCode,
                                                 expires: data.expires,
                                                 url: data.url,
                                               });
-                                            }
-
-                                            if (await copyToClipboard(cmd)) {
-                                              showSuccess('Command copied to clipboard!');
                                             }
                                           } else {
                                             showError('Failed to generate setup URL');
@@ -579,7 +575,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       {setupCode()?.url
                                         ? `curl -sSL "${setupCode()?.url}" | bash`
                                         : formData().host
-                                        ? 'Click the copy button above to generate your one-time setup command'
+                                        ? 'Click the button above to generate and view your setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
@@ -602,7 +598,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                                             />
                                           </svg>
-                                          Setup Code (One-Time Use)
+                                          Generated Command
                                         </h4>
                                         <button
                                           type="button"
@@ -624,11 +620,27 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           </svg>
                                         </button>
                                       </div>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider">
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 mb-3">
+                                        <code class="text-sm break-all text-white/90">
+                                          curl -sSL "{setupCode()?.url}" | bash
+                                        </code>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = `curl -sSL "${setupCode()?.url}" | bash`;
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied to clipboard!');
+                                          }
+                                        }}
+                                        class="w-full py-2 bg-white/20 hover:bg-white/30 rounded-md transition-colors font-medium text-sm"
+                                      >
+                                        Copy Command
+                                      </button>
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider mt-3">
                                         {setupCode()?.code}
                                       </div>
                                       <div class="mt-3 text-xs text-white/90 space-y-1">
-                                        <p>✅ Command copied to clipboard</p>
                                         <p>📋 Enter this code when the setup script prompts you</p>
                                         <p>⏱️ Expires in 5 minutes</p>
                                       </div>
@@ -1088,7 +1100,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       {setupCode()?.url
                                         ? `curl -sSL "${setupCode()?.url}" | bash`
                                         : formData().host
-                                        ? 'Click the copy button above to generate your one-time setup command'
+                                        ? 'Click the button above to generate and view your setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
@@ -1111,7 +1123,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                                             />
                                           </svg>
-                                          Setup Code (One-Time Use)
+                                          Generated Command
                                         </h4>
                                         <button
                                           type="button"
@@ -1133,11 +1145,27 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           </svg>
                                         </button>
                                       </div>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider">
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 mb-3">
+                                        <code class="text-sm break-all text-white/90">
+                                          curl -sSL "{setupCode()?.url}" | bash
+                                        </code>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const cmd = `curl -sSL "${setupCode()?.url}" | bash`;
+                                          if (await copyToClipboard(cmd)) {
+                                            showSuccess('Command copied to clipboard!');
+                                          }
+                                        }}
+                                        class="w-full py-2 bg-white/20 hover:bg-white/30 rounded-md transition-colors font-medium text-sm"
+                                      >
+                                        Copy Command
+                                      </button>
+                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider mt-3">
                                         {setupCode()?.code}
                                       </div>
                                       <div class="mt-3 text-xs text-white/90 space-y-1">
-                                        <p>✅ Command copied to clipboard</p>
                                         <p>📋 Enter this code when the setup script prompts you</p>
                                         <p>⏱️ Expires in 5 minutes</p>
                                       </div>
