@@ -27,7 +27,7 @@ PORT=${PORT:-${FRONTEND_PORT}}
 FRONTEND_DEV_HOST=${FRONTEND_DEV_HOST:-0.0.0.0}
 FRONTEND_DEV_PORT=${FRONTEND_DEV_PORT:-${FRONTEND_PORT}}
 PULSE_DEV_API_HOST=${PULSE_DEV_API_HOST:-127.0.0.1}
-PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-${FRONTEND_PORT}}
+PULSE_DEV_API_PORT=${PULSE_DEV_API_PORT:-7656}
 
 if [[ -z ${PULSE_DEV_API_URL:-} ]]; then
     PULSE_DEV_API_URL="http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}"
@@ -65,7 +65,7 @@ BANNER
 kill_port() {
     local port=$1
     printf "[hot-dev] Cleaning up port %s...\n" "${port}"
-    lsof -i :"${port}" | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null
+    lsof -i :"${port}" 2>/dev/null | awk 'NR>1 {print $2}' | xargs -r kill -9 2>/dev/null || true
 }
 
 printf "[hot-dev] Cleaning up existing processes...\n"
@@ -89,45 +89,48 @@ kill_port "${EXTRA_CLEANUP_PORT}"
 
 sleep 3
 
-if lsof -i :"${FRONTEND_DEV_PORT}" | grep -q LISTEN; then
+# Temporarily disable pipefail for port checks (lsof returns 1 when port is free)
+set +o pipefail
+
+if lsof -i :"${FRONTEND_DEV_PORT}" 2>/dev/null | grep -q LISTEN; then
     echo "ERROR: Port ${FRONTEND_DEV_PORT} is still in use after cleanup!"
     kill_port "${FRONTEND_DEV_PORT}"
     sleep 2
-    if lsof -i :"${FRONTEND_DEV_PORT}" | grep -q LISTEN; then
+    if lsof -i :"${FRONTEND_DEV_PORT}" 2>/dev/null | grep -q LISTEN; then
         echo "FATAL: Cannot free port ${FRONTEND_DEV_PORT}. Please manually kill the process:"
         lsof -i :"${FRONTEND_DEV_PORT}"
         exit 1
     fi
 fi
 
-if lsof -i :"${PULSE_DEV_API_PORT}" | grep -q LISTEN; then
+if lsof -i :"${PULSE_DEV_API_PORT}" 2>/dev/null | grep -q LISTEN; then
     echo "ERROR: Port ${PULSE_DEV_API_PORT} is still in use after cleanup!"
     kill_port "${PULSE_DEV_API_PORT}"
     sleep 2
-    if lsof -i :"${PULSE_DEV_API_PORT}" | grep -q LISTEN; then
+    if lsof -i :"${PULSE_DEV_API_PORT}" 2>/dev/null | grep -q LISTEN; then
         echo "FATAL: Cannot free port ${PULSE_DEV_API_PORT}. Please manually kill the process:"
         lsof -i :"${PULSE_DEV_API_PORT}"
         exit 1
     fi
 fi
 
+# Re-enable pipefail
+set -o pipefail
+
 echo "Ports are clean!"
 
 if [[ -f "${ROOT_DIR}/mock.env" ]]; then
-    set +u
-    # shellcheck disable=SC1090
-    source "${ROOT_DIR}/mock.env"
-    set -u
+    load_env_file "${ROOT_DIR}/mock.env"
     if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
         TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
         echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"
     fi
 fi
 
-if [[ -f /etc/pulse/.env ]]; then
+if [[ -f /etc/pulse/.env ]] && [[ -r /etc/pulse/.env ]]; then
     set +u
     # shellcheck disable=SC1091
-    source /etc/pulse/.env
+    source /etc/pulse/.env 2>/dev/null || true
     set -u
     echo "Auth configuration loaded from /etc/pulse/.env"
 fi
@@ -137,8 +140,8 @@ cd "${ROOT_DIR}"
 
 go build -o pulse ./cmd/pulse
 
-export PULSE_MOCK_MODE PULSE_MOCK_NODES PULSE_MOCK_VMS_PER_NODE PULSE_MOCK_LXCS_PER_NODE PULSE_MOCK_RANDOM_METRICS PULSE_MOCK_STOPPED_PERCENT
-export PULSE_AUTH_USER PULSE_AUTH_PASS
+# Mock variables already exported via load_env_file (set -a)
+# Just export the port variables for the backend
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT
