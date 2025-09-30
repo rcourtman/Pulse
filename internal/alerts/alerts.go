@@ -2268,6 +2268,23 @@ func (m *Manager) LoadActiveAlerts() error {
 
 		m.activeAlerts[alert.ID] = alert
 		restoredCount++
+
+		// For critical alerts that are still active after restart, send notifications
+		// This ensures users are notified about ongoing critical issues even after service restarts
+		// Only notify for alerts that started recently (within last 2 hours) to avoid spam
+		if alert.Level == AlertLevelCritical && now.Sub(alert.StartTime) < 2*time.Hour {
+			// Use a goroutine and add a small delay to avoid notification spam on startup
+			if m.onAlert != nil {
+				go func(a *Alert) {
+					time.Sleep(10 * time.Second) // Wait for system to stabilize after restart
+					log.Info().
+						Str("alertID", a.ID).
+						Str("resource", a.ResourceName).
+						Msg("Sending notification for restored critical alert")
+					m.onAlert(a)
+				}(alert)
+			}
+		}
 	}
 
 	log.Info().
