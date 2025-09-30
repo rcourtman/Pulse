@@ -47,6 +47,10 @@ export const Login: Component<LoginProps> = (props) => {
         return 'We could not complete the sign-in request. Please try again shortly.';
       case 'session_failed':
         return 'Login succeeded but we could not create a session. Try again.';
+      case 'invalid_id_token':
+        return 'ID token verification failed. Check that OIDC_ISSUER_URL matches the issuer claim in your provider tokens (check server logs for details).';
+      case 'invalid_nonce':
+        return 'Security validation failed (nonce mismatch). Please try again.';
       default:
         return 'Single sign-on failed. Please try again or contact an administrator.';
     }
