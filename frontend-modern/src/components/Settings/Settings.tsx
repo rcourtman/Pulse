@@ -168,19 +168,6 @@ const Settings: Component = () => {
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
 
-  const formatTimestamp = (timestamp?: string) => {
-    if (!timestamp) {
-      return 'Unknown';
-    }
-
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) {
-      return 'Unknown';
-    }
-
-    return date.toLocaleString();
-  };
-
   const formatRelativeTime = (timestamp?: number) => {
     if (!timestamp) {
       return '';

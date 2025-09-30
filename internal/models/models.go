@@ -321,12 +321,12 @@ type CPUInfo struct {
 
 // Temperature represents temperature sensors data
 type Temperature struct {
-	CPUPackage float64       `json:"cpuPackage,omitempty"` // CPU package temperature (primary metric)
-	CPUMax     float64       `json:"cpuMax,omitempty"`     // Highest core temperature
-	Cores      []CoreTemp    `json:"cores,omitempty"`      // Individual core temperatures
-	NVMe       []NVMeTemp    `json:"nvme,omitempty"`       // NVMe drive temperatures
-	Available  bool          `json:"available"`            // Whether temperature data is available
-	LastUpdate time.Time     `json:"lastUpdate"`           // When this data was collected
+	CPUPackage float64    `json:"cpuPackage,omitempty"` // CPU package temperature (primary metric)
+	CPUMax     float64    `json:"cpuMax,omitempty"`     // Highest core temperature
+	Cores      []CoreTemp `json:"cores,omitempty"`      // Individual core temperatures
+	NVMe       []NVMeTemp `json:"nvme,omitempty"`       // NVMe drive temperatures
+	Available  bool       `json:"available"`            // Whether temperature data is available
+	LastUpdate time.Time  `json:"lastUpdate"`           // When this data was collected
 }
 
 // CoreTemp represents a CPU core temperature

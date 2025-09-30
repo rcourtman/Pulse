@@ -53,7 +53,7 @@ type Monitor struct {
 	state            *models.State
 	pveClients       map[string]PVEClientInterface
 	pbsClients       map[string]*pbs.Client
-	tempCollector    *TemperatureCollector     // SSH-based temperature collector
+	tempCollector    *TemperatureCollector // SSH-based temperature collector
 	mu               sync.RWMutex
 	startTime        time.Time
 	rateTracker      *RateTracker
