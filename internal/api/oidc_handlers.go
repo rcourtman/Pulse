@@ -130,9 +130,15 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Verify the ID token
 	idToken, err := service.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		log.Error().Err(err).Str("issuer", cfg.IssuerURL).Msg("Failed to verify ID token")
+		log.Error().
+			Err(err).
+			Str("issuer", cfg.IssuerURL).
+			Str("client_id", cfg.ClientID).
+			Str("redirect_url", cfg.RedirectURL).
+			Msg("Failed to verify ID token - check issuer URL matches token issuer claim")
 		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
 		r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_id_token")
 		return
