@@ -138,8 +138,23 @@ func (s *Service) performScan() {
 	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
-	// Perform the scan
-	result, err := s.scanner.DiscoverServers(scanCtx, s.subnet)
+	// Perform the scan with real-time callback
+	result, err := s.scanner.DiscoverServersWithCallback(scanCtx, s.subnet, func(server discovery.DiscoveredServer) {
+		// Send immediate update for each discovered server
+		if s.wsHub != nil {
+			s.wsHub.Broadcast(websocket.Message{
+				Type: "discovery_server_found",
+				Data: map[string]interface{}{
+					"server":    server,
+					"timestamp": time.Now().Unix(),
+				},
+			})
+			log.Info().
+				Str("ip", server.IP).
+				Str("type", server.Type).
+				Msg("Broadcasting discovered server to clients")
+		}
+	})
 	if err != nil {
 		// Even if scan timed out, we might have partial results
 		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
