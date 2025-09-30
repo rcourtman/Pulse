@@ -449,11 +449,12 @@ See [Reverse Proxy Configuration Guide](docs/REVERSE_PROXY.md) for nginx, Caddy,
 - If you provide credentials via environment variables, they take precedence
 - To use Quick Security Setup: Start container WITHOUT auth environment variables
 
-### VM Disk Stats Show 0% or Dash
-- **Known Proxmox 9 limitation**: API tokens cannot access guest agent data
-- See [VM Disk Stats Troubleshooting Guide](docs/VM_DISK_STATS_TROUBLESHOOTING.md) for details
-- Container (LXC) disk stats work normally
-- This is a Proxmox API limitation, not a Pulse bug
+### VM Disk Stats Show "-"
+- VMs require QEMU Guest Agent to report disk usage (Proxmox API returns 0 for VMs)
+- Install guest agent in VM: `apt install qemu-guest-agent` (Linux) or virtio-win tools (Windows)
+- Enable in VM Options → QEMU Guest Agent, then restart VM
+- See [VM Disk Monitoring Guide](docs/VM_DISK_MONITORING.md) for setup
+- Container (LXC) disk stats always work (no guest agent needed)
 
 ### Connection Issues
 - Check Proxmox API is accessible (port 8006/8007)

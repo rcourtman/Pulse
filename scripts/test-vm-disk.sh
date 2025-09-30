@@ -117,7 +117,7 @@ if pveum user list 2>/dev/null | grep -q 'pulse_monitor@pam'; then
     if [[ $? -eq 0 && -n $acl_output ]]; then
         ok "pulse_monitor@pam user has ACL entries configured."
     else
-        warn "pulse_monitor@pam user exists but no ACLs were found. Ensure it has VM.Audit permissions."
+        warn "pulse_monitor@pam user exists but no ACLs were found. Ensure it has proper permissions."
     fi
 else
     warn "pulse_monitor@pam user not found. Create it if Pulse is expected to collect agent data."
@@ -128,7 +128,10 @@ cat <<'SUMMARY'
 Next steps:
   • If the guest agent is disabled, enable it in the VM Options tab (set "QEMU Guest Agent" to "Enabled").
   • Inside the guest OS, ensure the qemu-guest-agent service is installed, running, and has access to disk information.
-  • Verify the pulse_monitor@pam user (or your service account) has VM.Audit + VM.Monitor privileges on the VM.
+  • Verify the pulse_monitor@pam user (or your service account) has proper permissions:
+    - Proxmox 9: PVEAuditor role (includes VM.GuestAgent.Audit)
+    - Proxmox 8: VM.Monitor permission
+    - Both API tokens and passwords work fine for guest agent access
 
 Diagnostics complete.
 SUMMARY
