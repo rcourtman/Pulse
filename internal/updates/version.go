@@ -238,7 +238,7 @@ func GetDeploymentType() string {
 	if fileExists("/bin/update") {
 		// Read file directly instead of using exec.Command
 		data, err := os.ReadFile("/bin/update")
-		if err == nil && strings.Contains(string(data), "pulse.sh") {
+		if err == nil && (strings.Contains(string(data), "pulse.sh") || strings.Contains(string(data), "install.sh")) {
 			return "proxmoxve"
 		}
 	}

@@ -19,6 +19,12 @@ SERVICE_NAME="pulse"
 GITHUB_REPO="rcourtman/Pulse"
 BUILD_FROM_SOURCE=false
 SKIP_DOWNLOAD=false
+IN_CONTAINER=false
+IN_DOCKER=false
+ENABLE_AUTO_UPDATES=false
+FORCE_VERSION=""
+FORCE_CHANNEL=""
+SOURCE_BRANCH="main"
 
 # Wrapper for systemctl commands that might hang in unprivileged containers
 safe_systemctl() {
@@ -1453,15 +1459,29 @@ setup_directories() {
 }
 
 setup_update_command() {
-    # Function kept for compatibility but no longer creates update command
-    # Community Scripts installations have their own update mechanism at /bin/update
-    # Native installations should update using: curl -fsSL ... | bash
-    
+    # Create update command at /bin/update for ProxmoxVE LXC detection
+    # This allows the backend to detect ProxmoxVE installations
+    cat > /bin/update <<'EOF'
+#!/usr/bin/env bash
+# Pulse update command
+# This script re-runs the Pulse installer to update to the latest version
+
+set -e
+
+echo "Updating Pulse..."
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
+
+echo ""
+echo "Update complete! Pulse will restart automatically."
+EOF
+
+    chmod +x /bin/update
+
     # Ensure /usr/local/bin is in PATH for all users
     if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
         echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/profile
     fi
-    
+
     # Also add to bash profile if it exists
     if [[ -f /etc/bash.bashrc ]] && ! grep -q '/usr/local/bin' /etc/bash.bashrc 2>/dev/null; then
         echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/bash.bashrc
@@ -2372,13 +2392,6 @@ reset_pulse() {
 }
 
 # Parse command line arguments
-FORCE_VERSION=""
-FORCE_CHANNEL=""
-SOURCE_BRANCH="main"
-IN_CONTAINER=false
-IN_DOCKER=false
-ENABLE_AUTO_UPDATES=false
-
 while [[ $# -gt 0 ]]; do
     case $1 in
         --uninstall)
