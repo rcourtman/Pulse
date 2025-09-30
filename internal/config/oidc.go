@@ -120,7 +120,7 @@ func (c *OIDCConfig) Validate() error {
 	}
 
 	if strings.TrimSpace(c.RedirectURL) == "" {
-		return fmt.Errorf("oidc redirect url is required when OIDC is enabled")
+		return fmt.Errorf("oidc redirect url is required when OIDC is enabled (set PUBLIC_URL environment variable or provide redirect URL manually)")
 	}
 	if _, err := url.ParseRequestURI(c.RedirectURL); err != nil {
 		return fmt.Errorf("invalid oidc redirect url: %w", err)
