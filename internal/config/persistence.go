@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rs/zerolog/log"
 )
@@ -446,7 +447,7 @@ type SystemSettings struct {
 func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
 	// CRITICAL: Prevent saving empty nodes when in mock mode
 	// Mock mode should NEVER modify real node configuration
-	if os.Getenv("PULSE_MOCK_MODE") == "true" {
+	if mock.IsMockEnabled() {
 		log.Warn().Msg("Skipping nodes save - mock mode is enabled")
 		return nil // Silently succeed to prevent errors but don't save
 	}

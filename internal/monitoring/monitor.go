@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,6 +67,8 @@ type Monitor struct {
 	lastAuthAttempt  map[string]time.Time      // Track last auth attempt time
 	lastClusterCheck map[string]time.Time      // Track last cluster check for standalone nodes
 	persistence      *config.ConfigPersistence // Add persistence for saving updated configs
+	runtimeCtx       context.Context           // Context used while monitor is running
+	wsHub            *websocket.Hub            // Hub used for broadcasting state
 }
 
 // safePercentage calculates percentage safely, returning 0 if divisor is 0
@@ -110,6 +111,26 @@ func sortContent(content string) string {
 
 // GetConnectionStatuses returns the current connection status for all nodes
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
+	if mock.IsMockEnabled() {
+		statuses := make(map[string]bool)
+		state := mock.GetMockState()
+		for _, node := range state.Nodes {
+			key := "pve-" + node.Name
+			statuses[key] = strings.ToLower(node.Status) == "online"
+			if node.Host != "" {
+				statuses[node.Host] = strings.ToLower(node.Status) == "online"
+			}
+		}
+		for _, pbsInst := range state.PBSInstances {
+			key := "pbs-" + pbsInst.Name
+			statuses[key] = strings.ToLower(pbsInst.Status) != "offline"
+			if pbsInst.Host != "" {
+				statuses[pbsInst.Host] = strings.ToLower(pbsInst.Status) != "offline"
+			}
+		}
+		return statuses
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -212,7 +233,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	// Check if mock mode is enabled before initializing clients
-	mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
+	mockEnabled := mock.IsMockEnabled()
 
 	if mockEnabled {
 		log.Info().Msg("Mock mode enabled - skipping PVE/PBS client initialization")
@@ -373,6 +394,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Dur("pollingInterval", 10*time.Second).
 		Msg("Starting monitoring loop")
 
+	m.mu.Lock()
+	m.runtimeCtx = ctx
+	m.wsHub = wsHub
+	m.mu.Unlock()
+
 	// Initialize and start discovery service if enabled
 	if m.config.DiscoveryEnabled {
 		discoverySubnet := m.config.DiscoverySubnet
@@ -455,25 +481,23 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	broadcastTicker := time.NewTicker(pollingInterval)
 	defer broadcastTicker.Stop()
 
-	// Check if mock mode is enabled
-	mockEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
-
 	// Do an immediate poll on start (only if not in mock mode)
-	if !mockEnabled {
-		go m.poll(ctx, wsHub)
-	} else {
+	if mock.IsMockEnabled() {
 		log.Info().Msg("Mock mode enabled - skipping real node polling")
+		go m.checkMockAlerts()
+	} else {
+		go m.poll(ctx, wsHub)
 	}
 
 	for {
 		select {
 		case <-pollTicker.C:
-			// Start polling in a goroutine so it doesn't block the ticker (only if not in mock mode)
-			if !mockEnabled {
-				go m.poll(ctx, wsHub)
-			} else {
-				// In mock mode, still check alerts for mock data
+			if mock.IsMockEnabled() {
+				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
+			} else {
+				// Poll real infrastructure
+				go m.poll(ctx, wsHub)
 			}
 
 		case <-broadcastTicker.C:
@@ -2759,6 +2783,53 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	return m.state.GetSnapshot()
 }
 
+// SetMockMode switches between mock data and real infrastructure data at runtime.
+func (m *Monitor) SetMockMode(enable bool) {
+	current := mock.IsMockEnabled()
+	if current == enable {
+		log.Info().Bool("mockMode", enable).Msg("Mock mode already in desired state")
+		return
+	}
+
+	if enable {
+		mock.SetEnabled(true)
+		m.alertManager.ClearActiveAlerts()
+		m.mu.Lock()
+		m.resetStateLocked()
+		m.mu.Unlock()
+		log.Info().Msg("Switched monitor to mock mode")
+	} else {
+		mock.SetEnabled(false)
+		m.alertManager.ClearActiveAlerts()
+		m.mu.Lock()
+		m.resetStateLocked()
+		m.mu.Unlock()
+		log.Info().Msg("Switched monitor to real data mode")
+	}
+
+	m.mu.RLock()
+	ctx := m.runtimeCtx
+	hub := m.wsHub
+	m.mu.RUnlock()
+
+	if hub != nil {
+		hub.BroadcastState(m.GetState())
+	}
+
+	if !enable && ctx != nil && hub != nil {
+		// Kick off an immediate poll to repopulate state with live data
+		go m.poll(ctx, hub)
+	}
+}
+
+func (m *Monitor) resetStateLocked() {
+	m.state = models.NewState()
+	m.state.Stats = models.Stats{
+		StartTime: m.startTime,
+		Version:   "2.0.0-go",
+	}
+}
+
 // GetStartTime returns the monitor start time
 func (m *Monitor) GetStartTime() time.Time {
 	return m.startTime
@@ -3362,21 +3433,23 @@ func (m *Monitor) checkMockAlerts() {
 		Msg("Checking alerts for mock data")
 
 	// Clean up alerts for nodes that no longer exist
-	// Use the mock state nodes since we haven't updated global state yet
 	existingNodes := make(map[string]bool)
 	for _, node := range state.Nodes {
 		existingNodes[node.Name] = true
+		if node.Host != "" {
+			existingNodes[node.Host] = true
+		}
 	}
-	// Also add any real nodes from the global state
-	allState := m.state.GetSnapshot()
-	for _, node := range allState.Nodes {
-		existingNodes[node.Name] = true
+	for _, pbsInst := range state.PBSInstances {
+		existingNodes[pbsInst.Name] = true
+		existingNodes["pbs-"+pbsInst.Name] = true
+		if pbsInst.Host != "" {
+			existingNodes[pbsInst.Host] = true
+		}
 	}
 	log.Info().
-		Int("mockNodes", len(state.Nodes)).
-		Int("stateNodes", len(allState.Nodes)).
-		Int("totalNodes", len(existingNodes)).
-		Msg("Collecting nodes for alert cleanup")
+		Int("trackedNodes", len(existingNodes)).
+		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 
 	// Limit how many guests we check per cycle to prevent blocking with large datasets
