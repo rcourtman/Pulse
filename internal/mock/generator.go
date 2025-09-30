@@ -258,6 +258,9 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 		"5.15.143-1-pve",
 	}
 
+	// Generate temperature data
+	temp := generateNodeTemperature(cores)
+
 	return models.Node{
 		Name:          name,
 		Instance:      "", // Set by generateNodes based on cluster/standalone
@@ -285,8 +288,65 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 			Sockets: cores / 4, // Assume 4 cores per socket
 			MHz:     "2400",
 		},
-		Host: fmt.Sprintf("https://%s.local:8006", name),
-		ID:   fmt.Sprintf("node/%s", name),
+		Temperature: temp,
+		Host:        fmt.Sprintf("https://%s.local:8006", name),
+		ID:          fmt.Sprintf("node/%s", name),
+	}
+}
+
+// generateNodeTemperature generates realistic temperature data for a node
+func generateNodeTemperature(cores int) *models.Temperature {
+	// 30% chance of no temperature data (sensors not available)
+	if rand.Float64() < 0.3 {
+		return &models.Temperature{
+			Available: false,
+		}
+	}
+
+	// Generate CPU package temperature (40-75°C normal range)
+	cpuPackage := 40.0 + rand.Float64()*35.0
+	if rand.Float64() < 0.1 { // 10% chance of high temp
+		cpuPackage = 75.0 + rand.Float64()*15.0 // 75-90°C
+	}
+
+	// Generate core temperatures (similar to package, with variation)
+	coreTemps := make([]models.CoreTemp, cores)
+	maxTemp := cpuPackage
+	for i := 0; i < cores; i++ {
+		coreTemp := cpuPackage + (rand.Float64()-0.5)*10.0 // ±5°C from package
+		if coreTemp < 30.0 {
+			coreTemp = 30.0
+		}
+		if coreTemp > maxTemp {
+			maxTemp = coreTemp
+		}
+		coreTemps[i] = models.CoreTemp{
+			ID:          i,
+			Temperature: coreTemp,
+		}
+	}
+
+	// Generate NVMe temperatures (0-2 NVMe drives)
+	numNVMe := rand.Intn(3)
+	nvmeTemps := make([]models.NVMeTemp, numNVMe)
+	for i := 0; i < numNVMe; i++ {
+		nvmeTemp := 35.0 + rand.Float64()*40.0 // 35-75°C normal range
+		if rand.Float64() < 0.05 {             // 5% chance of high temp
+			nvmeTemp = 75.0 + rand.Float64()*10.0 // 75-85°C
+		}
+		nvmeTemps[i] = models.NVMeTemp{
+			Device:      fmt.Sprintf("nvme%d", i),
+			Temperature: nvmeTemp,
+		}
+	}
+
+	return &models.Temperature{
+		CPUPackage: cpuPackage,
+		CPUMax:     maxTemp,
+		Cores:      coreTemps,
+		NVMe:       nvmeTemps,
+		Available:  true,
+		LastUpdate: time.Now(),
 	}
 }
 
