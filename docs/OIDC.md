@@ -98,7 +98,33 @@ All configuration can be provided via environment variables (see [`docs/CONFIGUR
 | Symptom | Resolution |
 | --- | --- |
 | Users see `single sign-on failed` | Check `journalctl -u pulse-dev-hot.service` (or `pulse.service`) for detailed OIDC audit logs. Common causes include mismatched client IDs, incorrect redirect URLs, or group/domain restrictions. |
-| Redirect loops back to login | Ensure clock skew between Pulse and the IdP is <5 minutes. Verify the redirect URL is reachable from the user’s browser. |
+| Redirect loops back to login | Ensure clock skew between Pulse and the IdP is <5 minutes. Verify the redirect URL is reachable from the user's browser. |
 | UI shows "OIDC settings are managed by environment variables" | Remove the relevant `OIDC_*` environment variables or update them directly in your deployment. |
+| Provider discovery fails | Verify the issuer URL is reachable from the Pulse server and returns valid OIDC discovery metadata at `/.well-known/openid-configuration`. |
+| Group restrictions not working | Enable debug logging to see which groups the IdP is sending and verify the `groups_claim` setting matches your IdP's claim name. |
 
-For advanced debugging, temporarily set `LOG_LEVEL=debug` and check the backend logs for `oidc_login` audit events.
+### Debug Logging
+
+For detailed troubleshooting, set `LOG_LEVEL=debug` in your deployment and restart Pulse. Debug logs include:
+
+- OIDC provider initialization (issuer URL, endpoints discovered)
+- Authorization flow start (client ID, scopes requested)
+- Token exchange details (success/failure with specific errors)
+- ID token verification (subject extracted)
+- Claims extraction (username, email, groups found)
+- Access control checks (which emails/domains/groups were checked and why they passed or failed)
+
+Example debug log output:
+```
+DBG Initializing OIDC provider issuer=https://auth.example.com redirect_url=https://pulse.example.com/api/oidc/callback scopes=[openid,profile,email]
+DBG OIDC provider discovery successful issuer=https://auth.example.com auth_endpoint=https://auth.example.com/authorize token_endpoint=https://auth.example.com/token
+DBG Starting OIDC login flow issuer=https://auth.example.com client_id=pulse-client
+DBG Processing OIDC callback issuer=https://auth.example.com
+DBG OIDC code exchange successful
+DBG ID token verified successfully subject=user@example.com
+DBG Extracted user identity from claims username=user@example.com email=user@example.com email_claim=email username_claim=preferred_username
+DBG Checking group membership user_groups=[admins,users] allowed_groups=[admins] groups_claim=groups
+DBG User group membership verified
+```
+
+After reviewing the logs, set `LOG_LEVEL=info` to reduce log volume.
