@@ -318,6 +318,7 @@ export interface StorageBackup {
   id: string;
   storage: string;
   node: string;
+  instance: string;
   type: string;
   vmid: number;
   time: string;
@@ -343,6 +344,7 @@ export interface GuestSnapshot {
   id: string;
   name: string;
   node: string;
+  instance: string;
   type: string;
   vmid: number;
   time: string;
