@@ -242,10 +242,11 @@ const Storage: Component = () => {
     const mode = viewMode();
 
     if (mode === 'node') {
-      // Group by instance ID (not node name) to handle duplicate node names
+      // Group by node ID (instance + node name) to match Node.ID format
       const groups: Record<string, StorageType[]> = {};
       storage.forEach((s) => {
-        const key = s.instance; // Use unique instance ID instead of hostname
+        // Node.ID is formatted as "instance-nodename", so we need to match that
+        const key = `${s.instance}-${s.node}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(s);
       });
