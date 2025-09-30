@@ -175,11 +175,11 @@ const UnifiedBackups: Component = () => {
 
     // Normalize snapshots
     state.pveBackups?.guestSnapshots?.forEach((snapshot) => {
-      // Try to find the guest name by matching VMID
+      // Try to find the guest name by matching VMID and instance (not hostname)
       let guestName = '';
-      const vm = state.vms?.find((v) => v.vmid === snapshot.vmid && v.node === snapshot.node);
+      const vm = state.vms?.find((v) => v.vmid === snapshot.vmid && v.instance === snapshot.instance);
       const ct = state.containers?.find(
-        (c) => c.vmid === snapshot.vmid && c.node === snapshot.node,
+        (c) => c.vmid === snapshot.vmid && c.instance === snapshot.instance,
       );
       if (vm) {
         guestName = vm.name || '';

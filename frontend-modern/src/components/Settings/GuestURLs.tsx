@@ -26,7 +26,7 @@ export function GuestURLs(props: GuestURLsProps) {
     return [...vms, ...containers];
   });
 
-  // Filter and group guests by node
+  // Filter and group guests by node instance (not hostname, to handle duplicate names)
   const groupedGuests = createMemo(() => {
     const search = searchTerm().toLowerCase();
     let guests = allGuests();
@@ -41,18 +41,19 @@ export function GuestURLs(props: GuestURLsProps) {
       );
     }
 
-    // Group by node
+    // Group by instance ID (not hostname) to handle nodes with duplicate names
     const groups: Record<string, (VM | Container)[]> = {};
     guests.forEach((guest) => {
-      if (!groups[guest.node]) {
-        groups[guest.node] = [];
+      const key = guest.instance; // Use unique instance ID
+      if (!groups[key]) {
+        groups[key] = [];
       }
-      groups[guest.node].push(guest);
+      groups[key].push(guest);
     });
 
     // Sort guests within each node by VMID
-    Object.keys(groups).forEach((node) => {
-      groups[node] = groups[node].sort((a, b) => a.vmid - b.vmid);
+    Object.keys(groups).forEach((instanceId) => {
+      groups[instanceId] = groups[instanceId].sort((a, b) => a.vmid - b.vmid);
     });
 
     return groups;
@@ -287,17 +288,22 @@ export function GuestURLs(props: GuestURLsProps) {
                   when={Object.keys(groupedGuests()).length === 0}
                   fallback={
                     <For
-                      each={Object.entries(groupedGuests()).sort(([a], [b]) => a.localeCompare(b))}
+                      each={Object.entries(groupedGuests()).sort(([instanceIdA, guestsA], [instanceIdB, guestsB]) => {
+                        // Sort by node hostname for display, not instance ID
+                        const nodeA = guestsA[0]?.node || '';
+                        const nodeB = guestsB[0]?.node || '';
+                        return nodeA.localeCompare(nodeB);
+                      })}
                     >
-                      {([node, guests]) => (
+                      {([instanceId, guests]) => (
                         <>
-                          {/* Node header row */}
+                          {/* Node header row - show hostname not instance ID */}
                           <tr class="node-header bg-gray-50 dark:bg-gray-700/50 font-semibold text-gray-700 dark:text-gray-300 text-xs">
                             <td
                               colspan="5"
                               class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400"
                             >
-                              {node}
+                              {guests[0]?.node || instanceId}
                             </td>
                           </tr>
                           {/* Guest rows for this node */}
