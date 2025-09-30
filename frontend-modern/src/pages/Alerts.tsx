@@ -994,7 +994,7 @@ function OverviewTab(props: {
 
       {/* Recent Alerts */}
       <div>
-        <SectionHeader title="Active Alerts" class="mb-3" />
+        <SectionHeader title="Active Alerts" size="md" class="mb-3" />
         <Show
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
@@ -1518,8 +1518,9 @@ function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <SectionHeader
-          label="Notification Schedule"
-          title="Control when alerts are allowed to fire and how they are grouped."
+          title="Notification Schedule"
+          description="Control when alerts are allowed to fire and how they are grouped."
+          size="md"
         />
         <button
           type="button"
@@ -2359,11 +2360,17 @@ function HistoryTab() {
 
   return (
     <div class="space-y-4">
+      {/* Main section header */}
+      <SectionHeader
+        title="Alert History"
+        description="View past and active alerts with trends and filtering options."
+        size="md"
+      />
+
       {/* Alert Trends Mini-Chart */}
       <Card padding="md">
         <div class="mb-3 flex items-start justify-between gap-3">
           <SectionHeader
-            label="Trends"
             title="Alert frequency"
             description={
               <span class="text-xs text-gray-500 dark:text-gray-400">
