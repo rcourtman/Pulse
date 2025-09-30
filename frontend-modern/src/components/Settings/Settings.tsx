@@ -2628,11 +2628,11 @@ const Settings: Component = () => {
 
                 {/* Show message when auth is disabled */}
                 <Show when={!securityStatus()?.hasAuthentication}>
-                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
-                    <div class="flex items-start space-x-3">
-                      <div class="flex-shrink-0">
+                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex items-start gap-3 flex-1">
                         <svg
-                          class="h-6 w-6 text-amber-600 dark:text-amber-400"
+                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -2644,63 +2644,33 @@ const Settings: Component = () => {
                             d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                           />
                         </svg>
-                      </div>
-                      <div class="flex-1">
-                        <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                          Authentication is Disabled
-                        </h4>
-                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                          Pulse is currently running without authentication. This means anyone who
-                          can access this interface has full control.
-                        </p>
-                        <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
-                          <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                            Why is authentication disabled?
+                        <div class="flex-1 min-w-0">
+                          <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                            Authentication disabled
+                          </h4>
+                          <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            DISABLE_AUTH is set, or auth isn't configured yet.
                           </p>
-                          <ul class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                            <li>• DISABLE_AUTH environment variable is set to true</li>
-                            <li>• Recovery mode is active (.auth_recovery file exists)</li>
-                            <li>• Or authentication hasn't been configured yet</li>
-                          </ul>
                         </div>
-                        <Card
-                          tone="muted"
-                          padding="sm"
-                          class="mt-3 border border-amber-200 dark:border-amber-700"
-                        >
-                          <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                            To enable authentication:
-                          </p>
-                          <ol class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                            <li>1. Remove DISABLE_AUTH from environment variables</li>
-                            <li>2. Delete /etc/pulse/.auth_recovery if it exists</li>
-                            <li>3. Restart Pulse service</li>
-                            <li>4. Complete the security setup wizard on first access</li>
-                          </ol>
-                        </Card>
-                        <div class="mt-4">
-                          <button
-                            type="button"
-                            onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
-                            class="px-4 py-2 text-xs font-semibold rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors dark:border-blue-700 dark:text-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/40"
-                          >
-                            {showQuickSecuritySetup()
-                              ? 'Hide quick security setup'
-                              : 'Launch quick security setup'}
-                          </button>
-                        </div>
-                        <Show when={showQuickSecuritySetup()}>
-                          <div class="mt-4">
-                            <QuickSecuritySetup
-                              onConfigured={() => {
-                                setShowQuickSecuritySetup(false);
-                                loadSecurityStatus();
-                              }}
-                            />
-                          </div>
-                        </Show>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickSecuritySetup(!showQuickSecuritySetup())}
+                        class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                      >
+                        Setup
+                      </button>
                     </div>
+                    <Show when={showQuickSecuritySetup()}>
+                      <div class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700">
+                        <QuickSecuritySetup
+                          onConfigured={() => {
+                            setShowQuickSecuritySetup(false);
+                            loadSecurityStatus();
+                          }}
+                        />
+                      </div>
+                    </Show>
                   </div>
                 </Show>
 
@@ -2746,15 +2716,6 @@ const Settings: Component = () => {
                     {/* Content */}
                     <div class="p-6">
                       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="flex-1 text-sm text-gray-600 dark:text-gray-400">
-                          <p class="font-semibold text-gray-900 dark:text-gray-100">
-                            Credential controls
-                          </p>
-                          <p class="mt-1 leading-relaxed">
-                            Update the administrator password for routine maintenance, or rotate
-                            both the password and API token when you need a full credential refresh.
-                          </p>
-                        </div>
                         <div class="flex flex-wrap items-start gap-4">
                           <button
                             type="button"
@@ -2918,11 +2879,7 @@ const Settings: Component = () => {
                               Disable password auth
                             </div>
                             <div>
-                              Confirm OIDC or proxy auth works, then set{' '}
-                              <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                                DISABLE_AUTH=true
-                              </code>{' '}
-                              in your deployment.
+                              Set DISABLE_AUTH=true after confirming SSO works
                             </div>
                           </div>
                         </div>
@@ -3041,19 +2998,6 @@ const Settings: Component = () => {
                   </div>
                 </Show>
 
-                <div class="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-900/10 p-4 mb-6">
-                  <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                    Single Sign-On
-                  </h4>
-                  <p class="text-xs text-blue-700 dark:text-blue-300">
-                    Enable OIDC to add an SSO button alongside the existing password login. Disable
-                    password auth later by setting{' '}
-                    <code class="px-1 py-0.5 bg-blue-100/70 dark:bg-blue-900/40 rounded">
-                      DISABLE_AUTH=true
-                    </code>{' '}
-                    once SSO is verified.
-                  </p>
-                </div>
 
                 <OIDCPanel onConfigUpdated={loadSecurityStatus} />
 
@@ -3095,53 +3039,6 @@ const Settings: Component = () => {
 
                     {/* Content */}
                     <div class="p-6">
-                      {/* Show explanation when auth is disabled */}
-                      <Show when={!securityStatus()?.hasAuthentication}>
-                        <Card
-                          tone="info"
-                          padding="sm"
-                          class="mb-4 border border-blue-200 dark:border-blue-800"
-                        >
-                          <p class="text-xs text-blue-800 dark:text-blue-200">
-                            <strong>API Access Control:</strong> Even though authentication is
-                            disabled, you can still use API tokens to protect API access for
-                            automation and integrations.
-                          </p>
-                        </Card>
-                      </Show>
-                      <div class="mb-4 space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                        <p>
-                          Exports and imports{' '}
-                          {securityStatus()?.exportProtected &&
-                          !securityStatus()?.unprotectedExportAllowed
-                            ? 'require an API token and a passphrase'
-                            : 'follow the current server policy'}
-                          . Generating a token lets you:
-                        </p>
-                        <ul class="list-disc pl-5 space-y-1">
-                          <li>
-                            Authenticate scripts with the{' '}
-                            <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                              X-API-Token
-                            </code>{' '}
-                            header.
-                          </li>
-                          <li>
-                            Unlock encrypted export/import flows in Settings → Security → Backup
-                            &amp; restore.
-                          </li>
-                          <li>Keep UI logins separate from automation secrets.</li>
-                        </ul>
-                        <Show when={securityStatus()?.unprotectedExportAllowed}>
-                          <p class="text-amber-700 dark:text-amber-300">
-                            Unprotected exports are currently allowed. Set{' '}
-                            <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/50 rounded">
-                              ALLOW_UNPROTECTED_EXPORT=false
-                            </code>{' '}
-                            or configure an API token to harden backups.
-                          </p>
-                        </Show>
-                      </div>
                       <GenerateAPIToken currentTokenHint={securityStatus()?.apiTokenHint} />
                     </div>
                   </Card>
