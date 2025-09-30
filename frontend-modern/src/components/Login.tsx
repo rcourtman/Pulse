@@ -156,12 +156,14 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
-  createEffect(() => {
-    if (!loadingAuth() && supportsOIDC() && !autoOidcTriggered()) {
-      setAutoOidcTriggered(true);
-      startOidcLogin();
-    }
-  });
+  // Only auto-redirect to OIDC if password auth is disabled
+  // This prevents redirect loops when both password and OIDC are configured
+  // createEffect(() => {
+  //   if (!loadingAuth() && supportsOIDC() && !autoOidcTriggered()) {
+  //     setAutoOidcTriggered(true);
+  //     startOidcLogin();
+  //   }
+  // });
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
