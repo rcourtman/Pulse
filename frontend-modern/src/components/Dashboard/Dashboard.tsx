@@ -98,7 +98,7 @@ export function Dashboard(props: DashboardProps) {
     }
   });
 
-  // Create a mapping from node instance ID to node object
+  // Create a mapping from node ID to node object
   const nodeByInstance = createMemo(() => {
     const map: Record<string, Node> = {};
     props.nodes.forEach((node) => {
@@ -355,14 +355,15 @@ export function Dashboard(props: DashboardProps) {
       return groups;
     }
 
-    // Group by node instance ID (not hostname) to handle nodes with duplicate names
+    // Group by node ID (instance + node name) to match Node.ID format
     const groups: Record<string, (VM | Container)[]> = {};
     guests.forEach((guest) => {
-      const instanceId = guest.instance; // Use unique instance ID instead of hostname
-      if (!groups[instanceId]) {
-        groups[instanceId] = [];
+      // Node.ID is formatted as "instance-nodename", so we need to match that
+      const nodeId = `${guest.instance}-${guest.node}`;
+      if (!groups[nodeId]) {
+        groups[nodeId] = [];
       }
-      groups[instanceId].push(guest);
+      groups[nodeId].push(guest);
     });
 
     // Sort within each node group
@@ -931,13 +932,13 @@ export function Dashboard(props: DashboardProps) {
                           <tr class="bg-gray-50/50 dark:bg-gray-700/30">
                             <td class="py-0.5 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
                               <a
-                                href={node.host || `https://${node.name}:8006`}
+                                href={node!.host || `https://${node!.name}:8006`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                                title={`Open ${node.name} web interface`}
+                                title={`Open ${node!.name} web interface`}
                               >
-                                {node.name}
+                                {node!.name}
                               </a>
                             </td>
                             <td colspan="10" class="py-0.5 px-2"></td>
