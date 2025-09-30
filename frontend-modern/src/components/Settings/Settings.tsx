@@ -1,4 +1,5 @@
 import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } from 'solid-js';
+import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
 import { NodeModal } from './NodeModal';
@@ -112,7 +113,31 @@ type NodeConfigWithStatus = NodeConfig & {
 
 const Settings: Component = () => {
   const { state, connected } = useWebSocket();
-  const [activeTab, setActiveTab] = createSignal<SettingsTab>('pve');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive active tab from URL path
+  const activeTab = () => {
+    const path = location.pathname;
+    if (path.includes('/settings/pbs')) return 'pbs';
+    if (path.includes('/settings/system')) return 'system';
+    if (path.includes('/settings/security')) return 'security';
+    if (path.includes('/settings/diagnostics')) return 'diagnostics';
+    if (path.includes('/settings/urls')) return 'urls';
+    return 'pve'; // default
+  };
+
+  const setActiveTab = (tab: SettingsTab) => {
+    navigate(`/settings/${tab}`);
+  };
+
+  // Redirect /settings to /settings/pve on initial load
+  createEffect(() => {
+    if (location.pathname === '/settings' || location.pathname === '/settings/') {
+      navigate('/settings/pve', { replace: true });
+    }
+  });
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);

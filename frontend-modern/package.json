@@ -25,7 +25,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
   "dependencies": {
-    "@solidjs/router": "^0.10.0",
+    "@solidjs/router": "^0.10.10",
     "solid-js": "^1.8.0",
     "ws": "^8.18.3"
   },
