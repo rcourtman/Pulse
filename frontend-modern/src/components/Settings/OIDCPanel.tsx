@@ -326,8 +326,8 @@ export const OIDCPanel: Component<Props> = (props) => {
               />
               <p class={formHelpText}>
                 {config()?.defaultRedirect
-                  ? `If left blank, Pulse will use ${config()?.defaultRedirect}`
-                  : 'Set PUBLIC_URL environment variable or enter redirect URL manually'}
+                  ? `Optional - Leave blank to auto-detect from request headers (supports reverse proxies). Detected URL: ${config()?.defaultRedirect}`
+                  : 'Leave blank to auto-detect from request headers, or set PUBLIC_URL environment variable'}
               </p>
             </div>
           </div>
