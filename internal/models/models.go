@@ -374,6 +374,7 @@ type StorageBackup struct {
 	ID           string    `json:"id"`
 	Storage      string    `json:"storage"`
 	Node         string    `json:"node"`
+	Instance     string    `json:"instance"` // Unique instance identifier (for nodes with duplicate names)
 	Type         string    `json:"type"`
 	VMID         int       `json:"vmid"`
 	Time         time.Time `json:"time"`
@@ -393,6 +394,7 @@ type GuestSnapshot struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Node        string    `json:"node"`
+	Instance    string    `json:"instance"` // Unique instance identifier (for nodes with duplicate names)
 	Type        string    `json:"type"`
 	VMID        int       `json:"vmid"`
 	Time        time.Time `json:"time"`
