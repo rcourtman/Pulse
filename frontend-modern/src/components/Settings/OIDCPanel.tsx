@@ -324,7 +324,11 @@ export const OIDCPanel: Component<Props> = (props) => {
                 class={controlClass()}
                 disabled={isEnvLocked() || saving()}
               />
-              <p class={formHelpText}>If left blank, Pulse will use {config()?.defaultRedirect}.</p>
+              <p class={formHelpText}>
+                {config()?.defaultRedirect
+                  ? `If left blank, Pulse will use ${config()?.defaultRedirect}`
+                  : 'Set PUBLIC_URL environment variable or enter redirect URL manually'}
+              </p>
             </div>
           </div>
 
@@ -432,10 +436,12 @@ export const OIDCPanel: Component<Props> = (props) => {
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              Redirect URL registered with your IdP must match Pulse:{' '}
-              {config()?.defaultRedirect || ''}
-            </div>
+            <Show when={config()?.defaultRedirect}>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                Redirect URL registered with your IdP must match Pulse:{' '}
+                {config()?.defaultRedirect}
+              </div>
+            </Show>
             <div class="flex gap-3">
               <button
                 type="button"
