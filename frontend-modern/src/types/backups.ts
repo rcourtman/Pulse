@@ -3,7 +3,7 @@ export type GuestType = 'VM' | 'LXC' | 'Host' | 'Template' | 'ISO';
 
 export interface UnifiedBackup {
   backupType: BackupType;
-  vmid: number;
+  vmid: number | string;
   name: string;
   type: GuestType;
   node: string;

@@ -279,7 +279,7 @@ const UnifiedBackups: Component = () => {
 
       unified.push({
         backupType: 'remote',
-        vmid: parseInt(backup.vmid) || 0,
+        vmid: displayType === 'Host' ? backup.vmid : (parseInt(backup.vmid) || 0),
         name: backup.comment || '',
         type: displayType,
         node: backup.instance || 'PBS',
@@ -359,7 +359,7 @@ const UnifiedBackups: Component = () => {
       // For regular backups: show Proxmox node in Node column, local storage in Location
       unified.push({
         backupType: backupType,
-        vmid: backup.vmid || 0,
+        vmid: displayType === 'Host' ? backup.vmid : (backup.vmid || 0),
         name: backup.notes || backup.volid?.split('/').pop() || '',
         type: displayType,
         node: backup.node || '', // Proxmox node that has access to this backup
@@ -1975,7 +1975,7 @@ const UnifiedBackups: Component = () => {
                         onClick={() => handleSort('vmid')}
                         style="width: 60px;"
                       >
-                        VMID {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
+                        {hasHostBackups() ? 'VMID/Host' : 'VMID'} {sortKey() === 'vmid' && (sortDirection() === 'asc' ? '▲' : '▼')}
                       </th>
                       <th
                         class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
