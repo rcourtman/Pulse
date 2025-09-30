@@ -175,6 +175,19 @@ type AlertConfig struct {
 }
 
 // Manager handles alert monitoring and state
+//
+// Lock Ordering Documentation:
+// The Manager uses two mutexes to prevent deadlocks:
+//   1. m.mu (primary lock) - protects most manager state
+//   2. m.resolvedMutex - protects only recentlyResolved map
+//
+// Lock Ordering Rules:
+//   - NEVER hold m.mu when acquiring resolvedMutex
+//   - ALWAYS release m.mu before acquiring resolvedMutex
+//   - resolvedMutex can be held independently without m.mu
+//   - When both locks are needed, acquire m.mu first, then release it before acquiring resolvedMutex
+//
+// This ordering prevents deadlock scenarios where different goroutines acquire locks in different orders.
 type Manager struct {
 	mu             sync.RWMutex
 	config         AlertConfig
@@ -190,7 +203,7 @@ type Manager struct {
 	suppressedUntil map[string]time.Time // Track suppression windows
 	// Recently resolved alerts (kept for 5 minutes)
 	recentlyResolved map[string]*ResolvedAlert
-	resolvedMutex    sync.RWMutex
+	resolvedMutex    sync.RWMutex // Secondary lock - see Lock Ordering Documentation above
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Offline confirmation tracking
@@ -834,12 +847,13 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	}
 
 	// Check individual devices for errors
+	// Lock once for the entire loop instead of inside it
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, device := range pool.Devices {
 		if device.State != "ONLINE" || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
 			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
-
-			m.mu.Lock()
-			defer m.mu.Unlock()
 
 			if _, exists := m.activeAlerts[alertID]; !exists {
 				level := AlertLevelWarning
@@ -898,7 +912,7 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 		} else {
 			// Clear device alert if it's back to normal
 			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
-			m.clearAlert(alertID)
+			m.clearAlertNoLock(alertID)
 		}
 	}
 }
@@ -1089,6 +1103,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 			// Save active alerts after adding new one
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine")
+					}
+				}()
 				if err := m.SaveActiveAlerts(); err != nil {
 					log.Error().Err(err).Msg("Failed to save active alerts after creation")
 				}
@@ -1169,6 +1188,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 				// Save active alerts after resolution
 				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (resolution)")
+						}
+					}()
 					if err := m.SaveActiveAlerts(); err != nil {
 						log.Error().Err(err).Msg("Failed to save active alerts after resolution")
 					}
@@ -1186,6 +1210,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 				// Schedule cleanup after 5 minutes
 				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Error().Interface("panic", r).Str("alertID", alertID).Msg("Panic in cleanup goroutine")
+						}
+					}()
 					time.Sleep(5 * time.Minute)
 					m.resolvedMutex.Lock()
 					delete(m.recentlyResolved, alertID)
@@ -2210,10 +2239,21 @@ func (m *Manager) LoadActiveAlerts() error {
 		return fmt.Errorf("failed to unmarshal active alerts: %w", err)
 	}
 
-	// Restore alerts to the map
+	// Restore alerts to the map with deduplication
 	now := time.Now()
 	restoredCount := 0
+	duplicateCount := 0
+	seen := make(map[string]bool)
+
 	for _, alert := range alerts {
+		// Skip duplicates
+		if seen[alert.ID] {
+			duplicateCount++
+			log.Warn().Str("alertID", alert.ID).Msg("Skipping duplicate alert during restore")
+			continue
+		}
+		seen[alert.ID] = true
+
 		// Skip very old alerts (older than 24 hours)
 		if now.Sub(alert.StartTime) > 24*time.Hour {
 			log.Debug().Str("alertID", alert.ID).Msg("Skipping old alert during restore")
@@ -2230,7 +2270,11 @@ func (m *Manager) LoadActiveAlerts() error {
 		restoredCount++
 	}
 
-	log.Info().Int("restored", restoredCount).Int("total", len(alerts)).Msg("Restored active alerts from disk")
+	log.Info().
+		Int("restored", restoredCount).
+		Int("total", len(alerts)).
+		Int("duplicates", duplicateCount).
+		Msg("Restored active alerts from disk")
 	return nil
 }
 
@@ -2262,6 +2306,11 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		log.Info().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
 		// Save the cleaned up state
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (cleanup)")
+				}
+			}()
 			if err := m.SaveActiveAlerts(); err != nil {
 				log.Error().Err(err).Msg("Failed to save alerts after cleanup")
 			}
@@ -2294,6 +2343,11 @@ func (m *Manager) ClearActiveAlerts() {
 	log.Info().Msg("Cleared all active and pending alerts")
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (clear)")
+			}
+		}()
 		if err := m.SaveActiveAlerts(); err != nil {
 			log.Error().Err(err).Msg("Failed to persist cleared alerts")
 		}

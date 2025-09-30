@@ -28,6 +28,23 @@ func NewAlertHandlers(monitor *monitoring.Monitor, wsHub *websocket.Hub) *AlertH
 	}
 }
 
+// validateAlertID validates an alert ID for security
+func validateAlertID(alertID string) bool {
+	// Check length to prevent DOS attacks with huge IDs
+	if len(alertID) == 0 || len(alertID) > 500 {
+		return false
+	}
+	// Alert IDs should only contain alphanumeric, hyphens, underscores, colons, and slashes
+	// (e.g., "pve1:qemu/101-cpu", "node-offline-pve1")
+	for _, c := range alertID {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == ':' || c == '/' || c == '.') {
+			return false
+		}
+	}
+	return true
+}
+
 // GetAlertConfig returns the current alert configuration
 func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 	config := h.monitor.GetAlertManager().GetConfig()
@@ -85,8 +102,13 @@ func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) 
 func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 10000 {
 			limit = l
+		} else if err != nil {
+			log.Warn().Str("limit", limitStr).Msg("Invalid limit parameter, using default")
+		} else {
+			log.Warn().Int("limit", l).Msg("Limit exceeds maximum, capping at 10000")
+			limit = 10000
 		}
 	}
 
@@ -139,11 +161,12 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 
 	// Extract alert ID by removing the suffix
 	alertID := strings.TrimSuffix(path, suffix)
-	if alertID == "" {
+	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).
-			Msg("Empty alert ID")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+			Str("alertID", alertID).
+			Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
 		return
 	}
 
@@ -200,11 +223,12 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 
 	// Extract alert ID by removing the suffix
 	alertID := strings.TrimSuffix(path, suffix)
-	if alertID == "" {
+	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).
-			Msg("Empty alert ID")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+			Str("alertID", alertID).
+			Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
 		return
 	}
 
@@ -269,11 +293,12 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 
 	// Extract alert ID by removing the suffix
 	alertID := strings.TrimSuffix(path, suffix)
-	if alertID == "" {
+	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).
-			Msg("Empty alert ID")
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
+			Str("alertID", alertID).
+			Msg("Invalid alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
 		return
 	}
 
