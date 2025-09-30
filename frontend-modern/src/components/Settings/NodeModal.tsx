@@ -49,7 +49,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   });
 
   const [formData, setFormData] = createSignal(getCleanFormData());
-  const [setupCode, setSetupCode] = createSignal<{ code: string; expires: number } | null>(null);
+  const [setupCode, setSetupCode] = createSignal<{ code: string; expires: number; url?: string } | null>(null);
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -531,11 +531,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const data = await response.json();
                                             const cmd = `curl -sSL "${data.url}" | bash`;
 
-                                            // Store setup code for display
+                                            // Store setup code for display along with the URL
                                             if (data.setupCode) {
                                               setSetupCode({
                                                 code: data.setupCode,
                                                 expires: data.expires,
+                                                url: data.url,
                                               });
                                             }
 
@@ -573,10 +574,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </svg>
                                     </button>
                                     <code
-                                      class={formData().host ? 'text-green-400' : 'text-gray-500'}
+                                      class={setupCode()?.url ? 'text-green-400' : formData().host ? 'text-blue-400' : 'text-gray-500'}
                                     >
-                                      {formData().host
-                                        ? 'Click the copy button to generate the secure command'
+                                      {setupCode()?.url
+                                        ? `curl -sSL "${setupCode()?.url}" | bash`
+                                        : formData().host
+                                        ? 'Click the copy button above to generate your one-time setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
@@ -1036,11 +1039,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                               const data = await response.json();
                                               const cmd = `curl -sSL "${data.url}" | bash`;
 
-                                              // Store setup code for display
+                                              // Store setup code for display along with the URL
                                               if (data.setupCode) {
                                                 setSetupCode({
                                                   code: data.setupCode,
                                                   expires: data.expires,
+                                                  url: data.url,
                                                 });
                                               }
 
@@ -1079,10 +1083,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </button>
                                     </Show>
                                     <code
-                                      class={formData().host ? 'text-green-400' : 'text-gray-500'}
+                                      class={setupCode()?.url ? 'text-green-400' : formData().host ? 'text-blue-400' : 'text-gray-500'}
                                     >
-                                      {formData().host
-                                        ? 'curl -sSL "<click-copy-to-generate-secure-url>" | bash'
+                                      {setupCode()?.url
+                                        ? `curl -sSL "${setupCode()?.url}" | bash`
+                                        : formData().host
+                                        ? 'Click the copy button above to generate your one-time setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
