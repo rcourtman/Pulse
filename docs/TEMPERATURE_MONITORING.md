@@ -1,6 +1,6 @@
 # Temperature Monitoring
 
-Pulse can collect and display CPU and NVMe temperature data from your Proxmox nodes via SSH.
+Pulse can display real-time CPU and NVMe temperatures directly in your dashboard, giving you instant visibility into your hardware health.
 
 ## Features
 
@@ -12,10 +12,14 @@ Pulse can collect and display CPU and NVMe temperature data from your Proxmox no
   - Yellow: 60-80°C (warm)
   - Red: > 80°C (hot)
 
+## How It Works
+
+Temperature monitoring uses standard SSH key authentication (just like Ansible, Saltstack, and other automation tools) to securely collect sensor data from your nodes. Pulse connects via SSH and runs the `sensors` command to read hardware temperatures - that's it!
+
 ## Requirements
 
-1. **SSH Access**: Pulse needs SSH key authentication to the Proxmox nodes
-2. **lm-sensors**: Must be installed on each node you want to monitor
+1. **SSH Key Authentication**: Your Pulse server needs SSH key access to nodes (no passwords)
+2. **lm-sensors Package**: Installed on nodes to read hardware sensors
 
 ## Setup (Automatic)
 
@@ -115,49 +119,45 @@ journalctl -u pulse -f | grep -i temp
 
 ARM devices typically don't have the same sensor interfaces. Temperature monitoring may not work or may show different sensors (like `thermal_zone0` instead of `coretemp`).
 
-## Security Notes
+## Security & Architecture
 
-### What Access Is Granted
+### How Temperature Collection Works
 
-Temperature monitoring requires SSH key authentication to run `sensors -j` on your Proxmox nodes. Here's exactly what this means:
+Temperature monitoring uses **SSH key authentication** - the same trusted method used by automation tools like Ansible, Terraform, and Saltstack for managing infrastructure at scale.
 
-**Access Level**:
-- SSH access to `root@your-proxmox-node` from your Pulse server
-- Uses SSH key authentication (no passwords)
-- Pulse executes only: `sensors -j 2>/dev/null`
-- 5 second timeout per connection
-- No interactive shell, no other commands
+**What Happens**:
+1. Pulse connects to your node via SSH using a key (no passwords)
+2. Runs `sensors -j` to get temperature readings in JSON format
+3. Parses the data and displays it in the dashboard
+4. Disconnects (entire operation takes <1 second)
 
-**Security Model**:
-- ✅ **SSH key stored on Pulse server only** - Private key never leaves your Pulse server
-- ✅ **Public key on Proxmox nodes** - Only the public key is added to authorized_keys
-- ✅ **Read-only operation** - sensors command only reads hardware data
-- ✅ **No write access** - Cannot modify any Proxmox configuration
-- ✅ **Revocable** - Remove the key from authorized_keys to revoke access instantly
-- ✅ **Auditable** - All SSH connections are logged in Proxmox auth logs
+**Security Design**:
+- ✅ **Key-based authentication** - More secure than passwords, industry standard
+- ✅ **Read-only operation** - `sensors` command only reads hardware data
+- ✅ **Private key stays on Pulse server** - Never transmitted or exposed
+- ✅ **Public key on nodes** - Safe to store, can't be used to gain access
+- ✅ **Instantly revocable** - Remove key from authorized_keys to disable
+- ✅ **Logged and auditable** - All connections logged in `/var/log/auth.log`
 
-**Best Practices**:
-1. Only enable if you trust your Pulse server's security
-2. Use a dedicated SSH key for Pulse (not your personal key)
-3. Protect the Pulse server with proper firewalls/security
-4. Regularly review `/var/log/auth.log` on Proxmox nodes
-5. Consider using firewall rules to restrict SSH to your Pulse server's IP
+This is the same security model used by thousands of organizations for infrastructure automation.
 
-**Risk Assessment**:
-- **If Pulse server is compromised**: Attacker gains SSH access to your Proxmox nodes as root
-- **Mitigation**: Secure your Pulse server, use dedicated SSH keys, monitor logs
-- **Alternative**: Skip SSH setup and manually check temperatures via Proxmox web UI
+### Best Practices
 
-### Restricting SSH Access (Advanced)
+1. **Dedicated key**: Generate a separate SSH key just for Pulse (recommended)
+2. **Firewall rules**: Optionally restrict SSH to your Pulse server's IP
+3. **Regular monitoring**: Review auth logs if you want extra visibility
+4. **Secure your Pulse server**: Keep it updated and behind proper access controls
 
-If you want to limit SSH access to only the sensors command, you can use `authorized_keys` restrictions:
+### Command Restrictions (Optional)
+
+For maximum security, you can force the SSH key to only run `sensors`:
 
 ```bash
-# In /root/.ssh/authorized_keys on Proxmox node:
+# In /root/.ssh/authorized_keys on your Proxmox node:
 command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2E...
 ```
 
-This forces the key to only run `sensors -j` and nothing else.
+This restricts the key to only execute the sensors command and nothing else.
 
 ## Performance Impact
 
