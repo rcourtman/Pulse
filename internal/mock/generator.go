@@ -321,8 +321,8 @@ func generateNodeTemperature(cores int) *models.Temperature {
 			maxTemp = coreTemp
 		}
 		coreTemps[i] = models.CoreTemp{
-			ID:          i,
-			Temperature: coreTemp,
+			Core: i,
+			Temp: coreTemp,
 		}
 	}
 
@@ -335,8 +335,8 @@ func generateNodeTemperature(cores int) *models.Temperature {
 			nvmeTemp = 75.0 + rand.Float64()*10.0 // 75-85°C
 		}
 		nvmeTemps[i] = models.NVMeTemp{
-			Device:      fmt.Sprintf("nvme%d", i),
-			Temperature: nvmeTemp,
+			Device: fmt.Sprintf("nvme%d", i),
+			Temp:   nvmeTemp,
 		}
 	}
 
