@@ -56,13 +56,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         // Count storage backups (excluding PBS backups which are counted separately)
         if (state.pveBackups?.storageBackups) {
           count += state.pveBackups.storageBackups.filter(
-            (b) => b.instance === node.id && !b.isPBS,
+            (b) => b.instance === node.instance && b.node === node.name && !b.isPBS,
           ).length;
         }
 
         // Count snapshots
         if (state.pveBackups?.guestSnapshots) {
-          count += state.pveBackups.guestSnapshots.filter((s) => s.instance === node.id).length;
+          count += state.pveBackups.guestSnapshots.filter((s) => s.instance === node.instance && s.node === node.name).length;
         }
 
         counts[node.name] = count;
