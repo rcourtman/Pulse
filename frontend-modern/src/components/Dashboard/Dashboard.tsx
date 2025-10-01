@@ -568,10 +568,10 @@ export function Dashboard(props: DashboardProps) {
                     const diskPercent = () =>
                       node.disk ? Math.round((node.disk.used / node.disk.total) * 100) : 0;
 
-                    // Count VMs and containers for this node (use instance ID to handle duplicate node names)
-                    const nodeVMs = () => props.vms.filter((vm) => vm.instance === node.id).length;
+                    // Count VMs and containers for this node (match by both instance and node name)
+                    const nodeVMs = () => props.vms.filter((vm) => vm.instance === node.instance && vm.node === node.name).length;
                     const nodeContainers = () =>
-                      props.containers.filter((ct) => ct.instance === node.id).length;
+                      props.containers.filter((ct) => ct.instance === node.instance && ct.node === node.name).length;
 
                     const isSelected = () => search().includes(`node:${node.name}`);
 
