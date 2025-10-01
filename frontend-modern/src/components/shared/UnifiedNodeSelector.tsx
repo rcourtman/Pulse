@@ -47,7 +47,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
   const backupCounts = createMemo(() => {
     const counts: Record<string, number> = {};
 
-    // Count PVE backups and snapshots by node name
+    // Count PVE backups and snapshots by node instance (to handle duplicate hostnames)
     const nodes = props.nodes || state.nodes;
     if (nodes) {
       nodes.forEach((node) => {
@@ -56,13 +56,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
         // Count storage backups (excluding PBS backups which are counted separately)
         if (state.pveBackups?.storageBackups) {
           count += state.pveBackups.storageBackups.filter(
-            (b) => b.node === node.name && !b.isPBS,
+            (b) => b.instance === node.id && !b.isPBS,
           ).length;
         }
 
         // Count snapshots
         if (state.pveBackups?.guestSnapshots) {
-          count += state.pveBackups.guestSnapshots.filter((s) => s.node === node.name).length;
+          count += state.pveBackups.guestSnapshots.filter((s) => s.instance === node.id).length;
         }
 
         counts[node.name] = count;
