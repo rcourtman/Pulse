@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
@@ -455,6 +456,22 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// CRITICAL: Never save empty nodes configuration
+	// This prevents data loss from accidental wipes
+	if len(pveInstances) == 0 && len(pbsInstances) == 0 {
+		// Check if we're replacing existing non-empty config
+		if existing, err := c.LoadNodesConfig(); err == nil && existing != nil {
+			if len(existing.PVEInstances) > 0 || len(existing.PBSInstances) > 0 {
+				log.Error().
+					Int("existing_pve", len(existing.PVEInstances)).
+					Int("existing_pbs", len(existing.PBSInstances)).
+					Msg("BLOCKED attempt to save empty nodes config - would delete existing nodes!")
+				return fmt.Errorf("refusing to save empty nodes config when %d nodes exist",
+					len(existing.PVEInstances)+len(existing.PBSInstances))
+			}
+		}
+	}
+
 	config := NodesConfig{
 		PVEInstances: pveInstances,
 		PBSInstances: pbsInstances,
@@ -469,6 +486,31 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		return err
 	}
 
+	// Create TIMESTAMPED backup of existing file before overwriting (if it exists and has content)
+	// This ensures we keep multiple backups and can recover from disasters
+	if info, err := os.Stat(c.nodesFile); err == nil && info.Size() > 0 {
+		// Create timestamped backup
+		timestampedBackup := fmt.Sprintf("%s.backup-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+		if backupData, err := os.ReadFile(c.nodesFile); err == nil {
+			if err := os.WriteFile(timestampedBackup, backupData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to create timestamped backup of nodes config")
+			} else {
+				log.Info().Str("backup", timestampedBackup).Msg("Created timestamped backup of nodes config")
+			}
+		}
+
+		// Also maintain a "latest" backup for quick recovery
+		latestBackup := c.nodesFile + ".backup"
+		if backupData, err := os.ReadFile(c.nodesFile); err == nil {
+			if err := os.WriteFile(latestBackup, backupData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to create latest backup of nodes config")
+			}
+		}
+
+		// Clean up old timestamped backups (keep last 10)
+		c.cleanupOldBackups(c.nodesFile + ".backup-*")
+	}
+
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
@@ -478,7 +520,15 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		data = encrypted
 	}
 
-	if err := os.WriteFile(c.nodesFile, data, 0600); err != nil {
+	// Write to temporary file first, then atomically rename
+	tempFile := c.nodesFile + ".tmp"
+	if err := os.WriteFile(tempFile, data, 0600); err != nil {
+		return err
+	}
+
+	// Atomic rename
+	if err := os.Rename(tempFile, c.nodesFile); err != nil {
+		os.Remove(tempFile) // Clean up temp file on error
 		return err
 	}
 
@@ -512,9 +562,42 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	if c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
-			return nil, err
+			// Decryption failed - file may be corrupted
+			log.Error().Err(err).Str("file", c.nodesFile).Msg("Failed to decrypt nodes config - file may be corrupted")
+
+			// Try to restore from backup
+			backupFile := c.nodesFile + ".backup"
+			if backupData, backupErr := os.ReadFile(backupFile); backupErr == nil {
+				log.Info().Str("backup", backupFile).Msg("Attempting to restore nodes config from backup")
+				if decryptedBackup, decryptErr := c.crypto.Decrypt(backupData); decryptErr == nil {
+					log.Info().Msg("Successfully decrypted backup file")
+					data = decryptedBackup
+
+					// Move corrupted file out of the way with timestamp
+					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+					if renameErr := os.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+						log.Warn().Err(renameErr).Msg("Failed to rename corrupted file")
+					} else {
+						log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
+					}
+
+					// Restore backup as current file
+					if writeErr := os.WriteFile(c.nodesFile, backupData, 0600); writeErr != nil {
+						log.Error().Err(writeErr).Msg("Failed to restore backup as current file")
+					} else {
+						log.Info().Msg("Successfully restored nodes config from backup")
+					}
+				} else {
+					log.Error().Err(decryptErr).Msg("Backup file is also corrupted or encrypted with different key")
+					return nil, fmt.Errorf("nodes config corrupted and backup recovery failed: %w", decryptErr)
+				}
+			} else {
+				log.Error().Err(backupErr).Msg("No backup file available for recovery")
+				return nil, fmt.Errorf("nodes config corrupted and no backup available: %w", err)
+			}
+		} else {
+			data = decrypted
 		}
-		data = decrypted
 	}
 
 	var config NodesConfig
@@ -781,4 +864,53 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 
 	// Atomic rename
 	return os.Rename(tempFile, envFile)
+}
+
+// cleanupOldBackups removes old backup files, keeping only the most recent N backups
+func (c *ConfigPersistence) cleanupOldBackups(pattern string) {
+	// Use filepath.Glob to find all backup files matching the pattern
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		log.Warn().Err(err).Str("pattern", pattern).Msg("Failed to find backup files for cleanup")
+		return
+	}
+
+	// Keep only the last 10 backups
+	const maxBackups = 10
+	if len(matches) <= maxBackups {
+		return
+	}
+
+	// Sort by modification time (oldest first)
+	type fileInfo struct {
+		path    string
+		modTime time.Time
+	}
+	var files []fileInfo
+	for _, match := range matches {
+		info, err := os.Stat(match)
+		if err != nil {
+			continue
+		}
+		files = append(files, fileInfo{path: match, modTime: info.ModTime()})
+	}
+
+	// Sort oldest first
+	for i := 0; i < len(files)-1; i++ {
+		for j := i + 1; j < len(files); j++ {
+			if files[i].modTime.After(files[j].modTime) {
+				files[i], files[j] = files[j], files[i]
+			}
+		}
+	}
+
+	// Delete oldest backups (keep last 10)
+	toDelete := len(files) - maxBackups
+	for i := 0; i < toDelete; i++ {
+		if err := os.Remove(files[i].path); err != nil {
+			log.Warn().Err(err).Str("file", files[i].path).Msg("Failed to delete old backup")
+		} else {
+			log.Debug().Str("file", files[i].path).Msg("Deleted old backup")
+		}
+	}
 }
