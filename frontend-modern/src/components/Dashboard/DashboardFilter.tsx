@@ -27,7 +27,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <input
               ref={props.searchInputRef}
               type="text"
-              placeholder="Search or filter guests..."
+              placeholder="Search or filter..."
               value={props.search()}
               onInput={(e) => props.setSearch(e.currentTarget.value)}
               class={`w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
