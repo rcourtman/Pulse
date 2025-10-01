@@ -107,7 +107,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               </button>
               <button
                 type="button"
-                onClick={() => props.setGroupBy!('storage')}
+                onClick={() => props.setGroupBy!(props.groupBy!() === 'storage' ? 'node' : 'storage')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   props.groupBy!() === 'storage'
                     ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -168,9 +168,14 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               if (props.setGroupBy) props.setGroupBy('node');
             }}
             title="Reset all filters"
-            class="flex items-center justify-center px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 
-                   bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                   rounded-lg transition-colors"
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              props.search().trim() !== '' ||
+              props.sortKey() !== 'name' ||
+              props.sortDirection() !== 'asc' ||
+              (props.groupBy && props.groupBy!() !== 'node')
+                ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
           >
             <svg
               width="14"
@@ -187,20 +192,6 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             </svg>
             <span class="ml-1 hidden sm:inline">Reset</span>
           </button>
-
-          {/* Active Indicator */}
-          <Show
-            when={
-              props.search().trim() !== '' ||
-              props.sortKey() !== 'name' ||
-              props.sortDirection() !== 'asc' ||
-              (props.groupBy && props.groupBy!() !== 'node')
-            }
-          >
-            <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              Active
-            </span>
-          </Show>
         </div>
       </div>
     </Card>

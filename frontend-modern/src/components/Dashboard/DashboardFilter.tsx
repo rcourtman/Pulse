@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
 interface DashboardFilterProps {
   search: () => string;
@@ -21,18 +22,17 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
     <Card class="dashboard-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
         {/* Search Bar */}
-        <div class="flex gap-2 flex-1">
+        <div class="flex gap-2 flex-1 items-center">
           <div class="relative flex-1">
             <input
               ref={props.searchInputRef}
               type="text"
-              placeholder="Search by name, cpu>80, memory<20, tags:prod, node:pve1"
+              placeholder="Search or filter guests..."
               value={props.search()}
               onInput={(e) => props.setSearch(e.currentTarget.value)}
-              class={`w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+              class={`w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
-              title="Search guests or use filters like cpu>80"
             />
             <svg
               class="absolute left-3 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
@@ -66,6 +66,40 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               </button>
             </Show>
           </div>
+
+          {/* Help Icon with Tooltip */}
+          <button
+            type="button"
+            class="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const tooltipContent = `
+                <div class="space-y-2 p-1">
+                  <div class="font-semibold mb-2">Search Examples:</div>
+                  <div class="space-y-1">
+                    <div><span class="font-mono bg-gray-700 px-1 rounded">media</span> - Find guests with "media" in name</div>
+                    <div><span class="font-mono bg-gray-700 px-1 rounded">cpu>80</span> - Guests using over 80% CPU</div>
+                    <div><span class="font-mono bg-gray-700 px-1 rounded">memory<20</span> - Guests using under 20% memory</div>
+                    <div><span class="font-mono bg-gray-700 px-1 rounded">tags:prod</span> - Filter by tag</div>
+                    <div><span class="font-mono bg-gray-700 px-1 rounded">node:pve1</span> - Filter by node</div>
+                  </div>
+                </div>
+              `;
+              showTooltip(tooltipContent, rect.left, rect.top);
+            }}
+            onMouseLeave={() => hideTooltip()}
+            onClick={(e) => e.preventDefault()}
+            aria-label="Search help"
+          >
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </button>
         </div>
 
         {/* Filters */}
