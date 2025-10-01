@@ -225,8 +225,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      // A guest has an override if it has custom thresholds OR is disabled
-      const hasOverride = hasCustomThresholds || override?.disabled || false;
+      // A guest has an override if it has custom thresholds OR is disabled OR has connectivity disabled
+      const hasOverride =
+        hasCustomThresholds || override?.disabled || override?.disableConnectivity || false;
 
       return {
         id: guestId,
@@ -239,6 +240,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         status: guest.status,
         hasOverride: hasOverride,
         disabled: override?.disabled || false,
+        disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
         defaults: props.guestDefaults,
       };
@@ -573,11 +575,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {
-    // Find the resource - could be a node or PBS server
+    // Find the resource - could be a node, PBS server, or guest
     const nodes = nodesWithOverrides();
     const pbsServers = pbsServersWithOverrides();
-    const resource = [...nodes, ...pbsServers].find((r) => r.id === resourceId);
-    if (!resource || (resource.type !== 'node' && resource.type !== 'pbs')) return;
+    const guests = guestsWithOverrides();
+    const resource = [...nodes, ...pbsServers, ...guests].find((r) => r.id === resourceId);
+    if (!resource || (resource.type !== 'node' && resource.type !== 'pbs' && resource.type !== 'guest')) return;
 
     // Get existing override if it exists
     const existingOverride = props.overrides().find((o) => o.id === resourceId);
