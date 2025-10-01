@@ -1,6 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
 
 interface StorageFilterProps {
   search: () => string;
@@ -30,7 +30,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     <Card class="storage-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
         {/* Search Bar */}
-        <div class="flex gap-2 flex-1">
+        <div class="flex gap-2 flex-1 items-center">
           <div class="relative flex-1">
             <input
               ref={props.searchInputRef}
@@ -56,37 +56,19 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <button
-              type="button"
-              class="absolute right-3 top-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const tooltipContent = `
-                  <div class="space-y-2 p-1">
-                    <div class="font-semibold mb-2">Search Examples:</div>
-                    <div class="space-y-1">
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">local</span> - Find storage with "local" in name</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">node:pve1</span> - Show storage on specific node</div>
-                      <div><span class="font-mono bg-gray-700 px-1 rounded">nfs</span> - Find NFS storage</div>
-                    </div>
-                  </div>
-                `;
-                showTooltip(tooltipContent, rect.left, rect.top);
-              }}
-              onMouseLeave={() => hideTooltip()}
-              onClick={(e) => e.preventDefault()}
-              aria-label="Search help"
-            >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </button>
           </div>
+          <SearchTipsPopover
+            class="flex-shrink-0"
+            popoverId="storage-search-help"
+            intro="Quick examples"
+            tips={[
+              { code: 'local', description: 'Storage with "local" in the name' },
+              { code: 'node:pve1', description: 'Show storage on a specific node' },
+              { code: 'nfs', description: 'Find NFS storage' },
+            ]}
+            footerHighlight="node:pve1 nfs"
+            footerText="Combine filters to zero in on exactly what you need."
+          />
         </div>
 
         {/* Filters */}
