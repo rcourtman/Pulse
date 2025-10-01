@@ -267,7 +267,7 @@ const Settings: Component = () => {
           (n) => n.id === node.id || n.name === node.name,
         );
 
-        return {
+        const mergedNode = {
           ...node,
           // Use the hasPassword/hasToken from the API if available, otherwise check local fields
           hasPassword: node.hasPassword ?? !!node.password,
@@ -276,6 +276,19 @@ const Settings: Component = () => {
           // Merge temperature data from state
           temperature: stateNode?.temperature || node.temperature,
         };
+
+        // Debug logging for temperature
+        if (node.name === 'delly' || node.name === 'delly.lan') {
+          console.log('[Settings] Node temperature debug:', {
+            nodeName: node.name,
+            hasStateNode: !!stateNode,
+            stateTemp: stateNode?.temperature,
+            finalTemp: mergedNode.temperature,
+            tempAvailable: mergedNode.temperature?.available,
+          });
+        }
+
+        return mergedNode;
       });
       setNodes(nodesWithStatus);
     } catch (error) {
@@ -655,6 +668,25 @@ const Settings: Component = () => {
     } finally {
       // Mark initial load as complete even if there were errors
       setInitialLoadComplete(true);
+    }
+  });
+
+  // Re-merge temperature data from WebSocket state when it updates
+  createEffect(() => {
+    const currentState = typeof state === 'function' ? state() : null;
+    // Only run if we have nodes loaded and state has data
+    if (currentState?.nodes && nodes().length > 0) {
+      const updatedNodes = nodes().map((node) => {
+        const stateNode = currentState.nodes.find(
+          (n) => n.id === node.id || n.name === node.name,
+        );
+        // Only update if temperature data changed
+        if (stateNode?.temperature && stateNode.temperature !== node.temperature) {
+          return { ...node, temperature: stateNode.temperature };
+        }
+        return node;
+      });
+      setNodes(updatedNodes);
     }
   });
 
