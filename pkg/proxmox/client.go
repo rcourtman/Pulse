@@ -1270,9 +1270,18 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	case float64:
 		d.Wearout = int(v)
 	case string:
-		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers
-		// Just leave it as 0 (default value)
-		d.Wearout = 0
+		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers.
+		// Some controllers also return numeric wearout values as strings, so try to parse them.
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			d.Wearout = 0
+			break
+		}
+		if parsed, err := strconv.Atoi(trimmed); err == nil {
+			d.Wearout = parsed
+		} else {
+			d.Wearout = 0
+		}
 	case nil:
 		d.Wearout = 0
 	default:
