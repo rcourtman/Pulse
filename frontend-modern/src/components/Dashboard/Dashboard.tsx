@@ -216,12 +216,15 @@ export function Dashboard(props: DashboardProps) {
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
 
-    // Filter by selected node (using instance ID to handle duplicate hostnames)
+    // Filter by selected node (using node name for simple matching)
     const selectedNodeId = selectedNode();
-    console.log('Filtering guests - selected node:', selectedNodeId, 'total guests:', guests.length);
     if (selectedNodeId) {
-      guests = guests.filter((g) => g.instance === selectedNodeId);
-      console.log('After node filter:', guests.length);
+      // Find the node to get its name
+      const node = props.nodes.find(n => n.id === selectedNodeId);
+      if (node) {
+        // Filter guests by node name (not instance ID)
+        guests = guests.filter((g) => g.node === node.name);
+      }
     }
 
     // Filter by type
@@ -445,7 +448,7 @@ export function Dashboard(props: DashboardProps) {
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => {
     console.log('handleNodeSelect called:', nodeId, nodeType);
-    // Track selected node for filtering
+    // Track selected node for filtering (independent of search)
     if (nodeType === 'pve' || nodeType === null) {
       setSelectedNode(nodeId);
       console.log('Set selected node to:', nodeId);
