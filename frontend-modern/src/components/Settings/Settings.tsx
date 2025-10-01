@@ -258,13 +258,14 @@ const Settings: Component = () => {
   const loadNodes = async () => {
     try {
       const nodesList = await NodesAPI.getNodes();
-      // Merge temperature data from WebSocket state
-      const currentState = state();
+      // Merge temperature data from WebSocket state (if available)
+      const currentState = typeof state === 'function' ? state() : null;
       const nodesWithStatus = nodesList.map((node) => {
         // Find matching node in state to get temperature data
-        const stateNode =
-          currentState?.pveNodes?.find((n) => n.id === node.id || n.name === node.name) ||
-          currentState?.pbsNodes?.find((n) => n.id === node.id || n.name === node.name);
+        const stateNode = currentState
+          ? currentState?.pveNodes?.find((n) => n.id === node.id || n.name === node.name) ||
+            currentState?.pbsNodes?.find((n) => n.id === node.id || n.name === node.name)
+          : null;
 
         return {
           ...node,
