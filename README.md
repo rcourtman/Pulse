@@ -518,7 +518,7 @@ The backend now detects `FRONTEND_DEV_SERVER` and proxies requests straight to t
 
 ### Mock Mode - Develop Without Real Infrastructure
 
-Work on Pulse without needing Proxmox servers! Mock mode generates realistic test data and auto-reloads when toggled:
+Work on Pulse without needing Proxmox servers! Mock mode generates realistic test data and auto-reloads when toggled. The `mock.env` configuration file is **included in the repository**, so it works out of the box for all developers.
 
 ```bash
 # Enable mock mode with 7 nodes, ~90 guests
@@ -529,6 +529,10 @@ npm run mock:off
 
 # Edit mock configuration
 npm run mock:edit
+
+# Create local overrides (not committed to git)
+cp mock.env mock.env.local
+# Edit mock.env.local with your personal preferences
 ```
 
 **Backend auto-reloads when mock.env changes - no manual restarts!**

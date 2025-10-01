@@ -26,16 +26,27 @@ The backend will **automatically reload** when you toggle mock mode - no manual 
 
 ### Configuration
 
-Mock mode is configured via `mock.env` in the project root:
+Mock mode is configured via `mock.env` in the project root. This file is **tracked in the repository** with sensible defaults, so mock mode works out of the box for all developers.
 
+**Default configuration (mock.env):**
 ```bash
-PULSE_MOCK_MODE=true
+PULSE_MOCK_MODE=false              # Disabled by default
 PULSE_MOCK_NODES=7
 PULSE_MOCK_VMS_PER_NODE=5
 PULSE_MOCK_LXCS_PER_NODE=8
 PULSE_MOCK_RANDOM_METRICS=true
 PULSE_MOCK_STOPPED_PERCENT=20
 ```
+
+**Local overrides (not tracked):**
+Create `mock.env.local` for personal settings that won't be committed:
+```bash
+# mock.env.local - your personal settings
+PULSE_MOCK_MODE=true              # Always start in mock mode
+PULSE_MOCK_NODES=3                # Fewer nodes for faster startup
+```
+
+The `.local` file overrides values from `mock.env`, and is gitignored to keep your personal preferences private.
 
 **Configuration options:**
 
@@ -203,8 +214,9 @@ When `mock.env` changes:
 1. **Use mock mode for frontend development** - Fast, predictable data
 2. **Test with real data before PRs** - Ensure real infrastructure works
 3. **Adjust mock config to test edge cases** - High load, many nodes, etc.
-4. **Keep mock.env in .gitignore** - Local development config
-5. **Document any mock data assumptions** - Help other developers
+4. **Use mock.env.local for personal settings** - Your preferences won't be committed
+5. **Keep mock.env defaults reasonable** - Other developers will use them
+6. **Document any mock data assumptions** - Help other developers
 
 ## See Also
 
