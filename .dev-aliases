@@ -1,0 +1,33 @@
+#!/bin/bash
+# Pulse development environment auto-setup
+
+# Function to check if hot-dev is running
+check_hot_dev() {
+    # Check if Vite dev server is running on port 5173 or 7655
+    if lsof -Pi :5173 -sTCP:LISTEN -t >/dev/null 2>&1 || \
+       (lsof -Pi :7655 -sTCP:LISTEN -t >/dev/null 2>&1 && ps aux | grep -q "[n]ode.*vite"); then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Auto-start hot-dev if not running
+if ! check_hot_dev; then
+    echo "🔥 Starting hot-dev automatically..."
+    cd /opt/pulse && nohup ./scripts/hot-dev.sh > /tmp/hot-dev.log 2>&1 &
+    sleep 2
+    echo "✓ Hot reload started. Frontend: http://192.168.0.123:7655"
+fi
+
+# Helpful aliases
+alias hotdev='cd /opt/pulse && ./scripts/hot-dev.sh'
+alias hotdev-restart='pkill -f "hot-dev.sh" && pkill -f "vite" && sleep 1 && cd /opt/pulse && ./scripts/hot-dev.sh'
+alias hotdev-stop='pkill -f "hot-dev.sh" && pkill -f "vite"'
+alias hotdev-logs='tail -f /tmp/hot-dev.log'
+alias rebuild="cd /opt/pulse/frontend-modern && npm run build && go build -o pulse ./cmd/pulse && sudo systemctl restart pulse-backend"
+
+# Show status
+if check_hot_dev; then
+    echo "✓ Hot reload is running on http://192.168.0.123:7655"
+fi
