@@ -57,7 +57,12 @@ Starting HOT-RELOAD development mode
 Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (with hot-reload)
 Backend API: ${PULSE_DEV_API_URL}
 
+Mock Mode: ${PULSE_MOCK_MODE:-false}
+Toggle mock mode: npm run mock:on / npm run mock:off
+Mock config: npm run mock:edit
+
 Just edit frontend files and see changes instantly!
+Backend auto-reloads when mock.env changes!
 Press Ctrl+C to stop
 =========================================
 BANNER

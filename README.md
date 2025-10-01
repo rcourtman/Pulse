@@ -516,6 +516,25 @@ make dev-hot
 
 The backend now detects `FRONTEND_DEV_SERVER` and proxies requests straight to the Vite dev server. Edit files under `frontend-modern/src/` and the browser refreshes instantly—no manual rebuilds or service restarts required. Use `CTRL+C` to stop both processes.
 
+### Mock Mode - Develop Without Real Infrastructure
+
+Work on Pulse without needing Proxmox servers! Mock mode generates realistic test data and auto-reloads when toggled:
+
+```bash
+# Enable mock mode with 7 nodes, ~90 guests
+npm run mock:on
+
+# Disable mock mode (use real infrastructure)
+npm run mock:off
+
+# Edit mock configuration
+npm run mock:edit
+```
+
+**Backend auto-reloads when mock.env changes - no manual restarts!**
+
+See [docs/development/MOCK_MODE.md](docs/development/MOCK_MODE.md) for full details.
+
 ### Production-like Development
 ```bash
 # Watches files and rebuilds/embeds frontend into Go binary
