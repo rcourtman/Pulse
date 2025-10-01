@@ -1007,7 +1007,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
             <div class="mb-2">
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                Alert Delay (seconds before triggering)
+                Alert Delay (seconds above threshold before triggering)
               </h4>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div class="flex items-center gap-2">
