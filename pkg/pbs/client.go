@@ -475,7 +475,8 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	for _, ds := range datastoreList.Data {
 		// Try to get RRD data first which has more statistics
 		// RRD requires cf (consolidation function) and timeframe parameters
-		rrdPath := fmt.Sprintf("/admin/datastore/%s/rrd?cf=average&timeframe=hour", ds.Store)
+		// Valid cf values: AVERAGE, MAXIMUM, MINIMUM (all caps per PBS API spec)
+		rrdPath := fmt.Sprintf("/admin/datastore/%s/rrd?cf=AVERAGE&timeframe=hour", ds.Store)
 		rrdResp, err := c.get(ctx, rrdPath)
 		var dedupFactor float64
 		if err == nil {
