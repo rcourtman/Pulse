@@ -98,14 +98,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     const node = item.data as Node;
     switch (props.currentTab) {
       case 'dashboard':
-        // Use node.id (instance) for counting to handle duplicate hostnames correctly
-        const vmCount = props.vms?.filter((vm) => vm.instance === node.id).length || 0;
-        const containerCount = props.containers?.filter((ct) => ct.instance === node.id).length || 0;
+        // Match by both instance and node name to handle duplicate hostnames correctly
+        const vmCount = props.vms?.filter((vm) => vm.instance === node.instance && vm.node === node.name).length || 0;
+        const containerCount = props.containers?.filter((ct) => ct.instance === node.instance && ct.node === node.name).length || 0;
         return [vmCount, containerCount];
       case 'storage':
-        // Use node.id (instance) for counting to handle duplicate hostnames correctly
-        const storageCount = props.storage?.filter((s) => s.instance === node.id).length || 0;
-        const diskCount = state.physicalDisks?.filter((d) => d.instance === node.id).length || 0;
+        // Match by both instance and node name to handle duplicate hostnames correctly
+        const storageCount = props.storage?.filter((s) => s.instance === node.instance && s.node === node.name).length || 0;
+        const diskCount = state.physicalDisks?.filter((d) => d.instance === node.instance && d.node === node.name).length || 0;
         return [storageCount, diskCount];
       case 'backups':
         return [props.backupCounts?.[node.name] || 0];
