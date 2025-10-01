@@ -2966,28 +2966,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 func (m *Monitor) GetState() models.StateSnapshot {
 	// Check if mock mode is enabled
 	if mock.IsMockEnabled() {
-		mockState := mock.GetMockState()
-		// Include real alerts from the alert manager
-		activeAlerts := m.alertManager.GetActiveAlerts()
-		modelAlerts := make([]models.Alert, 0, len(activeAlerts))
-		for _, alert := range activeAlerts {
-			modelAlerts = append(modelAlerts, models.Alert{
-				ID:           alert.ID,
-				Type:         alert.Type,
-				Level:        string(alert.Level),
-				ResourceID:   alert.ResourceID,
-				ResourceName: alert.ResourceName,
-				Node:         alert.Node,
-				Instance:     alert.Instance,
-				Message:      alert.Message,
-				Value:        alert.Value,
-				Threshold:    alert.Threshold,
-				StartTime:    alert.StartTime,
-				Acknowledged: alert.Acknowledged,
-			})
+		state := mock.GetMockState()
+		if state.ActiveAlerts == nil {
+			// Populate snapshot lazily if the cache hasn't been filled yet.
+			mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+			state = mock.GetMockState()
 		}
-		mockState.ActiveAlerts = modelAlerts
-		return mockState
+		return state
 	}
 	return m.state.GetSnapshot()
 }
@@ -3704,4 +3689,8 @@ func (m *Monitor) checkMockAlerts() {
 			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorage(storage)
 	}
+
+	// Cache the latest alert snapshots directly in the mock data so the API can serve
+	// mock state without needing to grab the alert manager lock again.
+	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
 }

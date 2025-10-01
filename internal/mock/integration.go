@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -228,6 +229,35 @@ func GetMockState() models.StateSnapshot {
 	defer dataMu.RUnlock()
 
 	return cloneState(mockData)
+}
+
+// UpdateAlertSnapshots replaces the active and recently resolved alert lists used for mock mode.
+// This lets other components read alert data without querying the live alert manager, which can
+// be locked while alerts are being generated. Keeping a snapshot here prevents any blocking when
+// the API serves /api/state or WebSocket clients request the initial state.
+func UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert) {
+	dataMu.Lock()
+	defer dataMu.Unlock()
+
+	converted := make([]models.Alert, 0, len(active))
+	for _, alert := range active {
+		converted = append(converted, models.Alert{
+			ID:           alert.ID,
+			Type:         alert.Type,
+			Level:        string(alert.Level),
+			ResourceID:   alert.ResourceID,
+			ResourceName: alert.ResourceName,
+			Node:         alert.Node,
+			Instance:     alert.Instance,
+			Message:      alert.Message,
+			Value:        alert.Value,
+			Threshold:    alert.Threshold,
+			StartTime:    alert.StartTime,
+			Acknowledged: alert.Acknowledged,
+		})
+	}
+	mockData.ActiveAlerts = converted
+	mockData.RecentlyResolved = append([]models.ResolvedAlert(nil), resolved...)
 }
 
 // GetMockAlertHistory returns mock alert history.

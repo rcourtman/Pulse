@@ -32,27 +32,27 @@ async function main() {
   
   console.log('Starting simple Puppeteer screenshot capture...\n');
   
-  // Launch browser with MacBook Air-like display settings
+  // Launch browser with M1 MacBook Air display settings
   const browser = await puppeteer.launch({
     headless: 'new',  // Use new headless mode
     defaultViewport: null,  // Don't override viewport
     args: [
-      '--window-size=1280,800',  // MacBook Air effective resolution
+      '--window-size=1440,900',  // M1 MacBook Air effective resolution (2560x1600 native / 2)
       '--force-device-scale-factor=2',  // Retina display (2x)
       '--disable-dev-shm-usage',  // Better memory handling
       '--enable-font-antialiasing',  // Smooth fonts
       '--font-render-hinting=none'  // Disable hinting for sharper text
     ]
   });
-  
+
   const page = await browser.newPage();
-  
+
   // CRITICAL: Set viewport BEFORE navigating for sharp rendering!
   // This must happen before page.goto() or text will be blurry
-  // MacBook Air 13" display dimensions
+  // M1 MacBook Air 13" display dimensions (native 2560x1600, effective 1440x900 at 2x)
   await page.setViewport({
-    width: 1280,
-    height: 800,
+    width: 1440,
+    height: 900,
     deviceScaleFactor: 2  // Retina display
   });
   
@@ -186,13 +186,14 @@ async function main() {
     
     // Mobile view
     console.log('\nCapturing mobile view...');
-    
+
     // Set mobile viewport BEFORE reload for sharp rendering
+    // iPhone 12/13/14 dimensions for modern mobile testing
     await page.setViewport({
-      width: 375,  // iPhone standard width
-      height: 667,  // iPhone standard height
+      width: 390,  // iPhone 12/13/14 width
+      height: 844,  // iPhone 12/13/14 height
       isMobile: true,
-      deviceScaleFactor: 2  // 2x for standard retina
+      deviceScaleFactor: 3  // 3x for Super Retina XDR
     });
     
     // Now reload with the new viewport already set

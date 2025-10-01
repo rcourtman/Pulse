@@ -1619,12 +1619,14 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 
 // handleState handles state requests
 func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
+	log.Debug().Msg("[DEBUG] handleState: START")
 	if req.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed",
 			"Only GET method is allowed", nil)
 		return
 	}
 
+	log.Debug().Msg("[DEBUG] handleState: Before auth check")
 	// Use standard auth check (supports both basic auth and API tokens) unless auth is disabled
 	if !r.config.DisableAuth && !CheckAuth(r.config, w, req) {
 		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
@@ -1632,14 +1634,18 @@ func (r *Router) handleState(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Debug().Msg("[DEBUG] handleState: Before GetState")
 	state := r.monitor.GetState()
+	log.Debug().Msg("[DEBUG] handleState: After GetState, before ToFrontend")
 	frontendState := state.ToFrontend()
 
+	log.Debug().Msg("[DEBUG] handleState: Before WriteJSONResponse")
 	if err := utils.WriteJSONResponse(w, frontendState); err != nil {
 		log.Error().Err(err).Msg("Failed to encode state response")
 		writeErrorResponse(w, http.StatusInternalServerError, "encoding_error",
 			"Failed to encode state data", nil)
 	}
+	log.Debug().Msg("[DEBUG] handleState: END")
 }
 
 // handleVersion handles version requests

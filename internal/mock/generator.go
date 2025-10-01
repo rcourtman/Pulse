@@ -120,14 +120,14 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 
 		// Generate VMs
 		for i := 0; i < vmCount; i++ {
-			vm := generateVM(node.Name, vmidCounter, config)
+			vm := generateVM(node.Name, node.Instance, vmidCounter, config)
 			data.VMs = append(data.VMs, vm)
 			vmidCounter++
 		}
 
 		// Generate containers
 		for i := 0; i < lxcCount; i++ {
-			lxc := generateContainer(node.Name, vmidCounter, config)
+			lxc := generateContainer(node.Name, node.Instance, vmidCounter, config)
 			data.Containers = append(data.Containers, lxc)
 			vmidCounter++
 		}
@@ -449,7 +449,7 @@ func generateRealisticIO(ioType string) int64 {
 	return 0
 }
 
-func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
+func generateVM(nodeName string, instance string, vmid int, config MockConfig) models.VM {
 	name := generateGuestName("vm")
 	status := "running"
 	if rand.Float64() < config.StoppedPercent {
@@ -497,14 +497,15 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.8))
 
 	return models.VM{
-		Name:   name,
-		VMID:   vmid,
-		Node:   nodeName,
-		Type:   "qemu",
-		Status: status,
-		CPU:    cpu,
-		CPUs:   2 + rand.Intn(6), // 2-8 cores
-		Memory: mem,
+		Name:     name,
+		VMID:     vmid,
+		Node:     nodeName,
+		Instance: instance,
+		Type:     "qemu",
+		Status:   status,
+		CPU:      cpu,
+		CPUs:     2 + rand.Intn(6), // 2-8 cores
+		Memory:   mem,
 		Disk: models.Disk{
 			Total: totalDisk,
 			Used:  usedDisk,
@@ -521,7 +522,7 @@ func generateVM(nodeName string, vmid int, config MockConfig) models.VM {
 	}
 }
 
-func generateContainer(nodeName string, vmid int, config MockConfig) models.Container {
+func generateContainer(nodeName string, instance string, vmid int, config MockConfig) models.Container {
 	name := generateGuestName("lxc")
 	status := "running"
 	if rand.Float64() < config.StoppedPercent {
@@ -569,14 +570,15 @@ func generateContainer(nodeName string, vmid int, config MockConfig) models.Cont
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.6))
 
 	return models.Container{
-		Name:   name,
-		VMID:   vmid,
-		Node:   nodeName,
-		Type:   "lxc",
-		Status: status,
-		CPU:    cpu,
-		CPUs:   1 + rand.Intn(4), // 1-4 cores
-		Memory: mem,
+		Name:     name,
+		VMID:     vmid,
+		Node:     nodeName,
+		Instance: instance,
+		Type:     "lxc",
+		Status:   status,
+		CPU:      cpu,
+		CPUs:     1 + rand.Intn(4), // 1-4 cores
+		Memory:   mem,
 		Disk: models.Disk{
 			Total: totalDisk,
 			Used:  usedDisk,

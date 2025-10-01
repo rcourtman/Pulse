@@ -54,6 +54,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		Node:             n.Name,
 		Name:             n.Name,
 		Instance:         n.Instance,
+		Host:             n.Host,
 		Status:           n.Status,
 		Type:             n.Type,
 		CPU:              n.CPU,
@@ -67,6 +68,8 @@ func (n Node) ToFrontend() NodeFrontend {
 		CPUInfo:          n.CPUInfo,
 		LastSeen:         n.LastSeen.Unix() * 1000,
 		ConnectionHealth: n.ConnectionHealth,
+		IsClusterMember:  n.IsClusterMember,
+		ClusterName:      n.ClusterName,
 	}
 
 	// Include full Memory object if it has data
