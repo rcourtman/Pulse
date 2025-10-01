@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import type { Node, VM, Container, Storage, PBSInstance } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
@@ -20,99 +20,315 @@ interface NodeSummaryTableProps {
 
 export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const { activeAlerts, state } = useWebSocket();
-  // Combine and sort nodes based on tab
-  const sortedItems = createMemo(() => {
-    const items: Array<{ type: 'pve' | 'pbs'; data: Node | PBSInstance }> = [];
+  type CountSortKey = 'vmCount' | 'containerCount' | 'storageCount' | 'diskCount' | 'backupCount';
+  type SortKey =
+    | 'default'
+    | 'name'
+    | 'status'
+    | 'uptime'
+    | 'cpu'
+    | 'memory'
+    | 'disk'
+    | 'temperature'
+    | CountSortKey;
 
-    // Add PVE nodes (shown on all tabs)
-    if (props.nodes) {
-      props.nodes.forEach((node) => items.push({ type: 'pve', data: node }));
-    }
+  interface SortableItem {
+    type: 'pve' | 'pbs';
+    data: Node | PBSInstance;
+  }
 
-    // Add PBS instances (shown on all tabs)
-    if (props.pbsInstances) {
-      props.pbsInstances.forEach((pbs) => items.push({ type: 'pbs', data: pbs }));
-    }
+  interface CountColumn {
+    header: string;
+    key: CountSortKey;
+  }
 
-    // Sort by type (PVE first) then by status then by name
-    return items.sort((a, b) => {
-      // PVE nodes come before PBS
-      if (a.type !== b.type) return a.type === 'pve' ? -1 : 1;
+  const [sortKey, setSortKey] = createSignal<SortKey>('default');
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
-      // Then by online status
-      const aOnline =
-        a.type === 'pve'
-          ? (a.data as Node).status === 'online'
-          : (a.data as PBSInstance).status === 'healthy' ||
-            (a.data as PBSInstance).status === 'online';
-      const bOnline =
-        b.type === 'pve'
-          ? (b.data as Node).status === 'online'
-          : (b.data as PBSInstance).status === 'healthy' ||
-            (b.data as PBSInstance).status === 'online';
-      if (aOnline !== bOnline) return aOnline ? -1 : 1;
-
-      // Then by name
-      return a.data.name.localeCompare(b.data.name);
-    });
-  });
-
-  // Get column header based on tab
-  const getCountHeader = () => {
+  const countColumns = createMemo<CountColumn[]>(() => {
     switch (props.currentTab) {
       case 'dashboard':
-        return ['VMs', 'Containers'];
+        return [
+          { header: 'VMs', key: 'vmCount' },
+          { header: 'Containers', key: 'containerCount' },
+        ];
       case 'storage':
-        return ['Storage', 'Disks'];
+        return [
+          { header: 'Storage', key: 'storageCount' },
+          { header: 'Disks', key: 'diskCount' },
+        ];
       case 'backups':
-        return ['Backups'];
+        return [{ header: 'Backups', key: 'backupCount' }];
       default:
         return [];
     }
-  };
+  });
 
-  // Check if any PVE node has temperature data available
   const hasAnyTemperatureData = createMemo(() => {
     return props.nodes?.some((node) => node.temperature?.available) || false;
   });
 
-  // Get count values for a node
-  const getNodeCounts = (item: { type: 'pve' | 'pbs'; data: Node | PBSInstance }) => {
-    if (item.type === 'pbs') {
-      // PBS instances show different counts based on tab
-      switch (props.currentTab) {
-        case 'dashboard':
-          // PBS doesn't have VMs/Containers, return dashes
-          return ['-', '-'];
-        case 'storage':
-          // PBS doesn't have storage or disk count
-          return ['-', '-'];
-        case 'backups':
-          // PBS shows backup count
-          return [props.backupCounts?.[item.data.name] || 0];
-        default:
-          return [];
+  const nodeKey = (instance?: string, nodeName?: string) => `${instance ?? ''}::${nodeName ?? ''}`;
+
+  const vmCountsByNode = createMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    (props.vms ?? []).forEach((vm) => {
+      const key = nodeKey(vm.instance, vm.node);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  });
+
+  const containerCountsByNode = createMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    (props.containers ?? []).forEach((ct) => {
+      const key = nodeKey(ct.instance, ct.node);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  });
+
+  const storageCountsByNode = createMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    (props.storage ?? []).forEach((storage) => {
+      const key = nodeKey(storage.instance, storage.node);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  });
+
+  const diskCountsByNode = createMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    (state.physicalDisks ?? []).forEach((disk) => {
+      const key = nodeKey(disk.instance, disk.node);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  });
+
+  const getDefaultSortDirection = (key: Exclude<SortKey, 'default'>) => {
+    switch (key) {
+      case 'name':
+        return 'asc';
+      default:
+        return 'desc';
+    }
+  };
+
+  const handleSort = (key: Exclude<SortKey, 'default'>) => {
+    if (sortKey() === key) {
+      if (sortDirection() === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortKey('default');
+        setSortDirection('asc');
       }
+    } else {
+      setSortKey(key);
+      setSortDirection(getDefaultSortDirection(key));
+    }
+  };
+
+  const isItemOnline = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      return node.status === 'online' && (node.uptime || 0) > 0;
+    }
+    const pbs = item.data as PBSInstance;
+    return pbs.status === 'healthy' || pbs.status === 'online';
+  };
+
+  const getStatusRank = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      if (node.status === 'online' && (node.uptime || 0) > 0) return 2;
+      if (node.status === 'online' || node.status === 'unknown') return 1;
+      return 0;
+    }
+    const pbs = item.data as PBSInstance;
+    if (pbs.status === 'healthy' || pbs.status === 'online') return 2;
+    if (pbs.status === 'maintenance') return 1;
+    return 0;
+  };
+
+  const getPbsTotals = (pbs: PBSInstance) => {
+    return (pbs.datastores ?? []).reduce(
+      (acc, ds) => {
+        acc.used += ds.used || 0;
+        acc.total += ds.total || 0;
+        return acc;
+      },
+      { used: 0, total: 0 },
+    );
+  };
+
+  const getCpuPercent = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      return Math.round((node.cpu || 0) * 100);
+    }
+    const pbs = item.data as PBSInstance;
+    return Math.round(pbs.cpu || 0);
+  };
+
+  const getMemoryPercent = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      return Math.round(node.memory?.usage || 0);
+    }
+    const pbs = item.data as PBSInstance;
+    if (!pbs.memoryTotal) return 0;
+    return Math.round((pbs.memoryUsed / pbs.memoryTotal) * 100);
+  };
+
+  const getDiskPercent = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      if (!node.disk || node.disk.total === 0) return 0;
+      return Math.round((node.disk.used / node.disk.total) * 100);
+    }
+    const pbs = item.data as PBSInstance;
+    const totals = getPbsTotals(pbs);
+    if (totals.total === 0) return 0;
+    return Math.round((totals.used / totals.total) * 100);
+  };
+
+  const getDiskSublabel = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      if (!node.disk) return undefined;
+      return `${formatBytes(node.disk.used)}/${formatBytes(node.disk.total)}`;
+    }
+    const pbs = item.data as PBSInstance;
+    if (!pbs.datastores || pbs.datastores.length === 0) return undefined;
+    const totals = getPbsTotals(pbs);
+    return `${formatBytes(totals.used)}/${formatBytes(totals.total)}`;
+  };
+
+  const getTemperatureValue = (item: SortableItem) => {
+    if (item.type === 'pve') {
+      const node = item.data as Node;
+      if (!node.temperature?.available) return null;
+      return Math.round(node.temperature.cpuPackage ?? node.temperature.cpuMax ?? 0);
+    }
+    return null;
+  };
+
+  const getCountValue = (item: SortableItem, key: CountSortKey): number | null => {
+    if (item.type === 'pbs') {
+      const pbs = item.data as PBSInstance;
+      if (key === 'backupCount') {
+        return props.backupCounts?.[pbs.name] ?? 0;
+      }
+      return null;
     }
 
     const node = item.data as Node;
-    switch (props.currentTab) {
-      case 'dashboard':
-        // Match by both instance and node name to handle duplicate hostnames correctly
-        const vmCount = props.vms?.filter((vm) => vm.instance === node.instance && vm.node === node.name).length || 0;
-        const containerCount = props.containers?.filter((ct) => ct.instance === node.instance && ct.node === node.name).length || 0;
-        return [vmCount, containerCount];
-      case 'storage':
-        // Match by both instance and node name to handle duplicate hostnames correctly
-        const storageCount = props.storage?.filter((s) => s.instance === node.instance && s.node === node.name).length || 0;
-        const diskCount = state.physicalDisks?.filter((d) => d.instance === node.instance && d.node === node.name).length || 0;
-        return [storageCount, diskCount];
-      case 'backups':
-        return [props.backupCounts?.[node.name] || 0];
+    const keyId = nodeKey(node.instance, node.name);
+
+    switch (key) {
+      case 'vmCount':
+        return vmCountsByNode()[keyId] ?? 0;
+      case 'containerCount':
+        return containerCountsByNode()[keyId] ?? 0;
+      case 'storageCount':
+        return storageCountsByNode()[keyId] ?? 0;
+      case 'diskCount':
+        return diskCountsByNode()[keyId] ?? 0;
+      case 'backupCount':
+        return props.backupCounts?.[node.name] ?? 0;
       default:
-        return [];
+        return null;
     }
   };
+
+  const getSortValue = (item: SortableItem, key: SortKey): number | string | null => {
+    switch (key) {
+      case 'name':
+        return item.data.name;
+      case 'status':
+        return getStatusRank(item);
+      case 'uptime':
+        return item.type === 'pve'
+          ? (item.data as Node).uptime ?? 0
+          : (item.data as PBSInstance).uptime ?? 0;
+      case 'cpu':
+        return getCpuPercent(item);
+      case 'memory':
+        return getMemoryPercent(item);
+      case 'disk':
+        return getDiskPercent(item);
+      case 'temperature':
+        return getTemperatureValue(item);
+      case 'vmCount':
+      case 'containerCount':
+      case 'storageCount':
+      case 'diskCount':
+      case 'backupCount':
+        return getCountValue(item, key);
+      default:
+        return null;
+    }
+  };
+
+  const defaultComparison = (a: SortableItem, b: SortableItem) => {
+    if (a.type !== b.type) return a.type === 'pve' ? -1 : 1;
+
+    const aOnline = isItemOnline(a);
+    const bOnline = isItemOnline(b);
+    if (aOnline !== bOnline) return aOnline ? -1 : 1;
+
+    return a.data.name.localeCompare(b.data.name);
+  };
+
+  const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
+    const aEmpty =
+      valueA === null || valueA === undefined || (typeof valueA === 'number' && Number.isNaN(valueA));
+    const bEmpty =
+      valueB === null || valueB === undefined || (typeof valueB === 'number' && Number.isNaN(valueB));
+
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    if (typeof valueA === 'number' && typeof valueB === 'number') {
+      if (valueA === valueB) return 0;
+      return valueA < valueB ? -1 : 1;
+    }
+
+    const aStr = String(valueA).toLowerCase();
+    const bStr = String(valueB).toLowerCase();
+
+    if (aStr === bStr) return 0;
+    return aStr < bStr ? -1 : 1;
+  };
+
+  // Combine and sort nodes based on current sort selection
+  const sortedItems = createMemo(() => {
+    const items: SortableItem[] = [];
+
+    props.nodes?.forEach((node) => items.push({ type: 'pve', data: node }));
+    props.pbsInstances?.forEach((pbs) => items.push({ type: 'pbs', data: pbs }));
+
+    const key = sortKey();
+    const direction = sortDirection();
+
+    return items.sort((a, b) => {
+      if (key === 'default') {
+        return defaultComparison(a, b);
+      }
+
+      const valueA = getSortValue(a, key);
+      const valueB = getSortValue(b, key);
+      const comparison = compareValues(valueA, valueB);
+
+      if (comparison !== 0) {
+        return direction === 'asc' ? comparison : -comparison;
+      }
+
+      return defaultComparison(a, b);
+    });
+  });
 
   // Don't return null - let the table render even if empty
   // This prevents the table from disappearing on refresh while data loads
@@ -123,33 +339,66 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
         <table class="w-full min-w-[600px] border-collapse">
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
-              <th class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4">
-                {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}
+              <th
+                class="pl-3 pr-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-1/4 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                onClick={() => handleSort('name')}
+                onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
+                tabindex="0"
+                role="button"
+                aria-label={`Sort by name ${
+                  sortKey() === 'name' ? (sortDirection() === 'asc' ? 'ascending' : 'descending') : ''
+                }`}
+              >
+                {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}{' '}
+                {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20">
-                Status
+              <th
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('status')}
+              >
+                Status {sortKey() === 'status' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24">
-                Uptime
+              <th
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('uptime')}
+              >
+                Uptime {sortKey() === 'uptime' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
-                CPU
+              <th
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('cpu')}
+              >
+                CPU {sortKey() === 'cpu' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
-                Memory
+              <th
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('memory')}
+              >
+                Memory {sortKey() === 'memory' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
-              <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32">
-                {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}
+              <th
+                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-32 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                onClick={() => handleSort('disk')}
+              >
+                {props.currentTab === 'backups' && props.pbsInstances ? 'Storage / Disk' : 'Disk'}{' '}
+                {sortKey() === 'disk' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <Show when={hasAnyTemperatureData()}>
-                <th class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20">
-                  Temp
+                <th
+                  class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                  onClick={() => handleSort('temperature')}
+                >
+                  Temp {sortKey() === 'temperature' && (sortDirection() === 'asc' ? '▲' : '▼')}
                 </th>
               </Show>
-              <For each={getCountHeader()}>
-                {(header) => (
-                  <th class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-16">
-                    {header}
+              <For each={countColumns()}>
+                {(column) => (
+                  <th
+                    class="px-2 py-1.5 text-center text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-16 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => handleSort(column.key)}
+                  >
+                    {column.header}{' '}
+                    {sortKey() === column.key && (sortDirection() === 'asc' ? '▲' : '▼')}
                   </th>
                 )}
               </For>
@@ -162,55 +411,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const node = isPVE ? (item.data as Node) : null;
                 const pbs = !isPVE ? (item.data as PBSInstance) : null;
 
-                const isOnline = () =>
-                  isPVE
-                    ? node!.status === 'online' && node!.uptime > 0
-                    : pbs!.status === 'healthy' || pbs!.status === 'online';
-
-                const cpuPercent = () =>
-                  isPVE ? Math.round((node!.cpu || 0) * 100) : Math.round(pbs!.cpu || 0);
-
-                const memPercent = () =>
-                  isPVE
-                    ? Math.round(node!.memory?.usage || 0)
-                    : pbs!.memoryTotal
-                      ? Math.round((pbs!.memoryUsed / pbs!.memoryTotal) * 100)
-                      : 0;
-
-                const diskPercent = () => {
-                  if (isPVE) {
-                    return node!.disk ? Math.round((node!.disk.used / node!.disk.total) * 100) : 0;
-                  } else {
-                    // Calculate total storage for PBS
-                    if (!pbs!.datastores) return 0;
-                    const totals = pbs!.datastores.reduce(
-                      (acc, ds) => {
-                        acc.used += ds.used || 0;
-                        acc.total += ds.total || 0;
-                        return acc;
-                      },
-                      { used: 0, total: 0 },
-                    );
-                    return totals.total > 0 ? Math.round((totals.used / totals.total) * 100) : 0;
-                  }
-                };
-
-                const getDiskSublabel = () => {
-                  if (isPVE && node!.disk) {
-                    return `${formatBytes(node!.disk.used)}/${formatBytes(node!.disk.total)}`;
-                  } else if (!isPVE && pbs!.datastores) {
-                    const totals = pbs!.datastores.reduce(
-                      (acc, ds) => {
-                        acc.used += ds.used || 0;
-                        acc.total += ds.total || 0;
-                        return acc;
-                      },
-                      { used: 0, total: 0 },
-                    );
-                    return `${formatBytes(totals.used)}/${formatBytes(totals.total)}`;
-                  }
-                  return undefined;
-                };
+                const online = isItemOnline(item);
+                const cpuPercentValue = getCpuPercent(item);
+                const memoryPercentValue = getMemoryPercent(item);
+                const diskPercentValue = getDiskPercent(item);
+                const diskSublabel = getDiskSublabel(item);
+                const temperatureValue = getTemperatureValue(item);
+                const uptimeValue = isPVE ? node?.uptime ?? 0 : pbs?.uptime ?? 0;
 
                 // Use unique node ID (not hostname) to handle duplicate node names
                 const nodeId = isPVE ? node!.id : pbs!.name;
@@ -303,34 +510,34 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <div class="flex items-center gap-1">
                         <span
                           class={`h-2 w-2 flex-shrink-0 rounded-full ${
-                            isOnline() ? 'bg-green-500' : 'bg-red-500'
+                            online ? 'bg-green-500' : 'bg-red-500'
                           }`}
                         />
                         <span class="text-xs text-gray-600 dark:text-gray-400">
-                          {isOnline() ? 'Online' : 'Offline'}
+                          {online ? 'Online' : 'Offline'}
                         </span>
                       </div>
                     </td>
                     <td class="px-2 py-0.5 whitespace-nowrap">
                       <span
                         class={`text-xs ${
-                          isPVE && node!.uptime < 3600
+                          isPVE && (node?.uptime ?? 0) < 3600
                             ? 'text-orange-500'
                             : 'text-gray-600 dark:text-gray-400'
                         }`}
                       >
                         <Show
-                          when={isOnline() && (isPVE ? node!.uptime : pbs!.uptime)}
+                          when={online && uptimeValue}
                           fallback="-"
                         >
-                          {formatUptime(isPVE ? node!.uptime : pbs!.uptime)}
+                          {formatUptime(uptimeValue)}
                         </Show>
                       </span>
                     </td>
                     <td class="px-2 py-0.5">
                       <MetricBar
-                        value={cpuPercent()}
-                        label={`${cpuPercent()}%`}
+                        value={cpuPercentValue}
+                        label={`${cpuPercentValue}%`}
                         sublabel={
                           isPVE && node!.cpuInfo?.cores
                             ? `${node!.cpuInfo.cores} cores`
@@ -341,8 +548,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
                     <td class="px-2 py-0.5">
                       <MetricBar
-                        value={memPercent()}
-                        label={`${memPercent()}%`}
+                        value={memoryPercentValue}
+                        label={`${memoryPercentValue}%`}
                         sublabel={
                           isPVE && node!.memory
                             ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
@@ -355,9 +562,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </td>
                     <td class="px-2 py-0.5">
                       <MetricBar
-                        value={diskPercent()}
-                        label={`${diskPercent()}%`}
-                        sublabel={getDiskSublabel()}
+                        value={diskPercentValue}
+                        label={`${diskPercentValue}%`}
+                        sublabel={diskSublabel}
                         type="disk"
                       />
                     </td>
@@ -371,24 +578,27 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         >
                           <span
                             class={`text-xs font-medium ${
-                              (node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0) >= 80
+                              (temperatureValue ?? 0) >= 80
                                 ? 'text-red-600 dark:text-red-400'
-                                : (node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0) >= 70
+                                : (temperatureValue ?? 0) >= 70
                                   ? 'text-yellow-600 dark:text-yellow-400'
                                   : 'text-green-600 dark:text-green-400'
                             }`}
                           >
-                            {Math.round(node!.temperature!.cpuPackage || node!.temperature!.cpuMax || 0)}°C
+                            {temperatureValue ?? 0}°C
                           </span>
                         </Show>
                       </td>
                     </Show>
-                    <For each={getNodeCounts(item)}>
-                      {(count) => (
-                        <td class="px-2 py-0.5 whitespace-nowrap text-center">
-                          <span class="text-xs text-gray-700 dark:text-gray-300">{count}</span>
-                        </td>
-                      )}
+                    <For each={countColumns()}>
+                      {(column) => {
+                        const value = getCountValue(item, column.key);
+                        return (
+                          <td class="px-2 py-0.5 whitespace-nowrap text-center">
+                            <span class="text-xs text-gray-700 dark:text-gray-300">{value ?? '-'}</span>
+                          </td>
+                        );
+                      }}
                     </For>
                   </tr>
                 );
