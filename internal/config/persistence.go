@@ -599,11 +599,49 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 					}
 				} else {
 					log.Error().Err(decryptErr).Msg("Backup file is also corrupted or encrypted with different key")
-					return nil, fmt.Errorf("nodes config corrupted and backup recovery failed: %w", decryptErr)
+
+					// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
+					// Create an empty config so startup can continue, but log prominently
+					log.Error().
+						Str("corruptedFile", c.nodesFile).
+						Str("backupFile", backupFile).
+						Msg("⚠️  CRITICAL: Both nodes.enc and backup are corrupted/unreadable. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+
+					// Move corrupted file with timestamp for forensics
+					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+					os.Rename(c.nodesFile, corruptedFile)
+
+					// Create empty but valid config so system can start
+					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}}
+					emptyData, _ := json.Marshal(emptyConfig)
+					if c.crypto != nil {
+						emptyData, _ = c.crypto.Encrypt(emptyData)
+					}
+					os.WriteFile(c.nodesFile, emptyData, 0600)
+
+					return &emptyConfig, nil
 				}
 			} else {
 				log.Error().Err(backupErr).Msg("No backup file available for recovery")
-				return nil, fmt.Errorf("nodes config corrupted and no backup available: %w", err)
+
+				// CRITICAL: Don't delete the corrupted file - leave it for manual recovery
+				log.Error().
+					Str("corruptedFile", c.nodesFile).
+					Msg("⚠️  CRITICAL: nodes.enc is corrupted and no backup exists. Encryption key may have been regenerated. Manual recovery required. Starting with empty config.")
+
+				// Move corrupted file with timestamp for forensics
+				corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
+				os.Rename(c.nodesFile, corruptedFile)
+
+				// Create empty but valid config so system can start
+				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}}
+				emptyData, _ := json.Marshal(emptyConfig)
+				if c.crypto != nil {
+					emptyData, _ = c.crypto.Encrypt(emptyData)
+				}
+				os.WriteFile(c.nodesFile, emptyData, 0600)
+
+				return &emptyConfig, nil
 			}
 		} else {
 			data = decrypted
