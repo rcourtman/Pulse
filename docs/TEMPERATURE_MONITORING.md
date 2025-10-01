@@ -139,6 +139,12 @@ Temperature monitoring uses **SSH key authentication** - the same trusted method
 - ✅ **Instantly revocable** - Remove key from authorized_keys to disable
 - ✅ **Logged and auditable** - All connections logged in `/var/log/auth.log`
 
+### What Pulse Uses SSH For
+
+- **Temperature polls only**: Every monitoring cycle (about every 10 seconds) Pulse opens an SSH session, runs `sensors -j 2>/dev/null`, parses the JSON output, and closes the connection immediately.
+- **Optional setup help**: If you opt in during the setup script, Pulse writes its public key to `/root/.ssh/authorized_keys` and, when required, installs `lm-sensors` so the `sensors` command is available. Those actions happen once while the script runs and only with your confirmation.
+- **No other automation**: Pulse does not transfer files, modify other configuration, reboot the node, or run arbitrary shell commands through this SSH access. Removing the key cuts off temperature collection completely.
+
 This is the same security model used by thousands of organizations for infrastructure automation.
 
 ### Best Practices
