@@ -600,7 +600,7 @@ const Storage: Component = () => {
                               const isDisabled = storage.status !== 'available';
 
                               const alertStyles = getAlertStyles(
-                                storage.id || `${storage.instance}-${storage.name}`,
+                                storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
                                 activeAlerts,
                               );
                               const alertBg = alertStyles.hasAlert
