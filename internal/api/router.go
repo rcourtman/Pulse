@@ -214,20 +214,44 @@ func (r *Router) setupRoutes() {
 
 			// Check if auth is globally disabled
 			if r.config.DisableAuth {
+				// Even with auth disabled, check for OIDC sessions
+				oidcCfg := r.ensureOIDCConfig()
+				oidcUsername := ""
+				if oidcCfg != nil && oidcCfg.Enabled {
+					if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+						if ValidateSession(cookie.Value) {
+							oidcUsername = GetSessionUsername(cookie.Value)
+						}
+					}
+				}
+
 				// Even with auth disabled, report API token status for API access
 				var apiTokenHint string
 				if r.config.APIToken != "" && len(r.config.APIToken) >= 8 {
 					apiTokenHint = r.config.APIToken[:4] + "..." + r.config.APIToken[len(r.config.APIToken)-4:]
 				}
 
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				response := map[string]interface{}{
 					"configured":         false,
 					"disabled":           true,
 					"message":            "Authentication is disabled via DISABLE_AUTH environment variable",
 					"apiTokenConfigured": r.config.APIToken != "",
 					"apiTokenHint":       apiTokenHint,
 					"hasAuthentication":  false,
-				})
+				}
+
+				// Add OIDC info if available
+				if oidcCfg != nil {
+					response["oidcEnabled"] = oidcCfg.Enabled
+					response["oidcIssuer"] = oidcCfg.IssuerURL
+					response["oidcClientId"] = oidcCfg.ClientID
+					response["oidcUsername"] = oidcUsername
+					if len(oidcCfg.EnvOverrides) > 0 {
+						response["oidcEnvOverrides"] = oidcCfg.EnvOverrides
+					}
+				}
+
+				json.NewEncoder(w).Encode(response)
 				return
 			}
 
@@ -296,6 +320,16 @@ func (r *Router) setupRoutes() {
 				}
 			}
 
+			// Check for OIDC session
+			oidcUsername := ""
+			if oidcCfg != nil && oidcCfg.Enabled {
+				if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
+					if ValidateSession(cookie.Value) {
+						oidcUsername = GetSessionUsername(cookie.Value)
+					}
+				}
+			}
+
 			requiresAuth := r.config.APIToken != "" ||
 				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
 				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
@@ -322,6 +356,7 @@ func (r *Router) setupRoutes() {
 				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
 				"authUsername":                r.config.AuthUser,
 				"authLastModified":            authLastModified,
+				"oidcUsername":                oidcUsername,
 			}
 
 			if oidcCfg != nil {

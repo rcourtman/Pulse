@@ -370,6 +370,21 @@ func TrackUserSession(user, sessionID string) {
 	allSessions[user] = append(allSessions[user], sessionID)
 }
 
+// GetSessionUsername returns the username associated with a session ID
+func GetSessionUsername(sessionID string) string {
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+
+	for user, sessions := range allSessions {
+		for _, sid := range sessions {
+			if sid == sessionID {
+				return user
+			}
+		}
+	}
+	return ""
+}
+
 // InvalidateUserSessions invalidates all sessions for a user (e.g., on password change)
 func InvalidateUserSessions(user string) {
 	sessionsMu.Lock()

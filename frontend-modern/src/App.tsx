@@ -285,6 +285,52 @@ function App() {
         return;
       }
 
+      // Check for OIDC session
+      if (securityData.oidcEnabled && securityData.oidcUsername) {
+        console.log('[App] OIDC session detected, user:', securityData.oidcUsername);
+        setHasAuth(true); // OIDC is enabled, so auth is configured
+        setProxyAuthInfo({
+          username: securityData.oidcUsername,
+          logoutURL: undefined, // OIDC logout handled differently
+        });
+        setNeedsAuth(false);
+        // Initialize WebSocket for OIDC users
+        setWsStore(acquireWsStore());
+
+        // Load theme preference from server for cross-device sync
+        // Only use server preference if no local preference exists
+        if (!hasLocalPreference) {
+          try {
+            const systemSettings = await SettingsAPI.getSystemSettings();
+            if (systemSettings.theme && systemSettings.theme !== '') {
+              const prefersDark = systemSettings.theme === 'dark';
+              setDarkMode(prefersDark);
+              localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(prefersDark));
+              if (prefersDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            }
+            setHasLoadedServerTheme(true);
+          } catch (error) {
+            console.error('Failed to load theme from server:', error);
+          }
+        }
+
+        // Load version info
+        UpdatesAPI.getVersion()
+          .then((version) => {
+            setVersionInfo(version);
+            // Check for updates after loading version info (non-blocking)
+            updateStore.checkForUpdates();
+          })
+          .catch((error) => console.error('Failed to load version:', error));
+
+        setIsLoading(false);
+        return;
+      }
+
       // If no auth is configured, show FirstRunSetup
       if (!authConfigured) {
         console.log('[App] No auth configured, showing Login/FirstRunSetup');

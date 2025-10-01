@@ -69,7 +69,9 @@ You do not need to ship per-provider templates. Pulse speaks standard OIDC, so a
    - **Client Secret**: The client secret from your Authentik provider
    - **Scopes**: `openid profile email`
 
-4. For group-based access control:
+4. In Authentik, open **Applications → [your Pulse app] → Advanced** and set a **Signing Key** that advertises the `RS256` algorithm (generate or assign an RSA key). Authentik defaults to `HS256` when no signing key is configured, which Pulse rejects with the error `unexpected signature algorithm "HS256"; expected ["RS256"]`.
+
+5. For group-based access control:
    - Set **Groups claim** to `groups` (Authentik's default)
    - Add your allowed group names to **Allowed groups** (e.g., `admin`)
 
@@ -121,6 +123,7 @@ All configuration can be provided via environment variables (see [`docs/CONFIGUR
 | Symptom | Resolution |
 | --- | --- |
 | `invalid_id_token` error | The issuer URL configured in Pulse doesn't match the `iss` claim in the ID token from your provider. Enable `LOG_LEVEL=debug` to see the exact verification error. For Authentik, try both `https://auth.domain.com` (base URL) and `https://auth.domain.com/application/o/pulse/` (application URL) to see which matches your provider's token issuer. |
+| `unexpected signature algorithm "HS256"; expected ["RS256"]` in logs | Authentik falls back to HS256 if no signing key is configured. Assign an RSA signing key to the application (token settings → Signing key) so ID tokens are issued with RS256. |
 | Redirect loops back to login | After successful OIDC login, if you're redirected back to the login page, check that: (1) cookies are enabled in your browser, (2) if behind a proxy, ensure `X-Forwarded-Proto` header is set correctly, (3) check browser console for cookie errors. |
 | Users see `single sign-on failed` | Check `journalctl -u pulse.service` for detailed OIDC audit logs. Common causes include mismatched client IDs, incorrect redirect URLs, or group/domain restrictions. |
 | UI shows "OIDC settings are managed by environment variables" | Remove the relevant `OIDC_*` environment variables or update them directly in your deployment. |
