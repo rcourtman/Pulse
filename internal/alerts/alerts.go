@@ -61,7 +61,7 @@ type HysteresisThreshold struct {
 // ThresholdConfig represents threshold configuration
 type ThresholdConfig struct {
 	Disabled            bool                 `json:"disabled,omitempty"`            // Completely disable alerts for this guest
-	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity alerts
+	DisableConnectivity bool                 `json:"disableConnectivity,omitempty"` // Disable node offline/connectivity/powered-off alerts
 	CPU                 *HysteresisThreshold `json:"cpu,omitempty"`
 	Memory              *HysteresisThreshold `json:"memory,omitempty"`
 	Disk                *HysteresisThreshold `json:"disk,omitempty"`
@@ -760,35 +760,46 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		return
 	}
 
-	// Clear any alerts for non-running guests and skip threshold checks
+	// Handle non-running guests
 	// Proxmox VM states: running, stopped, paused, suspended
-	// We should only check thresholds for running VMs
 	if status != "running" {
-		// Clear all alerts for this guest if it's not running
+		// Check for powered-off state and generate alert if configured
+		if status == "stopped" {
+			m.checkGuestPoweredOff(guestID, name, node, instanceName, guestType)
+		} else {
+			// For paused/suspended, clear powered-off alert
+			m.clearGuestPoweredOffAlert(guestID, name)
+		}
+
+		// Clear all resource metric alerts (cpu, memory, disk, etc.) for non-running guests
 		m.mu.Lock()
 		alertsCleared := 0
 		for alertID, alert := range m.activeAlerts {
-			if alert.ResourceID == guestID {
+			// Only clear resource metric alerts, not powered-off alerts
+			if alert.ResourceID == guestID && alert.Type != "powered-off" {
 				delete(m.activeAlerts, alertID)
 				alertsCleared++
 				log.Debug().
 					Str("alertID", alertID).
 					Str("guest", name).
 					Str("status", status).
-					Msg("Cleared alert for non-running guest")
+					Msg("Cleared metric alert for non-running guest")
 			}
 		}
 		m.mu.Unlock()
 
 		if alertsCleared > 0 {
-			log.Info().
+			log.Debug().
 				Str("guest", name).
 				Str("status", status).
 				Int("alertsCleared", alertsCleared).
-				Msg("Cleared alerts for non-running guest")
+				Msg("Cleared metric alerts for non-running guest")
 		}
 		return
 	}
+
+	// If guest is running, clear any powered-off alert
+	m.clearGuestPoweredOffAlert(guestID, name)
 
 	// Get thresholds (check custom rules, then overrides, then defaults)
 	m.mu.RLock()
@@ -1994,6 +2005,152 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 		Str("node", storage.Node).
 		Dur("downtime", time.Since(alert.StartTime)).
 		Msg("Storage is back online")
+}
+
+// checkGuestPoweredOff creates an alert for powered-off guests
+func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string) {
+	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Get thresholds to check if powered-off alerts are disabled
+	var thresholds ThresholdConfig
+	if override, exists := m.config.Overrides[guestID]; exists {
+		thresholds = override
+	} else {
+		thresholds = m.config.GuestDefaults
+	}
+
+	// Check if powered-off alerts are disabled for this guest
+	if thresholds.Disabled || thresholds.DisableConnectivity {
+		// Powered-off alerts are disabled, clear any existing alert and return
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			delete(m.activeAlerts, alertID)
+			log.Debug().
+				Str("guest", name).
+				Msg("Guest powered-off alert cleared (alerts disabled)")
+		}
+		delete(m.offlineConfirmations, guestID)
+		return
+	}
+
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		// Alert already exists, just update LastSeen
+		m.activeAlerts[alertID].LastSeen = time.Now()
+		return
+	}
+
+	// Increment confirmation count
+	m.offlineConfirmations[guestID]++
+	confirmCount := m.offlineConfirmations[guestID]
+
+	log.Debug().
+		Str("guest", name).
+		Str("type", guestType).
+		Int("confirmations", confirmCount).
+		Msg("Guest powered-off detected")
+
+	// Require 2 consecutive powered-off polls (~10 seconds) before alerting
+	// This prevents false positives from transient states
+	const requiredConfirmations = 2
+	if confirmCount < requiredConfirmations {
+		log.Debug().
+			Str("guest", name).
+			Int("count", confirmCount).
+			Int("required", requiredConfirmations).
+			Msg("Guest appears powered-off, waiting for confirmation")
+		return
+	}
+
+	// Create new powered-off alert after confirmation
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "powered-off",
+		Level:        AlertLevelWarning, // Powered-off is a warning, not critical
+		ResourceID:   guestID,
+		ResourceName: name,
+		Node:         node,
+		Instance:     instanceName,
+		Message:      fmt.Sprintf("%s '%s' is powered off", guestType, name),
+		Value:        0, // Not applicable for powered-off status
+		Threshold:    0, // Not applicable for powered-off status
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Acknowledged: false,
+	}
+
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+
+	// Add to history
+	m.historyManager.AddAlert(*alert)
+
+	// Send notification after confirmation
+	if m.onAlert != nil {
+		m.onAlert(alert)
+	}
+
+	// Log the event
+	log.Warn().
+		Str("guest", name).
+		Str("type", guestType).
+		Str("node", node).
+		Str("instance", instanceName).
+		Int("confirmedAfter", requiredConfirmations).
+		Msg("Guest is powered off (confirmed)")
+}
+
+// clearGuestPoweredOffAlert removes powered-off alert when guest starts running
+func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
+	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Reset confirmation count when guest comes back online
+	if count, exists := m.offlineConfirmations[guestID]; exists && count > 0 {
+		log.Debug().
+			Str("guest", name).
+			Int("previousCount", count).
+			Msg("Guest is running, resetting powered-off confirmation count")
+		delete(m.offlineConfirmations, guestID)
+	}
+
+	// Check if powered-off alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+
+	// Remove from active alerts
+	delete(m.activeAlerts, alertID)
+
+	// Add to recently resolved (lock ordering: must not hold m.mu when acquiring resolvedMutex)
+	downtime := time.Since(alert.StartTime)
+
+	// Release m.mu before acquiring resolvedMutex
+	m.mu.Unlock()
+	m.resolvedMutex.Lock()
+	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+	m.recentlyResolved[alertID] = resolvedAlert
+	m.resolvedMutex.Unlock()
+	m.mu.Lock() // Re-acquire for deferred unlock
+
+	// Send recovery notification
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+
+	// Log recovery
+	log.Info().
+		Str("guest", name).
+		Dur("downtime", downtime).
+		Msg("Guest is now running")
 }
 
 // ClearAlert removes an alert from active alerts (but keeps in history)
