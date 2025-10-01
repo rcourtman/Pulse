@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, createEffect } from 'solid-js';
+import { Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
