@@ -2707,14 +2707,13 @@ else
         echo ""
     else
         # Token created successfully
-        echo "✅ Token created for Pulse monitoring"
+        echo "API token generated successfully"
         echo ""
     fi
-    
+
     # Try auto-registration
-    echo "🔄 Attempting auto-registration with Pulse..."
-    echo ""
-    
+    echo "Registering node with Pulse..."
+
     # Use auth token from URL parameter (much simpler!)
     AUTH_TOKEN="%s"
     
@@ -2750,35 +2749,32 @@ else
         # Construct registration request with setup code
         # Build JSON carefully to preserve the exclamation mark
         REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"pulse-monitor@pam!%s","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$AUTH_TOKEN"'"}'
-        
-        # Debug output
-        echo "🔍 Debug: Sending registration request to $PULSE_URL/api/auto-register"
-        
+
         # Send registration with setup code
         REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -s -X POST "$PULSE_URL/api/auto-register" \
             -H "Content-Type: application/json" \
             -d @- 2>&1)
     else
-        echo "⚠️  No setup code provided - skipping auto-registration"
+        echo "Warning: No authentication token provided"
+        echo "Auto-registration skipped"
         AUTO_REG_SUCCESS=false
         REGISTER_RESPONSE=""
     fi
-    
+
     AUTO_REG_SUCCESS=false
     if echo "$REGISTER_RESPONSE" | grep -q "success"; then
         AUTO_REG_SUCCESS=true
-        echo "✅ Successfully registered with Pulse!"
+        echo "Node registered successfully"
+        echo ""
     else
         if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            echo "⚠️  Auto-registration failed: Pulse requires authentication"
+            echo "Error: Auto-registration failed - authentication required"
             echo ""
             if [ -z "$PULSE_API_TOKEN" ]; then
-                echo "   To enable auto-registration, add your Pulse API token to the setup URL:"
-                echo "   &api_token=YOUR_PULSE_API_TOKEN"
-                echo ""
-                echo "   You can find your API token in Pulse Settings → Security"
+                echo "To enable auto-registration, add your API token to the setup URL"
+                echo "You can find your API token in Pulse Settings → Security"
             else
-                echo "   The provided API token was invalid. Please check your token."
+                echo "The provided API token was invalid"
             fi
         else
             echo "⚠️  Auto-registration failed. Manual configuration may be needed."
@@ -2828,27 +2824,20 @@ fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🌡️  TEMPERATURE MONITORING (Optional)"
+echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Pulse can display CPU and NVMe temperatures in your dashboard."
-echo "This feature uses standard SSH key authentication - the same method"
-echo "you likely already use for secure server access."
+echo "Enable hardware temperature monitoring for this node?"
 echo ""
-echo "How it works:"
-echo "   • Pulse connects via SSH using a key (no passwords)"
-echo "   • Runs 'sensors -j' to read temperature data"
-echo "   • Displays temps with color coding in the dashboard"
-echo "   • Works just like tools like Ansible, Saltstack, etc."
+echo "This will:"
+echo "  • Install lm-sensors package"
+echo "  • Configure SSH key authentication for Pulse server"
+echo "  • Allow Pulse to collect CPU and drive temperature data"
 echo ""
-echo "What's installed:"
-echo "   • Your Pulse server's SSH public key → /root/.ssh/authorized_keys"
-echo "   • lm-sensors package for reading hardware temps"
+echo "Security: Uses SSH public key authentication (read-only access)"
+echo "          Key can be revoked anytime via /root/.ssh/authorized_keys"
 echo ""
-echo "This is a common approach for monitoring tools and follows security best practices."
-echo "You can revoke access anytime by removing the key from authorized_keys."
-echo ""
-echo "Enable temperature monitoring? (y/N): "
+echo -n "Enable temperature monitoring? [y/N]: "
 
 if [ -t 0 ]; then
     read -p "> " -n 1 -r SSH_REPLY
@@ -2865,10 +2854,8 @@ echo ""
 
 if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔧 SETTING UP TEMPERATURE MONITORING"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    echo "Configuring temperature monitoring..."
 
     # SSH public key embedded from Pulse server
     SSH_PUBLIC_KEY="%s"
@@ -2880,51 +2867,42 @@ if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
 
         # Check if key already exists
         if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
-            echo "✅ SSH key already present in authorized_keys"
+            echo "  ✓ SSH key already configured"
         else
             echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
             chmod 600 /root/.ssh/authorized_keys
-            echo "✅ SSH key added to /root/.ssh/authorized_keys"
+            echo "  ✓ SSH key configured"
         fi
 
         # Install lm-sensors if not present
-        echo ""
-        echo "📦 Installing lm-sensors for temperature monitoring..."
         if ! command -v sensors &> /dev/null; then
+            echo "  ✓ Installing lm-sensors..."
             apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
             sensors-detect --auto > /dev/null 2>&1
-            echo "✅ lm-sensors installed"
         else
-            echo "✅ lm-sensors already installed"
+            echo "  ✓ lm-sensors package verified"
         fi
 
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "✅ TEMPERATURE MONITORING ENABLED"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        echo "✅ SSH key configured"
-        echo "✅ lm-sensors installed and configured"
-        echo ""
-        echo "🌡️  Temperature data will appear in your Pulse dashboard"
-        echo "    within ~10 seconds!"
-        echo ""
-        echo "💡 Tip: Temperatures show as color-coded values on node cards."
-        echo "    Hover over the temp to see detailed core and NVMe readings."
+        echo "Temperature monitoring enabled successfully."
+        echo "Temperature data will appear in the dashboard within 10 seconds."
     else
-        echo "⚠️  No SSH key available from Pulse server"
-        echo "   Temperature monitoring requires an SSH key to be configured."
-        echo "   You can set this up later manually if needed."
+        echo ""
+        echo "Warning: SSH key not available from Pulse server."
+        echo "Temperature monitoring cannot be configured automatically."
     fi
 else
-    echo "⏭️  Skipping temperature monitoring"
     echo ""
-    echo "   No problem! You can enable this later if you want."
-    echo "   See the Pulse documentation for manual setup instructions."
+    echo "Temperature monitoring skipped."
 fi
 
 echo ""
-echo "✅ Setup complete!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Setup Complete"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Node successfully registered with Pulse monitoring."
+echo "Data will appear in your dashboard within 10 seconds."
 echo ""
 
 # Only show manual setup instructions if auto-registration failed
@@ -3134,15 +3112,13 @@ EOF
         echo "✅ Successfully registered with Pulse!"
     else
         if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            echo "⚠️  Auto-registration failed: Pulse requires authentication"
+            echo "Error: Auto-registration failed - authentication required"
             echo ""
             if [ -z "$PULSE_API_TOKEN" ]; then
-                echo "   To enable auto-registration, add your Pulse API token to the setup URL:"
-                echo "   &api_token=YOUR_PULSE_API_TOKEN"
-                echo ""
-                echo "   You can find your API token in Pulse Settings → Security"
+                echo "To enable auto-registration, add your API token to the setup URL"
+                echo "You can find your API token in Pulse Settings → Security"
             else
-                echo "   The provided API token was invalid. Please check your token."
+                echo "The provided API token was invalid"
             fi
         else
             echo "⚠️  Auto-registration failed. Manual configuration may be needed."
