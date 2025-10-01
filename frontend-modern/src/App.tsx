@@ -291,7 +291,7 @@ function App() {
         setHasAuth(true); // OIDC is enabled, so auth is configured
         setProxyAuthInfo({
           username: securityData.oidcUsername,
-          logoutURL: undefined, // OIDC logout handled differently
+          logoutURL: securityData.oidcLogoutURL, // OIDC logout URL from IdP
         });
         setNeedsAuth(false);
         // Initialize WebSocket for OIDC users

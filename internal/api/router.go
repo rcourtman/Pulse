@@ -246,6 +246,7 @@ func (r *Router) setupRoutes() {
 					response["oidcIssuer"] = oidcCfg.IssuerURL
 					response["oidcClientId"] = oidcCfg.ClientID
 					response["oidcUsername"] = oidcUsername
+					response["oidcLogoutURL"] = oidcCfg.LogoutURL
 					if len(oidcCfg.EnvOverrides) > 0 {
 						response["oidcEnvOverrides"] = oidcCfg.EnvOverrides
 					}
@@ -363,6 +364,7 @@ func (r *Router) setupRoutes() {
 				status["oidcEnabled"] = oidcCfg.Enabled
 				status["oidcIssuer"] = oidcCfg.IssuerURL
 				status["oidcClientId"] = oidcCfg.ClientID
+				status["oidcLogoutURL"] = oidcCfg.LogoutURL
 				if len(oidcCfg.EnvOverrides) > 0 {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
 				}
