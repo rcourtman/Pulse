@@ -19,6 +19,7 @@ type OIDCConfig struct {
 	ClientID       string          `json:"clientId"`
 	ClientSecret   string          `json:"clientSecret,omitempty"`
 	RedirectURL    string          `json:"redirectUrl"`
+	LogoutURL      string          `json:"logoutUrl,omitempty"`
 	Scopes         []string        `json:"scopes,omitempty"`
 	UsernameClaim  string          `json:"usernameClaim,omitempty"`
 	EmailClaim     string          `json:"emailClaim,omitempty"`
@@ -193,6 +194,10 @@ func (c *OIDCConfig) MergeFromEnv(env map[string]string) {
 	if val, ok := env["OIDC_REDIRECT_URL"]; ok {
 		c.RedirectURL = val
 		c.EnvOverrides["redirectUrl"] = true
+	}
+	if val, ok := env["OIDC_LOGOUT_URL"]; ok {
+		c.LogoutURL = val
+		c.EnvOverrides["logoutUrl"] = true
 	}
 	if val, ok := env["OIDC_SCOPES"]; ok {
 		c.Scopes = parseDelimited(val)

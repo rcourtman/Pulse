@@ -409,6 +409,9 @@ func Load() (*Config, error) {
 	if val := os.Getenv("OIDC_REDIRECT_URL"); val != "" {
 		oidcEnv["OIDC_REDIRECT_URL"] = val
 	}
+	if val := os.Getenv("OIDC_LOGOUT_URL"); val != "" {
+		oidcEnv["OIDC_LOGOUT_URL"] = val
+	}
 	if val := os.Getenv("OIDC_SCOPES"); val != "" {
 		oidcEnv["OIDC_SCOPES"] = val
 	}
