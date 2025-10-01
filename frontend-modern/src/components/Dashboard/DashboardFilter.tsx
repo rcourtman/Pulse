@@ -1,6 +1,5 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
 interface DashboardFilterProps {
   search: () => string;
@@ -18,6 +17,42 @@ interface DashboardFilterProps {
 }
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
+  const [showSearchHelp, setShowSearchHelp] = createSignal(false);
+  let helpPopoverRef: HTMLDivElement | undefined;
+  let helpButtonRef: HTMLButtonElement | undefined;
+
+  const closeSearchHelp = () => setShowSearchHelp(false);
+
+  createEffect(() => {
+    if (!showSearchHelp()) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      const clickedInsidePopover = helpPopoverRef?.contains(target) ?? false;
+      const clickedHelpButton = helpButtonRef?.contains(target) ?? false;
+
+      if (!clickedInsidePopover && !clickedHelpButton) {
+        closeSearchHelp();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSearchHelp();
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    onCleanup(() => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    });
+  });
+
   return (
     <Card class="dashboard-filter mb-3" padding="sm">
       <div class="flex flex-col lg:flex-row gap-3">
@@ -67,39 +102,91 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </Show>
           </div>
 
-          {/* Help Icon with Tooltip */}
-          <button
-            type="button"
-            class="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            onMouseEnter={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const tooltipContent = `
-                <div class="space-y-2 p-1">
-                  <div class="font-semibold mb-2">Search Examples:</div>
-                  <div class="space-y-1">
-                    <div><span class="font-mono bg-gray-700 px-1 rounded">media</span> - Find guests with "media" in name</div>
-                    <div><span class="font-mono bg-gray-700 px-1 rounded">cpu>80</span> - Guests using over 80% CPU</div>
-                    <div><span class="font-mono bg-gray-700 px-1 rounded">memory<20</span> - Guests using under 20% memory</div>
-                    <div><span class="font-mono bg-gray-700 px-1 rounded">tags:prod</span> - Filter by tag</div>
-                    <div><span class="font-mono bg-gray-700 px-1 rounded">node:pve1</span> - Filter by node</div>
+          {/* Search Help Popover */}
+          <div class="relative flex-shrink-0">
+            <button
+              type="button"
+              ref={(el) => (helpButtonRef = el)}
+              class="flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 focus:ring-offset-white dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-blue-400/40 dark:focus:ring-offset-gray-900"
+              onClick={() => setShowSearchHelp((value) => !value)}
+              aria-expanded={showSearchHelp()}
+              aria-controls="dashboard-search-help"
+            >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 2a7 7 0 00-7 7c0 2.8 1.5 4.6 3 5.8.6.5 1 1.1 1 1.8V17a1 1 0 001 1h4a1 1 0 001-1v-.4c0-.7.3-1.3.9-1.8 1.5-1.2 3.1-3 3.1-5.8a7 7 0 00-7-7z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 21h4"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 17v4"
+                />
+              </svg>
+              <span>Search tips</span>
+            </button>
+
+            <Show when={showSearchHelp()}>
+              <div
+                ref={(el) => (helpPopoverRef = el)}
+                id="dashboard-search-help"
+                role="dialog"
+                aria-label="Search tips"
+                class="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white text-left shadow-xl dark:border-gray-600 dark:bg-gray-800"
+              >
+                <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2 dark:border-gray-700">
+                  <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">Search tips</span>
+                  <button
+                    type="button"
+                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    onClick={closeSearchHelp}
+                    aria-label="Close search tips"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="px-3 py-3 text-xs text-gray-600 dark:text-gray-300">
+                  <p class="mb-3 text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Combine filters to narrow results</p>
+                  <div class="space-y-2">
+                    <div class="flex items-start gap-2">
+                      <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">media</code>
+                      <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">Guests with "media" in the name</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">cpu&gt;80</code>
+                      <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">Highlight guests using more than 80% CPU</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">memory&lt;20</code>
+                      <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">Find guests under 20% memory usage</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">tags:prod</code>
+                      <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">Filter by tag</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">node:pve1</code>
+                      <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">Show guests on a specific node</span>
+                    </div>
+                  </div>
+                  <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                    Try `node:pve1 cpu&gt;60` to stack filters.
                   </div>
                 </div>
-              `;
-              showTooltip(tooltipContent, rect.left, rect.top);
-            }}
-            onMouseLeave={() => hideTooltip()}
-            onClick={(e) => e.preventDefault()}
-            aria-label="Search help"
-          >
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </button>
+              </div>
+            </Show>
+          </div>
         </div>
 
         {/* Filters */}
