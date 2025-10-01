@@ -114,7 +114,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setViewMode('snapshot')}
+              onClick={() => props.setViewMode(props.viewMode() === 'snapshot' ? 'all' : 'snapshot')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'snapshot'
                   ? 'bg-white dark:bg-gray-800 text-yellow-600 dark:text-yellow-400 shadow-sm'
@@ -125,7 +125,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setViewMode('pve')}
+              onClick={() => props.setViewMode(props.viewMode() === 'pve' ? 'all' : 'pve')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'pve'
                   ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
@@ -136,7 +136,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setViewMode('pbs')}
+              onClick={() => props.setViewMode(props.viewMode() === 'pbs' ? 'all' : 'pbs')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'pbs'
                   ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
@@ -172,7 +172,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               </button>
               <button
                 type="button"
-                onClick={() => props.setTypeFilter!('VM')}
+                onClick={() => props.setTypeFilter!(props.typeFilter!() === 'VM' ? 'all' : 'VM')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   props.typeFilter!() === 'VM'
                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -183,7 +183,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               </button>
               <button
                 type="button"
-                onClick={() => props.setTypeFilter!('LXC')}
+                onClick={() => props.setTypeFilter!(props.typeFilter!() === 'LXC' ? 'all' : 'LXC')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   props.typeFilter!() === 'LXC'
                     ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
@@ -194,7 +194,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               </button>
               <button
                 type="button"
-                onClick={() => props.setTypeFilter!('Host')}
+                onClick={() => props.setTypeFilter!(props.typeFilter!() === 'Host' ? 'all' : 'Host')}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   props.typeFilter!() === 'Host'
                     ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-sm'
@@ -222,7 +222,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setGroupBy('guest')}
+              onClick={() => props.setGroupBy(props.groupBy() === 'guest' ? 'date' : 'guest')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.groupBy() === 'guest'
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -287,9 +287,16 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               }
             }}
             title="Reset all filters"
-            class="flex items-center justify-center px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 
-                   bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                   rounded-lg transition-colors"
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              props.search().trim() !== '' ||
+              props.viewMode() !== 'all' ||
+              props.groupBy() !== 'date' ||
+              props.sortKey() !== 'backupTime' ||
+              props.sortDirection() !== 'desc' ||
+              (props.typeFilter && props.typeFilter() !== 'all')
+                ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
           >
             <svg
               width="14"
@@ -306,21 +313,6 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
             </svg>
             <span class="ml-1 hidden sm:inline">Reset</span>
           </button>
-
-          {/* Active Indicator */}
-          <Show
-            when={
-              props.search().trim() !== '' ||
-              props.viewMode() !== 'all' ||
-              props.groupBy() !== 'date' ||
-              props.sortKey() !== 'backupTime' ||
-              props.sortDirection() !== 'desc'
-            }
-          >
-            <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              Active
-            </span>
-          </Show>
         </div>
       </div>
     </Card>
