@@ -9,6 +9,7 @@ type NodeFrontend struct {
 	Node             string       `json:"node"` // Maps to Name
 	Name             string       `json:"name"`
 	Instance         string       `json:"instance"`
+	Host             string       `json:"host,omitempty"`
 	Status           string       `json:"status"`
 	Type             string       `json:"type"`
 	CPU              float64      `json:"cpu"`
@@ -25,6 +26,8 @@ type NodeFrontend struct {
 	Temperature      *Temperature `json:"temperature,omitempty"` // CPU/NVMe temperatures
 	LastSeen         int64        `json:"lastSeen"`              // Unix timestamp
 	ConnectionHealth string       `json:"connectionHealth"`
+	IsClusterMember  bool         `json:"isClusterMember,omitempty"`
+	ClusterName      string       `json:"clusterName,omitempty"`
 }
 
 // VMFrontend represents a VM with frontend-friendly field names
@@ -57,29 +60,29 @@ type VMFrontend struct {
 
 // ContainerFrontend represents a Container with frontend-friendly field names
 type ContainerFrontend struct {
-	ID       string  `json:"id"`
-	VMID     int     `json:"vmid"`
-	Name     string  `json:"name"`
-	Node     string  `json:"node"`
-	Instance string  `json:"instance"`
-	Status   string  `json:"status"`
-	Type     string  `json:"type"`
-	CPU      float64 `json:"cpu"`
-	CPUs     int     `json:"cpus"`
-	Memory   *Memory `json:"memory,omitempty"` // Full memory object
-	Mem      int64   `json:"mem"`              // Maps to Memory.Used
-	MaxMem   int64   `json:"maxmem"`           // Maps to Memory.Total
-	DiskObj  *Disk   `json:"disk,omitempty"`   // Full disk object
-	NetIn    int64   `json:"netin"`            // Maps to NetworkIn
-	NetOut   int64   `json:"netout"`           // Maps to NetworkOut
-	DiskRead int64   `json:"diskread"`         // Maps to DiskRead
-	DiskWrite int64  `json:"diskwrite"`        // Maps to DiskWrite
-	Uptime   int64   `json:"uptime"`
-	Template bool    `json:"template"`
-	LastBackup int64 `json:"lastBackup,omitempty"` // Unix timestamp
-	Tags     string  `json:"tags,omitempty"`       // Joined string
-	Lock     string  `json:"lock,omitempty"`
-	LastSeen int64   `json:"lastSeen"` // Unix timestamp
+	ID         string  `json:"id"`
+	VMID       int     `json:"vmid"`
+	Name       string  `json:"name"`
+	Node       string  `json:"node"`
+	Instance   string  `json:"instance"`
+	Status     string  `json:"status"`
+	Type       string  `json:"type"`
+	CPU        float64 `json:"cpu"`
+	CPUs       int     `json:"cpus"`
+	Memory     *Memory `json:"memory,omitempty"` // Full memory object
+	Mem        int64   `json:"mem"`              // Maps to Memory.Used
+	MaxMem     int64   `json:"maxmem"`           // Maps to Memory.Total
+	DiskObj    *Disk   `json:"disk,omitempty"`   // Full disk object
+	NetIn      int64   `json:"netin"`            // Maps to NetworkIn
+	NetOut     int64   `json:"netout"`           // Maps to NetworkOut
+	DiskRead   int64   `json:"diskread"`         // Maps to DiskRead
+	DiskWrite  int64   `json:"diskwrite"`        // Maps to DiskWrite
+	Uptime     int64   `json:"uptime"`
+	Template   bool    `json:"template"`
+	LastBackup int64   `json:"lastBackup,omitempty"` // Unix timestamp
+	Tags       string  `json:"tags,omitempty"`       // Joined string
+	Lock       string  `json:"lock,omitempty"`
+	LastSeen   int64   `json:"lastSeen"` // Unix timestamp
 }
 
 // StorageFrontend represents Storage with frontend-friendly field names

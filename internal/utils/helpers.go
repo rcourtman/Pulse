@@ -20,7 +20,13 @@ func GenerateID(prefix string) string {
 // WriteJSONResponse writes a JSON response to the http.ResponseWriter
 func WriteJSONResponse(w http.ResponseWriter, data interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(data)
+	// Use Marshal instead of Encoder for better performance with large payloads
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(jsonData)
+	return err
 }
 
 // WriteJSONError writes a JSON error response to the http.ResponseWriter
