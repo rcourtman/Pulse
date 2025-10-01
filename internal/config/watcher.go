@@ -14,12 +14,15 @@ import (
 
 // ConfigWatcher monitors the .env file for changes and updates runtime config
 type ConfigWatcher struct {
-	config      *Config
-	envPath     string
-	watcher     *fsnotify.Watcher
-	stopChan    chan struct{}
-	lastModTime time.Time
-	mu          sync.RWMutex
+	config          *Config
+	envPath         string
+	mockEnvPath     string
+	watcher         *fsnotify.Watcher
+	stopChan        chan struct{}
+	lastModTime     time.Time
+	mockLastModTime time.Time
+	mu              sync.RWMutex
+	onMockReload    func() // Callback to trigger backend restart
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -35,41 +38,66 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		envPath = "/data/.env"
 	}
 
+	// Determine mock.env path (always in project root)
+	mockEnvPath := "/opt/pulse/mock.env"
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 
 	cw := &ConfigWatcher{
-		config:   config,
-		envPath:  envPath,
-		watcher:  watcher,
-		stopChan: make(chan struct{}),
+		config:      config,
+		envPath:     envPath,
+		mockEnvPath: mockEnvPath,
+		watcher:     watcher,
+		stopChan:    make(chan struct{}),
 	}
 
-	// Get initial mod time
+	// Get initial mod times
 	if stat, err := os.Stat(envPath); err == nil {
 		cw.lastModTime = stat.ModTime()
+	}
+	if stat, err := os.Stat(mockEnvPath); err == nil {
+		cw.mockLastModTime = stat.ModTime()
 	}
 
 	return cw, nil
 }
 
+// SetMockReloadCallback sets the callback function to trigger when mock.env changes
+func (cw *ConfigWatcher) SetMockReloadCallback(callback func()) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	cw.onMockReload = callback
+}
+
 // Start begins watching the config file
 func (cw *ConfigWatcher) Start() error {
-	// Watch the directory instead of the file directly
-	// This handles atomic writes better (editor save patterns)
+	// Watch the directory for .env
 	dir := filepath.Dir(cw.envPath)
 	err := cw.watcher.Add(dir)
 	if err != nil {
-		log.Warn().Err(err).Str("path", dir).Msg("Failed to watch config directory, falling back to polling")
-		// Fall back to polling if watch fails
+		log.Warn().Err(err).Str("path", dir).Msg("Failed to watch config directory")
+	}
+
+	// Also watch the mock.env directory (/opt/pulse)
+	mockDir := filepath.Dir(cw.mockEnvPath)
+	if err := cw.watcher.Add(mockDir); err != nil {
+		log.Warn().Err(err).Str("path", mockDir).Msg("Failed to watch mock.env directory")
+	}
+
+	if err != nil {
+		log.Warn().Msg("Falling back to polling for config changes")
 		go cw.pollForChanges()
 		return nil
 	}
 
 	go cw.watchForChanges()
-	log.Info().Str("path", cw.envPath).Msg("Started watching .env file for changes")
+	log.Info().
+		Str("env_path", cw.envPath).
+		Str("mock_env_path", cw.mockEnvPath).
+		Msg("Started watching config files for changes")
 	return nil
 }
 
@@ -110,6 +138,17 @@ func (cw *ConfigWatcher) watchForChanges() {
 				}
 			}
 
+			// Check if the event is for mock.env
+			if filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath {
+				// Debounce - wait a bit for write to complete
+				time.Sleep(100 * time.Millisecond)
+
+				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					log.Info().Str("event", event.Op.String()).Msg("Detected mock.env file change")
+					cw.reloadMockConfig()
+				}
+			}
+
 		case err, ok := <-cw.watcher.Errors:
 			if !ok {
 				return
@@ -130,11 +169,21 @@ func (cw *ConfigWatcher) pollForChanges() {
 	for {
 		select {
 		case <-ticker.C:
+			// Check .env
 			if stat, err := os.Stat(cw.envPath); err == nil {
 				if stat.ModTime().After(cw.lastModTime) {
 					log.Info().Msg("Detected .env file change via polling")
 					cw.lastModTime = stat.ModTime()
 					cw.reloadConfig()
+				}
+			}
+
+			// Check mock.env
+			if stat, err := os.Stat(cw.mockEnvPath); err == nil {
+				if stat.ModTime().After(cw.mockLastModTime) {
+					log.Info().Msg("Detected mock.env file change via polling")
+					cw.mockLastModTime = stat.ModTime()
+					cw.reloadMockConfig()
 				}
 			}
 
@@ -220,5 +269,41 @@ func (cw *ConfigWatcher) reloadConfig() {
 			Msg("Applied .env file changes to runtime config")
 	} else {
 		log.Debug().Msg("No relevant changes detected in .env file")
+	}
+}
+
+// reloadMockConfig handles mock.env file changes
+func (cw *ConfigWatcher) reloadMockConfig() {
+	cw.mu.Lock()
+	callback := cw.onMockReload
+	cw.mu.Unlock()
+
+	// Load the mock.env file to update environment variables
+	envMap, err := godotenv.Read(cw.mockEnvPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error().Err(err).Msg("Failed to read mock.env file")
+			return
+		}
+		log.Warn().Msg("mock.env file not found")
+		return
+	}
+
+	// Update environment variables for the mock package to read
+	for key, value := range envMap {
+		if strings.HasPrefix(key, "PULSE_MOCK_") {
+			os.Setenv(key, value)
+		}
+	}
+
+	log.Info().
+		Str("path", cw.mockEnvPath).
+		Interface("config", envMap).
+		Msg("Reloaded mock.env configuration")
+
+	// Trigger callback to restart backend if set
+	if callback != nil {
+		log.Info().Msg("Triggering backend restart due to mock.env change")
+		go callback()
 	}
 }

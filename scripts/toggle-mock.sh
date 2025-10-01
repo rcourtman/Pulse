@@ -38,44 +38,70 @@ show_status() {
 
 enable_mock() {
     echo -e "${YELLOW}Enabling mock mode...${NC}"
-    
+
     # Update mock.env to enable mock mode
     sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=true/' "$MOCK_ENV_FILE"
-    
-    # Restart dev service to pick up changes
-    sudo systemctl restart pulse-dev
-    
-    echo -e "${GREEN}✓ Mock mode enabled!${NC}"
-    echo -e "Mock nodes will appear at: ${GREEN}http://192.168.0.123:7655${NC}"
+
+    # Touch the file to trigger file watcher (for hot-dev mode)
+    touch "$MOCK_ENV_FILE"
+
+    # If pulse-dev systemd service is running, restart it
+    if systemctl is-active --quiet pulse-dev 2>/dev/null; then
+        sudo systemctl restart pulse-dev
+        echo -e "${GREEN}✓ Mock mode enabled! (systemd service restarted)${NC}"
+    else
+        echo -e "${GREEN}✓ Mock mode enabled!${NC}"
+        echo -e "${BLUE}Note: Backend will auto-reload if running in hot-dev mode${NC}"
+    fi
+
     echo ""
     echo "To adjust mock settings, edit: $MOCK_ENV_FILE"
-    echo "Then run: sudo systemctl restart pulse-dev"
 }
 
 disable_mock() {
     echo -e "${YELLOW}Disabling mock mode...${NC}"
 
     # Sync production config before switching back
-    echo "Syncing production configuration..."
-    /opt/pulse/scripts/sync-production-config.sh
-    echo ""
+    if [ -f "/opt/pulse/scripts/sync-production-config.sh" ]; then
+        echo "Syncing production configuration..."
+        /opt/pulse/scripts/sync-production-config.sh
+        echo ""
+    fi
 
     # Update mock.env to disable mock mode
     sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=false/' "$MOCK_ENV_FILE"
 
-    # Restart dev service to pick up changes
-    sudo systemctl restart pulse-dev
+    # Touch the file to trigger file watcher (for hot-dev mode)
+    touch "$MOCK_ENV_FILE"
 
-    echo -e "${GREEN}✓ Mock mode disabled!${NC}"
+    # If pulse-dev systemd service is running, restart it
+    if systemctl is-active --quiet pulse-dev 2>/dev/null; then
+        sudo systemctl restart pulse-dev
+        echo -e "${GREEN}✓ Mock mode disabled! (systemd service restarted)${NC}"
+    else
+        echo -e "${GREEN}✓ Mock mode disabled!${NC}"
+        echo -e "${BLUE}Note: Backend will auto-reload if running in hot-dev mode${NC}"
+    fi
+
     echo "Using real Proxmox nodes"
 }
 
 edit_config() {
     echo -e "${YELLOW}Opening mock configuration for editing...${NC}"
     ${EDITOR:-nano} "$MOCK_ENV_FILE"
+
+    # Touch the file to trigger file watcher (for hot-dev mode)
+    touch "$MOCK_ENV_FILE"
+
     echo ""
     echo -e "${GREEN}Configuration updated!${NC}"
-    echo "Run 'sudo systemctl restart pulse-dev' to apply changes"
+
+    # If pulse-dev systemd service is running, suggest restart
+    if systemctl is-active --quiet pulse-dev 2>/dev/null; then
+        echo "Run 'sudo systemctl restart pulse-dev' to apply changes"
+    else
+        echo -e "${BLUE}Note: Backend will auto-reload if running in hot-dev mode${NC}"
+    fi
 }
 
 case "$1" in
