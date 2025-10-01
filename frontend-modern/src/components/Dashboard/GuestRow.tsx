@@ -4,6 +4,8 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
 import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
+import { DiskList } from './DiskList';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
 
@@ -29,6 +31,13 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  const guestId = createMemo(() => {
+    if (props.guest.id) return props.guest.id;
+    if (props.guest.instance === props.guest.node) {
+      return `${props.guest.node}-${props.guest.vmid}`;
+    }
+    return `${props.guest.instance}-${props.guest.node}-${props.guest.vmid}`;
+  });
 
   // Update custom URL when prop changes
   createEffect(() => {
@@ -236,22 +245,32 @@ export function GuestRow(props: GuestRowProps) {
       {/* Disk */}
       <td class="py-0.5 px-2 w-[140px]">
         <Show
-          when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
+          when={props.guest.disks && props.guest.disks.length > 0}
           fallback={
-            <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
-              -
-            </span>
+            <Show
+              when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
+              fallback={
+                <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
+                  -
+                </span>
+              }
+            >
+              <MetricBar
+                value={diskPercent()}
+                label={`${diskPercent().toFixed(0)}%`}
+                sublabel={
+                  props.guest.disk
+                    ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
+                    : undefined
+                }
+                type="disk"
+              />
+            </Show>
           }
         >
-          <MetricBar
-            value={diskPercent()}
-            label={`${diskPercent().toFixed(0)}%`}
-            sublabel={
-              props.guest.disk
-                ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
-                : undefined
-            }
-            type="disk"
+          <DiskList
+            disks={props.guest.disks!}
+            diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
           />
         </Show>
       </td>
