@@ -60,14 +60,18 @@ Monitor.GetState()
 - `Instance`: Cluster or standalone identifier
 
 ### Configuration (mock.env)
+The `mock.env` file is tracked in the repository with sensible defaults (mock mode disabled by default). Developers can create `mock.env.local` for personal overrides (gitignored).
+
 ```bash
-PULSE_MOCK_MODE=true              # Enable/disable
+PULSE_MOCK_MODE=false             # Enable/disable (false by default in repo)
 PULSE_MOCK_NODES=7                # Number of nodes
 PULSE_MOCK_VMS_PER_NODE=5         # Average VMs per node
 PULSE_MOCK_LXCS_PER_NODE=8        # Average containers per node
 PULSE_MOCK_RANDOM_METRICS=true    # Enable metric fluctuations
 PULSE_MOCK_STOPPED_PERCENT=20     # % of stopped guests
 ```
+
+**Personal overrides:** Create `mock.env.local` with your settings - it overrides `mock.env` and is gitignored.
 
 ### When to Use Mock Mode
 - Frontend development (fast, predictable data)

@@ -289,6 +289,16 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 		return
 	}
 
+	// Load local overrides if they exist
+	mockEnvLocalPath := cw.mockEnvPath + ".local"
+	if localEnv, err := godotenv.Read(mockEnvLocalPath); err == nil {
+		// Merge local overrides into envMap
+		for key, value := range localEnv {
+			envMap[key] = value
+		}
+		log.Debug().Str("path", mockEnvLocalPath).Msg("Loaded mock.env.local overrides")
+	}
+
 	// Update environment variables for the mock package to read
 	for key, value := range envMap {
 		if strings.HasPrefix(key, "PULSE_MOCK_") {
