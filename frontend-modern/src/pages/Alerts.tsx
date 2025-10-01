@@ -326,27 +326,27 @@ export function Alerts() {
       if (config.guestDefaults) {
         // Extract trigger values from potentially hysteresis thresholds
         setGuestDefaults({
-          cpu: getTriggerValue(config.guestDefaults.cpu) || 80,
-          memory: getTriggerValue(config.guestDefaults.memory) || 85,
-          disk: getTriggerValue(config.guestDefaults.disk) || 90,
-          diskRead: getTriggerValue(config.guestDefaults.diskRead) || 0,
-          diskWrite: getTriggerValue(config.guestDefaults.diskWrite) || 0,
-          networkIn: getTriggerValue(config.guestDefaults.networkIn) || 0,
-          networkOut: getTriggerValue(config.guestDefaults.networkOut) || 0,
+          cpu: getTriggerValue(config.guestDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.guestDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.guestDefaults.disk) ?? 90,
+          diskRead: getTriggerValue(config.guestDefaults.diskRead) ?? 0,
+          diskWrite: getTriggerValue(config.guestDefaults.diskWrite) ?? 0,
+          networkIn: getTriggerValue(config.guestDefaults.networkIn) ?? 0,
+          networkOut: getTriggerValue(config.guestDefaults.networkOut) ?? 0,
         });
       }
 
       if (config.nodeDefaults) {
         setNodeDefaults({
-          cpu: getTriggerValue(config.nodeDefaults.cpu) || 80,
-          memory: getTriggerValue(config.nodeDefaults.memory) || 85,
-          disk: getTriggerValue(config.nodeDefaults.disk) || 90,
-          temperature: getTriggerValue(config.nodeDefaults.temperature) || 80,
+          cpu: getTriggerValue(config.nodeDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.nodeDefaults.memory) ?? 85,
+          disk: getTriggerValue(config.nodeDefaults.disk) ?? 90,
+          temperature: getTriggerValue(config.nodeDefaults.temperature) ?? 80,
         });
       }
 
       if (config.storageDefault) {
-        setStorageDefault(getTriggerValue(config.storageDefault) || 85);
+        setStorageDefault(getTriggerValue(config.storageDefault) ?? 85);
       }
       if (config.timeThreshold !== undefined) {
         setTimeThreshold(config.timeThreshold);
