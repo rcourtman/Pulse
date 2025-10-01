@@ -126,6 +126,11 @@ echo "Ports are clean!"
 
 if [[ -f "${ROOT_DIR}/mock.env" ]]; then
     load_env_file "${ROOT_DIR}/mock.env"
+    # Load local overrides if they exist
+    if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
+        load_env_file "${ROOT_DIR}/mock.env.local"
+        echo "[hot-dev] Loaded mock.env.local overrides"
+    fi
     if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
         TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
         echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"

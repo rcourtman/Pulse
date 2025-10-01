@@ -106,12 +106,14 @@ scripts/test-*.sh
 scripts/run-tests.sh
 scripts/TEST_*.md
 
-# Mock mode files (local development only)
-mock.env*
+# Mock mode - exclude local overrides but keep the base file
+mock.env.local
+mock.env.backup
+
+# Legacy mock mode files (no longer used)
 internal/monitoring/mock_integration.go
 internal/monitoring/mock_stub.go
 scripts/mock-dev.sh
-scripts/toggle-mock.sh
 scripts/toggle-mock-pure.sh
 MOCK_MODE_GUIDE.md
 
