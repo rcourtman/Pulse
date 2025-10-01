@@ -14,12 +14,26 @@ chmod 700 "$DEV_DIR"
 # Copy essential production config files to dev
 # Skip session/csrf/alert files which are runtime-specific
 echo "Syncing production config to dev environment..."
+echo "  Source: $PROD_DIR"
+echo "  Target: $DEV_DIR"
+echo ""
 
-# Copy encryption key if it exists
+# Copy encryption key if it exists AND dev doesn't have a key yet
 if [ -f "$PROD_DIR/.encryption.key" ]; then
-    cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"
-    chmod 600 "$DEV_DIR/.encryption.key"
-    echo "✓ Synced encryption key"
+    if [ ! -f "$DEV_DIR/.encryption.key" ]; then
+        cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"
+        chmod 600 "$DEV_DIR/.encryption.key"
+        echo "✓ Synced encryption key (dev didn't have one)"
+    else
+        # Dev already has a key - compare ages
+        if [ "$PROD_DIR/.encryption.key" -nt "$DEV_DIR/.encryption.key" ]; then
+            echo "⚠ Production encryption key is newer than dev key"
+            echo "  This is unusual - dev key is usually created first"
+            echo "  Keeping existing dev key to avoid breaking encrypted configs"
+        else
+            echo "✓ Dev encryption key already exists and is current"
+        fi
+    fi
 fi
 
 # Copy nodes configuration - WITH VALIDATION

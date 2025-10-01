@@ -144,11 +144,17 @@ cd "${ROOT_DIR}"
 
 go build -o pulse ./cmd/pulse
 
+# CRITICAL: Export all required environment variables for the backend
 # Mock variables already exported via load_env_file (set -a)
-# Just export the port variables for the backend
+# But we must explicitly export PULSE_DATA_DIR to ensure dev mode uses correct config
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
 PORT=${PULSE_DEV_API_PORT}
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT
+
+# MUST export PULSE_DATA_DIR so backend uses dev-config directory
+export PULSE_DATA_DIR
+
+echo "[hot-dev] Backend will use config directory: ${PULSE_DATA_DIR}"
 ./pulse &
 BACKEND_PID=$!
 
