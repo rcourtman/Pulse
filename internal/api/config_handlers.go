@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"math/big"
@@ -11,10 +14,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	internalauth "github.com/rcourtman/pulse-go-rewrite/internal/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -2545,6 +2551,9 @@ func (h *ConfigHandlers) HandleSetupScript(w http.ResponseWriter, r *http.Reques
 		Int64("timestamp", timestamp).
 		Msg("Generated unique token name for setup script")
 
+	// Get or generate SSH public key for temperature monitoring
+	sshPublicKey := h.getOrGenerateSSHKey()
+
 	var script string
 
 	if serverType == "pve" {
@@ -2857,82 +2866,55 @@ echo ""
 if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📋 GET YOUR PULSE SERVER'S PUBLIC KEY"
+    echo "🔧 SETTING UP TEMPERATURE MONITORING"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "On your Pulse server, run this command (as the user running Pulse):"
-    echo ""
-    echo "   cat ~/.ssh/id_rsa.pub"
-    echo ""
-    echo "Don't have a key yet? Generate one first:"
-    echo ""
-    echo "   ssh-keygen -t rsa -N \"\" -f ~/.ssh/id_rsa"
-    echo ""
-    echo "Paste your PUBLIC key below (starts with 'ssh-rsa' or 'ssh-ed25519'):"
 
-    if [ -t 0 ]; then
-        read -r SSH_PUBLIC_KEY
-    else
-        if read -r SSH_PUBLIC_KEY </dev/tty 2>/dev/null; then
-            :
-        else
-            echo "❌ Cannot read SSH public key (no terminal available)"
-            SSH_PUBLIC_KEY=""
-        fi
-    fi
+    # SSH public key embedded from Pulse server
+    SSH_PUBLIC_KEY="%s"
 
     if [ -n "$SSH_PUBLIC_KEY" ]; then
-        # Validate it looks like a public key
-        if echo "$SSH_PUBLIC_KEY" | grep -qE "^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp256)"; then
-            # Add key to root's authorized_keys
-            mkdir -p /root/.ssh
-            chmod 700 /root/.ssh
+        # Add key to root's authorized_keys
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
 
-            # Check if key already exists
-            if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
-                echo "✅ SSH key already present in authorized_keys"
-            else
-                echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
-                chmod 600 /root/.ssh/authorized_keys
-                echo "✅ SSH key added to /root/.ssh/authorized_keys"
-            fi
-
-            # Install lm-sensors if not present
-            echo ""
-            echo "📦 Installing lm-sensors for temperature monitoring..."
-            if ! command -v sensors &> /dev/null; then
-                apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
-                sensors-detect --auto > /dev/null 2>&1
-                echo "✅ lm-sensors installed"
-            else
-                echo "✅ lm-sensors already installed"
-            fi
-
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "✅ TEMPERATURE MONITORING ENABLED"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "✅ SSH key configured"
-            echo "✅ lm-sensors installed and configured"
-            echo ""
-            echo "🌡️  Temperature data will appear in your Pulse dashboard"
-            echo "    within ~10 seconds!"
-            echo ""
-            echo "💡 Tip: Temperatures show as color-coded values on node cards."
-            echo "    Hover over the temp to see detailed core and NVMe readings."
+        # Check if key already exists
+        if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+            echo "✅ SSH key already present in authorized_keys"
         else
-            echo ""
-            echo "❌ That doesn't look like a valid SSH public key"
-            echo ""
-            echo "   A public key starts with 'ssh-rsa' or 'ssh-ed25519' and looks like:"
-            echo "   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... user@hostname"
-            echo ""
-            echo "   Run 'cat ~/.ssh/id_rsa.pub' on your Pulse server to get it."
+            echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo "✅ SSH key added to /root/.ssh/authorized_keys"
         fi
+
+        # Install lm-sensors if not present
+        echo ""
+        echo "📦 Installing lm-sensors for temperature monitoring..."
+        if ! command -v sensors &> /dev/null; then
+            apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
+            sensors-detect --auto > /dev/null 2>&1
+            echo "✅ lm-sensors installed"
+        else
+            echo "✅ lm-sensors already installed"
+        fi
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ TEMPERATURE MONITORING ENABLED"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "✅ SSH key configured"
+        echo "✅ lm-sensors installed and configured"
+        echo ""
+        echo "🌡️  Temperature data will appear in your Pulse dashboard"
+        echo "    within ~10 seconds!"
+        echo ""
+        echo "💡 Tip: Temperatures show as color-coded values on node cards."
+        echo "    Hover over the temp to see detailed core and NVMe readings."
     else
-        echo "⏭️  No key provided - skipping temperature monitoring"
-        echo "   You can set this up later by adding your key to /root/.ssh/authorized_keys"
+        echo "⚠️  No SSH key available from Pulse server"
+        echo "   Temperature monitoring requires an SSH key to be configured."
+        echo "   You can set this up later manually if needed."
     fi
 else
     echo "⏭️  Skipping temperature monitoring"
@@ -2961,7 +2943,7 @@ if [ "$AUTO_REG_SUCCESS" != true ]; then
 fi
 `, serverName, time.Now().Format("2006-01-02 15:04:05"), pulseIP,
 			tokenName, tokenName, tokenName, tokenName, tokenName, tokenName,
-			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, tokenName, serverHost)
+			authToken, pulseURL, serverHost, tokenName, tokenName, storagePerms, sshPublicKey, tokenName, serverHost)
 
 	} else { // PBS
 		script = fmt.Sprintf(`#!/bin/bash
@@ -4013,4 +3995,81 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 		"action":     "create_token", // Tells the script to create this token
 	})
 
+}
+
+// getOrGenerateSSHKey returns the SSH public key for temperature monitoring
+// If no key exists, it generates one automatically
+func (h *ConfigHandlers) getOrGenerateSSHKey() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Warn().Err(err).Msg("Could not determine home directory for SSH key")
+		return ""
+	}
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	privateKeyPath := filepath.Join(sshDir, "id_rsa")
+	publicKeyPath := filepath.Join(sshDir, "id_rsa.pub")
+
+	// Check if public key already exists
+	if pubKeyBytes, err := os.ReadFile(publicKeyPath); err == nil {
+		publicKey := strings.TrimSpace(string(pubKeyBytes))
+		log.Info().Str("keyPath", publicKeyPath).Msg("Using existing SSH public key")
+		return publicKey
+	}
+
+	// Key doesn't exist - generate one
+	log.Info().Str("sshDir", sshDir).Msg("Generating new SSH keypair for temperature monitoring")
+
+	// Create .ssh directory if it doesn't exist
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		log.Error().Err(err).Str("sshDir", sshDir).Msg("Failed to create .ssh directory")
+		return ""
+	}
+
+	// Generate RSA key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate RSA key")
+		return ""
+	}
+
+	// Save private key
+	privateKeyFile, err := os.OpenFile(privateKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		log.Error().Err(err).Str("path", privateKeyPath).Msg("Failed to create private key file")
+		return ""
+	}
+	defer privateKeyFile.Close()
+
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	if err := pem.Encode(privateKeyFile, privateKeyPEM); err != nil {
+		log.Error().Err(err).Msg("Failed to write private key")
+		return ""
+	}
+
+	// Generate public key in OpenSSH format
+	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate public key")
+		return ""
+	}
+
+	publicKeyBytes := ssh.MarshalAuthorizedKey(publicKey)
+	publicKeyString := strings.TrimSpace(string(publicKeyBytes))
+
+	// Save public key
+	if err := os.WriteFile(publicKeyPath, publicKeyBytes, 0644); err != nil {
+		log.Error().Err(err).Str("path", publicKeyPath).Msg("Failed to write public key")
+		return ""
+	}
+
+	log.Info().
+		Str("privateKey", privateKeyPath).
+		Str("publicKey", publicKeyPath).
+		Msg("Successfully generated SSH keypair")
+
+	return publicKeyString
 }

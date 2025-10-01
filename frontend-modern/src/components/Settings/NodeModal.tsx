@@ -49,7 +49,6 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   });
 
   const [formData, setFormData] = createSignal(getCleanFormData());
-  const [setupCode, setSetupCode] = createSignal<{ code: string; expires: number; url?: string } | null>(null);
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -508,13 +507,16 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     <button
                                       type="button"
                                       onClick={async () => {
+                                        console.log('[Quick Setup] Copy button clicked');
                                         try {
                                           // Check if host is populated
                                           if (!formData().host || formData().host.trim() === '') {
+                                            console.log('[Quick Setup] No host entered');
                                             showError('Please enter the Host URL first');
                                             return;
                                           }
 
+                                          console.log('[Quick Setup] Generating setup URL for host:', formData().host);
                                           // Always regenerate URL when host changes
                                           const { apiFetch } = await import('@/utils/apiClient');
                                           const response = await apiFetch('/api/setup-script-url', {
@@ -527,28 +529,30 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             }),
                                           });
 
+                                          console.log('[Quick Setup] API response:', response.status, response.ok);
                                           if (response.ok) {
                                             const data = await response.json();
+                                            console.log('[Quick Setup] Setup data received:', data);
 
-                                            // Store setup code for display along with the URL
-                                            if (data.setupCode) {
-                                              setSetupCode({
-                                                code: data.setupCode,
-                                                expires: data.expires,
-                                                url: data.url,
-                                              });
-
-                                              // Copy the command to clipboard
-                                              const cmd = `curl -sSL "${data.url}" | bash`;
-                                              if (await copyToClipboard(cmd)) {
+                                            // Backend returns url, command, and expires
+                                            // Just copy the command - don't show the modal
+                                            if (data.command) {
+                                              console.log('[Quick Setup] Copying command to clipboard:', data.command);
+                                              const copied = await copyToClipboard(data.command);
+                                              console.log('[Quick Setup] Copy result:', copied);
+                                              if (copied) {
                                                 showSuccess('Command copied to clipboard!');
+                                              } else {
+                                                showError('Failed to copy to clipboard');
                                               }
+                                            } else {
+                                              console.log('[Quick Setup] No command in response');
                                             }
                                           } else {
                                             showError('Failed to generate setup URL');
                                           }
                                         } catch (error) {
-                                          console.error('Failed to copy command:', error);
+                                          console.error('[Quick Setup] Error:', error);
                                           showError('Failed to copy command');
                                         }
                                       }}
@@ -574,83 +578,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                       </svg>
                                     </button>
-                                    <code
-                                      class={setupCode()?.url ? 'text-green-400' : formData().host ? 'text-blue-400' : 'text-gray-500'}
-                                    >
-                                      {setupCode()?.url
-                                        ? `curl -sSL "${setupCode()?.url}" | bash`
-                                        : formData().host
-                                        ? 'Click the button above to generate and view your setup command'
+                                    <code class="text-blue-400">
+                                      {formData().host
+                                        ? 'Click the button above to copy the setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
-
-                                  {/* Setup Code Display */}
-                                  <Show when={setupCode()}>
-                                    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
-                                      <div class="flex items-center justify-between mb-3">
-                                        <h4 class="text-sm font-semibold flex items-center">
-                                          <svg
-                                            class="w-4 h-4 mr-2"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                                            />
-                                          </svg>
-                                          Generated Command
-                                        </h4>
-                                        <button
-                                          type="button"
-                                          onClick={() => setSetupCode(null)}
-                                          class="text-white/80 hover:text-white"
-                                        >
-                                          <svg
-                                            class="w-4 h-4"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M6 18L18 6M6 6l12 12"
-                                            />
-                                          </svg>
-                                        </button>
-                                      </div>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 mb-3">
-                                        <code class="text-sm break-all text-white/90">
-                                          curl -sSL "{setupCode()?.url}" | bash
-                                        </code>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          const cmd = `curl -sSL "${setupCode()?.url}" | bash`;
-                                          if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied to clipboard!');
-                                          }
-                                        }}
-                                        class="w-full py-2 bg-white/20 hover:bg-white/30 rounded-md transition-colors font-medium text-sm"
-                                      >
-                                        Copy Command
-                                      </button>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider mt-3">
-                                        {setupCode()?.code}
-                                      </div>
-                                      <div class="mt-3 text-xs text-white/90 space-y-1">
-                                        <p>📋 Enter this code when the setup script prompts you</p>
-                                        <p>⏱️ Expires in 5 minutes</p>
-                                      </div>
-                                    </div>
-                                  </Show>
 
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                                     <div class="flex items-start space-x-2">
@@ -1054,18 +987,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                             if (response.ok) {
                                               const data = await response.json();
-                                              const cmd = `curl -sSL "${data.url}" | bash`;
-
-                                              // Store setup code for display along with the URL
-                                              if (data.setupCode) {
-                                                setSetupCode({
-                                                  code: data.setupCode,
-                                                  expires: data.expires,
-                                                  url: data.url,
-                                                });
-                                              }
-
-                                              if (await copyToClipboard(cmd)) {
+                                              if (data.command && (await copyToClipboard(data.command))) {
                                                 showSuccess('Command copied to clipboard!');
                                               }
                                             } else {
@@ -1099,83 +1021,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         </svg>
                                       </button>
                                     </Show>
-                                    <code
-                                      class={setupCode()?.url ? 'text-green-400' : formData().host ? 'text-blue-400' : 'text-gray-500'}
-                                    >
-                                      {setupCode()?.url
-                                        ? `curl -sSL "${setupCode()?.url}" | bash`
-                                        : formData().host
-                                        ? 'Click the button above to generate and view your setup command'
+                                    <code class="text-blue-400">
+                                      {formData().host
+                                        ? 'Click the button above to copy the setup command'
                                         : '⚠️ Please enter the Host URL above first'}
                                     </code>
                                   </div>
-
-                                  {/* Setup Code Display */}
-                                  <Show when={setupCode()}>
-                                    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
-                                      <div class="flex items-center justify-between mb-3">
-                                        <h4 class="text-sm font-semibold flex items-center">
-                                          <svg
-                                            class="w-4 h-4 mr-2"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                                            />
-                                          </svg>
-                                          Generated Command
-                                        </h4>
-                                        <button
-                                          type="button"
-                                          onClick={() => setSetupCode(null)}
-                                          class="text-white/80 hover:text-white"
-                                        >
-                                          <svg
-                                            class="w-4 h-4"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M6 18L18 6M6 6l12 12"
-                                            />
-                                          </svg>
-                                        </button>
-                                      </div>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 mb-3">
-                                        <code class="text-sm break-all text-white/90">
-                                          curl -sSL "{setupCode()?.url}" | bash
-                                        </code>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          const cmd = `curl -sSL "${setupCode()?.url}" | bash`;
-                                          if (await copyToClipboard(cmd)) {
-                                            showSuccess('Command copied to clipboard!');
-                                          }
-                                        }}
-                                        class="w-full py-2 bg-white/20 hover:bg-white/30 rounded-md transition-colors font-medium text-sm"
-                                      >
-                                        Copy Command
-                                      </button>
-                                      <div class="bg-white/10 backdrop-blur rounded-md p-3 font-mono text-2xl text-center tracking-wider mt-3">
-                                        {setupCode()?.code}
-                                      </div>
-                                      <div class="mt-3 text-xs text-white/90 space-y-1">
-                                        <p>📋 Enter this code when the setup script prompts you</p>
-                                        <p>⏱️ Expires in 5 minutes</p>
-                                      </div>
-                                    </div>
-                                  </Show>
 
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                                     <div class="flex items-start space-x-2">
