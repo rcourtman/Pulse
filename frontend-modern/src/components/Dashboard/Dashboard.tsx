@@ -917,10 +917,13 @@ export function Dashboard(props: DashboardProps) {
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   <For
                     each={Object.entries(groupedGuests()).sort(([instanceIdA], [instanceIdB]) => {
-                      // Sort by node name for display, not instance ID
+                      // Sort by node name for display, with instance ID as tiebreaker for duplicate hostnames
                       const nodeA = nodeByInstance()[instanceIdA];
                       const nodeB = nodeByInstance()[instanceIdB];
-                      return (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                      const nameCompare = (nodeA?.name || '').localeCompare(nodeB?.name || '');
+                      if (nameCompare !== 0) return nameCompare;
+                      // If names are equal (duplicate hostnames), sort by instance ID for stability
+                      return instanceIdA.localeCompare(instanceIdB);
                     })}
                     fallback={<></>}
                   >
