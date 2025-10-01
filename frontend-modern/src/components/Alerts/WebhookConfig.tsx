@@ -27,6 +27,85 @@ interface WebhookConfigProps {
   testing?: string | null;
 }
 
+type HeaderInput = { id: string; key: string; value: string };
+
+type CustomFieldPreset = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+};
+
+type CustomFieldInput = HeaderInput & {
+  label?: string;
+  placeholder?: string;
+  required?: boolean;
+};
+
+const customFieldPresets: Record<string, CustomFieldPreset[]> = {
+  pushover: [
+    {
+      key: 'app_token',
+      label: 'Application Token',
+      placeholder: 'Your Pushover application token',
+      required: true,
+    },
+    {
+      key: 'user_token',
+      label: 'User Key',
+      placeholder: 'Primary user key or group key',
+      required: true,
+    },
+  ],
+};
+
+const buildMapFromInputs = (inputs: Array<{ key: string; value: string }>): Record<string, string> => {
+  const map: Record<string, string> = {};
+  inputs.forEach(({ key, value }) => {
+    if (key) {
+      map[key] = value;
+    }
+  });
+  return map;
+};
+
+const createCustomFieldInputs = (
+  service: string,
+  existing: Record<string, string> = {},
+): CustomFieldInput[] => {
+  const presets = customFieldPresets[service];
+  const timestamp = Date.now();
+
+  if (!presets) {
+    return Object.entries(existing).map(([key, value], index) => ({
+      id: `custom-${key}-${timestamp}-${index}`,
+      key,
+      value,
+    }));
+  }
+
+  const inputs: CustomFieldInput[] = presets.map((preset, index) => ({
+    id: `custom-${preset.key}-${timestamp}-${index}`,
+    key: preset.key,
+    value: existing[preset.key] ?? '',
+    label: preset.label,
+    placeholder: preset.placeholder,
+    required: preset.required,
+  }));
+
+  Object.entries(existing)
+    .filter(([key]) => !presets.some((preset) => preset.key === key))
+    .forEach(([key, value], index) => {
+      inputs.push({
+        id: `custom-${key}-${timestamp}-${presets.length + index}`,
+        key,
+        value,
+      });
+    });
+
+  return inputs;
+};
+
 export function WebhookConfig(props: WebhookConfigProps) {
   const [adding, setAdding] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
@@ -40,14 +119,44 @@ export function WebhookConfig(props: WebhookConfigProps) {
     headers: { 'Content-Type': 'application/json' },
     enabled: true,
     payloadTemplate: '',
+    customFields: {},
   });
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
 
   // Track header inputs separately to avoid focus loss
-  const [headerInputs, setHeaderInputs] = createSignal<
-    Array<{ id: string; key: string; value: string }>
-  >([]);
+  const [headerInputs, setHeaderInputs] = createSignal<HeaderInput[]>([]);
+  const [customFieldInputs, _setCustomFieldInputs] = createSignal<CustomFieldInput[]>([]);
+
+  const setCustomFieldInputs = (inputs: CustomFieldInput[]) => {
+    _setCustomFieldInputs(inputs);
+    setFormData((prev) => ({
+      ...prev,
+      customFields: buildMapFromInputs(inputs),
+    }));
+  };
+
+  const updateCustomFieldInputs = (
+    updater: (inputs: CustomFieldInput[]) => CustomFieldInput[],
+  ) => {
+    _setCustomFieldInputs((prev) => {
+      const next = updater(prev);
+      setFormData((prevForm) => ({
+        ...prevForm,
+        customFields: buildMapFromInputs(next),
+      }));
+      return next;
+    });
+  };
+
+  const ensurePresetCustomFields = (service: string) => {
+    if (!customFieldPresets[service]) {
+      return;
+    }
+    const existing = formData().customFields || {};
+    const inputs = createCustomFieldInputs(service, existing);
+    setCustomFieldInputs(inputs);
+  };
 
   // Load webhook templates
   createEffect(async () => {
@@ -70,6 +179,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers[input.key] = input.value;
       }
     });
+    const customFields = buildMapFromInputs(customFieldInputs());
 
     if (editingId()) {
       props.onUpdate({
@@ -78,10 +188,12 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers,
         service: data.service,
         template: data.payloadTemplate,
+        customFields,
       });
       setEditingId(null);
       setAdding(false);
       setHeaderInputs([]);
+      setCustomFieldInputs([]);
     } else {
       // onAdd expects a webhook without id, but with service
       const newWebhook: Omit<Webhook, 'id'> = {
@@ -92,6 +204,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         enabled: data.enabled,
         service: data.service,
         template: data.payloadTemplate,
+        customFields,
       };
       props.onAdd(newWebhook);
       // Reset form and close the adding panel
@@ -103,8 +216,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers: { 'Content-Type': 'application/json' },
         enabled: true,
         payloadTemplate: '',
+        customFields: {},
       });
       setHeaderInputs([]);
+       setCustomFieldInputs([]);
       setAdding(false);
     }
   };
@@ -120,8 +235,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
       headers: { 'Content-Type': 'application/json' },
       enabled: true,
       payloadTemplate: '',
+      customFields: {},
     });
     setHeaderInputs([]);
+    setCustomFieldInputs([]);
   };
 
   const editWebhook = (webhook: Webhook) => {
@@ -132,6 +249,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       ...webhook,
       service: webhook.service || 'generic',
       payloadTemplate: webhook.template || '',
+      customFields: webhook.customFields || {},
     });
     // Set up header inputs for editing
     const headers = webhook.headers || {};
@@ -142,6 +260,14 @@ export function WebhookConfig(props: WebhookConfigProps) {
         value,
       })),
     );
+
+    const service = webhook.service || 'generic';
+    const existingCustomFields = webhook.customFields || {};
+    if (customFieldPresets[service] || Object.keys(existingCustomFields).length > 0) {
+      setCustomFieldInputs(createCustomFieldInputs(service, existingCustomFields));
+    } else {
+      setCustomFieldInputs([]);
+    }
     setAdding(true);
   };
 
@@ -167,7 +293,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
           value,
         })),
       );
+    } else {
+      setFormData({
+        ...formData(),
+        service,
+      });
     }
+    ensurePresetCustomFields(service);
     setShowServiceDropdown(false);
   };
 
@@ -436,6 +568,99 @@ export function WebhookConfig(props: WebhookConfigProps) {
             </div>
           </Show>
 
+          {/* Custom Fields Section */}
+          <Show when={customFieldInputs().length > 0 || formData().service === 'pushover'}>
+            <div class={formField}>
+              <label class={labelClass('flex items-center gap-2')}>
+                Custom fields
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Available as{' '}
+                  <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                    {'{{.CustomFields.<name>}}'}
+                  </code>{' '}
+                  in templates
+                </span>
+              </label>
+              <div class="space-y-2 text-xs">
+                <Index each={customFieldInputs()}>
+                  {(field, index) => (
+                    <div class="flex gap-2 text-xs">
+                      <div class="flex flex-1 flex-col gap-1">
+                        <Show when={field().label}>
+                          <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                            {field().label}
+                          </span>
+                        </Show>
+                        <input
+                          type="text"
+                          value={field().key}
+                          disabled={field().required}
+                          onInput={(e) => {
+                            const newKey = e.currentTarget.value;
+                            updateCustomFieldInputs((inputs) => {
+                              const next = [...inputs];
+                              next[index] = { ...next[index], key: newKey };
+                              return next;
+                            });
+                          }}
+                          placeholder="Field name"
+                          class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={field().value}
+                        onInput={(e) => {
+                          const newValue = e.currentTarget.value;
+                          updateCustomFieldInputs((inputs) => {
+                            const next = [...inputs];
+                            next[index] = { ...next[index], value: newValue };
+                            return next;
+                          });
+                        }}
+                        placeholder={field().placeholder || 'Value'}
+                        class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                      />
+                      <Show when={!field().required}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateCustomFieldInputs((inputs) =>
+                              inputs.filter((_, i) => i !== index),
+                            );
+                          }}
+                          class="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400"
+                        >
+                          Remove
+                        </button>
+                      </Show>
+                    </div>
+                  )}
+                </Index>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newId = `custom-${Date.now()}-${Math.random()}`;
+                    updateCustomFieldInputs((inputs) => [
+                      ...inputs,
+                      {
+                        id: newId,
+                        key: '',
+                        value: '',
+                      },
+                    ]);
+                  }}
+                  class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+                >
+                  + Add custom field
+                </button>
+              </div>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Need Pushover? Provide your Application Token and User Key here.
+              </p>
+            </div>
+          </Show>
+
           {/* Custom Headers Section */}
           <div class={formField}>
             <label class={labelClass('flex items-center gap-2')}>
@@ -541,9 +766,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       headers[input.key] = input.value;
                     }
                   });
+                  const customFields = buildMapFromInputs(customFieldInputs());
                   // Use a consistent temporary ID for this form session
                   const tempId = editingId() || 'temp-new-webhook';
-                  props.onTest(tempId, { ...formData(), headers });
+                  props.onTest(tempId, { ...formData(), headers, customFields });
                 }}
                 disabled={props.testing === (editingId() || 'temp-new-webhook')}
                 class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
@@ -575,6 +801,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                 value: 'application/json',
               },
             ]);
+            setCustomFieldInputs([]);
           }}
           class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
         >

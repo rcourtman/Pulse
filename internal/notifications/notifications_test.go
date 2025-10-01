@@ -70,3 +70,31 @@ func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
 		t.Fatalf("lastSent was not updated for new alert instance")
 	}
 }
+
+func TestConvertWebhookCustomFields(t *testing.T) {
+	if result := convertWebhookCustomFields(nil); result != nil {
+		t.Fatalf("expected nil for empty input, got %#v", result)
+	}
+
+	original := map[string]string{
+		"app_token":  "abc123",
+		"user_token": "user456",
+	}
+
+	converted := convertWebhookCustomFields(original)
+	if len(converted) != len(original) {
+		t.Fatalf("expected %d keys, got %d", len(original), len(converted))
+	}
+
+	for key, value := range original {
+		if got, ok := converted[key]; !ok || got != value {
+			t.Fatalf("expected %s=%s, got %v (present=%v)", key, value, got, ok)
+		}
+	}
+
+	// Mutate original map and ensure converted copy remains unchanged
+	original["extra"] = "new-value"
+	if _, ok := converted["extra"]; ok {
+		t.Fatalf("expected converted map to be independent of original mutations")
+	}
+}
