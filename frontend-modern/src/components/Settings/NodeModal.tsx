@@ -531,13 +531,18 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const data = await response.json();
 
                                             // Store setup code for display along with the URL
-                                            // Show it to the user BEFORE copying
                                             if (data.setupCode) {
                                               setSetupCode({
                                                 code: data.setupCode,
                                                 expires: data.expires,
                                                 url: data.url,
                                               });
+
+                                              // Copy the command to clipboard
+                                              const cmd = `curl -sSL "${data.url}" | bash`;
+                                              if (await copyToClipboard(cmd)) {
+                                                showSuccess('Command copied to clipboard!');
+                                              }
                                             }
                                           } else {
                                             showError('Failed to generate setup URL');
