@@ -258,14 +258,24 @@ const Settings: Component = () => {
   const loadNodes = async () => {
     try {
       const nodesList = await NodesAPI.getNodes();
-      // Add status and other UI fields
-      const nodesWithStatus = nodesList.map((node) => ({
-        ...node,
-        // Use the hasPassword/hasToken from the API if available, otherwise check local fields
-        hasPassword: node.hasPassword ?? !!node.password,
-        hasToken: node.hasToken ?? !!node.tokenValue,
-        status: node.status || ('pending' as const),
-      }));
+      // Merge temperature data from WebSocket state
+      const currentState = state();
+      const nodesWithStatus = nodesList.map((node) => {
+        // Find matching node in state to get temperature data
+        const stateNode =
+          currentState?.pveNodes?.find((n) => n.id === node.id || n.name === node.name) ||
+          currentState?.pbsNodes?.find((n) => n.id === node.id || n.name === node.name);
+
+        return {
+          ...node,
+          // Use the hasPassword/hasToken from the API if available, otherwise check local fields
+          hasPassword: node.hasPassword ?? !!node.password,
+          hasToken: node.hasToken ?? !!node.tokenValue,
+          status: node.status || ('pending' as const),
+          // Merge temperature data from state
+          temperature: stateNode?.temperature || node.temperature,
+        };
+      });
       setNodes(nodesWithStatus);
     } catch (error) {
       console.error('Failed to load nodes:', error);
