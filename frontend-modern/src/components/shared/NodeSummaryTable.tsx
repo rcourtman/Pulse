@@ -98,11 +98,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     const node = item.data as Node;
     switch (props.currentTab) {
       case 'dashboard':
-        const vmCount = props.vms?.filter((vm) => vm.instance === node.id).length || 0;
-        const containerCount = props.containers?.filter((ct) => ct.instance === node.id).length || 0;
+        const vmCount = props.vms?.filter((vm) => vm.node === node.name).length || 0;
+        const containerCount = props.containers?.filter((ct) => ct.node === node.name).length || 0;
         return [vmCount, containerCount];
       case 'storage':
-        const storageCount = props.storage?.filter((s) => s.instance === node.id).length || 0;
+        const storageCount = props.storage?.filter((s) => s.node === node.name).length || 0;
         const diskCount = state.physicalDisks?.filter((d) => d.node === node.name).length || 0;
         return [storageCount, diskCount];
       case 'backups':
