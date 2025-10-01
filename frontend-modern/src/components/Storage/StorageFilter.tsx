@@ -38,7 +38,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               placeholder="Search storage or node:nodename"
               value={props.search()}
               onInput={(e) => props.setSearch(e.currentTarget.value)}
-              class="w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+              class="w-full pl-9 pr-16 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
               title="Search storage by name or filter by node"
@@ -56,19 +56,23 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
+            <div class="absolute inset-y-0 right-3 flex items-center">
+              <SearchTipsPopover
+                popoverId="storage-search-help"
+                intro="Quick examples"
+                tips={[
+                  { code: 'local', description: 'Storage with "local" in the name' },
+                  { code: 'node:pve1', description: 'Show storage on a specific node' },
+                  { code: 'nfs', description: 'Find NFS storage' },
+                ]}
+                footerHighlight="node:pve1 nfs"
+                footerText="Combine filters to zero in on exactly what you need."
+                triggerVariant="icon"
+                buttonLabel="Search tips"
+                openOnHover
+              />
+            </div>
           </div>
-          <SearchTipsPopover
-            class="flex-shrink-0"
-            popoverId="storage-search-help"
-            intro="Quick examples"
-            tips={[
-              { code: 'local', description: 'Storage with "local" in the name' },
-              { code: 'node:pve1', description: 'Show storage on a specific node' },
-              { code: 'nfs', description: 'Find NFS storage' },
-            ]}
-            footerHighlight="node:pve1 nfs"
-            footerText="Combine filters to zero in on exactly what you need."
-          />
         </div>
 
         {/* Filters */}
