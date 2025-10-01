@@ -956,7 +956,7 @@ export function Dashboard(props: DashboardProps) {
                             <td colspan="11" class="py-2 px-3">
                               <div class="flex items-stretch gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/40 shadow-sm px-3 py-2">
                                 <div class={`w-1 rounded-full transition-colors ${getOfflineAccent(isNodeOnline)}`}></div>
-                                <div class="flex w-full flex-wrap items-center justify-between gap-4 text-[11px] sm:text-xs text-slate-600 dark:text-slate-200">
+                                <div class="flex w-full flex-wrap items-center gap-4 text-[11px] sm:text-xs text-slate-600 dark:text-slate-200">
                                   <div class="flex flex-wrap items-center gap-3">
                                     <a
                                       href={nodeUrl}
@@ -975,30 +975,10 @@ export function Dashboard(props: DashboardProps) {
                                             : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
                                         }`}
                                       >
-                                        {node!.isClusterMember ? node!.clusterName : 'Standalone'}
-                                      </span>
-                                    </Show>
-                                  </div>
-                                  <div class="flex flex-wrap items-center gap-3 text-slate-500 dark:text-slate-300">
-                                    <span class="inline-flex items-center gap-1 font-medium">
-                                      <span
-                                        class={`h-2.5 w-2.5 rounded-full ${
-                                          isNodeOnline ? 'bg-emerald-500' : 'bg-rose-500'
-                                        }`}
-                                      ></span>
-                                      {isNodeOnline ? 'Online' : 'Offline'}
+                                      {node!.isClusterMember ? node!.clusterName : 'Standalone'}
                                     </span>
-                                    <Show when={node && (node.uptime || 0) > 0}>
-                                      <span class="text-slate-400">|</span>
-                                      <span class="font-medium text-slate-500 dark:text-slate-300">
-                                        Uptime {formatUptime(node!.uptime)}
-                                      </span>
-                                    </Show>
-                                    <span class="text-slate-400">|</span>
-                                    <span class="font-medium text-slate-600 dark:text-slate-200">
-                                      {guestCount === 1 ? '1 guest' : `${guestCount} guests`}
-                                    </span>
-                                  </div>
+                                  </Show>
+                                </div>
                                 </div>
                               </div>
                             </td>

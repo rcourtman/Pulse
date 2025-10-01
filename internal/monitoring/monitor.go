@@ -2131,7 +2131,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			diskTotal := uint64(vm.MaxDisk)
 			diskFree := diskTotal - diskUsed
 			diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
-			diskStatusReason := "" // Empty string means we have data
+			diskStatusReason := ""            // Empty string means we have data
+			var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
 
 			// If VM shows 0 disk usage but has allocated disk, it's likely guest agent issue
 			// Set to -1 to indicate "unknown" rather than showing misleading 0%
@@ -2239,6 +2240,15 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 						if fs.TotalBytes > 0 {
 							totalBytes += fs.TotalBytes
 							usedBytes += fs.UsedBytes
+							individualDisks = append(individualDisks, models.Disk{
+								Total:      int64(fs.TotalBytes),
+								Used:       int64(fs.UsedBytes),
+								Free:       int64(fs.TotalBytes - fs.UsedBytes),
+								Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+								Mountpoint: fs.Mountpoint,
+								Type:       fs.Type,
+								Device:     fs.Disk,
+							})
 							log.Debug().
 								Str("instance", instanceName).
 								Str("vm", vm.Name).
@@ -2334,6 +2344,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Free:  int64(diskFree),
 					Usage: diskUsage,
 				},
+				Disks:            individualDisks,
 				DiskStatusReason: diskStatusReason,
 				NetworkIn:        maxInt64(0, int64(netInRate)),
 				NetworkOut:       maxInt64(0, int64(netOutRate)),

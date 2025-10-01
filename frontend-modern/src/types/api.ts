@@ -52,6 +52,7 @@ export interface VM {
   cpus: number;
   memory: Memory;
   disk: Disk;
+  disks?: Disk[];
   diskStatusReason?: string;
   networkIn: number;
   networkOut: number;
@@ -77,6 +78,7 @@ export interface Container {
   cpus: number;
   memory: Memory;
   disk: Disk;
+  disks?: Disk[];
   networkIn: number;
   networkOut: number;
   diskRead: number;
@@ -248,6 +250,9 @@ export interface Disk {
   used: number;
   free: number;
   usage: number;
+  mountpoint?: string;
+  type?: string;
+  device?: string;
 }
 
 export interface PhysicalDisk {

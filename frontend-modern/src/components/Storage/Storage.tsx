@@ -572,24 +572,49 @@ const Storage: Component = () => {
                           <>
                             {/* Group Header */}
                             <Show when={viewMode() === 'node' && node}>
-                              {(validNode) => (
-                                <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                                  <td
-                                    class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                                    colspan="9"
-                                  >
-                                    <a
-                                      href={validNode().host || `https://${validNode().name}:8006`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                                      title={`Open ${validNode().name} web interface`}
-                                    >
-                                      {validNode().name}
-                                    </a>
-                                  </td>
-                                </tr>
-                              )}
+                              {(validNode) => {
+                                const nodeData = validNode();
+                                const isOnline =
+                                  nodeData.status === 'online' && (nodeData.uptime || 0) > 0;
+
+                                return (
+                                  <tr>
+                                    <td colspan="9" class="py-2 px-3">
+                                      <div class="flex items-stretch gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/40 shadow-sm px-3 py-2">
+                                        <div
+                                          class={`w-1 rounded-full transition-colors ${
+                                            isOnline
+                                              ? 'bg-emerald-300 dark:bg-emerald-500/80'
+                                              : 'bg-rose-300 dark:bg-rose-500/80'
+                                          }`}
+                                        ></div>
+                                        <div class="flex flex-wrap items-center gap-3 text-[11px] sm:text-xs text-slate-600 dark:text-slate-200">
+                                          <a
+                                            href={nodeData.host || `https://${nodeData.name}:8006`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="text-slate-800 dark:text-slate-50 hover:text-sky-600 dark:hover:text-sky-400 transition-colors duration-150 cursor-pointer font-semibold text-sm sm:text-base"
+                                            title={`Open ${nodeData.name} web interface`}
+                                          >
+                                            {nodeData.name}
+                                          </a>
+                                          <Show when={nodeData.isClusterMember !== undefined}>
+                                            <span
+                                              class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
+                                                nodeData.isClusterMember
+                                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                                  : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
+                                              }`}
+                                            >
+                                              {nodeData.isClusterMember ? nodeData.clusterName : 'Standalone'}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              }}
                             </Show>
 
                           {/* Storage Rows */}

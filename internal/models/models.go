@@ -85,6 +85,7 @@ type VM struct {
 	CPUs             int       `json:"cpus"`
 	Memory           Memory    `json:"memory"`
 	Disk             Disk      `json:"disk"`
+	Disks            []Disk    `json:"disks,omitempty"`
 	DiskStatusReason string    `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	NetworkIn        int64     `json:"networkIn"`
 	NetworkOut       int64     `json:"networkOut"`
@@ -111,6 +112,7 @@ type Container struct {
 	CPUs       int       `json:"cpus"`
 	Memory     Memory    `json:"memory"`
 	Disk       Disk      `json:"disk"`
+	Disks      []Disk    `json:"disks,omitempty"`
 	NetworkIn  int64     `json:"networkIn"`
 	NetworkOut int64     `json:"networkOut"`
 	DiskRead   int64     `json:"diskRead"`
@@ -305,10 +307,13 @@ type Memory struct {
 
 // Disk represents disk usage
 type Disk struct {
-	Total int64   `json:"total"`
-	Used  int64   `json:"used"`
-	Free  int64   `json:"free"`
-	Usage float64 `json:"usage"`
+	Total      int64   `json:"total"`
+	Used       int64   `json:"used"`
+	Free       int64   `json:"free"`
+	Usage      float64 `json:"usage"`
+	Mountpoint string  `json:"mountpoint,omitempty"`
+	Type       string  `json:"type,omitempty"`
+	Device     string  `json:"device,omitempty"`
 }
 
 // CPUInfo represents CPU information

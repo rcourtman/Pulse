@@ -199,6 +199,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				diskFree := diskTotal - diskUsed
 				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
 				diskStatusReason := ""
+				var individualDisks []models.Disk
 
 				// For stopped VMs, we can't get guest agent data
 				if vm.Status != "running" {
@@ -331,6 +332,15 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 
 									totalBytes += fs.TotalBytes
 									usedBytes += fs.UsedBytes
+									individualDisks = append(individualDisks, models.Disk{
+										Total:      int64(fs.TotalBytes),
+										Used:       int64(fs.UsedBytes),
+										Free:       int64(fs.TotalBytes - fs.UsedBytes),
+										Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+										Mountpoint: fs.Mountpoint,
+										Type:       fs.Type,
+										Device:     fs.Disk,
+									})
 									log.Debug().
 										Str("vm", vm.Name).
 										Str("mountpoint", fs.Mountpoint).
@@ -412,6 +422,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						Free:  int64(diskFree),
 						Usage: diskUsage,
 					},
+					Disks:            individualDisks,
 					DiskStatusReason: diskStatusReason,
 					NetworkIn:        maxInt64(0, int64(netInRate)),
 					NetworkOut:       maxInt64(0, int64(netOutRate)),
