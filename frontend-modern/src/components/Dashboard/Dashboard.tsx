@@ -961,8 +961,12 @@ export function Dashboard(props: DashboardProps) {
                           {(guest) => (
                             <ComponentErrorBoundary name="GuestRow">
                               {(() => {
+                                // Match backend ID generation logic: standalone nodes use "node-vmid", clusters use "instance-node-vmid"
                                 const guestId =
-                                  guest.id || `${guest.instance}-${guest.node}-${guest.vmid}`;
+                                  guest.id ||
+                                  (guest.instance === guest.node
+                                    ? `${guest.node}-${guest.vmid}`
+                                    : `${guest.instance}-${guest.node}-${guest.vmid}`);
                                 const metadata =
                                   guestMetadata()[guestId] ||
                                   guestMetadata()[`${guest.node}-${guest.vmid}`];

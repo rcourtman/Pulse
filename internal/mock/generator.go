@@ -500,6 +500,14 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	totalDisk := int64((32 + rand.Intn(468)) * 1024 * 1024 * 1024) // 32-500 GB
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.8))
 
+	// Generate ID matching production logic: standalone uses "node-vmid", cluster uses "instance-node-vmid"
+	var vmID string
+	if instance == nodeName {
+		vmID = fmt.Sprintf("%s-%d", nodeName, vmid)
+	} else {
+		vmID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
+	}
+
 	return models.VM{
 		Name:     name,
 		VMID:     vmid,
@@ -521,7 +529,7 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 		NetworkIn:  generateRealisticIO("network-in"),
 		NetworkOut: generateRealisticIO("network-out"),
 		Uptime:     uptime,
-		ID:         fmt.Sprintf("mock-%s-%d", nodeName, vmid),
+		ID:         vmID,
 		Tags:       generateTags(),
 	}
 }
@@ -573,6 +581,14 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 	totalDisk := int64((8 + rand.Intn(120)) * 1024 * 1024 * 1024) // 8-128 GB
 	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.6))
 
+	// Generate ID matching production logic: standalone uses "node-vmid", cluster uses "instance-node-vmid"
+	var ctID string
+	if instance == nodeName {
+		ctID = fmt.Sprintf("%s-%d", nodeName, vmid)
+	} else {
+		ctID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
+	}
+
 	return models.Container{
 		Name:     name,
 		VMID:     vmid,
@@ -594,7 +610,7 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 		NetworkIn:  generateRealisticIO("network-in-ct"),
 		NetworkOut: generateRealisticIO("network-out-ct"),
 		Uptime:     uptime,
-		ID:         fmt.Sprintf("mock-%s-%d", nodeName, vmid),
+		ID:         ctID,
 		Tags:       generateTags(),
 	}
 }
@@ -856,7 +872,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		localTotal := int64(500 * 1024 * 1024 * 1024) // 500GB
 		localUsed := int64(float64(localTotal) * (0.3 + rand.Float64()*0.5))
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-local", node.Name),
+			ID:       fmt.Sprintf("%s-%s-local", node.Instance, node.Name),
 			Name:     "local",
 			Node:     node.Name,
 			Instance: node.Instance,
@@ -903,7 +919,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		}
 
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-local-zfs", node.Name),
+			ID:       fmt.Sprintf("%s-%s-local-zfs", node.Instance, node.Name),
 			Name:     "local-zfs",
 			Node:     node.Name,
 			Instance: node.Instance,
@@ -928,7 +944,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			used := int64(float64(total) * rand.Float64())
 
 			storage = append(storage, models.Storage{
-				ID:       fmt.Sprintf("%s-%s", node.Name, storageName),
+				ID:       fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, storageName),
 				Name:     storageName,
 				Node:     node.Name,
 				Instance: node.Instance,
@@ -963,7 +979,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			pbsTotal := int64(950 * 1024 * 1024 * 1024) // ~950GB matching real PBS
 			pbsUsed := int64(float64(pbsTotal) * 0.14)  // ~14% usage matching real data
 			storage = append(storage, models.Storage{
-				ID:       fmt.Sprintf("%s-pbs-%s", node.Name, pbsTargetNode.Name),
+				ID:       fmt.Sprintf("%s-%s-pbs-%s", node.Instance, node.Name, pbsTargetNode.Name),
 				Name:     fmt.Sprintf("pbs-%s", pbsTargetNode.Name),
 				Node:     node.Name, // The node that reports this storage
 				Instance: node.Instance,
@@ -988,8 +1004,8 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		storage = append(storage, models.Storage{
 			ID:       "shared-storage",
 			Name:     "shared-storage",
-			Node:     nodes[0].Name, // Associated with first node but shared
-			Instance: fmt.Sprintf("pve-%s", nodes[0].Name),
+			Node:     "shared", // Shared storage uses "shared" as node per production code
+			Instance: nodes[0].Instance,
 			Type:     "nfs",
 			Status:   "available",
 			Total:    sharedTotal,
