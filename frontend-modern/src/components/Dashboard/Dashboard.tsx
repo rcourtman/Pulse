@@ -166,26 +166,33 @@ export function Dashboard(props: DashboardProps) {
 
       // Escape key behavior
       if (e.key === 'Escape') {
-        // First check if we have search/filters to clear (including tag filters)
+        // First check if we have search/filters to clear (including tag filters and node selection)
         const hasActiveFilters =
-          search().trim() || sortKey() !== 'vmid' || sortDirection() !== 'asc';
+          search().trim() ||
+          sortKey() !== 'vmid' ||
+          sortDirection() !== 'asc' ||
+          selectedNode() !== null ||
+          viewMode() !== 'all' ||
+          statusMode() !== 'all';
 
         if (hasActiveFilters) {
-          // Clear ALL filters including search text and tag filters
+          // Clear ALL filters including search text, tag filters, node selection, and view modes
           setSearch('');
           setIsSearchLocked(false);
           setSortKey('vmid');
           setSortDirection('asc');
+          setSelectedNode(null);
+          setViewMode('all');
+          setStatusMode('all');
 
           // Blur the search input if it's focused
           if (searchInputRef && document.activeElement === searchInputRef) {
             searchInputRef.blur();
           }
-        } else if (showFilters()) {
-          // No search/filters active, so collapse the filters section
-          setShowFilters(false);
+        } else {
+          // No active filters, toggle the filters section visibility
+          setShowFilters(!showFilters());
         }
-        // If filters are already collapsed, do nothing
       } else if (!isInputField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // If it's a printable character and user is not in an input field
         // Expand filters section if collapsed
