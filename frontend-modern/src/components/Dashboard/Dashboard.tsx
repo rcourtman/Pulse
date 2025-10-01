@@ -33,6 +33,9 @@ export function Dashboard(props: DashboardProps) {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
 
+  const getOfflineAccent = (online: boolean) =>
+    online ? 'bg-emerald-300 dark:bg-emerald-500/80' : 'bg-rose-300 dark:bg-rose-500/80';
+
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
   const [viewMode, setViewMode] = createSignal<ViewMode>(
@@ -939,22 +942,66 @@ export function Dashboard(props: DashboardProps) {
                   >
                     {([instanceId, guests]) => {
                       const node = nodeByInstance()[instanceId];
+                      const guestCount = guests.length;
+                      const isNodeOnline = node
+                        ? node.status === 'online' && (node.uptime || 0) > 0
+                        : false;
+
+                      const nodeUrl = node?.host || (node ? `https://${node.name}:8006` : '');
+
                       return (
                       <>
                         <Show when={node && groupingMode() === 'grouped'}>
-                          <tr class="bg-gray-50/50 dark:bg-gray-700/30">
-                            <td class="py-0.5 pl-6 pr-2 text-xs font-medium text-gray-600 dark:text-gray-400 w-[200px]">
-                              <a
-                                href={node!.host || `https://${node!.name}:8006`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
-                                title={`Open ${node!.name} web interface`}
-                              >
-                                {node!.name}
-                              </a>
+                          <tr class="relative">
+                            <td colspan="11" class="py-2 px-3">
+                              <div class="flex items-stretch gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/40 shadow-sm px-3 py-2">
+                                <div class={`w-1 rounded-full transition-colors ${getOfflineAccent(isNodeOnline)}`}></div>
+                                <div class="flex w-full flex-wrap items-center justify-between gap-4 text-[11px] sm:text-xs text-slate-600 dark:text-slate-200">
+                                  <div class="flex flex-wrap items-center gap-3">
+                                    <a
+                                      href={nodeUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      class="text-slate-800 dark:text-slate-50 hover:text-sky-600 dark:hover:text-sky-400 transition-colors duration-150 cursor-pointer font-semibold text-sm sm:text-base"
+                                      title={`Open ${node!.name} web interface`}
+                                    >
+                                      {node!.name}
+                                    </a>
+                                    <Show when={node!.isClusterMember !== undefined}>
+                                      <span
+                                        class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
+                                          node!.isClusterMember
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {node!.isClusterMember ? node!.clusterName : 'Standalone'}
+                                      </span>
+                                    </Show>
+                                  </div>
+                                  <div class="flex flex-wrap items-center gap-3 text-slate-500 dark:text-slate-300">
+                                    <span class="inline-flex items-center gap-1 font-medium">
+                                      <span
+                                        class={`h-2.5 w-2.5 rounded-full ${
+                                          isNodeOnline ? 'bg-emerald-500' : 'bg-rose-500'
+                                        }`}
+                                      ></span>
+                                      {isNodeOnline ? 'Online' : 'Offline'}
+                                    </span>
+                                    <Show when={node && (node.uptime || 0) > 0}>
+                                      <span class="text-slate-400">|</span>
+                                      <span class="font-medium text-slate-500 dark:text-slate-300">
+                                        Uptime {formatUptime(node!.uptime)}
+                                      </span>
+                                    </Show>
+                                    <span class="text-slate-400">|</span>
+                                    <span class="font-medium text-slate-600 dark:text-slate-200">
+                                      {guestCount === 1 ? '1 guest' : `${guestCount} guests`}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
                             </td>
-                            <td colspan="10" class="py-0.5 px-2"></td>
                           </tr>
                         </Show>
                         <For each={guests} fallback={<></>}>
