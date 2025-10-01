@@ -2,6 +2,7 @@ import { Component, For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { formatBytes } from '@/utils/format';
 import type { PhysicalDisk } from '@/types/api';
+import { useWebSocket } from '@/App';
 
 interface DiskListProps {
   disks: PhysicalDisk[];
@@ -10,13 +11,19 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
+  const { state } = useWebSocket();
+
   // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
 
-    // Filter by node if selected (using instance ID to handle duplicate hostnames)
+    // Filter by node if selected (using node name for simple matching)
     if (props.selectedNode) {
-      disks = disks.filter((d) => d.instance === props.selectedNode);
+      // Find the node to get its name
+      const node = state.nodes?.find(n => n.id === props.selectedNode);
+      if (node) {
+        disks = disks.filter((d) => d.node === node.name);
+      }
     }
 
     // Filter by search term
@@ -82,12 +89,19 @@ export const DiskList: Component<DiskListProps> = (props) => {
     }
   };
 
+  // Get selected node name for display
+  const selectedNodeName = createMemo(() => {
+    if (!props.selectedNode) return null;
+    const node = state.nodes?.find(n => n.id === props.selectedNode);
+    return node?.name || null;
+  });
+
   return (
     <div>
       <Show when={filteredDisks().length === 0}>
         <Card padding="lg" class="text-center text-gray-500">
           No physical disks found
-          {props.selectedNode && ` for node ${props.selectedNode}`}
+          {selectedNodeName() && ` for node ${selectedNodeName()}`}
           {props.searchTerm && ` matching "${props.searchTerm}"`}
         </Card>
       </Show>
