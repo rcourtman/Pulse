@@ -371,6 +371,14 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		RetryEnabled:  false,     // Don't retry during testing
 	}
 
+	if len(basicWebhook.CustomFields) > 0 {
+		customFields := make(map[string]interface{}, len(basicWebhook.CustomFields))
+		for key, value := range basicWebhook.CustomFields {
+			customFields[key] = value
+		}
+		webhook.CustomFields = customFields
+	}
+
 	// If the webhook has a custom template, use it
 	if basicWebhook.Template != "" {
 		webhook.PayloadTemplate = basicWebhook.Template
