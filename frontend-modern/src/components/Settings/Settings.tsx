@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, For, Show, createEffect, onCleanup } from 'solid-js';
+import { Component, createSignal, onMount, For, Show, createEffect, onCleanup, on } from 'solid-js';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
@@ -259,13 +259,25 @@ const Settings: Component = () => {
     try {
       const nodesList = await NodesAPI.getNodes();
       // Merge temperature data from WebSocket state (if available)
-      const currentState = typeof state === 'function' ? state() : null;
+      // state is a store object, not a function
+      const stateNodes = state.nodes;
       const nodesWithStatus = nodesList.map((node) => {
         // Find matching node in state to get temperature data
         // State uses a unified 'nodes' array for all node types
-        const stateNode = currentState?.nodes?.find(
-          (n) => n.id === node.id || n.name === node.name,
-        );
+        // Match nodes by ID or by name (handling .lan suffix variations)
+        const stateNode = stateNodes?.find((n) => {
+          // Try exact ID match first
+          if (n.id === node.id) return true;
+          // Try exact name match
+          if (n.name === node.name) return true;
+          // Try name with/without .lan suffix
+          const nodeNameBase = node.name.replace(/\.lan$/, '');
+          const stateNameBase = n.name.replace(/\.lan$/, '');
+          if (nodeNameBase === stateNameBase) return true;
+          // Also check if state node ID contains the config node name
+          if (n.id.includes(node.name) || node.name.includes(n.name)) return true;
+          return false;
+        });
 
         const mergedNode = {
           ...node,
@@ -276,17 +288,6 @@ const Settings: Component = () => {
           // Merge temperature data from state
           temperature: stateNode?.temperature || node.temperature,
         };
-
-        // Debug logging for temperature
-        if (node.name === 'delly' || node.name === 'delly.lan') {
-          console.log('[Settings] Node temperature debug:', {
-            nodeName: node.name,
-            hasStateNode: !!stateNode,
-            stateTemp: stateNode?.temperature,
-            finalTemp: mergedNode.temperature,
-            tempAvailable: mergedNode.temperature?.available,
-          });
-        }
 
         return mergedNode;
       });
@@ -672,23 +673,41 @@ const Settings: Component = () => {
   });
 
   // Re-merge temperature data from WebSocket state when it updates
-  createEffect(() => {
-    const currentState = typeof state === 'function' ? state() : null;
-    // Only run if we have nodes loaded and state has data
-    if (currentState?.nodes && nodes().length > 0) {
-      const updatedNodes = nodes().map((node) => {
-        const stateNode = currentState.nodes.find(
-          (n) => n.id === node.id || n.name === node.name,
-        );
-        // Only update if temperature data changed
-        if (stateNode?.temperature && stateNode.temperature !== node.temperature) {
-          return { ...node, temperature: stateNode.temperature };
+  createEffect(
+    on(
+      () => state.nodes,
+      (stateNodes) => {
+        const currentNodes = nodes();
+
+        // Only run if we have nodes loaded and state has data
+        if (stateNodes && stateNodes.length > 0 && currentNodes.length > 0) {
+          const updatedNodes = currentNodes.map((node) => {
+            // Match nodes by ID or by name (handling .lan suffix variations)
+            const stateNode = stateNodes.find((n) => {
+              // Try exact ID match first
+              if (n.id === node.id) return true;
+              // Try exact name match
+              if (n.name === node.name) return true;
+              // Try name with/without .lan suffix
+              const nodeNameBase = node.name.replace(/\.lan$/, '');
+              const stateNameBase = n.name.replace(/\.lan$/, '');
+              if (nodeNameBase === stateNameBase) return true;
+              // Also check if state node ID contains the config node name
+              if (n.id.includes(node.name) || node.name.includes(n.name)) return true;
+              return false;
+            });
+
+            // Merge temperature data from state if available
+            if (stateNode?.temperature) {
+              return { ...node, temperature: stateNode.temperature };
+            }
+            return node;
+          });
+          setNodes(updatedNodes);
         }
-        return node;
-      });
-      setNodes(updatedNodes);
-    }
-  });
+      },
+    ),
+  );
 
   const saveSettings = async () => {
     try {

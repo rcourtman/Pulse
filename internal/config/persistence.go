@@ -446,6 +446,16 @@ type SystemSettings struct {
 
 // SaveNodesConfig saves nodes configuration to file (encrypted)
 func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
+	return c.saveNodesConfig(pveInstances, pbsInstances, false)
+}
+
+// SaveNodesConfigAllowEmpty saves nodes configuration even when all nodes are removed.
+// Use sparingly for explicit administrative actions (e.g. deleting the final node).
+func (c *ConfigPersistence) SaveNodesConfigAllowEmpty(pveInstances []PVEInstance, pbsInstances []PBSInstance) error {
+	return c.saveNodesConfig(pveInstances, pbsInstances, true)
+}
+
+func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInstances []PBSInstance, allowEmpty bool) error {
 	// CRITICAL: Prevent saving empty nodes when in mock mode
 	// Mock mode should NEVER modify real node configuration
 	if mock.IsMockEnabled() {
@@ -458,7 +468,7 @@ func (c *ConfigPersistence) SaveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 	// CRITICAL: Never save empty nodes configuration
 	// This prevents data loss from accidental wipes
-	if len(pveInstances) == 0 && len(pbsInstances) == 0 {
+	if !allowEmpty && len(pveInstances) == 0 && len(pbsInstances) == 0 {
 		// Check if we're replacing existing non-empty config
 		if existing, err := c.LoadNodesConfig(); err == nil && existing != nil {
 			if len(existing.PVEInstances) > 0 || len(existing.PBSInstances) > 0 {

@@ -75,7 +75,13 @@ func (cw *ConfigWatcher) Start() error {
 
 // Stop stops the config watcher
 func (cw *ConfigWatcher) Stop() {
-	close(cw.stopChan)
+	select {
+	case <-cw.stopChan:
+		// Already stopped
+		return
+	default:
+		close(cw.stopChan)
+	}
 	cw.watcher.Close()
 }
 
