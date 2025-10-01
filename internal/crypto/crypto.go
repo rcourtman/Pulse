@@ -90,26 +90,34 @@ func getOrCreateKey() ([]byte, error) {
 		}
 	}
 
-	// Before generating a new key, check if encrypted data exists
+	// Before generating a new key, check if encrypted data exists OR if there are any backup/corrupted files
 	// This prevents silently orphaning existing encrypted configurations
-	encryptedFiles := []string{
-		filepath.Join(dataDir, "nodes.enc"),
-		filepath.Join(dataDir, "email.enc"),
-		filepath.Join(dataDir, "webhooks.enc"),
+	// CRITICAL: Also check for .backup and .corrupted files to prevent data loss
+	checkPatterns := []string{
+		"nodes.enc*",
+		"email.enc*",
+		"webhooks.enc*",
+		"oidc.enc*",
 	}
 
 	hasEncryptedData := false
-	for _, file := range encryptedFiles {
-		if info, err := os.Stat(file); err == nil && info.Size() > 0 {
-			hasEncryptedData = true
-			log.Warn().
-				Str("file", file).
-				Msg("Found encrypted data but no valid encryption key")
+	var foundFiles []string
+	for _, pattern := range checkPatterns {
+		matches, _ := filepath.Glob(filepath.Join(dataDir, pattern))
+		for _, file := range matches {
+			if info, err := os.Stat(file); err == nil && info.Size() > 0 {
+				hasEncryptedData = true
+				foundFiles = append(foundFiles, filepath.Base(file))
+			}
 		}
 	}
 
 	if hasEncryptedData {
-		return nil, fmt.Errorf("encryption key not found but encrypted data exists - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete the .enc files to start fresh")
+		log.Error().
+			Strs("foundFiles", foundFiles).
+			Str("dataDir", dataDir).
+			Msg("⚠️  CRITICAL: Encryption key not found but encrypted/backup/corrupted files exist")
+		return nil, fmt.Errorf("encryption key not found but encrypted data exists (%v) - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete ALL .enc* files to start fresh", foundFiles)
 	}
 
 	// Generate new key (only if no encrypted data exists)
