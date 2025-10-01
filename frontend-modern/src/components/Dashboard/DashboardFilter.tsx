@@ -85,7 +85,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setViewMode('vm')}
+              onClick={() => props.setViewMode(props.viewMode() === 'vm' ? 'all' : 'vm')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'vm'
                   ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -96,7 +96,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setViewMode('lxc')}
+              onClick={() => props.setViewMode(props.viewMode() === 'lxc' ? 'all' : 'lxc')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.viewMode() === 'lxc'
                   ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
@@ -124,7 +124,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setStatusMode('running')}
+              onClick={() => props.setStatusMode(props.statusMode() === 'running' ? 'all' : 'running')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.statusMode() === 'running'
                   ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
@@ -135,7 +135,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setStatusMode('stopped')}
+              onClick={() => props.setStatusMode(props.statusMode() === 'stopped' ? 'all' : 'stopped')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.statusMode() === 'stopped'
                   ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
@@ -164,7 +164,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => props.setGroupingMode('flat')}
+              onClick={() => props.setGroupingMode(props.groupingMode() === 'flat' ? 'grouped' : 'flat')}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                 props.groupingMode() === 'flat'
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -189,9 +189,14 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               props.setGroupingMode('grouped');
             }}
             title="Reset all filters"
-            class="flex items-center justify-center px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 
-                   bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                   rounded-lg transition-colors"
+            class={`flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              props.search() ||
+              props.viewMode() !== 'all' ||
+              props.statusMode() !== 'all' ||
+              props.groupingMode() !== 'grouped'
+                ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
           >
             <svg
               width="14"
@@ -208,20 +213,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </svg>
             <span class="ml-1 hidden sm:inline">Reset</span>
           </button>
-
-          {/* Active Indicator */}
-          <Show
-            when={
-              props.search() ||
-              props.viewMode() !== 'all' ||
-              props.statusMode() !== 'all' ||
-              props.groupingMode() !== 'grouped'
-            }
-          >
-            <span class="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              Active
-            </span>
-          </Show>
         </div>
       </div>
     </Card>
