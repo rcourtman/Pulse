@@ -46,7 +46,7 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
               placeholder="Search backups or node:nodename"
               value={props.search()}
               onInput={(e) => props.setSearch(e.currentTarget.value)}
-              class="w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+              class="w-full pl-9 pr-16 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
               title="Search backups by name or filter by node"
@@ -64,19 +64,23 @@ export const BackupsFilter: Component<BackupsFilterProps> = (props) => {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
+            <div class="absolute inset-y-0 right-3 flex items-center">
+              <SearchTipsPopover
+                popoverId="backups-search-help"
+                intro="Quick examples"
+                tips={[
+                  { code: 'media', description: 'Backups with "media" in the name' },
+                  { code: 'node:pve1', description: 'Show backups from a specific node' },
+                  { code: 'vm-104', description: 'Locate backups for VM 104' },
+                ]}
+                footerHighlight="node:pve1 vm-104"
+                footerText="Mix terms to focus on the exact backups you need."
+                triggerVariant="icon"
+                buttonLabel="Search tips"
+                openOnHover
+              />
+            </div>
           </div>
-          <SearchTipsPopover
-            class="flex-shrink-0"
-            popoverId="backups-search-help"
-            intro="Quick examples"
-            tips={[
-              { code: 'media', description: 'Backups with "media" in the name' },
-              { code: 'node:pve1', description: 'Show backups from a specific node' },
-              { code: 'vm-104', description: 'Locate backups for VM 104' },
-            ]}
-            footerHighlight="node:pve1 vm-104"
-            footerText="Mix terms to focus on the exact backups you need."
-          />
         </div>
 
         {/* Filters */}
