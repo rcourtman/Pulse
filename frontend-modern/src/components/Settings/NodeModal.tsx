@@ -49,6 +49,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   });
 
   const [formData, setFormData] = createSignal(getCleanFormData());
+  const [quickSetupCommand, setQuickSetupCommand] = createSignal('');
 
   // Track previous state to detect changes
   let previousResetKey: number | undefined = undefined;
@@ -65,6 +66,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;
       setFormData(() => getCleanFormData());
+      setQuickSetupCommand('');
       setTestResult(null);
       return;
     }
@@ -73,6 +75,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     if (nodeType !== previousNodeType && previousNodeType !== undefined) {
       previousNodeType = nodeType;
       setFormData(() => getCleanFormData());
+      setQuickSetupCommand('');
       setTestResult(null);
       return;
     }
@@ -81,6 +84,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
     // Reset when opening for new node
     if (isOpen && !editingNode) {
       setFormData(() => getCleanFormData());
+      setQuickSetupCommand('');
       setTestResult(null);
     }
   });
@@ -172,6 +176,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
   const updateField = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === 'host') {
+      setQuickSetupCommand('');
+    }
+    if (field === 'setupMode' && value !== 'auto') {
+      setQuickSetupCommand('');
+    }
   };
 
   const handleTestConnection = async () => {
@@ -538,6 +548,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             // Just copy the command - don't show the modal
                                             if (data.command) {
                                               console.log('[Quick Setup] Copying command to clipboard:', data.command);
+                                              setQuickSetupCommand(data.command);
                                               const copied = await copyToClipboard(data.command);
                                               console.log('[Quick Setup] Copy result:', copied);
                                               if (copied) {
@@ -578,11 +589,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                       </svg>
                                     </button>
-                                    <code class="text-blue-400">
-                                      {formData().host
-                                        ? 'Click the button above to copy the setup command'
-                                        : '⚠️ Please enter the Host URL above first'}
-                                    </code>
+                                    <Show
+                                      when={quickSetupCommand().length > 0}
+                                      fallback={
+                                        <code class="text-blue-400">
+                                          {formData().host
+                                            ? 'Click the button above to copy the setup command'
+                                            : '⚠️ Please enter the Host URL above first'}
+                                        </code>
+                                      }
+                                    >
+                                      <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                                        {quickSetupCommand()}
+                                      </code>
+                                    </Show>
                                   </div>
 
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
@@ -987,8 +1007,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                             if (response.ok) {
                                               const data = await response.json();
-                                              if (data.command && (await copyToClipboard(data.command))) {
-                                                showSuccess('Command copied to clipboard!');
+                                              if (data.command) {
+                                                setQuickSetupCommand(data.command);
+                                                if (await copyToClipboard(data.command)) {
+                                                  showSuccess('Command copied to clipboard!');
+                                                } else {
+                                                  showError('Failed to copy to clipboard');
+                                                }
                                               }
                                             } else {
                                               showError('Failed to generate setup URL');
@@ -1021,11 +1046,20 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                         </svg>
                                       </button>
                                     </Show>
-                                    <code class="text-blue-400">
-                                      {formData().host
-                                        ? 'Click the button above to copy the setup command'
-                                        : '⚠️ Please enter the Host URL above first'}
-                                    </code>
+                                    <Show
+                                      when={quickSetupCommand().length > 0}
+                                      fallback={
+                                        <code class="text-blue-400">
+                                          {formData().host
+                                            ? 'Click the button above to copy the setup command'
+                                            : '⚠️ Please enter the Host URL above first'}
+                                        </code>
+                                      }
+                                    >
+                                      <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                                        {quickSetupCommand()}
+                                      </code>
+                                    </Show>
                                   </div>
 
                                   <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">

@@ -1517,6 +1517,8 @@ func (h *ConfigHandlers) HandleUpdateNode(w http.ResponseWriter, r *http.Request
 
 // HandleDeleteNode deletes a node
 func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("HandleDeleteNode called")
+
 	// Prevent node modifications in mock mode
 	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
@@ -1543,18 +1545,39 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	log.Debug().
+		Str("nodeID", nodeID).
+		Str("nodeType", nodeType).
+		Int("index", index).
+		Int("pveCount", len(h.config.PVEInstances)).
+		Int("pbsCount", len(h.config.PBSInstances)).
+		Msg("Attempting to delete node")
+
+	var deletedNodeHost string
+
 	// Delete the node
 	if nodeType == "pve" && index < len(h.config.PVEInstances) {
+		deletedNodeHost = h.config.PVEInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PVE node")
 		h.config.PVEInstances = append(h.config.PVEInstances[:index], h.config.PVEInstances[index+1:]...)
 	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
+		deletedNodeHost = h.config.PBSInstances[index].Host
+		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PBS node")
 		h.config.PBSInstances = append(h.config.PBSInstances[:index], h.config.PBSInstances[index+1:]...)
 	} else {
+		log.Warn().
+			Str("nodeID", nodeID).
+			Str("nodeType", nodeType).
+			Int("index", index).
+			Int("pveCount", len(h.config.PVEInstances)).
+			Int("pbsCount", len(h.config.PBSInstances)).
+			Msg("Node not found for deletion")
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
 	// Save configuration to disk using our persistence instance
-	if err := h.persistence.SaveNodesConfig(h.config.PVEInstances, h.config.PBSInstances); err != nil {
+	if err := h.persistence.SaveNodesConfigAllowEmpty(h.config.PVEInstances, h.config.PBSInstances); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -1562,15 +1585,9 @@ func (h *ConfigHandlers) HandleDeleteNode(w http.ResponseWriter, r *http.Request
 
 	// Immediately trigger discovery scan BEFORE reloading monitor
 	// This way we can get the deleted node's info for immediate discovery
-	var deletedNodeHost string
 	var deletedNodeType string = nodeType
 
-	// Get the host info of the deleted node for quick re-discovery
-	if nodeType == "pve" && index < len(h.config.PVEInstances) {
-		deletedNodeHost = h.config.PVEInstances[index].Host
-	} else if nodeType == "pbs" && index < len(h.config.PBSInstances) {
-		deletedNodeHost = h.config.PBSInstances[index].Host
-	}
+	// deletedNodeHost already captured before removal when available
 
 	// Extract IP and port from the host URL for targeted discovery
 	var targetIP string
@@ -2827,73 +2844,128 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Temperature Monitoring Setup (Optional)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Enable hardware temperature monitoring for this node?"
-echo ""
-echo "This will:"
-echo "  • Install lm-sensors package"
-echo "  • Configure SSH key authentication for Pulse server"
-echo "  • Allow Pulse to collect CPU and drive temperature data"
-echo ""
-echo "Security: Uses SSH public key authentication (read-only access)"
-echo "          Key can be revoked anytime via /root/.ssh/authorized_keys"
-echo ""
-echo -n "Enable temperature monitoring? [y/N]: "
 
-if [ -t 0 ]; then
-    read -p "> " -n 1 -r SSH_REPLY
-else
-    if read -p "> " -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
-        :
-    else
-        echo "(No terminal available - skipping SSH setup)"
-        SSH_REPLY="n"
-    fi
+# SSH public key embedded from Pulse server
+SSH_PUBLIC_KEY="%s"
+
+# Check if SSH key is already configured
+SSH_ALREADY_CONFIGURED=false
+if [ -n "$SSH_PUBLIC_KEY" ] && grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+    SSH_ALREADY_CONFIGURED=true
 fi
-echo ""
-echo ""
 
-if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
+if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
+    echo "Temperature monitoring is currently ENABLED on this node."
     echo ""
+    echo "What would you like to do?"
     echo ""
-    echo "Configuring temperature monitoring..."
+    echo "  [K]eep    - Leave temperature monitoring enabled (no changes)"
+    echo "  [R]emove  - Disable and remove SSH access"
+    echo "  [S]kip    - Skip this section"
+    echo ""
+    echo -n "Your choice [K/r/s]: "
 
-    # SSH public key embedded from Pulse server
-    SSH_PUBLIC_KEY="%s"
-
-    if [ -n "$SSH_PUBLIC_KEY" ]; then
-        # Add key to root's authorized_keys
-        mkdir -p /root/.ssh
-        chmod 700 /root/.ssh
-
-        # Check if key already exists
-        if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
-            echo "  ✓ SSH key already configured"
-        else
-            echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
-            chmod 600 /root/.ssh/authorized_keys
-            echo "  ✓ SSH key configured"
-        fi
-
-        # Install lm-sensors if not present
-        if ! command -v sensors &> /dev/null; then
-            echo "  ✓ Installing lm-sensors..."
-            apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
-            sensors-detect --auto > /dev/null 2>&1
-        else
-            echo "  ✓ lm-sensors package verified"
-        fi
-
-        echo ""
-        echo "Temperature monitoring enabled successfully."
-        echo "Temperature data will appear in the dashboard within 10 seconds."
+    if [ -t 0 ]; then
+        read -p "> " -n 1 -r SSH_ACTION
     else
+        if read -p "> " -n 1 -r SSH_ACTION </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - keeping existing configuration)"
+            SSH_ACTION="k"
+        fi
+    fi
+    echo ""
+    echo ""
+
+    if [[ $SSH_ACTION =~ ^[Rr]$ ]]; then
+        echo "Removing temperature monitoring configuration..."
+
+        # Remove the SSH key from authorized_keys
+        if [ -f /root/.ssh/authorized_keys ]; then
+            grep -vF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp
+            mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo "  ✓ SSH key removed from authorized_keys"
+        fi
+
         echo ""
-        echo "Warning: SSH key not available from Pulse server."
-        echo "Temperature monitoring cannot be configured automatically."
+        echo "Temperature monitoring has been disabled."
+        echo "Note: lm-sensors package was NOT removed (in case you use it elsewhere)"
+        echo ""
+        echo "To completely remove lm-sensors (optional):"
+        echo "  apt-get remove --purge lm-sensors"
+    else
+        echo "Temperature monitoring configuration unchanged."
     fi
 else
+    echo "Enable hardware temperature monitoring for this node?"
     echo ""
-    echo "Temperature monitoring skipped."
+    echo "This will:"
+    echo "  • Install lm-sensors package"
+    echo "  • Configure SSH key authentication for Pulse server"
+    echo "  • Allow Pulse to collect CPU and drive temperature data"
+    echo ""
+    echo "Security: Uses SSH public key authentication (read-only access)"
+    echo ""
+    echo -n "Enable temperature monitoring? [y/N]: "
+
+    if [ -t 0 ]; then
+        read -p "> " -n 1 -r SSH_REPLY
+    else
+        if read -p "> " -n 1 -r SSH_REPLY </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - skipping SSH setup)"
+            SSH_REPLY="n"
+        fi
+    fi
+    echo ""
+    echo ""
+
+    if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo ""
+        echo "Configuring temperature monitoring..."
+
+        if [ -n "$SSH_PUBLIC_KEY" ]; then
+            # Add key to root's authorized_keys
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+
+            # Check if key already exists (redundant check but safe)
+            if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+                echo "  ✓ SSH key already configured"
+            else
+                echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/authorized_keys
+                echo "  ✓ SSH key configured"
+            fi
+
+            # Install lm-sensors if not present
+            if ! command -v sensors &> /dev/null; then
+                echo "  ✓ Installing lm-sensors..."
+                apt-get update -qq && apt-get install -y lm-sensors > /dev/null 2>&1
+                sensors-detect --auto > /dev/null 2>&1
+            else
+                echo "  ✓ lm-sensors package verified"
+            fi
+
+            echo ""
+            echo "Temperature monitoring enabled successfully."
+            echo "Temperature data will appear in the dashboard within 10 seconds."
+            echo ""
+            echo "To disable later, re-run this setup script or manually remove the key:"
+            echo "  grep -v 'pulse' /root/.ssh/authorized_keys > /tmp/ak && mv /tmp/ak /root/.ssh/authorized_keys"
+        else
+            echo ""
+            echo "Warning: SSH key not available from Pulse server."
+            echo "Temperature monitoring cannot be configured automatically."
+        fi
+    else
+        echo ""
+        echo "Temperature monitoring skipped."
+    fi
 fi
 
 echo ""
