@@ -151,14 +151,15 @@ type EmailConfig struct {
 
 // WebhookConfig holds webhook settings
 type WebhookConfig struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	URL      string            `json:"url"`
-	Method   string            `json:"method"`
-	Headers  map[string]string `json:"headers"`
-	Enabled  bool              `json:"enabled"`
-	Service  string            `json:"service"`  // discord, slack, teams, etc.
-	Template string            `json:"template"` // Custom payload template
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Method       string            `json:"method"`
+	Headers      map[string]string `json:"headers"`
+	Enabled      bool              `json:"enabled"`
+	Service      string            `json:"service"`  // discord, slack, teams, etc.
+	Template     string            `json:"template"` // Custom payload template
+	CustomFields map[string]string `json:"customFields,omitempty"`
 }
 
 // NewNotificationManager creates a new notification manager
@@ -533,13 +534,15 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			}
 		}
 
+		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
 			Service:         webhook.Service,
 			PayloadTemplate: webhook.Template,
+			CustomFields:    customFields,
 		}
 
-		data := n.prepareWebhookData(alert, nil)
+		data := n.prepareWebhookData(alert, customFields)
 
 		// For Telegram webhooks (check URL pattern since service might be empty)
 		if strings.Contains(webhook.URL, "api.telegram.org") {
@@ -563,9 +566,11 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 		alert := alertList[0]
 
 		// Convert to enhanced webhook to use template
+		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
+			CustomFields:  customFields,
 		}
 
 		// Get service template
@@ -601,7 +606,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			}
 
 			// Prepare data and generate payload
-			data := n.prepareWebhookData(alert, nil)
+			data := n.prepareWebhookData(alert, customFields)
 
 			// Handle service-specific requirements
 			if webhook.Service == "telegram" {
@@ -851,14 +856,16 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	// Only use custom template if it's not empty
 	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" {
 		// Use custom template provided by user
+		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig:   webhook,
 			Service:         webhook.Service,
 			PayloadTemplate: webhook.Template,
+			CustomFields:    customFields,
 		}
 
 		// Prepare data and generate payload
-		data := n.prepareWebhookData(alert, nil)
+		data := n.prepareWebhookData(alert, customFields)
 
 		// For Telegram, still extract chat_id from URL if present
 		if webhook.Service == "telegram" {
@@ -885,9 +892,11 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	} else if webhook.Service != "" && webhook.Service != "generic" {
 		// Check if this webhook has a service type and use the proper template
 		// Convert to enhanced webhook to use template
+		customFields := convertWebhookCustomFields(webhook.CustomFields)
 		enhanced := EnhancedWebhookConfig{
 			WebhookConfig: webhook,
 			Service:       webhook.Service,
+			CustomFields:  customFields,
 		}
 
 		// Get service template
@@ -904,7 +913,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 		// Only use template if found, otherwise fall back to generic
 		if templateFound {
 			// Prepare data and generate payload
-			data := n.prepareWebhookData(alert, nil)
+			data := n.prepareWebhookData(alert, customFields)
 
 			// For Telegram, extract chat_id from URL if present
 			if webhook.Service == "telegram" {
@@ -976,6 +985,18 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 
 	// Send using common request logic
 	n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID))
+}
+
+func convertWebhookCustomFields(fields map[string]string) map[string]interface{} {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	converted := make(map[string]interface{}, len(fields))
+	for key, value := range fields {
+		converted[key] = value
+	}
+	return converted
 }
 
 // prepareWebhookData prepares data for template rendering

@@ -54,6 +54,7 @@ export interface Webhook {
   template?: string;
   enabled: boolean;
   service?: string; // Added to support Discord, Slack, etc.
+  customFields?: Record<string, string>;
 }
 
 export interface NotificationTestRequest {
