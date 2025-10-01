@@ -353,6 +353,219 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		Bool("enabled", config.Enabled).
 		Interface("guestDefaults", config.GuestDefaults).
 		Msg("Alert configuration updated")
+
+	// Re-evaluate active alerts against new thresholds
+	m.reevaluateActiveAlertsLocked()
+}
+
+// reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration
+// This should only be called with m.mu already locked
+func (m *Manager) reevaluateActiveAlertsLocked() {
+	if len(m.activeAlerts) == 0 {
+		return
+	}
+
+	// Track alerts that should be resolved
+	alertsToResolve := make([]string, 0)
+
+	for alertID, alert := range m.activeAlerts {
+		// Parse the alert ID to extract resource ID and metric type
+		// Alert ID format: {resourceID}-{metricType}
+		parts := strings.Split(alertID, "-")
+		if len(parts) < 2 {
+			continue
+		}
+
+		metricType := parts[len(parts)-1]
+		resourceID := strings.Join(parts[:len(parts)-1], "-")
+
+		// Get the appropriate threshold based on resource type and ID
+		var threshold *HysteresisThreshold
+
+		// Determine the resource type from the alert's metadata or instance
+		// We need to check what kind of resource this is
+		if alert.Instance == "Node" || alert.Instance == alert.Node {
+			// This is a node alert
+			thresholds := m.config.NodeDefaults
+			threshold = getThresholdForMetric(thresholds, metricType)
+		} else if alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/") {
+			// This is a storage alert
+			if override, exists := m.config.Overrides[resourceID]; exists && override.Usage != nil {
+				threshold = override.Usage
+			} else {
+				threshold = &m.config.StorageDefault
+			}
+		} else if alert.Instance == "PBS" {
+			// This is a PBS alert
+			thresholds := m.config.NodeDefaults
+			if override, exists := m.config.Overrides[resourceID]; exists {
+				if override.CPU != nil && metricType == "cpu" {
+					threshold = ensureHysteresisThreshold(override.CPU)
+				} else if override.Memory != nil && metricType == "memory" {
+					threshold = ensureHysteresisThreshold(override.Memory)
+				}
+			}
+			if threshold == nil {
+				threshold = getThresholdForMetric(thresholds, metricType)
+			}
+		} else {
+			// This is a guest (qemu/lxc) alert
+			// Check if there's an override for this specific guest
+			if override, exists := m.config.Overrides[resourceID]; exists {
+				if override.Disabled {
+					// Alert is now disabled for this resource, resolve it
+					alertsToResolve = append(alertsToResolve, alertID)
+					continue
+				}
+				threshold = getThresholdForMetricFromConfig(override, metricType)
+			}
+
+			// If no override or override doesn't have this metric, use defaults
+			if threshold == nil {
+				threshold = getThresholdForMetric(m.config.GuestDefaults, metricType)
+			}
+		}
+
+		// If no threshold found or threshold is disabled (trigger <= 0), resolve the alert
+		if threshold == nil || threshold.Trigger <= 0 {
+			alertsToResolve = append(alertsToResolve, alertID)
+			continue
+		}
+
+		// Check if current value is now below the clear threshold
+		clearThreshold := threshold.Clear
+		if clearThreshold <= 0 {
+			clearThreshold = threshold.Trigger
+		}
+
+		if alert.Value <= clearThreshold {
+			// Alert should be resolved due to new threshold
+			alertsToResolve = append(alertsToResolve, alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Float64("value", alert.Value).
+				Float64("oldThreshold", alert.Threshold).
+				Float64("newClearThreshold", clearThreshold).
+				Msg("Resolving alert due to threshold change")
+		} else if alert.Value < threshold.Trigger {
+			// Value is between clear and trigger thresholds after config change
+			// Resolve it to prevent confusion
+			alertsToResolve = append(alertsToResolve, alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Float64("value", alert.Value).
+				Float64("newTrigger", threshold.Trigger).
+				Float64("newClear", clearThreshold).
+				Msg("Resolving alert - value now below trigger threshold after config change")
+		}
+	}
+
+	// Resolve all alerts that should be cleared
+	for _, alertID := range alertsToResolve {
+		if alert, exists := m.activeAlerts[alertID]; exists {
+			resolvedAlert := &ResolvedAlert{
+				Alert:        alert,
+				ResolvedTime: time.Now(),
+			}
+
+			// Remove from active alerts
+			delete(m.activeAlerts, alertID)
+
+			// Add to recently resolved
+			m.resolvedMutex.Lock()
+			m.recentlyResolved[alertID] = resolvedAlert
+			m.resolvedMutex.Unlock()
+
+			log.Info().
+				Str("alertID", alertID).
+				Msg("Alert auto-resolved after configuration change")
+		}
+	}
+
+	// Save updated active alerts if any were resolved
+	if len(alertsToResolve) > 0 {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (config update)")
+				}
+			}()
+			if err := m.SaveActiveAlerts(); err != nil {
+				log.Error().Err(err).Msg("Failed to save active alerts after config update")
+			}
+		}()
+	}
+}
+
+// getThresholdForMetric returns the threshold for a specific metric type from a ThresholdConfig
+func getThresholdForMetric(config ThresholdConfig, metricType string) *HysteresisThreshold {
+	switch metricType {
+	case "cpu":
+		return config.CPU
+	case "memory":
+		return config.Memory
+	case "disk":
+		return config.Disk
+	case "diskRead":
+		return config.DiskRead
+	case "diskWrite":
+		return config.DiskWrite
+	case "networkIn":
+		return config.NetworkIn
+	case "networkOut":
+		return config.NetworkOut
+	case "temperature":
+		return config.Temperature
+	case "usage":
+		return config.Usage
+	default:
+		return nil
+	}
+}
+
+// getThresholdForMetricFromConfig returns the threshold for a specific metric type from a ThresholdConfig
+// ensuring hysteresis is properly set
+func getThresholdForMetricFromConfig(config ThresholdConfig, metricType string) *HysteresisThreshold {
+	var threshold *HysteresisThreshold
+	switch metricType {
+	case "cpu":
+		if config.CPU != nil {
+			threshold = ensureHysteresisThreshold(config.CPU)
+		}
+	case "memory":
+		if config.Memory != nil {
+			threshold = ensureHysteresisThreshold(config.Memory)
+		}
+	case "disk":
+		if config.Disk != nil {
+			threshold = ensureHysteresisThreshold(config.Disk)
+		}
+	case "diskRead":
+		if config.DiskRead != nil {
+			threshold = ensureHysteresisThreshold(config.DiskRead)
+		}
+	case "diskWrite":
+		if config.DiskWrite != nil {
+			threshold = ensureHysteresisThreshold(config.DiskWrite)
+		}
+	case "networkIn":
+		if config.NetworkIn != nil {
+			threshold = ensureHysteresisThreshold(config.NetworkIn)
+		}
+	case "networkOut":
+		if config.NetworkOut != nil {
+			threshold = ensureHysteresisThreshold(config.NetworkOut)
+		}
+	case "temperature":
+		if config.Temperature != nil {
+			threshold = ensureHysteresisThreshold(config.Temperature)
+		}
+	case "usage":
+		if config.Usage != nil {
+			threshold = ensureHysteresisThreshold(config.Usage)
+		}
+	}
+	return threshold
 }
 
 // isInQuietHours checks if the current time is within quiet hours
