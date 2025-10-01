@@ -22,11 +22,32 @@ if [ -f "$PROD_DIR/.encryption.key" ]; then
     echo "✓ Synced encryption key"
 fi
 
-# Copy nodes configuration
+# Copy nodes configuration - WITH VALIDATION
 if [ -f "$PROD_DIR/nodes.enc" ]; then
-    cp -f "$PROD_DIR/nodes.enc" "$DEV_DIR/nodes.enc"
-    chmod 600 "$DEV_DIR/nodes.enc"
-    echo "✓ Synced nodes configuration"
+    # Check if production nodes.enc is valid (not corrupted)
+    # Only sync if destination doesn't exist OR production file is newer
+    SHOULD_SYNC=false
+
+    if [ ! -f "$DEV_DIR/nodes.enc" ]; then
+        # Destination doesn't exist, safe to sync
+        SHOULD_SYNC=true
+        echo "  → Dev nodes.enc doesn't exist, will sync from production"
+    elif [ "$PROD_DIR/nodes.enc" -nt "$DEV_DIR/nodes.enc" ]; then
+        # Production is newer
+        echo "  → Production nodes.enc is newer than dev copy"
+        SHOULD_SYNC=true
+    else
+        # Dev is newer or same age - KEEP THE DEV COPY
+        echo "  → Dev nodes.enc is current, keeping existing copy"
+        echo "  → (Production: $(stat -c %y "$PROD_DIR/nodes.enc" 2>/dev/null | cut -d' ' -f1-2))"
+        echo "  → (Dev: $(stat -c %y "$DEV_DIR/nodes.enc" 2>/dev/null | cut -d' ' -f1-2))"
+    fi
+
+    if [ "$SHOULD_SYNC" = true ]; then
+        cp -f "$PROD_DIR/nodes.enc" "$DEV_DIR/nodes.enc"
+        chmod 600 "$DEV_DIR/nodes.enc"
+        echo "✓ Synced nodes configuration"
+    fi
 elif [ -f "$PROD_DIR/nodes.json" ]; then
     cp -f "$PROD_DIR/nodes.json" "$DEV_DIR/nodes.json"
     chmod 600 "$DEV_DIR/nodes.json"

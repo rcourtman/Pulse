@@ -35,6 +35,23 @@ export function GuestRow(props: GuestRowProps) {
     setCustomUrl(props.customUrl);
   });
 
+  // Load custom URL from backend if not provided via props
+  onMount(async () => {
+    if (!props.customUrl) {
+      const startTime = performance.now();
+      try {
+        const metadata = await GuestMetadataAPI.getMetadata(guestId());
+        const endTime = performance.now();
+        console.log(`[PERF] Individual metadata call for ${guestId()} took ${(endTime - startTime).toFixed(2)}ms`);
+        if (metadata && metadata.customUrl) {
+          setCustomUrl(metadata.customUrl);
+        }
+      } catch (err) {
+        // Silently fail - not critical for display
+        console.debug('Failed to load guest metadata:', err);
+      }
+    }
+  });
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
   const memPercent = createMemo(() => {
     if (!props.guest.memory) return 0;
