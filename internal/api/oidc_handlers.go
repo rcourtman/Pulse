@@ -140,14 +140,20 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 	// Verify the ID token
 	idToken, err := service.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
+		errorCode := "invalid_id_token"
+		logMessage := "Failed to verify ID token - check issuer URL matches token issuer claim"
+		if strings.Contains(err.Error(), "unexpected signature algorithm") {
+			errorCode = "invalid_signature_alg"
+			logMessage = "Failed to verify ID token - provider is issuing HS256 tokens, Pulse requires RS256"
+		}
 		log.Error().
 			Err(err).
 			Str("issuer", cfg.IssuerURL).
 			Str("client_id", cfg.ClientID).
 			Str("redirect_url", cfg.RedirectURL).
-			Msg("Failed to verify ID token - check issuer URL matches token issuer claim")
+			Msg(logMessage)
 		LogAuditEvent("oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
-		r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_id_token")
+		r.redirectOIDCError(w, req, entry.ReturnTo, errorCode)
 		return
 	}
 

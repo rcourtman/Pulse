@@ -75,7 +75,9 @@ You do not need to ship per-provider templates. Pulse speaks standard OIDC, so a
    - Set **Groups claim** to `groups` (Authentik's default)
    - Add your allowed group names to **Allowed groups** (e.g., `admin`)
 
-**Important**: If you see "invalid_id_token" errors, the issuer URL might not match what Authentik puts in tokens. Check your Pulse logs with `LOG_LEVEL=debug` to see the exact error. The issuer claim in the token must match your configured `OIDC_ISSUER_URL` exactly.
+**Important notes**:
+- If you see "invalid_id_token" errors, the issuer URL might not match what Authentik puts in tokens. Check your Pulse logs with `LOG_LEVEL=debug` to see the exact error. The issuer claim in the token must match your configured `OIDC_ISSUER_URL` exactly.
+- When using OIDC behind a reverse proxy with HTTPS, ensure `PUBLIC_URL` or `OIDC_REDIRECT_URL` uses `https://` (not `http://`). If these are not set, Pulse will auto-detect the protocol from `X-Forwarded-Proto` headers.
 
 ### Dex / other self-hosted issuers
 

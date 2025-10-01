@@ -45,6 +45,7 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 		ClientID          string   `json:"clientId"`
 		ClientSecret      *string  `json:"clientSecret,omitempty"`
 		RedirectURL       string   `json:"redirectUrl"`
+		LogoutURL         string   `json:"logoutUrl"`
 		Scopes            []string `json:"scopes"`
 		UsernameClaim     string   `json:"usernameClaim"`
 		EmailClaim        string   `json:"emailClaim"`
@@ -65,6 +66,7 @@ func (r *Router) handleUpdateOIDCConfig(w http.ResponseWriter, req *http.Request
 		IssuerURL:      strings.TrimSpace(payload.IssuerURL),
 		ClientID:       strings.TrimSpace(payload.ClientID),
 		RedirectURL:    strings.TrimSpace(payload.RedirectURL),
+		LogoutURL:      strings.TrimSpace(payload.LogoutURL),
 		Scopes:         append([]string{}, payload.Scopes...),
 		UsernameClaim:  strings.TrimSpace(payload.UsernameClaim),
 		EmailClaim:     strings.TrimSpace(payload.EmailClaim),
@@ -112,6 +114,7 @@ type oidcResponse struct {
 	IssuerURL       string          `json:"issuerUrl"`
 	ClientID        string          `json:"clientId"`
 	RedirectURL     string          `json:"redirectUrl"`
+	LogoutURL       string          `json:"logoutUrl"`
 	Scopes          []string        `json:"scopes"`
 	UsernameClaim   string          `json:"usernameClaim"`
 	EmailClaim      string          `json:"emailClaim"`
@@ -135,6 +138,7 @@ func makeOIDCResponse(cfg *config.OIDCConfig, publicURL string) oidcResponse {
 		IssuerURL:       cfg.IssuerURL,
 		ClientID:        cfg.ClientID,
 		RedirectURL:     cfg.RedirectURL,
+		LogoutURL:       cfg.LogoutURL,
 		Scopes:          append([]string{}, cfg.Scopes...),
 		UsernameClaim:   cfg.UsernameClaim,
 		EmailClaim:      cfg.EmailClaim,

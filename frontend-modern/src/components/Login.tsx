@@ -48,6 +48,8 @@ export const Login: Component<LoginProps> = (props) => {
         return 'Login succeeded but we could not create a session. Try again.';
       case 'invalid_id_token':
         return 'ID token verification failed. Check that OIDC_ISSUER_URL matches the issuer claim in your provider tokens (check server logs for details).';
+      case 'invalid_signature_alg':
+        return 'The identity provider is issuing HS256 tokens. Configure it to sign ID tokens with RS256 (see your IdP\'s OIDC settings).';
       case 'invalid_nonce':
         return 'Security validation failed (nonce mismatch). Please try again.';
       default:

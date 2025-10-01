@@ -11,6 +11,7 @@ interface OIDCConfigResponse {
   issuerUrl: string;
   clientId: string;
   redirectUrl: string;
+  logoutUrl: string;
   scopes: string[];
   usernameClaim: string;
   emailClaim: string;
@@ -45,6 +46,7 @@ export const OIDCPanel: Component<Props> = (props) => {
     issuerUrl: '',
     clientId: '',
     redirectUrl: '',
+    logoutUrl: '',
     scopes: '',
     usernameClaim: 'preferred_username',
     emailClaim: 'email',
@@ -68,6 +70,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         issuerUrl: '',
         clientId: '',
         redirectUrl: '',
+        logoutUrl: '',
         scopes: '',
         usernameClaim: 'preferred_username',
         emailClaim: 'email',
@@ -86,6 +89,7 @@ export const OIDCPanel: Component<Props> = (props) => {
       issuerUrl: data.issuerUrl ?? '',
       clientId: data.clientId ?? '',
       redirectUrl: data.redirectUrl || data.defaultRedirect || '',
+      logoutUrl: data.logoutUrl ?? '',
       scopes: data.scopes?.join(' ') ?? 'openid profile email',
       usernameClaim: data.usernameClaim || 'preferred_username',
       emailClaim: data.emailClaim || 'email',
@@ -137,6 +141,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         issuerUrl: form.issuerUrl.trim(),
         clientId: form.clientId.trim(),
         redirectUrl: form.redirectUrl.trim(),
+        logoutUrl: form.logoutUrl.trim(),
         scopes: splitList(form.scopes),
         usernameClaim: form.usernameClaim.trim(),
         emailClaim: form.emailClaim.trim(),
@@ -325,9 +330,23 @@ export const OIDCPanel: Component<Props> = (props) => {
                 disabled={isEnvLocked() || saving()}
               />
               <p class={formHelpText}>
-                {config()?.defaultRedirect
+                {config()?.defaultRedirect && config()?.defaultRedirect.trim() !== ''
                   ? `Optional - Leave blank to auto-detect from request headers (supports reverse proxies). Detected URL: ${config()?.defaultRedirect}`
-                  : 'Leave blank to auto-detect from request headers, or set PUBLIC_URL environment variable'}
+                  : 'Optional - Leave blank to auto-detect from request headers. For best results, set PUBLIC_URL environment variable.'}
+              </p>
+            </div>
+            <div class={formField}>
+              <label class={labelClass()}>Logout URL</label>
+              <input
+                type="url"
+                value={form.logoutUrl}
+                onInput={(event) => setForm('logoutUrl', event.currentTarget.value)}
+                placeholder="https://auth.example.com/application/o/pulse/end-session/"
+                class={controlClass()}
+                disabled={isEnvLocked() || saving()}
+              />
+              <p class={formHelpText}>
+                Optional - OIDC end-session URL for proper logout (e.g., Authentik's end-session endpoint). Leave blank to use local logout only.
               </p>
             </div>
           </div>

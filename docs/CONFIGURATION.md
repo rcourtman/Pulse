@@ -236,7 +236,8 @@ Set these environment variables to manage single sign-on without using the UI. W
 - `OIDC_ISSUER_URL` - Provider issuer URL
 - `OIDC_CLIENT_ID` - Registered client ID
 - `OIDC_CLIENT_SECRET` - Client secret (plain text)
-- `OIDC_REDIRECT_URL` - Override default redirect callback
+- `OIDC_REDIRECT_URL` - Override default redirect callback (use `https://` when behind TLS proxy)
+- `OIDC_LOGOUT_URL` - End-session URL for proper OIDC logout (e.g., `https://auth.example.com/application/o/pulse/end-session/`)
 - `OIDC_SCOPES` - Space/comma separated scopes (e.g. `openid profile email`)
 - `OIDC_USERNAME_CLAIM` - Claim used for the Pulse username
 - `OIDC_EMAIL_CLAIM` - Claim that contains the email address
