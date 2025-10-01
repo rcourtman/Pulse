@@ -137,7 +137,7 @@ func runServer() {
 		Addr:         fmt.Sprintf("%s:%d", cfg.BackendHost, cfg.FrontendPort),
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 60 * time.Second, // Increased from 15s to 60s to support large JSON responses (e.g., mock data)
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -146,6 +146,14 @@ func runServer() {
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create config watcher, .env changes will require restart")
 	} else {
+		// Set callback to reload monitor when mock.env changes
+		configWatcher.SetMockReloadCallback(func() {
+			log.Info().Msg("mock.env changed, reloading monitor")
+			if err := reloadableMonitor.Reload(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor after mock.env change")
+			}
+		})
+
 		if err := configWatcher.Start(); err != nil {
 			log.Warn().Err(err).Msg("Failed to start config watcher")
 		}
