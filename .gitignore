@@ -137,3 +137,4 @@ tmp_*.sh
 cloud-relay/
 scripts/agent/
 docs/internal/
+claude.md
