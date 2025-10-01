@@ -30,7 +30,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               placeholder="Search or filter..."
               value={props.search()}
               onInput={(e) => props.setSearch(e.currentTarget.value)}
-              class={`w-full pl-9 pr-9 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+              class={`w-full pl-9 pr-16 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
                      bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
             />
@@ -50,7 +50,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <Show when={props.search()}>
               <button
                 type="button"
-                class="absolute right-3 top-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                class="absolute right-9 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 onClick={() => props.setSearch('')}
                 aria-label="Clear search"
                 title="Clear search"
@@ -65,22 +65,25 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                 </svg>
               </button>
             </Show>
+            <div class="absolute inset-y-0 right-3 flex items-center">
+              <SearchTipsPopover
+                popoverId="dashboard-search-help"
+                intro="Combine filters to narrow results"
+                tips={[
+                  { code: 'media', description: 'Guests with "media" in the name' },
+                  { code: 'cpu>80', description: 'Highlight guests using more than 80% CPU' },
+                  { code: 'memory<20', description: 'Find guests under 20% memory usage' },
+                  { code: 'tags:prod', description: 'Filter by tag' },
+                  { code: 'node:pve1', description: 'Show guests on a specific node' },
+                ]}
+                footerHighlight="node:pve1 cpu>60"
+                footerText="Stack filters to get laser-focused results."
+                triggerVariant="icon"
+                buttonLabel="Search tips"
+                openOnHover
+              />
+            </div>
           </div>
-
-          <SearchTipsPopover
-            class="flex-shrink-0"
-            popoverId="dashboard-search-help"
-            intro="Combine filters to narrow results"
-            tips={[
-              { code: 'media', description: 'Guests with "media" in the name' },
-              { code: 'cpu>80', description: 'Highlight guests using more than 80% CPU' },
-              { code: 'memory<20', description: 'Find guests under 20% memory usage' },
-              { code: 'tags:prod', description: 'Filter by tag' },
-              { code: 'node:pve1', description: 'Show guests on a specific node' },
-            ]}
-            footerHighlight="node:pve1 cpu>60"
-            footerText="Stack filters to get laser-focused results."
-          />
         </div>
 
         {/* Filters */}

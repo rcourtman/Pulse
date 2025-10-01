@@ -15,12 +15,15 @@ interface SearchTipsPopoverProps {
   popoverId?: string;
   align?: 'left' | 'right';
   class?: string;
+  triggerVariant?: 'button' | 'link' | 'icon';
+  openOnHover?: boolean;
 }
 
 export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
   const [open, setOpen] = createSignal(false);
   let popoverRef: HTMLDivElement | undefined;
   let triggerRef: HTMLButtonElement | undefined;
+  let pointerInside = false;
 
   const close = () => setOpen(false);
 
@@ -57,17 +60,66 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
   const popoverPositionClass = props.align === 'left' ? 'left-0' : 'right-0';
   const popoverId = props.popoverId ?? 'search-tips-popover';
 
+  const triggerVariant = props.triggerVariant ?? 'button';
+  const openOnHover = props.openOnHover ?? false;
+  const buttonLabel = props.buttonLabel ?? 'Search tips';
+
+  const triggerBaseClasses =
+    'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400/40 dark:focus:ring-offset-gray-900';
+
+  const triggerClasses =
+    triggerVariant === 'button'
+      ? `rounded-md border border-gray-200 px-2.5 py-1 text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 ${triggerBaseClasses}`
+      : triggerVariant === 'link'
+      ? `rounded px-1 py-0.5 text-gray-500 underline decoration-dotted underline-offset-4 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 ${triggerBaseClasses}`
+      : `flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-100 ${triggerBaseClasses}`;
+
+  const handleMouseEnter = () => {
+    pointerInside = true;
+    setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    pointerInside = false;
+    setOpen(false);
+  };
+
   return (
-    <div class={`relative ${props.class ?? ''}`}>
+    <div
+      class={`relative ${props.class ?? ''}`}
+      onMouseEnter={openOnHover ? handleMouseEnter : undefined}
+      onMouseLeave={openOnHover ? handleMouseLeave : undefined}
+    >
       <button
         ref={(el) => (triggerRef = el)}
         type="button"
-        class="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 focus:ring-offset-white dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-blue-400/40 dark:focus:ring-offset-gray-900"
-        onClick={() => setOpen((value) => !value)}
+        class={triggerClasses}
+        onClick={openOnHover ? () => setOpen(true) : () => setOpen((value) => !value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          if (!pointerInside) {
+            setOpen(false);
+          }
+        }}
         aria-expanded={open()}
         aria-controls={popoverId}
+        aria-label={buttonLabel}
       >
-        {props.buttonLabel ?? 'Search tips'}
+        {triggerVariant === 'icon' ? (
+          <>
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span class="sr-only">{buttonLabel}</span>
+          </>
+        ) : (
+          buttonLabel
+        )}
       </button>
 
       <Show when={open()}>
