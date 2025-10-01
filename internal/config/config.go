@@ -202,6 +202,24 @@ func Load() (*Config, error) {
 		log.Info().Msg("Loaded configuration from .env in current directory")
 	}
 
+	// Load mock.env and mock.env.local for mock mode configuration
+	mockEnv := "mock.env"
+	mockEnvLocal := "mock.env.local"
+	if _, err := os.Stat(mockEnv); err == nil {
+		if err := godotenv.Load(mockEnv); err != nil {
+			log.Warn().Err(err).Str("file", mockEnv).Msg("Failed to load mock.env file")
+		} else {
+			log.Info().Str("file", mockEnv).Msg("Loaded mock mode configuration")
+		}
+	}
+	if _, err := os.Stat(mockEnvLocal); err == nil {
+		if err := godotenv.Load(mockEnvLocal); err != nil {
+			log.Warn().Err(err).Str("file", mockEnvLocal).Msg("Failed to load mock.env.local file")
+		} else {
+			log.Info().Str("file", mockEnvLocal).Msg("Loaded local mock mode overrides")
+		}
+	}
+
 	// Initialize config with defaults
 	cfg := &Config{
 		BackendHost:          "0.0.0.0",
