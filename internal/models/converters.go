@@ -90,27 +90,26 @@ func (n Node) ToFrontend() NodeFrontend {
 // ToFrontend converts a VM to VMFrontend
 func (v VM) ToFrontend() VMFrontend {
 	vm := VMFrontend{
-		ID:        v.ID,
-		VMID:      v.VMID,
-		Name:      v.Name,
-		Node:      v.Node,
-		Instance:  v.Instance,
-		Status:    v.Status,
-		Type:      v.Type,
-		CPU:       v.CPU,
-		CPUs:      v.CPUs,
-		Mem:       v.Memory.Used,
-		MaxMem:    v.Memory.Total,
-		Disk:      v.Disk.Used,
-		MaxDisk:   v.Disk.Total,
-		NetIn:     zeroIfNegative(v.NetworkIn),
-		NetOut:    zeroIfNegative(v.NetworkOut),
-		DiskRead:  zeroIfNegative(v.DiskRead),
-		DiskWrite: zeroIfNegative(v.DiskWrite),
-		Uptime:    v.Uptime,
-		Template:  v.Template,
-		Lock:      v.Lock,
-		LastSeen:  v.LastSeen.Unix() * 1000,
+		ID:               v.ID,
+		VMID:             v.VMID,
+		Name:             v.Name,
+		Node:             v.Node,
+		Instance:         v.Instance,
+		Status:           v.Status,
+		Type:             v.Type,
+		CPU:              v.CPU,
+		CPUs:             v.CPUs,
+		Mem:              v.Memory.Used,
+		MaxMem:           v.Memory.Total,
+		NetIn:            zeroIfNegative(v.NetworkIn),
+		NetOut:           zeroIfNegative(v.NetworkOut),
+		DiskRead:         zeroIfNegative(v.DiskRead),
+		DiskWrite:        zeroIfNegative(v.DiskWrite),
+		Uptime:           v.Uptime,
+		Template:         v.Template,
+		Lock:             v.Lock,
+		LastSeen:         v.LastSeen.Unix() * 1000,
+		DiskStatusReason: v.DiskStatusReason,
 	}
 
 	// Convert tags array to string
@@ -126,6 +125,11 @@ func (v VM) ToFrontend() VMFrontend {
 	// Include full Memory object if it has data
 	if v.Memory.Total > 0 {
 		vm.Memory = &v.Memory
+	}
+
+	// Include full Disk object if it has data
+	if v.Disk.Total > 0 {
+		vm.DiskObj = &v.Disk
 	}
 
 	return vm
@@ -145,8 +149,6 @@ func (c Container) ToFrontend() ContainerFrontend {
 		CPUs:      c.CPUs,
 		Mem:       c.Memory.Used,
 		MaxMem:    c.Memory.Total,
-		Disk:      c.Disk.Used,
-		MaxDisk:   c.Disk.Total,
 		NetIn:     zeroIfNegative(c.NetworkIn),
 		NetOut:    zeroIfNegative(c.NetworkOut),
 		DiskRead:  zeroIfNegative(c.DiskRead),
@@ -170,6 +172,11 @@ func (c Container) ToFrontend() ContainerFrontend {
 	// Include full Memory object if it has data
 	if c.Memory.Total > 0 {
 		ct.Memory = &c.Memory
+	}
+
+	// Include full Disk object if it has data
+	if c.Disk.Total > 0 {
+		ct.DiskObj = &c.Disk
 	}
 
 	return ct
