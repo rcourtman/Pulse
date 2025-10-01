@@ -406,7 +406,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.mu.Unlock()
 
 	// Initialize and start discovery service if enabled
-	if m.config.DiscoveryEnabled {
+	if mock.IsMockEnabled() {
+		log.Info().Msg("Mock mode enabled - skipping discovery service")
+		m.discoveryService = nil
+	} else if m.config.DiscoveryEnabled {
 		discoverySubnet := m.config.DiscoverySubnet
 		if discoverySubnet == "" {
 			discoverySubnet = "auto"
@@ -1249,7 +1252,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Int("wearout", disk.Wearout).
 				Msg("Checking disk health")
 
-			if disk.Health != "PASSED" && disk.Health != "" {
+			if disk.Health != "PASSED" && disk.Health != "OK" && disk.Health != "" {
 				// Disk has failed or is failing - alert manager will handle this
 				log.Warn().
 					Str("node", node.Node).
@@ -2991,6 +2994,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 		m.mu.Lock()
 		m.resetStateLocked()
 		m.mu.Unlock()
+		m.StopDiscoveryService()
 		log.Info().Msg("Switched monitor to mock mode")
 	} else {
 		mock.SetEnabled(false)
@@ -3013,6 +3017,9 @@ func (m *Monitor) SetMockMode(enable bool) {
 	if !enable && ctx != nil && hub != nil {
 		// Kick off an immediate poll to repopulate state with live data
 		go m.poll(ctx, hub)
+		if m.config.DiscoveryEnabled {
+			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
+		}
 	}
 }
 

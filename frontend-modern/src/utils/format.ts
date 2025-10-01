@@ -1,6 +1,6 @@
 // Type-safe formatting utilities
 
-export function formatBytes(bytes: number, decimals = 0): string {
+export function formatBytes(bytes: number, decimals = 1): string {
   if (!bytes || bytes < 0) return '0 B';
 
   const k = 1024;
