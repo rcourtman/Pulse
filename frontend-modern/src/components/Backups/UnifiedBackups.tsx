@@ -485,9 +485,14 @@ const UnifiedBackups: Component = () => {
       );
     }
 
-    // Node selection filter (using instance ID to handle duplicate hostnames)
+    // Node selection filter (using node name for simple matching)
     if (nodeFilter) {
-      data = data.filter((item) => item.instance === nodeFilter);
+      // Find the node to get its name
+      const node = state.nodes?.find(n => n.id === nodeFilter);
+      if (node) {
+        // Filter backups by node name
+        data = data.filter((item) => item.node === node.name);
+      }
     }
 
     // Search filter - with advanced filtering support like Dashboard
@@ -1104,7 +1109,6 @@ const UnifiedBackups: Component = () => {
         currentTab="backups"
         onNodeSelect={(nodeId) => {
           setSelectedNode(nodeId);
-          setIsSearchLocked(!!nodeId);
         }}
         onNamespaceSelect={(namespaceFilter) => {
           setSearchTerm(namespaceFilter);
