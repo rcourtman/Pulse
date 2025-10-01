@@ -246,6 +246,8 @@ Set these environment variables to manage single sign-on without using the UI. W
 - `OIDC_ALLOWED_EMAILS` - Explicit email allowlist
 - `PULSE_PUBLIC_URL` **(strongly recommended)** - The externally reachable base URL Pulse should advertise. This is used to generate the default redirect URI. If you expose Pulse on multiple hostnames, list each one in your IdP configuration because OIDC callbacks must match exactly.
 
+> **Authentik note:** Assign an RSA signing key to the application so ID tokens use `RS256`. Without it Authentik falls back to `HS256`, which Pulse rejects. See [Authentik setup details](OIDC.md#authentik) for the exact menu path.
+
 #### Proxy/SSO Authentication Variables
 For integration with authentication proxies (Authentik, Authelia, etc):
 
