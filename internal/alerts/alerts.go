@@ -410,6 +410,10 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		} else {
 			// This is a guest (qemu/lxc) alert
+			// We need to evaluate custom rules, but we don't have the guest object here.
+			// For now, we'll mark these alerts for re-evaluation by the monitor.
+			// The next poll cycle will properly evaluate them with custom rules.
+
 			// Check if there's an override for this specific guest
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				if override.Disabled {
@@ -421,6 +425,8 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 
 			// If no override or override doesn't have this metric, use defaults
+			// Note: This doesn't consider custom rules - those will be evaluated
+			// on the next poll cycle when we have the full guest object
 			if threshold == nil {
 				threshold = getThresholdForMetric(m.config.GuestDefaults, metricType)
 			}
@@ -494,6 +500,73 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				log.Error().Err(err).Msg("Failed to save active alerts after config update")
 			}
 		}()
+	}
+}
+
+// ReevaluateGuestAlert reevaluates a specific guest's alerts with full threshold resolution including custom rules
+// This should be called by the monitor with the current guest state
+func (m *Manager) ReevaluateGuestAlert(guest interface{}, guestID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Get the correct thresholds for this guest (includes custom rules evaluation)
+	thresholds := m.getGuestThresholds(guest, guestID)
+
+	// Check all metric types for this guest
+	metricTypes := []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"}
+
+	for _, metricType := range metricTypes {
+		alertID := fmt.Sprintf("%s-%s", guestID, metricType)
+		alert, exists := m.activeAlerts[alertID]
+		if !exists {
+			continue
+		}
+
+		// Get the threshold for this metric
+		var threshold *HysteresisThreshold
+		switch metricType {
+		case "cpu":
+			threshold = thresholds.CPU
+		case "memory":
+			threshold = thresholds.Memory
+		case "disk":
+			threshold = thresholds.Disk
+		case "diskRead":
+			threshold = thresholds.DiskRead
+		case "diskWrite":
+			threshold = thresholds.DiskWrite
+		case "networkIn":
+			threshold = thresholds.NetworkIn
+		case "networkOut":
+			threshold = thresholds.NetworkOut
+		}
+
+		// If threshold is disabled or doesn't exist, clear the alert
+		if threshold == nil || threshold.Trigger <= 0 {
+			m.clearAlertNoLock(alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Str("metric", metricType).
+				Msg("Cleared alert - threshold disabled")
+			continue
+		}
+
+		// Check if alert should be cleared based on new threshold
+		clearThreshold := threshold.Clear
+		if clearThreshold <= 0 {
+			clearThreshold = threshold.Trigger
+		}
+
+		if alert.Value <= clearThreshold || alert.Value < threshold.Trigger {
+			m.clearAlertNoLock(alertID)
+			log.Info().
+				Str("alertID", alertID).
+				Str("metric", metricType).
+				Float64("value", alert.Value).
+				Float64("trigger", threshold.Trigger).
+				Float64("clear", clearThreshold).
+				Msg("Cleared alert - value now below threshold after config change")
+		}
 	}
 }
 
@@ -963,20 +1036,17 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 	}
 
 	// Check pool state (DEGRADED, FAULTED, etc.)
+	stateAlertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
 	if pool.State != "ONLINE" {
-		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
+		level := AlertLevelWarning
+		if pool.State == "FAULTED" || pool.State == "UNAVAIL" {
+			level = AlertLevelCritical
+		}
 
 		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		if _, exists := m.activeAlerts[alertID]; !exists {
-			level := AlertLevelWarning
-			if pool.State == "FAULTED" || pool.State == "UNAVAIL" {
-				level = AlertLevelCritical
-			}
-
+		if _, exists := m.activeAlerts[stateAlertID]; !exists {
 			alert := &Alert{
-				ID:           alertID,
+				ID:           stateAlertID,
 				Type:         "zfs-pool-state",
 				Level:        level,
 				ResourceID:   storage.ID,
@@ -994,8 +1064,8 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				},
 			}
 
-			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
+			m.activeAlerts[stateAlertID] = alert
+			m.recentAlerts[stateAlertID] = alert
 			m.historyManager.AddAlert(*alert)
 
 			if m.onAlert != nil {
@@ -1008,26 +1078,23 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				Str("node", storage.Node).
 				Msg("ZFS pool is not healthy")
 		}
+		m.mu.Unlock()
 	} else {
 		// Clear state alert if pool is back online
-		alertID := fmt.Sprintf("zfs-pool-state-%s", storage.ID)
-		m.clearAlert(alertID)
+		m.clearAlert(stateAlertID)
 	}
 
 	// Check for read/write/checksum errors
 	totalErrors := pool.ReadErrors + pool.WriteErrors + pool.ChecksumErrors
+	errorsAlertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
 	if totalErrors > 0 {
-		alertID := fmt.Sprintf("zfs-pool-errors-%s", storage.ID)
-
 		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		existingAlert, exists := m.activeAlerts[alertID]
+		existingAlert, exists := m.activeAlerts[errorsAlertID]
 
 		// Only create new alert or update if error count increased
-		if !exists || (exists && float64(totalErrors) > existingAlert.Value) {
+		if !exists || float64(totalErrors) > existingAlert.Value {
 			alert := &Alert{
-				ID:           alertID,
+				ID:           errorsAlertID,
 				Type:         "zfs-pool-errors",
 				Level:        AlertLevelWarning,
 				ResourceID:   storage.ID,
@@ -1049,12 +1116,12 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 			}
 
 			if exists {
-				// Update existing alert
+				// Preserve original start time when updating
 				alert.StartTime = existingAlert.StartTime
 			}
 
-			m.activeAlerts[alertID] = alert
-			m.recentAlerts[alertID] = alert
+			m.activeAlerts[errorsAlertID] = alert
+			m.recentAlerts[errorsAlertID] = alert
 			m.historyManager.AddAlert(*alert)
 
 			if m.onAlert != nil {
@@ -1069,17 +1136,18 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				Str("node", storage.Node).
 				Msg("ZFS pool has I/O errors")
 		}
+		m.mu.Unlock()
+	} else {
+		m.clearAlert(errorsAlertID)
 	}
 
 	// Check individual devices for errors
-	// Lock once for the entire loop instead of inside it
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	for _, device := range pool.Devices {
-		if device.State != "ONLINE" || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
-			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
+		alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
 
+		// Skip SPARE devices unless they have actual errors
+		if (device.State != "ONLINE" && device.State != "SPARE") || device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
 			if _, exists := m.activeAlerts[alertID]; !exists {
 				level := AlertLevelWarning
 				if device.State == "FAULTED" || device.State == "UNAVAIL" {
@@ -1136,10 +1204,10 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 			}
 		} else {
 			// Clear device alert if it's back to normal
-			alertID := fmt.Sprintf("zfs-device-%s-%s", storage.ID, device.Name)
 			m.clearAlertNoLock(alertID)
 		}
 	}
+	m.mu.Unlock()
 }
 
 // clearAlert removes an alert if it exists

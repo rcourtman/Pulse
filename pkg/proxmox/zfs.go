@@ -150,8 +150,8 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 		}
 	}
 
-	// Add this device if it has errors or is not healthy
-	if dev.State != "ONLINE" || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
+	// Add this device if it has errors or is not healthy (but skip SPARE devices unless they have errors)
+	if (dev.State != "ONLINE" && dev.State != "SPARE") || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
 		devices = append(devices, ZFSDevice{
 			Name:           dev.Name,
 			Type:           deviceType,

@@ -1,11 +1,128 @@
 # Claude Code Notes
 
+## Development Environment Context
+
+### Your Role: Development Environment Orchestrator
+You are the **intelligent orchestrator** of this development environment. The user expects:
+- **Zero manual intervention** - Everything should "just work"
+- **Smart mode switching** - You decide when to use mock vs production data
+- **Proactive monitoring** - Check environment state before making changes
+- **Seamless operation** - Handle mode switches, restarts, and debugging automatically
+
+### Current Environment State
+- **Location**: LXC container (CT 152) on Proxmox host "delly" at 192.168.0.219
+- **Default mode**: Mock mode (PULSE_MOCK_MODE=true in mock.env.local)
+- **Service**: pulse-backend.service (systemd) - uses EnvironmentFile for mock.env + mock.env.local
+- **Access**: Web (http://192.168.0.219:7681) or SSH (ssh claude-dev)
+- **Env loading**: Dual approach - systemd EnvironmentFile + Go godotenv (both needed for reliability)
+
+### Before ANY Task: Check Environment State
+**ALWAYS** run this single command first to understand the current state:
+```bash
+/opt/pulse/scripts/claude-env-check.sh
+```
+
+This returns JSON with:
+- `backend.running`: Is the backend service running?
+- `backend.mock_mode`: Is mock mode currently active?
+- `backend.mock_configured`: Is mock mode configured to run?
+- `frontend.running`: Is Vite dev server running?
+- `frontend.built`: Is frontend built?
+
+Example output:
+```json
+{
+  "backend": {
+    "running": true,
+    "mock_mode": true,
+    "mock_configured": true
+  },
+  "frontend": {
+    "running": false,
+    "built": true
+  }
+}
+```
+
+### Smart Mode Switching Logic
+
+**Use Mock Mode when:**
+- Developing frontend features (fast, predictable)
+- Testing UI components or layouts
+- Working on alerts, thresholds, or dashboard grouping
+- User says "test this" or "try this feature"
+- No real infrastructure needed
+
+**Use Production Mode when:**
+- Testing real Proxmox API integration
+- Debugging authentication issues
+- Validating actual infrastructure behavior
+- User says "check my real servers" or "production data"
+- Before creating PRs
+
+**Switch modes automatically:**
+```bash
+# Enable mock mode
+/opt/pulse/scripts/dev-orchestrator.sh mock
+
+# Disable mock mode (production)
+/opt/pulse/scripts/dev-orchestrator.sh prod
+
+# Check status
+/opt/pulse/scripts/dev-orchestrator.sh status
+
+# Or use npm scripts (simpler but less reliable)
+npm run mock:on   # Edits file but doesn't restart service
+npm run mock:off  # Edits file but doesn't restart service
+```
+
+**IMPORTANT:** Always use `dev-orchestrator.sh` for mode switching as it:
+1. Updates the config file
+2. Restarts the backend service
+3. Verifies the mode switch succeeded
+4. Returns clear success/failure status
+
+### Typical Workflows
+
+#### Starting a New Task
+1. **Check current state**: `/opt/pulse/scripts/claude-env-check.sh`
+2. **Decide mode needed**: Mock for features, Production for API/auth work
+3. **Switch if needed**: `/opt/pulse/scripts/dev-orchestrator.sh mock|prod`
+4. **Proceed with task**: Make code changes
+5. **Frontend changes?**: Service serves pre-built frontend, changes require rebuild
+6. **Verify**: Check API at http://localhost:7655/api/state
+
+#### Frontend Development
+- Frontend is **pre-built** and served by backend
+- Changes to frontend-modern/ require rebuild
+- **No auto-reload** - you must rebuild manually or run `npm run dev` (hot-dev.sh)
+- Backend serves from `frontend-modern/dist/`
+
+#### Backend Development
+- Service auto-restarts on crashes (systemd Restart=always)
+- Code changes require: `go build -o pulse ./cmd/pulse && sudo systemctl restart pulse-backend`
+- Mock mode config changes (`mock.env`) trigger auto-reload (no restart needed)
+
+#### Mode Switching During Development
+```bash
+# You're working on frontend in mock mode, need to test with real data
+/opt/pulse/scripts/dev-orchestrator.sh prod
+
+# Back to mock for faster iteration
+/opt/pulse/scripts/dev-orchestrator.sh mock
+```
+
 ## Critical Warnings
 
 ### ⚠️ NEVER kill the pulse process
 **NEVER** run `pkill -f "./pulse"` or similar commands that kill the pulse process. This will terminate tmux/ttyd sessions and disconnect the Claude Code session.
 
-If you need to restart pulse or enable mock mode, coordinate with the user first to avoid disconnection.
+If you need to restart pulse, use: `sudo systemctl restart pulse-backend`
+
+### ⚠️ Service vs Hot-Dev
+- **Normal operation**: systemd service (pulse-backend.service) - now loads mock.env.local correctly
+- **Hot-dev mode**: `npm run dev` - for active development with auto-reload
+- User prefers systemd service for seamless operation
 
 ## Mock Mode System
 
