@@ -34,14 +34,14 @@ export class AlertsAPI {
   // Removed unused config methods - not implemented in backend
 
   static async acknowledge(alertId: string, user?: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${alertId}/acknowledge`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/acknowledge`, {
       method: 'POST',
       body: JSON.stringify({ user }),
     });
   }
 
   static async unacknowledge(alertId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${alertId}/unacknowledge`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/unacknowledge`, {
       method: 'POST',
     });
   }
@@ -59,7 +59,7 @@ export class AlertsAPI {
   }
 
   static async clearAlert(alertId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/${alertId}/clear`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(alertId)}/clear`, {
       method: 'POST',
     });
   }
