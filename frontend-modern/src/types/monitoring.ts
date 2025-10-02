@@ -44,6 +44,14 @@ export interface Node {
   kernelVersion?: string;
 }
 
+export interface GuestNetworkInterface {
+  name?: string;
+  mac?: string;
+  addresses?: string[];
+  rxBytes?: number;
+  txBytes?: number;
+}
+
 export interface Guest {
   id: string;
   vmid: number;
@@ -73,6 +81,10 @@ export interface Guest {
     in: number;
     out: number;
   };
+  osName?: string;
+  osVersion?: string;
+  ipAddresses?: string[];
+  networkInterfaces?: GuestNetworkInterface[];
   template?: boolean;
   haState?: string;
   protection?: boolean;

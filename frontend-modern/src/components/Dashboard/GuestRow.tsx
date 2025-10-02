@@ -41,6 +41,11 @@ export function GuestRow(props: GuestRowProps) {
 
   const hasMultipleDisks = createMemo(() => (props.guest.disks?.length ?? 0) > 1);
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
+  const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
+  const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
+  const osName = createMemo(() => props.guest.osName?.trim() ?? '');
+  const osVersion = createMemo(() => props.guest.osVersion?.trim() ?? '');
+  const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
 
   // Update custom URL when prop changes
   createEffect(() => {
@@ -77,7 +82,7 @@ export function GuestRow(props: GuestRowProps) {
     const total = props.guest.memory.total ?? 0;
     return `${formatBytes(used)}/${formatBytes(total)}`;
   });
-  const memoryTooltip = createMemo(() => {
+  const memoryExtraLines = createMemo(() => {
     if (!props.guest.memory) return undefined;
     const lines: string[] = [];
     const total = props.guest.memory.total ?? 0;
@@ -92,8 +97,11 @@ export function GuestRow(props: GuestRowProps) {
       const swapUsed = props.guest.memory.swapUsed ?? 0;
       lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
     }
-    return lines.length > 0 ? lines.join('\n') : undefined;
+    return lines.length > 0 ? lines : undefined;
   });
+  const memoryTooltip = createMemo(() =>
+    memoryExtraLines()?.join('\n') ?? undefined,
+  );
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
     // Check if usage is -1 (unknown/no guest agent)
@@ -171,57 +179,47 @@ export function GuestRow(props: GuestRowProps) {
       <tr class={rowClass()} style={rowStyle()}>
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center gap-2">
+        <div class="flex items-start gap-2">
           {/* Status indicator */}
           <span
-            class={`h-2 w-2 rounded-full flex-shrink-0 ${
+            class={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
               isRunning() ? 'bg-green-500' : 'bg-red-500'
             }`}
             title={props.guest.status}
           ></span>
 
-          {/* Name - clickable if custom URL is set */}
-          <Show
-            when={customUrl()}
-            fallback={
-              <span
-                class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                title={props.guest.name}
+          <div class="flex items-center gap-2">
+            {/* Name - clickable if custom URL is set */}
+            <Show
+              when={customUrl()}
+              fallback={
+                <span
+                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                  title={props.guest.name}
+                >
+                  {props.guest.name}
+                </span>
+              }
+            >
+              <a
+                href={customUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
+                title={`${props.guest.name} - Click to open custom URL`}
               >
                 {props.guest.name}
-              </span>
-            }
-          >
-            <a
-              href={customUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
-              title={`${props.guest.name} - Click to open custom URL`}
-            >
-              {props.guest.name}
-            </a>
-          </Show>
+              </a>
+            </Show>
 
-          {/* Tag badges */}
-          <TagBadges
-            tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-            maxVisible={3}
-            onTagClick={props.onTagClick}
-            activeSearch={props.activeSearch}
-          />
+            {/* Tag badges */}
+            <TagBadges
+              tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+              maxVisible={3}
+              onTagClick={props.onTagClick}
+              activeSearch={props.activeSearch}
+            />
           </div>
-
-          <Show when={ipAddresses().length > 0}>
-            <div class="flex flex-wrap gap-1 pl-4 text-[10px] font-medium text-blue-700 dark:text-blue-200">
-              <For each={ipAddresses()}>
-                {(ip) => (
-                  <span class="rounded bg-blue-100 px-1.5 py-0.5 dark:bg-blue-900/40">{ip}</span>
-                )}
-              </For>
-            </div>
-          </Show>
         </div>
       </td>
 
@@ -281,41 +279,25 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk */}
-      <td class="py-0.5 px-2 w-[180px]">
-        <Show when={hasMultipleDisks()}>
-          <DiskList
-            disks={props.guest.disks!}
-            diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
-          />
-        </Show>
-        <Show when={!hasMultipleDisks() && props.guest.disks && props.guest.disks.length > 0}>
-          <DiskList
-            disks={props.guest.disks!}
-            diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
-          />
-        </Show>
+      <td class="py-0.5 px-2 w-[140px]">
         <Show
-          when={!props.guest.disks || props.guest.disks.length === 0}
+          when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
+          fallback={
+            <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
+              -
+            </span>
+          }
         >
-          <Show
-            when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
-            fallback={
-              <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
-                -
-              </span>
+          <MetricBar
+            value={diskPercent()}
+            label={`${diskPercent().toFixed(0)}%`}
+            sublabel={
+              props.guest.disk
+                ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
+                : undefined
             }
-          >
-            <MetricBar
-              value={diskPercent()}
-              label={`${diskPercent().toFixed(0)}%`}
-              sublabel={
-                props.guest.disk
-                  ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
-                  : undefined
-              }
-              type="disk"
-            />
-          </Show>
+            type="disk"
+          />
         </Show>
       </td>
 
@@ -335,39 +317,105 @@ export function GuestRow(props: GuestRowProps) {
         <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
       </td>
       </tr>
-      <Show when={hasMultipleDisks()}>
-        <tr class="bg-gray-50/60 dark:bg-gray-800/40">
-          <td colSpan={11} class="px-4 pb-3 pt-2">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Memory</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{memoryUsageLabel()}</div>
-                <Show when={memoryTooltip()}>
-                  <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-300 whitespace-pre-line">
-                    {memoryTooltip()}
-                  </div>
+      <Show
+        when={
+          (hasMultipleDisks() && props.guest.disks && props.guest.disks.length > 0) ||
+          hasNetworkInterfaces() ||
+          ipAddresses().length > 0 ||
+          (memoryExtraLines() && memoryExtraLines()!.length > 0) ||
+          hasOsInfo()
+        }
+      >
+        <tr class="bg-gray-50/60 dark:bg-gray-800/40 text-[11px] text-gray-600 dark:text-gray-300">
+          <td class="px-4 py-2 align-top" colSpan={1}>
+            <Show when={hasOsInfo()}>
+              <div class="flex items-center gap-1 text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                <Show when={osName().length > 0}>
+                  <span class="truncate" title={osName()}>{osName()}</span>
+                </Show>
+                <Show when={osName().length > 0 && osVersion().length > 0}>
+                  <span class="text-gray-400 dark:text-gray-600">•</span>
+                </Show>
+                <Show when={osVersion().length > 0}>
+                  <span class="truncate" title={osVersion()}>{osVersion()}</span>
                 </Show>
               </div>
-              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">IP Addresses</div>
-                <Show
-                  when={ipAddresses().length > 0}
-                  fallback={<div class="mt-1 text-sm text-gray-400 dark:text-gray-500">—</div>}
-                >
-                  <div class="mt-1 flex flex-wrap gap-1 text-sm text-gray-800 dark:text-gray-100">
-                    <For each={ipAddresses()}>{(ip) => <span>{ip}</span>}</For>
-                  </div>
-                </Show>
+            </Show>
+
+            <Show when={ipAddresses().length > 0}>
+              <div class="mt-1 flex flex-wrap gap-1">
+                <For each={ipAddresses()}>
+                  {(ip) => (
+                    <span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                      {ip}
+                    </span>
+                  )}
+                </For>
               </div>
-              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Disks</div>
-                <DiskList
-                  disks={props.guest.disks || []}
-                  diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
-                />
+            </Show>
+
+            <Show when={hasNetworkInterfaces()}>
+              <div class="mt-2 flex flex-col gap-1">
+                <For each={networkInterfaces()}>
+                  {(iface) => {
+                    const addresses = iface.addresses ?? [];
+                    const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
+                    return (
+                      <div class="rounded border border-gray-200 bg-white/70 p-1.5 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                        <div class="flex items-center gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-200">
+                          <span class="truncate" title={iface.name}>{iface.name || 'interface'}</span>
+                          <Show when={iface.mac}>
+                            <span class="text-[10px] text-gray-400 dark:text-gray-500" title={iface.mac}>
+                              {iface.mac}
+                            </span>
+                          </Show>
+                        </div>
+                        <Show when={addresses.length > 0}>
+                          <div class="mt-1 flex flex-wrap gap-1">
+                            <For each={addresses}>
+                              {(ip) => (
+                                <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                  {ip}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                        <Show when={hasTraffic}>
+                          <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                            RX {formatBytes(iface.rxBytes ?? 0)} / TX {formatBytes(iface.txBytes ?? 0)}
+                          </div>
+                        </Show>
+                      </div>
+                    );
+                  }}
+                </For>
               </div>
-            </div>
+            </Show>
           </td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}>
+            <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
+              <div class="space-y-1">
+                <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
+              </div>
+            </Show>
+          </td>
+          <td class="px-2 py-2" colSpan={1}>
+            <Show when={hasMultipleDisks() && props.guest.disks && props.guest.disks.length > 0}>
+              <DiskList
+                disks={props.guest.disks || []}
+                diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
+              />
+            </Show>
+          </td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
+          <td class="px-2 py-2" colSpan={1}></td>
         </tr>
       </Show>
     </>

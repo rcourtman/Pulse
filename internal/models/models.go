@@ -88,6 +88,9 @@ type VM struct {
 	Disks            []Disk    `json:"disks,omitempty"`
 	DiskStatusReason string    `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	IPAddresses      []string  `json:"ipAddresses,omitempty"`
+	OSName           string    `json:"osName,omitempty"`
+	OSVersion        string    `json:"osVersion,omitempty"`
+	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 	NetworkIn        int64     `json:"networkIn"`
 	NetworkOut       int64     `json:"networkOut"`
 	DiskRead         int64     `json:"diskRead"`
@@ -307,6 +310,14 @@ type Memory struct {
 	Balloon   int64   `json:"balloon,omitempty"`
 	SwapUsed  int64   `json:"swapUsed,omitempty"`
 	SwapTotal int64   `json:"swapTotal,omitempty"`
+}
+
+type GuestNetworkInterface struct {
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
+	RXBytes   int64    `json:"rxBytes,omitempty"`
+	TXBytes   int64    `json:"txBytes,omitempty"`
 }
 
 // Disk represents disk usage

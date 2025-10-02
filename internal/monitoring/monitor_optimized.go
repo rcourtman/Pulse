@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -141,6 +140,9 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 				memUsed := uint64(0)
 				memTotal := vm.MaxMem
 				var vmStatus *proxmox.VMStatus
+				var ipAddresses []string
+				var networkInterfaces []models.GuestNetworkInterface
+				var osName, osVersion string
 
 				if vm.Status == "running" {
 					// Try to get detailed VM status (but don't wait too long)
@@ -164,37 +166,20 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					cancel()
 				}
 
-				ipAddresses := make([]string, 0)
 				if vm.Status == "running" && vmStatus != nil {
-					ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
-					interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, n.Node, vm.VMID)
-					cancelIface()
-					if err != nil {
-						log.Debug().Str("instance", instanceName).Str("vm", vm.Name).Int("vmid", vm.VMID).Err(err).Msg("Guest agent network interfaces unavailable")
-					} else {
-						seenIPs := make(map[string]struct{})
-						for _, iface := range interfaces {
-							for _, addr := range iface.IPAddresses {
-								ip := strings.TrimSpace(addr.Address)
-								if ip == "" {
-									continue
-								}
-								lower := strings.ToLower(ip)
-								if strings.HasPrefix(ip, "127.") || strings.HasPrefix(lower, "fe80") || strings.HasPrefix(ip, "::1") {
-									continue
-								}
-								if _, exists := seenIPs[ip]; exists {
-									continue
-								}
-								seenIPs[ip] = struct{}{}
-								ipAddresses = append(ipAddresses, ip)
-							}
-						}
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
+					if len(guestIPs) > 0 {
+						ipAddresses = guestIPs
 					}
-				}
-
-				if len(ipAddresses) > 1 {
-					sort.Strings(ipAddresses)
+					if len(guestIfaces) > 0 {
+						networkInterfaces = guestIfaces
+					}
+					if guestOSName != "" {
+						osName = guestOSName
+					}
+					if guestOSVersion != "" {
+						osVersion = guestOSVersion
+					}
 				}
 
 				// Calculate I/O rates after we have the actual values
@@ -461,17 +446,20 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						Free:  int64(diskFree),
 						Usage: diskUsage,
 					},
-					Disks:            individualDisks,
-					DiskStatusReason: diskStatusReason,
-					NetworkIn:        maxInt64(0, int64(netInRate)),
-					NetworkOut:       maxInt64(0, int64(netOutRate)),
-					DiskRead:         maxInt64(0, int64(diskReadRate)),
-					DiskWrite:        maxInt64(0, int64(diskWriteRate)),
-					Uptime:           int64(vm.Uptime),
-					Template:         vm.Template == 1,
-					LastSeen:         time.Now(),
-					Tags:             tags,
-					IPAddresses:      ipAddresses,
+					Disks:             individualDisks,
+					DiskStatusReason:  diskStatusReason,
+					NetworkIn:         maxInt64(0, int64(netInRate)),
+					NetworkOut:        maxInt64(0, int64(netOutRate)),
+					DiskRead:          maxInt64(0, int64(diskReadRate)),
+					DiskWrite:         maxInt64(0, int64(diskWriteRate)),
+					Uptime:            int64(vm.Uptime),
+					Template:          vm.Template == 1,
+					LastSeen:          time.Now(),
+					Tags:              tags,
+					IPAddresses:       ipAddresses,
+					OSName:            osName,
+					OSVersion:         osVersion,
+					NetworkInterfaces: networkInterfaces,
 				}
 
 				// Zero out metrics for non-running VMs

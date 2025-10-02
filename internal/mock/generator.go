@@ -608,45 +608,107 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 		vmID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
 	}
 
+	osName, osVersion := generateGuestOSMetadata()
+	ipAddresses, networkIfaces := generateGuestNetworkInfo()
+
 	return models.VM{
-		Name:             name,
-		VMID:             vmid,
-		Node:             nodeName,
-		Instance:         instance,
-		Type:             "qemu",
-		Status:           status,
-		CPU:              cpu,
-		CPUs:             2 + rand.Intn(6), // 2-8 cores
-		Memory:           mem,
-		Disk:             aggregatedDisk,
-		Disks:            virtualDisks,
-		DiskStatusReason: diskStatusReason,
-		DiskRead:         generateRealisticIO("disk-read"),
-		DiskWrite:        generateRealisticIO("disk-write"),
-		NetworkIn:        generateRealisticIO("network-in"),
-		NetworkOut:       generateRealisticIO("network-out"),
-		Uptime:           uptime,
-		ID:               vmID,
-		Tags:             generateTags(),
-		IPAddresses:      generateGuestIPs(),
+		Name:              name,
+		VMID:              vmid,
+		Node:              nodeName,
+		Instance:          instance,
+		Type:              "qemu",
+		Status:            status,
+		CPU:               cpu,
+		CPUs:              2 + rand.Intn(6), // 2-8 cores
+		Memory:            mem,
+		Disk:              aggregatedDisk,
+		Disks:             virtualDisks,
+		DiskStatusReason:  diskStatusReason,
+		DiskRead:          generateRealisticIO("disk-read"),
+		DiskWrite:         generateRealisticIO("disk-write"),
+		NetworkIn:         generateRealisticIO("network-in"),
+		NetworkOut:        generateRealisticIO("network-out"),
+		Uptime:            uptime,
+		ID:                vmID,
+		Tags:              generateTags(),
+		IPAddresses:       ipAddresses,
+		OSName:            osName,
+		OSVersion:         osVersion,
+		NetworkInterfaces: networkIfaces,
 	}
 }
 
-func generateGuestIPs() []string {
-	count := 1 + rand.Intn(2) // 1-2 IPs
-	ips := make([]string, 0, count)
-	seen := make(map[string]struct{})
+func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
+	ifaceCount := 1 + rand.Intn(2)
+	ipSet := make(map[string]struct{})
+	ipAddresses := make([]string, 0, ifaceCount*2)
+	interfaces := make([]models.GuestNetworkInterface, 0, ifaceCount)
 
-	for len(ips) < count {
-		ip := fmt.Sprintf("10.%d.%d.%d", rand.Intn(200)+1, rand.Intn(254), rand.Intn(254))
-		if _, exists := seen[ip]; exists {
-			continue
+	for i := 0; i < ifaceCount; i++ {
+		name := fmt.Sprintf("eth%d", i)
+		if rand.Float64() < 0.3 {
+			name = fmt.Sprintf("ens%d", i+3)
 		}
-		seen[ip] = struct{}{}
-		ips = append(ips, ip)
+
+		mac := fmt.Sprintf("52:54:%02x:%02x:%02x:%02x",
+			rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+
+		addrCount := 1 + rand.Intn(2)
+		addresses := make([]string, 0, addrCount)
+
+		for len(addresses) < addrCount {
+			var ip string
+			if rand.Float64() < 0.2 {
+				ip = fmt.Sprintf("fd00:%x:%x::%x", rand.Intn(1<<16), rand.Intn(1<<16), rand.Intn(1<<16))
+			} else {
+				ip = fmt.Sprintf("10.%d.%d.%d", rand.Intn(200)+1, rand.Intn(254), rand.Intn(254))
+			}
+
+			if _, exists := ipSet[ip]; exists {
+				continue
+			}
+			ipSet[ip] = struct{}{}
+			addresses = append(addresses, ip)
+			ipAddresses = append(ipAddresses, ip)
+		}
+
+		rxBytes := int64(rand.Int63n(8*1024*1024*1024) + rand.Int63n(256*1024*1024))
+		txBytes := int64(rand.Int63n(6*1024*1024*1024) + rand.Int63n(256*1024*1024))
+
+		interfaces = append(interfaces, models.GuestNetworkInterface{
+			Name:      name,
+			MAC:       mac,
+			Addresses: addresses,
+			RXBytes:   rxBytes,
+			TXBytes:   txBytes,
+		})
 	}
 
-	return ips
+	sort.Strings(ipAddresses)
+
+	return ipAddresses, interfaces
+}
+
+func generateGuestOSMetadata() (string, string) {
+	variants := []struct {
+		Name    string
+		Version string
+	}{
+		{"Ubuntu", "22.04 LTS"},
+		{"Ubuntu", "24.04 LTS"},
+		{"Debian GNU/Linux", "12 (Bookworm)"},
+		{"Debian GNU/Linux", "11 (Bullseye)"},
+		{"CentOS Stream", "9"},
+		{"Rocky Linux", "9.3"},
+		{"AlmaLinux", "8.10"},
+		{"Fedora", fmt.Sprintf("%d", 38+rand.Intn(3))},
+		{"Windows Server", "2019"},
+		{"Windows Server", "2022"},
+		{"Arch Linux", "rolling"},
+	}
+
+	choice := variants[rand.Intn(len(variants))]
+	return choice.Name, choice.Version
 }
 
 func generateContainer(nodeName string, instance string, vmid int, config MockConfig) models.Container {
