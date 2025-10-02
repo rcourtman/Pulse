@@ -11,6 +11,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { useWebSocket } from '@/App';
 import { showSuccess, showError } from '@/utils/toast';
+import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
@@ -2421,14 +2422,14 @@ function HistoryTab() {
             const isSelected = selectedBarIndex() === i;
             return (
               <div
-                class="flex-1 group relative flex items-end cursor-pointer"
+                class="flex-1 relative flex items-end cursor-pointer"
                 onClick={() => setSelectedBarIndex(i === selectedBarIndex() ? null : i)}
               >
                 {/* Background track for all slots */}
                 <div class="absolute bottom-0 w-full h-1 bg-gray-300 dark:bg-gray-600 opacity-30 rounded-full"></div>
                 {/* Actual bar */}
                 <div
-                  class="w-full group relative rounded-sm transition-all"
+                  class="w-full relative rounded-sm transition-all"
                   style={{
                     height: `${pixelHeight}px`,
                     'background-color':
@@ -2436,34 +2437,36 @@ function HistoryTab() {
                     opacity: isSelected ? '1' : '0.8',
                     'box-shadow': isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.4)' : 'none',
                   }}
-                  title={`${val} alert${val !== 1 ? 's' : ''}`}
-                >
-                  {/* Tooltip on hover */}
-                  <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    <div class="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                      <div class="font-semibold">
-                        {val} alert{val !== 1 ? 's' : ''}
-                      </div>
-                      <div class="text-[10px] text-gray-300">
-                        {timeFilter() === '24h'
-                          ? `${alertTrends().bucketSize} hour period`
-                          : timeFilter() === '7d'
-                            ? `${alertTrends().bucketSize / 24} day period`
-                            : timeFilter() === '30d'
-                              ? `${alertTrends().bucketSize / 24} day period`
-                              : `${alertTrends().bucketSize / 24} day period`}
-                      </div>
-                      <div class="text-[10px] text-gray-300">
-                        {new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: timeFilter() === '24h' ? 'numeric' : undefined,
-                          minute: timeFilter() === '24h' ? '2-digit' : undefined,
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  onMouseEnter={(e) => {
+                    if (val <= 0) {
+                      hideTooltip();
+                      return;
+                    }
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    const bucketHours = alertTrends().bucketSize;
+                    const bucketLabel = (() => {
+                      if (timeFilter() === '24h') return `${bucketHours} hour period`;
+                      const bucketDays = bucketHours / 24;
+                      return `${bucketDays} day period`;
+                    })();
+                    const timestamp = new Date(alertTrends().bucketTimes[i]).toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: timeFilter() === '24h' ? 'numeric' : undefined,
+                      minute: timeFilter() === '24h' ? '2-digit' : undefined,
+                    });
+                    const content = [
+                      `${val} alert${val !== 1 ? 's' : ''}`,
+                      bucketLabel,
+                      timestamp,
+                    ].join('\n');
+                    showTooltip(content, rect.left + rect.width / 2, rect.top, {
+                      align: 'center',
+                      direction: 'up',
+                    });
+                  }}
+                  onMouseLeave={() => hideTooltip()}
+                />
               </div>
             );
           })}
