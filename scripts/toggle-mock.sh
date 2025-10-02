@@ -34,8 +34,20 @@ restart_backend() {
     sleep 1
     pkill -9 -x pulse 2>/dev/null || true
 
-    # Build if needed
-    if [ ! -f "$ROOT_DIR/pulse" ] || [ "$ROOT_DIR/cmd/pulse/main.go" -nt "$ROOT_DIR/pulse" ]; then
+    # Build if needed (rebuild when any Go file is newer than the binary)
+    build_needed=false
+    if [ ! -f "$ROOT_DIR/pulse" ]; then
+        build_needed=true
+    else
+        changed=$(find "$ROOT_DIR" \
+            \( -path "$ROOT_DIR/node_modules" -o -path "$ROOT_DIR/frontend-modern/node_modules" \) -prune \
+            -o -name '*.go' -newer "$ROOT_DIR/pulse" -print -quit)
+        if [ -n "$changed" ]; then
+            build_needed=true
+        fi
+    fi
+
+    if [ "$build_needed" = true ]; then
         echo "Building backend..."
         cd "$ROOT_DIR"
         go build -o pulse ./cmd/pulse || {
