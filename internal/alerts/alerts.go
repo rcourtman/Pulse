@@ -247,7 +247,13 @@ func NewManager() *Manager {
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
 			HysteresisMargin:  5.0, // 5% default margin
-			Overrides:         make(map[string]ThresholdConfig),
+			TimeThresholds: map[string]int{
+				"guest":   10, // 10 second delay for guest CPU alerts
+				"node":    15, // 15 second delay for node alerts
+				"storage": 30, // 30 second delay for storage alerts
+				"pbs":     30, // 30 second delay for PBS alerts
+			},
+			Overrides: make(map[string]ThresholdConfig),
 			Schedule: ScheduleConfig{
 				QuietHours: QuietHours{
 					Enabled:  false, // OFF - users should opt-in to quiet hours
