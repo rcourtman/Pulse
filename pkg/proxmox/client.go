@@ -964,6 +964,20 @@ type VMFileSystem struct {
 	DiskRaw    []interface{} `json:"disk"` // Raw disk device info from API
 }
 
+type VMIpAddress struct {
+	Address string `json:"ip-address"`
+	Prefix  int    `json:"prefix"`
+}
+
+type VMNetworkInterface struct {
+	Name          string        `json:"name"`
+	HardwareAddr  string        `json:"hardware-address"`
+	IPAddresses   []VMIpAddress `json:"ip-addresses"`
+	Statistics    interface{}   `json:"statistics,omitempty"`
+	HasIp4Gateway bool          `json:"has-ipv4-synth-gateway,omitempty"`
+	HasIp6Gateway bool          `json:"has-ipv6-synth-gateway,omitempty"`
+}
+
 // GetVMFSInfo returns filesystem information from QEMU guest agent
 func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid))
@@ -1053,6 +1067,27 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 
 	// If both fail, return error
 	return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+}
+
+// GetVMNetworkInterfaces returns network interfaces reported by the guest agent
+func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]VMNetworkInterface, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Result []VMNetworkInterface `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data.Result, nil
 }
 
 // GetVMStatus returns detailed VM status including balloon info

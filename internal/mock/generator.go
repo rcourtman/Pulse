@@ -488,10 +488,11 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
 		mem = models.Memory{
-			Total: totalMem,
-			Used:  usedMem,
-			Free:  totalMem - usedMem,
-			Usage: memUsage * 100,
+			Total:   totalMem,
+			Used:    usedMem,
+			Free:    totalMem - usedMem,
+			Usage:   memUsage * 100,
+			Balloon: totalMem,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
 	}
@@ -524,14 +525,32 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			Free:  totalDisk - usedDisk,
 			Usage: float64(usedDisk) / float64(totalDisk) * 100,
 		},
-		DiskRead:   generateRealisticIO("disk-read"),
-		DiskWrite:  generateRealisticIO("disk-write"),
-		NetworkIn:  generateRealisticIO("network-in"),
-		NetworkOut: generateRealisticIO("network-out"),
-		Uptime:     uptime,
-		ID:         vmID,
-		Tags:       generateTags(),
+		DiskRead:    generateRealisticIO("disk-read"),
+		DiskWrite:   generateRealisticIO("disk-write"),
+		NetworkIn:   generateRealisticIO("network-in"),
+		NetworkOut:  generateRealisticIO("network-out"),
+		Uptime:      uptime,
+		ID:          vmID,
+		Tags:        generateTags(),
+		IPAddresses: generateGuestIPs(),
 	}
+}
+
+func generateGuestIPs() []string {
+	count := 1 + rand.Intn(2) // 1-2 IPs
+	ips := make([]string, 0, count)
+	seen := make(map[string]struct{})
+
+	for len(ips) < count {
+		ip := fmt.Sprintf("10.%d.%d.%d", rand.Intn(200)+1, rand.Intn(254), rand.Intn(254))
+		if _, exists := seen[ip]; exists {
+			continue
+		}
+		seen[ip] = struct{}{}
+		ips = append(ips, ip)
+	}
+
+	return ips
 }
 
 func generateContainer(nodeName string, instance string, vmid int, config MockConfig) models.Container {
@@ -569,10 +588,11 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
 		mem = models.Memory{
-			Total: totalMem,
-			Used:  usedMem,
-			Free:  totalMem - usedMem,
-			Usage: memUsage * 100,
+			Total:   totalMem,
+			Used:    usedMem,
+			Free:    totalMem - usedMem,
+			Usage:   memUsage * 100,
+			Balloon: totalMem,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
 	}

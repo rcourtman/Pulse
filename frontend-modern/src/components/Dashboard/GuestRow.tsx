@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
@@ -39,8 +39,8 @@ export function GuestRow(props: GuestRowProps) {
     return `${props.guest.instance}-${props.guest.node}-${props.guest.vmid}`;
   });
 
-  const diskCount = createMemo(() => (props.guest.disks ? props.guest.disks.length : 0));
-  const hasMultipleDisks = createMemo(() => diskCount() > 1);
+  const hasMultipleDisks = createMemo(() => (props.guest.disks?.length ?? 0) > 1);
+  const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
 
   // Update custom URL when prop changes
   createEffect(() => {
@@ -70,6 +70,24 @@ export function GuestRow(props: GuestRowProps) {
     if (!props.guest.memory) return 0;
     // Use the pre-calculated usage percentage from the backend
     return props.guest.memory.usage || 0;
+  });
+  const memorySubLabel = createMemo(() => {
+    if (!props.guest.memory) return undefined;
+    const used = props.guest.memory.used ?? 0;
+    const total = props.guest.memory.total ?? 0;
+    const parts = [`${formatBytes(used)}/${formatBytes(total)}`];
+    if (props.guest.memory.balloon && props.guest.memory.balloon > 0 && props.guest.memory.balloon !== total) {
+      parts.push(`balloon ${formatBytes(props.guest.memory.balloon)}`);
+    }
+    if (
+      props.guest.memory.swapUsed &&
+      props.guest.memory.swapUsed > 0 &&
+      props.guest.memory.swapTotal &&
+      props.guest.memory.swapTotal > 0
+    ) {
+      parts.push(`swap ${formatBytes(props.guest.memory.swapUsed)}/${formatBytes(props.guest.memory.swapTotal)}`);
+    }
+    return parts.join(' • ');
   });
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
@@ -147,7 +165,8 @@ export function GuestRow(props: GuestRowProps) {
     <tr class={rowClass()} style={rowStyle()}>
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center gap-2">
           {/* Status indicator */}
           <span
             class={`h-2 w-2 rounded-full flex-shrink-0 ${
@@ -186,6 +205,17 @@ export function GuestRow(props: GuestRowProps) {
             onTagClick={props.onTagClick}
             activeSearch={props.activeSearch}
           />
+          </div>
+
+          <Show when={ipAddresses().length > 0}>
+            <div class="flex flex-wrap gap-1 pl-4 text-[10px] font-medium text-blue-700 dark:text-blue-200">
+              <For each={ipAddresses()}>
+                {(ip) => (
+                  <span class="rounded bg-blue-100 px-1.5 py-0.5 dark:bg-blue-900/40">{ip}</span>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </td>
 
@@ -237,11 +267,7 @@ export function GuestRow(props: GuestRowProps) {
         <MetricBar
           value={memPercent()}
           label={`${memPercent().toFixed(0)}%`}
-          sublabel={
-            props.guest.memory
-              ? `${formatBytes(props.guest.memory.used)}/${formatBytes(props.guest.memory.total)}`
-              : undefined
-          }
+          sublabel={memorySubLabel()}
           type="memory"
         />
       </td>
