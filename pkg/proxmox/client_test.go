@@ -23,6 +23,21 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 			expected: 81,
 		},
 		{
+			name:     "escaped numeric string",
+			wearout:  "\"\\\"81\\\"\"",
+			expected: 81,
+		},
+		{
+			name:     "percentage string",
+			wearout:  "\"81%\"",
+			expected: 81,
+		},
+		{
+			name:     "percentage with spaces",
+			wearout:  "\"  82 % \"",
+			expected: 82,
+		},
+		{
 			name:     "not applicable string",
 			wearout:  "\"N/A\"",
 			expected: 0,
@@ -35,6 +50,11 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 		{
 			name:     "null value",
 			wearout:  "null",
+			expected: 0,
+		},
+		{
+			name:     "unknown string",
+			wearout:  "\"Unknown\"",
 			expected: 0,
 		},
 	}

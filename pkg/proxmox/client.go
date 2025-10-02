@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
@@ -1273,16 +1274,7 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	case string:
 		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers.
 		// Some controllers also return numeric wearout values as strings, so try to parse them.
-		trimmed := strings.TrimSpace(v)
-		if trimmed == "" {
-			d.Wearout = 0
-			break
-		}
-		if parsed, err := strconv.Atoi(trimmed); err == nil {
-			d.Wearout = parsed
-		} else {
-			d.Wearout = 0
-		}
+		d.Wearout = parseWearoutValue(v)
 	case nil:
 		d.Wearout = 0
 	default:
@@ -1312,6 +1304,57 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// parseWearoutValue normalizes the wearout value returned by Proxmox into an integer percentage.
+// The API occasionally wraps numeric values in escaped quotes (\"81\"), appends percent symbols,
+// or reports descriptive strings like "N/A". We strip those variations so downstream code can work
+// with a simple integer. Non-numeric results collapse to zero so monitoring can proceed safely.
+func parseWearoutValue(raw string) int {
+	cleaned := strings.TrimSpace(raw)
+	if cleaned == "" {
+		return 0
+	}
+
+	// Remove escaped quotes and surrounding quotes the API sometimes includes.
+	cleaned = strings.ReplaceAll(cleaned, "\\\"", "")
+	cleaned = strings.Trim(cleaned, "\"'")
+	cleaned = strings.TrimSpace(cleaned)
+
+	if cleaned == "" {
+		return 0
+	}
+
+	switch strings.ToLower(cleaned) {
+	case "n/a", "na", "none", "unknown":
+		return 0
+	}
+
+	if parsed, err := strconv.Atoi(cleaned); err == nil {
+		return parsed
+	}
+
+	if parsed, err := strconv.ParseFloat(cleaned, 64); err == nil {
+		if parsed <= 0 {
+			return 0
+		}
+		return int(parsed)
+	}
+
+	var digits strings.Builder
+	for _, r := range cleaned {
+		if unicode.IsDigit(r) {
+			digits.WriteRune(r)
+		}
+	}
+
+	if digits.Len() > 0 {
+		if parsed, err := strconv.Atoi(digits.String()); err == nil {
+			return parsed
+		}
+	}
+
+	return 0
 }
 
 // DiskSmart represents SMART data for a disk
