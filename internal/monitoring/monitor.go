@@ -1472,6 +1472,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Size:        disk.Size,
 				Health:      disk.Health,
 				Wearout:     disk.Wearout,
+				WearoutUsed: disk.WearoutUsed,
 				RPM:         disk.RPM,
 				Used:        disk.Used,
 				LastChecked: time.Now(),
@@ -1499,7 +1500,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Pass disk info to alert manager
 				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-			} else if disk.Wearout > 0 && disk.Wearout < 10 {
+			} else if disk.Wearout >= 0 && disk.Wearout < 10 {
 				// Low wearout warning (less than 10% life remaining)
 				log.Warn().
 					Str("node", node.Node).

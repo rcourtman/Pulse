@@ -3047,7 +3047,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	}
 
 	// Check for low wearout (SSD life remaining)
-	if disk.Wearout > 0 && disk.Wearout < 10 {
+	if disk.Wearout >= 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
 
 		if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
@@ -3060,17 +3060,18 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				ResourceName: fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath),
 				Node:         node,
 				Instance:     instance,
-				Message:      fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout),
+				Message:      fmt.Sprintf("SSD life remaining dropped below 10%% (%d%% remaining, %d%% wear used)", disk.Wearout, disk.WearoutUsed),
 				Value:        float64(disk.Wearout),
 				Threshold:    10.0,
 				StartTime:    time.Now(),
 				LastSeen:     time.Now(),
 				Metadata: map[string]interface{}{
-					"disk_path":    disk.DevPath,
-					"disk_model":   disk.Model,
-					"disk_serial":  disk.Serial,
-					"disk_type":    disk.Type,
-					"disk_wearout": disk.Wearout,
+					"disk_path":         disk.DevPath,
+					"disk_model":        disk.Model,
+					"disk_serial":       disk.Serial,
+					"disk_type":         disk.Type,
+					"disk_wearout":      disk.Wearout,
+					"disk_wearout_used": disk.WearoutUsed,
 				},
 			}
 
