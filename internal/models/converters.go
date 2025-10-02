@@ -140,6 +140,10 @@ func (v VM) ToFrontend() VMFrontend {
 		vm.Disks = v.Disks
 	}
 
+	if len(v.IPAddresses) > 0 {
+		vm.IPAddresses = append([]string(nil), v.IPAddresses...)
+	}
+
 	return vm
 }
 

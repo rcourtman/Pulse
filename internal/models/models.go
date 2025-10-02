@@ -87,6 +87,7 @@ type VM struct {
 	Disk             Disk      `json:"disk"`
 	Disks            []Disk    `json:"disks,omitempty"`
 	DiskStatusReason string    `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	IPAddresses      []string  `json:"ipAddresses,omitempty"`
 	NetworkIn        int64     `json:"networkIn"`
 	NetworkOut       int64     `json:"networkOut"`
 	DiskRead         int64     `json:"diskRead"`
@@ -299,10 +300,13 @@ type PBSGarbageJob struct {
 
 // Memory represents memory usage
 type Memory struct {
-	Total int64   `json:"total"`
-	Used  int64   `json:"used"`
-	Free  int64   `json:"free"`
-	Usage float64 `json:"usage"`
+	Total     int64   `json:"total"`
+	Used      int64   `json:"used"`
+	Free      int64   `json:"free"`
+	Usage     float64 `json:"usage"`
+	Balloon   int64   `json:"balloon,omitempty"`
+	SwapUsed  int64   `json:"swapUsed,omitempty"`
+	SwapTotal int64   `json:"swapTotal,omitempty"`
 }
 
 // Disk represents disk usage

@@ -54,6 +54,7 @@ export interface VM {
   disk: Disk;
   disks?: Disk[];
   diskStatusReason?: string;
+  ipAddresses?: string[];
   networkIn: number;
   networkOut: number;
   diskRead: number;
@@ -79,6 +80,7 @@ export interface Container {
   memory: Memory;
   disk: Disk;
   disks?: Disk[];
+  ipAddresses?: string[];
   networkIn: number;
   networkOut: number;
   diskRead: number;
@@ -243,6 +245,9 @@ export interface Memory {
   used: number;
   free: number;
   usage: number;
+  balloon?: number;
+  swapUsed?: number;
+  swapTotal?: number;
 }
 
 export interface Disk {
