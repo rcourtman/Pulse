@@ -438,6 +438,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 	m.alertManager.SetResolvedCallback(func(alertID string) {
 		wsHub.BroadcastAlertResolved(alertID)
+		m.notificationMgr.CancelAlert(alertID)
 		// Don't broadcast full state here - it causes a cascade with many guests
 		// The frontend will get the updated alerts through the regular broadcast ticker
 		// state := m.GetState()

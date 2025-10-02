@@ -783,7 +783,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		for alertID, alert := range m.activeAlerts {
 			// Only clear resource metric alerts, not powered-off alerts
 			if alert.ResourceID == guestID && alert.Type != "powered-off" {
-				delete(m.activeAlerts, alertID)
+				m.clearAlertNoLock(alertID)
 				alertsCleared++
 				log.Debug().
 					Str("alertID", alertID).
@@ -817,7 +817,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		m.mu.Lock()
 		for alertID, alert := range m.activeAlerts {
 			if alert.ResourceID == guestID {
-				delete(m.activeAlerts, alertID)
+				m.clearAlertNoLock(alertID)
 				log.Info().
 					Str("alertID", alertID).
 					Str("guest", name).
@@ -923,7 +923,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Clear CPU alert
 		cpuAlertID := fmt.Sprintf("%s-cpu", pbs.ID)
 		if _, exists := m.activeAlerts[cpuAlertID]; exists {
-			delete(m.activeAlerts, cpuAlertID)
+			m.clearAlertNoLock(cpuAlertID)
 			log.Info().
 				Str("alertID", cpuAlertID).
 				Str("pbs", pbs.Name).
@@ -932,7 +932,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Clear Memory alert
 		memAlertID := fmt.Sprintf("%s-memory", pbs.ID)
 		if _, exists := m.activeAlerts[memAlertID]; exists {
-			delete(m.activeAlerts, memAlertID)
+			m.clearAlertNoLock(memAlertID)
 			log.Info().
 				Str("alertID", memAlertID).
 				Str("pbs", pbs.Name).
@@ -941,7 +941,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		// Clear offline alert
 		offlineAlertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
 		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			delete(m.activeAlerts, offlineAlertID)
+			m.clearAlertNoLock(offlineAlertID)
 			log.Info().
 				Str("alertID", offlineAlertID).
 				Str("pbs", pbs.Name).
@@ -1003,7 +1003,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		// Clear usage alert
 		usageAlertID := fmt.Sprintf("%s-usage", storage.ID)
 		if _, exists := m.activeAlerts[usageAlertID]; exists {
-			delete(m.activeAlerts, usageAlertID)
+			m.clearAlertNoLock(usageAlertID)
 			log.Info().
 				Str("alertID", usageAlertID).
 				Str("storage", storage.Name).
@@ -1012,7 +1012,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		// Clear offline alert
 		offlineAlertID := fmt.Sprintf("storage-offline-%s", storage.ID)
 		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			delete(m.activeAlerts, offlineAlertID)
+			m.clearAlertNoLock(offlineAlertID)
 			log.Info().
 				Str("alertID", offlineAlertID).
 				Str("storage", storage.Name).
@@ -1666,7 +1666,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 	if override, exists := m.config.Overrides[node.ID]; exists && override.DisableConnectivity {
 		// Node connectivity alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			delete(m.activeAlerts, alertID)
+			m.clearAlertNoLock(alertID)
 			log.Debug().
 				Str("node", node.Name).
 				Msg("Node offline alert cleared (connectivity alerts disabled)")
@@ -1797,7 +1797,7 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 	if override, exists := m.config.Overrides[pbs.ID]; exists && (override.Disabled || override.DisableConnectivity) {
 		// PBS connectivity alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			delete(m.activeAlerts, alertID)
+			m.clearAlertNoLock(alertID)
 			log.Debug().
 				Str("pbs", pbs.Name).
 				Msg("PBS offline alert cleared (connectivity alerts disabled)")
@@ -1910,7 +1910,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 	if override, exists := m.config.Overrides[storage.ID]; exists && override.Disabled {
 		// Storage alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			delete(m.activeAlerts, alertID)
+			m.clearAlertNoLock(alertID)
 			log.Debug().
 				Str("storage", storage.Name).
 				Msg("Storage offline alert cleared (alerts disabled)")
@@ -2032,7 +2032,7 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 	if thresholds.Disabled || thresholds.DisableConnectivity {
 		// Powered-off alerts are disabled, clear any existing alert and return
 		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			delete(m.activeAlerts, alertID)
+			m.clearAlertNoLock(alertID)
 			log.Debug().
 				Str("guest", name).
 				Msg("Guest powered-off alert cleared (alerts disabled)")
