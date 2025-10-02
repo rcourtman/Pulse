@@ -53,6 +53,76 @@ var commonTags = []string{
 	"team-a", "team-b", "customer-1", "project-x",
 }
 
+var vmMountpoints = []string{
+	"/",
+	"/var",
+	"/home",
+	"/srv",
+	"/opt",
+	"/data",
+	"/backup",
+	"/logs",
+	"/mnt/data",
+	"/mnt/backup",
+}
+
+var vmFilesystemTypes = []string{"ext4", "xfs", "btrfs", "zfs"}
+var vmDevices = []string{"vda", "vdb", "vdc", "sda", "sdb", "sdc", "nvme0n1", "nvme1n1"}
+
+func generateVirtualDisks() ([]models.Disk, models.Disk) {
+	diskCount := 1 + rand.Intn(3)
+	disks := make([]models.Disk, 0, diskCount)
+	usedMounts := make(map[string]struct{})
+	var total int64
+	var used int64
+
+	for i := 0; i < diskCount; i++ {
+		mount := "/"
+		if i == 0 {
+			usedMounts[mount] = struct{}{}
+		} else {
+			candidate := vmMountpoints[rand.Intn(len(vmMountpoints))]
+			for _, taken := usedMounts[candidate]; taken && len(usedMounts) < len(vmMountpoints); _, taken = usedMounts[candidate] {
+				candidate = vmMountpoints[rand.Intn(len(vmMountpoints))]
+			}
+			mount = candidate
+			usedMounts[mount] = struct{}{}
+		}
+
+		sizeGiB := 40 + rand.Intn(360) // 40 - 400 GiB
+		totalBytes := int64(sizeGiB) * 1024 * 1024 * 1024
+		usage := 0.25 + rand.Float64()*0.6
+		usedBytes := int64(float64(totalBytes) * usage)
+
+		device := vmDevices[i%len(vmDevices)]
+		fsType := vmFilesystemTypes[rand.Intn(len(vmFilesystemTypes))]
+
+		disks = append(disks, models.Disk{
+			Total:      totalBytes,
+			Used:       usedBytes,
+			Free:       totalBytes - usedBytes,
+			Usage:      usage * 100,
+			Mountpoint: mount,
+			Type:       fsType,
+			Device:     fmt.Sprintf("/dev/%s", device),
+		})
+
+		total += totalBytes
+		used += usedBytes
+	}
+
+	aggregated := models.Disk{
+		Total: total,
+		Used:  used,
+		Free:  total - used,
+	}
+	if total > 0 {
+		aggregated.Usage = float64(used) / float64(total) * 100
+	}
+
+	return disks, aggregated
+}
+
 func GenerateMockData(config MockConfig) models.StateSnapshot {
 	rand.Seed(time.Now().UnixNano())
 
@@ -498,8 +568,23 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	}
 
 	// Disk stats
-	totalDisk := int64((32 + rand.Intn(468)) * 1024 * 1024 * 1024) // 32-500 GB
-	usedDisk := int64(float64(totalDisk) * (0.1 + rand.Float64()*0.8))
+	virtualDisks, aggregatedDisk := generateVirtualDisks()
+	diskStatusReason := ""
+
+	if status != "running" {
+		diskStatusReason = "vm-stopped"
+		aggregatedDisk.Usage = -1
+		aggregatedDisk.Used = 0
+		aggregatedDisk.Free = aggregatedDisk.Total
+		virtualDisks = nil
+	} else if rand.Float64() < 0.1 {
+		// Simulate agent issues where detailed disks are unavailable
+		diskStatusReason = "agent-not-running"
+		aggregatedDisk.Usage = -1
+		aggregatedDisk.Used = 0
+		aggregatedDisk.Free = aggregatedDisk.Total
+		virtualDisks = nil
+	}
 
 	// Generate ID matching production logic: standalone uses "node-vmid", cluster uses "instance-node-vmid"
 	var vmID string
@@ -510,29 +595,26 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	}
 
 	return models.VM{
-		Name:     name,
-		VMID:     vmid,
-		Node:     nodeName,
-		Instance: instance,
-		Type:     "qemu",
-		Status:   status,
-		CPU:      cpu,
-		CPUs:     2 + rand.Intn(6), // 2-8 cores
-		Memory:   mem,
-		Disk: models.Disk{
-			Total: totalDisk,
-			Used:  usedDisk,
-			Free:  totalDisk - usedDisk,
-			Usage: float64(usedDisk) / float64(totalDisk) * 100,
-		},
-		DiskRead:    generateRealisticIO("disk-read"),
-		DiskWrite:   generateRealisticIO("disk-write"),
-		NetworkIn:   generateRealisticIO("network-in"),
-		NetworkOut:  generateRealisticIO("network-out"),
-		Uptime:      uptime,
-		ID:          vmID,
-		Tags:        generateTags(),
-		IPAddresses: generateGuestIPs(),
+		Name:             name,
+		VMID:             vmid,
+		Node:             nodeName,
+		Instance:         instance,
+		Type:             "qemu",
+		Status:           status,
+		CPU:              cpu,
+		CPUs:             2 + rand.Intn(6), // 2-8 cores
+		Memory:           mem,
+		Disk:             aggregatedDisk,
+		Disks:            virtualDisks,
+		DiskStatusReason: diskStatusReason,
+		DiskRead:         generateRealisticIO("disk-read"),
+		DiskWrite:        generateRealisticIO("disk-write"),
+		NetworkIn:        generateRealisticIO("network-in"),
+		NetworkOut:       generateRealisticIO("network-out"),
+		Uptime:           uptime,
+		ID:               vmID,
+		Tags:             generateTags(),
+		IPAddresses:      generateGuestIPs(),
 	}
 }
 
