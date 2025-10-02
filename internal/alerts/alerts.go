@@ -1320,10 +1320,12 @@ func (m *Manager) clearAlert(alertID string) {
 
 // getTimeThresholdForType returns the appropriate time threshold for the resource type
 func (m *Manager) getTimeThresholdForType(resourceType string) int {
+	typeKey := strings.ToLower(strings.TrimSpace(resourceType))
+
 	// Use per-type thresholds if available
 	if m.config.TimeThresholds != nil {
-		switch resourceType {
-		case "qemu", "lxc", "guest":
+		switch typeKey {
+		case "guest", "qemu", "lxc", "vm", "ct", "container":
 			if delay, ok := m.config.TimeThresholds["guest"]; ok {
 				return delay
 			}
@@ -1385,6 +1387,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	if value >= threshold.Trigger {
 		// Threshold exceeded
 		if !exists {
+			alertStartTime := time.Now()
+
 			// Determine the appropriate time threshold based on resource type
 			timeThreshold := m.getTimeThresholdForType(resourceType)
 
@@ -1396,6 +1400,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
 						// Time threshold met, proceed with alert
 						delete(m.pendingAlerts, alertID)
+						if !pendingTime.IsZero() {
+							alertStartTime = pendingTime
+						}
 						log.Debug().
 							Str("alertID", alertID).
 							Int("timeThreshold", timeThreshold).
@@ -1412,7 +1419,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					}
 				} else {
 					// First time exceeding threshold, start tracking
-					m.pendingAlerts[alertID] = time.Now()
+					m.pendingAlerts[alertID] = alertStartTime
 					log.Debug().
 						Str("alertID", alertID).
 						Int("timeThreshold", timeThreshold).
@@ -1477,7 +1484,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Message:      message,
 				Value:        value,
 				Threshold:    threshold.Trigger,
-				StartTime:    time.Now(),
+				StartTime:    alertStartTime,
 				LastSeen:     time.Now(),
 				Metadata:     alertMetadata,
 			}
