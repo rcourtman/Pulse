@@ -315,6 +315,51 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	}
 }
 
+// CancelAlert removes pending notifications for a resolved alert
+func (n *NotificationManager) CancelAlert(alertID string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if len(n.pendingAlerts) == 0 {
+		return
+	}
+
+	filtered := n.pendingAlerts[:0]
+	removed := 0
+	for _, pending := range n.pendingAlerts {
+		if pending == nil {
+			continue
+		}
+		if pending.ID == alertID {
+			removed++
+			continue
+		}
+		filtered = append(filtered, pending)
+	}
+
+	if removed == 0 {
+		return
+	}
+
+	for i := len(filtered); i < len(n.pendingAlerts); i++ {
+		n.pendingAlerts[i] = nil
+	}
+
+	n.pendingAlerts = filtered
+
+	if len(n.pendingAlerts) == 0 && n.groupTimer != nil {
+		if n.groupTimer.Stop() {
+			log.Debug().Str("alertID", alertID).Msg("Stopped grouping timer after alert cancellation")
+		}
+		n.groupTimer = nil
+	}
+
+	log.Debug().
+		Str("alertID", alertID).
+		Int("remaining", len(n.pendingAlerts)).
+		Msg("Removed resolved alert from pending notifications")
+}
+
 // sendGroupedAlerts sends all pending alerts as a group
 func (n *NotificationManager) sendGroupedAlerts() {
 	n.mu.Lock()

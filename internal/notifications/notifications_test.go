@@ -71,6 +71,60 @@ func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
 	}
 }
 
+func TestCancelAlertRemovesPending(t *testing.T) {
+	nm := NewNotificationManager("")
+	nm.SetGroupingWindow(120)
+
+	alertA := &alerts.Alert{
+		ID:        "vm-100-disk",
+		Type:      "disk",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now(),
+	}
+	alertB := &alerts.Alert{
+		ID:        "vm-101-disk",
+		Type:      "disk",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now(),
+	}
+
+	nm.SendAlert(alertA)
+	nm.SendAlert(alertB)
+
+	nm.CancelAlert(alertA.ID)
+
+	nm.mu.RLock()
+	remaining := make([]string, 0, len(nm.pendingAlerts))
+	for _, pending := range nm.pendingAlerts {
+		if pending != nil {
+			remaining = append(remaining, pending.ID)
+		}
+	}
+	groupTimerActive := nm.groupTimer != nil
+	nm.mu.RUnlock()
+
+	if len(remaining) != 1 || remaining[0] != alertB.ID {
+		t.Fatalf("expected only %s to remain pending, got %v", alertB.ID, remaining)
+	}
+	if !groupTimerActive {
+		t.Fatalf("expected grouping timer to remain active while other alerts pending")
+	}
+
+	nm.CancelAlert(alertB.ID)
+
+	nm.mu.RLock()
+	if len(nm.pendingAlerts) != 0 {
+		nm.mu.RUnlock()
+		t.Fatalf("expected no pending alerts after cancelling all, found %d", len(nm.pendingAlerts))
+	}
+	timerStopped := nm.groupTimer == nil
+	nm.mu.RUnlock()
+
+	if !timerStopped {
+		t.Fatalf("expected grouping timer to be cleared when no alerts remain")
+	}
+}
+
 func TestConvertWebhookCustomFields(t *testing.T) {
 	if result := convertWebhookCustomFields(nil); result != nil {
 		t.Fatalf("expected nil for empty input, got %#v", result)
