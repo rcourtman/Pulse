@@ -1092,6 +1092,11 @@ function OverviewTab(props: {
                           <span class="text-xs text-gray-600 dark:text-gray-400">
                             ({alert.type})
                           </span>
+                          <Show when={alert.node}>
+                            <span class="text-xs text-gray-500 dark:text-gray-500">
+                              on {alert.node}
+                            </span>
+                          </Show>
                           <Show when={alert.acknowledged}>
                             <span class="px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
                               Acknowledged

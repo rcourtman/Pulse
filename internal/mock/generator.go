@@ -1753,6 +1753,7 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 
 		// Generate wearout for SSDs (100 is new, 0 is dead)
 		wearout := 0
+		wearoutUsed := 0
 		if diskModel.diskType == "nvme" || diskModel.diskType == "sata" {
 			if rand.Float64() < 0.7 { // 70% chance it's an SSD with wearout data
 				wearout = rand.Intn(50) + 50 // 50-100% life remaining
@@ -1760,6 +1761,16 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 					wearout = rand.Intn(15) + 5 // 5-20% life remaining
 				}
 			}
+		}
+		if wearout < 0 {
+			wearout = 0
+		}
+		if wearout > 100 {
+			wearout = 100
+		}
+		wearoutUsed = 100 - wearout
+		if wearoutUsed < 0 {
+			wearoutUsed = 0
 		}
 
 		// Generate temperature
@@ -1779,6 +1790,7 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 			Size:        diskModel.size,
 			Health:      health,
 			Wearout:     wearout,
+			WearoutUsed: wearoutUsed,
 			Temperature: temp,
 			Used:        []string{"ext4", "zfs", "btrfs", "xfs"}[rand.Intn(4)],
 			LastChecked: time.Now(),
