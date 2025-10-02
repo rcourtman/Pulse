@@ -45,6 +45,7 @@ type VMFrontend struct {
 	Mem              int64   `json:"mem"`                        // Maps to Memory.Used
 	MaxMem           int64   `json:"maxmem"`                     // Maps to Memory.Total
 	DiskObj          *Disk   `json:"disk,omitempty"`             // Full disk object
+	Disks            []Disk  `json:"disks,omitempty"`            // Individual filesystem/disk usage
 	DiskStatusReason string  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
 	NetIn            int64   `json:"netin"`                      // Maps to NetworkIn
 	NetOut           int64   `json:"netout"`                     // Maps to NetworkOut
@@ -73,6 +74,7 @@ type ContainerFrontend struct {
 	Mem        int64   `json:"mem"`              // Maps to Memory.Used
 	MaxMem     int64   `json:"maxmem"`           // Maps to Memory.Total
 	DiskObj    *Disk   `json:"disk,omitempty"`   // Full disk object
+	Disks      []Disk  `json:"disks,omitempty"`  // Individual filesystem/disk usage
 	NetIn      int64   `json:"netin"`            // Maps to NetworkIn
 	NetOut     int64   `json:"netout"`           // Maps to NetworkOut
 	DiskRead   int64   `json:"diskread"`         // Maps to DiskRead
