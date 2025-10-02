@@ -167,7 +167,8 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   return (
-    <tr class={rowClass()} style={rowStyle()}>
+    <>
+      <tr class={rowClass()} style={rowStyle()}>
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
         <div class="flex flex-col gap-1">
@@ -333,6 +334,42 @@ export function GuestRow(props: GuestRowProps) {
       <td class="py-0.5 px-2">
         <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
       </td>
-    </tr>
+      </tr>
+      <Show when={hasMultipleDisks()}>
+        <tr class="bg-gray-50/60 dark:bg-gray-800/40">
+          <td colSpan={11} class="px-4 pb-3 pt-2">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Memory</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{memoryUsageLabel()}</div>
+                <Show when={memoryTooltip()}>
+                  <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-300 whitespace-pre-line">
+                    {memoryTooltip()}
+                  </div>
+                </Show>
+              </div>
+              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">IP Addresses</div>
+                <Show
+                  when={ipAddresses().length > 0}
+                  fallback={<div class="mt-1 text-sm text-gray-400 dark:text-gray-500">—</div>}
+                >
+                  <div class="mt-1 flex flex-wrap gap-1 text-sm text-gray-800 dark:text-gray-100">
+                    <For each={ipAddresses()}>{(ip) => <span>{ip}</span>}</For>
+                  </div>
+                </Show>
+              </div>
+              <div class="rounded border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Disks</div>
+                <DiskList
+                  disks={props.guest.disks || []}
+                  diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
+                />
+              </div>
+            </div>
+          </td>
+        </tr>
+      </Show>
+    </>
   );
 }
