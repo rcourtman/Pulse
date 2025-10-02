@@ -74,33 +74,33 @@ type Node struct {
 
 // VM represents a virtual machine
 type VM struct {
-	ID               string    `json:"id"`
-	VMID             int       `json:"vmid"`
-	Name             string    `json:"name"`
-	Node             string    `json:"node"`
-	Instance         string    `json:"instance"`
-	Status           string    `json:"status"`
-	Type             string    `json:"type"`
-	CPU              float64   `json:"cpu"`
-	CPUs             int       `json:"cpus"`
-	Memory           Memory    `json:"memory"`
-	Disk             Disk      `json:"disk"`
-	Disks            []Disk    `json:"disks,omitempty"`
-	DiskStatusReason string    `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
-	IPAddresses      []string  `json:"ipAddresses,omitempty"`
-	OSName           string    `json:"osName,omitempty"`
-	OSVersion        string    `json:"osVersion,omitempty"`
+	ID                string                  `json:"id"`
+	VMID              int                     `json:"vmid"`
+	Name              string                  `json:"name"`
+	Node              string                  `json:"node"`
+	Instance          string                  `json:"instance"`
+	Status            string                  `json:"status"`
+	Type              string                  `json:"type"`
+	CPU               float64                 `json:"cpu"`
+	CPUs              int                     `json:"cpus"`
+	Memory            Memory                  `json:"memory"`
+	Disk              Disk                    `json:"disk"`
+	Disks             []Disk                  `json:"disks,omitempty"`
+	DiskStatusReason  string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	IPAddresses       []string                `json:"ipAddresses,omitempty"`
+	OSName            string                  `json:"osName,omitempty"`
+	OSVersion         string                  `json:"osVersion,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
-	NetworkIn        int64     `json:"networkIn"`
-	NetworkOut       int64     `json:"networkOut"`
-	DiskRead         int64     `json:"diskRead"`
-	DiskWrite        int64     `json:"diskWrite"`
-	Uptime           int64     `json:"uptime"`
-	Template         bool      `json:"template"`
-	LastBackup       time.Time `json:"lastBackup,omitempty"`
-	Tags             []string  `json:"tags,omitempty"`
-	Lock             string    `json:"lock,omitempty"`
-	LastSeen         time.Time `json:"lastSeen"`
+	NetworkIn         int64                   `json:"networkIn"`
+	NetworkOut        int64                   `json:"networkOut"`
+	DiskRead          int64                   `json:"diskRead"`
+	DiskWrite         int64                   `json:"diskWrite"`
+	Uptime            int64                   `json:"uptime"`
+	Template          bool                    `json:"template"`
+	LastBackup        time.Time               `json:"lastBackup,omitempty"`
+	Tags              []string                `json:"tags,omitempty"`
+	Lock              string                  `json:"lock,omitempty"`
+	LastSeen          time.Time               `json:"lastSeen"`
 }
 
 // Container represents an LXC container
@@ -178,13 +178,14 @@ type PhysicalDisk struct {
 	DevPath     string    `json:"devPath"` // /dev/nvme0n1, /dev/sda
 	Model       string    `json:"model"`
 	Serial      string    `json:"serial"`
-	Type        string    `json:"type"`        // nvme, sata, sas
-	Size        int64     `json:"size"`        // bytes
-	Health      string    `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout     int       `json:"wearout"`     // SSD life remaining percentage (0-100, 100 is best)
-	Temperature int       `json:"temperature"` // Celsius (if available)
-	RPM         int       `json:"rpm"`         // 0 for SSDs
-	Used        string    `json:"used"`        // Filesystem or partition usage
+	Type        string    `json:"type"`                  // nvme, sata, sas
+	Size        int64     `json:"size"`                  // bytes
+	Health      string    `json:"health"`                // PASSED, FAILED, UNKNOWN
+	Wearout     int       `json:"wearout"`               // SSD life remaining percentage (0-100, 100 is best)
+	WearoutUsed int       `json:"wearoutUsed,omitempty"` // Percentage of wear consumed (0-100, 0 is new)
+	Temperature int       `json:"temperature"`           // Celsius (if available)
+	RPM         int       `json:"rpm"`                   // 0 for SSDs
+	Used        string    `json:"used"`                  // Filesystem or partition usage
 	LastChecked time.Time `json:"lastChecked"`
 }
 

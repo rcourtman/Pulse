@@ -1274,17 +1274,18 @@ func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSP
 
 // Disk represents a physical disk on a Proxmox node
 type Disk struct {
-	DevPath string `json:"devpath"`
-	Model   string `json:"model"`
-	Serial  string `json:"serial"`
-	Type    string `json:"type"`   // nvme, sata, sas
-	Health  string `json:"health"` // PASSED, FAILED, UNKNOWN
-	Wearout int    `json:"-"`      // SSD wear percentage (0-100, 100 is best) - handled by UnmarshalJSON
-	Size    int64  `json:"size"`   // Size in bytes
-	RPM     int    `json:"rpm"`    // 0 for SSDs
-	Used    string `json:"used"`   // Filesystem or partition usage
-	Vendor  string `json:"vendor"`
-	WWN     string `json:"wwn"` // World Wide Name
+	DevPath     string `json:"devpath"`
+	Model       string `json:"model"`
+	Serial      string `json:"serial"`
+	Type        string `json:"type"`   // nvme, sata, sas
+	Health      string `json:"health"` // PASSED, FAILED, UNKNOWN
+	WearoutUsed int    `json:"-"`      // 0-100 wear consumed (0 is new)
+	Wearout     int    `json:"-"`      // Life remaining percentage (0-100, 100 is best)
+	Size        int64  `json:"size"`   // Size in bytes
+	RPM         int    `json:"rpm"`    // 0 for SSDs
+	Used        string `json:"used"`   // Filesystem or partition usage
+	Vendor      string `json:"vendor"`
+	WWN         string `json:"wwn"` // World Wide Name
 }
 
 // UnmarshalJSON custom unmarshaler for Disk to handle non-numeric wearout values
@@ -1303,19 +1304,24 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	}
 
 	// Handle wearout field which can be int, string ("N/A"), or null
+	wearoutUsed := 0
 	switch v := aux.Wearout.(type) {
 	case float64:
-		d.Wearout = int(v)
+		wearoutUsed = int(v)
 	case string:
 		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers.
 		// Some controllers also return numeric wearout values as strings, so try to parse them.
-		d.Wearout = parseWearoutValue(v)
+		wearoutUsed = parseWearoutValue(v)
 	case nil:
-		d.Wearout = 0
+		wearoutUsed = 0
 	default:
-		// Unexpected type, log and set to 0
-		d.Wearout = 0
+		// Unexpected type, normalize to zero
+		wearoutUsed = 0
 	}
+
+	wearoutUsed = clampWearoutConsumed(wearoutUsed)
+	d.WearoutUsed = wearoutUsed
+	d.Wearout = lifeRemainingFromWearout(wearoutUsed)
 
 	// Handle rpm field which can be number, string descriptor ("SSD"/"N/A"), or null
 	switch v := aux.RPM.(type) {
@@ -1390,6 +1396,27 @@ func parseWearoutValue(raw string) int {
 	}
 
 	return 0
+}
+
+func clampWearoutConsumed(val int) int {
+	if val < 0 {
+		return 0
+	}
+	if val > 100 {
+		return 100
+	}
+	return val
+}
+
+func lifeRemainingFromWearout(consumed int) int {
+	remaining := 100 - consumed
+	if remaining < 0 {
+		return 0
+	}
+	if remaining > 100 {
+		return 100
+	}
+	return remaining
 }
 
 // DiskSmart represents SMART data for a disk
