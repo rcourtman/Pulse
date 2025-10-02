@@ -1522,6 +1522,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		diskWriteBytes := int64(res.DiskWrite)
 		networkInBytes := int64(res.NetIn)
 		networkOutBytes := int64(res.NetOut)
+		var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
 
 		if res.Type == "qemu" {
 			// Skip templates if configured
@@ -1637,7 +1638,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								Int("filesystems", len(fsInfo)).
 								Msg("Got filesystem info from guest agent")
 
-							// Aggregate disk usage from all filesystems
+							// Aggregate disk usage from all filesystems AND preserve individual disk data
 							var totalBytes, usedBytes uint64
 							var skippedFS []string
 							var includedFS []string
@@ -1701,6 +1702,18 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									usedBytes += fs.UsedBytes
 									includedFS = append(includedFS, fmt.Sprintf("%s(%s,%.1fGB)",
 										fs.Mountpoint, fs.Type, float64(fs.TotalBytes)/1073741824))
+
+									// Add to individual disks array
+									individualDisks = append(individualDisks, models.Disk{
+										Total:      int64(fs.TotalBytes),
+										Used:       int64(fs.UsedBytes),
+										Free:       int64(fs.TotalBytes - fs.UsedBytes),
+										Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+										Mountpoint: fs.Mountpoint,
+										Type:       fs.Type,
+										Device:     fs.Disk,
+									})
+
 									log.Debug().
 										Str("instance", instanceName).
 										Str("vm", res.Name).
@@ -1846,6 +1859,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					Free:  int64(diskFree),
 					Usage: diskUsage,
 				},
+				Disks:      individualDisks, // Individual filesystem data
 				NetworkIn:  maxInt64(0, int64(netInRate)),
 				NetworkOut: maxInt64(0, int64(netOutRate)),
 				DiskRead:   maxInt64(0, int64(diskReadRate)),

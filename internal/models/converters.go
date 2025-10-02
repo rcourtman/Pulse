@@ -135,6 +135,11 @@ func (v VM) ToFrontend() VMFrontend {
 		vm.DiskObj = &v.Disk
 	}
 
+	// Include individual disks array if available
+	if len(v.Disks) > 0 {
+		vm.Disks = v.Disks
+	}
+
 	return vm
 }
 
@@ -180,6 +185,11 @@ func (c Container) ToFrontend() ContainerFrontend {
 	// Include full Disk object if it has data
 	if c.Disk.Total > 0 {
 		ct.DiskObj = &c.Disk
+	}
+
+	// Include individual disks array if available
+	if len(c.Disks) > 0 {
+		ct.Disks = c.Disks
 	}
 
 	return ct
