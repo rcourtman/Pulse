@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -161,6 +162,39 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 						networkOutBytes = int64(vmStatus.NetOut)
 					}
 					cancel()
+				}
+
+				ipAddresses := make([]string, 0)
+				if vm.Status == "running" && vmStatus != nil {
+					ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
+					interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, n.Node, vm.VMID)
+					cancelIface()
+					if err != nil {
+						log.Debug().Str("instance", instanceName).Str("vm", vm.Name).Int("vmid", vm.VMID).Err(err).Msg("Guest agent network interfaces unavailable")
+					} else {
+						seenIPs := make(map[string]struct{})
+						for _, iface := range interfaces {
+							for _, addr := range iface.IPAddresses {
+								ip := strings.TrimSpace(addr.Address)
+								if ip == "" {
+									continue
+								}
+								lower := strings.ToLower(ip)
+								if strings.HasPrefix(ip, "127.") || strings.HasPrefix(lower, "fe80") || strings.HasPrefix(ip, "::1") {
+									continue
+								}
+								if _, exists := seenIPs[ip]; exists {
+									continue
+								}
+								seenIPs[ip] = struct{}{}
+								ipAddresses = append(ipAddresses, ip)
+							}
+						}
+					}
+				}
+
+				if len(ipAddresses) > 1 {
+					sort.Strings(ipAddresses)
 				}
 
 				// Calculate I/O rates after we have the actual values
@@ -399,6 +433,16 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					diskStatusReason = "no-status"
 				}
 
+				memory := models.Memory{
+					Total: int64(memTotal),
+					Used:  int64(memUsed),
+					Free:  int64(memTotal - memUsed),
+					Usage: safePercentage(float64(memUsed), float64(memTotal)),
+				}
+				if vmStatus != nil && vmStatus.Balloon > 0 {
+					memory.Balloon = int64(vmStatus.Balloon)
+				}
+
 				// Create VM model
 				modelVM := models.VM{
 					ID:       guestID,
@@ -410,12 +454,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					Type:     "qemu",
 					CPU:      cpuUsage,
 					CPUs:     int(vm.CPUs),
-					Memory: models.Memory{
-						Total: int64(memTotal),
-						Used:  int64(memUsed),
-						Free:  int64(memTotal - memUsed),
-						Usage: safePercentage(float64(memUsed), float64(memTotal)),
-					},
+					Memory:   memory,
 					Disk: models.Disk{
 						Total: int64(diskTotal),
 						Used:  int64(diskUsed),
@@ -432,6 +471,7 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 					Template:         vm.Template == 1,
 					LastSeen:         time.Now(),
 					Tags:             tags,
+					IPAddresses:      ipAddresses,
 				}
 
 				// Zero out metrics for non-running VMs
