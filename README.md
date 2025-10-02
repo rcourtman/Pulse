@@ -10,7 +10,7 @@ Monitor your entire Proxmox infrastructure from a single dashboard. Get instant 
 
 **[Try the live demo →](https://demo.pulserelay.pro)** (read-only with mock data)
 
-![Dashboard](docs/images/01-dashboard.png)
+<img width="2872" height="1502" alt="image" src="https://github.com/user-attachments/assets/41ac125c-59e3-4bdc-bfd2-e300109aa1f7" />
 
 ## Support Pulse Development
 
