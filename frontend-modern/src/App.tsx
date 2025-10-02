@@ -870,7 +870,7 @@ function AppLayout(props: {
         {props.versionInfo()?.isDocker && ' - Docker'}
         <Show when={props.lastUpdateText()}>
           <span class="mx-2">|</span>
-          <span>Last updated: {props.lastUpdateText()}</span>
+          <span>Last refresh: {props.lastUpdateText()}</span>
         </Show>
       </footer>
     </>
