@@ -71,13 +71,19 @@ export function GuestRow(props: GuestRowProps) {
     // Use the pre-calculated usage percentage from the backend
     return props.guest.memory.usage || 0;
   });
-  const memorySubLabel = createMemo(() => {
+  const memoryUsageLabel = createMemo(() => {
     if (!props.guest.memory) return undefined;
     const used = props.guest.memory.used ?? 0;
     const total = props.guest.memory.total ?? 0;
-    const parts = [`${formatBytes(used)}/${formatBytes(total)}`];
+    return `${formatBytes(used)}/${formatBytes(total)}`;
+  });
+
+  const memoryExtraInfo = createMemo(() => {
+    if (!props.guest.memory) return [] as string[];
+    const extras: string[] = [];
+    const total = props.guest.memory.total ?? 0;
     if (props.guest.memory.balloon && props.guest.memory.balloon > 0 && props.guest.memory.balloon !== total) {
-      parts.push(`balloon ${formatBytes(props.guest.memory.balloon)}`);
+      extras.push(`balloon ${formatBytes(props.guest.memory.balloon)}`);
     }
     if (
       props.guest.memory.swapUsed &&
@@ -85,9 +91,9 @@ export function GuestRow(props: GuestRowProps) {
       props.guest.memory.swapTotal &&
       props.guest.memory.swapTotal > 0
     ) {
-      parts.push(`swap ${formatBytes(props.guest.memory.swapUsed)}/${formatBytes(props.guest.memory.swapTotal)}`);
+      extras.push(`swap ${formatBytes(props.guest.memory.swapUsed)}/${formatBytes(props.guest.memory.swapTotal)}`);
     }
-    return parts.join(' • ');
+    return extras;
   });
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
@@ -267,9 +273,14 @@ export function GuestRow(props: GuestRowProps) {
         <MetricBar
           value={memPercent()}
           label={`${memPercent().toFixed(0)}%`}
-          sublabel={memorySubLabel()}
+          sublabel={memoryUsageLabel()}
           type="memory"
         />
+        <Show when={memoryExtraInfo().length > 0}>
+          <div class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-300">
+            <For each={memoryExtraInfo()}>{(info) => <span>{info}</span>}</For>
+          </div>
+        </Show>
       </td>
 
       {/* Disk */}
