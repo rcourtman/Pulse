@@ -77,29 +77,6 @@ export function GuestRow(props: GuestRowProps) {
     const total = props.guest.memory.total ?? 0;
     return `${formatBytes(used)}/${formatBytes(total)}`;
   });
-  const memoryBadges = createMemo(() => {
-    if (!props.guest.memory) return [] as { label: string; className: string }[];
-    const badges: { label: string; className: string }[] = [];
-    const total = props.guest.memory.total ?? 0;
-    if (
-      props.guest.memory.balloon &&
-      props.guest.memory.balloon > 0 &&
-      props.guest.memory.balloon !== total
-    ) {
-      badges.push({
-        label: `Balloon ${formatBytes(props.guest.memory.balloon)}`,
-        className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200',
-      });
-    }
-    if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
-      const swapUsed = props.guest.memory.swapUsed ?? 0;
-      badges.push({
-        label: `Swap ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`,
-        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
-      });
-    }
-    return badges;
-  });
   const memoryTooltip = createMemo(() => {
     if (!props.guest.memory) return undefined;
     const lines: string[] = [];
@@ -300,17 +277,6 @@ export function GuestRow(props: GuestRowProps) {
             type="memory"
           />
         </div>
-        <Show when={memoryBadges().length > 0}>
-          <div class="mt-1 flex flex-wrap gap-1">
-            <For each={memoryBadges()}>
-              {(badge) => (
-                <span class={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                  {badge.label}
-                </span>
-              )}
-            </For>
-          </div>
-        </Show>
       </td>
 
       {/* Disk */}
