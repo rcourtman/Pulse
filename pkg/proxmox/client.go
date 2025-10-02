@@ -1256,6 +1256,7 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	type Alias Disk
 	aux := &struct {
 		Wearout interface{} `json:"wearout"`
+		RPM     interface{} `json:"rpm"`
 		*Alias
 	}{
 		Alias: (*Alias)(d),
@@ -1287,6 +1288,27 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	default:
 		// Unexpected type, log and set to 0
 		d.Wearout = 0
+	}
+
+	// Handle rpm field which can be number, string descriptor ("SSD"/"N/A"), or null
+	switch v := aux.RPM.(type) {
+	case float64:
+		d.RPM = int(v)
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" || strings.EqualFold(trimmed, "ssd") || strings.EqualFold(trimmed, "n/a") {
+			d.RPM = 0
+			break
+		}
+		if parsed, err := strconv.Atoi(trimmed); err == nil {
+			d.RPM = parsed
+		} else {
+			d.RPM = 0
+		}
+	case nil:
+		d.RPM = 0
+	default:
+		d.RPM = 0
 	}
 
 	return nil
