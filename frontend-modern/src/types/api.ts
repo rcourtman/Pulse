@@ -40,6 +40,14 @@ export interface Node {
   clusterName?: string; // Name of cluster (empty if standalone)
 }
 
+export interface GuestNetworkInterface {
+  name?: string;
+  mac?: string;
+  addresses?: string[];
+  rxBytes?: number;
+  txBytes?: number;
+}
+
 export interface VM {
   id: string;
   vmid: number;
@@ -55,6 +63,9 @@ export interface VM {
   disks?: Disk[];
   diskStatusReason?: string;
   ipAddresses?: string[];
+  osName?: string;
+  osVersion?: string;
+  networkInterfaces?: GuestNetworkInterface[];
   networkIn: number;
   networkOut: number;
   diskRead: number;
@@ -81,6 +92,9 @@ export interface Container {
   disk: Disk;
   disks?: Disk[];
   ipAddresses?: string[];
+  osName?: string;
+  osVersion?: string;
+  networkInterfaces?: GuestNetworkInterface[];
   networkIn: number;
   networkOut: number;
   diskRead: number;

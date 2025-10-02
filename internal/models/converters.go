@@ -144,6 +144,19 @@ func (v VM) ToFrontend() VMFrontend {
 		vm.IPAddresses = append([]string(nil), v.IPAddresses...)
 	}
 
+	if v.OSName != "" {
+		vm.OSName = v.OSName
+	}
+
+	if v.OSVersion != "" {
+		vm.OSVersion = v.OSVersion
+	}
+
+	if len(v.NetworkInterfaces) > 0 {
+		vm.NetworkInterfaces = make([]GuestNetworkInterface, len(v.NetworkInterfaces))
+		copy(vm.NetworkInterfaces, v.NetworkInterfaces)
+	}
+
 	return vm
 }
 

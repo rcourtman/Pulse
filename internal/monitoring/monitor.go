@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -43,6 +44,7 @@ type PVEClientInterface interface {
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error)
+	GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
 	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
 	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
@@ -109,6 +111,237 @@ func sortContent(content string) string {
 	parts := strings.Split(content, ",")
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
+}
+
+func fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string) {
+	if vmStatus == nil {
+		return nil, nil, "", ""
+	}
+
+	var ipAddresses []string
+	var networkIfaces []models.GuestNetworkInterface
+	var osName, osVersion string
+
+	ifaceCtx, cancelIface := context.WithTimeout(ctx, 5*time.Second)
+	interfaces, err := client.GetVMNetworkInterfaces(ifaceCtx, nodeName, vmid)
+	cancelIface()
+	if err != nil {
+		log.Debug().
+			Str("instance", instanceName).
+			Str("vm", vmName).
+			Int("vmid", vmid).
+			Err(err).
+			Msg("Guest agent network interfaces unavailable")
+	} else if len(interfaces) > 0 {
+		ipAddresses, networkIfaces = processGuestNetworkInterfaces(interfaces)
+	}
+
+	if vmStatus.Agent > 0 {
+		osCtx, cancelOS := context.WithTimeout(ctx, 3*time.Second)
+		agentInfo, err := client.GetVMAgentInfo(osCtx, nodeName, vmid)
+		cancelOS()
+		if err != nil {
+			log.Debug().
+				Str("instance", instanceName).
+				Str("vm", vmName).
+				Int("vmid", vmid).
+				Err(err).
+				Msg("Guest agent OS info unavailable")
+		} else if len(agentInfo) > 0 {
+			osName, osVersion = extractGuestOSInfo(agentInfo)
+		}
+	}
+
+	return ipAddresses, networkIfaces, osName, osVersion
+}
+
+func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, []models.GuestNetworkInterface) {
+	ipSet := make(map[string]struct{})
+	ipAddresses := make([]string, 0)
+	guestIfaces := make([]models.GuestNetworkInterface, 0, len(raw))
+
+	for _, iface := range raw {
+		ifaceName := strings.TrimSpace(iface.Name)
+		mac := strings.TrimSpace(iface.HardwareAddr)
+
+		addrSet := make(map[string]struct{})
+		addresses := make([]string, 0, len(iface.IPAddresses))
+
+		for _, addr := range iface.IPAddresses {
+			ip := strings.TrimSpace(addr.Address)
+			if ip == "" {
+				continue
+			}
+			lower := strings.ToLower(ip)
+			if strings.HasPrefix(ip, "127.") || strings.HasPrefix(lower, "fe80") || ip == "::1" {
+				continue
+			}
+
+			if _, exists := addrSet[ip]; !exists {
+				addrSet[ip] = struct{}{}
+				addresses = append(addresses, ip)
+			}
+
+			if _, exists := ipSet[ip]; !exists {
+				ipSet[ip] = struct{}{}
+				ipAddresses = append(ipAddresses, ip)
+			}
+		}
+
+		if len(addresses) > 1 {
+			sort.Strings(addresses)
+		}
+
+		rxBytes := parseInterfaceStat(iface.Statistics, "rx-bytes")
+		txBytes := parseInterfaceStat(iface.Statistics, "tx-bytes")
+
+		if len(addresses) == 0 && rxBytes == 0 && txBytes == 0 {
+			continue
+		}
+
+		guestIfaces = append(guestIfaces, models.GuestNetworkInterface{
+			Name:      ifaceName,
+			MAC:       mac,
+			Addresses: addresses,
+			RXBytes:   rxBytes,
+			TXBytes:   txBytes,
+		})
+	}
+
+	if len(ipAddresses) > 1 {
+		sort.Strings(ipAddresses)
+	}
+
+	if len(guestIfaces) > 1 {
+		sort.SliceStable(guestIfaces, func(i, j int) bool {
+			return guestIfaces[i].Name < guestIfaces[j].Name
+		})
+	}
+
+	return ipAddresses, guestIfaces
+}
+
+func parseInterfaceStat(stats interface{}, key string) int64 {
+	if stats == nil {
+		return 0
+	}
+	statsMap, ok := stats.(map[string]interface{})
+	if !ok {
+		return 0
+	}
+	val, ok := statsMap[key]
+	if !ok {
+		return 0
+	}
+	return anyToInt64(val)
+}
+
+func extractGuestOSInfo(data map[string]interface{}) (string, string) {
+	if data == nil {
+		return "", ""
+	}
+
+	if result, ok := data["result"]; ok {
+		if resultMap, ok := result.(map[string]interface{}); ok {
+			data = resultMap
+		}
+	}
+
+	name := stringValue(data["name"])
+	prettyName := stringValue(data["pretty-name"])
+	version := stringValue(data["version"])
+	versionID := stringValue(data["version-id"])
+
+	osName := name
+	if osName == "" {
+		osName = prettyName
+	}
+	if osName == "" {
+		osName = stringValue(data["id"])
+	}
+
+	osVersion := version
+	if osVersion == "" && versionID != "" {
+		osVersion = versionID
+	}
+	if osVersion == "" && prettyName != "" && prettyName != osName {
+		osVersion = prettyName
+	}
+	if osVersion == "" {
+		osVersion = stringValue(data["kernel-release"])
+	}
+	if osVersion == osName {
+		osVersion = ""
+	}
+
+	return osName, osVersion
+}
+
+func stringValue(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String())
+	case float64:
+		return strings.TrimSpace(strconv.FormatFloat(v, 'f', -1, 64))
+	case float32:
+		return strings.TrimSpace(strconv.FormatFloat(float64(v), 'f', -1, 32))
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	default:
+		return ""
+	}
+}
+
+func anyToInt64(val interface{}) int64 {
+	switch v := val.(type) {
+	case int:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case uint32:
+		return int64(v)
+	case uint64:
+		if v > math.MaxInt64 {
+			return math.MaxInt64
+		}
+		return int64(v)
+	case float32:
+		return int64(v)
+	case float64:
+		return int64(v)
+	case string:
+		if v == "" {
+			return 0
+		}
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return parsed
+		}
+		if parsedFloat, err := strconv.ParseFloat(v, 64); err == nil {
+			return int64(parsedFloat)
+		}
+	case json.Number:
+		if parsed, err := v.Int64(); err == nil {
+			return parsed
+		}
+		if parsedFloat, err := v.Float64(); err == nil {
+			return int64(parsedFloat)
+		}
+	}
+	return 0
 }
 
 // GetConnectionStatuses returns the current connection status for all nodes
@@ -1525,6 +1758,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		networkInBytes := int64(res.NetIn)
 		networkOutBytes := int64(res.NetOut)
 		var individualDisks []models.Disk // Store individual filesystems for multi-disk monitoring
+		var ipAddresses []string
+		var networkInterfaces []models.GuestNetworkInterface
+		var osName, osVersion string
 
 		if res.Type == "qemu" {
 			// Skip templates if configured
@@ -1563,6 +1799,21 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					diskWriteBytes = int64(vmStatus.DiskWrite)
 					networkInBytes = int64(vmStatus.NetIn)
 					networkOutBytes = int64(vmStatus.NetOut)
+
+					// Gather guest metadata from the agent when available
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, vmStatus)
+					if len(guestIPs) > 0 {
+						ipAddresses = guestIPs
+					}
+					if len(guestIfaces) > 0 {
+						networkInterfaces = guestIfaces
+					}
+					if guestOSName != "" {
+						osName = guestOSName
+					}
+					if guestOSVersion != "" {
+						osVersion = guestOSVersion
+					}
 
 					// Always try to get filesystem info if agent is enabled
 					// Prefer guest agent data over cluster/resources data for accuracy
@@ -1861,14 +2112,18 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					Free:  int64(diskFree),
 					Usage: diskUsage,
 				},
-				Disks:      individualDisks, // Individual filesystem data
-				NetworkIn:  maxInt64(0, int64(netInRate)),
-				NetworkOut: maxInt64(0, int64(netOutRate)),
-				DiskRead:   maxInt64(0, int64(diskReadRate)),
-				DiskWrite:  maxInt64(0, int64(diskWriteRate)),
-				Uptime:     int64(res.Uptime),
-				Template:   res.Template == 1,
-				LastSeen:   time.Now(),
+				Disks:             individualDisks, // Individual filesystem data
+				IPAddresses:       ipAddresses,
+				OSName:            osName,
+				OSVersion:         osVersion,
+				NetworkInterfaces: networkInterfaces,
+				NetworkIn:         maxInt64(0, int64(netInRate)),
+				NetworkOut:        maxInt64(0, int64(netOutRate)),
+				DiskRead:          maxInt64(0, int64(diskReadRate)),
+				DiskWrite:         maxInt64(0, int64(diskWriteRate)),
+				Uptime:            int64(res.Uptime),
+				Template:          res.Template == 1,
+				LastSeen:          time.Now(),
 			}
 
 			// Parse tags
@@ -2099,32 +2354,50 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 			// For running VMs, try to get detailed status with balloon info
 			memUsed := uint64(0)
 			memTotal := vm.MaxMem
+			var ipAddresses []string
+			var networkInterfaces []models.GuestNetworkInterface
+			var osName, osVersion string
 
 			if vm.Status == "running" {
 				// Try to get detailed VM status for more accurate memory reporting and disk I/O
-				if vmStatus, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil {
+				if status, err := client.GetVMStatus(ctx, node.Node, vm.VMID); err == nil && status != nil {
+
 					// Use actual disk I/O values from detailed status
-					diskReadBytes = int64(vmStatus.DiskRead)
-					diskWriteBytes = int64(vmStatus.DiskWrite)
-					networkInBytes = int64(vmStatus.NetIn)
-					networkOutBytes = int64(vmStatus.NetOut)
+					diskReadBytes = int64(status.DiskRead)
+					diskWriteBytes = int64(status.DiskWrite)
+					networkInBytes = int64(status.NetIn)
+					networkOutBytes = int64(status.NetOut)
 
 					// If balloon is enabled, use balloon as the total available memory
-					if vmStatus.Balloon > 0 && vmStatus.Balloon < vmStatus.MaxMem {
-						memTotal = vmStatus.Balloon
+					if status.Balloon > 0 && status.Balloon < status.MaxMem {
+						memTotal = status.Balloon
 					}
 
 					// If we have free memory from guest agent, calculate actual usage
-					if vmStatus.FreeMem > 0 {
+					if status.FreeMem > 0 {
 						// Guest agent reports free memory, so calculate used
-						memUsed = memTotal - vmStatus.FreeMem
-					} else if vmStatus.Mem > 0 {
+						memUsed = memTotal - status.FreeMem
+					} else if status.Mem > 0 {
 						// No guest agent free memory data, but we have actual memory usage
 						// Use the reported memory usage from Proxmox
-						memUsed = vmStatus.Mem
+						memUsed = status.Mem
 					} else {
 						// No memory data available at all - show 0% usage
 						memUsed = 0
+					}
+
+					guestIPs, guestIfaces, guestOSName, guestOSVersion := fetchGuestAgentMetadata(ctx, client, instanceName, node.Node, vm.Name, vm.VMID, status)
+					if len(guestIPs) > 0 {
+						ipAddresses = guestIPs
+					}
+					if len(guestIfaces) > 0 {
+						networkInterfaces = guestIfaces
+					}
+					if guestOSName != "" {
+						osName = guestOSName
+					}
+					if guestOSVersion != "" {
+						osVersion = guestOSVersion
 					}
 				} else {
 					// Failed to get detailed status - show 0% usage
@@ -2360,17 +2633,21 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					Free:  int64(diskFree),
 					Usage: diskUsage,
 				},
-				Disks:            individualDisks,
-				DiskStatusReason: diskStatusReason,
-				NetworkIn:        maxInt64(0, int64(netInRate)),
-				NetworkOut:       maxInt64(0, int64(netOutRate)),
-				DiskRead:         maxInt64(0, int64(diskReadRate)),
-				DiskWrite:        maxInt64(0, int64(diskWriteRate)),
-				Uptime:           int64(vm.Uptime),
-				Template:         vm.Template == 1,
-				Tags:             tags,
-				Lock:             vm.Lock,
-				LastSeen:         time.Now(),
+				Disks:             individualDisks,
+				IPAddresses:       ipAddresses,
+				OSName:            osName,
+				OSVersion:         osVersion,
+				NetworkInterfaces: networkInterfaces,
+				DiskStatusReason:  diskStatusReason,
+				NetworkIn:         maxInt64(0, int64(netInRate)),
+				NetworkOut:        maxInt64(0, int64(netOutRate)),
+				DiskRead:          maxInt64(0, int64(diskReadRate)),
+				DiskWrite:         maxInt64(0, int64(diskWriteRate)),
+				Uptime:            int64(vm.Uptime),
+				Template:          vm.Template == 1,
+				Tags:              tags,
+				Lock:              vm.Lock,
+				LastSeen:          time.Now(),
 			}
 			allVMs = append(allVMs, modelVM)
 

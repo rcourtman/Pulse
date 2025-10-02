@@ -721,6 +721,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	var guestID, name, node, guestType, status string
 	var cpu, memUsage, diskUsage float64
 	var diskRead, diskWrite, netIn, netOut int64
+	var disks []models.Disk
 
 	// Extract data based on guest type
 	switch g := guest.(type) {
@@ -737,6 +738,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
+		disks = g.Disks
 
 		// Debug logging for high memory VMs
 		if memUsage > 85 {
@@ -759,6 +761,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		diskWrite = g.DiskWrite
 		netIn = g.NetworkIn
 		netOut = g.NetworkOut
+		disks = g.Disks
 	default:
 		log.Debug().
 			Str("type", fmt.Sprintf("%T", guest)).
@@ -838,22 +841,84 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Msg("Checking guest thresholds")
 
 	// Check thresholds
-	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory)
-	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk)
+	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, nil)
+	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, nil)
+	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, nil)
+
+	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
+		seenDisks := make(map[string]struct{})
+		for idx, disk := range disks {
+			if disk.Total <= 0 {
+				continue
+			}
+			if disk.Usage < 0 {
+				continue
+			}
+
+			label := strings.TrimSpace(disk.Mountpoint)
+			if label == "" {
+				label = strings.TrimSpace(disk.Device)
+			}
+			if label == "" {
+				label = fmt.Sprintf("Disk %d", idx+1)
+			}
+
+			keySource := label
+			if disk.Device != "" && !strings.EqualFold(disk.Device, label) {
+				keySource = fmt.Sprintf("%s-%s", label, disk.Device)
+			}
+			sanitizedKey := sanitizeAlertKey(keySource)
+			if sanitizedKey == "" {
+				sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
+			}
+
+			// Avoid duplicate checks if two disks resolve to the same key
+			if _, exists := seenDisks[sanitizedKey]; exists {
+				continue
+			}
+			seenDisks[sanitizedKey] = struct{}{}
+
+			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
+			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
+
+			log.Debug().
+				Str("guest", name).
+				Str("node", node).
+				Str("instance", instanceName).
+				Str("diskLabel", label).
+				Float64("usage", disk.Usage).
+				Msg("Evaluating individual disk for alert thresholds")
+
+			metadata := map[string]interface{}{
+				"mountpoint": disk.Mountpoint,
+				"device":     disk.Device,
+				"diskType":   disk.Type,
+				"totalBytes": disk.Total,
+				"usedBytes":  disk.Used,
+				"freeBytes":  disk.Free,
+				"diskIndex":  idx,
+				"label":      label,
+			}
+
+			m.checkMetric(perDiskResourceID, name, node, instanceName, guestType, "disk", disk.Usage, thresholds.Disk, &metricOptions{
+				Metadata: metadata,
+				Message:  message,
+			})
+		}
+	}
 
 	// Check I/O metrics (convert bytes/s to MB/s)
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead)
+		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, nil)
 	}
 	if thresholds.DiskWrite != nil && thresholds.DiskWrite.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite)
+		m.checkMetric(guestID, name, node, instanceName, guestType, "diskWrite", float64(diskWrite)/1024/1024, thresholds.DiskWrite, nil)
 	}
 	if thresholds.NetworkIn != nil && thresholds.NetworkIn.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn)
+		m.checkMetric(guestID, name, node, instanceName, guestType, "networkIn", float64(netIn)/1024/1024, thresholds.NetworkIn, nil)
 	}
 	if thresholds.NetworkOut != nil && thresholds.NetworkOut.Trigger > 0 {
-		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut)
+		m.checkMetric(guestID, name, node, instanceName, guestType, "networkOut", float64(netOut)/1024/1024, thresholds.NetworkOut, nil)
 	}
 }
 
@@ -877,9 +942,9 @@ func (m *Manager) CheckNode(node models.Node) {
 
 	// Check each metric (only if node is online)
 	if node.Status != "offline" {
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU)
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory)
-		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk)
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
+		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "disk", node.Disk.Usage, thresholds.Disk, nil)
 
 		// Check temperature if available
 		if node.Temperature != nil && node.Temperature.Available && thresholds.Temperature != nil {
@@ -888,7 +953,7 @@ func (m *Manager) CheckNode(node models.Node) {
 			if temp == 0 {
 				temp = node.Temperature.CPUMax
 			}
-			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature)
+			m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "temperature", temp, thresholds.Temperature, nil)
 		}
 	}
 }
@@ -964,9 +1029,9 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	// Check metrics only if PBS is online
 	if pbs.Status != "offline" {
 		// PBS CPU is already a percentage
-		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold)
+		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold, nil)
 		// PBS Memory is already a percentage
-		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "memory", pbs.Memory, memoryThreshold)
+		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "memory", pbs.Memory, memoryThreshold, nil)
 	}
 }
 
@@ -1036,7 +1101,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		Msg("Checking storage thresholds")
 
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
-		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold)
+		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold, nil)
 	}
 
 	// Check ZFS pool status if this is ZFS storage
@@ -1282,7 +1347,12 @@ func (m *Manager) getTimeThresholdForType(resourceType string) int {
 }
 
 // checkMetric checks a single metric against its threshold with hysteresis
-func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold) {
+type metricOptions struct {
+	Metadata map[string]interface{}
+	Message  string
+}
+
+func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
 	if threshold == nil || threshold.Trigger <= 0 {
 		return
 	}
@@ -1372,6 +1442,30 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// New alert
+			message := ""
+			if opts != nil && opts.Message != "" {
+				message = opts.Message
+			} else {
+				switch metricType {
+				case "usage":
+					message = fmt.Sprintf("%s at %.1f%%", resourceType, value)
+				case "diskRead", "diskWrite", "networkIn", "networkOut":
+					message = fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
+				default:
+					message = fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
+				}
+			}
+
+			alertMetadata := map[string]interface{}{
+				"resourceType":   resourceType,
+				"clearThreshold": threshold.Clear,
+			}
+			if opts != nil && opts.Metadata != nil {
+				for k, v := range opts.Metadata {
+					alertMetadata[k] = v
+				}
+			}
+
 			alert := &Alert{
 				ID:           alertID,
 				Type:         metricType,
@@ -1380,26 +1474,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				ResourceName: resourceName,
 				Node:         node,
 				Instance:     instance,
-				Message: func() string {
-					if metricType == "usage" {
-						return fmt.Sprintf("%s at %.1f%%", resourceType, value)
-					}
-					// For I/O metrics (diskRead, diskWrite, networkIn, networkOut), show MB/s not percentage
-					if metricType == "diskRead" || metricType == "diskWrite" ||
-						metricType == "networkIn" || metricType == "networkOut" {
-						return fmt.Sprintf("%s %s at %.1f MB/s", resourceType, metricType, value)
-					}
-					// For CPU, memory, disk metrics show percentage
-					return fmt.Sprintf("%s %s at %.1f%%", resourceType, metricType, value)
-				}(),
-				Value:     value,
-				Threshold: threshold.Trigger,
-				StartTime: time.Now(),
-				LastSeen:  time.Now(),
-				Metadata: map[string]interface{}{
-					"resourceType":   resourceType,
-					"clearThreshold": threshold.Clear,
-				},
+				Message:      message,
+				Value:        value,
+				Threshold:    threshold.Trigger,
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata:     alertMetadata,
 			}
 
 			// Set level based on how much over threshold
@@ -1461,6 +1541,21 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			// Update existing alert
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
+			if existingAlert.Metadata == nil {
+				existingAlert.Metadata = map[string]interface{}{}
+			}
+			existingAlert.Metadata["resourceType"] = resourceType
+			existingAlert.Metadata["clearThreshold"] = threshold.Clear
+			if opts != nil {
+				if opts.Message != "" {
+					existingAlert.Message = opts.Message
+				}
+				if opts.Metadata != nil {
+					for k, v := range opts.Metadata {
+						existingAlert.Metadata[k] = v
+					}
+				}
+			}
 
 			// Update level if needed
 			if value >= threshold.Trigger+10 {
@@ -1545,6 +1640,50 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 		}
 	}
+}
+
+func sanitizeAlertKey(label string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		return ""
+	}
+
+	if trimmed == "/" {
+		return "root"
+	}
+
+	trimmed = strings.Trim(trimmed, "/\\ ")
+	if trimmed == "" {
+		trimmed = "root"
+	}
+
+	lower := strings.ToLower(trimmed)
+	var builder strings.Builder
+	builder.Grow(len(lower))
+	prevDash := false
+	for _, r := range lower {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if r == '.' {
+			builder.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if !prevDash {
+			builder.WriteRune('-')
+			prevDash = true
+		}
+	}
+
+	sanitized := strings.Trim(builder.String(), "-.")
+	if sanitized == "" {
+		sanitized = "disk"
+	}
+
+	return sanitized
 }
 
 // abs returns the absolute value of a float64
