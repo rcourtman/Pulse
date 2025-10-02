@@ -3,7 +3,6 @@ import type { VM, Container, Node } from '@/types/api';
 import { GuestRow } from './GuestRow';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
-import { createTooltipSystem } from '@/components/shared/Tooltip';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
@@ -85,8 +84,6 @@ export function Dashboard(props: DashboardProps) {
   const [sortKey, setSortKey] = createSignal<keyof (VM | Container) | null>('vmid');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
-  // Create tooltip system
-  const TooltipComponent = createTooltipSystem();
 
   // Load all guest metadata on mount (single API call for all guests)
   onMount(async () => {
@@ -1041,8 +1038,6 @@ export function Dashboard(props: DashboardProps) {
         </div>
       </Show>
 
-      {/* Tooltip System */}
-      <TooltipComponent />
     </div>
   );
 }

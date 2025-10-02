@@ -9,6 +9,7 @@ import { BackupsFilter } from './BackupsFilter';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import type { BackupType, GuestType, UnifiedBackup } from '@/types/backups';
 
 type FilterableGuestType = 'VM' | 'LXC' | 'Host';
@@ -66,8 +67,9 @@ const UnifiedBackups: Component = () => {
     end: number;
   } | null>(null);
   const [chartTimeRange, setChartTimeRange] = createSignal(30);
-  const [tooltip, setTooltip] = createSignal<{ text: string; x: number; y: number } | null>(null);
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
+  const availableBackupsTooltipText =
+    'Daily counts of backups still available for restore across snapshots, PVE storage, and PBS.';
 
   const sortKeyOptions: { value: BackupSortKey; label: string }[] = [
     { value: 'backupTime', label: 'Time' },
@@ -1317,10 +1319,49 @@ const UnifiedBackups: Component = () => {
           <Card padding="md">
             <div class="mb-3 flex items-start justify-between gap-3">
               <SectionHeader
-                title="Available backups"
+                title={
+                  <div class="flex items-center gap-1.5">
+                    <span>Available backups</span>
+                    <button
+                      type="button"
+                      class="text-gray-400 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:text-gray-500 dark:hover:text-gray-300"
+                      aria-label={availableBackupsTooltipText}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        showTooltip(availableBackupsTooltipText, rect.left + rect.width / 2, rect.top, {
+                          align: 'center',
+                          direction: 'up',
+                        });
+                      }}
+                      onFocus={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        showTooltip(availableBackupsTooltipText, rect.left + rect.width / 2, rect.top, {
+                          align: 'center',
+                          direction: 'up',
+                        });
+                      }}
+                      onMouseLeave={() => hideTooltip()}
+                      onBlur={() => hideTooltip()}
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M11.25 11.25h1.5v3.75m-.75-9.75h.008v.008H12.75V5.25H11.25Zm0 0a7.5 7.5 0 1 1-7.5 7.5 7.5 7.5 0 0 1 7.5-7.5Z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                }
                 size="sm"
                 class="flex-1"
-                description="Daily counts of backups still available for restore across snapshots, PVE storage, and PBS."
               />
               <div class="flex items-center gap-2 text-xs">
                 <div class="flex items-center gap-1">
@@ -1370,7 +1411,7 @@ const UnifiedBackups: Component = () => {
                   </button>
                 </div>
                 <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                <span class="text-gray-500 dark:text-gray-400">Retained over the last {chartTimeRange()} days</span>
+                <span class="text-gray-500 dark:text-gray-400">Last {chartTimeRange()} days</span>
                 <Show when={selectedDateRange()}>
                   <button
                     type="button"
@@ -1654,7 +1695,8 @@ const UnifiedBackups: Component = () => {
                           }
 
                           // Hover effects with tooltips
-                          barGroup.addEventListener('mouseenter', (e) => {
+                          barGroup.addEventListener('mouseenter', (event) => {
+                            const e = event as MouseEvent;
                             rect.setAttribute('fill-opacity', '1');
                             rect.setAttribute('filter', 'brightness(1.2)');
 
@@ -1668,46 +1710,38 @@ const UnifiedBackups: Component = () => {
                             let tooltipText = `${formattedDate}`;
 
                             if (d.total > 0) {
-                              tooltipText += `\nAvailable for restore: ${d.total} backup${
+                              tooltipText += `\nAvailable: ${d.total} backup${
                                 d.total > 1 ? 's' : ''
                               }`;
 
-                              const breakdown = [];
+                              const breakdown: string[] = [];
                               if (d.snapshots > 0)
-                                breakdown.push(
-                                  `${d.snapshots} snapshot backup${d.snapshots > 1 ? 's' : ''}`,
-                                );
+                                breakdown.push(`Snapshots: ${d.snapshots}`);
                               if (d.pve > 0)
-                                breakdown.push(
-                                  `${d.pve} PVE backup${d.pve > 1 ? 's' : ''}`,
-                                );
+                                breakdown.push(`PVE: ${d.pve}`);
                               if (d.pbs > 0)
-                                breakdown.push(
-                                  `${d.pbs} PBS backup${d.pbs > 1 ? 's' : ''}`,
-                                );
+                                breakdown.push(`PBS: ${d.pbs}`);
 
                               if (breakdown.length > 0) {
-                                tooltipText += `\n${breakdown.join(', ')}`;
+                                tooltipText += `\n${breakdown.join(' • ')}`;
                               }
                             } else {
                               tooltipText += '\nNo backups available';
                             }
 
-                            // Get mouse position relative to the page
-                            const mouseX = e.pageX || e.clientX + window.scrollX;
-                            const mouseY = e.pageY || e.clientY + window.scrollY;
+                            const mouseX = e.clientX;
+                            const mouseY = e.clientY;
 
-                            setTooltip({
-                              text: tooltipText,
-                              x: mouseX,
-                              y: mouseY - 60,
+                            showTooltip(tooltipText, mouseX, mouseY, {
+                              align: 'center',
+                              direction: 'up',
                             });
                           });
 
                           barGroup.addEventListener('mouseleave', () => {
                             rect.setAttribute('fill-opacity', '0.8');
                             rect.removeAttribute('filter');
-                            setTooltip(null);
+                            hideTooltip();
                           });
 
                           // Click to filter
@@ -2299,15 +2333,15 @@ const UnifiedBackups: Component = () => {
                                     const fullText = details.join(' • ') || '-';
                                     if (fullText.length > 35) {
                                       const rect = e.currentTarget.getBoundingClientRect();
-                                      setTooltip({
-                                        text: fullText,
-                                        x: rect.left,
-                                        y: rect.top - 5,
+                                      showTooltip(fullText, rect.left, rect.top, {
+                                        align: 'left',
+                                        direction: 'up',
+                                        maxWidth: 260,
                                       });
                                     }
                                   }}
                                   onMouseLeave={() => {
-                                    setTooltip(null);
+                                    hideTooltip();
                                   }}
                                 >
                                   {(() => {
@@ -2352,22 +2386,6 @@ const UnifiedBackups: Component = () => {
             </Show>
           </div>
         </Card>
-
-        {/* Tooltip */}
-        <Show when={tooltip()}>
-          <div
-            class="fixed z-[9999] px-3 py-2 text-sm bg-black text-white rounded-lg shadow-xl pointer-events-none"
-            style={{
-              left: `${tooltip()!.x - 75}px`,
-              top: `${tooltip()!.y - 35}px`,
-              'max-width': '200px',
-              'white-space': 'pre-line',
-              'font-family': 'system-ui, -apple-system, sans-serif',
-            }}
-          >
-            {tooltip()!.text}
-          </div>
-        </Show>
       </Show>
     </div>
   );

@@ -31,6 +31,7 @@ import { eventBus } from './stores/events';
 import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
+import { createTooltipSystem } from './components/shared/Tooltip';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -56,6 +57,7 @@ export const useDarkMode = () => {
 };
 
 function App() {
+  const TooltipRoot = createTooltipSystem();
   const owner = getOwner();
   const acquireWsStore = (): EnhancedStore => {
     const store = owner
@@ -509,6 +511,7 @@ function App() {
                   </div>
                   <ToastContainer />
                   <NotificationContainer />
+                  <TooltipRoot />
                 </DarkModeContext.Provider>
               </WebSocketContext.Provider>
             </Show>
