@@ -15,6 +15,7 @@ import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 
 interface DashboardProps {
   vms: VM[];
@@ -32,9 +33,6 @@ export function Dashboard(props: DashboardProps) {
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [guestMetadata, setGuestMetadata] = createSignal<Record<string, GuestMetadata>>({});
-
-  const getOfflineAccent = (online: boolean) =>
-    online ? 'bg-emerald-300 dark:bg-emerald-500/80' : 'bg-rose-300 dark:bg-rose-500/80';
 
   // Initialize from localStorage with proper type checking
   const storedViewMode = localStorage.getItem('dashboardViewMode');
@@ -952,37 +950,7 @@ export function Dashboard(props: DashboardProps) {
                       return (
                       <>
                         <Show when={node && groupingMode() === 'grouped'}>
-                          <tr class="relative">
-                            <td colspan="11" class="py-2 px-3">
-                              <div class="flex items-stretch gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/40 shadow-sm px-3 py-2">
-                                <div class={`w-1 rounded-full transition-colors ${getOfflineAccent(isNodeOnline)}`}></div>
-                                <div class="flex w-full flex-wrap items-center gap-4 text-[11px] sm:text-xs text-slate-600 dark:text-slate-200">
-                                  <div class="flex flex-wrap items-center gap-3">
-                                    <a
-                                      href={nodeUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      class="text-slate-800 dark:text-slate-50 hover:text-sky-600 dark:hover:text-sky-400 transition-colors duration-150 cursor-pointer font-semibold text-sm sm:text-base"
-                                      title={`Open ${node!.name} web interface`}
-                                    >
-                                      {node!.name}
-                                    </a>
-                                    <Show when={node!.isClusterMember !== undefined}>
-                                      <span
-                                        class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
-                                          node!.isClusterMember
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
-                                        }`}
-                                      >
-                                      {node!.isClusterMember ? node!.clusterName : 'Standalone'}
-                                    </span>
-                                  </Show>
-                                </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
+                          <NodeGroupHeader node={node!} colspan={11} />
                         </Show>
                         <For each={guests} fallback={<></>}>
                           {(guest) => (
