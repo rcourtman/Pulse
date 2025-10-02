@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createEffect, onMount } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, on } from 'solid-js';
 import type { VM, Container } from '@/types/api';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { MetricBar } from './MetricBar';
@@ -8,6 +8,16 @@ import { DiskList } from './DiskList';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 
 type Guest = VM | Container;
+
+const drawerState = new Map<string, boolean>();
+
+const buildGuestId = (guest: Guest) => {
+  if (guest.id) return guest.id;
+  if (guest.instance === guest.node) {
+    return `${guest.node}-${guest.vmid}`;
+  }
+  return `${guest.instance}-${guest.node}-${guest.vmid}`;
+};
 
 // Type guard for VM vs Container
 const isVM = (guest: Guest): guest is VM => {
@@ -31,14 +41,9 @@ interface GuestRowProps {
 
 export function GuestRow(props: GuestRowProps) {
   const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
-  const [drawerOpen, setDrawerOpen] = createSignal(false);
-  const guestId = createMemo(() => {
-    if (props.guest.id) return props.guest.id;
-    if (props.guest.instance === props.guest.node) {
-      return `${props.guest.node}-${props.guest.vmid}`;
-    }
-    return `${props.guest.instance}-${props.guest.node}-${props.guest.vmid}`;
-  });
+  const initialGuestId = buildGuestId(props.guest);
+  const [drawerOpen, setDrawerOpen] = createSignal(drawerState.get(initialGuestId) ?? false);
+  const guestId = createMemo(() => buildGuestId(props.guest));
 
   const hasMultipleDisks = createMemo(() => (props.guest.disks?.length ?? 0) > 1);
   const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
@@ -111,9 +116,23 @@ export function GuestRow(props: GuestRowProps) {
     hasNetworkInterfaces(),
   );
 
+  createEffect(on(guestId, (id) => {
+    const stored = drawerState.get(id);
+    if (stored !== undefined) {
+      setDrawerOpen(stored);
+    } else {
+      setDrawerOpen(false);
+    }
+  }));
+
+  createEffect(() => {
+    drawerState.set(guestId(), drawerOpen());
+  });
+
   createEffect(() => {
     if (!canShowDrawer() && drawerOpen()) {
       setDrawerOpen(false);
+      drawerState.set(guestId(), false);
     }
   });
 
@@ -405,6 +424,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show when={hasNetworkInterfaces()}>
                 <div class="min-w-[220px] flex-1 rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Network Interfaces</div>
+                  <div class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Row charts show current rate; totals below are cumulative since boot.</div>
                   <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-300">
                     <For each={networkInterfaces()}>
                       {(iface) => {
@@ -433,8 +453,8 @@ export function GuestRow(props: GuestRowProps) {
                             </Show>
                             <Show when={hasTraffic}>
                               <div class="flex items-center gap-3 text-[10px] text-gray-500 dark:text-gray-400">
-                                <span>RX {formatBytes(iface.rxBytes ?? 0)}</span>
-                                <span>TX {formatBytes(iface.txBytes ?? 0)}</span>
+                                <span>Total RX {formatBytes(iface.rxBytes ?? 0)}</span>
+                                <span>Total TX {formatBytes(iface.txBytes ?? 0)}</span>
                               </div>
                             </Show>
                           </div>
