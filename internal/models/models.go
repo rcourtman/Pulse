@@ -178,14 +178,13 @@ type PhysicalDisk struct {
 	DevPath     string    `json:"devPath"` // /dev/nvme0n1, /dev/sda
 	Model       string    `json:"model"`
 	Serial      string    `json:"serial"`
-	Type        string    `json:"type"`                  // nvme, sata, sas
-	Size        int64     `json:"size"`                  // bytes
-	Health      string    `json:"health"`                // PASSED, FAILED, UNKNOWN
-	Wearout     int       `json:"wearout"`               // SSD life remaining percentage (0-100, 100 is best)
-	WearoutUsed int       `json:"wearoutUsed,omitempty"` // Percentage of wear consumed (0-100, 0 is new)
-	Temperature int       `json:"temperature"`           // Celsius (if available)
-	RPM         int       `json:"rpm"`                   // 0 for SSDs
-	Used        string    `json:"used"`                  // Filesystem or partition usage
+	Type        string    `json:"type"`        // nvme, sata, sas
+	Size        int64     `json:"size"`        // bytes
+	Health      string    `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout     int       `json:"wearout"`     // SSD wear metric from Proxmox (0-100, controller-specific semantics)
+	Temperature int       `json:"temperature"` // Celsius (if available)
+	RPM         int       `json:"rpm"`         // 0 for SSDs
+	Used        string    `json:"used"`        // Filesystem or partition usage
 	LastChecked time.Time `json:"lastChecked"`
 }
 
