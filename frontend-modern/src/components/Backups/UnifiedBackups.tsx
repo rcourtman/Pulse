@@ -886,6 +886,17 @@ const UnifiedBackups: Component = () => {
     return avgFactor.toFixed(1) + 'x';
   });
 
+  const parseDateKey = (dateKey: string) => {
+    const [yearStr, monthStr, dayStr] = dateKey.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return new Date(dateKey);
+    }
+    return new Date(year, Math.max(0, month - 1), Math.max(1, day));
+  };
+
   // Calculate available backup counts for chart
   const chartData = createMemo(() => {
     const days = chartTimeRange();
@@ -1516,6 +1527,8 @@ const UnifiedBackups: Component = () => {
                           const barHeight = d.total * yScale;
                           const x = Math.max(0, i * xScale + (xScale - barWidth) / 2);
                           const y = height - barHeight;
+                          const barDate = parseDateKey(d.date);
+                          const barDateMs = barDate.getTime();
 
                           const barGroup = document.createElementNS(
                             'http://www.w3.org/2000/svg',
@@ -1578,8 +1591,8 @@ const UnifiedBackups: Component = () => {
                           // Highlight selected date
                           if (
                             selectedDateRange() &&
-                            new Date(d.date).getTime() >= selectedDateRange()!.start * 1000 &&
-                            new Date(d.date).getTime() <= selectedDateRange()!.end * 1000
+                            barDateMs >= selectedDateRange()!.start * 1000 &&
+                            barDateMs <= selectedDateRange()!.end * 1000
                           ) {
                             rect.classList.add('ring-2', 'ring-blue-500');
                           }
@@ -1646,8 +1659,7 @@ const UnifiedBackups: Component = () => {
                             rect.setAttribute('filter', 'brightness(1.2)');
 
                             // Show tooltip
-                            const date = new Date(d.date);
-                            const formattedDate = date.toLocaleDateString('en-US', {
+                            const formattedDate = barDate.toLocaleDateString('en-US', {
                               weekday: 'short',
                               month: 'short',
                               day: 'numeric',
@@ -1700,12 +1712,14 @@ const UnifiedBackups: Component = () => {
 
                           // Click to filter
                           barGroup.addEventListener('click', () => {
-                            const clickedDate = new Date(d.date);
-                            const startOfDay =
-                              new Date(clickedDate.setHours(0, 0, 0, 0)).getTime() / 1000;
-                            const endOfDay =
-                              new Date(clickedDate.setHours(23, 59, 59, 999)).getTime() / 1000;
-                            setSelectedDateRange({ start: startOfDay, end: endOfDay });
+                            const startOfDay = new Date(barDate);
+                            startOfDay.setHours(0, 0, 0, 0);
+                            const endOfDay = new Date(barDate);
+                            endOfDay.setHours(23, 59, 59, 999);
+                            setSelectedDateRange({
+                              start: startOfDay.getTime() / 1000,
+                              end: endOfDay.getTime() / 1000,
+                            });
                           });
 
                           barsGroup.appendChild(barGroup);
@@ -1718,11 +1732,10 @@ const UnifiedBackups: Component = () => {
                             showLabel =
                               i % Math.ceil(data.length / 10) === 0 || i === data.length - 1;
                           } else if (chartTimeRange() <= 90) {
-                            const dayOfWeek = new Date(d.date).getDay();
+                            const dayOfWeek = barDate.getDay();
                             showLabel = dayOfWeek === 0 || i === 0 || i === data.length - 1;
                           } else {
-                            const date = new Date(d.date);
-                            showLabel = date.getDate() === 1 || i === 0 || i === data.length - 1;
+                            showLabel = barDate.getDate() === 1 || i === 0 || i === data.length - 1;
                           }
 
                           if (showLabel) {
@@ -1739,20 +1752,19 @@ const UnifiedBackups: Component = () => {
                             );
 
                             // Use shorter format for horizontal labels
-                            const date = new Date(d.date);
                             let labelText;
                             if (chartTimeRange() <= 7) {
                               // For 7 days, show month/day
-                              labelText = `${date.getMonth() + 1}/${date.getDate()}`;
+                              labelText = `${barDate.getMonth() + 1}/${barDate.getDate()}`;
                             } else if (chartTimeRange() <= 30) {
                               // For 30 days, show day only (or month/day for first of month)
                               labelText =
-                                date.getDate() === 1
-                                  ? `${date.getMonth() + 1}/1`
-                                  : date.getDate().toString();
+                                barDate.getDate() === 1
+                                  ? `${barDate.getMonth() + 1}/1`
+                                  : barDate.getDate().toString();
                             } else {
                               // For longer ranges, show month/day
-                              labelText = `${date.getMonth() + 1}/${date.getDate()}`;
+                              labelText = `${barDate.getMonth() + 1}/${barDate.getDate()}`;
                             }
                             text.textContent = labelText;
                             g.appendChild(text);
