@@ -886,7 +886,7 @@ const UnifiedBackups: Component = () => {
     return avgFactor.toFixed(1) + 'x';
   });
 
-  // Calculate backup frequency data for chart
+  // Calculate available backup counts for chart
   const chartData = createMemo(() => {
     const days = chartTimeRange();
     const now = new Date();
@@ -1301,11 +1301,16 @@ const UnifiedBackups: Component = () => {
 
       {/* Main Content - show when any nodes or PBS are configured */}
       <Show when={(state.nodes || []).length > 0 || (state.pbs && state.pbs.length > 0)}>
-        {/* Backup Frequency Chart - hide when no backups match the filter */}
+        {/* Available Backups chart - hide when no backups match the filter */}
         <Show when={filteredData().length > 0}>
           <Card padding="md">
             <div class="mb-3 flex items-start justify-between gap-3">
-              <SectionHeader title="Backup frequency" size="sm" class="flex-1" />
+              <SectionHeader
+                title="Available backups"
+                size="sm"
+                class="flex-1"
+                description="Daily counts of backups still available for restore across snapshots, PVE storage, and PBS."
+              />
               <div class="flex items-center gap-2 text-xs">
                 <div class="flex items-center gap-1">
                   <button
@@ -1354,7 +1359,7 @@ const UnifiedBackups: Component = () => {
                   </button>
                 </div>
                 <div class="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                <span class="text-gray-500 dark:text-gray-400">Last {chartTimeRange()} days</span>
+                <span class="text-gray-500 dark:text-gray-400">Retained over the last {chartTimeRange()} days</span>
                 <Show when={selectedDateRange()}>
                   <button
                     type="button"
@@ -1396,7 +1401,7 @@ const UnifiedBackups: Component = () => {
                 }
               >
                 <svg
-                  class="backup-frequency-svg w-full h-full"
+                  class="available-backups-svg w-full h-full"
                   style="cursor: pointer"
                   ref={(el) => {
                     // Use createEffect to reactively update the chart
@@ -1651,21 +1656,29 @@ const UnifiedBackups: Component = () => {
                             let tooltipText = `${formattedDate}`;
 
                             if (d.total > 0) {
-                              tooltipText += `\nTotal: ${d.total} backup${d.total > 1 ? 's' : ''}`;
+                              tooltipText += `\nAvailable for restore: ${d.total} backup${
+                                d.total > 1 ? 's' : ''
+                              }`;
 
                               const breakdown = [];
                               if (d.snapshots > 0)
                                 breakdown.push(
-                                  `${d.snapshots} Snapshot${d.snapshots > 1 ? 's' : ''}`,
+                                  `${d.snapshots} snapshot backup${d.snapshots > 1 ? 's' : ''}`,
                                 );
-                              if (d.pve > 0) breakdown.push(`${d.pve} PVE`);
-                              if (d.pbs > 0) breakdown.push(`${d.pbs} PBS`);
+                              if (d.pve > 0)
+                                breakdown.push(
+                                  `${d.pve} PVE backup${d.pve > 1 ? 's' : ''}`,
+                                );
+                              if (d.pbs > 0)
+                                breakdown.push(
+                                  `${d.pbs} PBS backup${d.pbs > 1 ? 's' : ''}`,
+                                );
 
                               if (breakdown.length > 0) {
                                 tooltipText += `\n${breakdown.join(', ')}`;
                               }
                             } else {
-                              tooltipText += '\nNo backups';
+                              tooltipText += '\nNo backups available';
                             }
 
                             // Get mouse position relative to the page
