@@ -1,7 +1,6 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
-import { MetricBar } from './MetricBar';
 
 interface DiskListProps {
   disks: Disk[];
@@ -9,7 +8,16 @@ interface DiskListProps {
 }
 
 export function DiskList(props: DiskListProps) {
-  const [expanded, setExpanded] = createSignal(false);
+  const getUsagePercent = (disk: Disk) => {
+    if (!disk.total || disk.total <= 0) return 0;
+    return (disk.used / disk.total) * 100;
+  };
+
+  const getBarColor = (percentage: number) => {
+    if (percentage >= 90) return 'bg-red-500/60 dark:bg-red-500/50';
+    if (percentage >= 80) return 'bg-yellow-500/60 dark:bg-yellow-500/50';
+    return 'bg-green-500/60 dark:bg-green-500/50';
+  };
 
   const getDiskStatusTooltip = () => {
     const reason = props.diskStatusReason;
@@ -45,76 +53,40 @@ export function DiskList(props: DiskListProps) {
         </span>
       }
     >
-      <div class="flex flex-col gap-1">
-        {/* Show first disk or aggregated view when collapsed */}
-        <Show when={!expanded() && props.disks.length === 1}>
-          <MetricBar
-            value={(props.disks[0].used / props.disks[0].total) * 100}
-            label={`${((props.disks[0].used / props.disks[0].total) * 100).toFixed(0)}%`}
-            sublabel={`${formatBytes(props.disks[0].used)}/${formatBytes(props.disks[0].total)}`}
-            type="disk"
-          />
-        </Show>
+      <div class="flex flex-col gap-1.5">
+        <For each={props.disks}>
+          {(disk) => {
+            const usage = getUsagePercent(disk);
+            const label = disk.mountpoint || disk.device || 'Unknown';
+            const hasCapacity = disk.total && disk.total > 0;
 
-        <Show when={!expanded() && props.disks.length > 1}>
-          <div class="flex items-center gap-2">
-            <MetricBar
-              value={
-                (props.disks.reduce((acc, d) => acc + d.used, 0) /
-                  props.disks.reduce((acc, d) => acc + d.total, 0)) *
-                100
-              }
-              label={`${(
-                (props.disks.reduce((acc, d) => acc + d.used, 0) /
-                  props.disks.reduce((acc, d) => acc + d.total, 0)) *
-                100
-              ).toFixed(0)}%`}
-              sublabel={`${formatBytes(
-                props.disks.reduce((acc, d) => acc + d.used, 0)
-              )}/${formatBytes(props.disks.reduce((acc, d) => acc + d.total, 0))}`}
-              type="disk"
-            />
-            <button
-              onClick={() => setExpanded(true)}
-              class="text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
-              title="Show individual disks"
-            >
-              {props.disks.length} disks
-            </button>
-          </div>
-        </Show>
-
-        {/* Expanded view showing all individual disks */}
-        <Show when={expanded()}>
-          <div class="flex flex-col gap-1">
-            <For each={props.disks}>
-              {(disk) => (
-                <div class="flex items-center gap-2">
-                  <div class="flex-1">
-                    <MetricBar
-                      value={(disk.used / disk.total) * 100}
-                      label={`${((disk.used / disk.total) * 100).toFixed(0)}%`}
-                      sublabel={`${formatBytes(disk.used)}/${formatBytes(disk.total)}`}
-                      type="disk"
-                    />
-                  </div>
-                  <span
-                    class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
-                    title={disk.type ? `${disk.type} filesystem` : undefined}
-                  >
-                    {disk.mountpoint || disk.device || 'Unknown'}
-                  </span>
+            return (
+              <div class="rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+                <div
+                  class="truncate text-gray-700 dark:text-gray-200"
+                  title={label !== 'Unknown' ? label : undefined}
+                >
+                  {label}
                 </div>
-              )}
-            </For>
-            <button
-              onClick={() => setExpanded(false)}
-              class="text-xs text-blue-600 dark:text-blue-400 hover:underline text-left"
-            >
-              Collapse
-            </button>
-          </div>
-        </Show>
+                <div class="mt-0.5 text-[9px] text-gray-500 dark:text-gray-400">
+                  {hasCapacity
+                    ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
+                    : 'Usage unavailable'}
+                </div>
+                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-600">
+                  <div
+                    class={`absolute inset-y-0 left-0 ${getBarColor(usage)}`}
+                    style={{ width: `${Math.min(usage, 100)}%` }}
+                  />
+                </div>
+                <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-gray-600 dark:text-gray-300">
+                  <span>{hasCapacity ? `${usage.toFixed(0)}%` : '—'}</span>
+                  <span>{disk.type?.toUpperCase() ?? ''}</span>
+                </div>
+              </div>
+            );
+          }}
+        </For>
       </div>
     </Show>
   );

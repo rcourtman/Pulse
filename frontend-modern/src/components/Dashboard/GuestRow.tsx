@@ -39,10 +39,14 @@ export function GuestRow(props: GuestRowProps) {
     return `${props.guest.instance}-${props.guest.node}-${props.guest.vmid}`;
   });
 
+  const diskCount = createMemo(() => (props.guest.disks ? props.guest.disks.length : 0));
+  const hasMultipleDisks = createMemo(() => diskCount() > 1);
+
   // Update custom URL when prop changes
   createEffect(() => {
     setCustomUrl(props.customUrl);
   });
+
 
   // Load custom URL from backend if not provided via props
   onMount(async () => {
@@ -243,35 +247,41 @@ export function GuestRow(props: GuestRowProps) {
       </td>
 
       {/* Disk */}
-      <td class="py-0.5 px-2 w-[140px]">
-        <Show
-          when={props.guest.disks && props.guest.disks.length > 0}
-          fallback={
-            <Show
-              when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
-              fallback={
-                <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
-                  -
-                </span>
-              }
-            >
-              <MetricBar
-                value={diskPercent()}
-                label={`${diskPercent().toFixed(0)}%`}
-                sublabel={
-                  props.guest.disk
-                    ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
-                    : undefined
-                }
-                type="disk"
-              />
-            </Show>
-          }
-        >
+      <td class="py-0.5 px-2 w-[180px]">
+        <Show when={hasMultipleDisks()}>
           <DiskList
             disks={props.guest.disks!}
             diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
           />
+        </Show>
+        <Show when={!hasMultipleDisks() && props.guest.disks && props.guest.disks.length > 0}>
+          <DiskList
+            disks={props.guest.disks!}
+            diskStatusReason={isVM(props.guest) ? props.guest.diskStatusReason : undefined}
+          />
+        </Show>
+        <Show
+          when={!props.guest.disks || props.guest.disks.length === 0}
+        >
+          <Show
+            when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
+            fallback={
+              <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
+                -
+              </span>
+            }
+          >
+            <MetricBar
+              value={diskPercent()}
+              label={`${diskPercent().toFixed(0)}%`}
+              sublabel={
+                props.guest.disk
+                  ? `${formatBytes(props.guest.disk.used)}/${formatBytes(props.guest.disk.total)}`
+                  : undefined
+              }
+              type="disk"
+            />
+          </Show>
         </Show>
       </td>
 
