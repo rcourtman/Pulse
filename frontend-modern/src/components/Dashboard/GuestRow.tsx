@@ -80,9 +80,7 @@ export function GuestRow(props: GuestRowProps) {
   const memoryTooltip = createMemo(() => {
     if (!props.guest.memory) return undefined;
     const lines: string[] = [];
-    const used = props.guest.memory.used ?? 0;
     const total = props.guest.memory.total ?? 0;
-    lines.push(`Used: ${formatBytes(used)} / ${formatBytes(total)}`);
     if (
       props.guest.memory.balloon &&
       props.guest.memory.balloon > 0 &&
