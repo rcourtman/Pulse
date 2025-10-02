@@ -77,6 +77,25 @@ export function GuestRow(props: GuestRowProps) {
     const total = props.guest.memory.total ?? 0;
     return `${formatBytes(used)}/${formatBytes(total)}`;
   });
+  const memoryTooltip = createMemo(() => {
+    if (!props.guest.memory) return undefined;
+    const lines: string[] = [];
+    const used = props.guest.memory.used ?? 0;
+    const total = props.guest.memory.total ?? 0;
+    lines.push(`Used: ${formatBytes(used)} / ${formatBytes(total)}`);
+    if (
+      props.guest.memory.balloon &&
+      props.guest.memory.balloon > 0 &&
+      props.guest.memory.balloon !== total
+    ) {
+      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon)}`);
+    }
+    if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
+      const swapUsed = props.guest.memory.swapUsed ?? 0;
+      lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
+    }
+    return lines.length > 0 ? lines.join('\n') : undefined;
+  });
   const diskPercent = createMemo(() => {
     if (!props.guest.disk || props.guest.disk.total === 0) return 0;
     // Check if usage is -1 (unknown/no guest agent)
@@ -252,12 +271,14 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Memory */}
       <td class="py-0.5 px-2 w-[140px]">
-        <MetricBar
-          value={memPercent()}
-          label={`${memPercent().toFixed(0)}%`}
-          sublabel={memoryUsageLabel()}
-          type="memory"
-        />
+        <div title={memoryTooltip() ?? undefined}>
+          <MetricBar
+            value={memPercent()}
+            label={`${memPercent().toFixed(0)}%`}
+            sublabel={memoryUsageLabel()}
+            type="memory"
+          />
+        </div>
       </td>
 
       {/* Disk */}
