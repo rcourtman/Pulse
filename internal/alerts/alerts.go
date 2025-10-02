@@ -3049,29 +3049,49 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout >= 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
+		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
+		resourceID := fmt.Sprintf("%s-%s", node, disk.DevPath)
+		resourceName := fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath)
 
-		if _, exists := m.activeAlerts[wearoutAlertID]; !exists {
+		if existing, exists := m.activeAlerts[wearoutAlertID]; exists {
+			// Refresh details so legacy alerts pick up updated wording and metadata
+			existing.LastSeen = time.Now()
+			existing.Value = float64(disk.Wearout)
+			existing.Message = message
+			existing.ResourceID = resourceID
+			existing.ResourceName = resourceName
+			existing.Node = node
+			existing.Instance = instance
+			if existing.Metadata == nil {
+				existing.Metadata = map[string]interface{}{}
+			}
+			existing.Metadata["disk_path"] = disk.DevPath
+			existing.Metadata["disk_model"] = disk.Model
+			existing.Metadata["disk_serial"] = disk.Serial
+			existing.Metadata["disk_type"] = disk.Type
+			existing.Metadata["disk_wearout"] = disk.Wearout
+			delete(existing.Metadata, "disk_wearout_used")
+		} else {
 			// Create wearout alert
 			alert := &Alert{
 				ID:           wearoutAlertID,
 				Type:         "disk-wearout",
 				Level:        AlertLevelWarning,
-				ResourceID:   fmt.Sprintf("%s-%s", node, disk.DevPath),
-				ResourceName: fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath),
+				ResourceID:   resourceID,
+				ResourceName: resourceName,
 				Node:         node,
 				Instance:     instance,
-				Message:      fmt.Sprintf("SSD life remaining dropped below 10%% (%d%% remaining, %d%% wear used)", disk.Wearout, disk.WearoutUsed),
+				Message:      message,
 				Value:        float64(disk.Wearout),
 				Threshold:    10.0,
 				StartTime:    time.Now(),
 				LastSeen:     time.Now(),
 				Metadata: map[string]interface{}{
-					"disk_path":         disk.DevPath,
-					"disk_model":        disk.Model,
-					"disk_serial":       disk.Serial,
-					"disk_type":         disk.Type,
-					"disk_wearout":      disk.Wearout,
-					"disk_wearout_used": disk.WearoutUsed,
+					"disk_path":    disk.DevPath,
+					"disk_model":   disk.Model,
+					"disk_serial":  disk.Serial,
+					"disk_type":    disk.Type,
+					"disk_wearout": disk.Wearout,
 				},
 			}
 
