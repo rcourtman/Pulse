@@ -8,64 +8,54 @@ import (
 
 func TestDiskUnmarshalWearout(t *testing.T) {
 	tests := []struct {
-		name         string
-		wearout      json.RawMessage
-		expectedLife int
-		expectedUsed int
+		name     string
+		wearout  json.RawMessage
+		expected int
 	}{
 		{
-			name:         "numeric",
-			wearout:      json.RawMessage(`81`),
-			expectedLife: 19,
-			expectedUsed: 81,
+			name:     "numeric",
+			wearout:  json.RawMessage(`81`),
+			expected: 81,
 		},
 		{
-			name:         "numeric string",
-			wearout:      json.RawMessage(`"81"`),
-			expectedLife: 19,
-			expectedUsed: 81,
+			name:     "numeric string",
+			wearout:  json.RawMessage(`"81"`),
+			expected: 81,
 		},
 		{
-			name:         "escaped numeric string",
-			wearout:      json.RawMessage(`"\"81\""`),
-			expectedLife: 19,
-			expectedUsed: 81,
+			name:     "escaped numeric string",
+			wearout:  json.RawMessage(`"\"81\""`),
+			expected: 81,
 		},
 		{
-			name:         "percentage string",
-			wearout:      json.RawMessage(`"81%"`),
-			expectedLife: 19,
-			expectedUsed: 81,
+			name:     "percentage string",
+			wearout:  json.RawMessage(`"81%"`),
+			expected: 81,
 		},
 		{
-			name:         "percentage with spaces",
-			wearout:      json.RawMessage(`"  82 % "`),
-			expectedLife: 18,
-			expectedUsed: 82,
+			name:     "percentage with spaces",
+			wearout:  json.RawMessage(`"  82 % "`),
+			expected: 82,
 		},
 		{
-			name:         "not applicable string",
-			wearout:      json.RawMessage(`"N/A"`),
-			expectedLife: 100,
-			expectedUsed: 0,
+			name:     "not applicable string",
+			wearout:  json.RawMessage(`"N/A"`),
+			expected: 0,
 		},
 		{
-			name:         "empty string",
-			wearout:      json.RawMessage(`""`),
-			expectedLife: 100,
-			expectedUsed: 0,
+			name:     "empty string",
+			wearout:  json.RawMessage(`""`),
+			expected: 0,
 		},
 		{
-			name:         "null value",
-			wearout:      json.RawMessage(`null`),
-			expectedLife: 100,
-			expectedUsed: 0,
+			name:     "null value",
+			wearout:  json.RawMessage(`null`),
+			expected: 0,
 		},
 		{
-			name:         "unknown string",
-			wearout:      json.RawMessage(`"Unknown"`),
-			expectedLife: 100,
-			expectedUsed: 0,
+			name:     "unknown string",
+			wearout:  json.RawMessage(`"Unknown"`),
+			expected: 0,
 		},
 	}
 
@@ -76,11 +66,8 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 			if err := json.Unmarshal([]byte(payload), &disk); err != nil {
 				t.Fatalf("unexpected error unmarshalling disk: %v", err)
 			}
-			if disk.Wearout != tc.expectedLife {
-				t.Fatalf("life remaining: got %d, want %d", disk.Wearout, tc.expectedLife)
-			}
-			if disk.WearoutUsed != tc.expectedUsed {
-				t.Fatalf("wear consumed: got %d, want %d", disk.WearoutUsed, tc.expectedUsed)
+			if disk.Wearout != tc.expected {
+				t.Fatalf("wearout: got %d, want %d", disk.Wearout, tc.expected)
 			}
 		})
 	}

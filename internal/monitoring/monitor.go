@@ -1472,7 +1472,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Size:        disk.Size,
 				Health:      disk.Health,
 				Wearout:     disk.Wearout,
-				WearoutUsed: disk.WearoutUsed,
 				RPM:         disk.RPM,
 				Used:        disk.Used,
 				LastChecked: time.Now(),
