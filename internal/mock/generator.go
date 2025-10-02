@@ -557,12 +557,26 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			memUsage = 0.80 + rand.Float64()*0.1 // 80-90%
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
+		balloon := totalMem
+		if rand.Float64() < 0.7 {
+			balloon = int64(float64(totalMem) * (0.65 + rand.Float64()*0.25))
+		}
+
+		swapTotal := int64(0)
+		swapUsed := int64(0)
+		if rand.Float64() < 0.6 {
+			swapTotal = int64((1 + rand.Intn(5)) * 1024 * 1024 * 1024) // 1-5 GB
+			swapUsed = int64(float64(swapTotal) * (0.1 + rand.Float64()*0.4))
+		}
+
 		mem = models.Memory{
-			Total:   totalMem,
-			Used:    usedMem,
-			Free:    totalMem - usedMem,
-			Usage:   memUsage * 100,
-			Balloon: totalMem,
+			Total:     totalMem,
+			Used:      usedMem,
+			Free:      totalMem - usedMem,
+			Usage:     memUsage * 100,
+			Balloon:   balloon,
+			SwapTotal: swapTotal,
+			SwapUsed:  swapUsed,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
 	}
@@ -669,12 +683,26 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			memUsage = 0.82 + rand.Float64()*0.08 // 82-90%
 		}
 		usedMem := int64(float64(totalMem) * memUsage)
+		balloon := totalMem
+		if rand.Float64() < 0.5 {
+			balloon = int64(float64(totalMem) * (0.7 + rand.Float64()*0.2))
+		}
+
+		swapTotal := int64(0)
+		swapUsed := int64(0)
+		if rand.Float64() < 0.4 {
+			swapTotal = int64((256 + rand.Intn(1024)) * 1024 * 1024) // 256MB - 1.25GB
+			swapUsed = int64(float64(swapTotal) * (0.1 + rand.Float64()*0.4))
+		}
+
 		mem = models.Memory{
-			Total:   totalMem,
-			Used:    usedMem,
-			Free:    totalMem - usedMem,
-			Usage:   memUsage * 100,
-			Balloon: totalMem,
+			Total:     totalMem,
+			Used:      usedMem,
+			Free:      totalMem - usedMem,
+			Usage:     memUsage * 100,
+			Balloon:   balloon,
+			SwapTotal: swapTotal,
+			SwapUsed:  swapUsed,
 		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
 	}
