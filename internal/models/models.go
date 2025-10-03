@@ -133,21 +133,24 @@ type Container struct {
 
 // Storage represents a storage resource
 type Storage struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Node     string   `json:"node"`
-	Instance string   `json:"instance"`
-	Type     string   `json:"type"`
-	Status   string   `json:"status"`
-	Total    int64    `json:"total"`
-	Used     int64    `json:"used"`
-	Free     int64    `json:"free"`
-	Usage    float64  `json:"usage"`
-	Content  string   `json:"content"`
-	Shared   bool     `json:"shared"`
-	Enabled  bool     `json:"enabled"`
-	Active   bool     `json:"active"`
-	ZFSPool  *ZFSPool `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Node      string   `json:"node"`
+	Instance  string   `json:"instance"`
+	Nodes     []string `json:"nodes,omitempty"`
+	NodeIDs   []string `json:"nodeIds,omitempty"`
+	NodeCount int      `json:"nodeCount,omitempty"`
+	Type      string   `json:"type"`
+	Status    string   `json:"status"`
+	Total     int64    `json:"total"`
+	Used      int64    `json:"used"`
+	Free      int64    `json:"free"`
+	Usage     float64  `json:"usage"`
+	Content   string   `json:"content"`
+	Shared    bool     `json:"shared"`
+	Enabled   bool     `json:"enabled"`
+	Active    bool     `json:"active"`
+	ZFSPool   *ZFSPool `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
 }
 
 // ZFSPool represents a ZFS pool with health and error information
