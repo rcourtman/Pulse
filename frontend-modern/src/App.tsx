@@ -556,10 +556,10 @@ function AppLayout(props: {
   // Determine active tab from current path
   const getActiveTab = () => {
     const path = location.pathname;
-    if (path === '/storage') return 'storage';
-    if (path === '/backups') return 'backups';
-    if (path === '/alerts') return 'alerts';
-    if (path === '/settings') return 'settings';
+    if (path.startsWith('/storage')) return 'storage';
+    if (path.startsWith('/backups')) return 'backups';
+    if (path.startsWith('/alerts')) return 'alerts';
+    if (path.startsWith('/settings')) return 'settings';
     return 'main';
   };
 
