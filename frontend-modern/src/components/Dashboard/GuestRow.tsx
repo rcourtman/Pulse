@@ -196,6 +196,8 @@ export function GuestRow(props: GuestRowProps) {
     return true;
   });
 
+  const drawerDisabled = createMemo(() => props.parentNodeOnline === false || !isRunning());
+
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
@@ -390,7 +392,11 @@ export function GuestRow(props: GuestRowProps) {
           aria-hidden={!isRunning() || props.parentNodeOnline === false}
         >
           <td class="px-4 py-2" colSpan={11}>
-            <div class="flex flex-wrap gap-3 justify-start">
+            <div
+              class={`flex flex-wrap gap-3 justify-start ${
+                drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
+              }`}
+            >
               <Show when={hasOsInfo() || ipAddresses().length > 0}>
                 <div class="min-w-[220px] rounded border border-gray-200 bg-white/70 p-2 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                   <div class="text-[11px] font-medium text-gray-700 dark:text-gray-200">Guest Overview</div>
