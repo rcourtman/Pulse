@@ -2131,7 +2131,7 @@ const UnifiedBackups: Component = () => {
                     <For each={groupedData()}>
                       {(group) => (
                         <>
-                          <tr class="bg-gray-50/50 dark:bg-gray-700/30">
+                          <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
                               colspan={(() => {
                                 let cols = 7; // Base columns: VMID, Type, Name, Node, Time, Backup, Details
@@ -2143,15 +2143,22 @@ const UnifiedBackups: Component = () => {
                                 if (backupTypeFilter() !== 'snapshot') cols++; // Add Location column
                                 return cols;
                               })()}
-                              class="p-0.5 px-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                              class="py-1 pr-2 pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
-                              {group.label} ({group.items.length})
+                              <div class="flex items-center justify-between gap-3">
+                                <span class="truncate" title={group.label}>
+                                  {group.label}
+                                </span>
+                                <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                  {group.items.length}
+                                </span>
+                              </div>
                             </td>
                           </tr>
                           <For each={group.items}>
                             {(item) => (
                               <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                <td class="p-0.5 px-1.5 text-sm align-middle">{item.vmid}</td>
+                                <td class="p-0.5 pl-5 pr-1.5 text-sm align-middle">{item.vmid}</td>
                                 <td class="p-0.5 px-1.5 align-middle">
                                   <span
                                     class={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${

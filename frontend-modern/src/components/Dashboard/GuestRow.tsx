@@ -37,6 +37,7 @@ interface GuestRowProps {
   customUrl?: string;
   onTagClick?: (tag: string) => void;
   activeSearch?: string;
+  parentNodeOnline?: boolean;
 }
 
 export function GuestRow(props: GuestRowProps) {
@@ -151,7 +152,12 @@ export function GuestRow(props: GuestRowProps) {
     return (props.guest.disk.used / props.guest.disk.total) * 100;
   });
 
-  const isRunning = createMemo(() => props.guest.status === 'running');
+  const isRunning = createMemo(() => {
+    if (props.parentNodeOnline === false) {
+      return false;
+    }
+    return props.guest.status === 'running';
+  });
 
   // Get helpful tooltip for disk status
   const getDiskStatusTooltip = () => {
@@ -182,37 +188,41 @@ export function GuestRow(props: GuestRowProps) {
     }
   };
 
+  const showAlertHighlight = createMemo(() => {
+    if (!props.alertStyles?.hasAlert) return false;
+    if (!isRunning() && props.alertStyles.severity === 'warning') {
+      return false;
+    }
+    return true;
+  });
+
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
-    // Extract only the background color from alert styles, not the border
-    const alertBg = props.alertStyles?.hasAlert
-      ? props.alertStyles.severity === 'critical'
+    const alertBg = showAlertHighlight()
+      ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
       : '';
-    const defaultHover = props.alertStyles?.hasAlert
-      ? ''
-      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+    const defaultHover = showAlertHighlight() ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     const clickable = canShowDrawer() ? 'cursor-pointer' : '';
-    const expanded = drawerOpen() && !props.alertStyles?.hasAlert ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+    const expanded = drawerOpen() && !showAlertHighlight() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   });
 
   // Get first cell styling
   const firstCellClass = createMemo(() => {
-    const base = 'py-0.5 px-2 whitespace-nowrap relative';
-    // Add extra padding when alert is present for visual spacing
-    const padding = props.alertStyles?.hasAlert ? 'pl-4' : '';
-    return `${base} ${padding}`;
+    const base = 'py-0.5 pr-2 whitespace-nowrap relative';
+    const indent = showAlertHighlight() ? 'pl-6' : 'pl-5';
+    return `${base} ${indent}`;
   });
 
   // Get row styles including box-shadow for alert border
   const rowStyle = createMemo(() => {
-    if (!props.alertStyles?.hasAlert) return {};
-    const color = props.alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+    if (!showAlertHighlight()) return {};
+    const color = props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
     return {
       'box-shadow': `inset 4px 0 0 0 ${color}`,
     };
@@ -223,49 +233,39 @@ export function GuestRow(props: GuestRowProps) {
       <tr class={rowClass()} style={rowStyle()} onClick={toggleDrawer} aria-expanded={drawerOpen()}>
       {/* Name - Sticky column */}
       <td class={firstCellClass()}>
-        <div class="flex items-start gap-2">
-          {/* Status indicator */}
-          <span
-            class={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
-              isRunning() ? 'bg-green-500' : 'bg-red-500'
-            }`}
-            title={props.guest.status}
-          ></span>
-
-          <div class="flex items-center gap-2">
-            {/* Name - clickable if custom URL is set */}
-            <Show
-              when={customUrl()}
-              fallback={
-                <span
-                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                  title={props.guest.name}
-                >
-                  {props.guest.name}
-                </span>
-              }
-            >
-              <a
-                href={customUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
-                title={`${props.guest.name} - Click to open custom URL`}
-                onClick={(event) => event.stopPropagation()}
+        <div class="flex items-center gap-2">
+          {/* Name - clickable if custom URL is set */}
+          <Show
+            when={customUrl()}
+            fallback={
+              <span
+                class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                title={props.guest.name}
               >
                 {props.guest.name}
-              </a>
-            </Show>
+              </span>
+            }
+          >
+            <a
+              href={customUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer truncate"
+              title={`${props.guest.name} - Click to open custom URL`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {props.guest.name}
+            </a>
+          </Show>
 
-            {/* Tag badges */}
-            <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
-              <TagBadges
-                tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
-                maxVisible={3}
-                onTagClick={props.onTagClick}
-                activeSearch={props.activeSearch}
-              />
-            </div>
+          {/* Tag badges */}
+          <div class="flex" data-prevent-toggle onClick={(event) => event.stopPropagation()}>
+            <TagBadges
+              tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
+              maxVisible={3}
+              onTagClick={props.onTagClick}
+              activeSearch={props.activeSearch}
+            />
           </div>
         </div>
       </td>

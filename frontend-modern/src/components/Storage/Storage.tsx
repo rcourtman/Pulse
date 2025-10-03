@@ -587,22 +587,56 @@ const Storage: Component = () => {
                                 storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
                                 activeAlerts,
                               );
-                              const alertBg = alertStyles.hasAlert
-                                ? alertStyles.severity === 'critical'
-                                  ? 'bg-red-50 dark:bg-red-950/30'
-                                  : 'bg-yellow-50 dark:bg-yellow-950/20'
-                                : '';
-                              const rowClass = `${isDisabled ? 'opacity-60' : ''} ${alertBg} hover:shadow-sm transition-all duration-200`;
 
-                              // Create row style with inset box-shadow for alert border
-                              const rowStyle = createMemo(() => {
-                                const styles: Record<string, string> = {};
-                                if (alertStyles.hasAlert) {
-                                  const color =
-                                    alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
-                                  styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
+                              const parentNodeOnline = createMemo(() => {
+                                if (viewMode() === 'node' && node) {
+                                  return node.status === 'online' && (node.uptime || 0) > 0;
                                 }
-                                return styles;
+                                return true;
+                              });
+
+                              const showAlertHighlight = createMemo(
+                                () => alertStyles.hasAlert && parentNodeOnline(),
+                              );
+
+                              const rowClass = createMemo(() => {
+                                const classes = [
+                                  'transition-all duration-200',
+                                  'hover:bg-gray-50 dark:hover:bg-gray-700/30',
+                                  'hover:shadow-sm',
+                                ];
+
+                                if (showAlertHighlight()) {
+                                  classes.push(
+                                    alertStyles.severity === 'critical'
+                                      ? 'bg-red-50 dark:bg-red-950/30'
+                                      : 'bg-yellow-50 dark:bg-yellow-950/20',
+                                  );
+                                }
+
+                                if (isDisabled || !parentNodeOnline()) {
+                                  classes.push('opacity-60');
+                                }
+
+                                return classes.join(' ');
+                              });
+
+                              const rowStyle = createMemo(() => {
+                                if (!showAlertHighlight()) return {} as Record<string, string>;
+                                const color =
+                                  alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
+                                return {
+                                  'box-shadow': `inset 4px 0 0 0 ${color}`,
+                                };
+                              });
+
+                              const firstCellClass = createMemo(() => {
+                                if (viewMode() === 'node') {
+                                  return showAlertHighlight()
+                                    ? 'p-0.5 pl-6 pr-1.5'
+                                    : 'p-0.5 pl-5 pr-1.5';
+                                }
+                                return showAlertHighlight() ? 'p-0.5 pl-3 pr-1.5' : 'p-0.5 px-1.5';
                               });
 
                               const zfsPool = storage.zfsPool;
@@ -610,12 +644,10 @@ const Storage: Component = () => {
                               return (
                                 <>
                                   <tr
-                                    class={`${rowClass} hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors`}
+                                    class={`${rowClass()} transition-colors`}
                                     style={rowStyle()}
                                   >
-                                    <td
-                                      class={`p-0.5 ${alertStyles.hasAlert ? 'pl-3 pr-1.5' : 'px-1.5'}`}
-                                    >
+                                    <td class={firstCellClass()}>
                                       <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                           {storage.name}
