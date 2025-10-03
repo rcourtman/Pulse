@@ -1398,6 +1398,17 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				if err == nil {
 					// Look for local or local-lvm storage as most stable disk metric
 					for _, storage := range nodeStorages {
+						if reason, skip := readOnlyFilesystemReason(storage.Type, storage.Total, storage.Used); skip {
+							log.Debug().
+								Str("node", node.Node).
+								Str("storage", storage.Storage).
+								Str("type", storage.Type).
+								Str("skipReason", reason).
+								Uint64("total", storage.Total).
+								Uint64("used", storage.Used).
+								Msg("Skipping read-only storage while building disk fallback")
+							continue
+						}
 						if storage.Storage == "local" || storage.Storage == "local-lvm" {
 							disk := models.Disk{
 								Total: int64(storage.Total),
@@ -1929,6 +1940,10 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 								// Check filesystem type
 								fsTypeLower := strings.ToLower(fs.Type)
+								if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
+									skipReasons = append(skipReasons, fmt.Sprintf("read-only-%s", reason))
+									shouldSkip = true
+								}
 								if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
 									fs.Type == "cgroup" || fs.Type == "cgroup2" ||
 									fs.Type == "sysfs" || fs.Type == "proc" ||
@@ -2901,6 +2916,17 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		log.Debug().Str("node", node.Node).Int("storageCount", len(nodeStorage)).Msg("Retrieved storage for node")
 
 		for _, storage := range nodeStorage {
+			if reason, skip := readOnlyFilesystemReason(storage.Type, storage.Total, storage.Used); skip {
+				log.Debug().
+					Str("node", node.Node).
+					Str("storage", storage.Storage).
+					Str("type", storage.Type).
+					Str("skipReason", reason).
+					Uint64("total", storage.Total).
+					Uint64("used", storage.Used).
+					Msg("Skipping read-only storage mount")
+				continue
+			}
 			// Get cluster config for this storage
 			clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
 
