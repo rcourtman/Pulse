@@ -381,7 +381,14 @@ export function GuestRow(props: GuestRowProps) {
       </td>
       </tr>
       <Show when={drawerOpen() && canShowDrawer()}>
-        <tr class="bg-gray-50/60 dark:bg-gray-800/40 text-[11px] text-gray-600 dark:text-gray-300">
+        <tr
+          class={`text-[11px] ${
+            isRunning() && props.parentNodeOnline !== false
+              ? 'bg-gray-50/60 text-gray-600 dark:bg-gray-800/40 dark:text-gray-300'
+              : 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
+          }`}
+          aria-hidden={!isRunning() || props.parentNodeOnline === false}
+        >
           <td class="px-4 py-2" colSpan={11}>
             <div class="flex flex-wrap gap-3 justify-start">
               <Show when={hasOsInfo() || ipAddresses().length > 0}>
