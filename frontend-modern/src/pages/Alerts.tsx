@@ -205,6 +205,7 @@ export function Alerts() {
   };
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
+  const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
 
   // Quick tip visibility state
@@ -379,12 +380,55 @@ export function Alerts() {
     }
   });
 
-  // Load existing alert configuration on mount (only once)
-  onMount(async () => {
+  const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
+    setIsReloadingConfig(true);
+    setHasUnsavedChanges(false);
+
+    // Reset to defaults before applying server state
+    setGuestDefaults({
+      cpu: 80,
+      memory: 85,
+      disk: 90,
+      diskRead: 0,
+      diskWrite: 0,
+      networkIn: 0,
+      networkOut: 0,
+    });
+    setNodeDefaults({
+      cpu: 80,
+      memory: 85,
+      disk: 90,
+      temperature: 80,
+    });
+    setStorageDefault(85);
+    setTimeThreshold(0);
+    setTimeThresholds({ guest: 10, node: 15, storage: 30, pbs: 30 });
+    setScheduleQuietHours(createDefaultQuietHours());
+    setScheduleCooldown(createDefaultCooldown());
+    setScheduleGrouping(createDefaultGrouping());
+    setScheduleEscalation(createDefaultEscalation());
+
+    setEmailConfig({
+      enabled: false,
+      provider: '',
+      server: '',
+      port: 587,
+      username: '',
+      password: '',
+      from: '',
+      to: [],
+      tls: true,
+      startTLS: false,
+      replyTo: '',
+      maxRetries: 3,
+      retryDelay: 5,
+      rateLimit: 60,
+    });
+
     try {
       const config = await AlertsAPI.getConfig();
+
       if (config.guestDefaults) {
-        // Extract trigger values from potentially hysteresis thresholds
         setGuestDefaults({
           cpu: getTriggerValue(config.guestDefaults.cpu) ?? 80,
           memory: getTriggerValue(config.guestDefaults.memory) ?? 85,
@@ -411,7 +455,6 @@ export function Alerts() {
       if (config.timeThreshold !== undefined) {
         setTimeThreshold(config.timeThreshold);
       }
-      // Load per-type time thresholds if available
       if (config.timeThresholds) {
         setTimeThresholds({
           guest: config.timeThresholds.guest ?? 10,
@@ -420,7 +463,6 @@ export function Alerts() {
           pbs: config.timeThresholds.pbs ?? 30,
         });
       } else if (config.timeThreshold !== undefined && config.timeThreshold > 0) {
-        // Fallback to legacy single threshold for all types (only if it's non-zero)
         setTimeThresholds({
           guest: config.timeThreshold,
           node: config.timeThreshold,
@@ -428,16 +470,12 @@ export function Alerts() {
           pbs: config.timeThreshold,
         });
       }
-      // If neither is set or legacy is 0, keep the defaults (10, 15, 30, 30)
-      if (config.overrides) {
-        // Store raw config to be processed when state is available
-        setRawOverridesConfig(config.overrides);
-      }
-      // Load schedule config into parent state
+
+      setRawOverridesConfig(config.overrides || {});
+
       if (config.schedule) {
         if (config.schedule.quietHours) {
           const qh = config.schedule.quietHours;
-          // Convert days array to object if needed
           let days: Record<string, boolean>;
           if (Array.isArray(qh.days)) {
             days = {
@@ -450,15 +488,7 @@ export function Alerts() {
               saturday: qh.days.includes(6),
             };
           } else {
-            days = (qh.days as Record<string, boolean>) || {
-              monday: true,
-              tuesday: true,
-              wednesday: true,
-              thursday: true,
-              friday: true,
-              saturday: false,
-              sunday: false,
-            };
+            days = (qh.days as Record<string, boolean>) || createDefaultQuietHours().days;
           }
 
           setScheduleQuietHours({
@@ -481,7 +511,7 @@ export function Alerts() {
         if (config.schedule.grouping) {
           setScheduleGrouping({
             enabled: config.schedule.grouping.enabled || false,
-            window: Math.floor((config.schedule.grouping.window || 300) / 60), // Convert seconds to minutes
+            window: Math.floor((config.schedule.grouping.window || 300) / 60),
             byNode:
               config.schedule.grouping.byNode !== undefined
                 ? config.schedule.grouping.byNode
@@ -492,7 +522,6 @@ export function Alerts() {
                 : false,
           });
         } else if (config.schedule.groupingWindow !== undefined) {
-          // Handle legacy groupingWindow field
           setScheduleGrouping({
             enabled: config.schedule.groupingWindow > 0,
             window: Math.floor(config.schedule.groupingWindow / 60),
@@ -514,20 +543,19 @@ export function Alerts() {
         }
       }
 
-      // Load email configuration
       try {
         const emailConfigData = await NotificationsAPI.getEmailConfig();
         setEmailConfig({
           enabled: emailConfigData.enabled,
-          provider: emailConfigData.provider,
-          server: emailConfigData.server, // Fixed: now correctly maps
-          port: emailConfigData.port, // Fixed: now correctly maps
-          username: emailConfigData.username,
+          provider: emailConfigData.provider || '',
+          server: emailConfigData.server || '',
+          port: emailConfigData.port || 587,
+          username: emailConfigData.username || '',
           password: emailConfigData.password || '',
-          from: emailConfigData.from,
-          to: emailConfigData.to,
-          tls: emailConfigData.tls,
-          startTLS: emailConfigData.startTLS,
+          from: emailConfigData.from || '',
+          to: emailConfigData.to || [],
+          tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
+          startTLS: emailConfigData.startTLS || false,
           replyTo: '',
           maxRetries: 3,
           retryDelay: 5,
@@ -536,9 +564,23 @@ export function Alerts() {
       } catch (emailErr) {
         console.error('Failed to load email configuration:', emailErr);
       }
+
+      if (options.notify) {
+        showSuccess('Changes discarded');
+      }
     } catch (err) {
       console.error('Failed to load alert configuration:', err);
+      if (options.notify) {
+        showError('Failed to reload configuration');
+      }
+    } finally {
+      setIsReloadingConfig(false);
     }
+  };
+
+  // Load existing alert configuration on mount (only once)
+  onMount(() => {
+    void loadAlertConfiguration();
   });
 
   // Reload email config when switching to destinations tab
@@ -696,7 +738,8 @@ export function Alerts() {
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
               <button
-                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700"
+                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isReloadingConfig()}
                 onClick={async () => {
                   try {
                     // Save alert configuration with hysteresis format
@@ -790,13 +833,13 @@ export function Alerts() {
                 Save Changes
               </button>
               <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial"
-                onClick={() => {
-                  // Reset any changes made
-                  window.location.reload();
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isReloadingConfig()}
+                onClick={async () => {
+                  await loadAlertConfiguration({ notify: true });
                 }}
               >
-                Discard
+                {isReloadingConfig() ? 'Discarding...' : 'Discard'}
               </button>
             </div>
           </div>
