@@ -48,7 +48,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
   // Get health status color and badge
   const getHealthStatus = (disk: PhysicalDisk) => {
-    if (disk.health === 'PASSED') {
+    const healthValue = (disk.health || '').trim();
+    const normalizedHealth = healthValue.toUpperCase();
+    const isHealthy =
+      normalizedHealth === 'PASSED' ||
+      normalizedHealth === 'OK' ||
+      normalizedHealth === 'GOOD';
+
+    if (isHealthy) {
       // Check wearout for SSDs
       if (disk.wearout > 0 && disk.wearout < 10) {
         return {
@@ -57,12 +64,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
           text: 'LOW LIFE',
         };
       }
+      const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth || 'HEALTHY';
       return {
         color: 'text-green-700 dark:text-green-400',
         bgColor: 'bg-green-100 dark:bg-green-900/30',
-        text: 'HEALTHY',
+        text: label,
       };
-    } else if (disk.health === 'FAILED') {
+    } else if (normalizedHealth === 'FAILED') {
       return {
         color: 'text-red-700 dark:text-red-400',
         bgColor: 'bg-red-100 dark:bg-red-900/30',

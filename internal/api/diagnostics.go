@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -128,7 +129,7 @@ type SystemDiagnostic struct {
 
 // handleDiagnostics returns comprehensive diagnostic information
 func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
 	defer cancel()
 
 	diag := DiagnosticsInfo{
@@ -308,14 +309,18 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		return result
 	}
 
-	// Check all nodes for VMs
+	// Fetch VMs once per node and keep lookup map
+	nodeVMMap := make(map[string][]proxmox.VM)
 	var allVMs []proxmox.VM
 	for _, node := range nodes {
-		vms, err := client.GetVMs(ctx, node.Node)
+		vmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		vms, err := client.GetVMs(vmCtx, node.Node)
+		cancel()
 		if err != nil {
 			log.Debug().Err(err).Str("node", node.Node).Msg("Failed to get VMs from node")
 			continue
 		}
+		nodeVMMap[node.Node] = vms
 		allVMs = append(allVMs, vms...)
 	}
 
@@ -334,39 +339,30 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 	result.ProblematicVMs = []VMDiskIssue{}
 	for _, vm := range vms {
 		if vm.Template == 0 && vm.Status == "running" {
-			// Find which node this VM is on
-			vmNode := ""
-			for _, node := range nodes {
-				nodeVMs, _ := client.GetVMs(ctx, node.Node)
-				for _, nvm := range nodeVMs {
-					if nvm.VMID == vm.VMID {
-						vmNode = node.Node
-						break
-					}
-				}
-				if vmNode != "" {
-					break
-				}
-			}
-
+			vmNode := strings.TrimSpace(vm.Node)
 			if vmNode == "" {
 				continue
 			}
 
 			// Check if agent is configured
-			vmStatus, err := client.GetVMStatus(ctx, vmNode, vm.VMID)
+			statusCtx, statusCancel := context.WithTimeout(ctx, 10*time.Second)
+			vmStatus, err := client.GetVMStatus(statusCtx, vmNode, vm.VMID)
+			statusCancel()
 			if err != nil {
+				errStr := err.Error()
 				result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
 					VMID:   vm.VMID,
 					Name:   vm.Name,
 					Status: vm.Status,
-					Issue:  "Failed to get VM status: " + err.Error(),
+					Issue:  "Failed to get VM status: " + errStr,
 				})
 			} else if vmStatus != nil && vmStatus.Agent > 0 {
 				result.VMsWithAgent++
 
 				// Try to get filesystem info
-				fsInfo, err := client.GetVMFSInfo(ctx, vmNode, vm.VMID)
+				fsCtx, fsCancel := context.WithTimeout(ctx, 10*time.Second)
+				fsInfo, err := client.GetVMFSInfo(fsCtx, vmNode, vm.VMID)
+				fsCancel()
 				if err != nil {
 					result.ProblematicVMs = append(result.ProblematicVMs, VMDiskIssue{
 						VMID:   vm.VMID,
@@ -437,10 +433,28 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 		result.TestVMName = testVM.Name
 
 		// Check VM status for agent
-		vmStatus, err := client.GetVMStatus(ctx, testVMNode, testVM.VMID)
+		statusCtx, statusCancel := context.WithTimeout(ctx, 10*time.Second)
+		vmStatus, err := client.GetVMStatus(statusCtx, testVMNode, testVM.VMID)
+		statusCancel()
 		if err != nil {
-			result.TestResult = "Failed to get VM status: " + err.Error()
-			result.Recommendations = append(result.Recommendations, "Check API token has PVEAuditor role")
+			errStr := err.Error()
+			result.TestResult = "Failed to get VM status: " + errStr
+			if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
+				result.Recommendations = append(result.Recommendations,
+					"VM status request timed out; check network connectivity to the node",
+					"If this persists, increase the diagnostics timeout or reduce VM load during checks",
+				)
+			} else if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") {
+				result.Recommendations = append(result.Recommendations,
+					"Ensure API token has PVEAuditor role",
+					"For PVE 9: PVEAuditor includes VM.GuestAgent.Audit",
+					"For PVE 8: May need additional VM.Monitor permission",
+				)
+			} else {
+				result.Recommendations = append(result.Recommendations,
+					"Verify the node is reachable and API token is valid",
+				)
+			}
 		} else if vmStatus == nil || vmStatus.Agent == 0 {
 			result.TestResult = "Guest agent not enabled in VM configuration"
 			result.Recommendations = append(result.Recommendations,
@@ -448,7 +462,9 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 				"Install qemu-guest-agent package in the VM")
 		} else {
 			// Try to get filesystem info
-			fsInfo, err := client.GetVMFSInfo(ctx, testVMNode, testVM.VMID)
+			fsCtx, fsCancel := context.WithTimeout(ctx, 10*time.Second)
+			fsInfo, err := client.GetVMFSInfo(fsCtx, testVMNode, testVM.VMID)
+			fsCancel()
 			if err != nil {
 				errStr := err.Error()
 				if strings.Contains(errStr, "500") || strings.Contains(errStr, "not running") {
@@ -463,6 +479,12 @@ func (r *Router) checkVMDiskMonitoring(ctx context.Context, client *proxmox.Clie
 						"Ensure API token has PVEAuditor role",
 						"For PVE 9: PVEAuditor includes VM.GuestAgent.Audit",
 						"For PVE 8: May need additional VM.Monitor permission")
+				} else if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
+					result.TestResult = "Guest agent request timed out"
+					result.Recommendations = append(result.Recommendations,
+						"Ensure the VM responds to guest agent queries promptly",
+						"Consider increasing the diagnostics timeout if the environment is large",
+					)
 				} else {
 					result.TestResult = "Failed to get guest agent data: " + errStr
 				}
@@ -562,7 +584,9 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 		}
 
 		// Try to get disk list
-		disks, err := client.GetDisks(ctx, node.Node)
+		diskCtx, diskCancel := context.WithTimeout(ctx, 10*time.Second)
+		disks, err := client.GetDisks(diskCtx, node.Node)
+		diskCancel()
 		if err != nil {
 			errStr := err.Error()
 			nodeResult.Error = errStr
@@ -574,6 +598,13 @@ func (r *Router) checkPhysicalDisks(ctx context.Context, client *proxmox.Client,
 					result.Recommendations = append(result.Recommendations,
 						"Check API token has sufficient permissions for disk monitoring",
 						"Token needs at least PVEAuditor role on the node")
+				}
+			} else if errors.Is(err, context.DeadlineExceeded) || strings.Contains(errStr, "context deadline exceeded") {
+				nodeResult.APIResponse = "Timeout"
+				if !contains(result.Recommendations, "Disk query timed out; verify node connectivity and load") {
+					result.Recommendations = append(result.Recommendations,
+						"Disk query timed out; verify node connectivity and load",
+						"Increase diagnostics timeout if nodes are slow to respond")
 				}
 			} else if strings.Contains(errStr, "404") || strings.Contains(errStr, "501") {
 				nodeResult.APIResponse = "Endpoint not available"

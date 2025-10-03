@@ -3209,6 +3209,8 @@ const Settings: Component = () => {
                             unknown
                           >;
 
+                          const connectionKeyMap = new Map<string, string>();
+
                           // Sanitize IP addresses (keep first octet for network type identification)
                           const sanitizeIP = (ip: string) => {
                             if (!ip) return ip;
@@ -3226,6 +3228,13 @@ const Settings: Component = () => {
                             const suffixMatch = hostname.match(/\.(lan|local|home|internal)$/);
                             const suffix = suffixMatch ? suffixMatch[0] : '';
                             return `node-REDACTED${suffix}`;
+                          };
+
+                          const sanitizeText = (text: string | undefined) => {
+                            if (!text) return text;
+                            return text
+                              .replace(/https?:\/\/[^"'\s]+/g, 'https://REDACTED')
+                              .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, 'xxx.xxx.xxx.xxx');
                           };
 
                           // Sanitize nodes
@@ -3258,9 +3267,12 @@ const Settings: Component = () => {
                                   )
                                 : node.clusterEndpoints;
 
+                              const sanitizedId = `${nodeType}-${index}`;
+                              connectionKeyMap.set(nodeName, sanitizedId);
+
                               return {
                                 ...node,
-                                id: `${nodeType}-${index}`,
+                                id: sanitizedId,
                                 name: sanitizeHostname(nodeName),
                                 host: nodeHost
                                   ? nodeHost.replace(/https?:\/\/[^:\/]+/, 'https://REDACTED')
@@ -3270,6 +3282,137 @@ const Settings: Component = () => {
                                 clusterEndpoints,
                               };
                             });
+                          }
+
+                          // Sanitize backend diagnostics (if present)
+                          if (
+                            sanitized.backendDiagnostics &&
+                            typeof sanitized.backendDiagnostics === 'object'
+                          ) {
+                            const backend = sanitized.backendDiagnostics as Record<string, unknown>;
+
+                            if (Array.isArray(backend.nodes)) {
+                              backend.nodes = backend.nodes.map((rawNode, index: number) => {
+                                const node = rawNode as Record<string, unknown>;
+                                const originalName = typeof node.name === 'string' ? node.name : '';
+                                const sanitizedId = `diagnostic-node-${index}`;
+                                connectionKeyMap.set(originalName, sanitizedId);
+
+                                const vmDiskCheck = node.vmDiskCheck as Record<string, unknown> | undefined;
+                                const physicalDisks = node.physicalDisks as Record<
+                                  string,
+                                  unknown
+                                > | undefined;
+
+                                if (vmDiskCheck) {
+                                  if (typeof vmDiskCheck.testVMName === 'string') {
+                                    vmDiskCheck.testVMName = 'vm-REDACTED';
+                                  }
+                                  if (typeof vmDiskCheck.testResult === 'string') {
+                                    const sanitizedResult = sanitizeText(
+                                      vmDiskCheck.testResult as string,
+                                    );
+                                    vmDiskCheck.testResult = sanitizedResult ?? vmDiskCheck.testResult;
+                                  }
+                                  if (Array.isArray(vmDiskCheck.problematicVMs)) {
+                                    vmDiskCheck.problematicVMs = (
+                                      vmDiskCheck.problematicVMs as Array<Record<string, unknown>>
+                                    ).map((problem) => {
+                                      const issueText = sanitizeText(
+                                        typeof problem.issue === 'string' ? problem.issue : undefined,
+                                      );
+                                      return {
+                                        ...problem,
+                                        name: 'vm-REDACTED',
+                                        issue: issueText ?? problem.issue,
+                                      };
+                                    });
+                                  }
+                                  if (Array.isArray(vmDiskCheck.recommendations)) {
+                                    vmDiskCheck.recommendations = (
+                                      vmDiskCheck.recommendations as Array<string>
+                                    ).map((rec) => sanitizeText(rec) ?? rec);
+                                  }
+                                }
+
+                                if (physicalDisks) {
+                                  if (typeof physicalDisks.testResult === 'string') {
+                                    const sanitizedResult = sanitizeText(
+                                      physicalDisks.testResult as string,
+                                    );
+                                    physicalDisks.testResult = sanitizedResult ?? physicalDisks.testResult;
+                                  }
+                                  if (Array.isArray(physicalDisks.nodeResults)) {
+                                    physicalDisks.nodeResults = (
+                                      physicalDisks.nodeResults as Array<Record<string, unknown>>
+                                    ).map((result) => ({
+                                      ...result,
+                                      nodeName: sanitizeHostname(
+                                        typeof result.nodeName === 'string' ? result.nodeName : '',
+                                      ),
+                                      apiResponse:
+                                        sanitizeText(
+                                          typeof result.apiResponse === 'string'
+                                            ? result.apiResponse
+                                            : undefined,
+                                        ) ?? result.apiResponse,
+                                      error:
+                                        sanitizeText(
+                                          typeof result.error === 'string'
+                                            ? result.error
+                                            : undefined,
+                                        ) ?? result.error,
+                                    }));
+                                  }
+                                }
+
+                                return {
+                                  ...node,
+                                  id: sanitizedId,
+                                  name: sanitizeHostname(originalName),
+                                  host:
+                                    typeof node.host === 'string'
+                                      ? (node.host as string).replace(
+                                          /https?:\/\/[^:\/]+/,
+                                          'https://REDACTED',
+                                        )
+                                      : node.host,
+                                  error:
+                                    sanitizeText(
+                                      typeof node.error === 'string' ? node.error : undefined,
+                                    ) ?? node.error,
+                                  vmDiskCheck,
+                                  physicalDisks,
+                                };
+                              });
+                            }
+
+                            if (Array.isArray(backend.pbs)) {
+                              backend.pbs = backend.pbs.map((rawPbs, index: number) => {
+                                const pbsNode = rawPbs as Record<string, unknown>;
+                                const originalName =
+                                  typeof pbsNode.name === 'string' ? pbsNode.name : '';
+                                const sanitizedId = `diagnostic-pbs-${index}`;
+                                connectionKeyMap.set(originalName, sanitizedId);
+
+                                return {
+                                  ...pbsNode,
+                                  id: sanitizedId,
+                                  name: sanitizeHostname(originalName),
+                                  host:
+                                    typeof pbsNode.host === 'string'
+                                      ? (pbsNode.host as string).replace(
+                                          /https?:\/\/[^:\/]+/,
+                                          'https://REDACTED',
+                                        )
+                                      : pbsNode.host,
+                                  error:
+                                    sanitizeText(
+                                      typeof pbsNode.error === 'string' ? pbsNode.error : undefined,
+                                    ) ?? pbsNode.error,
+                                };
+                              });
+                            }
                           }
 
                           // Sanitize storage
@@ -3316,13 +3459,13 @@ const Settings: Component = () => {
                                 const volid = typeof b.volid === 'string' ? b.volid : undefined;
                                 return {
                                   ...b,
-                                  node: sanitizeHostname(backupNode),
-                                  storage: `storage-${index}`,
-                                  vmid: backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
-                                  volid: volid ? 'vol-REDACTED' : volid,
-                                };
-                              });
-                            }
+                                node: sanitizeHostname(backupNode),
+                                storage: `storage-${index}`,
+                                vmid: backupVmid !== undefined ? `vm-${backupVmid}` : backupVmid,
+                                volid: volid ? 'vol-REDACTED' : volid,
+                              };
+                            });
+                          }
 
                             // Sanitize PBS backups
                             if (Array.isArray(backups.pbsBackups)) {
@@ -3373,6 +3516,22 @@ const Settings: Component = () => {
                               /\/\/[^\/]+/,
                               '//REDACTED',
                             );
+                          }
+
+                          if (
+                            sanitized.connectionHealth &&
+                            typeof sanitized.connectionHealth === 'object'
+                          ) {
+                            const newConnectionHealth: Record<string, unknown> = {};
+                            let index = 1;
+                            Object.entries(
+                              sanitized.connectionHealth as Record<string, unknown>,
+                            ).forEach(([key, value]) => {
+                              const mappedKey = connectionKeyMap.get(key) || `resource-${index}`;
+                              newConnectionHealth[mappedKey] = value;
+                              index += 1;
+                            });
+                            sanitized.connectionHealth = newConnectionHealth;
                           }
 
                           // Add sanitization notice
