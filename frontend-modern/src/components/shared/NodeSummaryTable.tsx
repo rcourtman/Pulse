@@ -524,38 +524,53 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       </span>
                     </td>
                     <td class="px-2 py-0.5">
-                      <MetricBar
-                        value={cpuPercentValue}
-                        label={`${cpuPercentValue}%`}
-                        sublabel={
-                          isPVE && node!.cpuInfo?.cores
-                            ? `${node!.cpuInfo.cores} cores`
-                            : undefined
-                        }
-                        type="cpu"
-                      />
-                    </td>
-                    <td class="px-2 py-0.5">
-                      <MetricBar
-                        value={memoryPercentValue}
-                        label={`${memoryPercentValue}%`}
-                        sublabel={
-                          isPVE && node!.memory
-                            ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
-                            : !isPVE && pbs!.memoryTotal
-                              ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}`
+                      <Show
+                        when={online}
+                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                      >
+                        <MetricBar
+                          value={cpuPercentValue}
+                          label={`${cpuPercentValue}%`}
+                          sublabel={
+                            isPVE && node!.cpuInfo?.cores
+                              ? `${node!.cpuInfo.cores} cores`
                               : undefined
-                        }
-                        type="memory"
-                      />
+                          }
+                          type="cpu"
+                        />
+                      </Show>
                     </td>
                     <td class="px-2 py-0.5">
-                      <MetricBar
-                        value={diskPercentValue}
-                        label={`${diskPercentValue}%`}
-                        sublabel={diskSublabel}
-                        type="disk"
-                      />
+                      <Show
+                        when={online}
+                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                      >
+                        <MetricBar
+                          value={memoryPercentValue}
+                          label={`${memoryPercentValue}%`}
+                          sublabel={
+                            isPVE && node!.memory
+                              ? `${formatBytes(node!.memory.used)}/${formatBytes(node!.memory.total)}`
+                              : !isPVE && pbs!.memoryTotal
+                                ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}`
+                                : undefined
+                          }
+                          type="memory"
+                        />
+                      </Show>
+                    </td>
+                    <td class="px-2 py-0.5">
+                      <Show
+                        when={online}
+                        fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                      >
+                        <MetricBar
+                          value={diskPercentValue}
+                          label={`${diskPercentValue}%`}
+                          sublabel={diskSublabel}
+                          type="disk"
+                        />
+                      </Show>
                     </td>
                     <Show when={hasAnyTemperatureData()}>
                       <td class="px-2 py-0.5 whitespace-nowrap text-center">
