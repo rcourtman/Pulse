@@ -1624,6 +1624,7 @@ StandardOutput=journal
 StandardError=journal
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PULSE_DATA_DIR=$CONFIG_DIR"
+EnvironmentFile=-$CONFIG_DIR/.env
 EOF
 
     # Add port configuration if not default
