@@ -65,7 +65,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
           count += state.pveBackups.guestSnapshots.filter((s) => s.instance === node.instance && s.node === node.name).length;
         }
 
-        counts[node.name] = count;
+        counts[node.id] = count;
       });
     }
 

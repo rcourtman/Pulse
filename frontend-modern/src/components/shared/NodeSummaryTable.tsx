@@ -222,7 +222,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
       case 'diskCount':
         return diskCountsByNode()[keyId] ?? 0;
       case 'backupCount':
-        return props.backupCounts?.[node.name] ?? 0;
+        return props.backupCounts?.[node.id] ?? 0;
       default:
         return null;
     }

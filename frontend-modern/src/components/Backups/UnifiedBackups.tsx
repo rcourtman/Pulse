@@ -487,13 +487,13 @@ const UnifiedBackups: Component = () => {
       );
     }
 
-    // Node selection filter (using node name for simple matching)
+    // Node selection filter using both instance and node name for uniqueness
     if (nodeFilter) {
-      // Find the node to get its name
-      const node = state.nodes?.find(n => n.id === nodeFilter);
+      const node = state.nodes?.find((n) => n.id === nodeFilter);
       if (node) {
-        // Filter backups by node name
-        data = data.filter((item) => item.node === node.name);
+        data = data.filter(
+          (item) => item.instance === node.instance && item.node === node.name,
+        );
       }
     }
 

@@ -221,14 +221,15 @@ export function Dashboard(props: DashboardProps) {
   const filteredGuests = createMemo(() => {
     let guests = allGuests();
 
-    // Filter by selected node (using node name for simple matching)
+    // Filter by selected node using both instance and node name for uniqueness
     const selectedNodeId = selectedNode();
     if (selectedNodeId) {
-      // Find the node to get its name
-      const node = props.nodes.find(n => n.id === selectedNodeId);
+      // Find the node to get both instance and name for precise matching
+      const node = props.nodes.find((n) => n.id === selectedNodeId);
       if (node) {
-        // Filter guests by node name (not instance ID)
-        guests = guests.filter((g) => g.node === node.name);
+        guests = guests.filter(
+          (g) => g.instance === node.instance && g.node === node.name,
+        );
       }
     }
 

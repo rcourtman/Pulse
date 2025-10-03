@@ -83,6 +83,7 @@ const Storage: Component = () => {
       const storageMap = new Map();
       storage.forEach((s) => {
         let key;
+        const nodeId = `${s.instance}-${s.node}`;
 
         // For PBS storage, group by capacity since they're the same PBS server
         // PBS namespaces (pbs-node1, pbs-node2) pointing to same server should be grouped
@@ -104,6 +105,7 @@ const Storage: Component = () => {
             ...s,
             name: s.type === 'pbs' ? 'PBS Storage' : s.name, // Generic name for PBS
             nodes: [s.node],
+            nodeIds: [nodeId],
             nodeCount: 1,
             pbsNames: s.type === 'pbs' ? [s.name] : undefined, // Track individual PBS names
           });
@@ -113,6 +115,11 @@ const Storage: Component = () => {
           if (!existing.nodes.includes(s.node)) {
             existing.nodes.push(s.node);
             existing.nodeCount = existing.nodes.length;
+          }
+          if (!existing.nodeIds) {
+            existing.nodeIds = [nodeId];
+          } else if (!existing.nodeIds.includes(nodeId)) {
+            existing.nodeIds.push(nodeId);
           }
           // For PBS, collect all namespace names
           if (s.type === 'pbs' && existing.pbsNames && !existing.pbsNames.includes(s.name)) {
@@ -132,14 +139,17 @@ const Storage: Component = () => {
   const sortedStorage = createMemo(() => {
     let storage = [...filteredStorage()];
 
-    // Apply node selection filter (using node name for simple matching)
+    // Apply node selection filter with instance-aware matching
     const nodeFilter = selectedNode();
     if (nodeFilter) {
-      // Find the node to get its name
-      const node = state.nodes?.find(n => n.id === nodeFilter);
+      const node = state.nodes?.find((n) => n.id === nodeFilter);
       if (node) {
-        // Filter storage by node name
-        storage = storage.filter((s) => s.node === node.name);
+        const nodeId = `${node.instance}-${node.name}`;
+        storage = storage.filter((s) => {
+          const belongsToNode = s.instance === node.instance && s.node === node.name;
+          const aggregatedNodeIds = (s as { nodeIds?: string[] }).nodeIds ?? [];
+          return belongsToNode || aggregatedNodeIds.includes(nodeId);
+        });
       }
     }
 
