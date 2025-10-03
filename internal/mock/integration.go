@@ -281,6 +281,7 @@ func cloneState(state models.StateSnapshot) models.StateSnapshot {
 		VMs:              append([]models.VM(nil), state.VMs...),
 		Containers:       append([]models.Container(nil), state.Containers...),
 		Storage:          append([]models.Storage(nil), state.Storage...),
+		CephClusters:     append([]models.CephCluster(nil), state.CephClusters...),
 		PhysicalDisks:    append([]models.PhysicalDisk(nil), state.PhysicalDisks...),
 		PBSInstances:     append([]models.PBSInstance(nil), state.PBSInstances...),
 		PBSBackups:       append([]models.PBSBackup(nil), state.PBSBackups...),

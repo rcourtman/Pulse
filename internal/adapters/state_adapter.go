@@ -61,6 +61,11 @@ func (s *StateAdapter) UpdateStorage(storage []models.Storage) {
 	s.state.UpdateStorage(storage)
 }
 
+// UpdateCephClustersForInstance implements StateStore interface
+func (s *StateAdapter) UpdateCephClustersForInstance(instanceName string, clusters []models.CephCluster) {
+	s.state.UpdateCephClustersForInstance(instanceName, clusters)
+}
+
 // UpdatePBSInstances implements StateStore interface
 func (s *StateAdapter) UpdatePBSInstances(instances []models.PBSInstance) {
 	s.state.UpdatePBSInstances(instances)

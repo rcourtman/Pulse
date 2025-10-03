@@ -2,7 +2,7 @@ import { Component, For, Show, createSignal, createMemo, createEffect, onMount }
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { formatBytes } from '@/utils/format';
-import type { Storage as StorageType } from '@/types/api';
+import type { Storage as StorageType, CephCluster } from '@/types/api';
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { UnifiedNodeSelector } from '@/components/shared/UnifiedNodeSelector';
 import { StorageFilter } from './StorageFilter';
@@ -17,6 +17,7 @@ const Storage: Component = () => {
   const [tabView, setTabView] = createSignal<'pools' | 'disks'>('pools');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [expandedStorage, setExpandedStorage] = createSignal<string | null>(null);
   type StorageSortKey = 'name' | 'node' | 'type' | 'status' | 'usage' | 'free' | 'total';
   const [sortKey, setSortKey] = createSignal<StorageSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -26,6 +27,118 @@ const Storage: Component = () => {
     const map: Record<string, typeof state.nodes[0]> = {};
     (state.nodes || []).forEach((node) => {
       map[node.id] = node;
+    });
+    return map;
+  });
+
+  const isCephType = (type?: string) => {
+    const value = (type || '').toLowerCase();
+    return value === 'rbd' || value === 'cephfs' || value === 'ceph';
+  };
+
+  const getCephHealthLabel = (health?: string) => {
+    if (!health) return 'CEPH';
+    const normalized = health.toUpperCase();
+    return normalized.startsWith('HEALTH_') ? normalized.replace('HEALTH_', '') : normalized;
+  };
+
+  const getCephHealthStyles = (health?: string) => {
+    const normalized = (health || '').toUpperCase();
+    if (normalized === 'HEALTH_OK') {
+      return 'bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300 border border-green-200 dark:border-green-800';
+    }
+    if (normalized === 'HEALTH_WARN' || normalized === 'HEALTH_WARNING') {
+      return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/60 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-800';
+    }
+    if (normalized === 'HEALTH_ERR' || normalized === 'HEALTH_ERROR' || normalized === 'HEALTH_CRIT') {
+      return 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200 border border-red-300 dark:border-red-800';
+    }
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 border border-blue-200 dark:border-blue-700';
+  };
+
+  const cephClusters = createMemo(() => state.cephClusters || []);
+
+  const visibleCephClusters = createMemo<CephCluster[]>(() => {
+    const explicit = cephClusters();
+    if (explicit && explicit.length > 0) {
+      return explicit;
+    }
+
+    const storageList = state.storage || [];
+    const summaryByInstance = new Map<
+      string,
+      {
+        total: number;
+        used: number;
+        nodes: Set<string>;
+        storages: number;
+      }
+    >();
+
+    storageList.forEach((item) => {
+      if (!isCephType(item?.type)) {
+        return;
+      }
+      const instance = item.instance || 'ceph';
+      let summary = summaryByInstance.get(instance);
+      if (!summary) {
+        summary = {
+          total: 0,
+          used: 0,
+          nodes: new Set<string>(),
+          storages: 0,
+        };
+        summaryByInstance.set(instance, summary);
+      }
+
+      summary.total += Math.max(0, item.total || 0);
+      summary.used += Math.max(0, item.used || 0);
+      summary.storages += 1;
+
+      if (Array.isArray(item.nodes)) {
+        item.nodes.forEach((node) => node && summary!.nodes.add(node));
+      } else if (item.node) {
+        summary.nodes.add(item.node);
+      }
+    });
+
+    return Array.from(summaryByInstance.entries()).map(([instance, info], index) => {
+      const totalBytes = info.total;
+      const usedBytes = info.used;
+      const availableBytes = Math.max(totalBytes - usedBytes, 0);
+      const usagePercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+      const numOsds = Math.max(1, info.storages * 2);
+      const numMons = Math.min(3, Math.max(1, info.nodes.size));
+
+      return {
+        id: `${instance}-derived-${index}`,
+        instance,
+        name: `${instance} Ceph`,
+        health: 'HEALTH_UNKNOWN',
+        healthMessage: 'Derived from storage metrics – live Ceph telemetry unavailable.',
+        totalBytes,
+        usedBytes,
+        availableBytes,
+        usagePercent,
+        numMons,
+        numMgrs: numMons > 1 ? 2 : 1,
+        numOsds,
+        numOsdsUp: numOsds,
+        numOsdsIn: numOsds,
+        numPGs: Math.max(128, info.storages * 128),
+        pools: undefined,
+        services: undefined,
+        lastUpdated: Date.now(),
+      } as CephCluster;
+    });
+  });
+
+  const cephClusterByInstance = createMemo<Record<string, CephCluster>>(() => {
+    const map: Record<string, CephCluster> = {};
+    visibleCephClusters().forEach((cluster) => {
+      if (cluster?.instance) {
+        map[cluster.instance] = cluster;
+      }
     });
     return map;
   });
@@ -675,6 +788,128 @@ const Storage: Component = () => {
                                 () => alertStyles.hasUnacknowledgedAlert && parentNodeOnline(),
                               );
 
+                              const isCephStorage = createMemo(() => isCephType(storage.type));
+                              const canExpand = createMemo(() => isCephStorage());
+                              const zfsPool = storage.zfsPool;
+                              const storageRowId = createMemo(
+                                () => storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
+                              );
+                              const cephCluster = createMemo(
+                                () => cephClusterByInstance()[storage.instance],
+                              );
+                              const cephInstanceStorages = createMemo(() =>
+                                (state.storage || []).filter(
+                                  (item) =>
+                                    item.instance === storage.instance && isCephType(item.type),
+                                ),
+                              );
+                              const cephHealthLabel = createMemo(() => {
+                                const health = (cephCluster()?.health || '').toUpperCase();
+                                if (!health || health === 'HEALTH_UNKNOWN') {
+                                  return '';
+                                }
+                                return getCephHealthLabel(health);
+                              });
+                              const cephHealthClass = createMemo(() => {
+                                const health = (cephCluster()?.health || '').toUpperCase();
+                                if (!health || health === 'HEALTH_UNKNOWN') {
+                                  return '';
+                                }
+                                return getCephHealthStyles(health);
+                              });
+                              const drawerDisabled = createMemo(
+                                () => isDisabled || !parentNodeOnline(),
+                              );
+                              const cephSummaryText = createMemo(() => {
+                                const cluster = cephCluster();
+                                const parts: string[] = [];
+
+                                if (cluster && Number.isFinite(cluster.totalBytes)) {
+                                  const total = Math.max(0, cluster.totalBytes || 0);
+                                  const used = Math.max(0, cluster.usedBytes || 0);
+                                  const percent = total > 0 ? (used / total) * 100 : 0;
+                                  parts.push(
+                                    `${formatBytes(used)} / ${formatBytes(total)} (${percent.toFixed(1)}%)`,
+                                  );
+                                  if (
+                                    Number.isFinite(cluster.numOsds) &&
+                                    Number.isFinite(cluster.numOsdsUp)
+                                  ) {
+                                    parts.push(`OSDs ${cluster.numOsdsUp}/${cluster.numOsds}`);
+                                  }
+                                  if (Number.isFinite(cluster.numPGs) && cluster.numPGs > 0) {
+                                    parts.push(`PGs ${cluster.numPGs.toLocaleString()}`);
+                                  }
+                                } else {
+                                  const storages = cephInstanceStorages();
+                                  if (storages.length > 0) {
+                                    const totals = storages.reduce(
+                                      (acc, item) => {
+                                        acc.total += Math.max(0, item.total || 0);
+                                        acc.used += Math.max(0, item.used || 0);
+                                        return acc;
+                                      },
+                                      { total: 0, used: 0 },
+                                    );
+                                    if (totals.total > 0) {
+                                      const percent = (totals.used / totals.total) * 100;
+                                      parts.push(
+                                        `${formatBytes(totals.used)} / ${formatBytes(totals.total)} (${percent.toFixed(1)}%)`,
+                                      );
+                                    }
+                                  }
+                                }
+
+                                return parts.join(' • ');
+                              });
+                              const cephPoolsText = createMemo(() => {
+                                const cluster = cephCluster();
+                                if (cluster && cluster.pools && cluster.pools.length > 0) {
+                                  return cluster.pools
+                                    .slice(0, 2)
+                                    .map((pool) => {
+                                      if (!pool) return '';
+                                      const total = Math.max(1, pool.storedBytes + pool.availableBytes);
+                                      const percent = total > 0 ? (pool.storedBytes / total) * 100 : 0;
+                                      return `${pool.name}: ${percent.toFixed(1)}%`;
+                                    })
+                                    .filter(Boolean)
+                                    .join(', ');
+                                }
+
+                                const storages = cephInstanceStorages();
+                                if (storages.length === 0) {
+                                  return '';
+                                }
+
+                                return storages
+                                  .slice(0, 2)
+                                  .map((item) => {
+                                    const total = Math.max(1, item.total || 0);
+                                    const used = Math.max(0, item.used || 0);
+                                    const percent = total > 0 ? (used / total) * 100 : 0;
+                                    return `${item.name}: ${percent.toFixed(1)}%`;
+                                  })
+                                  .filter(Boolean)
+                                  .join(', ');
+                              });
+                              const cephHealthMessage = createMemo(() => {
+                                const cluster = cephCluster();
+                                if (cluster?.healthMessage) {
+                                  return cluster.healthMessage;
+                                }
+                                if (cluster && cluster.health && cluster.health !== 'HEALTH_UNKNOWN') {
+                                  return '';
+                                }
+                                if (cephInstanceStorages().length > 0) {
+                                  return 'Derived from storage metrics – live Ceph telemetry unavailable.';
+                                }
+                                return '';
+                              });
+                              const isExpanded = createMemo(
+                                () => expandedStorage() === storageRowId(),
+                              );
+
                               const rowClass = createMemo(() => {
                                 const classes = [
                                   'transition-all duration-200',
@@ -692,6 +927,14 @@ const Storage: Component = () => {
 
                                 if (isDisabled || !parentNodeOnline()) {
                                   classes.push('opacity-60');
+                                }
+
+                                if (canExpand()) {
+                                  classes.push('cursor-pointer');
+                                }
+
+                                if (canExpand() && isExpanded()) {
+                                  classes.push('bg-gray-50 dark:bg-gray-800/40');
                                 }
 
                                 return classes.join(' ');
@@ -712,21 +955,30 @@ const Storage: Component = () => {
                                     ? 'p-0.5 pl-6 pr-1.5'
                                     : 'p-0.5 pl-5 pr-1.5';
                                 }
-                                return showAlertHighlight() ? 'p-0.5 pl-3 pr-1.5' : 'p-0.5 px-1.5';
+                                return showAlertHighlight() ? 'p-0.5 pl-3 pr-1.5' : 'p-0.5 pl-3 pr-1.5';
                               });
 
-                              const zfsPool = storage.zfsPool;
+                              const toggleDrawer = () => {
+                                if (!canExpand()) return;
+                                setExpandedStorage((prev) =>
+                                  prev === storageRowId() ? null : storageRowId(),
+                                );
+                              };
 
                               return (
                                 <>
                                   <tr
                                     class={`${rowClass()} transition-colors`}
                                     style={rowStyle()}
+                                    onClick={toggleDrawer}
+                                    aria-expanded={canExpand() && isExpanded() ? 'true' : 'false'}
                                   >
                                     <td class={`${firstCellClass()} align-middle`}>
                                       <div class="flex items-center gap-2 min-w-0">
                                         <span
-                                          class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]"
+                                          class={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${
+                                            canExpand() ? 'max-w-[180px]' : 'max-w-[200px]'
+                                          }`}
                                           title={storage.name}
                                         >
                                           {storage.name}
@@ -773,6 +1025,14 @@ const Storage: Component = () => {
                                               ({nodeListDisplay()})
                                             </span>
                                           </Show>
+                                        </Show>
+                                        <Show when={isCephStorage() && cephHealthLabel()}>
+                                          <span
+                                            class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}
+                                            title={cephCluster()?.healthMessage}
+                                          >
+                                            {cephHealthLabel()}
+                                          </span>
                                         </Show>
                                       </div>
                                     </td>
@@ -831,6 +1091,60 @@ const Storage: Component = () => {
                                     </td>
                                     <td class="p-0.5 px-1.5"></td>
                                   </tr>
+                                  <Show when={isCephStorage() && isExpanded()}>
+                                    <tr
+                                      class={`text-[11px] border-t border-gray-200 dark:border-gray-700 ${
+                                        drawerDisabled()
+                                          ? 'bg-gray-100/70 text-gray-400 dark:bg-gray-900/30 dark:text-gray-500'
+                                          : 'bg-gray-50/60 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
+                                      }`}
+                                    >
+                                      <td colSpan={9} class="px-4 py-3">
+                                        <div
+                                          class={`grid gap-3 md:grid-cols-2 xl:grid-cols-2 ${
+                                            drawerDisabled() ? 'opacity-60 pointer-events-none' : ''
+                                          }`}
+                                        >
+                                          <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
+                                            <div class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                              <span>Ceph Cluster</span>
+                                              <span>{cephCluster()?.name || storage.instance}</span>
+                                              <Show when={cephHealthLabel()}>
+                                                <span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cephHealthClass()}`}>
+                                                  {cephHealthLabel()}
+                                                </span>
+                                              </Show>
+                                            </div>
+                                            <Show when={cephSummaryText()}>
+                                              <div class="mt-2 text-[12px] text-gray-600 dark:text-gray-300">
+                                                {cephSummaryText()}
+                                              </div>
+                                            </Show>
+                                            <Show when={cephHealthMessage()}>
+                                              <div class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                                {cephHealthMessage()}
+                                              </div>
+                                            </Show>
+                                          </div>
+                                          <div class="rounded-lg border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30 text-gray-600 dark:text-gray-300">
+                                            <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                              Pools
+                                            </div>
+                                            <Show
+                                              when={cephPoolsText()}
+                                              fallback={
+                                                <div class="mt-2 text-[12px] text-gray-500 dark:text-gray-400">
+                                                  No pool data available
+                                                </div>
+                                              }
+                                            >
+                                              <div class="mt-2 text-[12px]">{cephPoolsText()}</div>
+                                            </Show>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </Show>
                                   <Show
                                     when={
                                       storage.zfsPool &&

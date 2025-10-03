@@ -115,19 +115,43 @@ type StorageFrontend struct {
 	Active    bool     `json:"active"`
 }
 
+// CephClusterFrontend represents a Ceph cluster with frontend-friendly field names
+type CephClusterFrontend struct {
+	ID             string              `json:"id"`
+	Instance       string              `json:"instance"`
+	Name           string              `json:"name"`
+	FSID           string              `json:"fsid,omitempty"`
+	Health         string              `json:"health"`
+	HealthMessage  string              `json:"healthMessage,omitempty"`
+	TotalBytes     int64               `json:"totalBytes"`
+	UsedBytes      int64               `json:"usedBytes"`
+	AvailableBytes int64               `json:"availableBytes"`
+	UsagePercent   float64             `json:"usagePercent"`
+	NumMons        int                 `json:"numMons"`
+	NumMgrs        int                 `json:"numMgrs"`
+	NumOSDs        int                 `json:"numOsds"`
+	NumOSDsUp      int                 `json:"numOsdsUp"`
+	NumOSDsIn      int                 `json:"numOsdsIn"`
+	NumPGs         int                 `json:"numPGs"`
+	Pools          []CephPool          `json:"pools,omitempty"`
+	Services       []CephServiceStatus `json:"services,omitempty"`
+	LastUpdated    int64               `json:"lastUpdated"`
+}
+
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	Nodes            []NodeFrontend      `json:"nodes"`
-	VMs              []VMFrontend        `json:"vms"`
-	Containers       []ContainerFrontend `json:"containers"`
-	Storage          []StorageFrontend   `json:"storage"`
-	PhysicalDisks    []PhysicalDisk      `json:"physicalDisks"`
-	PBS              []PBSInstance       `json:"pbs"`              // Keep as is
-	ActiveAlerts     []Alert             `json:"activeAlerts"`     // Active alerts
-	Metrics          map[string]any      `json:"metrics"`          // Empty object for now
-	PVEBackups       PVEBackups          `json:"pveBackups"`       // Keep as is
-	Performance      map[string]any      `json:"performance"`      // Empty object for now
-	ConnectionHealth map[string]bool     `json:"connectionHealth"` // Keep as is
-	Stats            map[string]any      `json:"stats"`            // Empty object for now
-	LastUpdate       int64               `json:"lastUpdate"`       // Unix timestamp
+	Nodes            []NodeFrontend        `json:"nodes"`
+	VMs              []VMFrontend          `json:"vms"`
+	Containers       []ContainerFrontend   `json:"containers"`
+	Storage          []StorageFrontend     `json:"storage"`
+	CephClusters     []CephClusterFrontend `json:"cephClusters"`
+	PhysicalDisks    []PhysicalDisk        `json:"physicalDisks"`
+	PBS              []PBSInstance         `json:"pbs"`              // Keep as is
+	ActiveAlerts     []Alert               `json:"activeAlerts"`     // Active alerts
+	Metrics          map[string]any        `json:"metrics"`          // Empty object for now
+	PVEBackups       PVEBackups            `json:"pveBackups"`       // Keep as is
+	Performance      map[string]any        `json:"performance"`      // Empty object for now
+	ConnectionHealth map[string]bool       `json:"connectionHealth"` // Keep as is
+	Stats            map[string]any        `json:"stats"`            // Empty object for now
+	LastUpdate       int64                 `json:"lastUpdate"`       // Unix timestamp
 }

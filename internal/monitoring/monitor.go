@@ -48,6 +48,8 @@ type PVEClientInterface interface {
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
 	GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error)
 	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
+	GetCephStatus(ctx context.Context) (*proxmox.CephStatus, error)
+	GetCephDF(ctx context.Context) (*proxmox.CephDF, error)
 }
 
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
@@ -2933,9 +2935,13 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Create a map for quick lookup of cluster storage config
 	clusterStorageMap := make(map[string]proxmox.Storage)
+	cephDetected := false
 	if clusterStorageAvailable {
 		for _, cs := range clusterStorages {
 			clusterStorageMap[cs.Storage] = cs
+			if !cephDetected && isCephStorageType(cs.Type) {
+				cephDetected = true
+			}
 		}
 	}
 
@@ -3079,7 +3085,19 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		Bool("clusterConfigAvailable", clusterStorageAvailable).
 		Msg("Updating storage for instance")
 
+	if !cephDetected {
+		for _, storage := range instanceStorage {
+			if isCephStorageType(storage.Type) {
+				cephDetected = true
+				break
+			}
+		}
+	}
+
 	m.state.UpdateStorageForInstance(instanceName, instanceStorage)
+
+	// Refresh Ceph cluster state now that storage has been updated
+	m.pollCephCluster(ctx, instanceName, client, cephDetected)
 }
 
 // pollBackupTasks polls backup tasks from a PVE instance
@@ -3931,6 +3949,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 	m.state.UpdateVMsForInstance(instanceName, []models.VM{})
 	m.state.UpdateContainersForInstance(instanceName, []models.Container{})
 	m.state.UpdateStorageForInstance(instanceName, []models.Storage{})
+	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
 	m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
 	m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})

@@ -44,6 +44,7 @@ type StateResponse struct {
 	VMs              []models.VM            `json:"vms"`
 	Containers       []models.Container     `json:"containers"`
 	Storage          []models.Storage       `json:"storage"`
+	CephClusters     []models.CephCluster   `json:"cephClusters"`
 	PBSInstances     []models.PBSInstance   `json:"pbs"`
 	PBSBackups       []models.PBSBackup     `json:"pbsBackups"`
 	Metrics          []models.Metric        `json:"metrics"`
