@@ -86,11 +86,19 @@ export const STORAGE_KEYS = {
   // Backup settings
   BACKUPS_SHOW_FILTERS: 'backupsShowFilters',
   BACKUPS_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
+  BACKUPS_SEARCH_HISTORY: 'backupsSearchHistory',
 
   // Dashboard settings
   DASHBOARD_SHOW_FILTERS: 'dashboardShowFilters',
   DASHBOARD_CARD_VIEW: 'dashboardCardView',
   DASHBOARD_AUTO_REFRESH: 'dashboardAutoRefresh',
+  DASHBOARD_SEARCH_HISTORY: 'dashboardSearchHistory',
+
+  // Storage search
+  STORAGE_SEARCH_HISTORY: 'storageSearchHistory',
+
+  // Alerts search
+  ALERTS_SEARCH_HISTORY: 'alertsSearchHistory',
 
   // API token
   API_TOKEN: 'apiToken',
