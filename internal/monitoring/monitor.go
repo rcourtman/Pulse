@@ -50,6 +50,31 @@ type PVEClientInterface interface {
 	GetDisks(ctx context.Context, node string) ([]proxmox.Disk, error)
 }
 
+func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
+	baseName := strings.TrimSpace(nodeName)
+	if baseName == "" {
+		baseName = "unknown-node"
+	}
+
+	if instance == nil {
+		return baseName
+	}
+
+	friendly := strings.TrimSpace(instance.Name)
+	if friendly == "" {
+		return baseName
+	}
+
+	if instance.IsCluster {
+		if strings.EqualFold(friendly, baseName) {
+			return baseName
+		}
+		return fmt.Sprintf("%s (%s)", friendly, baseName)
+	}
+
+	return friendly
+}
+
 // Monitor handles all monitoring operations
 type Monitor struct {
 	config           *config.Config
@@ -1187,14 +1212,17 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Convert to models
 	var modelNodes []models.Node
 	for _, node := range nodes {
+		displayName := getNodeDisplayName(instanceCfg, node.Node)
+
 		modelNode := models.Node{
-			ID:       instanceName + "-" + node.Node,
-			Name:     node.Node,
-			Instance: instanceName,
-			Host:     instanceCfg.Host, // Add the actual host URL
-			Status:   node.Status,
-			Type:     "node",
-			CPU:      safeFloat(node.CPU), // Already in percentage
+			ID:          instanceName + "-" + node.Node,
+			Name:        node.Node,
+			DisplayName: displayName,
+			Instance:    instanceName,
+			Host:        instanceCfg.Host, // Add the actual host URL
+			Status:      node.Status,
+			Type:        "node",
+			CPU:         safeFloat(node.CPU), // Already in percentage
 			Memory: models.Memory{
 				Total: int64(node.MaxMem),
 				Used:  int64(node.Mem),
@@ -3861,6 +3889,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 	failedNode := models.Node{
 		ID:               instanceName + "-failed",
 		Name:             instanceName,
+		DisplayName:      instanceName,
 		Instance:         instanceName,
 		Host:             hostURL, // Include host URL even for failed nodes
 		Status:           "offline",

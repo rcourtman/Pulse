@@ -5,6 +5,7 @@ import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
 import { AlertIndicator } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 
 interface CompactNodeCardProps {
   node: Node;
@@ -24,6 +25,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
     if (!props.node.disk || props.node.disk.total === 0) return 0;
     return Math.round((props.node.disk.used / props.node.disk.total) * 100);
   });
+
+  const displayName = () => getNodeDisplayName(props.node);
+  const showActualName = () => hasAlternateDisplayName(props.node);
 
   const alertStyles = getAlertStyles(props.node.id || props.node.name, activeAlerts);
   const nodeAlerts = createMemo(() =>
@@ -90,9 +94,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           href={props.node.host || `https://${props.node.name}:8006`}
           target="_blank"
           class="font-medium text-sm w-24 truncate hover:text-blue-600 dark:hover:text-blue-400"
-          title={props.node.name}
+          title={
+            showActualName()
+              ? `${displayName()} • ${props.node.name}`
+              : props.node.name
+          }
         >
-          {props.node.name}
+          {displayName()}
         </a>
 
         {/* Cluster/Standalone indicator */}
@@ -172,8 +180,11 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
             target="_blank"
             class="font-semibold text-sm hover:text-blue-600 dark:hover:text-blue-400"
           >
-            {props.node.name}
+            {displayName()}
           </a>
+          <Show when={showActualName()}>
+            <span class="text-[10px] text-gray-500 dark:text-gray-400">({props.node.name})</span>
+          </Show>
           {/* Cluster/Standalone indicator */}
           <Show when={props.node.isClusterMember !== undefined}>
             <span

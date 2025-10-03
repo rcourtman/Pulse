@@ -5,6 +5,7 @@ import { getAlertStyles, getResourceAlerts } from '@/utils/alerts';
 import { AlertIndicator, AlertCountBadge } from '@/components/shared/AlertIndicators';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 
 interface NodeCardProps {
   node: Node;
@@ -48,6 +49,9 @@ const NodeCard: Component<NodeCardProps> = (props) => {
     if (!props.node.disk || props.node.disk.total === 0) return 0;
     return Math.round((props.node.disk.used / props.node.disk.total) * 100);
   });
+
+  const displayName = () => getNodeDisplayName(props.node);
+  const showActualName = () => hasAlternateDisplayName(props.node);
 
   // Calculate normalized load (load average / cpu count)
   const normalizedLoad = () => {
@@ -162,8 +166,11 @@ const NodeCard: Component<NodeCardProps> = (props) => {
             class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer"
             title={`Open ${props.node.name} web interface`}
           >
-            {props.node.name}
+            {displayName()}
           </a>
+          <Show when={showActualName()}>
+            <span class="text-[10px] text-gray-500 dark:text-gray-400">({props.node.name})</span>
+          </Show>
           {/* Cluster/Standalone indicator - more compact */}
           <Show when={props.node.isClusterMember !== undefined}>
             <span

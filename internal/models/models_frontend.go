@@ -8,6 +8,7 @@ type NodeFrontend struct {
 	ID               string       `json:"id"`
 	Node             string       `json:"node"` // Maps to Name
 	Name             string       `json:"name"`
+	DisplayName      string       `json:"displayName"`
 	Instance         string       `json:"instance"`
 	Host             string       `json:"host,omitempty"`
 	Status           string       `json:"status"`
