@@ -606,7 +606,7 @@ const Storage: Component = () => {
                               });
 
                               const showAlertHighlight = createMemo(
-                                () => alertStyles.hasAlert && parentNodeOnline(),
+                                () => alertStyles.hasUnacknowledgedAlert && parentNodeOnline(),
                               );
 
                               const rowClass = createMemo(() => {

@@ -403,7 +403,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 // Use the full resource ID for alert matching
                 const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
                 const alertStyles = getAlertStyles(resourceId, activeAlerts);
-                const showAlertHighlight = alertStyles.hasAlert && online;
+                const showAlertHighlight = alertStyles.hasUnacknowledgedAlert && online;
 
                 const rowStyle = createMemo(() => {
                   const styles: Record<string, string> = {};
