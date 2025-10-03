@@ -79,7 +79,7 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	defer hm.mu.Unlock()
 
 	entry := HistoryEntry{
-		Alert:     alert,
+		Alert:     *alert.Clone(),
 		Timestamp: time.Now(),
 	}
 
@@ -170,26 +170,32 @@ func (hm *HistoryManager) loadHistory() error {
 // saveHistory saves history to disk
 func (hm *HistoryManager) saveHistory() error {
 	hm.mu.RLock()
-	data, err := json.MarshalIndent(hm.history, "", "  ")
+	snapshot := make([]HistoryEntry, len(hm.history))
+	copy(snapshot, hm.history)
 	hm.mu.RUnlock()
+
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 
 	if err != nil {
 		return fmt.Errorf("failed to marshal history: %w", err)
 	}
 
 	// Create backup of existing file
-	if _, err := os.Stat(hm.historyFile); err == nil {
-		if err := os.Rename(hm.historyFile, hm.backupFile); err != nil {
+	historyFile := hm.historyFile
+	backupFile := hm.backupFile
+
+	if _, err := os.Stat(historyFile); err == nil {
+		if err := os.Rename(historyFile, backupFile); err != nil {
 			log.Warn().Err(err).Msg("Failed to create backup file")
 		}
 	}
 
 	// Write new file
-	if err := os.WriteFile(hm.historyFile, data, 0644); err != nil {
+	if err := os.WriteFile(historyFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write history file: %w", err)
 	}
 
-	log.Debug().Int("entries", len(hm.history)).Msg("Saved alert history")
+	log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
 	return nil
 }
 
