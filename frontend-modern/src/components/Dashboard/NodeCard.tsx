@@ -112,6 +112,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
   const nodeAlerts = createMemo(() =>
     getResourceAlerts(props.node.id || props.node.name, activeAlerts),
   );
+  const unacknowledgedNodeAlerts = createMemo(() => nodeAlerts().filter((alert) => !alert.acknowledged));
 
   // Determine border/ring style based on status and alerts
   const getBorderClass = () => {
@@ -124,7 +125,7 @@ const NodeCard: Component<NodeCardProps> = (props) => {
       return 'ring-2 ring-red-500 border-red-200 dark:border-red-600';
     }
     // Alert nodes get colored ring based on severity
-    if (alertStyles.hasAlert) {
+    if (alertStyles.hasUnacknowledgedAlert) {
       return alertStyles.severity === 'critical'
         ? 'ring-2 ring-red-500 border-red-200 dark:border-red-600'
         : 'ring-2 ring-orange-500 border-orange-200 dark:border-orange-500';
@@ -176,17 +177,22 @@ const NodeCard: Component<NodeCardProps> = (props) => {
               {props.node.isClusterMember ? 'C' : 'S'}
             </span>
           </Show>
-          <Show when={alertStyles.hasAlert}>
+          <Show when={alertStyles.hasUnacknowledgedAlert}>
             <div class="flex items-center gap-1">
-              <AlertIndicator severity={alertStyles.severity} alerts={nodeAlerts()} />
-              <Show when={alertStyles.alertCount > 1}>
+              <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
+              <Show when={(alertStyles.unacknowledgedCount || 0) > 1}>
                 <AlertCountBadge
-                  count={alertStyles.alertCount}
+                  count={alertStyles.unacknowledgedCount || 0}
                   severity={alertStyles.severity!}
-                  alerts={nodeAlerts()}
+                  alerts={unacknowledgedNodeAlerts()}
                 />
               </Show>
             </div>
+          </Show>
+          <Show when={!alertStyles.hasUnacknowledgedAlert && alertStyles.hasAcknowledgedOnlyAlert}>
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+              Ack
+            </span>
           </Show>
         </h3>
         <span

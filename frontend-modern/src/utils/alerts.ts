@@ -6,11 +6,14 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
     (alert) => alert.resourceId === resourceId,
   );
 
+  const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
+  const acknowledgedAlerts = alertsForResource.filter((alert) => alert.acknowledged);
+
   let highestSeverity: 'critical' | 'warning' | null = null;
   let hasPoweredOffAlert = false;
   let hasNonPoweredOffAlert = false;
 
-  alertsForResource.forEach((alert) => {
+  unacknowledgedAlerts.forEach((alert) => {
     if (alert.level === 'critical' || (alert.level === 'warning' && highestSeverity !== 'critical')) {
       highestSeverity = alert.level;
     }
@@ -23,18 +26,25 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
   });
 
   const alertCount = alertsForResource.length;
+  const unacknowledgedCount = unacknowledgedAlerts.length;
+  const acknowledgedCount = acknowledgedAlerts.length;
+  const hasUnacknowledgedAlert = unacknowledgedCount > 0;
+  const hasAlert = alertCount > 0;
 
-  // Return appropriate styling based on alert severity
   if (highestSeverity === 'critical') {
     return {
       rowClass: 'bg-red-50 dark:bg-red-950/30 border-l-4 border-red-500 dark:border-red-400',
       indicatorClass: 'bg-red-500',
       badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      hasAlert: alertCount > 0,
+      hasAlert,
       alertCount,
       severity: 'critical' as const,
       hasPoweredOffAlert,
       hasNonPoweredOffAlert,
+      hasUnacknowledgedAlert,
+      unacknowledgedCount,
+      acknowledgedCount,
+      hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
     };
   }
 
@@ -44,11 +54,15 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
         'bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500 dark:border-yellow-400',
       indicatorClass: 'bg-yellow-500',
       badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      hasAlert: alertCount > 0,
+      hasAlert,
       alertCount,
       severity: 'warning' as const,
       hasPoweredOffAlert,
       hasNonPoweredOffAlert,
+      hasUnacknowledgedAlert,
+      unacknowledgedCount,
+      acknowledgedCount,
+      hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
     };
   }
 
@@ -56,11 +70,15 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
     rowClass: '',
     indicatorClass: '',
     badgeClass: '',
-    hasAlert: false,
-    alertCount: 0,
+    hasAlert,
+    alertCount,
     severity: null,
-    hasPoweredOffAlert: false,
-    hasNonPoweredOffAlert: false,
+    hasPoweredOffAlert,
+    hasNonPoweredOffAlert,
+    hasUnacknowledgedAlert,
+    unacknowledgedCount,
+    acknowledgedCount,
+    hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
 };
 

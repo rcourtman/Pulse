@@ -29,6 +29,7 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
   const nodeAlerts = createMemo(() =>
     getResourceAlerts(props.node.id || props.node.name, activeAlerts),
   );
+  const unacknowledgedNodeAlerts = createMemo(() => nodeAlerts().filter((alert) => !alert.acknowledged));
 
   // Get status color
   const getMetricColor = (value: number, type: 'cpu' | 'mem' | 'disk') => {
@@ -67,7 +68,7 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
             : !isOnline()
               ? 'border-red-500'
-              : alertStyles.hasAlert
+              : alertStyles.hasUnacknowledgedAlert
                 ? 'border-orange-500'
                 : 'border-gray-200 dark:border-gray-700'
         } border transition-all cursor-pointer hover:scale-[1.01]`}
@@ -108,8 +109,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         </Show>
 
         {/* Alert indicator */}
-        <Show when={alertStyles.hasAlert}>
-          <AlertIndicator severity={alertStyles.severity} alerts={nodeAlerts()} />
+        <Show when={alertStyles.hasUnacknowledgedAlert}>
+          <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
+        </Show>
+        <Show when={!alertStyles.hasUnacknowledgedAlert && alertStyles.hasAcknowledgedOnlyAlert}>
+          <span class="text-[9px] px-1 py-0.5 rounded-full font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+            Ack
+          </span>
         </Show>
 
         {/* Metrics */}
@@ -144,7 +150,7 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
           : !isOnline()
             ? 'border-red-500'
-            : alertStyles.hasAlert
+            : alertStyles.hasUnacknowledgedAlert
               ? 'border-orange-500'
               : 'border-gray-200 dark:border-gray-700'
       } cursor-pointer transition-all hover:scale-[1.02]`}
@@ -180,8 +186,13 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
               {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
             </span>
           </Show>
-          <Show when={alertStyles.hasAlert}>
-            <AlertIndicator severity={alertStyles.severity} alerts={nodeAlerts()} />
+          <Show when={alertStyles.hasUnacknowledgedAlert}>
+            <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
+          </Show>
+          <Show when={!alertStyles.hasUnacknowledgedAlert && alertStyles.hasAcknowledgedOnlyAlert}>
+            <span class="text-[9px] px-1 py-0.5 rounded-full font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+              Ack
+            </span>
           </Show>
         </div>
         <span class="text-xs text-gray-500 dark:text-gray-400">
