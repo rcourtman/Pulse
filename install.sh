@@ -1439,23 +1439,44 @@ download_pulse() {
 
 setup_directories() {
     print_info "Setting up directories..."
-    
+
     # Create directories (only if they don't exist)
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$INSTALL_DIR"
-    
+
     # Set permissions (preserve existing files)
     # Use chown without -R on CONFIG_DIR to avoid changing existing file permissions
     chown pulse:pulse "$CONFIG_DIR"
     chown -R pulse:pulse "$INSTALL_DIR"
     chmod 700 "$CONFIG_DIR"
-    
+
     # Ensure critical config files retain proper permissions if they exist
     for config_file in "$CONFIG_DIR"/alerts.json "$CONFIG_DIR"/system.json "$CONFIG_DIR"/*.enc; do
         if [[ -f "$config_file" ]]; then
             chown pulse:pulse "$config_file"
         fi
     done
+
+    # Create .env file with mock mode explicitly disabled (unless it already exists)
+    if [[ ! -f "$CONFIG_DIR/.env" ]]; then
+        cat > "$CONFIG_DIR/.env" << 'EOF'
+# Pulse Environment Configuration
+# This file is loaded by systemd when starting Pulse
+
+# Mock mode - set to "true" to enable mock/demo data for testing
+# WARNING: Only enable this on demo/test servers, never in production!
+PULSE_MOCK_MODE=false
+
+# Mock configuration (only used when PULSE_MOCK_MODE=true)
+#PULSE_MOCK_NODES=7
+#PULSE_MOCK_VMS_PER_NODE=5
+#PULSE_MOCK_LXCS_PER_NODE=8
+#PULSE_MOCK_RANDOM_METRICS=true
+#PULSE_MOCK_STOPPED_PERCENT=20
+EOF
+        chown pulse:pulse "$CONFIG_DIR/.env"
+        chmod 600 "$CONFIG_DIR/.env"
+    fi
 }
 
 setup_update_command() {
