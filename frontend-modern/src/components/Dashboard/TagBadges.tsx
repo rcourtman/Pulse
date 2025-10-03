@@ -18,53 +18,58 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
 
   const visibleTags = () => props.tags?.slice(0, maxVisible()) || [];
   const hiddenTags = () => props.tags?.slice(maxVisible()) || [];
-  const hasHiddenTags = () => hiddenTags().length > 0;
+
+  const TagDot: Component<{ tag: string }> = (dotProps) => {
+    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark());
+    const isActive = () => props.activeSearch?.includes(`tags:${dotProps.tag}`) || false;
+
+    return (
+      <div
+        class="relative"
+        onMouseEnter={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          showTooltip(dotProps.tag, rect.left + rect.width / 2, rect.top, {
+            align: 'center',
+            direction: 'up',
+          });
+        }}
+        onMouseLeave={() => {
+          hideTooltip();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onTagClick?.(dotProps.tag);
+        }}
+      >
+        <div
+          class="w-2 h-2 rounded-full hover:scale-150 transition-transform duration-200 ease-out cursor-pointer"
+          style={{
+            'background-color': colors().bg,
+            'box-shadow': isActive()
+              ? isDark()
+                ? `0 0 0 2.5px rgba(255, 255, 255, 0.9)`
+                : `0 0 0 2.5px rgba(0, 0, 0, 0.8)`
+              : 'none',
+          }}
+        />
+      </div>
+    );
+  };
 
   return (
     <Show when={props.tags && props.tags.length > 0}>
       <div class="inline-flex items-center gap-1 ml-2">
         <For each={visibleTags()}>
-          {(tag) => {
-            const colors = () => getTagColorWithSpecial(tag, isDark());
-            const isActive = () => props.activeSearch?.includes(`tags:${tag}`) || false;
-
-            return (
-              <div
-                class="relative"
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  showTooltip(tag, rect.left + rect.width / 2, rect.top, {
-                    align: 'center',
-                    direction: 'up',
-                  });
-                }}
-                onMouseLeave={() => {
-                  hideTooltip();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onTagClick?.(tag);
-                }}
-              >
-                {/* Colored dot indicator */}
-                <div
-                  class="w-2 h-2 rounded-full hover:scale-150 transition-transform duration-200 ease-out cursor-pointer"
-                  style={{
-                    'background-color': colors().bg,
-                    'box-shadow': isActive()
-                      ? isDark()
-                        ? `0 0 0 2.5px rgba(255, 255, 255, 0.9)` // White ring in dark mode when active
-                        : `0 0 0 2.5px rgba(0, 0, 0, 0.8)` // Black ring in light mode when active
-                      : 'none', // No box-shadow when not active - just flat circle
-                  }}
-                />
-              </div>
-            );
-          }}
+          {(tag) => <TagDot tag={tag} />}
         </For>
 
-        {/* Show +X more indicator if there are hidden tags */}
-        <Show when={hasHiddenTags()}>
+        {/* Show the final dot if only one hidden tag remains */}
+        <Show when={hiddenTags().length === 1}>
+          <TagDot tag={hiddenTags()[0]} />
+        </Show>
+
+        {/* Show +X more indicator if there are multiple hidden tags */}
+        <Show when={hiddenTags().length > 1}>
           <div
             class="relative"
             onMouseEnter={(e) => {
@@ -82,7 +87,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
               hideTooltip();
             }}
           >
-            <div class="text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 hover:scale-125 transition-transform duration-200 ease-out">
+            <div class="inline-flex items-center text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap leading-none cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 hover:scale-125 transition-transform duration-200 ease-out">
               +{hiddenTags().length}
             </div>
           </div>
