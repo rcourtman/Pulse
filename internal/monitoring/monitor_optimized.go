@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -966,7 +967,21 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 
 	// Collect results from all nodes
 	var allStorage []models.Storage
-	sharedStorageMap := make(map[string]models.Storage) // Map to keep best shared storage entry
+	type sharedStorageAggregation struct {
+		storage models.Storage
+		nodes   map[string]struct{}
+		nodeIDs map[string]struct{}
+	}
+	sharedStorageMap := make(map[string]*sharedStorageAggregation) // Map to keep shared storage entries with node affiliations
+
+	toSortedSlice := func(set map[string]struct{}) []string {
+		slice := make([]string, 0, len(set))
+		for value := range set {
+			slice = append(slice, value)
+		}
+		sort.Strings(slice)
+		return slice
+	}
 	successfulNodes := 0
 	failedNodes := 0
 
@@ -978,16 +993,33 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 			polledNodes[result.node] = true // Mark this node as successfully polled
 			for _, storage := range result.storage {
 				if storage.Shared {
-					// For shared storage, use just the storage name as key
-					// This ensures consistent deduplication regardless of which node reports first
+					// For shared storage, aggregate by storage name so we can retain the reporting nodes
 					key := storage.Name
+					nodeIdentifier := fmt.Sprintf("%s-%s", storage.Instance, storage.Node)
 
-					// Keep the entry with the most complete data (highest usage)
-					// or the first one if all are equal
-					if existing, exists := sharedStorageMap[key]; !exists || storage.Used > existing.Used {
-						// Update the Node field to indicate it's shared across cluster
-						storage.Node = "cluster"
-						sharedStorageMap[key] = storage
+					if entry, exists := sharedStorageMap[key]; exists {
+						entry.nodes[storage.Node] = struct{}{}
+						entry.nodeIDs[nodeIdentifier] = struct{}{}
+
+						// Prefer the entry with the most up-to-date utilization data
+						if storage.Used > entry.storage.Used || (storage.Total > entry.storage.Total && storage.Used == entry.storage.Used) {
+							entry.storage.Total = storage.Total
+							entry.storage.Used = storage.Used
+							entry.storage.Free = storage.Free
+							entry.storage.Usage = storage.Usage
+							entry.storage.ZFSPool = storage.ZFSPool
+							entry.storage.Status = storage.Status
+							entry.storage.Enabled = storage.Enabled
+							entry.storage.Active = storage.Active
+							entry.storage.Content = storage.Content
+							entry.storage.Type = storage.Type
+						}
+					} else {
+						sharedStorageMap[key] = &sharedStorageAggregation{
+							storage: storage,
+							nodes:   map[string]struct{}{storage.Node: {}},
+							nodeIDs: map[string]struct{}{nodeIdentifier: {}},
+						}
 					}
 				} else {
 					// Non-shared storage goes directly to results
@@ -998,8 +1030,12 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 	}
 
 	// Add deduplicated shared storage to results
-	for _, storage := range sharedStorageMap {
-		allStorage = append(allStorage, storage)
+	for _, entry := range sharedStorageMap {
+		entry.storage.Node = "cluster"
+		entry.storage.Nodes = toSortedSlice(entry.nodes)
+		entry.storage.NodeIDs = toSortedSlice(entry.nodeIDs)
+		entry.storage.NodeCount = len(entry.storage.Nodes)
+		allStorage = append(allStorage, entry.storage)
 	}
 
 	// Preserve existing storage data for nodes that weren't polled (offline or error)

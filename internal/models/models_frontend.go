@@ -93,22 +93,25 @@ type ContainerFrontend struct {
 
 // StorageFrontend represents Storage with frontend-friendly field names
 type StorageFrontend struct {
-	ID       string  `json:"id"`
-	Storage  string  `json:"storage"` // Maps to Name
-	Name     string  `json:"name"`
-	Node     string  `json:"node"`
-	Instance string  `json:"instance"`
-	Type     string  `json:"type"`
-	Status   string  `json:"status"`
-	Total    int64   `json:"total"`
-	Used     int64   `json:"used"`
-	Avail    int64   `json:"avail"` // Maps to Free
-	Free     int64   `json:"free"`
-	Usage    float64 `json:"usage"`
-	Content  string  `json:"content"`
-	Shared   bool    `json:"shared"`
-	Enabled  bool    `json:"enabled"`
-	Active   bool    `json:"active"`
+	ID        string   `json:"id"`
+	Storage   string   `json:"storage"` // Maps to Name
+	Name      string   `json:"name"`
+	Node      string   `json:"node"`
+	Instance  string   `json:"instance"`
+	Nodes     []string `json:"nodes,omitempty"`
+	NodeIDs   []string `json:"nodeIds,omitempty"`
+	NodeCount int      `json:"nodeCount,omitempty"`
+	Type      string   `json:"type"`
+	Status    string   `json:"status"`
+	Total     int64    `json:"total"`
+	Used      int64    `json:"used"`
+	Avail     int64    `json:"avail"` // Maps to Free
+	Free      int64    `json:"free"`
+	Usage     float64  `json:"usage"`
+	Content   string   `json:"content"`
+	Shared    bool     `json:"shared"`
+	Enabled   bool     `json:"enabled"`
+	Active    bool     `json:"active"`
 }
 
 // StateFrontend represents the state with frontend-friendly field names
