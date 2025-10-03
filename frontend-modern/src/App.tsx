@@ -528,7 +528,7 @@ function App() {
       <Route path="/" component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />} />
       <Route path="/storage" component={StorageComponent} />
       <Route path="/backups" component={Backups} />
-      <Route path="/alerts" component={Alerts} />
+      <Route path="/alerts/*" component={Alerts} />
       <Route path="/settings/*" component={Settings} />
     </Router>
   );
