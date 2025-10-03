@@ -17,6 +17,7 @@ import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container } from '@/types/api';
+import { useNavigate, useLocation } from '@solidjs/router';
 
 type AlertTab =
   | 'overview'
@@ -144,7 +145,65 @@ const createDefaultEscalation = (): EscalationConfig => ({
 
 export function Alerts() {
   const { state, activeAlerts, updateAlert } = useWebSocket();
-  const [activeTab, setActiveTab] = createSignal<AlertTab>('overview');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const tabSegments: Record<AlertTab, string> = {
+    overview: 'overview',
+    thresholds: 'thresholds',
+    destinations: 'destinations',
+    schedule: 'schedule',
+    history: 'history',
+    'custom-rules': 'custom-rules',
+  };
+
+  const pathForTab = (tab: AlertTab) => {
+    const segment = tabSegments[tab];
+    return segment ? `/alerts/${segment}` : '/alerts';
+  };
+
+  const tabFromPath = (pathname: string): AlertTab => {
+    const normalizedPath = pathname.replace(/\/+$/, '') || '/alerts';
+    const segments = normalizedPath.split('/').filter(Boolean);
+
+    if (segments[0] !== 'alerts') {
+      return 'overview';
+    }
+
+    const segment = segments[1] ?? '';
+    if (!segment) {
+      return 'overview';
+    }
+
+    const entry = (Object.entries(tabSegments) as [AlertTab, string][])
+      .find(([, value]) => value === segment);
+
+    return entry ? entry[0] : 'overview';
+  };
+
+  const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
+
+  createEffect(() => {
+    const currentPath = location.pathname;
+    const tab = tabFromPath(currentPath);
+
+    if (tab !== activeTab()) {
+      setActiveTab(tab);
+    }
+
+    const expectedPath = pathForTab(tab);
+    if (currentPath !== expectedPath) {
+      navigate(expectedPath, { replace: true });
+    }
+  });
+
+  const handleTabChange = (tab: AlertTab) => {
+    const targetPath = pathForTab(tab);
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+  };
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
 
@@ -757,7 +816,7 @@ export function Alerts() {
                       ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                 >
                   {tab.label}
                 </button>
