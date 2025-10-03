@@ -17,12 +17,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
   const filteredDisks = createMemo(() => {
     let disks = props.disks || [];
 
-    // Filter by node if selected (using node name for simple matching)
+    // Filter by node if selected using both instance and node name
     if (props.selectedNode) {
-      // Find the node to get its name
-      const node = state.nodes?.find(n => n.id === props.selectedNode);
+      const node = state.nodes?.find((n) => n.id === props.selectedNode);
       if (node) {
-        disks = disks.filter((d) => d.node === node.name);
+        disks = disks.filter(
+          (d) => d.instance === node.instance && d.node === node.name,
+        );
       }
     }
 
