@@ -71,6 +71,7 @@ type Monitor struct {
 	lastAuthAttempt  map[string]time.Time      // Track last auth attempt time
 	lastClusterCheck map[string]time.Time      // Track last cluster check for standalone nodes
 	persistence      *config.ConfigPersistence // Add persistence for saving updated configs
+	pbsBackupPollers map[string]bool           // Track PBS backup polling goroutines per instance
 	runtimeCtx       context.Context           // Context used while monitor is running
 	wsHub            *websocket.Hub            // Hub used for broadcasting state
 }
@@ -431,6 +432,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastAuthAttempt:  make(map[string]time.Time),
 		lastClusterCheck: make(map[string]time.Time),
 		persistence:      config.NewConfigPersistence(cfg.DataPath),
+		pbsBackupPollers: make(map[string]bool),
 	}
 
 	// Load saved configurations
@@ -3258,11 +3260,57 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
-		log.Info().
-			Str("instance", instanceName).
-			Int("datastores", len(pbsInst.Datastores)).
-			Msg("Polling PBS backups")
-		m.pollPBSBackups(ctx, instanceName, client, pbsInst.Datastores)
+		if len(pbsInst.Datastores) == 0 {
+			log.Debug().
+				Str("instance", instanceName).
+				Msg("No PBS datastores available for backup polling")
+		} else {
+			backupCycles := 10
+			if m.config.BackupPollingCycles > 0 {
+				backupCycles = m.config.BackupPollingCycles
+			}
+
+			shouldPoll := m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1
+			if !shouldPoll {
+				log.Debug().
+					Str("instance", instanceName).
+					Int64("cycle", m.pollCounter).
+					Int("backupCycles", backupCycles).
+					Msg("Skipping PBS backup polling this cycle")
+			} else {
+				m.mu.Lock()
+				if m.pbsBackupPollers[instanceName] {
+					m.mu.Unlock()
+					log.Debug().
+						Str("instance", instanceName).
+						Msg("PBS backup polling already in progress")
+				} else {
+					m.pbsBackupPollers[instanceName] = true
+					m.mu.Unlock()
+
+					datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
+					copy(datastoreSnapshot, pbsInst.Datastores)
+
+					go func(ds []models.PBSDatastore) {
+						defer func() {
+							m.mu.Lock()
+							delete(m.pbsBackupPollers, instanceName)
+							m.mu.Unlock()
+						}()
+
+						log.Info().
+							Str("instance", instanceName).
+							Int("datastores", len(ds)).
+							Msg("Starting background PBS backup polling")
+
+						backupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						defer cancel()
+
+						m.pollPBSBackups(backupCtx, instanceName, client, ds)
+					}(datastoreSnapshot)
+				}
+			}
+		}
 	} else {
 		log.Debug().
 			Str("instance", instanceName).
