@@ -492,6 +492,9 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		if alert.Instance == "Node" || alert.Instance == alert.Node {
 			// This is a node alert
 			thresholds := m.config.NodeDefaults
+			if override, exists := m.config.Overrides[resourceID]; exists {
+				thresholds = m.applyThresholdOverride(thresholds, override)
+			}
 			threshold = getThresholdForMetric(thresholds, metricType)
 		} else if alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/") {
 			// This is a storage alert
@@ -1027,6 +1030,9 @@ func (m *Manager) CheckNode(node models.Node) {
 		return
 	}
 	thresholds := m.config.NodeDefaults
+	if override, exists := m.config.Overrides[node.ID]; exists {
+		thresholds = m.applyThresholdOverride(thresholds, override)
+	}
 	m.mu.RUnlock()
 
 	// CRITICAL: Check if node is offline first
@@ -2440,6 +2446,77 @@ func (m *Manager) convertLegacyThreshold(legacy *float64) *HysteresisThreshold {
 	}
 }
 
+func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
+	if threshold == nil {
+		return nil
+	}
+	clone := *threshold
+	return &clone
+}
+
+func (m *Manager) applyThresholdOverride(base ThresholdConfig, override ThresholdConfig) ThresholdConfig {
+	result := base
+
+	if override.Disabled {
+		result.Disabled = true
+	}
+	if override.DisableConnectivity {
+		result.DisableConnectivity = true
+	}
+
+	if override.CPU != nil {
+		result.CPU = ensureHysteresisThreshold(cloneThreshold(override.CPU))
+	} else if override.CPULegacy != nil {
+		result.CPU = m.convertLegacyThreshold(override.CPULegacy)
+	}
+
+	if override.Memory != nil {
+		result.Memory = ensureHysteresisThreshold(cloneThreshold(override.Memory))
+	} else if override.MemoryLegacy != nil {
+		result.Memory = m.convertLegacyThreshold(override.MemoryLegacy)
+	}
+
+	if override.Disk != nil {
+		result.Disk = ensureHysteresisThreshold(cloneThreshold(override.Disk))
+	} else if override.DiskLegacy != nil {
+		result.Disk = m.convertLegacyThreshold(override.DiskLegacy)
+	}
+
+	if override.DiskRead != nil {
+		result.DiskRead = ensureHysteresisThreshold(cloneThreshold(override.DiskRead))
+	} else if override.DiskReadLegacy != nil {
+		result.DiskRead = m.convertLegacyThreshold(override.DiskReadLegacy)
+	}
+
+	if override.DiskWrite != nil {
+		result.DiskWrite = ensureHysteresisThreshold(cloneThreshold(override.DiskWrite))
+	} else if override.DiskWriteLegacy != nil {
+		result.DiskWrite = m.convertLegacyThreshold(override.DiskWriteLegacy)
+	}
+
+	if override.NetworkIn != nil {
+		result.NetworkIn = ensureHysteresisThreshold(cloneThreshold(override.NetworkIn))
+	} else if override.NetworkInLegacy != nil {
+		result.NetworkIn = m.convertLegacyThreshold(override.NetworkInLegacy)
+	}
+
+	if override.NetworkOut != nil {
+		result.NetworkOut = ensureHysteresisThreshold(cloneThreshold(override.NetworkOut))
+	} else if override.NetworkOutLegacy != nil {
+		result.NetworkOut = m.convertLegacyThreshold(override.NetworkOutLegacy)
+	}
+
+	if override.Temperature != nil {
+		result.Temperature = ensureHysteresisThreshold(cloneThreshold(override.Temperature))
+	}
+
+	if override.Usage != nil {
+		result.Usage = ensureHysteresisThreshold(cloneThreshold(override.Usage))
+	}
+
+	return result
+}
+
 // ensureHysteresisThreshold ensures a threshold has hysteresis configured
 func ensureHysteresisThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
 	if threshold == nil {
@@ -2696,6 +2773,9 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 		} else if applicableRule.Thresholds.NetworkOutLegacy != nil {
 			thresholds.NetworkOut = m.convertLegacyThreshold(applicableRule.Thresholds.NetworkOutLegacy)
 		}
+		if applicableRule.Thresholds.DisableConnectivity {
+			thresholds.DisableConnectivity = true
+		}
 
 		log.Debug().
 			Str("guest", guestID).
@@ -2709,6 +2789,9 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 		// Apply the disabled flag if set
 		if override.Disabled {
 			thresholds.Disabled = true
+		}
+		if override.DisableConnectivity {
+			thresholds.DisableConnectivity = true
 		}
 
 		if override.CPU != nil {
