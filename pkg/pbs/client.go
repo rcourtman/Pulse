@@ -822,22 +822,64 @@ func (c *Client) ListAllBackups(ctx context.Context, datastore string, namespace
 				Int("groups", len(groups)).
 				Msg("Found backup groups")
 
-			var allSnapshots []BackupSnapshot
+			var (
+				allSnapshots []BackupSnapshot
+				snapshotsMu  sync.Mutex
+			)
 
-			// For each group, get snapshots
+			groupSem := make(chan struct{}, 5)
+			var groupWG sync.WaitGroup
+
+			// For each group, get snapshots concurrently with a small worker limit to avoid hammering PBS
 			for _, group := range groups {
-				snapshots, err := c.ListBackupSnapshots(ctx, datastore, namespace, group.BackupType, group.BackupID)
-				if err != nil {
-					log.Error().
+				if ctx.Err() != nil {
+					log.Debug().
 						Str("datastore", datastore).
 						Str("namespace", namespace).
-						Str("type", group.BackupType).
-						Str("id", group.BackupID).
-						Err(err).
-						Msg("Failed to list snapshots")
-					continue
+						Msg("Context cancelled before completing snapshot fetch")
+					break
 				}
-				allSnapshots = append(allSnapshots, snapshots...)
+
+				group := group
+
+				groupWG.Add(1)
+				go func() {
+					defer groupWG.Done()
+
+					select {
+					case groupSem <- struct{}{}:
+					case <-ctx.Done():
+						return
+					}
+					defer func() { <-groupSem }()
+
+					snapshots, err := c.ListBackupSnapshots(ctx, datastore, namespace, group.BackupType, group.BackupID)
+					if err != nil {
+						log.Error().
+							Str("datastore", datastore).
+							Str("namespace", namespace).
+							Str("type", group.BackupType).
+							Str("id", group.BackupID).
+							Err(err).
+							Msg("Failed to list snapshots")
+						return
+					}
+
+					if len(snapshots) == 0 {
+						return
+					}
+
+					snapshotsMu.Lock()
+					allSnapshots = append(allSnapshots, snapshots...)
+					snapshotsMu.Unlock()
+				}()
+			}
+
+			groupWG.Wait()
+
+			if ctx.Err() != nil {
+				resultCh <- namespaceResult{namespace: namespace, err: ctx.Err()}
+				return
 			}
 
 			resultCh <- namespaceResult{
