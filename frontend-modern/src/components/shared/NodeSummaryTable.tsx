@@ -425,40 +425,63 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 // Use the full resource ID for alert matching
                 const resourceId = isPVE ? node!.id || node!.name : pbs!.id || pbs!.name;
                 const alertStyles = getAlertStyles(resourceId, activeAlerts);
+                const showAlertHighlight = alertStyles.hasAlert && online;
 
-                // Get row styles including box-shadow for alert border
                 const rowStyle = createMemo(() => {
                   const styles: Record<string, string> = {};
-                  if (isSelected()) {
-                    styles['box-shadow'] =
-                      '0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)';
-                  }
-                  if (alertStyles.hasAlert) {
+                  const shadows: string[] = [];
+
+                  if (showAlertHighlight) {
                     const color = alertStyles.severity === 'critical' ? '#ef4444' : '#eab308';
-                    styles['box-shadow'] =
-                      `inset 4px 0 0 0 ${color}${isSelected() ? ', 0 0 0 1px rgba(59, 130, 246, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.1)' : ''}`;
+                    shadows.push(`inset 4px 0 0 0 ${color}`);
                   }
+
+                  if (isSelected()) {
+                    shadows.push('0 0 0 1px rgba(59, 130, 246, 0.5)');
+                    shadows.push('0 2px 4px -1px rgba(0, 0, 0, 0.1)');
+                  }
+
+                  if (shadows.length > 0) {
+                    styles['box-shadow'] = shadows.join(', ');
+                  }
+
                   return styles;
+                });
+
+                const rowClass = createMemo(() => {
+                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm';
+
+                  if (isSelected()) {
+                    return `cursor-pointer transition-all duration-200 relative bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-sm z-10`;
+                  }
+
+                  if (showAlertHighlight) {
+                    return alertStyles.severity === 'critical'
+                      ? 'cursor-pointer transition-all duration-200 relative bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40 hover:shadow-sm'
+                      : 'cursor-pointer transition-all duration-200 relative bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30 hover:shadow-sm';
+                  }
+
+                  let className = baseHover;
+
+                  if (props.selectedNode && props.selectedNode !== nodeId) {
+                    className += ' opacity-50 hover:opacity-80';
+                  }
+
+                  if (!online) {
+                    className += ' opacity-60';
+                  }
+
+                  return className;
                 });
 
                 return (
                   <tr
-                    class={`cursor-pointer transition-all duration-200 relative ${
-                      isSelected()
-                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 z-10'
-                        : alertStyles.hasAlert
-                          ? alertStyles.severity === 'critical'
-                            ? 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/40'
-                            : 'bg-yellow-50 dark:bg-yellow-950/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/30'
-                          : props.selectedNode
-                            ? 'opacity-50 hover:opacity-80 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:shadow-sm'
-                    }`}
+                    class={rowClass()}
                     style={rowStyle()}
                     onClick={() => props.onNodeClick(nodeId, item.type)}
                   >
                     <td
-                      class={`pr-2 py-0.5 whitespace-nowrap ${alertStyles.hasAlert ? 'pl-4' : 'pl-3'}`}
+                      class={`pr-2 py-0.5 whitespace-nowrap ${showAlertHighlight ? 'pl-4' : 'pl-3'}`}
                     >
                       <div class="flex items-center gap-1">
                         <a
@@ -507,16 +530,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       </div>
                     </td>
                     <td class="px-2 py-0.5 whitespace-nowrap">
-                      <div class="flex items-center gap-1">
-                        <span
-                          class={`h-2 w-2 flex-shrink-0 rounded-full ${
-                            online ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        />
-                        <span class="text-xs text-gray-600 dark:text-gray-400">
-                          {online ? 'Online' : 'Offline'}
-                        </span>
-                      </div>
+                      <span
+                        class={`text-xs font-medium ${
+                          online ? 'text-gray-600 dark:text-gray-400' : 'text-red-500 dark:text-red-400'
+                        }`}
+                      >
+                        {online ? 'Online' : 'Offline'}
+                      </span>
                     </td>
                     <td class="px-2 py-0.5 whitespace-nowrap">
                       <span

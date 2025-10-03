@@ -937,12 +937,7 @@ export function Dashboard(props: DashboardProps) {
                   >
                     {([instanceId, guests]) => {
                       const node = nodeByInstance()[instanceId];
-                      const guestCount = guests.length;
-                      const isNodeOnline = node
-                        ? node.status === 'online' && (node.uptime || 0) > 0
-                        : false;
-
-                      const nodeUrl = node?.host || (node ? `https://${node.name}:8006` : '');
+                      const isNodeOnline = !!(node && node.status === 'online' && (node.uptime || 0) > 0);
 
                       return (
                       <>
@@ -969,6 +964,7 @@ export function Dashboard(props: DashboardProps) {
                                     customUrl={metadata?.customUrl}
                                     onTagClick={handleTagClick}
                                     activeSearch={search()}
+                                    parentNodeOnline={isNodeOnline}
                                   />
                                 );
                               })()}
