@@ -575,10 +575,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <Show when={hasAnyTemperatureData()}>
                       <td class="px-2 py-0.5 whitespace-nowrap text-center">
                         <Show
-                          when={isPVE && node!.temperature?.available}
-                          fallback={
-                            <span class="text-xs text-gray-400 dark:text-gray-500">-</span>
-                          }
+                          when={online && isPVE && node!.temperature?.available}
+                          fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
                         >
                           <span
                             class={`text-xs font-medium ${
@@ -597,9 +595,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     <For each={countColumns()}>
                       {(column) => {
                         const value = getCountValue(item, column.key);
+                        const display = online ? value ?? '-' : '-';
+                        const textClass = online
+                          ? 'text-xs text-gray-700 dark:text-gray-300'
+                          : 'text-xs text-gray-400 dark:text-gray-500';
                         return (
                           <td class="px-2 py-0.5 whitespace-nowrap text-center">
-                            <span class="text-xs text-gray-700 dark:text-gray-300">{value ?? '-'}</span>
+                            <span class={textClass}>{display}</span>
                           </td>
                         );
                       }}
