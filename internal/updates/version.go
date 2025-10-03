@@ -167,7 +167,7 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	}
 
 	// Final fallback
-	version := "4.19.2"
+	version := "4.20.0"
 	channel := "stable"
 	if strings.Contains(strings.ToLower(version), "rc") {
 		channel = "rc"
