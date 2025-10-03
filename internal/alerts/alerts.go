@@ -2999,7 +2999,8 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	defer m.mu.Unlock()
 
 	// Check if disk health is not PASSED
-	if disk.Health != "PASSED" && disk.Health != "" {
+	normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
+	if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
 		// Check if alert already exists
 		if _, exists := m.activeAlerts[alertID]; !exists {
 			// Create new health alert
@@ -3047,7 +3048,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	}
 
 	// Check for low wearout (SSD life remaining)
-	if disk.Wearout >= 0 && disk.Wearout < 10 {
+	if disk.Wearout > 0 && disk.Wearout < 10 {
 		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
 		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
 		resourceID := fmt.Sprintf("%s-%s", node, disk.DevPath)

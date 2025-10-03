@@ -1487,7 +1487,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Int("wearout", disk.Wearout).
 				Msg("Checking disk health")
 
-			if disk.Health != "PASSED" && disk.Health != "OK" && disk.Health != "" {
+			normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
+			if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
 				// Disk has failed or is failing - alert manager will handle this
 				log.Warn().
 					Str("node", node.Node).
@@ -1499,7 +1500,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 				// Pass disk info to alert manager
 				m.alertManager.CheckDiskHealth(instanceName, node.Node, disk)
-			} else if disk.Wearout >= 0 && disk.Wearout < 10 {
+			} else if disk.Wearout > 0 && disk.Wearout < 10 {
 				// Low wearout warning (less than 10% life remaining)
 				log.Warn().
 					Str("node", node.Node).

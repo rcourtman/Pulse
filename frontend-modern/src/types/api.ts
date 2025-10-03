@@ -285,7 +285,7 @@ export interface PhysicalDisk {
   type: 'nvme' | 'sata' | 'sas' | string;
   size: number;
   health: 'PASSED' | 'FAILED' | 'UNKNOWN' | string;
-  wearout: number; // 0-100, 100 is best (percentage life remaining)
+  wearout: number; // 0-100, 100 is best, -1 when the controller doesn't report it
   temperature: number;
   rpm: number;
   used: string;
