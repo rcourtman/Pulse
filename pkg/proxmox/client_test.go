@@ -40,22 +40,22 @@ func TestDiskUnmarshalWearout(t *testing.T) {
 		{
 			name:     "not applicable string",
 			wearout:  json.RawMessage(`"N/A"`),
-			expected: 0,
+			expected: wearoutUnknown,
 		},
 		{
 			name:     "empty string",
 			wearout:  json.RawMessage(`""`),
-			expected: 0,
+			expected: wearoutUnknown,
 		},
 		{
 			name:     "null value",
 			wearout:  json.RawMessage(`null`),
-			expected: 0,
+			expected: wearoutUnknown,
 		},
 		{
 			name:     "unknown string",
 			wearout:  json.RawMessage(`"Unknown"`),
-			expected: 0,
+			expected: wearoutUnknown,
 		},
 	}
 
