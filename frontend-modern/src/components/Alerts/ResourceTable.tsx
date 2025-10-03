@@ -134,19 +134,34 @@ export function ResourceTable(props: ResourceTableProps) {
                           return resource.thresholds ?? {};
                         };
                         const displayValue = (metric: string): number => {
-                          const thresh = thresholds();
-                          const defaults = resource.defaults || {};
+                          const parseNumeric = (value: unknown): number | undefined => {
+                            if (value === undefined || value === null) return undefined;
+                            if (typeof value === 'number') return value;
+                            const parsed = Number(value);
+                            return Number.isFinite(parsed) ? parsed : undefined;
+                          };
+
+                          const extract = (source: Record<string, unknown> | undefined) =>
+                            parseNumeric(source?.[metric]);
+
+                          const defaults = resource.defaults as Record<string, unknown> | undefined;
+
                           if (isEditing()) {
-                            const val = thresh[metric] ?? defaults[metric];
-                            return typeof val === 'number' ? val : Number(val) || 0;
+                            const edited = extract(thresholds() as Record<string, unknown>);
+                            if (edited !== undefined) {
+                              return edited;
+                            }
+                            const fallback = extract(defaults);
+                            return fallback !== undefined ? fallback : 0;
                           }
-                          const liveValue = resource.thresholds?.[metric];
-                          if (typeof liveValue === 'number') {
+
+                          const liveValue = extract(resource.thresholds as Record<string, unknown> | undefined);
+                          if (liveValue !== undefined) {
                             return liveValue;
                           }
-                          return typeof defaults[metric] === 'number'
-                            ? (defaults[metric] as number)
-                            : 0;
+
+                          const fallback = extract(defaults);
+                          return fallback !== undefined ? fallback : 0;
                         };
                         const isOverridden = (metric: string) => {
                           return (
@@ -215,14 +230,30 @@ export function ResourceTable(props: ResourceTableProps) {
                             {/* Metric columns - dynamically rendered based on resource type */}
                             <For each={props.columns}>
                               {(column) => {
-                                const metric = column
-                                  .toLowerCase()
-                                  .replace(' %', '')
-                                  .replace(' mb/s', '')
-                                  .replace('disk r', 'diskRead')
-                                  .replace('disk w', 'diskWrite')
-                                  .replace('net in', 'networkIn')
-                                  .replace('net out', 'networkOut');
+                                const normalizedColumn = column.trim().toLowerCase();
+                                const metric = (
+                                  {
+                                    'cpu %': 'cpu',
+                                    'memory %': 'memory',
+                                    'disk %': 'disk',
+                                    'disk r mb/s': 'diskRead',
+                                    'disk w mb/s': 'diskWrite',
+                                    'net in mb/s': 'networkIn',
+                                    'net out mb/s': 'networkOut',
+                                    'usage %': 'usage',
+                                    'temp °c': 'temperature',
+                                    'temperature °c': 'temperature',
+                                    temperature: 'temperature',
+                                  } as Record<string, string>
+                                )[normalizedColumn]
+                                  ?? normalizedColumn
+                                    .replace(' %', '')
+                                    .replace(' °c', '')
+                                    .replace(' mb/s', '')
+                                    .replace('disk r', 'diskRead')
+                                    .replace('disk w', 'diskWrite')
+                                    .replace('net in', 'networkIn')
+                                    .replace('net out', 'networkOut');
 
                                 // Check if this metric applies to this resource type
                                 const showMetric = () => {
@@ -269,17 +300,19 @@ export function ResourceTable(props: ResourceTableProps) {
                                           type="number"
                                           min="-1"
                                           max={
-                                            metric.includes('disk') ||
-                                            metric.includes('memory') ||
-                                            metric.includes('cpu') ||
-                                            metric === 'usage'
-                                              ? 100
-                                              : 10000
+                                            metric === 'temperature'
+                                              ? 200
+                                              : metric.includes('disk') ||
+                                                  metric.includes('memory') ||
+                                                  metric.includes('cpu') ||
+                                                  metric === 'usage'
+                                                ? 100
+                                                : 10000
                                           }
-                                          value={thresholds()?.[metric] || ''}
+                                          value={thresholds()?.[metric] ?? ''}
                                           onInput={(e) => {
                                             const val = parseInt(e.currentTarget.value);
-                                            if (!isNaN(val)) {
+                                            if (!Number.isNaN(val)) {
                                               props.setEditingThresholds({
                                                 ...props.editingThresholds(),
                                                 [metric]: val,
@@ -502,13 +535,34 @@ export function ResourceTable(props: ResourceTableProps) {
                         return resource.thresholds ?? {};
                       };
                       const displayValue = (metric: string): number => {
-                        const thresh = thresholds();
-                        const defaults = resource.defaults || {};
+                        const parseNumeric = (value: unknown): number | undefined => {
+                          if (value === undefined || value === null) return undefined;
+                          if (typeof value === 'number') return value;
+                          const parsed = Number(value);
+                          return Number.isFinite(parsed) ? parsed : undefined;
+                        };
+
+                        const extract = (source: Record<string, unknown> | undefined) =>
+                          parseNumeric(source?.[metric]);
+
+                        const defaults = resource.defaults as Record<string, unknown> | undefined;
+
                         if (isEditing()) {
-                          const val = thresh?.[metric] || defaults[metric];
-                          return typeof val === 'string' ? parseFloat(val) || 0 : val || 0;
+                          const edited = extract(thresholds() as Record<string, unknown>);
+                          if (edited !== undefined) {
+                            return edited;
+                          }
+                          const fallback = extract(defaults);
+                          return fallback !== undefined ? fallback : 0;
                         }
-                        return resource.thresholds?.[metric] || defaults[metric] || 0;
+
+                        const liveValue = extract(resource.thresholds as Record<string, unknown> | undefined);
+                        if (liveValue !== undefined) {
+                          return liveValue;
+                        }
+
+                        const fallback = extract(defaults);
+                        return fallback !== undefined ? fallback : 0;
                       };
                       const isOverridden = (metric: string) => {
                         return (

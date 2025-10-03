@@ -419,8 +419,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       }
     });
 
-    // If no overrides, just cancel the edit
-    if (Object.keys(overrideThresholds).length === 0) {
+    const hasStateOnlyOverride = Boolean(resource.disabled || resource.disableConnectivity);
+
+    // If no threshold overrides or state flags remain, remove the override entirely
+    if (Object.keys(overrideThresholds).length === 0 && !hasStateOnlyOverride) {
       // If there was an existing override, remove it
       if (resource.hasOverride) {
         const newOverrides = props.overrides().filter((o) => o.id !== resourceId);
@@ -446,6 +448,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       node: 'node' in resource ? resource.node : undefined,
       instance: 'instance' in resource ? resource.instance : undefined,
       disabled: resource.disabled,
+      disableConnectivity: resource.disableConnectivity,
       thresholds: overrideThresholds,
     };
 
@@ -472,6 +475,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     });
     if (resource.disabled) {
       hysteresisThresholds.disabled = true;
+    }
+    if (resource.disableConnectivity) {
+      hysteresisThresholds.disableConnectivity = true;
     }
     newRawConfig[resourceId] = hysteresisThresholds;
     props.setRawOverridesConfig(newRawConfig);
@@ -1184,7 +1190,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         <ResourceTable
           title="Proxmox Nodes"
           resources={nodesWithOverrides()}
-          columns={['CPU %', 'Memory %', 'Disk %']}
+          columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
           activeAlerts={props.activeAlerts}
           onEdit={startEditing}
           onSaveEdit={saveEdit}
