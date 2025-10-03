@@ -59,7 +59,7 @@ export function createWebSocketStore(url: string) {
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
 
   // Track alerts with pending acknowledgment changes to prevent race conditions
-  const pendingAckChanges = new Set<string>();
+  const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: number;
@@ -268,19 +268,38 @@ export function createWebSocketStore(url: string) {
                 }
               });
 
-              // Add new alerts (skip those with pending ack changes)
+              // Add new alerts (skip those with pending acknowledgment changes until server confirms)
               Object.entries(newAlerts).forEach(([id, alert]) => {
                 // Skip updating if this alert has a pending acknowledgment change
                 if (pendingAckChanges.has(id)) {
-                  // Check if the acknowledgment state from server matches our pending change
-                  const currentAlert = activeAlerts[id];
-                  if (currentAlert && currentAlert.acknowledged !== alert.acknowledged) {
-                    logger.debug(
-                      `Skipping update for alert ${id} - has pending ack change (local: ${currentAlert.acknowledged}, server: ${alert.acknowledged})`,
-                    );
-                    return;
+                  const pending = pendingAckChanges.get(id)!;
+
+                  if (pending.ack) {
+                    // Expecting an acknowledged alert
+                    if (!alert.acknowledged) {
+                      logger.debug(
+                        `Skipping update for alert ${id} - awaiting server acknowledgment confirmation`,
+                      );
+                      return;
+                    }
+
+                    const serverAckTime = alert.ackTime || '';
+                    const previousAckTime = pending.previousAckTime || '';
+                    if (serverAckTime === previousAckTime) {
+                      logger.debug(
+                        `Server ack time for alert ${id} unchanged (${serverAckTime}); treating as confirmed`,
+                      );
+                    }
+                  } else {
+                    // Expecting an unacknowledged alert
+                    if (alert.acknowledged) {
+                      logger.debug(
+                        `Skipping update for alert ${id} - awaiting server unacknowledge confirmation`,
+                      );
+                      return;
+                    }
                   }
-                  // If the server has caught up with our change, we can clear the pending flag
+
                   pendingAckChanges.delete(id);
                 }
                 setActiveAlerts(id, alert);
@@ -462,19 +481,22 @@ export function createWebSocketStore(url: string) {
       if (existingAlert) {
         // Track this alert as having pending changes if acknowledgment is changing
         if ('acknowledged' in updates) {
-          pendingAckChanges.add(alertId);
-          // Clear the pending flag after a longer delay to ensure server has time to sync
-          // This prevents race conditions with slow network or server processing
+          const previousAckTime = existingAlert.ackTime;
+          pendingAckChanges.set(alertId, {
+            ack: !!updates.acknowledged,
+            previousAckTime,
+          });
+          // Safety valve: if we never hear back from the server (e.g., request failed silently),
+          // clear the pending flag after a generous timeout so we eventually resync with reality.
           setTimeout(() => {
-            // Only clear if the alert still exists and matches our expected state
-            const currentAlert = activeAlerts[alertId];
-            if (!currentAlert || currentAlert.acknowledged === updates.acknowledged) {
+            if (pendingAckChanges.has(alertId)) {
+              logger.warn(`Clearing stale pending ack change for alert ${alertId}`);
               pendingAckChanges.delete(alertId);
-            } else {
-              // State doesn't match, keep protection for a bit longer
-              setTimeout(() => pendingAckChanges.delete(alertId), 3000);
+              notificationStore.error(
+                'Server did not confirm the alert acknowledgment in time. Re-syncing from latest data.',
+              );
             }
-          }, 5000); // 5 seconds initial wait
+          }, 15000);
         }
         setActiveAlerts(alertId, { ...existingAlert, ...updates });
       }
