@@ -188,6 +188,54 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 			}
 		}
 
+		if node.Status == "offline" {
+			// Create placeholder offline guests with zeroed metrics
+			if vmCount == 0 {
+				vmCount = 1
+			}
+			for i := 0; i < vmCount; i++ {
+				vm := generateVM(node.Name, node.Instance, vmidCounter, config)
+				vm.Status = "stopped"
+				vm.CPU = 0
+				vm.Memory.Used = 0
+				vm.Memory.Usage = 0
+				vm.Memory.Free = vm.Memory.Total
+				vm.Disk.Used = 0
+				vm.Disk.Free = vm.Disk.Total
+				vm.Disk.Usage = 0
+				vm.NetworkIn = 0
+				vm.NetworkOut = 0
+				vm.DiskRead = 0
+				vm.DiskWrite = 0
+				vm.Uptime = 0
+				data.VMs = append(data.VMs, vm)
+				vmidCounter++
+			}
+
+			if lxcCount == 0 {
+				lxcCount = 1
+			}
+			for i := 0; i < lxcCount; i++ {
+				lxc := generateContainer(node.Name, node.Instance, vmidCounter, config)
+				lxc.Status = "stopped"
+				lxc.CPU = 0
+				lxc.Memory.Used = 0
+				lxc.Memory.Usage = 0
+				lxc.Memory.Free = lxc.Memory.Total
+				lxc.Disk.Used = 0
+				lxc.Disk.Free = lxc.Disk.Total
+				lxc.Disk.Usage = 0
+				lxc.NetworkIn = 0
+				lxc.NetworkOut = 0
+				lxc.DiskRead = 0
+				lxc.DiskWrite = 0
+				lxc.Uptime = 0
+				data.Containers = append(data.Containers, lxc)
+				vmidCounter++
+			}
+			continue
+		}
+
 		// Generate VMs
 		for i := 0; i < vmCount; i++ {
 			vm := generateVM(node.Name, node.Instance, vmidCounter, config)
