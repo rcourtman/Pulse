@@ -318,17 +318,6 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 
 								if !isWindowsDrive {
 									if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
-										if fs.TotalBytes > 0 {
-											individualDisks = append(individualDisks, models.Disk{
-												Total:      int64(fs.TotalBytes),
-												Used:       int64(fs.UsedBytes),
-												Free:       int64(fs.TotalBytes - fs.UsedBytes),
-												Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
-												Mountpoint: fs.Mountpoint,
-												Type:       fs.Type,
-												Device:     fs.Disk,
-											})
-										}
 										log.Debug().
 											Str("vm", vm.Name).
 											Str("mountpoint", fs.Mountpoint).

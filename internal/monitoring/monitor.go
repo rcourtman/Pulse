@@ -2008,16 +2008,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								}
 
 								if shouldSkip {
-									if reasonReadOnly != "" && fs.TotalBytes > 0 {
-										individualDisks = append(individualDisks, models.Disk{
-											Total:      int64(fs.TotalBytes),
-											Used:       int64(fs.UsedBytes),
-											Free:       int64(fs.TotalBytes - fs.UsedBytes),
-											Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
-											Mountpoint: fs.Mountpoint,
-											Type:       fs.Type,
-											Device:     fs.Disk,
-										})
+									if reasonReadOnly != "" {
 										log.Debug().
 											Str("instance", instanceName).
 											Str("vm", res.Name).
@@ -2026,7 +2017,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 											Str("type", fs.Type).
 											Float64("total_gb", float64(fs.TotalBytes)/1073741824).
 											Float64("used_gb", float64(fs.UsedBytes)/1073741824).
-											Msg("Tracking read-only filesystem separately from disk aggregation")
+											Msg("Skipping read-only filesystem from disk aggregation")
 									}
 									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,%s)",
 										fs.Mountpoint, fs.Type, strings.Join(skipReasons, ",")))
@@ -2597,6 +2588,19 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, cli
 					var totalBytes, usedBytes uint64
 					var skippedFS []string
 					for _, fs := range fsInfo {
+						if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
+							log.Debug().
+								Str("instance", instanceName).
+								Str("vm", vm.Name).
+								Str("mountpoint", fs.Mountpoint).
+								Str("type", fs.Type).
+								Str("skipReason", reason).
+								Uint64("total", fs.TotalBytes).
+								Uint64("used", fs.UsedBytes).
+								Msg("Skipping read-only filesystem from guest agent (legacy API)")
+							skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,read-only-%s)", fs.Mountpoint, fs.Type, reason))
+							continue
+						}
 						// Skip special filesystems and mounts
 						if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
 							strings.HasPrefix(fs.Mountpoint, "/dev") ||

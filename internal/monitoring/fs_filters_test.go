@@ -36,6 +36,22 @@ func TestReadOnlyFilesystemReason(t *testing.T) {
 			skip:       true,
 		},
 		{
+			name:       "squashfs filesystem",
+			fsType:     "squashfs",
+			totalBytes: 4096,
+			usedBytes:  4096,
+			reason:     "squashfs",
+			skip:       true,
+		},
+		{
+			name:       "squash-fs alias",
+			fsType:     "Squash-FS",
+			totalBytes: 2048,
+			usedBytes:  2048,
+			reason:     "squashfs",
+			skip:       true,
+		},
+		{
 			name:       "overlay below capacity",
 			fsType:     "overlay",
 			totalBytes: 100,
@@ -67,6 +83,10 @@ func TestReadOnlyFilesystemReason(t *testing.T) {
 func TestShouldIgnoreReadOnlyFilesystem(t *testing.T) {
 	if !shouldIgnoreReadOnlyFilesystem("erofs", 100, 10) {
 		t.Fatalf("expected erofs to be ignored")
+	}
+
+	if !shouldIgnoreReadOnlyFilesystem("squashfs", 100, 100) {
+		t.Fatalf("expected squashfs to be ignored")
 	}
 
 	if shouldIgnoreReadOnlyFilesystem("ext4", 100, 10) {
