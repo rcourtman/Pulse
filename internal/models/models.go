@@ -181,7 +181,7 @@ type PhysicalDisk struct {
 	Type        string    `json:"type"`        // nvme, sata, sas
 	Size        int64     `json:"size"`        // bytes
 	Health      string    `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout     int       `json:"wearout"`     // SSD wear metric from Proxmox (0-100, controller-specific semantics)
+	Wearout     int       `json:"wearout"`     // SSD wear metric from Proxmox (0-100, -1 when unavailable)
 	Temperature int       `json:"temperature"` // Celsius (if available)
 	RPM         int       `json:"rpm"`         // 0 for SSDs
 	Used        string    `json:"used"`        // Filesystem or partition usage

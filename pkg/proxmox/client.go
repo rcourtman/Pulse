@@ -1272,6 +1272,8 @@ func (c *Client) GetZFSPoolDetail(ctx context.Context, node, pool string) (*ZFSP
 	return &result.Data, nil
 }
 
+const wearoutUnknown = -1
+
 // Disk represents a physical disk on a Proxmox node
 type Disk struct {
 	DevPath string `json:"devpath"`
@@ -1279,7 +1281,7 @@ type Disk struct {
 	Serial  string `json:"serial"`
 	Type    string `json:"type"`   // nvme, sata, sas
 	Health  string `json:"health"` // PASSED, FAILED, UNKNOWN
-	Wearout int    `json:"-"`      // SSD wear percentage (0-100, 100 is best)
+	Wearout int    `json:"-"`      // SSD wear percentage (0-100, 100 is best, -1 when unavailable)
 	Size    int64  `json:"size"`   // Size in bytes
 	RPM     int    `json:"rpm"`    // 0 for SSDs
 	Used    string `json:"used"`   // Filesystem or partition usage
@@ -1311,10 +1313,10 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 		// Some controllers also return numeric wearout values as strings, so try to parse them.
 		d.Wearout = parseWearoutValue(v)
 	case nil:
-		d.Wearout = 0
+		d.Wearout = wearoutUnknown
 	default:
-		// Unexpected type, normalize to zero
-		d.Wearout = 0
+		// Unexpected type, normalize to unknown
+		d.Wearout = wearoutUnknown
 	}
 
 	d.Wearout = clampWearoutConsumed(d.Wearout)
@@ -1346,11 +1348,12 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 // parseWearoutValue normalizes the wearout value returned by Proxmox into an integer percentage.
 // The API occasionally wraps numeric values in escaped quotes (\"81\"), appends percent symbols,
 // or reports descriptive strings like "N/A". We strip those variations so downstream code can work
-// with a simple integer. Non-numeric results collapse to zero so monitoring can proceed safely.
+// with a simple integer. Non-numeric results bubble up wearoutUnknown (-1) so callers can treat them
+// as "not reported" instead of a critical wearout value.
 func parseWearoutValue(raw string) int {
 	cleaned := strings.TrimSpace(raw)
 	if cleaned == "" {
-		return 0
+		return wearoutUnknown
 	}
 
 	// Remove escaped quotes and surrounding quotes the API sometimes includes.
@@ -1359,12 +1362,12 @@ func parseWearoutValue(raw string) int {
 	cleaned = strings.TrimSpace(cleaned)
 
 	if cleaned == "" {
-		return 0
+		return wearoutUnknown
 	}
 
 	switch strings.ToLower(cleaned) {
 	case "n/a", "na", "none", "unknown":
-		return 0
+		return wearoutUnknown
 	}
 
 	if parsed, err := strconv.Atoi(cleaned); err == nil {
@@ -1373,7 +1376,7 @@ func parseWearoutValue(raw string) int {
 
 	if parsed, err := strconv.ParseFloat(cleaned, 64); err == nil {
 		if parsed <= 0 {
-			return 0
+			return int(parsed)
 		}
 		return int(parsed)
 	}
@@ -1391,10 +1394,13 @@ func parseWearoutValue(raw string) int {
 		}
 	}
 
-	return 0
+	return wearoutUnknown
 }
 
 func clampWearoutConsumed(val int) int {
+	if val == wearoutUnknown {
+		return wearoutUnknown
+	}
 	if val < 0 {
 		return 0
 	}
