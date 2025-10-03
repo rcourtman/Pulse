@@ -338,7 +338,13 @@ export function GuestRow(props: GuestRowProps) {
       {/* Disk */}
       <td class="py-0.5 px-2 w-[140px]">
         <Show
-          when={props.guest.disk && props.guest.disk.total > 0 && diskPercent() !== -1}
+          when={
+            isRunning() &&
+            props.parentNodeOnline !== false &&
+            props.guest.disk &&
+            props.guest.disk.total > 0 &&
+            diskPercent() !== -1
+          }
           fallback={
             <span class="text-gray-400 text-sm cursor-help" title={getDiskStatusTooltip()}>
               -
