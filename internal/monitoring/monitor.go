@@ -970,7 +970,22 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	m.state.Stats.Uptime = int64(time.Since(m.startTime).Seconds())
 	m.state.Stats.WebSocketClients = wsHub.GetClientCount()
 
-	// Sync active alerts to state
+	// Sync alert state so broadcasts include the latest acknowledgement data
+	m.syncAlertsToState()
+
+	// Increment poll counter
+	m.mu.Lock()
+	m.pollCounter++
+	m.mu.Unlock()
+
+	log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
+
+	// Broadcasting is now handled by the timer in Start()
+}
+
+// syncAlertsToState copies the latest alert manager data into the shared state snapshot.
+// This keeps WebSocket broadcasts aligned with in-memory acknowledgement updates.
+func (m *Monitor) syncAlertsToState() {
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
 	for _, alert := range activeAlerts {
@@ -987,25 +1002,25 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,
 			Acknowledged: alert.Acknowledged,
+			AckTime:      alert.AckTime,
+			AckUser:      alert.AckUser,
 		})
+		if alert.Acknowledged {
+			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("Syncing acknowledged alert")
+		}
 	}
 	m.state.UpdateActiveAlerts(modelAlerts)
 
-	// Sync recently resolved alerts
 	recentlyResolved := m.alertManager.GetRecentlyResolved()
 	if len(recentlyResolved) > 0 {
 		log.Info().Int("count", len(recentlyResolved)).Msg("Syncing recently resolved alerts")
 	}
 	m.state.UpdateRecentlyResolved(recentlyResolved)
+}
 
-	// Increment poll counter
-	m.mu.Lock()
-	m.pollCounter++
-	m.mu.Unlock()
-
-	log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
-
-	// Broadcasting is now handled by the timer in Start()
+// SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
+func (m *Monitor) SyncAlertState() {
+	m.syncAlertsToState()
 }
 
 // pollConcurrent polls all instances concurrently
