@@ -266,6 +266,15 @@ func generateNodes(config MockConfig) []models.Node {
 			node.CPU = 0
 			node.Memory.Used = 0
 			node.Memory.Usage = 0
+			node.Memory.Free = node.Memory.Total
+			node.Uptime = 0
+			node.LoadAverage = []float64{0, 0, 0}
+			node.Disk.Used = 0
+			node.Disk.Usage = 0
+			node.Disk.Free = node.Disk.Total
+			if node.Temperature != nil {
+				node.Temperature = &models.Temperature{Available: false}
+			}
 			node.ConnectionHealth = "offline"
 		} else {
 			// For cluster nodes, since one is offline, the cluster is degraded
@@ -1060,29 +1069,55 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	contentTypes := []string{"images", "vztmpl,iso", "rootdir", "backup", "snippets"}
 
 	for _, node := range nodes {
+		isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
 		// Local storage (always present)
 		localTotal := int64(500 * 1024 * 1024 * 1024) // 500GB
 		localUsed := int64(float64(localTotal) * (0.3 + rand.Float64()*0.5))
+		if isOffline {
+			localUsed = 0
+		}
+		localFree := localTotal - localUsed
+		localUsage := 0.0
+		if localTotal > 0 {
+			localUsage = float64(localUsed) / float64(localTotal) * 100
+		}
+		localStatus := "available"
+		localEnabled := true
+		localActive := true
+		if isOffline {
+			localStatus = "offline"
+			localEnabled = false
+			localActive = false
+		}
+
 		storage = append(storage, models.Storage{
 			ID:       fmt.Sprintf("%s-%s-local", node.Instance, node.Name),
 			Name:     "local",
 			Node:     node.Name,
 			Instance: node.Instance,
 			Type:     "dir",
-			Status:   "available",
+			Status:   localStatus,
 			Total:    localTotal,
 			Used:     localUsed,
-			Free:     localTotal - localUsed,
-			Usage:    float64(localUsed) / float64(localTotal) * 100,
+			Free:     localFree,
+			Usage:    localUsage,
 			Content:  "vztmpl,iso",
 			Shared:   false,
-			Enabled:  true,
-			Active:   true,
+			Enabled:  localEnabled,
+			Active:   localActive,
 		})
 
 		// Local-zfs (common)
 		zfsTotal := int64(2 * 1024 * 1024 * 1024 * 1024) // 2TB
 		zfsUsed := int64(float64(zfsTotal) * (0.2 + rand.Float64()*0.6))
+		if isOffline {
+			zfsUsed = 0
+		}
+		zfsFree := zfsTotal - zfsUsed
+		zfsUsage := 0.0
+		if zfsTotal > 0 {
+			zfsUsage = float64(zfsUsed) / float64(zfsTotal) * 100
+		}
 
 		// Generate ZFS pool status
 		var zfsPool *models.ZFSPool
@@ -1110,21 +1145,30 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			}
 		}
 
+		zfsStatus := "available"
+		zfsEnabled := true
+		zfsActive := true
+		if isOffline {
+			zfsStatus = "offline"
+			zfsEnabled = false
+			zfsActive = false
+		}
+
 		storage = append(storage, models.Storage{
 			ID:       fmt.Sprintf("%s-%s-local-zfs", node.Instance, node.Name),
 			Name:     "local-zfs",
 			Node:     node.Name,
 			Instance: node.Instance,
 			Type:     "zfspool",
-			Status:   "available",
+			Status:   zfsStatus,
 			Total:    zfsTotal,
 			Used:     zfsUsed,
-			Free:     zfsTotal - zfsUsed,
-			Usage:    float64(zfsUsed) / float64(zfsTotal) * 100,
+			Free:     zfsFree,
+			Usage:    zfsUsage,
 			Content:  "images,rootdir",
 			Shared:   false,
-			Enabled:  true,
-			Active:   true,
+			Enabled:  zfsEnabled,
+			Active:   zfsActive,
 			ZFSPool:  zfsPool,
 		})
 
@@ -1134,6 +1178,23 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			storageName := fmt.Sprintf("storage-%s-%d", node.Name, rand.Intn(100))
 			total := int64((1 + rand.Intn(10)) * 1024 * 1024 * 1024 * 1024) // 1-10TB
 			used := int64(float64(total) * rand.Float64())
+			if isOffline {
+				used = 0
+			}
+			free := total - used
+			usage := 0.0
+			if total > 0 {
+				usage = float64(used) / float64(total) * 100
+			}
+
+			status := "available"
+			enabled := true
+			active := true
+			if isOffline {
+				status = "offline"
+				enabled = false
+				active = false
+			}
 
 			storage = append(storage, models.Storage{
 				ID:       fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, storageName),
@@ -1141,15 +1202,15 @@ func generateStorage(nodes []models.Node) []models.Storage {
 				Node:     node.Name,
 				Instance: node.Instance,
 				Type:     storageType,
-				Status:   "available",
+				Status:   status,
 				Total:    total,
 				Used:     used,
-				Free:     total - used,
-				Usage:    float64(used) / float64(total) * 100,
+				Free:     free,
+				Usage:    usage,
 				Content:  contentTypes[rand.Intn(len(contentTypes))],
 				Shared:   storageType == "nfs" || storageType == "cephfs",
-				Enabled:  true,
-				Active:   true,
+				Enabled:  enabled,
+				Active:   active,
 			})
 		}
 	}
