@@ -643,6 +643,21 @@ const Storage: Component = () => {
                               const usagePercent =
                                 storage.total > 0 ? (storage.used / storage.total) * 100 : 0;
                               const isDisabled = storage.status !== 'available';
+                              const pbsNamesDisplay = createMemo(() => {
+                                const names = storage.pbsNames?.filter(
+                                  (name): name is string => Boolean(name),
+                                );
+                                if (!names || names.length === 0) return '';
+                                return [...names].sort((a, b) => a.localeCompare(b)).join(', ');
+                              });
+
+                              const nodeListDisplay = createMemo(() => {
+                                const nodes =
+                                  storage.nodes && storage.nodes.length > 0
+                                    ? storage.nodes.filter((node): node is string => Boolean(node))
+                                    : [storage.node].filter((node): node is string => Boolean(node));
+                                return nodes.join(', ');
+                              });
 
                               const alertStyles = getAlertStyles(
                                 storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
@@ -708,9 +723,12 @@ const Storage: Component = () => {
                                     class={`${rowClass()} transition-colors`}
                                     style={rowStyle()}
                                   >
-                                    <td class={firstCellClass()}>
-                                      <div class="flex items-center gap-2">
-                                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    <td class={`${firstCellClass()} align-middle`}>
+                                      <div class="flex items-center gap-2 min-w-0">
+                                        <span
+                                          class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]"
+                                          title={storage.name}
+                                        >
                                           {storage.name}
                                         </span>
                                         {/* ZFS Health Badge */}
@@ -740,17 +758,19 @@ const Storage: Component = () => {
                                         </Show>
                                         <Show when={viewMode() === 'storage'}>
                                           <Show when={storage.pbsNames}>
-                                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                              ({storage.pbsNames?.sort().join(', ')})
+                                            <span
+                                              class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
+                                              title={pbsNamesDisplay()}
+                                            >
+                                              ({pbsNamesDisplay()})
                                             </span>
                                           </Show>
                                           <Show when={!storage.pbsNames}>
-                                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                              (
-                                              {storage.nodes
-                                                ? storage.nodes.join(', ')
-                                                : storage.node}
-                                              )
+                                            <span
+                                              class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[240px]"
+                                              title={nodeListDisplay()}
+                                            >
+                                              ({nodeListDisplay()})
                                             </span>
                                           </Show>
                                         </Show>
@@ -762,11 +782,14 @@ const Storage: Component = () => {
                                       </span>
                                     </td>
                                     <td class="p-0.5 px-1.5 hidden lg:table-cell">
-                                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                                      <span
+                                        class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap truncate max-w-[220px]"
+                                        title={storage.content || '-'}
+                                      >
                                         {storage.content || '-'}
                                       </span>
                                     </td>
-                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
+                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
                                       <span
                                         class={`${
                                           storage.status === 'available'
@@ -800,10 +823,10 @@ const Storage: Component = () => {
                                         </span>
                                       </div>
                                     </td>
-                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell">
+                                    <td class="p-0.5 px-1.5 text-xs hidden sm:table-cell whitespace-nowrap">
                                       {formatBytes(storage.free || 0)}
                                     </td>
-                                    <td class="p-0.5 px-1.5 text-xs">
+                                    <td class="p-0.5 px-1.5 text-xs whitespace-nowrap">
                                       {formatBytes(storage.total || 0)}
                                     </td>
                                     <td class="p-0.5 px-1.5"></td>
