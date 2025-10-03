@@ -1537,7 +1537,7 @@ func generateCephClusters(nodes []models.Node, storage []models.Storage) []model
 			ID:             fmt.Sprintf("%s-ceph", instanceName),
 			Instance:       instanceName,
 			Name:           fmt.Sprintf("%s Ceph", strings.Title(strings.ReplaceAll(instanceName, "-", " "))),
-			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%012d", rand.Intn(1_000_000_000_000)),
+			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%012d", rand.Int63n(1_000_000_000_000)),
 			Health:         health,
 			HealthMessage:  healthMessage,
 			TotalBytes:     totalBytes,
