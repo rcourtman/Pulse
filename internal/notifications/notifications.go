@@ -494,6 +494,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			Username: config.Username,
 			Password: config.Password,
 		},
+		Provider:      config.Provider,
 		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
 		MaxRetries:    2,
 		RetryDelay:    3,
@@ -552,6 +553,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 			Username: config.Username,
 			Password: config.Password,
 		},
+		Provider:      config.Provider,
 		StartTLS:      config.StartTLS, // Use the configured StartTLS setting
 		MaxRetries:    2,
 		RetryDelay:    3,
