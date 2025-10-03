@@ -9,6 +9,7 @@ import {
   getOwner,
   runWithOwner,
 } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { Router, Route, useNavigate, useLocation } from '@solidjs/router';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
