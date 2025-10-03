@@ -305,6 +305,21 @@ func NewManager() *Manager {
 	return m
 }
 
+// addRecentlyResolvedUnlocked records a resolved alert assuming the caller does not hold m.mu.
+func (m *Manager) addRecentlyResolvedUnlocked(alertID string, resolved *ResolvedAlert) {
+	m.resolvedMutex.Lock()
+	m.recentlyResolved[alertID] = resolved
+	m.resolvedMutex.Unlock()
+}
+
+// addRecentlyResolvedWithPrimaryLock records a resolved alert while preserving the caller's
+// ownership of m.mu. Callers must hold m.mu before invoking this helper.
+func (m *Manager) addRecentlyResolvedWithPrimaryLock(alertID string, resolved *ResolvedAlert) {
+	m.mu.Unlock()
+	m.addRecentlyResolvedUnlocked(alertID, resolved)
+	m.mu.Lock()
+}
+
 // SetAlertCallback sets the callback for new alerts
 func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
 	m.mu.Lock()
@@ -483,10 +498,8 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			// Remove from active alerts
 			delete(m.activeAlerts, alertID)
 
-			// Add to recently resolved
-			m.resolvedMutex.Lock()
-			m.recentlyResolved[alertID] = resolvedAlert
-			m.resolvedMutex.Unlock()
+			// Add to recently resolved while respecting lock ordering
+			m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 			log.Info().
 				Str("alertID", alertID).
@@ -1295,27 +1308,30 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 // clearAlert removes an alert if it exists
 func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if alert, exists := m.activeAlerts[alertID]; exists {
+	alert, exists := m.activeAlerts[alertID]
+	if exists {
 		delete(m.activeAlerts, alertID)
-
-		// Add to recently resolved
-		resolvedAlert := &ResolvedAlert{
-			Alert:        alert,
-			ResolvedTime: time.Now(),
-		}
-		m.recentlyResolved[alertID] = resolvedAlert
-
-		// Send recovery notification
-		if m.onResolved != nil {
-			m.onResolved(alertID)
-		}
-
-		log.Info().
-			Str("alertID", alertID).
-			Msg("Alert cleared")
 	}
+	m.mu.Unlock()
+
+	if !exists {
+		return
+	}
+
+	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+
+	m.addRecentlyResolvedUnlocked(alertID, resolvedAlert)
+
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+
+	log.Info().
+		Str("alertID", alertID).
+		Msg("Alert cleared")
 }
 
 // getTimeThresholdForType returns the appropriate time threshold for the resource type
@@ -1610,14 +1626,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					}
 				}()
 
-				// Add to recently resolved
-				m.resolvedMutex.Lock()
-				m.recentlyResolved[alertID] = resolvedAlert
-				m.resolvedMutex.Unlock()
+				// Add to recently resolved while preventing lock-order inversions
+				m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 				log.Info().
 					Str("alertID", alertID).
-					Int("totalRecentlyResolved", len(m.recentlyResolved)).
 					Msg("Added alert to recently resolved")
 
 				// Schedule cleanup after 5 minutes
@@ -1912,12 +1925,11 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
 
-	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	resolvedAlert.Alert = alert
-	m.recentlyResolved[alertID] = resolvedAlert
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
 	if m.onResolved != nil {
@@ -2025,12 +2037,11 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
 
-	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	resolvedAlert.Alert = alert
-	m.recentlyResolved[alertID] = resolvedAlert
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
 	if m.onResolved != nil {
@@ -2139,12 +2150,11 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
 
-	// Add to recently resolved
 	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	resolvedAlert.Alert = alert
-	m.recentlyResolved[alertID] = resolvedAlert
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
 	if m.onResolved != nil {
@@ -2279,19 +2289,12 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	// Remove from active alerts
 	delete(m.activeAlerts, alertID)
 
-	// Add to recently resolved (lock ordering: must not hold m.mu when acquiring resolvedMutex)
 	downtime := time.Since(alert.StartTime)
-
-	// Release m.mu before acquiring resolvedMutex
-	m.mu.Unlock()
-	m.resolvedMutex.Lock()
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	m.recentlyResolved[alertID] = resolvedAlert
-	m.resolvedMutex.Unlock()
-	m.mu.Lock() // Re-acquire for deferred unlock
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
 
 	// Send recovery notification
 	if m.onResolved != nil {
@@ -3120,23 +3123,24 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 
 // clearAlertNoLock clears an alert without locking (must be called with lock held)
 func (m *Manager) clearAlertNoLock(alertID string) {
-	if alert, exists := m.activeAlerts[alertID]; exists {
-		delete(m.activeAlerts, alertID)
-
-		// Add to recently resolved
-		resolvedAlert := &ResolvedAlert{
-			Alert:        alert,
-			ResolvedTime: time.Now(),
-		}
-		m.recentlyResolved[alertID] = resolvedAlert
-
-		// Send recovery notification
-		if m.onResolved != nil {
-			m.onResolved(alertID)
-		}
-
-		log.Info().
-			Str("alertID", alertID).
-			Msg("Alert cleared")
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
 	}
+
+	delete(m.activeAlerts, alertID)
+	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+
+	if m.onResolved != nil {
+		m.onResolved(alertID)
+	}
+
+	log.Info().
+		Str("alertID", alertID).
+		Msg("Alert cleared")
 }
