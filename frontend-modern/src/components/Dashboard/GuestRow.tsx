@@ -188,18 +188,7 @@ export function GuestRow(props: GuestRowProps) {
     }
   };
 
-  const showAlertHighlight = createMemo(() => {
-    if (!props.alertStyles?.hasAlert) return false;
-    if (
-      !isRunning() &&
-      props.alertStyles.severity === 'warning' &&
-      props.alertStyles.hasPoweredOffAlert &&
-      !props.alertStyles.hasNonPoweredOffAlert
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const showAlertHighlight = createMemo(() => !!props.alertStyles?.hasAlert);
 
   const alertAccentColor = createMemo(() => {
     if (!showAlertHighlight()) return undefined;
