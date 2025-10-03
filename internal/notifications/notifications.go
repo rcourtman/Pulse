@@ -116,6 +116,44 @@ type NotificationManager struct {
 	webhookRateLimits map[string]*webhookRateLimit // Track rate limits per webhook URL
 }
 
+// copyEmailConfig returns a defensive copy of EmailConfig including its slices to avoid data races.
+func copyEmailConfig(cfg EmailConfig) EmailConfig {
+	copy := cfg
+	if len(cfg.To) > 0 {
+		copy.To = append([]string(nil), cfg.To...)
+	}
+	return copy
+}
+
+// copyWebhookConfigs deep-copies webhook configurations to isolate concurrent writers from background senders.
+func copyWebhookConfigs(webhooks []WebhookConfig) []WebhookConfig {
+	if len(webhooks) == 0 {
+		return nil
+	}
+
+	copies := make([]WebhookConfig, 0, len(webhooks))
+	for _, webhook := range webhooks {
+		clone := webhook
+		if len(webhook.Headers) > 0 {
+			headers := make(map[string]string, len(webhook.Headers))
+			for k, v := range webhook.Headers {
+				headers[k] = v
+			}
+			clone.Headers = headers
+		}
+		if len(webhook.CustomFields) > 0 {
+			custom := make(map[string]string, len(webhook.CustomFields))
+			for k, v := range webhook.CustomFields {
+				custom[k] = v
+			}
+			clone.CustomFields = custom
+		}
+		copies = append(copies, clone)
+	}
+
+	return copies
+}
+
 type notificationRecord struct {
 	lastSent   time.Time
 	alertStart time.Time
@@ -381,13 +419,14 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		Int("alertCount", len(alertsToSend)).
 		Msg("Sending grouped alert notifications")
 
-	// Send notifications
-	if n.emailConfig.Enabled {
-		go n.sendGroupedEmail(alertsToSend)
-	}
+	// Snapshot configuration while holding the lock to avoid races with concurrent updates
+	emailConfig := copyEmailConfig(n.emailConfig)
+	webhooks := copyWebhookConfigs(n.webhooks)
 
-	webhooks := make([]WebhookConfig, len(n.webhooks))
-	copy(webhooks, n.webhooks)
+	// Send notifications using the captured snapshots outside the lock to avoid blocking writers
+	if emailConfig.Enabled {
+		go n.sendGroupedEmail(emailConfig, alertsToSend)
+	}
 
 	for _, webhook := range webhooks {
 		if webhook.Enabled {
@@ -406,8 +445,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 }
 
 // sendGroupedEmail sends a grouped email notification
-func (n *NotificationManager) sendGroupedEmail(alertList []*alerts.Alert) {
-	config := n.emailConfig
+func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*alerts.Alert) {
 
 	// Don't check for recipients here - sendHTMLEmail handles empty recipients
 	// by using the From address as the recipient
