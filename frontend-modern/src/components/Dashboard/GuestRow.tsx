@@ -272,25 +272,27 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Type */}
       <td class="py-0.5 px-2 whitespace-nowrap">
-        <span
-          class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-            props.guest.type === 'qemu'
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-              : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-          }`}
-        >
-          {isVM(props.guest) ? 'VM' : 'LXC'}
-        </span>
+        <div class="flex h-[24px] items-center">
+          <span
+            class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
+              props.guest.type === 'qemu'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+            }`}
+          >
+            {isVM(props.guest) ? 'VM' : 'LXC'}
+          </span>
+        </div>
       </td>
 
       {/* VMID */}
-      <td class="py-0.5 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+      <td class="py-0.5 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 align-middle">
         {props.guest.vmid}
       </td>
 
       {/* Uptime */}
       <td
-        class={`py-0.5 px-2 text-sm whitespace-nowrap ${
+        class={`py-0.5 px-2 text-sm whitespace-nowrap align-middle ${
           props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'
         }`}
       >
@@ -359,18 +361,26 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* Disk I/O */}
       <td class="py-0.5 px-2">
-        <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
+        <div class="flex h-[24px] items-center">
+          <IOMetric value={props.guest.diskRead} disabled={!isRunning()} />
+        </div>
       </td>
       <td class="py-0.5 px-2">
-        <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
+        <div class="flex h-[24px] items-center">
+          <IOMetric value={props.guest.diskWrite} disabled={!isRunning()} />
+        </div>
       </td>
 
       {/* Network I/O */}
       <td class="py-0.5 px-2">
-        <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
+        <div class="flex h-[24px] items-center">
+          <IOMetric value={props.guest.networkIn} disabled={!isRunning()} />
+        </div>
       </td>
       <td class="py-0.5 px-2">
-        <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
+        <div class="flex h-[24px] items-center">
+          <IOMetric value={props.guest.networkOut} disabled={!isRunning()} />
+        </div>
       </td>
       </tr>
       <Show when={drawerOpen() && canShowDrawer()}>
