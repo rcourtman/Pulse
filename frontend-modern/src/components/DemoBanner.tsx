@@ -12,7 +12,7 @@ export function DemoBanner() {
       if (demoHeader === 'true') {
         setIsDemoMode(true);
       }
-    } catch (e) {
+    } catch (_err) {
       // Ignore errors
     }
   });
