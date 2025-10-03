@@ -5,6 +5,7 @@ import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { useWebSocket } from '@/App';
 import { getAlertStyles } from '@/utils/alerts';
 import { Card } from '@/components/shared/Card';
+import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 
 interface NodeSummaryTableProps {
   nodes: Node[];
@@ -231,7 +232,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const getSortValue = (item: SortableItem, key: SortKey): number | string | null => {
     switch (key) {
       case 'name':
-        return item.data.name;
+        return item.type === 'pve'
+          ? getNodeDisplayName(item.data as Node)
+          : (item.data as PBSInstance).name;
       case 'uptime':
         return item.type === 'pve'
           ? (item.data as Node).uptime ?? 0
@@ -262,7 +265,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     const bOnline = isItemOnline(b);
     if (aOnline !== bOnline) return aOnline ? -1 : 1;
 
-    return a.data.name.localeCompare(b.data.name);
+    const aName = a.type === 'pve'
+      ? getNodeDisplayName(a.data as Node)
+      : (a.data as PBSInstance).name;
+    const bName = b.type === 'pve'
+      ? getNodeDisplayName(b.data as Node)
+      : (b.data as PBSInstance).name;
+
+    return aName.localeCompare(bName);
   };
 
   const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
@@ -396,6 +406,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 const diskSublabel = getDiskSublabel(item);
                 const temperatureValue = getTemperatureValue(item);
                 const uptimeValue = isPVE ? node?.uptime ?? 0 : pbs?.uptime ?? 0;
+                const displayName = () =>
+                  isPVE ? getNodeDisplayName(node as Node) : (pbs as PBSInstance).name;
+                const showActualName = () => isPVE && hasAlternateDisplayName(node as Node);
 
                 // Use unique node ID (not hostname) to handle duplicate node names
                 const nodeId = isPVE ? node!.id : pbs!.name;
@@ -472,8 +485,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           onClick={(e) => e.stopPropagation()}
                           class="font-medium text-[11px] text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
                         >
-                          {item.data.name}
+                          {displayName()}
                         </a>
+                        <Show when={showActualName()}>
+                          <span class="text-[9px] text-gray-500 dark:text-gray-400">
+                            ({(node as Node).name})
+                          </span>
+                        </Show>
                         <Show when={isPVE}>
                           <span class="text-[9px] px-1 py-0 rounded text-[8px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                             PVE

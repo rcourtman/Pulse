@@ -32,6 +32,7 @@ export interface NetworkInfo {
 export interface Node {
   id: string;
   name: string;
+  displayName?: string;
   type: string;
   status: 'online' | 'offline' | 'unknown';
   instance: string;

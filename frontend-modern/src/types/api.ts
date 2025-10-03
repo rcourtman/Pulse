@@ -21,6 +21,7 @@ export interface State {
 export interface Node {
   id: string;
   name: string;
+  displayName?: string;
   instance: string;
   host: string;
   status: string;
