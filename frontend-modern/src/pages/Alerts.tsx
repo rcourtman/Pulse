@@ -2341,25 +2341,99 @@ function HistoryTab() {
     );
   });
 
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  const getDaySuffix = (day: number) => {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  };
+
+  const formatAlertGroupLabel = (date: Date, todayStart: number, yesterdayStart: number) => {
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const suffix = getDaySuffix(day);
+    const absoluteDate = `${month} ${day}${suffix}`;
+
+    if (date.getTime() === todayStart) {
+      return `Today (${absoluteDate})`;
+    }
+
+    if (date.getTime() === yesterdayStart) {
+      return `Yesterday (${absoluteDate})`;
+    }
+
+    return absoluteDate;
+  };
+
+  type AlertHistoryRow = ReturnType<typeof alertData>[number];
+
   // Group alerts by day for display
   const groupedAlerts = createMemo(() => {
-    const groups = new Map();
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = todayDate.getTime();
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStart = yesterdayDate.getTime();
+
+    const groups = new Map<
+      number,
+      {
+        date: Date;
+        label: string;
+        fullLabel: string;
+        alerts: AlertHistoryRow[];
+      }
+    >();
 
     alertData().forEach((alert) => {
-      const date = new Date(alert.startTime);
-      const dayKey = date.toLocaleDateString();
+      const alertDate = new Date(alert.startTime);
+      const dateOnly = new Date(
+        alertDate.getFullYear(),
+        alertDate.getMonth(),
+        alertDate.getDate(),
+      );
+      const dateKey = dateOnly.getTime();
 
-      if (!groups.has(dayKey)) {
-        groups.set(dayKey, {
-          date: date,
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, {
+          date: dateOnly,
+          label: formatAlertGroupLabel(dateOnly, todayStart, yesterdayStart),
+          fullLabel: dateOnly.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
           alerts: [],
         });
       }
 
-      groups.get(dayKey).alerts.push(alert);
+      groups.get(dateKey)!.alerts.push(alert);
     });
 
-    // Convert to array and sort by date (newest first)
     return Array.from(groups.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
   });
 
@@ -2638,17 +2712,20 @@ function HistoryTab() {
                       {(group) => (
                         <>
                           {/* Date divider */}
-                          <tr class="bg-gray-50 dark:bg-gray-800">
+                          <tr class="bg-gray-50 dark:bg-gray-900/40">
                             <td
                               colspan="8"
-                              class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400"
+                              class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
-                              {group.date.toLocaleDateString('en-US', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                              })}
+                              <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <span class="truncate" title={group.fullLabel}>
+                                  {group.label}
+                                </span>
+                                <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                  {group.alerts.length}{' '}
+                                  {group.alerts.length === 1 ? 'alert' : 'alerts'}
+                                </span>
+                              </div>
                             </td>
                           </tr>
 
