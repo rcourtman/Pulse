@@ -34,6 +34,8 @@ interface GuestRowProps {
     hasAlert: boolean;
     alertCount: number;
     severity: 'critical' | 'warning' | null;
+    hasPoweredOffAlert?: boolean;
+    hasNonPoweredOffAlert?: boolean;
   };
   customUrl?: string;
   onTagClick?: (tag: string) => void;
@@ -188,10 +190,20 @@ export function GuestRow(props: GuestRowProps) {
 
   const showAlertHighlight = createMemo(() => {
     if (!props.alertStyles?.hasAlert) return false;
-    if (!isRunning() && props.alertStyles.severity === 'warning') {
+    if (
+      !isRunning() &&
+      props.alertStyles.severity === 'warning' &&
+      props.alertStyles.hasPoweredOffAlert &&
+      !props.alertStyles.hasNonPoweredOffAlert
+    ) {
       return false;
     }
     return true;
+  });
+
+  const alertAccentColor = createMemo(() => {
+    if (!showAlertHighlight()) return undefined;
+    return props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
   });
 
   const drawerDisabled = createMemo(() => !isRunning());
@@ -215,14 +227,15 @@ export function GuestRow(props: GuestRowProps) {
   // Get first cell styling
   const firstCellClass = createMemo(() => {
     const base = 'py-0.5 pr-2 whitespace-nowrap relative';
-    const indent = showAlertHighlight() ? 'pl-6' : 'pl-5';
+    const indent = 'pl-5';
     return `${base} ${indent}`;
   });
 
   // Get row styles including box-shadow for alert border
   const rowStyle = createMemo(() => {
     if (!showAlertHighlight()) return {};
-    const color = props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
+    const color = alertAccentColor();
+    if (!color) return {};
     return {
       'box-shadow': `inset 4px 0 0 0 ${color}`,
     };

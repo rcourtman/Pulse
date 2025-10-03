@@ -1310,14 +1310,11 @@ const Settings: Component = () => {
                                           Backups
                                         </span>
                                       )}
-                                    {node.type === 'pve' &&
-                                      'temperature' in node &&
-                                      node.temperature &&
-                                      node.temperature.available && (
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                                          Temperature
-                                        </span>
-                                      )}
+                                    {node.type === 'pve' && node.temperature?.available && (
+                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                                        Temperature
+                                      </span>
+                                    )}
                                   </div>
                                   <Show
                                     when={
@@ -1845,14 +1842,11 @@ const Settings: Component = () => {
                                           Prune Jobs
                                         </span>
                                       )}
-                                    {node.type === 'pbs' &&
-                                      'temperature' in node &&
-                                      node.temperature &&
-                                      node.temperature.available && (
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                                          Temperature
-                                        </span>
-                                      )}
+                                    {node.type === 'pbs' && node.temperature?.available && (
+                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                                        Temperature
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>

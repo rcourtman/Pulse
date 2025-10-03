@@ -2,21 +2,27 @@ import type { Alert } from '@/types/api';
 
 // Get alert highlighting styles based on active alerts for a resource
 export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, Alert>) => {
-  // Find the highest severity alert for this resource
-  let highestSeverity: 'critical' | 'warning' | null = null;
-  let alertCount = 0;
+  const alertsForResource = Object.values(activeAlerts).filter(
+    (alert) => alert.resourceId === resourceId,
+  );
 
-  Object.values(activeAlerts).forEach((alert) => {
-    if (alert.resourceId === resourceId) {
-      alertCount++;
-      if (
-        alert.level === 'critical' ||
-        (alert.level === 'warning' && highestSeverity !== 'critical')
-      ) {
-        highestSeverity = alert.level;
-      }
+  let highestSeverity: 'critical' | 'warning' | null = null;
+  let hasPoweredOffAlert = false;
+  let hasNonPoweredOffAlert = false;
+
+  alertsForResource.forEach((alert) => {
+    if (alert.level === 'critical' || (alert.level === 'warning' && highestSeverity !== 'critical')) {
+      highestSeverity = alert.level;
+    }
+
+    if (alert.type === 'powered-off') {
+      hasPoweredOffAlert = true;
+    } else {
+      hasNonPoweredOffAlert = true;
     }
   });
+
+  const alertCount = alertsForResource.length;
 
   // Return appropriate styling based on alert severity
   if (highestSeverity === 'critical') {
@@ -24,9 +30,11 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
       rowClass: 'bg-red-50 dark:bg-red-950/30 border-l-4 border-red-500 dark:border-red-400',
       indicatorClass: 'bg-red-500',
       badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      hasAlert: true,
+      hasAlert: alertCount > 0,
       alertCount,
       severity: 'critical' as const,
+      hasPoweredOffAlert,
+      hasNonPoweredOffAlert,
     };
   }
 
@@ -36,9 +44,11 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
         'bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-500 dark:border-yellow-400',
       indicatorClass: 'bg-yellow-500',
       badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      hasAlert: true,
+      hasAlert: alertCount > 0,
       alertCount,
       severity: 'warning' as const,
+      hasPoweredOffAlert,
+      hasNonPoweredOffAlert,
     };
   }
 
@@ -49,6 +59,8 @@ export const getAlertStyles = (resourceId: string, activeAlerts: Record<string, 
     hasAlert: false,
     alertCount: 0,
     severity: null,
+    hasPoweredOffAlert: false,
+    hasNonPoweredOffAlert: false,
   };
 };
 
