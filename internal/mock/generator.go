@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -258,6 +259,9 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 
 	// Generate storage for each node
 	data.Storage = generateStorage(data.Nodes)
+
+	// Generate Ceph cluster data if Ceph-backed storage is present
+	data.CephClusters = generateCephClusters(data.Nodes, data.Storage)
 
 	// Generate PBS instances and backups
 	data.PBSInstances = generatePBSInstances()
@@ -1339,6 +1343,59 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		}
 	}
 
+	if len(clusterNodes) > 0 {
+		nodeNames := make([]string, 0, len(clusterNodes))
+		nodeIDs := make([]string, 0, len(clusterNodes))
+		for _, clusterNode := range clusterNodes {
+			nodeNames = append(nodeNames, clusterNode.Name)
+			nodeIDs = append(nodeIDs, fmt.Sprintf("%s-%s", clusterNode.Instance, clusterNode.Name))
+		}
+
+		cephTotal := int64(120 * 1024 * 1024 * 1024 * 1024) // 120 TiB shared CephFS
+		cephUsed := int64(float64(cephTotal) * (0.52 + rand.Float64()*0.18))
+		storage = append(storage, models.Storage{
+			ID:        fmt.Sprintf("%s-shared-cephfs", clusterNodes[0].Instance),
+			Name:      "cephfs-shared",
+			Node:      "shared",
+			Instance:  clusterNodes[0].Instance,
+			Type:      "cephfs",
+			Status:    "available",
+			Total:     cephTotal,
+			Used:      cephUsed,
+			Free:      cephTotal - cephUsed,
+			Usage:     float64(cephUsed) / float64(cephTotal) * 100,
+			Content:   "images,rootdir,backup",
+			Shared:    true,
+			Enabled:   true,
+			Active:    true,
+			Nodes:     nodeNames,
+			NodeIDs:   nodeIDs,
+			NodeCount: len(nodeNames),
+		})
+
+		rbdTotal := int64(80 * 1024 * 1024 * 1024 * 1024) // 80 TiB shared RBD pool
+		rbdUsed := int64(float64(rbdTotal) * (0.48 + rand.Float64()*0.22))
+		storage = append(storage, models.Storage{
+			ID:        fmt.Sprintf("%s-shared-rbd", clusterNodes[0].Instance),
+			Name:      "ceph-rbd-pool",
+			Node:      "shared",
+			Instance:  clusterNodes[0].Instance,
+			Type:      "rbd",
+			Status:    "available",
+			Total:     rbdTotal,
+			Used:      rbdUsed,
+			Free:      rbdTotal - rbdUsed,
+			Usage:     float64(rbdUsed) / float64(rbdTotal) * 100,
+			Content:   "images,rootdir",
+			Shared:    true,
+			Enabled:   true,
+			Active:    true,
+			Nodes:     nodeNames,
+			NodeIDs:   nodeIDs,
+			NodeCount: len(nodeNames),
+		})
+	}
+
 	// Add a shared storage (NFS or CephFS)
 	if len(nodes) > 1 {
 		sharedTotal := int64(10 * 1024 * 1024 * 1024 * 1024) // 10TB
@@ -1362,6 +1419,153 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	}
 
 	return storage
+}
+
+func generateCephClusters(nodes []models.Node, storage []models.Storage) []models.CephCluster {
+	cephStorageByInstance := make(map[string][]models.Storage)
+	for _, st := range storage {
+		typeLower := strings.ToLower(strings.TrimSpace(st.Type))
+		if typeLower == "cephfs" || typeLower == "rbd" || typeLower == "ceph" {
+			cephStorageByInstance[st.Instance] = append(cephStorageByInstance[st.Instance], st)
+		}
+	}
+
+	if len(cephStorageByInstance) == 0 {
+		return nil
+	}
+
+	nodesByInstance := make(map[string][]models.Node)
+	for _, node := range nodes {
+		nodesByInstance[node.Instance] = append(nodesByInstance[node.Instance], node)
+	}
+
+	var clusters []models.CephCluster
+	for instanceName, cephStorages := range cephStorageByInstance {
+		instanceNodes := nodesByInstance[instanceName]
+		uniqueNodeNames := make(map[string]struct{})
+		for _, node := range instanceNodes {
+			if node.Name != "" {
+				uniqueNodeNames[node.Name] = struct{}{}
+			}
+		}
+
+		var totalBytes int64
+		var usedBytes int64
+		for _, st := range cephStorages {
+			totalBytes += st.Total
+			usedBytes += st.Used
+		}
+		if totalBytes == 0 {
+			totalBytes = int64(120 * 1024 * 1024 * 1024 * 1024)
+		}
+		if usedBytes == 0 {
+			usedBytes = int64(float64(totalBytes) * 0.52)
+		}
+		availableBytes := totalBytes - usedBytes
+		usagePercent := float64(usedBytes) / float64(totalBytes) * 100
+
+		health := "HEALTH_OK"
+		healthMessage := ""
+		if rand.Float64() < 0.2 {
+			health = "HEALTH_WARN"
+			healthMessage = "1 PG degraded"
+		}
+
+		pools := make([]models.CephPool, 0, len(cephStorages))
+		for idx, st := range cephStorages {
+			percent := 0.0
+			if st.Total > 0 {
+				percent = float64(st.Used) / float64(st.Total) * 100
+			}
+			poolName := st.Name
+			if poolName == "" {
+				if idx == 0 {
+					poolName = "rbd"
+				} else if idx == 1 {
+					poolName = "cephfs-data"
+				} else {
+					poolName = fmt.Sprintf("pool-%d", idx+1)
+				}
+			}
+			pools = append(pools, models.CephPool{
+				ID:             idx + 1,
+				Name:           poolName,
+				StoredBytes:    st.Used,
+				AvailableBytes: st.Free,
+				Objects:        int64(1_200_000 + rand.Intn(800_000)),
+				PercentUsed:    percent,
+			})
+		}
+
+		numMons := 1
+		if len(uniqueNodeNames) >= 3 {
+			numMons = 3
+		} else if len(uniqueNodeNames) == 2 {
+			numMons = 2
+		}
+
+		numMgrs := 1
+		if len(uniqueNodeNames) > 1 {
+			numMgrs = 2
+		}
+
+		numOSDs := maxInt(len(uniqueNodeNames)*3, 6)
+		numOSDsUp := numOSDs
+		if health != "HEALTH_OK" && numOSDsUp > 0 {
+			numOSDsUp--
+		}
+
+		services := []models.CephServiceStatus{
+			{Type: "mon", Running: numMons, Total: numMons},
+			{Type: "mgr", Running: numMgrs, Total: numMgrs},
+		}
+
+		if len(uniqueNodeNames) > 1 {
+			mdsRunning := 2
+			mdsTotal := 2
+			if rand.Float64() < 0.25 {
+				mdsRunning = 1
+			}
+			mds := models.CephServiceStatus{Type: "mds", Running: mdsRunning, Total: mdsTotal}
+			if mdsRunning < mdsTotal {
+				mds.Message = "1 standby"
+			}
+			services = append(services, mds)
+		}
+
+		cluster := models.CephCluster{
+			ID:             fmt.Sprintf("%s-ceph", instanceName),
+			Instance:       instanceName,
+			Name:           fmt.Sprintf("%s Ceph", strings.Title(strings.ReplaceAll(instanceName, "-", " "))),
+			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%012d", rand.Intn(1_000_000_000_000)),
+			Health:         health,
+			HealthMessage:  healthMessage,
+			TotalBytes:     totalBytes,
+			UsedBytes:      usedBytes,
+			AvailableBytes: availableBytes,
+			UsagePercent:   usagePercent,
+			NumMons:        numMons,
+			NumMgrs:        numMgrs,
+			NumOSDs:        numOSDs,
+			NumOSDsUp:      numOSDsUp,
+			NumOSDsIn:      numOSDs,
+			NumPGs:         512 + rand.Intn(256),
+			Pools:          pools,
+			Services:       services,
+			LastUpdated:    time.Now().Add(-time.Duration(rand.Intn(180)) * time.Second),
+		}
+
+		clusters = append(clusters, cluster)
+	}
+
+	return clusters
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // generateBackups generates mock backup data for VMs and containers
