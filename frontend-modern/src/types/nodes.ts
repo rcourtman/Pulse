@@ -1,3 +1,5 @@
+import type { Temperature } from '@/types/api';
+
 // Node configuration types
 
 export interface ClusterEndpoint {
@@ -52,6 +54,7 @@ export interface PBSNodeConfig {
 export type NodeConfig = (PVENodeConfig | PBSNodeConfig) & {
   type: 'pve' | 'pbs';
   status?: 'connected' | 'disconnected' | 'error' | 'pending';
+  temperature?: Temperature;
 };
 
 export interface NodesResponse {

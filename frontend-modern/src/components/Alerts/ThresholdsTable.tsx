@@ -578,7 +578,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     // Find the resource - could be a node, PBS server, or guest
     const nodes = nodesWithOverrides();
     const pbsServers = pbsServersWithOverrides();
-    const guests = guestsWithOverrides();
+    const guests = Object.values(guestsGroupedByNode()).flat();
     const resource = [...nodes, ...pbsServers, ...guests].find((r) => r.id === resourceId);
     if (!resource || (resource.type !== 'node' && resource.type !== 'pbs' && resource.type !== 'guest')) return;
 

@@ -288,7 +288,7 @@ export function GuestURLs(props: GuestURLsProps) {
                   when={Object.keys(groupedGuests()).length === 0}
                   fallback={
                     <For
-                      each={Object.entries(groupedGuests()).sort(([instanceIdA, guestsA], [instanceIdB, guestsB]) => {
+                      each={Object.entries(groupedGuests()).sort(([, guestsA], [, guestsB]) => {
                         // Sort by node hostname for display, not instance ID
                         const nodeA = guestsA[0]?.node || '';
                         const nodeB = guestsB[0]?.node || '';
