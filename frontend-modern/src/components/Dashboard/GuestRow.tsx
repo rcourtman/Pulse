@@ -36,6 +36,10 @@ interface GuestRowProps {
     severity: 'critical' | 'warning' | null;
     hasPoweredOffAlert?: boolean;
     hasNonPoweredOffAlert?: boolean;
+    hasUnacknowledgedAlert?: boolean;
+    unacknowledgedCount?: number;
+    acknowledgedCount?: number;
+    hasAcknowledgedOnlyAlert?: boolean;
   };
   customUrl?: string;
   onTagClick?: (tag: string) => void;
@@ -188,7 +192,8 @@ export function GuestRow(props: GuestRowProps) {
     }
   };
 
-  const showAlertHighlight = createMemo(() => !!props.alertStyles?.hasAlert);
+  const showAlertHighlight = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);
+  const hasAcknowledgedOnlyAlert = createMemo(() => !!props.alertStyles?.hasAcknowledgedOnlyAlert);
 
   const alertAccentColor = createMemo(() => {
     if (!showAlertHighlight()) return undefined;
@@ -269,6 +274,12 @@ export function GuestRow(props: GuestRowProps) {
               activeSearch={props.activeSearch}
             />
           </div>
+
+          <Show when={hasAcknowledgedOnlyAlert()}>
+            <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+              Ack
+            </span>
+          </Show>
         </div>
       </td>
 
