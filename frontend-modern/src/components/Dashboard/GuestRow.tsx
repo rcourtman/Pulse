@@ -6,6 +6,7 @@ import { IOMetric } from './IOMetric';
 import { TagBadges } from './TagBadges';
 import { DiskList } from './DiskList';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
+import { isGuestRunning, shouldDisplayGuestMetrics } from '@/utils/status';
 
 type Guest = VM | Container;
 
@@ -152,12 +153,9 @@ export function GuestRow(props: GuestRowProps) {
     return (props.guest.disk.used / props.guest.disk.total) * 100;
   });
 
-  const isRunning = createMemo(() => {
-    if (props.parentNodeOnline === false) {
-      return false;
-    }
-    return props.guest.status === 'running';
-  });
+  const parentOnline = createMemo(() => props.parentNodeOnline !== false);
+  const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
+  const showGuestMetrics = createMemo(() => shouldDisplayGuestMetrics(props.guest, parentOnline()));
 
   // Get helpful tooltip for disk status
   const getDiskStatusTooltip = () => {
@@ -196,7 +194,7 @@ export function GuestRow(props: GuestRowProps) {
     return true;
   });
 
-  const drawerDisabled = createMemo(() => props.parentNodeOnline === false || !isRunning());
+  const drawerDisabled = createMemo(() => !isRunning());
 
   // Get row styling - include alert styles if present
   const rowClass = createMemo(() => {
@@ -303,10 +301,7 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* CPU */}
       <td class="py-0.5 px-2 w-[140px]">
-        <Show
-          when={isRunning() && props.parentNodeOnline !== false}
-          fallback={<span class="text-sm text-gray-400">-</span>}
-        >
+        <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
           <MetricBar
             value={cpuPercent()}
             label={`${cpuPercent().toFixed(0)}%`}
@@ -323,10 +318,7 @@ export function GuestRow(props: GuestRowProps) {
       {/* Memory */}
       <td class="py-0.5 px-2 w-[140px]">
         <div title={memoryTooltip() ?? undefined}>
-          <Show
-            when={isRunning() && props.parentNodeOnline !== false}
-            fallback={<span class="text-sm text-gray-400">-</span>}
-          >
+          <Show when={showGuestMetrics()} fallback={<span class="text-sm text-gray-400">-</span>}>
             <MetricBar
               value={memPercent()}
               label={`${memPercent().toFixed(0)}%`}
@@ -341,8 +333,7 @@ export function GuestRow(props: GuestRowProps) {
       <td class="py-0.5 px-2 w-[140px]">
         <Show
           when={
-            isRunning() &&
-            props.parentNodeOnline !== false &&
+            showGuestMetrics() &&
             props.guest.disk &&
             props.guest.disk.total > 0 &&
             diskPercent() !== -1
