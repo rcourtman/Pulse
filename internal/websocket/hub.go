@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -146,6 +147,90 @@ type Client struct {
 	send     chan []byte
 	id       string
 	lastPing time.Time
+}
+
+// cloneAlertData returns a broadcast-safe copy of alert data to avoid data races when
+// downstream sanitization/encoding happens concurrently with alert manager mutations.
+func cloneAlertData(alert interface{}) interface{} {
+	switch a := alert.(type) {
+	case *alerts.Alert:
+		cloned := cloneAlert(a)
+		return cloned
+	case alerts.Alert:
+		cloned := cloneAlert(&a)
+		return cloned
+	default:
+		return alert
+	}
+}
+
+// cloneAlert performs a deep copy of the mutable fields within alerts.Alert.
+func cloneAlert(src *alerts.Alert) alerts.Alert {
+	if src == nil {
+		return alerts.Alert{}
+	}
+	clone := *src
+
+	if src.AckTime != nil {
+		t := *src.AckTime
+		clone.AckTime = &t
+	}
+
+	if len(src.EscalationTimes) > 0 {
+		clone.EscalationTimes = append([]time.Time(nil), src.EscalationTimes...)
+	}
+
+	if src.Metadata != nil {
+		clone.Metadata = cloneMetadata(src.Metadata)
+	}
+
+	return clone
+}
+
+// cloneMetadata creates a deep copy of alert metadata to detach from shared maps/slices.
+func cloneMetadata(src map[string]interface{}) map[string]interface{} {
+	if src == nil {
+		return nil
+	}
+
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = cloneMetadataValue(v)
+	}
+	return dst
+}
+
+func cloneMetadataValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		return cloneMetadata(v)
+	case map[string]string:
+		m := make(map[string]interface{}, len(v))
+		for key, val := range v {
+			m[key] = val
+		}
+		return m
+	case []interface{}:
+		arr := make([]interface{}, len(v))
+		for i, elem := range v {
+			arr[i] = cloneMetadataValue(elem)
+		}
+		return arr
+	case []string:
+		arr := make([]string, len(v))
+		copy(arr, v)
+		return arr
+	case []int:
+		arr := make([]int, len(v))
+		copy(arr, v)
+		return arr
+	case []float64:
+		arr := make([]float64, len(v))
+		copy(arr, v)
+		return arr
+	default:
+		return v
+	}
 }
 
 // Hub maintains active WebSocket clients and broadcasts messages
@@ -350,7 +435,7 @@ func (h *Hub) BroadcastAlert(alert interface{}) {
 	log.Info().Interface("alert", alert).Msg("Broadcasting alert to WebSocket clients")
 	msg := Message{
 		Type: "alert",
-		Data: alert,
+		Data: cloneAlertData(alert),
 	}
 	h.BroadcastMessage(msg)
 }
