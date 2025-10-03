@@ -301,27 +301,37 @@ export function GuestRow(props: GuestRowProps) {
 
       {/* CPU */}
       <td class="py-0.5 px-2 w-[140px]">
-        <MetricBar
-          value={cpuPercent()}
-          label={`${cpuPercent().toFixed(0)}%`}
-          sublabel={
-            props.guest.cpus
-              ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores`
-              : undefined
-          }
-          type="cpu"
-        />
+        <Show
+          when={isRunning() && props.parentNodeOnline !== false}
+          fallback={<span class="text-sm text-gray-400">-</span>}
+        >
+          <MetricBar
+            value={cpuPercent()}
+            label={`${cpuPercent().toFixed(0)}%`}
+            sublabel={
+              props.guest.cpus
+                ? `${((props.guest.cpu || 0) * props.guest.cpus).toFixed(1)}/${props.guest.cpus} cores`
+                : undefined
+            }
+            type="cpu"
+          />
+        </Show>
       </td>
 
       {/* Memory */}
       <td class="py-0.5 px-2 w-[140px]">
         <div title={memoryTooltip() ?? undefined}>
-          <MetricBar
-            value={memPercent()}
-            label={`${memPercent().toFixed(0)}%`}
-            sublabel={memoryUsageLabel()}
-            type="memory"
-          />
+          <Show
+            when={isRunning() && props.parentNodeOnline !== false}
+            fallback={<span class="text-sm text-gray-400">-</span>}
+          >
+            <MetricBar
+              value={memPercent()}
+              label={`${memPercent().toFixed(0)}%`}
+              sublabel={memoryUsageLabel()}
+              type="memory"
+            />
+          </Show>
         </div>
       </td>
 
