@@ -749,9 +749,13 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 
 	// Create a map for quick lookup of cluster storage config
 	clusterStorageMap := make(map[string]proxmox.Storage)
+	cephDetected := false
 	if clusterStorageAvailable {
 		for _, cs := range clusterStorages {
 			clusterStorageMap[cs.Storage] = cs
+			if !cephDetected && isCephStorageType(cs.Type) {
+				cephDetected = true
+			}
 		}
 	}
 
@@ -1093,8 +1097,20 @@ func (m *Monitor) pollStorageWithNodesOptimized(ctx context.Context, instanceNam
 		m.alertManager.CheckStorage(storage)
 	}
 
+	if !cephDetected {
+		for _, storage := range allStorage {
+			if isCephStorageType(storage.Type) {
+				cephDetected = true
+				break
+			}
+		}
+	}
+
 	// Update state with all storage
 	m.state.UpdateStorageForInstance(instanceName, allStorage)
+
+	// Poll Ceph cluster data after refreshing storage information
+	m.pollCephCluster(ctx, instanceName, client, cephDetected)
 
 	duration := time.Since(startTime)
 

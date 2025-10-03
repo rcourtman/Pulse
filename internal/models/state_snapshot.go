@@ -8,6 +8,7 @@ type StateSnapshot struct {
 	VMs              []VM            `json:"vms"`
 	Containers       []Container     `json:"containers"`
 	Storage          []Storage       `json:"storage"`
+	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
 	PBSInstances     []PBSInstance   `json:"pbs"`
 	PBSBackups       []PBSBackup     `json:"pbsBackups"`
@@ -32,6 +33,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		VMs:           append([]VM{}, s.VMs...),
 		Containers:    append([]Container{}, s.Containers...),
 		Storage:       append([]Storage{}, s.Storage...),
+		CephClusters:  append([]CephCluster{}, s.CephClusters...),
 		PhysicalDisks: append([]PhysicalDisk{}, s.PhysicalDisks...),
 		PBSInstances:  append([]PBSInstance{}, s.PBSInstances...),
 		PBSBackups:    append([]PBSBackup{}, s.PBSBackups...),
@@ -83,11 +85,18 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		storage[i] = st.ToFrontend()
 	}
 
+	// Convert Ceph clusters
+	cephClusters := make([]CephClusterFrontend, len(s.CephClusters))
+	for i, cluster := range s.CephClusters {
+		cephClusters[i] = cluster.ToFrontend()
+	}
+
 	return StateFrontend{
 		Nodes:            nodes,
 		VMs:              vms,
 		Containers:       containers,
 		Storage:          storage,
+		CephClusters:     cephClusters,
 		PhysicalDisks:    s.PhysicalDisks,
 		PBS:              s.PBSInstances,
 		ActiveAlerts:     s.ActiveAlerts,

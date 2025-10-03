@@ -643,6 +643,34 @@ func (cc *ClusterClient) GetStorageContent(ctx context.Context, node, storage st
 	return result, err
 }
 
+// GetCephStatus returns Ceph cluster status information with failover support.
+func (cc *ClusterClient) GetCephStatus(ctx context.Context) (*CephStatus, error) {
+	var result *CephStatus
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		status, err := client.GetCephStatus(ctx)
+		if err != nil {
+			return err
+		}
+		result = status
+		return nil
+	})
+	return result, err
+}
+
+// GetCephDF returns Ceph capacity information with failover support.
+func (cc *ClusterClient) GetCephDF(ctx context.Context) (*CephDF, error) {
+	var result *CephDF
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		df, err := client.GetCephDF(ctx)
+		if err != nil {
+			return err
+		}
+		result = df
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
 	var result []Snapshot
 	err := cc.executeWithFailover(ctx, func(client *Client) error {

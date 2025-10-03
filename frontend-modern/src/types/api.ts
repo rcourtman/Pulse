@@ -5,6 +5,7 @@ export interface State {
   vms: VM[];
   containers: Container[];
   storage: Storage[];
+  cephClusters: CephCluster[];
   physicalDisks: PhysicalDisk[];
   pbs: PBSInstance[];
   pbsBackups: PBSBackup[];
@@ -130,6 +131,44 @@ export interface Storage {
   pbsNames?: string[];
   // ZFS pool status
   zfsPool?: ZFSPool;
+}
+
+export interface CephCluster {
+  id: string;
+  instance: string;
+  name: string;
+  fsid?: string;
+  health: string;
+  healthMessage?: string;
+  totalBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+  usagePercent: number;
+  numMons: number;
+  numMgrs: number;
+  numOsds: number;
+  numOsdsUp: number;
+  numOsdsIn: number;
+  numPGs: number;
+  pools?: CephPool[];
+  services?: CephServiceStatus[];
+  lastUpdated: number;
+}
+
+export interface CephPool {
+  id: number;
+  name: string;
+  storedBytes: number;
+  availableBytes: number;
+  objects: number;
+  percentUsed: number;
+}
+
+export interface CephServiceStatus {
+  type: string;
+  running: number;
+  total: number;
+  message?: string;
 }
 
 export interface ZFSPool {

@@ -14,6 +14,7 @@ type State struct {
 	VMs              []VM            `json:"vms"`
 	Containers       []Container     `json:"containers"`
 	Storage          []Storage       `json:"storage"`
+	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
 	PBSInstances     []PBSInstance   `json:"pbs"`
 	PBSBackups       []PBSBackup     `json:"pbsBackups"`
@@ -174,6 +175,47 @@ type ZFSDevice struct {
 	ReadErrors     int64  `json:"readErrors"`
 	WriteErrors    int64  `json:"writeErrors"`
 	ChecksumErrors int64  `json:"checksumErrors"`
+}
+
+// CephCluster represents the health and capacity information for a Ceph cluster
+type CephCluster struct {
+	ID             string              `json:"id"`
+	Instance       string              `json:"instance"`
+	Name           string              `json:"name"`
+	FSID           string              `json:"fsid,omitempty"`
+	Health         string              `json:"health"`
+	HealthMessage  string              `json:"healthMessage,omitempty"`
+	TotalBytes     int64               `json:"totalBytes"`
+	UsedBytes      int64               `json:"usedBytes"`
+	AvailableBytes int64               `json:"availableBytes"`
+	UsagePercent   float64             `json:"usagePercent"`
+	NumMons        int                 `json:"numMons"`
+	NumMgrs        int                 `json:"numMgrs"`
+	NumOSDs        int                 `json:"numOsds"`
+	NumOSDsUp      int                 `json:"numOsdsUp"`
+	NumOSDsIn      int                 `json:"numOsdsIn"`
+	NumPGs         int                 `json:"numPGs"`
+	Pools          []CephPool          `json:"pools,omitempty"`
+	Services       []CephServiceStatus `json:"services,omitempty"`
+	LastUpdated    time.Time           `json:"lastUpdated"`
+}
+
+// CephPool represents usage statistics for a Ceph pool
+type CephPool struct {
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	StoredBytes    int64   `json:"storedBytes"`
+	AvailableBytes int64   `json:"availableBytes"`
+	Objects        int64   `json:"objects"`
+	PercentUsed    float64 `json:"percentUsed"`
+}
+
+// CephServiceStatus summarises daemon health for a Ceph service type (e.g. mon, mgr)
+type CephServiceStatus struct {
+	Type    string `json:"type"`
+	Running int    `json:"running"`
+	Total   int    `json:"total"`
+	Message string `json:"message,omitempty"`
 }
 
 // PhysicalDisk represents a physical disk on a node
@@ -690,6 +732,39 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 	})
 
 	s.Storage = newStorage
+	s.LastUpdate = time.Now()
+}
+
+// UpdateCephClustersForInstance updates Ceph cluster information for a specific instance
+func (s *State) UpdateCephClustersForInstance(instanceName string, clusters []CephCluster) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Preserve clusters from other instances
+	filtered := make([]CephCluster, 0, len(s.CephClusters))
+	for _, cluster := range s.CephClusters {
+		if cluster.Instance != instanceName {
+			filtered = append(filtered, cluster)
+		}
+	}
+
+	// Add updated clusters (if any) for this instance
+	if len(clusters) > 0 {
+		filtered = append(filtered, clusters...)
+	}
+
+	// Sort for stable ordering in UI
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].Instance == filtered[j].Instance {
+			if filtered[i].Name == filtered[j].Name {
+				return filtered[i].ID < filtered[j].ID
+			}
+			return filtered[i].Name < filtered[j].Name
+		}
+		return filtered[i].Instance < filtered[j].Instance
+	})
+
+	s.CephClusters = filtered
 	s.LastUpdate = time.Now()
 }
 
