@@ -1964,12 +1964,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 							for _, fs := range fsInfo {
 								// Skip special filesystems and mounts
 								skipReasons := []string{}
+								reasonReadOnly := ""
 								shouldSkip := false
 
 								// Check filesystem type
 								fsTypeLower := strings.ToLower(fs.Type)
 								if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
 									skipReasons = append(skipReasons, fmt.Sprintf("read-only-%s", reason))
+									reasonReadOnly = reason
 									shouldSkip = true
 								}
 								if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
@@ -2004,6 +2006,26 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								}
 
 								if shouldSkip {
+									if reasonReadOnly != "" && fs.TotalBytes > 0 {
+										individualDisks = append(individualDisks, models.Disk{
+											Total:      int64(fs.TotalBytes),
+											Used:       int64(fs.UsedBytes),
+											Free:       int64(fs.TotalBytes - fs.UsedBytes),
+											Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+											Mountpoint: fs.Mountpoint,
+											Type:       fs.Type,
+											Device:     fs.Disk,
+										})
+										log.Debug().
+											Str("instance", instanceName).
+											Str("vm", res.Name).
+											Int("vmid", res.VMID).
+											Str("mountpoint", fs.Mountpoint).
+											Str("type", fs.Type).
+											Float64("total_gb", float64(fs.TotalBytes)/1073741824).
+											Float64("used_gb", float64(fs.UsedBytes)/1073741824).
+											Msg("Tracking read-only filesystem separately from disk aggregation")
+									}
 									skippedFS = append(skippedFS, fmt.Sprintf("%s(%s,%s)",
 										fs.Mountpoint, fs.Type, strings.Join(skipReasons, ",")))
 									continue
