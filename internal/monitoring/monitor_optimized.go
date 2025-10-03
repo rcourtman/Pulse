@@ -316,36 +316,47 @@ func (m *Monitor) pollVMsWithNodesOptimized(ctx context.Context, instanceName st
 								// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
 								isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
 
-					if !isWindowsDrive {
-						if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
-							log.Debug().
-								Str("vm", vm.Name).
-								Str("mountpoint", fs.Mountpoint).
-								Str("type", fs.Type).
-								Str("skipReason", reason).
-								Uint64("total", fs.TotalBytes).
-								Uint64("used", fs.UsedBytes).
-								Msg("Skipping read-only filesystem from guest agent")
-							continue
-						}
+								if !isWindowsDrive {
+									if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
+										if fs.TotalBytes > 0 {
+											individualDisks = append(individualDisks, models.Disk{
+												Total:      int64(fs.TotalBytes),
+												Used:       int64(fs.UsedBytes),
+												Free:       int64(fs.TotalBytes - fs.UsedBytes),
+												Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
+												Mountpoint: fs.Mountpoint,
+												Type:       fs.Type,
+												Device:     fs.Disk,
+											})
+										}
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("type", fs.Type).
+											Str("skipReason", reason).
+											Uint64("total", fs.TotalBytes).
+											Uint64("used", fs.UsedBytes).
+											Msg("Skipping read-only filesystem from guest agent")
+										continue
+									}
 
-						if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
-							strings.HasPrefix(fs.Mountpoint, "/dev") ||
-							strings.HasPrefix(fs.Mountpoint, "/proc") ||
-							strings.HasPrefix(fs.Mountpoint, "/sys") ||
-							strings.HasPrefix(fs.Mountpoint, "/run") ||
-							fs.Mountpoint == "/boot/efi" ||
-							fs.Mountpoint == "System Reserved" ||
-							strings.Contains(fs.Mountpoint, "System Reserved") ||
-							strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
-							log.Debug().
-								Str("vm", vm.Name).
-								Str("mountpoint", fs.Mountpoint).
-								Str("type", fs.Type).
-								Msg("Skipping special filesystem")
-							continue
-						}
-					}
+									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
+										strings.HasPrefix(fs.Mountpoint, "/dev") ||
+										strings.HasPrefix(fs.Mountpoint, "/proc") ||
+										strings.HasPrefix(fs.Mountpoint, "/sys") ||
+										strings.HasPrefix(fs.Mountpoint, "/run") ||
+										fs.Mountpoint == "/boot/efi" ||
+										fs.Mountpoint == "System Reserved" ||
+										strings.Contains(fs.Mountpoint, "System Reserved") ||
+										strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
+										log.Debug().
+											Str("vm", vm.Name).
+											Str("mountpoint", fs.Mountpoint).
+											Str("type", fs.Type).
+											Msg("Skipping special filesystem")
+										continue
+									}
+								}
 
 								// Skip if we've already seen this device (duplicate mount point)
 								if fs.Disk != "" && seenDevices[fs.Disk] {
