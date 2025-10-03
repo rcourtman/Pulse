@@ -15,6 +15,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		ID:               n.ID,
 		Node:             n.Name,
 		Name:             n.Name,
+		DisplayName:      n.DisplayName,
 		Instance:         n.Instance,
 		Host:             n.Host,
 		Status:           n.Status,
@@ -47,6 +48,10 @@ func (n Node) ToFrontend() NodeFrontend {
 	// Include temperature data if available
 	if n.Temperature != nil && n.Temperature.Available {
 		nf.Temperature = n.Temperature
+	}
+
+	if nf.DisplayName == "" {
+		nf.DisplayName = nf.Name
 	}
 
 	return nf

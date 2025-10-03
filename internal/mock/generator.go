@@ -305,6 +305,7 @@ func generateNodes(config MockConfig) []models.Node {
 
 		node := generateNode(nodeName, isHighLoad, config)
 		node.Instance = "mock-cluster" // Part of cluster
+		node.DisplayName = fmt.Sprintf("%s (%s)", node.Instance, nodeName)
 		node.IsClusterMember = true
 		node.ClusterName = "mock-cluster"
 		// ID format matches real system: instance-nodename
@@ -347,6 +348,7 @@ func generateNodes(config MockConfig) []models.Node {
 
 		node := generateNode(nodeName, isHighLoad, config)
 		node.Instance = nodeName // Standalone - instance matches name
+		node.DisplayName = node.Instance
 		node.IsClusterMember = false
 		node.ClusterName = ""             // Empty for standalone
 		node.ConnectionHealth = "healthy" // Standalone nodes are healthy if online
@@ -396,6 +398,7 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 
 	return models.Node{
 		Name:          name,
+		DisplayName:   name,
 		Instance:      "", // Set by generateNodes based on cluster/standalone
 		Type:          "pve",
 		Status:        "online",

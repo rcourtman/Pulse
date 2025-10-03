@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import type { Node } from '@/types/api';
+import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 
 interface NodeGroupHeaderProps {
   node: Node;
@@ -9,6 +10,8 @@ interface NodeGroupHeaderProps {
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
   const isOnline = () => props.node.status === 'online' && (props.node.uptime || 0) > 0;
   const nodeUrl = () => props.node.host || `https://${props.node.name}:8006`;
+  const displayName = () => getNodeDisplayName(props.node);
+  const showActualName = () => hasAlternateDisplayName(props.node);
 
   return (
     <tr class="bg-gray-50 dark:bg-gray-900/40">
@@ -29,8 +32,11 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
             class="transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
             title={`Open ${props.node.name} web interface`}
           >
-            {props.node.name}
+            {displayName()}
           </a>
+          <Show when={showActualName()}>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">({props.node.name})</span>
+          </Show>
 
           <Show when={props.node.isClusterMember !== undefined}>
             <span
