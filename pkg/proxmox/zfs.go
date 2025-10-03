@@ -3,6 +3,7 @@ package proxmox
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
@@ -150,8 +151,34 @@ func convertDeviceRecursive(dev ZFSPoolDevice) []ZFSDevice {
 		}
 	}
 
-	// Add this device if it has errors or is not healthy (but skip SPARE devices unless they have errors)
-	if (dev.State != "ONLINE" && dev.State != "SPARE") || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
+	lowerName := strings.ToLower(strings.TrimSpace(dev.Name))
+	isSpare := lowerName == "spares" || strings.HasPrefix(lowerName, "spare")
+	if isSpare {
+		if deviceType == "vdev" {
+			deviceType = "spare"
+		} else if dev.Leaf == 1 {
+			deviceType = "spare"
+		}
+	}
+
+	state := strings.ToUpper(strings.TrimSpace(dev.State))
+	if state == "" {
+		state = "UNKNOWN"
+	}
+
+	healthyStates := map[string]bool{
+		"ONLINE": true,
+		"SPARE":  true,
+		"AVAIL":  true,
+		"INUSE":  true,
+	}
+
+	if state == "UNKNOWN" && isSpare {
+		healthyStates[state] = true
+	}
+
+	// Add this device if it has errors or is not healthy (but skip healthy spares)
+	if !healthyStates[state] || dev.Read > 0 || dev.Write > 0 || dev.Cksum > 0 {
 		devices = append(devices, ZFSDevice{
 			Name:           dev.Name,
 			Type:           deviceType,
