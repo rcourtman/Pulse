@@ -200,9 +200,10 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 				vm.Memory.Used = 0
 				vm.Memory.Usage = 0
 				vm.Memory.Free = vm.Memory.Total
+				vm.Memory.SwapUsed = 0
 				vm.Disk.Used = 0
 				vm.Disk.Free = vm.Disk.Total
-				vm.Disk.Usage = 0
+				vm.Disk.Usage = -1
 				vm.NetworkIn = 0
 				vm.NetworkOut = 0
 				vm.DiskRead = 0
@@ -222,9 +223,10 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 				lxc.Memory.Used = 0
 				lxc.Memory.Usage = 0
 				lxc.Memory.Free = lxc.Memory.Total
+				lxc.Memory.SwapUsed = 0
 				lxc.Disk.Used = 0
 				lxc.Disk.Free = lxc.Disk.Total
-				lxc.Disk.Usage = 0
+				lxc.Disk.Usage = -1
 				lxc.NetworkIn = 0
 				lxc.NetworkOut = 0
 				lxc.DiskRead = 0
@@ -668,7 +670,7 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	osName, osVersion := generateGuestOSMetadata()
 	ipAddresses, networkIfaces := generateGuestNetworkInfo()
 
-	return models.VM{
+	vm := models.VM{
 		Name:              name,
 		VMID:              vmid,
 		Node:              nodeName,
@@ -693,6 +695,24 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 		OSVersion:         osVersion,
 		NetworkInterfaces: networkIfaces,
 	}
+
+	if status != "running" {
+		vm.CPU = 0
+		vm.Memory.Usage = 0
+		vm.Memory.SwapUsed = 0
+		vm.Memory.Used = 0
+		vm.Memory.Free = vm.Memory.Total
+		vm.Disk.Used = 0
+		vm.Disk.Free = vm.Disk.Total
+		vm.Disk.Usage = -1
+		vm.NetworkIn = 0
+		vm.NetworkOut = 0
+		vm.DiskRead = 0
+		vm.DiskWrite = 0
+		vm.Uptime = 0
+	}
+
+	return vm
 }
 
 func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
@@ -838,7 +858,7 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 		ctID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
 	}
 
-	return models.Container{
+	ct := models.Container{
 		Name:     name,
 		VMID:     vmid,
 		Node:     nodeName,
@@ -862,6 +882,24 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 		ID:         ctID,
 		Tags:       generateTags(),
 	}
+
+	if status != "running" {
+		ct.CPU = 0
+		ct.Memory.Usage = 0
+		ct.Memory.SwapUsed = 0
+		ct.Memory.Used = 0
+		ct.Memory.Free = ct.Memory.Total
+		ct.Disk.Used = 0
+		ct.Disk.Free = ct.Disk.Total
+		ct.Disk.Usage = -1
+		ct.NetworkIn = 0
+		ct.NetworkOut = 0
+		ct.DiskRead = 0
+		ct.DiskWrite = 0
+		ct.Uptime = 0
+	}
+
+	return ct
 }
 
 func generateGuestName(prefix string) string {
