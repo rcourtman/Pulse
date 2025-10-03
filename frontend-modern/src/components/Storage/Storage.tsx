@@ -100,30 +100,81 @@ const Storage: Component = () => {
         }
 
         if (!storageMap.has(key)) {
+          const backendNodes = (s.nodes ?? []).filter((node): node is string => Boolean(node));
+          const backendNodeIds = ((s as { nodeIds?: string[] }).nodeIds ?? []).filter(
+            (id): id is string => Boolean(id),
+          );
+
+          const rawNodes = backendNodes.length > 0 ? backendNodes : [s.node].filter(Boolean);
+          const uniqueNodes = Array.from(new Set(rawNodes));
+          const normalizedInitialNodes =
+            uniqueNodes.length > 1 ? uniqueNodes.filter((node) => node !== 'cluster') : uniqueNodes;
+          const nodesForStorage =
+            normalizedInitialNodes.length > 0 ? normalizedInitialNodes : uniqueNodes;
+          const initialNodeIds = Array.from(
+            new Set(backendNodeIds.length > 0 ? backendNodeIds : [nodeId].filter(Boolean)),
+          );
+
+          const initialPBSNames =
+            s.type === 'pbs'
+              ? Array.from(new Set((s.pbsNames ?? [s.name]).filter((name): name is string => Boolean(name))))
+              : undefined;
+
           // First occurrence - store it with node list
           storageMap.set(key, {
             ...s,
             name: s.type === 'pbs' ? 'PBS Storage' : s.name, // Generic name for PBS
-            nodes: [s.node],
-            nodeIds: [nodeId],
-            nodeCount: 1,
-            pbsNames: s.type === 'pbs' ? [s.name] : undefined, // Track individual PBS names
+            nodes: nodesForStorage,
+            nodeIds: initialNodeIds,
+            nodeCount: nodesForStorage.length,
+            pbsNames: initialPBSNames, // Track individual PBS names
           });
         } else {
           // Duplicate - just add to node list
           const existing = storageMap.get(key);
-          if (!existing.nodes.includes(s.node)) {
-            existing.nodes.push(s.node);
-            existing.nodeCount = existing.nodes.length;
-          }
+
+          const backendNodes = (s.nodes ?? []).filter((node): node is string => Boolean(node));
+          const rawCandidateNodes =
+            backendNodes.length > 0 ? backendNodes : [s.node].filter(Boolean);
+          const candidateNodes =
+            rawCandidateNodes.length > 1
+              ? rawCandidateNodes.filter((node) => node !== 'cluster')
+              : rawCandidateNodes;
+          candidateNodes.forEach((node) => {
+            if (!existing.nodes.includes(node)) {
+              existing.nodes.push(node);
+            }
+          });
+          existing.nodeCount = existing.nodes.length;
+
+          const backendNodeIds = ((s as { nodeIds?: string[] }).nodeIds ?? []).filter(
+            (id): id is string => Boolean(id),
+          );
+          const candidateNodeIds =
+            backendNodeIds.length > 0 ? backendNodeIds : [nodeId].filter(Boolean);
+
           if (!existing.nodeIds) {
-            existing.nodeIds = [nodeId];
-          } else if (!existing.nodeIds.includes(nodeId)) {
-            existing.nodeIds.push(nodeId);
+            existing.nodeIds = [];
           }
-          // For PBS, collect all namespace names
-          if (s.type === 'pbs' && existing.pbsNames && !existing.pbsNames.includes(s.name)) {
-            existing.pbsNames.push(s.name);
+          candidateNodeIds.forEach((id) => {
+            if (!existing.nodeIds!.includes(id)) {
+              existing.nodeIds!.push(id);
+            }
+          });
+
+          // For PBS, collect all namespace names (merging backend-provided data)
+          if (s.type === 'pbs') {
+            if (!existing.pbsNames) {
+              existing.pbsNames = [];
+            }
+            const incomingPBSNames = (s.pbsNames ?? [s.name]).filter(
+              (name): name is string => Boolean(name),
+            );
+            incomingPBSNames.forEach((name) => {
+              if (!existing.pbsNames!.includes(name)) {
+                existing.pbsNames!.push(name);
+              }
+            });
           }
         }
       });

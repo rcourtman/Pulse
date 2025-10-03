@@ -124,6 +124,7 @@ export interface Storage {
   active: boolean;
   // Added for deduplication in storage view
   nodes?: string[];
+  nodeIds?: string[];
   nodeCount?: number;
   pbsNames?: string[];
   // ZFS pool status
