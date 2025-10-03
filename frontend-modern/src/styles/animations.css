@@ -1,13 +1,15 @@
 /* Animated Metric Container */
 .metric-container {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   overflow: visible;
-  min-height: 1.5em;
+  min-height: 1em;
 }
 
 .metric-value {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   position: relative;
   z-index: 2;
 }
