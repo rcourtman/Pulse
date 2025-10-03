@@ -279,6 +279,14 @@ type Manager struct {
 	// Offline confirmation tracking
 	nodeOfflineCount     map[string]int // Track consecutive offline counts for nodes (legacy)
 	offlineConfirmations map[string]int // Track consecutive offline counts for all resources
+	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
+	ackState map[string]ackRecord
+}
+
+type ackRecord struct {
+	acknowledged bool
+	user         string
+	time         time.Time
 }
 
 // NewManager creates a new alert manager
@@ -295,6 +303,7 @@ func NewManager() *Manager {
 		pendingAlerts:        make(map[string]time.Time),
 		nodeOfflineCount:     make(map[string]int),
 		offlineConfirmations: make(map[string]int),
+		ackState:             make(map[string]ackRecord),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -583,7 +592,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 
 			// Remove from active alerts
-			delete(m.activeAlerts, alertID)
+			m.removeActiveAlertNoLock(alertID)
 
 			// Add to recently resolved while respecting lock ordering
 			m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
@@ -1249,6 +1258,8 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				},
 			}
 
+			m.preserveAlertState(stateAlertID, alert)
+
 			m.activeAlerts[stateAlertID] = alert
 			m.recentAlerts[stateAlertID] = alert
 			m.historyManager.AddAlert(*alert)
@@ -1302,6 +1313,8 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				// Preserve original start time when updating
 				alert.StartTime = existingAlert.StartTime
 			}
+
+			m.preserveAlertState(errorsAlertID, alert)
 
 			m.activeAlerts[errorsAlertID] = alert
 			m.recentAlerts[errorsAlertID] = alert
@@ -1367,6 +1380,8 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 					},
 				}
 
+				m.preserveAlertState(alertID, alert)
+
 				m.activeAlerts[alertID] = alert
 				m.recentAlerts[alertID] = alert
 				m.historyManager.AddAlert(*alert)
@@ -1394,7 +1409,7 @@ func (m *Manager) clearAlert(alertID string) {
 	m.mu.Lock()
 	alert, exists := m.activeAlerts[alertID]
 	if exists {
-		delete(m.activeAlerts, alertID)
+		m.removeActiveAlertNoLock(alertID)
 	}
 	m.mu.Unlock()
 
@@ -1594,6 +1609,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				alert.Level = AlertLevelCritical
 			}
 
+			m.preserveAlertState(alertID, alert)
+
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
@@ -1696,7 +1713,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				}
 
 				// Remove from active alerts
-				delete(m.activeAlerts, alertID)
+				m.removeActiveAlertNoLock(alertID)
 
 				// Save active alerts after resolution
 				go func() {
@@ -1815,6 +1832,17 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 
 	// Write the modified alert back to the map
 	m.activeAlerts[alertID] = alert
+	m.ackState[alertID] = ackRecord{
+		acknowledged: true,
+		user:         user,
+		time:         now,
+	}
+
+	log.Debug().
+		Str("alertID", alertID).
+		Str("user", user).
+		Time("ackTime", now).
+		Msg("Alert acknowledgment recorded")
 
 	return nil
 }
@@ -1835,12 +1863,54 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	// Write the modified alert back to the map
 	m.activeAlerts[alertID] = alert
+	delete(m.ackState, alertID)
 
 	log.Info().
 		Str("alertID", alertID).
 		Msg("Alert unacknowledged")
 
 	return nil
+}
+
+// preserveAlertState copies acknowledgement and escalation metadata from an existing alert
+// into a freshly constructed alert before it replaces the existing entry in the map. This
+// prevents UI state from regressing when alerts are rebuilt during polling.
+func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
+	if updated == nil {
+		return
+	}
+
+	existing, exists := m.activeAlerts[alertID]
+	if exists && existing != nil {
+		updated.Acknowledged = existing.Acknowledged
+		updated.AckUser = existing.AckUser
+		if existing.AckTime != nil {
+			t := *existing.AckTime
+			updated.AckTime = &t
+		} else {
+			updated.AckTime = nil
+		}
+		updated.LastEscalation = existing.LastEscalation
+		if len(existing.EscalationTimes) > 0 {
+			updated.EscalationTimes = append([]time.Time(nil), existing.EscalationTimes...)
+		} else {
+			updated.EscalationTimes = nil
+		}
+		return
+	}
+
+	// Fall back to previously recorded acknowledgement state for this alert ID (e.g., flapping alerts)
+	if record, ok := m.ackState[alertID]; ok && record.acknowledged {
+		updated.Acknowledged = true
+		updated.AckUser = record.user
+		t := record.time
+		updated.AckTime = &t
+	}
+}
+
+func (m *Manager) removeActiveAlertNoLock(alertID string) {
+	delete(m.activeAlerts, alertID)
+	delete(m.ackState, alertID)
 }
 
 // GetActiveAlerts returns all active alerts
@@ -1963,6 +2033,8 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		Acknowledged: false,
 	}
 
+	m.preserveAlertState(alertID, alert)
+
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 
@@ -2005,7 +2077,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	}
 
 	// Remove from active alerts
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
@@ -2080,6 +2152,8 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 		LastSeen:     time.Now(),
 	}
 
+	m.preserveAlertState(alertID, alert)
+
 	m.activeAlerts[alertID] = alert
 
 	// Log and notify
@@ -2115,7 +2189,7 @@ func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
 	}
 
 	// Remove from active alerts
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
@@ -2191,6 +2265,8 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		LastSeen:     time.Now(),
 	}
 
+	m.preserveAlertState(alertID, alert)
+
 	m.activeAlerts[alertID] = alert
 
 	// Log and notify
@@ -2226,7 +2302,7 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 	}
 
 	// Remove from active alerts
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
@@ -2321,6 +2397,8 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 		Acknowledged: false,
 	}
 
+	m.preserveAlertState(alertID, alert)
+
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 
@@ -2363,7 +2441,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	}
 
 	// Remove from active alerts
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 
 	downtime := time.Since(alert.StartTime)
 	resolvedAlert := &ResolvedAlert{
@@ -2390,7 +2468,7 @@ func (m *Manager) ClearAlert(alertID string) {
 	defer m.mu.Unlock()
 
 	// Remove from active alerts only
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 
 	if m.onResolved != nil {
 		go m.onResolved(alertID)
@@ -2407,7 +2485,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	// Clean up acknowledged alerts
 	for id, alert := range m.activeAlerts {
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > maxAge {
-			delete(m.activeAlerts, id)
+			m.removeActiveAlertNoLock(id)
 		}
 	}
 
@@ -3025,6 +3103,17 @@ func (m *Manager) LoadActiveAlerts() error {
 		}
 
 		m.activeAlerts[alert.ID] = alert
+		if alert.Acknowledged {
+			ackTime := alert.StartTime
+			if alert.AckTime != nil {
+				ackTime = *alert.AckTime
+			}
+			m.ackState[alert.ID] = ackRecord{
+				acknowledged: true,
+				user:         alert.AckUser,
+				time:         ackTime,
+			}
+		}
 		restoredCount++
 
 		// For critical alerts that are still active after restart, send notifications
@@ -3072,7 +3161,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 
 		// If we couldn't get a node or the node doesn't exist, remove the alert
 		if node == "" || !existingNodes[node] {
-			delete(m.activeAlerts, alertID)
+			m.removeActiveAlertNoLock(alertID)
 			removedCount++
 			log.Debug().Str("alertID", alertID).Str("node", node).Msg("Removed alert for non-existent node")
 		}
@@ -3110,6 +3199,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.alertRateLimit = make(map[string][]time.Time)
 	m.nodeOfflineCount = make(map[string]int)
 	m.offlineConfirmations = make(map[string]int)
+	m.ackState = make(map[string]ackRecord)
 	m.mu.Unlock()
 
 	m.resolvedMutex.Lock()
@@ -3184,6 +3274,8 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				},
 			}
 
+			m.preserveAlertState(alertID, alert)
+
 			m.activeAlerts[alertID] = alert
 			m.recentAlerts[alertID] = alert
 			m.historyManager.AddAlert(*alert)
@@ -3251,6 +3343,8 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				},
 			}
 
+			m.preserveAlertState(wearoutAlertID, alert)
+
 			m.activeAlerts[wearoutAlertID] = alert
 			m.recentAlerts[wearoutAlertID] = alert
 			m.historyManager.AddAlert(*alert)
@@ -3278,7 +3372,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 		return
 	}
 
-	delete(m.activeAlerts, alertID)
+	m.removeActiveAlertNoLock(alertID)
 	resolvedAlert := &ResolvedAlert{
 		Alert:        alert,
 		ResolvedTime: time.Now(),

@@ -1239,13 +1239,20 @@ function OverviewTab(props: {
                               // Call API first, only update local state if successful
                               await AlertsAPI.unacknowledge(alert.id);
                               // Only update local state after successful API call
-                              props.updateAlert(alert.id, { acknowledged: false });
+                              props.updateAlert(alert.id, {
+                                acknowledged: false,
+                                ackTime: undefined,
+                                ackUser: undefined,
+                              });
                               showSuccess('Alert restored');
                             } else {
                               // Call API first, only update local state if successful
                               await AlertsAPI.acknowledge(alert.id);
                               // Only update local state after successful API call
-                              props.updateAlert(alert.id, { acknowledged: true });
+                              props.updateAlert(alert.id, {
+                                acknowledged: true,
+                                ackTime: new Date().toISOString(),
+                              });
                               showSuccess('Alert acknowledged');
                             }
                           } catch (err) {
