@@ -24,7 +24,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   type SortKey =
     | 'default'
     | 'name'
-    | 'status'
     | 'uptime'
     | 'cpu'
     | 'memory'
@@ -138,19 +137,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return pbs.status === 'healthy' || pbs.status === 'online';
   };
 
-  const getStatusRank = (item: SortableItem) => {
-    if (item.type === 'pve') {
-      const node = item.data as Node;
-      if (node.status === 'online' && (node.uptime || 0) > 0) return 2;
-      if (node.status === 'online' || node.status === 'unknown') return 1;
-      return 0;
-    }
-    const pbs = item.data as PBSInstance;
-    if (pbs.status === 'healthy' || pbs.status === 'online') return 2;
-    if (pbs.status === 'maintenance') return 1;
-    return 0;
-  };
-
   const getPbsTotals = (pbs: PBSInstance) => {
     return (pbs.datastores ?? []).reduce(
       (acc, ds) => {
@@ -246,8 +232,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     switch (key) {
       case 'name':
         return item.data.name;
-      case 'status':
-        return getStatusRank(item);
       case 'uptime':
         return item.type === 'pve'
           ? (item.data as Node).uptime ?? 0
@@ -351,12 +335,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
               >
                 {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'}{' '}
                 {sortKey() === 'name' && (sortDirection() === 'asc' ? '▲' : '▼')}
-              </th>
-              <th
-                class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-20 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                onClick={() => handleSort('status')}
-              >
-                Status {sortKey() === 'status' && (sortDirection() === 'asc' ? '▲' : '▼')}
               </th>
               <th
                 class="px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider min-w-24 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -528,15 +506,6 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           </span>
                         </Show>
                       </div>
-                    </td>
-                    <td class="px-2 py-0.5 whitespace-nowrap">
-                      <span
-                        class={`text-xs font-medium ${
-                          online ? 'text-gray-600 dark:text-gray-400' : 'text-red-500 dark:text-red-400'
-                        }`}
-                      >
-                        {online ? 'Online' : 'Offline'}
-                      </span>
                     </td>
                     <td class="px-2 py-0.5 whitespace-nowrap">
                       <span
