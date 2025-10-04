@@ -152,16 +152,16 @@ This is the same security model used by thousands of organizations for infrastru
 3. **Regular monitoring**: Review auth logs if you want extra visibility
 4. **Secure your Pulse server**: Keep it updated and behind proper access controls
 
-### Command Restrictions (Optional)
+### Command Restrictions (Default)
 
-For maximum security, you can force the SSH key to only run `sensors`:
+Pulse now writes the temperature key with a forced command so the connection can only execute `sensors -j`. Port/X11/agent forwarding and PTY allocation are all disabled automatically when you opt in through the setup script. Re-running the script upgrades older installs to the restricted entry without touching any of your other SSH keys.
 
 ```bash
-# In /root/.ssh/authorized_keys on your Proxmox node:
+# Example entry in /root/.ssh/authorized_keys installed by Pulse
 command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAAAB3NzaC1yc2E...
 ```
 
-This restricts the key to only execute the sensors command and nothing else.
+You can still manage the entry manually if you prefer, but no extra steps are required for new installations.
 
 ## Performance Impact
 
