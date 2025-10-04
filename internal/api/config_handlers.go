@@ -2847,11 +2847,19 @@ echo ""
 
 # SSH public key embedded from Pulse server
 SSH_PUBLIC_KEY="%s"
+SSH_RESTRICTED_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_PUBLIC_KEY"
 
-# Check if SSH key is already configured
+# Check if SSH key is already configured and whether it needs upgrading
 SSH_ALREADY_CONFIGURED=false
-if [ -n "$SSH_PUBLIC_KEY" ] && grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
-    SSH_ALREADY_CONFIGURED=true
+SSH_LEGACY_KEY=false
+
+if [ -n "$SSH_PUBLIC_KEY" ] && [ -f /root/.ssh/authorized_keys ]; then
+    if grep -qF "$SSH_RESTRICTED_KEY_ENTRY" /root/.ssh/authorized_keys 2>/dev/null; then
+        SSH_ALREADY_CONFIGURED=true
+    elif grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+        SSH_ALREADY_CONFIGURED=true
+        SSH_LEGACY_KEY=true
+    fi
 fi
 
 if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
@@ -2895,8 +2903,22 @@ if [ "$SSH_ALREADY_CONFIGURED" = true ]; then
         echo ""
         echo "To completely remove lm-sensors (optional):"
         echo "  apt-get remove --purge lm-sensors"
-    else
+    elif [[ $SSH_ACTION =~ ^[Ss]$ ]]; then
         echo "Temperature monitoring configuration unchanged."
+    else
+        if [ "$SSH_LEGACY_KEY" = true ]; then
+            echo "Updating Pulse SSH key to sensors-only access..."
+            TMP_AUTH_KEYS=$(mktemp)
+            if [ -f /root/.ssh/authorized_keys ]; then
+                grep -vF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys > "$TMP_AUTH_KEYS"
+            fi
+            echo "$SSH_RESTRICTED_KEY_ENTRY" >> "$TMP_AUTH_KEYS"
+            mv "$TMP_AUTH_KEYS" /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo "  ✓ SSH key restricted to sensors -j"
+        else
+            echo "Temperature monitoring configuration unchanged."
+        fi
     fi
 else
     echo "Enable hardware temperature monitoring for this node?"
@@ -2934,12 +2956,16 @@ else
             chmod 700 /root/.ssh
 
             # Check if key already exists (redundant check but safe)
-            if grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+            if [ -f /root/.ssh/authorized_keys ] && grep -qF "$SSH_RESTRICTED_KEY_ENTRY" /root/.ssh/authorized_keys 2>/dev/null; then
                 echo "  ✓ SSH key already configured"
             else
-                echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
+                if [ -f /root/.ssh/authorized_keys ] && grep -qF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+                    grep -vF "$SSH_PUBLIC_KEY" /root/.ssh/authorized_keys > /root/.ssh/authorized_keys.tmp
+                    mv /root/.ssh/authorized_keys.tmp /root/.ssh/authorized_keys
+                fi
+                echo "$SSH_RESTRICTED_KEY_ENTRY" >> /root/.ssh/authorized_keys
                 chmod 600 /root/.ssh/authorized_keys
-                echo "  ✓ SSH key configured"
+                echo "  ✓ SSH key configured (restricted to sensors -j)"
             fi
 
             # Install lm-sensors if not present
