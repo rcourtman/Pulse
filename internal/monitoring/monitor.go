@@ -1376,6 +1376,16 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		m.state.SetConnectionHealth(instanceName, true)
 	}
 
+	// Capture previous memory metrics so we can preserve them if detailed status fails
+	prevState := m.GetState()
+	prevNodeMemory := make(map[string]models.Memory)
+	for _, existingNode := range prevState.Nodes {
+		if existingNode.Instance != instanceName {
+			continue
+		}
+		prevNodeMemory[existingNode.ID] = existingNode.Memory
+	}
+
 	// Convert to models
 	var modelNodes []models.Node
 	for _, node := range nodes {
@@ -1421,19 +1431,22 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 				Msg("Node disk metrics from /nodes endpoint")
 		}
 
+		// Track whether we successfully replaced memory metrics with detailed status data
+		memoryUpdated := false
+
 		// Get detailed node info if available (skip for offline nodes)
 		if node.Status == "online" {
 			nodeInfo, nodeErr := client.GetNodeStatus(ctx, node.Node)
 			if nodeErr != nil {
 				// If we can't get node status, log but continue with data from /nodes endpoint
 				if node.Disk > 0 && node.MaxDisk > 0 {
-					log.Debug().
+					log.Warn().
 						Str("instance", instanceName).
 						Str("node", node.Node).
 						Err(nodeErr).
 						Uint64("usingDisk", node.Disk).
 						Uint64("usingMaxDisk", node.MaxDisk).
-						Msg("Could not get node status - using disk metrics from /nodes endpoint")
+						Msg("Could not get node status - using fallback metrics (memory will include cache/buffers)")
 				} else {
 					log.Warn().
 						Str("instance", instanceName).
@@ -1441,7 +1454,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						Err(nodeErr).
 						Uint64("disk", node.Disk).
 						Uint64("maxDisk", node.MaxDisk).
-						Msg("Could not get node status and no valid disk metrics from /nodes endpoint")
+						Msg("Could not get node status - no fallback metrics available (memory will include cache/buffers)")
 				}
 			} else if nodeInfo != nil {
 				// Convert LoadAvg from interface{} to float64
@@ -1507,7 +1520,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Uint64("available", nodeInfo.Memory.Available).
 							Uint64("actualUsed", actualUsed).
 							Float64("usage", safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total))).
-							Msg("Using available memory for accurate usage calculation")
+							Msg("Node memory: using available field (excludes reclaimable cache)")
 					} else {
 						// Fallback to traditional used memory if available field is missing
 						actualUsed = nodeInfo.Memory.Used
@@ -1515,7 +1528,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Str("node", node.Node).
 							Uint64("total", nodeInfo.Memory.Total).
 							Uint64("used", nodeInfo.Memory.Used).
-							Msg("Available memory field missing, using traditional used memory")
+							Msg("Node memory: Available field missing - using traditional calculation (includes cache)")
 					}
 
 					modelNode.Memory = models.Memory{
@@ -1524,6 +1537,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						Free:  int64(nodeInfo.Memory.Total - actualUsed),
 						Usage: safePercentage(float64(actualUsed), float64(nodeInfo.Memory.Total)),
 					}
+					memoryUpdated = true
 				}
 
 				if nodeInfo.CPUInfo != nil {
@@ -1550,6 +1564,36 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 						MHz:     mhzStr,
 					}
 				}
+			}
+		}
+
+		// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available
+		if !memoryUpdated && node.Status == "online" {
+			if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.Total > 0 {
+				total := int64(node.MaxMem)
+				if total == 0 {
+					total = prevMem.Total
+				}
+				used := prevMem.Used
+				if total > 0 && used > total {
+					used = total
+				}
+				free := total - used
+				if free < 0 {
+					free = 0
+				}
+
+				preserved := prevMem
+				preserved.Total = total
+				preserved.Used = used
+				preserved.Free = free
+				preserved.Usage = safePercentage(float64(used), float64(total))
+
+				modelNode.Memory = preserved
+				log.Debug().
+					Str("instance", instanceName).
+					Str("node", node.Node).
+					Msg("Preserving previous memory metrics - node status unavailable this cycle")
 			}
 		}
 
