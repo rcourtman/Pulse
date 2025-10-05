@@ -3,12 +3,15 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useWebSocket } from '@/App';
 import UnifiedBackups from './UnifiedBackups';
+import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 
 const Backups: Component = () => {
   const { state, connected } = useWebSocket();
 
   return (
-    <div>
+    <div class="space-y-3">
+      <ProxmoxSectionNav current="backups" />
+
       {/* Loading State */}
       <Show when={connected() && !state.pveBackups && !state.pbs}>
         <Card padding="lg">

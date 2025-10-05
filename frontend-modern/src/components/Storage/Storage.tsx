@@ -10,6 +10,7 @@ import { DiskList } from './DiskList';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
+import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 
 const Storage: Component = () => {
   const { state, connected, activeAlerts, initialDataReceived } = useWebSocket();
@@ -496,7 +497,9 @@ const Storage: Component = () => {
   };
 
   return (
-    <div>
+    <div class="space-y-3">
+      <ProxmoxSectionNav current="storage" />
+
       {/* Node Selector */}
       <UnifiedNodeSelector
         currentTab="storage"

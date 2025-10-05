@@ -1,14 +1,42 @@
-import { Component, createSignal, Show, For } from 'solid-js';
+import { Component, createEffect, createSignal, Show, For } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
+import { Toggle } from '@/components/shared/Toggle';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
   const [showInstructions, setShowInstructions] = createSignal(false);
 
   const dockerHosts = () => state.dockerHosts || [];
+
+  const STORAGE_KEY = 'pulse-show-docker-tab';
+  const readPreference = () => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored !== 'false';
+  };
+
+  const [showDockerTab, setShowDockerTab] = createSignal(readPreference());
+
+  const persistPreference = (value: boolean) => {
+    setShowDockerTab(value);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY, value ? 'true' : 'false');
+      window.dispatchEvent(
+        new CustomEvent('pulse:docker-tab-visibility', {
+          detail: { value },
+        }),
+      );
+    }
+  };
+
+  createEffect(() => {
+    if (dockerHosts().length > 0 && !showDockerTab()) {
+      persistPreference(true);
+    }
+  });
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -94,6 +122,27 @@ WantedBy=multi-user.target`;
           {showInstructions() ? 'Hide' : 'Show'} deployment instructions
         </button>
       </div>
+
+      <Card class="space-y-3" padding="lg">
+        <SectionHeader
+          title="Docker tab visibility"
+          description="Hide the Docker tab if you don’t plan to monitor container hosts. We’ll show it automatically once an agent reports in."
+          size="sm"
+          align="left"
+        />
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1 text-sm text-gray-600 dark:text-gray-400">
+            Show Docker tab in navigation
+          </div>
+          <Toggle
+            checked={showDockerTab()}
+            onChange={(event) => persistPreference((event.currentTarget as HTMLInputElement).checked)}
+          />
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          Preference is saved per browser. Hiding the tab won’t stop existing Docker hosts from reporting metrics.
+        </p>
+      </Card>
 
       {/* Deployment Instructions */}
       <Show when={showInstructions()}>

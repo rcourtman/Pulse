@@ -5,6 +5,7 @@ import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { CopyButton } from '@/components/shared/CopyButton';
 import { MetricBar } from '@/components/Dashboard/MetricBar';
 import { DockerFilter } from './DockerFilter';
 // import type { DockerHostSummary } from './DockerHostSummaryTable';
@@ -750,17 +751,31 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
             title="No Docker hosts configured"
             description={
               <span>
-                Deploy the Pulse Docker agent on your Docker hosts to collect container metrics. Review the{' '}
+                Deploy the Pulse Docker agent on at least one Docker host to light up this tab. As soon as an agent reports in, container metrics appear automatically.
+              </span>
+            }
+            actions={
+              <>
+                <CopyButton
+                  text={`docker run -d \ \
+  --name pulse-docker-agent \ \
+  -e PULSE_URL="http://<pulse-server>:8080" \ \
+  -e PULSE_TOKEN="<your-api-token>" \ \
+  -v /var/run/docker.sock:/var/run/docker.sock \ \
+  ghcr.io/rcourtman/pulse-docker-agent:latest`}
+                  class="w-full sm:w-auto"
+                >
+                  Copy install command
+                </CopyButton>
                 <a
                   href="https://github.com/rcourtman/Pulse/blob/main/docs/DOCKER_MONITORING.md"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="text-blue-600 dark:text-blue-400 hover:underline"
+                  class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  Docker monitoring guide
-                </a>{' '}
-                for setup instructions.
-              </span>
+                  Read the Docker monitoring guide
+                </a>
+              </>
             }
           />
         </Card>
