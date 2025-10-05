@@ -17,6 +17,7 @@ import StorageComponent from './components/Storage/Storage';
 import Backups from './components/Backups/Backups';
 import Settings from './components/Settings/Settings';
 import { Alerts } from './pages/Alerts';
+import { DockerHosts } from './components/Docker/DockerHosts';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationContainer from './components/NotificationContainer';
@@ -33,6 +34,7 @@ import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
+import type { State } from '@/types/api';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -67,6 +69,44 @@ function App() {
     return store || getGlobalWebSocketStore();
   };
 
+  const fallbackState: State = {
+    nodes: [],
+    vms: [],
+    containers: [],
+    dockerHosts: [],
+    storage: [],
+    cephClusters: [],
+    physicalDisks: [],
+    pbs: [],
+    metrics: [],
+    pveBackups: {
+      backupTasks: [],
+      storageBackups: [],
+      guestSnapshots: [],
+    },
+    pbsBackups: [],
+    performance: {
+      apiCallDuration: {},
+      lastPollDuration: 0,
+      pollingStartTime: '',
+      totalApiCalls: 0,
+      failedApiCalls: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+    },
+    connectionHealth: {},
+    stats: {
+      startTime: new Date().toISOString(),
+      uptime: 0,
+      pollingCycles: 0,
+      webSocketClients: 0,
+      version: '0.0.0',
+    },
+    activeAlerts: [],
+    recentlyResolved: [],
+    lastUpdate: '',
+  };
+
   // Simple auth state
   const [isLoading, setIsLoading] = createSignal(true);
   const [needsAuth, setNeedsAuth] = createSignal(false);
@@ -78,8 +118,7 @@ function App() {
 
   // Don't initialize WebSocket until after auth check
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
-  const state = () =>
-    wsStore()?.state || { vms: [], containers: [], nodes: [], pbs: [], lastUpdate: '' };
+  const state = (): State => wsStore()?.state || fallbackState;
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
 
@@ -491,7 +530,7 @@ function App() {
                   <DemoBanner />
                   <UpdateBanner />
                   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
-                    <div class="container w-[95%] max-w-screen-xl mx-auto">
+                    <div class="container w-[98%] max-w-[1920px] mx-auto">
                       <AppLayout
                         connected={connected}
                         reconnecting={reconnecting}
@@ -528,6 +567,7 @@ function App() {
       <Route path="/" component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />} />
       <Route path="/storage" component={StorageComponent} />
       <Route path="/backups" component={Backups} />
+      <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} />} />
       <Route path="/alerts/*" component={Alerts} />
       <Route path="/settings/*" component={Settings} />
     </Router>
@@ -547,7 +587,7 @@ function AppLayout(props: {
   needsAuth: () => boolean;
   proxyAuthInfo: () => { username?: string; logoutURL?: string } | null;
   handleLogout: () => void;
-  state: () => { vms: unknown[]; containers: unknown[]; nodes: unknown[] };
+  state: () => State;
   children?: JSX.Element;
 }) {
   const navigate = useNavigate();
@@ -558,6 +598,7 @@ function AppLayout(props: {
     const path = location.pathname;
     if (path.startsWith('/storage')) return 'storage';
     if (path.startsWith('/backups')) return 'backups';
+    if (path.startsWith('/docker')) return 'docker';
     if (path.startsWith('/alerts')) return 'alerts';
     if (path.startsWith('/settings')) return 'settings';
     return 'main';
@@ -794,6 +835,25 @@ function AppLayout(props: {
             <line x1="9" y1="21" x2="9" y2="9"></line>
           </svg>
           <span>Backups</span>
+        </div>
+        <div
+          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+            getActiveTab() === 'docker'
+              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+          }`}
+          onClick={() => navigate('/docker')}
+          role="tab"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338 0-.676.03-1.01.07-.458-1.515-1.877-2.352-3.173-2.352-1.604 0-2.832 1.125-3.254 1.828a.18.18 0 01-.142.084H1.101a.17.17 0 00-.17.171c0 1.047.134 3.528 1.82 5.416.819.915 2.096 2.055 4.563 2.434.766.117 1.582.176 2.427.176 1.066 0 2.14-.118 3.153-.35.88-.202 1.72-.5 2.497-.885.28-.14.53-.295.776-.458.986-.656 1.732-1.5 2.24-2.542.507.362 1.07.546 1.657.546.452 0 .908-.117 1.328-.346.922-.506 1.4-1.528 1.4-2.98 0-.156-.047-.31-.129-.438"/>
+          </svg>
+          <span>Docker</span>
         </div>
         <div
           class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${

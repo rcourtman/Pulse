@@ -63,6 +63,11 @@ export function formatRelativeTime(timestamp: number): string {
 
   const now = Date.now();
   const diffMs = now - timestamp;
+
+  // Handle invalid or future timestamps
+  if (isNaN(diffMs) || !isFinite(diffMs)) return '';
+  if (diffMs < 0) return '0s ago'; // Future timestamp, treat as current
+
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);
@@ -71,7 +76,7 @@ export function formatRelativeTime(timestamp: number): string {
   const diffYears = Math.floor(diffDays / 365);
 
   if (diffSeconds < 60) {
-    return diffSeconds <= 1 ? 'just now' : `${diffSeconds}s ago`;
+    return `${diffSeconds}s ago`;
   } else if (diffMinutes < 60) {
     return diffMinutes === 1 ? '1 min ago' : `${diffMinutes} mins ago`;
   } else if (diffHours < 24) {

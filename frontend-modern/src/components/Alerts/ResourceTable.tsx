@@ -28,6 +28,7 @@ interface ResourceTableProps {
   groupedResources?: Record<string, Resource[]>;
   columns: string[];
   activeAlerts?: Record<string, Alert>;
+  emptyMessage?: string;
   onEdit: (
     resourceId: string,
     thresholds: Record<string, number | undefined>,
@@ -46,6 +47,15 @@ interface ResourceTableProps {
 }
 
 export function ResourceTable(props: ResourceTableProps) {
+  const flattenResources = (): Resource[] => {
+    if (props.groupedResources) {
+      return Object.values(props.groupedResources).flat();
+    }
+    return props.resources ?? [];
+  };
+
+  const hasRows = () => flattenResources().length > 0;
+
   const MetricValueWithHeat = (metricProps: {
     resourceId: string;
     metric: string;
@@ -205,9 +215,13 @@ export function ResourceTable(props: ResourceTableProps) {
                                       ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
                                       : resource.type === 'storage'
                                         ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                        : resource.resourceType === 'VM'
-                                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                          : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                        : resource.type === 'dockerHost'
+                                          ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300'
+                                          : resource.type === 'dockerContainer'
+                                            ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
+                                            : resource.resourceType === 'VM'
+                                              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                              : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                                 }`}
                               >
                                 {resource.resourceType}
@@ -331,7 +345,12 @@ export function ResourceTable(props: ResourceTableProps) {
 
                             {/* Alerts column */}
                             <td class="p-1 px-2 text-center">
-                              <Show when={resource.type === 'guest' && props.onToggleDisabled}>
+                              <Show
+                                when={
+                                  (resource.type === 'guest' || resource.type === 'dockerContainer') &&
+                                  props.onToggleDisabled
+                                }
+                              >
                                 <button
                                   type="button"
                                   onClick={() => props.onToggleDisabled?.(resource.id)}
@@ -357,7 +376,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                   }`}
                                   title="Toggle powered-off alerts for this guest"
                                 >
-                                  {resource.disableConnectivity ? 'No Powered-Off' : 'Alert Powered-Off'}
+                                  {resource.disableConnectivity
+                                    ? 'Powered-Off Alerts Off'
+                                    : 'Powered-Off Alerts On'}
                                 </button>
                               </Show>
                               <Show
@@ -373,7 +394,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   }`}
                                   title="Toggle connectivity alerts for this node"
                                 >
-                                  {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                                  {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
                                 </button>
                               </Show>
                               <Show when={resource.type === 'storage'}>
@@ -402,7 +423,23 @@ export function ResourceTable(props: ResourceTableProps) {
                                   }`}
                                   title="Toggle connectivity alerts for this PBS server"
                                 >
-                                  {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                                  {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
+                                </button>
+                              </Show>
+                              <Show
+                                when={resource.type === 'dockerHost' && props.onToggleNodeConnectivity}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
+                                  class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                    resource.disableConnectivity
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                      : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                  }`}
+                                  title="Toggle connectivity alerts for this Docker host"
+                                >
+                                  {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
                                 </button>
                               </Show>
                             </td>
@@ -457,36 +494,39 @@ export function ResourceTable(props: ResourceTableProps) {
                                     </>
                                   }
                                 >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      props.onEdit(
-                                        resource.id,
-                                        resource.thresholds ? { ...resource.thresholds } : {},
-                                        resource.defaults ? { ...resource.defaults } : {},
-                                      )
-                                    }
-                                    class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                    title="Edit thresholds"
-                                  >
-                                    <svg
-                                      class="w-4 h-4"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
+                                  <Show when={resource.type !== 'dockerHost'}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        props.onEdit(
+                                          resource.id,
+                                          resource.thresholds ? { ...resource.thresholds } : {},
+                                          resource.defaults ? { ...resource.defaults } : {},
+                                        )
+                                      }
+                                      class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                      title="Edit thresholds"
                                     >
-                                      <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                      />
-                                    </svg>
-                                  </button>
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </Show>
                                   <Show
                                     when={
                                       resource.hasOverride ||
-                                      (resource.type === 'node' && resource.disableConnectivity)
+                                      ((resource.type === 'node' || resource.type === 'dockerHost') &&
+                                        resource.disableConnectivity)
                                     }
                                   >
                                     <button
@@ -763,7 +803,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                 }`}
                                 title="Toggle powered-off alerts for this guest"
                               >
-                                {resource.disableConnectivity ? 'No Powered-Off' : 'Alert Powered-Off'}
+                                {resource.disableConnectivity
+                                  ? 'Powered-Off Alerts Off'
+                                  : 'Powered-Off Alerts On'}
                               </button>
                             </Show>
                             <Show when={resource.type === 'node' && props.onToggleNodeConnectivity}>
@@ -777,7 +819,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 }`}
                                 title="Toggle connectivity alerts for this node"
                               >
-                                {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                                {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
                               </button>
                             </Show>
                             <Show when={resource.type === 'storage'}>
@@ -804,7 +846,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 }`}
                                 title="Toggle connectivity alerts for this PBS server"
                               >
-                                {resource.disableConnectivity ? 'No Offline' : 'Alert Offline'}
+                                {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
                               </button>
                             </Show>
                           </td>
@@ -930,6 +972,16 @@ export function ResourceTable(props: ResourceTableProps) {
                   </td>
                 </tr>
               </Show>
+            </Show>
+            <Show when={!hasRows()}>
+              <tr>
+                <td
+                  colspan={props.columns.length + 5}
+                  class="px-4 py-6 text-sm text-center text-gray-500 dark:text-gray-400"
+                >
+                  {props.emptyMessage || 'No resources available.'}
+                </td>
+              </tr>
             </Show>
           </tbody>
         </table>

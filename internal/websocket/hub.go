@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -423,6 +424,18 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // BroadcastState broadcasts state update to all clients
 func (h *Hub) BroadcastState(state interface{}) {
+	// Debug log to track docker hosts
+	dockerHostsCount := -1
+	// Use reflection to get dockerHosts field from any struct type
+	v := reflect.ValueOf(state)
+	if v.Kind() == reflect.Struct {
+		field := v.FieldByName("DockerHosts")
+		if field.IsValid() && field.Kind() == reflect.Slice {
+			dockerHostsCount = field.Len()
+		}
+	}
+	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("Broadcasting state")
+
 	msg := Message{
 		Type: "rawData",
 		Data: state,

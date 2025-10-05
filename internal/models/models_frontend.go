@@ -92,6 +92,65 @@ type ContainerFrontend struct {
 	LastSeen   int64   `json:"lastSeen"` // Unix timestamp
 }
 
+// DockerHostFrontend represents a Docker host with frontend-friendly fields
+type DockerHostFrontend struct {
+	ID               string                    `json:"id"`
+	AgentID          string                    `json:"agentId"`
+	Hostname         string                    `json:"hostname"`
+	DisplayName      string                    `json:"displayName"`
+	MachineID        string                    `json:"machineId,omitempty"`
+	OS               string                    `json:"os,omitempty"`
+	KernelVersion    string                    `json:"kernelVersion,omitempty"`
+	Architecture     string                    `json:"architecture,omitempty"`
+	DockerVersion    string                    `json:"dockerVersion,omitempty"`
+	CPUs             int                       `json:"cpus"`
+	TotalMemoryBytes int64                     `json:"totalMemoryBytes"`
+	UptimeSeconds    int64                     `json:"uptimeSeconds"`
+	Status           string                    `json:"status"`
+	LastSeen         int64                     `json:"lastSeen"`
+	IntervalSeconds  int                       `json:"intervalSeconds"`
+	AgentVersion     string                    `json:"agentVersion,omitempty"`
+	Containers       []DockerContainerFrontend `json:"containers"`
+}
+
+// DockerContainerFrontend represents a Docker container for the frontend
+type DockerContainerFrontend struct {
+	ID            string                           `json:"id"`
+	Name          string                           `json:"name"`
+	Image         string                           `json:"image"`
+	State         string                           `json:"state"`
+	Status        string                           `json:"status"`
+	Health        string                           `json:"health,omitempty"`
+	CPUPercent    float64                          `json:"cpuPercent"`
+	MemoryUsage   int64                            `json:"memoryUsageBytes"`
+	MemoryLimit   int64                            `json:"memoryLimitBytes"`
+	MemoryPercent float64                          `json:"memoryPercent"`
+	UptimeSeconds int64                            `json:"uptimeSeconds"`
+	RestartCount  int                              `json:"restartCount"`
+	ExitCode      int                              `json:"exitCode"`
+	CreatedAt     int64                            `json:"createdAt"`
+	StartedAt     *int64                           `json:"startedAt,omitempty"`
+	FinishedAt    *int64                           `json:"finishedAt,omitempty"`
+	Ports         []DockerContainerPortFrontend    `json:"ports,omitempty"`
+	Labels        map[string]string                `json:"labels,omitempty"`
+	Networks      []DockerContainerNetworkFrontend `json:"networks,omitempty"`
+}
+
+// DockerContainerPortFrontend represents a container port mapping
+type DockerContainerPortFrontend struct {
+	PrivatePort int    `json:"privatePort"`
+	PublicPort  int    `json:"publicPort,omitempty"`
+	Protocol    string `json:"protocol"`
+	IP          string `json:"ip,omitempty"`
+}
+
+// DockerContainerNetworkFrontend represents container network addresses
+type DockerContainerNetworkFrontend struct {
+	Name string `json:"name"`
+	IPv4 string `json:"ipv4,omitempty"`
+	IPv6 string `json:"ipv6,omitempty"`
+}
+
 // StorageFrontend represents Storage with frontend-friendly field names
 type StorageFrontend struct {
 	ID        string   `json:"id"`
@@ -143,6 +202,7 @@ type StateFrontend struct {
 	Nodes            []NodeFrontend        `json:"nodes"`
 	VMs              []VMFrontend          `json:"vms"`
 	Containers       []ContainerFrontend   `json:"containers"`
+	DockerHosts      []DockerHostFrontend  `json:"dockerHosts"`
 	Storage          []StorageFrontend     `json:"storage"`
 	CephClusters     []CephClusterFrontend `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk        `json:"physicalDisks"`

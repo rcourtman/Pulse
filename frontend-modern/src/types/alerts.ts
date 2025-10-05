@@ -13,6 +13,7 @@ export interface AlertThresholds {
   diskWrite?: HysteresisThreshold;
   networkIn?: HysteresisThreshold;
   networkOut?: HysteresisThreshold;
+  disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   // Legacy support for backward compatibility
   cpuLegacy?: number;
   memoryLegacy?: number;
@@ -22,7 +23,7 @@ export interface AlertThresholds {
   networkInLegacy?: number;
   networkOutLegacy?: number;
   // Allow indexing with string
-  [key: string]: HysteresisThreshold | number | undefined;
+  [key: string]: HysteresisThreshold | number | boolean | undefined;
 }
 
 export type RawOverrideConfig = AlertThresholds & {

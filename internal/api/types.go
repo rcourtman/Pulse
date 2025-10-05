@@ -40,21 +40,22 @@ type SuccessResponse struct {
 
 // StateResponse represents the full state response
 type StateResponse struct {
-	Nodes            []models.Node          `json:"nodes"`
-	VMs              []models.VM            `json:"vms"`
-	Containers       []models.Container     `json:"containers"`
-	Storage          []models.Storage       `json:"storage"`
-	CephClusters     []models.CephCluster   `json:"cephClusters"`
-	PBSInstances     []models.PBSInstance   `json:"pbs"`
-	PBSBackups       []models.PBSBackup     `json:"pbsBackups"`
-	Metrics          []models.Metric        `json:"metrics"`
-	PVEBackups       models.PVEBackups      `json:"pveBackups"`
-	Performance      models.Performance     `json:"performance"`
-	ConnectionHealth map[string]bool        `json:"connectionHealth"`
-	Stats            models.Stats           `json:"stats"`
-	ActiveAlerts     []models.Alert         `json:"activeAlerts"`
-	RecentlyResolved []models.ResolvedAlert `json:"recentlyResolved"`
-	LastUpdate       time.Time              `json:"lastUpdate"`
+	Nodes            []models.Node               `json:"nodes"`
+	VMs              []models.VM                 `json:"vms"`
+	Containers       []models.Container          `json:"containers"`
+	DockerHosts      []models.DockerHostFrontend `json:"dockerHosts"`
+	Storage          []models.Storage            `json:"storage"`
+	CephClusters     []models.CephCluster        `json:"cephClusters"`
+	PBSInstances     []models.PBSInstance        `json:"pbs"`
+	PBSBackups       []models.PBSBackup          `json:"pbsBackups"`
+	Metrics          []models.Metric             `json:"metrics"`
+	PVEBackups       models.PVEBackups           `json:"pveBackups"`
+	Performance      models.Performance          `json:"performance"`
+	ConnectionHealth map[string]bool             `json:"connectionHealth"`
+	Stats            models.Stats                `json:"stats"`
+	ActiveAlerts     []models.Alert              `json:"activeAlerts"`
+	RecentlyResolved []models.ResolvedAlert      `json:"recentlyResolved"`
+	LastUpdate       time.Time                   `json:"lastUpdate"`
 }
 
 // ConfigResponse represents configuration response
@@ -387,4 +388,9 @@ type ConfigExportResponse struct {
 type InstallScriptResponse struct {
 	URL     string `json:"url"`
 	Command string `json:"command"`
+}
+
+// AgentVersionResponse represents Docker agent version information
+type AgentVersionResponse struct {
+	Version string `json:"version"`
 }

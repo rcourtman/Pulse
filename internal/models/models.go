@@ -13,6 +13,7 @@ type State struct {
 	Nodes            []Node          `json:"nodes"`
 	VMs              []VM            `json:"vms"`
 	Containers       []Container     `json:"containers"`
+	DockerHosts      []DockerHost    `json:"dockerHosts"`
 	Storage          []Storage       `json:"storage"`
 	CephClusters     []CephCluster   `json:"cephClusters"`
 	PhysicalDisks    []PhysicalDisk  `json:"physicalDisks"`
@@ -131,6 +132,65 @@ type Container struct {
 	Tags       []string  `json:"tags,omitempty"`
 	Lock       string    `json:"lock,omitempty"`
 	LastSeen   time.Time `json:"lastSeen"`
+}
+
+// DockerHost represents a Docker host reporting metrics via the external agent.
+type DockerHost struct {
+	ID               string            `json:"id"`
+	AgentID          string            `json:"agentId"`
+	Hostname         string            `json:"hostname"`
+	DisplayName      string            `json:"displayName"`
+	MachineID        string            `json:"machineId,omitempty"`
+	OS               string            `json:"os,omitempty"`
+	KernelVersion    string            `json:"kernelVersion,omitempty"`
+	Architecture     string            `json:"architecture,omitempty"`
+	DockerVersion    string            `json:"dockerVersion,omitempty"`
+	CPUs             int               `json:"cpus"`
+	TotalMemoryBytes int64             `json:"totalMemoryBytes"`
+	UptimeSeconds    int64             `json:"uptimeSeconds"`
+	Status           string            `json:"status"`
+	LastSeen         time.Time         `json:"lastSeen"`
+	IntervalSeconds  int               `json:"intervalSeconds"`
+	AgentVersion     string            `json:"agentVersion,omitempty"`
+	Containers       []DockerContainer `json:"containers"`
+}
+
+// DockerContainer represents the state of a Docker container on a monitored host.
+type DockerContainer struct {
+	ID            string                       `json:"id"`
+	Name          string                       `json:"name"`
+	Image         string                       `json:"image"`
+	State         string                       `json:"state"`
+	Status        string                       `json:"status"`
+	Health        string                       `json:"health,omitempty"`
+	CPUPercent    float64                      `json:"cpuPercent"`
+	MemoryUsage   int64                        `json:"memoryUsageBytes"`
+	MemoryLimit   int64                        `json:"memoryLimitBytes"`
+	MemoryPercent float64                      `json:"memoryPercent"`
+	UptimeSeconds int64                        `json:"uptimeSeconds"`
+	RestartCount  int                          `json:"restartCount"`
+	ExitCode      int                          `json:"exitCode"`
+	CreatedAt     time.Time                    `json:"createdAt"`
+	StartedAt     *time.Time                   `json:"startedAt,omitempty"`
+	FinishedAt    *time.Time                   `json:"finishedAt,omitempty"`
+	Ports         []DockerContainerPort        `json:"ports,omitempty"`
+	Labels        map[string]string            `json:"labels,omitempty"`
+	Networks      []DockerContainerNetworkLink `json:"networks,omitempty"`
+}
+
+// DockerContainerPort describes an exposed container port mapping.
+type DockerContainerPort struct {
+	PrivatePort int    `json:"privatePort"`
+	PublicPort  int    `json:"publicPort,omitempty"`
+	Protocol    string `json:"protocol"`
+	IP          string `json:"ip,omitempty"`
+}
+
+// DockerContainerNetworkLink summarises container network addresses per network.
+type DockerContainerNetworkLink struct {
+	Name string `json:"name"`
+	IPv4 string `json:"ipv4,omitempty"`
+	IPv6 string `json:"ipv6,omitempty"`
 }
 
 // Storage represents a storage resource
@@ -495,6 +555,7 @@ func NewState() *State {
 		Nodes:         make([]Node, 0),
 		VMs:           make([]VM, 0),
 		Containers:    make([]Container, 0),
+		DockerHosts:   make([]DockerHost, 0),
 		Storage:       make([]Storage, 0),
 		PhysicalDisks: make([]PhysicalDisk, 0),
 		PBSInstances:  make([]PBSInstance, 0),
@@ -653,6 +714,102 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 
 	s.Containers = newContainers
 	s.LastUpdate = time.Now()
+}
+
+// UpsertDockerHost inserts or updates a Docker host in state.
+func (s *State) UpsertDockerHost(host DockerHost) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	updated := false
+	for i, existing := range s.DockerHosts {
+		if existing.ID == host.ID {
+			s.DockerHosts[i] = host
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		s.DockerHosts = append(s.DockerHosts, host)
+	}
+
+	sort.Slice(s.DockerHosts, func(i, j int) bool {
+		return s.DockerHosts[i].Hostname < s.DockerHosts[j].Hostname
+	})
+
+	s.LastUpdate = time.Now()
+}
+
+// SetDockerHostStatus updates the status of a docker host if present.
+func (s *State) SetDockerHostStatus(hostID, status string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := false
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			if host.Status != status {
+				host.Status = status
+				s.DockerHosts[i] = host
+				s.LastUpdate = time.Now()
+			}
+			changed = true
+			break
+		}
+	}
+
+	return changed
+}
+
+// TouchDockerHost updates the last seen timestamp for a docker host.
+func (s *State) TouchDockerHost(hostID string, ts time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			host.LastSeen = ts
+			s.DockerHosts[i] = host
+			s.LastUpdate = time.Now()
+			return true
+		}
+	}
+
+	return false
+}
+
+// RemoveStaleDockerHosts removes docker hosts that haven't been seen since cutoff.
+func (s *State) RemoveStaleDockerHosts(cutoff time.Time) []DockerHost {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	removed := make([]DockerHost, 0)
+	fresh := make([]DockerHost, 0, len(s.DockerHosts))
+	for _, host := range s.DockerHosts {
+		if host.LastSeen.Before(cutoff) && cutoff.After(host.LastSeen) {
+			removed = append(removed, host)
+			continue
+		}
+		fresh = append(fresh, host)
+	}
+
+	if len(removed) > 0 {
+		s.DockerHosts = fresh
+		s.LastUpdate = time.Now()
+	}
+
+	return removed
+}
+
+// GetDockerHosts returns a copy of docker hosts.
+func (s *State) GetDockerHosts() []DockerHost {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	hosts := make([]DockerHost, len(s.DockerHosts))
+	copy(hosts, s.DockerHosts)
+	return hosts
 }
 
 // UpdateStorage updates the storage in the state
