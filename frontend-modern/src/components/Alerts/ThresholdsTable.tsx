@@ -1033,21 +1033,10 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
                   VMs & Containers
                 </h4>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                      Powered-off alerts
-                    </span>
-                    <span
-                      class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        props.guestDisableConnectivity
-                          ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-100'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
-                      }`}
-                    >
-                      {props.guestDisableConnectivity ? 'Off' : 'On'}
-                    </span>
-                  </div>
+                <div class="flex items-center gap-3 mb-3">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Powered-off alerts
+                  </span>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -1064,6 +1053,15 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                     />
                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
+                  <span
+                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      props.guestDisableConnectivity
+                        ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-100'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
+                    }`}
+                  >
+                    {props.guestDisableConnectivity ? 'Off' : 'On'}
+                  </span>
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
                   Turn this off if you routinely power guests down and don’t want warnings.

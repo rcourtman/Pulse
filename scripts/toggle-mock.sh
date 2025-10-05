@@ -129,6 +129,27 @@ edit_config() {
     echo "Run '$0 on' or '$0 off' to apply changes"
 }
 
+sync_config() {
+    echo -e "${YELLOW}Syncing production configuration to dev...${NC}"
+
+    if [ -f "$ROOT_DIR/scripts/sync-production-config.sh" ]; then
+        "$ROOT_DIR/scripts/sync-production-config.sh"
+        echo ""
+        echo -e "${GREEN}✓ Configuration synced!${NC}"
+
+        # Only restart if backend is currently running
+        if pgrep -x pulse > /dev/null; then
+            echo ""
+            restart_backend
+        else
+            echo "Backend not running. Start hot-dev to use the updated config."
+        fi
+    else
+        echo -e "${RED}✗ Sync script not found${NC}"
+        return 1
+    fi
+}
+
 case "$1" in
     on)
         enable_mock
@@ -142,15 +163,19 @@ case "$1" in
     edit)
         edit_config
         ;;
+    sync)
+        sync_config
+        ;;
     *)
         echo "Mock Data Mode Control for Pulse"
         echo ""
-        echo "Usage: $0 {on|off|status|edit}"
+        echo "Usage: $0 {on|off|status|edit|sync}"
         echo ""
         echo "  on      - Enable mock data mode"
         echo "  off     - Disable mock mode, use real nodes"
         echo "  status  - Show current mock mode status"
         echo "  edit    - Edit mock configuration"
+        echo "  sync    - Sync production config to dev (use after adding nodes)"
         echo ""
         echo "After changing modes, restart hot-dev:"
         echo "  Ctrl+C in hot-dev terminal"
