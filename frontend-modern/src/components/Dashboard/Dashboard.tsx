@@ -15,6 +15,7 @@ import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
+import { ProxmoxSectionNav } from '@/components/Proxmox/ProxmoxSectionNav';
 
 interface DashboardProps {
   vms: VM[];
@@ -514,7 +515,9 @@ export function Dashboard(props: DashboardProps) {
   };
 
   return (
-    <div>
+    <div class="space-y-3">
+      <ProxmoxSectionNav current="overview" />
+
       {/* Unified Node Selector */}
       <UnifiedNodeSelector
         currentTab="dashboard"
