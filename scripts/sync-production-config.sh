@@ -18,20 +18,23 @@ echo "  Source: $PROD_DIR"
 echo "  Target: $DEV_DIR"
 echo ""
 
-# Copy encryption key if it exists AND dev doesn't have a key yet
+# CRITICAL: Always sync production encryption key to dev
+# This ensures dev can decrypt production's encrypted config files
 if [ -f "$PROD_DIR/.encryption.key" ]; then
     if [ ! -f "$DEV_DIR/.encryption.key" ]; then
         cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"
         chmod 600 "$DEV_DIR/.encryption.key"
-        echo "✓ Synced encryption key (dev didn't have one)"
+        echo "✓ Synced encryption key from production"
     else
-        # Dev already has a key - compare ages
-        if [ "$PROD_DIR/.encryption.key" -nt "$DEV_DIR/.encryption.key" ]; then
-            echo "⚠ Production encryption key is newer than dev key"
-            echo "  This is unusual - dev key is usually created first"
-            echo "  Keeping existing dev key to avoid breaking encrypted configs"
+        # Check if keys are different
+        if ! cmp -s "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"; then
+            echo "⚠ Dev encryption key differs from production - syncing production key"
+            echo "  (This prevents decryption errors when loading production configs)"
+            cp -f "$PROD_DIR/.encryption.key" "$DEV_DIR/.encryption.key"
+            chmod 600 "$DEV_DIR/.encryption.key"
+            echo "✓ Synced encryption key from production"
         else
-            echo "✓ Dev encryption key already exists and is current"
+            echo "✓ Dev encryption key matches production"
         fi
     fi
 fi
@@ -39,28 +42,41 @@ fi
 # Copy nodes configuration - WITH VALIDATION
 if [ -f "$PROD_DIR/nodes.enc" ]; then
     # Check if production nodes.enc is valid (not corrupted)
-    # Only sync if destination doesn't exist OR production file is newer
+    # Only sync if destination doesn't exist OR production file is newer OR dev copy is corrupted
     SHOULD_SYNC=false
 
     if [ ! -f "$DEV_DIR/nodes.enc" ]; then
         # Destination doesn't exist, safe to sync
         SHOULD_SYNC=true
         echo "  → Dev nodes.enc doesn't exist, will sync from production"
-    elif [ "$PROD_DIR/nodes.enc" -nt "$DEV_DIR/nodes.enc" ]; then
-        # Production is newer
-        echo "  → Production nodes.enc is newer than dev copy"
-        SHOULD_SYNC=true
     else
-        # Dev is newer or same age - KEEP THE DEV COPY
-        echo "  → Dev nodes.enc is current, keeping existing copy"
-        echo "  → (Production: $(stat -c %y "$PROD_DIR/nodes.enc" 2>/dev/null | cut -d' ' -f1-2))"
-        echo "  → (Dev: $(stat -c %y "$DEV_DIR/nodes.enc" 2>/dev/null | cut -d' ' -f1-2))"
+        # Dev copy exists - validate it before deciding
+        DEV_SIZE=$(stat -c %s "$DEV_DIR/nodes.enc" 2>/dev/null || echo 0)
+        PROD_SIZE=$(stat -c %s "$PROD_DIR/nodes.enc" 2>/dev/null || echo 0)
+
+        # Check if dev copy is suspiciously small (likely corrupted)
+        if [ "$DEV_SIZE" -lt 100 ]; then
+            echo "  → Dev nodes.enc is too small ($DEV_SIZE bytes), likely corrupted"
+            SHOULD_SYNC=true
+        # Check if files are different (always prefer production to avoid drift)
+        elif ! cmp -s "$PROD_DIR/nodes.enc" "$DEV_DIR/nodes.enc"; then
+            echo "  → Dev nodes.enc differs from production, syncing to avoid drift"
+            echo "  → (Production: $PROD_SIZE bytes, Dev: $DEV_SIZE bytes)"
+            SHOULD_SYNC=true
+        else
+            # Files are identical
+            echo "  → Dev nodes.enc is identical to production, no sync needed"
+        fi
     fi
 
     if [ "$SHOULD_SYNC" = true ]; then
+        # Back up the old dev copy if it exists (for debugging)
+        if [ -f "$DEV_DIR/nodes.enc" ]; then
+            cp -f "$DEV_DIR/nodes.enc" "$DEV_DIR/nodes.enc.before-sync-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+        fi
         cp -f "$PROD_DIR/nodes.enc" "$DEV_DIR/nodes.enc"
         chmod 600 "$DEV_DIR/nodes.enc"
-        echo "✓ Synced nodes configuration"
+        echo "✓ Synced nodes configuration from production"
     fi
 elif [ -f "$PROD_DIR/nodes.json" ]; then
     cp -f "$PROD_DIR/nodes.json" "$DEV_DIR/nodes.json"
