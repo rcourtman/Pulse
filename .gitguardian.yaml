@@ -1,0 +1,30 @@
+version: 2
+
+# GitGuardian Configuration
+# Prevents false positives while maintaining security scanning
+
+# Ignore documentation and example files where placeholder tokens are expected
+paths-ignore:
+  - "**/*.md"                    # Documentation files with examples
+  - "**/docs/**"                 # Documentation directory
+  - "**/examples/**"             # Example code
+  - "**/*.example"               # Example configuration files
+  - "**/*.sample"                # Sample files
+
+# Ignore specific patterns that are known false positives
+matches-ignore:
+  - name: Disabled token placeholder
+    match: "--token disabled"
+  - name: Token environment variable placeholder
+    match: "PULSE_TOKEN_PLACEHOLDER"
+  - name: URL placeholder
+    match: "PULSE_URL_PLACEHOLDER"
+  - name: Generic documentation placeholders
+    match: "your-api-token|replace-me|<token>|<your-api-token>"
+
+# Keep scanning enabled for actual code and config
+# GitGuardian will still catch real secrets in:
+# - Source code (.go, .ts, .tsx, .js, etc.)
+# - Configuration files (.env, config.json, etc.)
+# - Scripts (.sh that don't match ignored patterns)
+# - Any file not explicitly ignored above
