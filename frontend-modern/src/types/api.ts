@@ -4,6 +4,7 @@ export interface State {
   nodes: Node[];
   vms: VM[];
   containers: Container[];
+  dockerHosts: DockerHost[];
   storage: Storage[];
   cephClusters: CephCluster[];
   physicalDisks: PhysicalDisk[];
@@ -107,6 +108,61 @@ export interface Container {
   tags: string[] | string | null;
   lock: string;
   lastSeen: string;
+}
+
+export interface DockerHost {
+  id: string;
+  agentId: string;
+  hostname: string;
+  displayName: string;
+  machineId?: string;
+  os?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  dockerVersion?: string;
+  cpus: number;
+  totalMemoryBytes: number;
+  uptimeSeconds: number;
+  status: string;
+  lastSeen: number;
+  intervalSeconds: number;
+  agentVersion?: string;
+  containers: DockerContainer[];
+}
+
+export interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  health?: string;
+  cpuPercent: number;
+  memoryUsageBytes: number;
+  memoryLimitBytes: number;
+  memoryPercent: number;
+  uptimeSeconds: number;
+  restartCount: number;
+  exitCode: number;
+  createdAt: number;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+  ports?: DockerContainerPort[];
+  labels?: Record<string, string>;
+  networks?: DockerContainerNetwork[];
+}
+
+export interface DockerContainerPort {
+  privatePort: number;
+  publicPort?: number;
+  protocol: string;
+  ip?: string;
+}
+
+export interface DockerContainerNetwork {
+  name: string;
+  ipv4?: string;
+  ipv6?: string;
 }
 
 export interface Storage {

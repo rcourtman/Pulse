@@ -16,7 +16,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import type { EmailConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
-import type { Alert, State, VM, Container } from '@/types/api';
+import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
 
 type AlertTab =
@@ -33,10 +33,18 @@ interface DestinationsRef {
 }
 
 // Override interface for both guests and nodes
+type OverrideType =
+  | 'guest'
+  | 'node'
+  | 'storage'
+  | 'pbs'
+  | 'dockerHost'
+  | 'dockerContainer';
+
 interface Override {
   id: string; // Full ID (e.g. "Main-node1-105" for guest, "node-node1" for node, "pbs-name" for PBS)
   name: string; // Display name
-  type: 'guest' | 'node' | 'storage' | 'pbs';
+  type: OverrideType;
   resourceType?: string; // VM, CT, Node, Storage, or PBS
   vmid?: number; // Only for guests
   node?: string; // Node name (for guests and storage), undefined for nodes themselves
@@ -144,7 +152,7 @@ const createDefaultEscalation = (): EscalationConfig => ({
 });
 
 export function Alerts() {
-  const { state, activeAlerts, updateAlert } = useWebSocket();
+  const { state, activeAlerts, updateAlert, removeAlerts } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -292,7 +300,82 @@ export function Alerts() {
       // Convert overrides object to array format
       const overridesList: Override[] = [];
 
+      const dockerHostsList: DockerHost[] = state.dockerHosts || [];
+      const dockerHostMap = new Map<string, DockerHost>();
+      const dockerContainerMap = new Map<string, { host: DockerHost; container: DockerContainer }>();
+
+      dockerHostsList.forEach((host) => {
+        dockerHostMap.set(host.id, host);
+        (host.containers || []).forEach((container) => {
+          const resourceId = `docker:${host.id}/${container.id}`;
+          dockerContainerMap.set(resourceId, { host, container });
+        });
+      });
+
       Object.entries(rawConfig).forEach(([key, thresholds]) => {
+        // Docker host override stored by host ID
+        const dockerHost = dockerHostMap.get(key);
+        if (dockerHost) {
+          overridesList.push({
+            id: key,
+            name: dockerHost.displayName?.trim() || dockerHost.hostname || dockerHost.id,
+            type: 'dockerHost',
+            resourceType: 'Docker Host',
+            disableConnectivity: thresholds.disableConnectivity || false,
+            thresholds: extractTriggerValues(thresholds),
+          });
+          return;
+        }
+
+        // Docker container override stored as docker:hostId/containerId
+        const dockerContainer = dockerContainerMap.get(key);
+        if (dockerContainer) {
+          const { host, container } = dockerContainer;
+          const containerName = container.name?.replace(/^\/+/, '') || container.id;
+          overridesList.push({
+            id: key,
+            name: containerName,
+            type: 'dockerContainer',
+            resourceType: 'Docker Container',
+            node: host.hostname,
+            instance: host.displayName,
+            disabled: thresholds.disabled || false,
+            disableConnectivity: thresholds.disableConnectivity || false,
+            thresholds: extractTriggerValues(thresholds),
+          });
+          return;
+        }
+
+        if (key.startsWith('docker:')) {
+          // Handle docker overrides where the host/container is no longer reporting
+          const [, rest] = key.split(':', 2);
+          const [hostId, containerId] = (rest || '').split('/', 2);
+
+          if (containerId) {
+            overridesList.push({
+              id: key,
+              name: containerId,
+              type: 'dockerContainer',
+              resourceType: 'Docker Container',
+              node: hostId,
+              disabled: thresholds.disabled || false,
+              disableConnectivity: thresholds.disableConnectivity || false,
+              thresholds: extractTriggerValues(thresholds),
+            });
+            return;
+          }
+
+          overridesList.push({
+            id: hostId || key,
+            name: hostId || key,
+            type: 'dockerHost',
+            resourceType: 'Docker Host',
+            disableConnectivity: thresholds.disableConnectivity || false,
+            thresholds: extractTriggerValues(thresholds),
+          });
+          return;
+        }
+
         // Check if it's a PBS server override (starts with "pbs-")
         if (key.startsWith('pbs-')) {
           const pbs = (state.pbs || []).find((p) => p.id === key);
@@ -394,6 +477,7 @@ export function Alerts() {
       networkIn: 0,
       networkOut: 0,
     });
+    setGuestDisableConnectivity(false);
     setNodeDefaults({
       cpu: 80,
       memory: 85,
@@ -438,6 +522,9 @@ export function Alerts() {
           networkIn: getTriggerValue(config.guestDefaults.networkIn) ?? 0,
           networkOut: getTriggerValue(config.guestDefaults.networkOut) ?? 0,
         });
+        setGuestDisableConnectivity(Boolean(config.guestDefaults.disableConnectivity));
+      } else {
+        setGuestDisableConnectivity(false);
       }
 
       if (config.nodeDefaults) {
@@ -630,9 +717,14 @@ export function Alerts() {
   );
 
   // Helper function to extract trigger value from threshold
-  const getTriggerValue = (threshold: number | HysteresisThreshold | undefined): number => {
+  const getTriggerValue = (
+    threshold: number | boolean | HysteresisThreshold | undefined,
+  ): number => {
     if (typeof threshold === 'number') {
       return threshold; // Legacy format
+    }
+    if (typeof threshold === 'boolean') {
+      return 0;
     }
     if (threshold && typeof threshold === 'object' && 'trigger' in threshold) {
       return threshold.trigger; // New hysteresis format
@@ -661,6 +753,7 @@ export function Alerts() {
     networkIn: 0,
     networkOut: 0,
   });
+  const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
 
   const [nodeDefaults, setNodeDefaults] = createSignal({
     cpu: 80,
@@ -761,6 +854,7 @@ export function Alerts() {
                         diskWrite: createHysteresisThreshold(guestDefaults().diskWrite),
                         networkIn: createHysteresisThreshold(guestDefaults().networkIn),
                         networkOut: createHysteresisThreshold(guestDefaults().networkOut),
+                        disableConnectivity: guestDisableConnectivity(),
                       },
                       nodeDefaults: {
                         cpu: createHysteresisThreshold(nodeDefaults().cpu),
@@ -892,7 +986,9 @@ export function Alerts() {
               allGuests={allGuests}
               state={state}
               guestDefaults={guestDefaults}
+              guestDisableConnectivity={guestDisableConnectivity}
               setGuestDefaults={setGuestDefaults}
+              setGuestDisableConnectivity={setGuestDisableConnectivity}
               nodeDefaults={nodeDefaults}
               setNodeDefaults={setNodeDefaults}
               storageDefault={storageDefault}
@@ -903,6 +999,7 @@ export function Alerts() {
               setTimeThresholds={setTimeThresholds}
               activeAlerts={activeAlerts}
               setHasUnsavedChanges={setHasUnsavedChanges}
+              removeAlerts={removeAlerts}
             />
           </Show>
 
@@ -1308,6 +1405,8 @@ interface ThresholdsTabProps {
   setGuestDefaults: (
     value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
+  guestDisableConnectivity: () => boolean;
+  setGuestDisableConnectivity: (value: boolean) => void;
   setNodeDefaults: (
     value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
@@ -1318,6 +1417,7 @@ interface ThresholdsTabProps {
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
+  removeAlerts: (predicate: (alert: Alert) => boolean) => void;
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
@@ -1331,9 +1431,12 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       allGuests={props.allGuests}
       nodes={props.state.nodes || []}
       storage={props.state.storage || []}
+      dockerHosts={props.state.dockerHosts || []}
       pbsInstances={props.state.pbs || []}
       guestDefaults={props.guestDefaults()}
+      guestDisableConnectivity={props.guestDisableConnectivity()}
       setGuestDefaults={props.setGuestDefaults}
+      setGuestDisableConnectivity={props.setGuestDisableConnectivity}
       nodeDefaults={props.nodeDefaults()}
       setNodeDefaults={props.setNodeDefaults}
       storageDefault={props.storageDefault}
@@ -1344,6 +1447,7 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setTimeThresholds={props.setTimeThresholds}
       setHasUnsavedChanges={props.setHasUnsavedChanges}
       activeAlerts={props.activeAlerts}
+      removeAlerts={props.removeAlerts}
     />
   );
 }

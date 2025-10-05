@@ -279,6 +279,8 @@ type Manager struct {
 	// Offline confirmation tracking
 	nodeOfflineCount     map[string]int // Track consecutive offline counts for nodes (legacy)
 	offlineConfirmations map[string]int // Track consecutive offline counts for all resources
+	dockerOfflineCount   map[string]int // Track consecutive offline counts for Docker hosts
+	dockerStateConfirm   map[string]int // Track consecutive state confirmations for Docker containers
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 }
@@ -303,6 +305,8 @@ func NewManager() *Manager {
 		pendingAlerts:        make(map[string]time.Time),
 		nodeOfflineCount:     make(map[string]int),
 		offlineConfirmations: make(map[string]int),
+		dockerOfflineCount:   make(map[string]int),
+		dockerStateConfirm:   make(map[string]int),
 		ackState:             make(map[string]ackRecord),
 		config: AlertConfig{
 			Enabled: true,
@@ -496,23 +500,47 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		// Get the appropriate threshold based on resource type and ID
 		var threshold *HysteresisThreshold
 
+		resourceTypeMeta := ""
+		if alert.Metadata != nil {
+			if metaType, ok := alert.Metadata["resourceType"].(string); ok {
+				resourceTypeMeta = strings.ToLower(metaType)
+			}
+		}
+
+		if alert.Type == "docker-host-offline" || strings.HasPrefix(alertID, "docker-container-health-") || strings.HasPrefix(alertID, "docker-container-state-") {
+			// Non-metric Docker alerts are not governed by thresholds
+			continue
+		}
+
+		if resourceTypeMeta == "dockerhost" {
+			// No threshold evaluation for Docker hosts (connectivity handled separately)
+			continue
+		}
+		if resourceTypeMeta == "docker container" {
+			thresholds := m.config.GuestDefaults
+			if override, exists := m.config.Overrides[resourceID]; exists {
+				thresholds = m.applyThresholdOverride(thresholds, override)
+			}
+			threshold = getThresholdForMetric(thresholds, metricType)
+		}
+
 		// Determine the resource type from the alert's metadata or instance
 		// We need to check what kind of resource this is
-		if alert.Instance == "Node" || alert.Instance == alert.Node {
+		if threshold == nil && (alert.Instance == "Node" || alert.Instance == alert.Node) {
 			// This is a node alert
 			thresholds := m.config.NodeDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
 				thresholds = m.applyThresholdOverride(thresholds, override)
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
-		} else if alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/") {
+		} else if threshold == nil && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
 			// This is a storage alert
 			if override, exists := m.config.Overrides[resourceID]; exists && override.Usage != nil {
 				threshold = override.Usage
 			} else {
 				threshold = &m.config.StorageDefault
 			}
-		} else if alert.Instance == "PBS" {
+		} else if threshold == nil && alert.Instance == "PBS" {
 			// This is a PBS alert
 			thresholds := m.config.NodeDefaults
 			if override, exists := m.config.Overrides[resourceID]; exists {
@@ -525,7 +553,9 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			if threshold == nil {
 				threshold = getThresholdForMetric(thresholds, metricType)
 			}
-		} else {
+		}
+
+		if threshold == nil {
 			// This is a guest (qemu/lxc) alert
 			// We need to evaluate custom rules, but we don't have the guest object here.
 			// For now, we'll mark these alerts for re-evaluation by the monitor.
@@ -1147,6 +1177,464 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	}
 }
 
+// dockerInstanceName returns the logical instance name used for Docker alerts.
+func dockerInstanceName(host models.DockerHost) string {
+	name := strings.TrimSpace(host.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(host.Hostname)
+	}
+	if name == "" {
+		return "Docker"
+	}
+	return fmt.Sprintf("Docker:%s", name)
+}
+
+// dockerContainerDisplayName normalizes the container name for alert readability.
+func dockerContainerDisplayName(container models.DockerContainer) string {
+	name := strings.TrimSpace(container.Name)
+	if strings.HasPrefix(name, "/") {
+		name = strings.TrimLeft(name, "/")
+	}
+	if name == "" {
+		id := strings.TrimSpace(container.ID)
+		if len(id) > 12 {
+			id = id[:12]
+		}
+		return id
+	}
+	return name
+}
+
+// dockerResourceID builds a stable identifier for Docker container alerts.
+func dockerResourceID(hostID, containerID string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerID = strings.TrimSpace(containerID)
+	if containerID == "" {
+		if hostID == "" {
+			return "docker:unknown"
+		}
+		return fmt.Sprintf("docker:%s", hostID)
+	}
+	if hostID == "" {
+		return fmt.Sprintf("docker:container/%s", containerID)
+	}
+	return fmt.Sprintf("docker:%s/%s", hostID, containerID)
+}
+
+// CheckDockerHost evaluates Docker host telemetry and container metrics for alerts.
+func (m *Manager) CheckDockerHost(host models.DockerHost) {
+	if host.ID == "" {
+		return
+	}
+
+	// Fresh telemetry marks the host as online and clears any offline alert.
+	m.HandleDockerHostOnline(host)
+
+	m.mu.RLock()
+	alertsEnabled := m.config.Enabled
+	m.mu.RUnlock()
+	if !alertsEnabled {
+		return
+	}
+
+	seen := make(map[string]struct{}, len(host.Containers))
+	for _, container := range host.Containers {
+		resourceID := dockerResourceID(host.ID, container.ID)
+		seen[resourceID] = struct{}{}
+		m.evaluateDockerContainer(host, container, resourceID)
+	}
+
+	m.cleanupDockerContainerAlerts(host, seen)
+}
+
+func (m *Manager) evaluateDockerContainer(host models.DockerHost, container models.DockerContainer, resourceID string) {
+	containerName := dockerContainerDisplayName(container)
+	nodeName := strings.TrimSpace(host.Hostname)
+	instanceName := dockerInstanceName(host)
+	resourceType := "Docker Container"
+
+	state := strings.ToLower(strings.TrimSpace(container.State))
+	if state == "" {
+		state = strings.ToLower(strings.TrimSpace(container.Status))
+	}
+
+	if state != "running" {
+		m.checkDockerContainerState(host, container, resourceID, containerName, instanceName, nodeName)
+		m.clearDockerContainerMetricAlerts(resourceID, "cpu", "memory")
+	} else {
+		m.clearDockerContainerStateAlert(resourceID)
+
+		thresholds := m.config.GuestDefaults
+		if override, exists := m.config.Overrides[resourceID]; exists {
+			thresholds = m.applyThresholdOverride(thresholds, override)
+		}
+
+		if thresholds.CPU != nil {
+			cpuMetadata := map[string]interface{}{
+				"resourceType":  resourceType,
+				"hostId":        host.ID,
+				"hostName":      host.DisplayName,
+				"hostHostname":  host.Hostname,
+				"containerId":   container.ID,
+				"containerName": containerName,
+				"image":         container.Image,
+				"state":         container.State,
+				"status":        container.Status,
+				"restartCount":  container.RestartCount,
+				"metric":        "cpu",
+				"cpuPercent":    container.CPUPercent,
+			}
+			m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "cpu", container.CPUPercent, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+		}
+
+		if thresholds.Memory != nil {
+			memMetadata := map[string]interface{}{
+				"resourceType":     resourceType,
+				"hostId":           host.ID,
+				"hostName":         host.DisplayName,
+				"hostHostname":     host.Hostname,
+				"containerId":      container.ID,
+				"containerName":    containerName,
+				"image":            container.Image,
+				"state":            container.State,
+				"status":           container.Status,
+				"restartCount":     container.RestartCount,
+				"metric":           "memory",
+				"memoryPercent":    container.MemoryPercent,
+				"memoryUsageBytes": container.MemoryUsage,
+			}
+			if container.MemoryLimit > 0 {
+				memMetadata["memoryLimitBytes"] = container.MemoryLimit
+			}
+			m.checkMetric(resourceID, containerName, nodeName, instanceName, resourceType, "memory", container.MemoryPercent, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+		}
+	}
+
+	m.checkDockerContainerHealth(host, container, resourceID, containerName, instanceName, nodeName)
+}
+
+// HandleDockerHostOnline clears offline tracking and alerts for a Docker host.
+func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
+	if host.ID == "" {
+		return
+	}
+
+	alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
+
+	m.mu.Lock()
+	delete(m.dockerOfflineCount, host.ID)
+	_, exists := m.activeAlerts[alertID]
+	m.mu.Unlock()
+
+	if exists {
+		m.clearAlert(alertID)
+	}
+}
+
+// HandleDockerHostOffline raises an alert when a Docker host stops reporting.
+func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
+	if host.ID == "" {
+		return
+	}
+
+	m.mu.RLock()
+	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	m.mu.RUnlock()
+
+	alertID := fmt.Sprintf("docker-host-offline-%s", host.ID)
+	resourceID := fmt.Sprintf("docker:%s", strings.TrimSpace(host.ID))
+	instanceName := dockerInstanceName(host)
+	nodeName := strings.TrimSpace(host.Hostname)
+
+	var disableConnectivity bool
+	m.mu.RLock()
+	if override, exists := m.config.Overrides[host.ID]; exists {
+		disableConnectivity = override.DisableConnectivity
+	}
+	m.mu.RUnlock()
+
+	if disableConnectivity {
+		m.clearAlert(alertID)
+		m.mu.Lock()
+		delete(m.dockerOfflineCount, host.ID)
+		m.mu.Unlock()
+		return
+	}
+
+	m.mu.Lock()
+	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+		alert.LastSeen = time.Now()
+		m.activeAlerts[alertID] = alert
+		m.mu.Unlock()
+		return
+	}
+
+	m.dockerOfflineCount[host.ID]++
+	confirmations := m.dockerOfflineCount[host.ID]
+	const requiredConfirmations = 3
+	if confirmations < requiredConfirmations {
+		m.mu.Unlock()
+		log.Debug().
+			Str("dockerHost", host.DisplayName).
+			Str("hostID", host.ID).
+			Int("confirmations", confirmations).
+			Int("required", requiredConfirmations).
+			Msg("Docker host appears offline, awaiting confirmation")
+		return
+	}
+
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "docker-host-offline",
+		Level:        AlertLevelCritical,
+		ResourceID:   resourceID,
+		ResourceName: host.DisplayName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      fmt.Sprintf("Docker host '%s' is offline", host.DisplayName),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"resourceType": "DockerHost",
+			"hostId":       host.ID,
+			"hostname":     host.Hostname,
+			"agentId":      host.AgentID,
+			"displayName":  host.DisplayName,
+		},
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, false)
+	m.mu.Unlock()
+
+	log.Error().
+		Str("dockerHost", host.DisplayName).
+		Str("hostID", host.ID).
+		Str("hostname", host.Hostname).
+		Msg("CRITICAL: Docker host is offline")
+
+	m.clearDockerHostContainerAlerts(host.ID)
+}
+
+func (m *Manager) checkDockerContainerState(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
+	stateKey := resourceID
+
+	m.mu.Lock()
+	if alert, exists := m.activeAlerts[alertID]; exists && alert != nil {
+		alert.LastSeen = time.Now()
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{})
+		}
+		alert.Metadata["state"] = container.State
+		alert.Metadata["status"] = container.Status
+		m.activeAlerts[alertID] = alert
+		m.mu.Unlock()
+		return
+	}
+
+	m.dockerStateConfirm[stateKey]++
+	confirmations := m.dockerStateConfirm[stateKey]
+	const requiredConfirmations = 2
+	if confirmations < requiredConfirmations {
+		m.mu.Unlock()
+		log.Debug().
+			Str("container", containerName).
+			Str("host", host.DisplayName).
+			Str("state", container.State).
+			Int("confirmations", confirmations).
+			Int("required", requiredConfirmations).
+			Msg("Docker container state change detected, awaiting confirmation")
+		return
+	}
+
+	level := AlertLevelWarning
+	stateLower := strings.ToLower(container.State)
+	switch stateLower {
+	case "exited", "dead", "removing", "restarting", "unknown":
+		level = AlertLevelCritical
+	}
+
+	message := fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status))
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "docker-container-state",
+		Level:        level,
+		ResourceID:   resourceID,
+		ResourceName: containerName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      message,
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"resourceType":  "Docker Container",
+			"hostId":        host.ID,
+			"hostName":      host.DisplayName,
+			"hostHostname":  host.Hostname,
+			"containerId":   container.ID,
+			"containerName": containerName,
+			"image":         container.Image,
+			"state":         container.State,
+			"status":        container.Status,
+		},
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, true)
+	m.mu.Unlock()
+
+	log.Warn().
+		Str("container", containerName).
+		Str("host", host.DisplayName).
+		Str("state", container.State).
+		Msg("Docker container state alert raised")
+}
+
+func (m *Manager) clearDockerContainerStateAlert(resourceID string) {
+	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
+	m.mu.Lock()
+	delete(m.dockerStateConfirm, resourceID)
+	m.mu.Unlock()
+	m.clearAlert(alertID)
+}
+
+func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	health := strings.ToLower(strings.TrimSpace(container.Health))
+	if health == "" || health == "none" || health == "healthy" || health == "starting" {
+		m.clearDockerContainerHealthAlert(resourceID)
+		return
+	}
+
+	level := AlertLevelWarning
+	if health == "unhealthy" {
+		level = AlertLevelCritical
+	}
+
+	alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "docker-container-health",
+		Level:        level,
+		ResourceID:   resourceID,
+		ResourceName: containerName,
+		Node:         nodeName,
+		Instance:     instanceName,
+		Message:      fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+		Metadata: map[string]interface{}{
+			"resourceType":  "Docker Container",
+			"hostId":        host.ID,
+			"hostName":      host.DisplayName,
+			"hostHostname":  host.Hostname,
+			"containerId":   container.ID,
+			"containerName": containerName,
+			"image":         container.Image,
+			"state":         container.State,
+			"status":        container.Status,
+			"health":        container.Health,
+		},
+	}
+
+	m.mu.Lock()
+	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+		alert.StartTime = existing.StartTime
+	}
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+	m.recentAlerts[alertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.dispatchAlert(alert, false)
+	m.mu.Unlock()
+
+	log.Warn().
+		Str("container", containerName).
+		Str("host", host.DisplayName).
+		Str("health", container.Health).
+		Msg("Docker container health alert raised")
+}
+
+func (m *Manager) clearDockerContainerHealthAlert(resourceID string) {
+	alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
+	m.clearAlert(alertID)
+}
+
+func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ...string) {
+	if len(metrics) == 0 {
+		metrics = []string{"cpu", "memory"}
+	}
+	for _, metric := range metrics {
+		alertID := fmt.Sprintf("%s-%s", resourceID, metric)
+		m.clearAlert(alertID)
+	}
+}
+
+func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[string]struct{}) {
+	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(host.ID))
+
+	m.mu.Lock()
+	toClear := make([]string, 0)
+	for alertID, alert := range m.activeAlerts {
+		if !strings.HasPrefix(alert.ResourceID, prefix) {
+			continue
+		}
+		if _, exists := seen[alert.ResourceID]; exists {
+			continue
+		}
+		toClear = append(toClear, alertID)
+	}
+	for resourceID := range m.dockerStateConfirm {
+		if strings.HasPrefix(resourceID, prefix) {
+			if _, exists := seen[resourceID]; !exists {
+				delete(m.dockerStateConfirm, resourceID)
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	for _, alertID := range toClear {
+		m.clearAlert(alertID)
+	}
+}
+
+func (m *Manager) clearDockerHostContainerAlerts(hostID string) {
+	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(hostID))
+
+	m.mu.Lock()
+	toClear := make([]string, 0)
+	for alertID, alert := range m.activeAlerts {
+		if strings.HasPrefix(alert.ResourceID, prefix) {
+			toClear = append(toClear, alertID)
+		}
+	}
+	for resourceID := range m.dockerStateConfirm {
+		if strings.HasPrefix(resourceID, prefix) {
+			delete(m.dockerStateConfirm, resourceID)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, alertID := range toClear {
+		m.clearAlert(alertID)
+	}
+}
+
 // CheckStorage checks storage against thresholds
 func (m *Manager) CheckStorage(storage models.Storage) {
 	m.mu.RLock()
@@ -1441,6 +1929,10 @@ func (m *Manager) getTimeThresholdForType(resourceType string) int {
 	if m.config.TimeThresholds != nil {
 		switch typeKey {
 		case "guest", "qemu", "lxc", "vm", "ct", "container":
+			if delay, ok := m.config.TimeThresholds["guest"]; ok {
+				return delay
+			}
+		case "docker container", "dockercontainer", "docker":
 			if delay, ok := m.config.TimeThresholds["guest"]; ok {
 				return delay
 			}
@@ -3199,6 +3691,8 @@ func (m *Manager) ClearActiveAlerts() {
 	m.alertRateLimit = make(map[string][]time.Time)
 	m.nodeOfflineCount = make(map[string]int)
 	m.offlineConfirmations = make(map[string]int)
+	m.dockerOfflineCount = make(map[string]int)
+	m.dockerStateConfirm = make(map[string]int)
 	m.ackState = make(map[string]ackRecord)
 	m.mu.Unlock()
 

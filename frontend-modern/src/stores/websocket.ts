@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, produce } from 'solid-js/store';
 import type {
   State,
   WSMessage,
@@ -23,6 +23,7 @@ export function createWebSocketStore(url: string) {
     nodes: [],
     vms: [],
     containers: [],
+    dockerHosts: [],
     storage: [],
     cephClusters: [],
     physicalDisks: [],
@@ -234,6 +235,17 @@ export function createWebSocketStore(url: string) {
                 };
               });
               setState('containers', transformedContainers);
+            }
+            if (message.data.dockerHosts !== undefined && message.data.dockerHosts !== null) {
+              // Only update if dockerHosts is present and not null
+              if (Array.isArray(message.data.dockerHosts)) {
+                console.log('[WebSocket] Updating dockerHosts:', message.data.dockerHosts.length, 'hosts');
+                setState('dockerHosts', message.data.dockerHosts);
+              } else {
+                console.warn('[WebSocket] Received non-array dockerHosts:', typeof message.data.dockerHosts);
+              }
+            } else if (message.data.dockerHosts === null) {
+              console.log('[WebSocket] Received null dockerHosts, ignoring');
             }
             if (message.data.storage !== undefined) setState('storage', message.data.storage);
             if (message.data.cephClusters !== undefined)
@@ -477,6 +489,33 @@ export function createWebSocketStore(url: string) {
       window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0; // Reset attempts for manual reconnect
       connect();
+    },
+    removeAlerts: (predicate: (alert: Alert) => boolean) => {
+      const keysToRemove: string[] = [];
+      Object.entries(activeAlerts).forEach(([alertId, alert]) => {
+        if (!alert) {
+          keysToRemove.push(alertId);
+          return;
+        }
+        try {
+          if (predicate(alert)) {
+            pendingAckChanges.delete(alertId);
+            keysToRemove.push(alertId);
+          }
+        } catch (error) {
+          logger.error('Failed to evaluate alert removal predicate', error);
+        }
+      });
+
+      if (keysToRemove.length > 0) {
+        setActiveAlerts(
+          produce((draft) => {
+            keysToRemove.forEach((key) => {
+              delete draft[key];
+            });
+          }),
+        );
+      }
     },
     // Method to update an alert locally (e.g., after acknowledgment)
     updateAlert: (alertId: string, updates: Partial<Alert>) => {

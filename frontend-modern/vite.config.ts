@@ -55,6 +55,14 @@ export default defineConfig({
         target: backendUrl,
         changeOrigin: true,
       },
+      '/install-docker-agent.sh': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/download': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
     },
   },
   build: {

@@ -44,6 +44,7 @@ Pulse is built by a solo developer in evenings and weekends. Your support helps:
   - Example: "Storage 'local-lvm' at 85% capacity"
   - Example: "VM 'database' is back online"
 - Unified view of PBS backups, PVE backups, and snapshots
+- Optional Docker container monitoring via lightweight agent
 - Config export/import with encryption and authentication
 - Automatic stable updates with safe rollback (opt-in)
 - Dark/light themes, responsive design
@@ -145,6 +146,10 @@ curl -sSL "http://pulse:7655/api/setup-script?type=pbs&host=https://pbs:8007&aut
 - `pulse_url` (optional): Pulse server URL if different from where script is downloaded
 
 The script handles user creation, permissions, token generation, and registration automatically.
+
+### Monitor Docker Containers (optional)
+
+Deploy the lightweight [Pulse Docker agent](docs/DOCKER_MONITORING.md) on any host running Docker to stream container status and resource data back to Pulse. Install the agent alongside your stack, point it at your Pulse URL and API token, and the new **Docker** tab in the UI will light up with per-container CPU, memory, health, and restart insights.
 
 ## Docker
 

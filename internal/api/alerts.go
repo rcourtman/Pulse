@@ -201,7 +201,7 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 	if h.wsHub != nil {
 		go func() {
 			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
+			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert unacknowledgment")
 		}()
 	}
@@ -273,7 +273,7 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 	if h.wsHub != nil {
 		go func() {
 			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
+			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert acknowledgment")
 		}()
 	}
@@ -319,7 +319,7 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 	if h.wsHub != nil {
 		go func() {
 			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
+			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after alert clear")
 		}()
 	}
@@ -381,7 +381,7 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 	if h.wsHub != nil && anySuccess {
 		go func() {
 			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
+			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after bulk alert acknowledgment")
 		}()
 	}
@@ -433,7 +433,7 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	if h.wsHub != nil && anySuccess {
 		go func() {
 			state := h.monitor.GetState()
-			h.wsHub.BroadcastState(state)
+			h.wsHub.BroadcastState(state.ToFrontend())
 			log.Debug().Msg("Broadcasted state after bulk alert clear")
 		}()
 	}
