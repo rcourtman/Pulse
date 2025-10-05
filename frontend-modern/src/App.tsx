@@ -10,7 +10,7 @@ import {
   runWithOwner,
 } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Router, Route, useNavigate, useLocation } from '@solidjs/router';
+import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
 import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import StorageComponent from './components/Storage/Storage';
@@ -564,9 +564,16 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
-      <Route path="/" component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />} />
-      <Route path="/storage" component={StorageComponent} />
-      <Route path="/backups" component={Backups} />
+      <Route path="/" component={() => <Navigate href="/proxmox/overview" />} />
+      <Route path="/proxmox" component={() => <Navigate href="/proxmox/overview" />} />
+      <Route
+        path="/proxmox/overview"
+        component={() => <Dashboard vms={state().vms} containers={state().containers} nodes={state().nodes} />}
+      />
+      <Route path="/proxmox/storage" component={StorageComponent} />
+      <Route path="/proxmox/backups" component={Backups} />
+      <Route path="/storage" component={() => <Navigate href="/proxmox/storage" />} />
+      <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} />} />
       <Route path="/alerts/*" component={Alerts} />
       <Route path="/settings/*" component={Settings} />
@@ -592,16 +599,56 @@ function AppLayout(props: {
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [dockerTabPreference, setDockerTabPreference] = createSignal(true);
+
+  const DOCKER_VISIBILITY_EVENT = 'pulse:docker-tab-visibility';
+  const DOCKER_PREFERENCE_KEY = 'pulse-show-docker-tab';
+
+  const readDockerPreference = () => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem(DOCKER_PREFERENCE_KEY);
+    return stored !== 'false';
+  };
+
+  onMount(() => {
+    setDockerTabPreference(readDockerPreference());
+
+    const refreshPreference = (value?: boolean) => {
+      if (typeof value === 'boolean') {
+        setDockerTabPreference(value);
+        return;
+      }
+      setDockerTabPreference(readDockerPreference());
+    };
+
+    const handler = (event: Event) => {
+      if (event instanceof CustomEvent && typeof event.detail?.value === 'boolean') {
+        refreshPreference(event.detail.value);
+      } else {
+        refreshPreference();
+      }
+    };
+
+    window.addEventListener(DOCKER_VISIBILITY_EVENT, handler);
+    return () => window.removeEventListener(DOCKER_VISIBILITY_EVENT, handler);
+  });
 
   // Determine active tab from current path
   const getActiveTab = () => {
     const path = location.pathname;
-    if (path.startsWith('/storage')) return 'storage';
-    if (path.startsWith('/backups')) return 'backups';
+    if (path.startsWith('/proxmox')) return 'proxmox';
     if (path.startsWith('/docker')) return 'docker';
     if (path.startsWith('/alerts')) return 'alerts';
     if (path.startsWith('/settings')) return 'settings';
-    return 'main';
+    return 'proxmox';
+  };
+
+  const shouldShowDockerTab = () => {
+    const hosts = props.state().dockerHosts || [];
+    if (hosts.length > 0) {
+      return true;
+    }
+    return dockerTabPreference();
   };
 
   return (
@@ -763,12 +810,13 @@ function AppLayout(props: {
       >
         <div
           class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'main'
+            getActiveTab() === 'proxmox'
               ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
           }`}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/proxmox/overview')}
           role="tab"
+          title="Proxmox overview, storage, and backups"
         >
           <svg
             width="14"
@@ -783,78 +831,29 @@ function AppLayout(props: {
             <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
-          <span>Main</span>
+          <span>Proxmox</span>
         </div>
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'storage'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/storage')}
-          role="tab"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <Show when={shouldShowDockerTab()}>
+          <div
+            class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
+              getActiveTab() === 'docker'
+                ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
+            }`}
+            onClick={() => navigate('/docker')}
+            role="tab"
           >
-            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-          </svg>
-          <span>Storage</span>
-        </div>
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'backups'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/backups')}
-          role="tab"
-          title="PVE backups, PBS backups, and VM/CT snapshots"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="3" y1="9" x2="21" y2="9"></line>
-            <line x1="9" y1="21" x2="9" y2="9"></line>
-          </svg>
-          <span>Backups</span>
-        </div>
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'docker'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/docker')}
-          role="tab"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338 0-.676.03-1.01.07-.458-1.515-1.877-2.352-3.173-2.352-1.604 0-2.832 1.125-3.254 1.828a.18.18 0 01-.142.084H1.101a.17.17 0 00-.17.171c0 1.047.134 3.528 1.82 5.416.819.915 2.096 2.055 4.563 2.434.766.117 1.582.176 2.427.176 1.066 0 2.14-.118 3.153-.35.88-.202 1.72-.5 2.497-.885.28-.14.53-.295.776-.458.986-.656 1.732-1.5 2.24-2.542.507.362 1.07.546 1.657.546.452 0 .908-.117 1.328-.346.922-.506 1.4-1.528 1.4-2.98 0-.156-.047-.31-.129-.438"/>
-          </svg>
-          <span>Docker</span>
-        </div>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338 0-.676.03-1.01.07-.458-1.515-1.877-2.352-3.173-2.352-1.604 0-2.832 1.125-3.254 1.828a.18.18 0 01-.142.084H1.101a.17.17 0 00-.17.171c0 1.047.134 3.528 1.82 5.416.819.915 2.096 2.055 4.563 2.434.766.117 1.582.176 2.427.176 1.066 0 2.14-.118 3.153-.35.88-.202 1.72-.5 2.497-.885.28-.14.53-.295.776-.458.986-.656 1.732-1.5 2.24-2.542.507.362 1.07.546 1.657.546.452 0 .908-.117 1.328-.346.922-.506 1.4-1.528 1.4-2.98 0-.156-.047-.31-.129-.438"/>
+            </svg>
+            <span>Docker</span>
+          </div>
+        </Show>
         <div
           class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
             getActiveTab() === 'alerts'
