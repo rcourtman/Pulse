@@ -6,6 +6,7 @@ import { NodeModal } from './NodeModal';
 import { GenerateAPIToken } from './GenerateAPIToken';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { GuestURLs } from './GuestURLs';
+import { DockerAgents } from './DockerAgents';
 import { OIDCPanel } from './OIDCPanel';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
@@ -102,7 +103,7 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type SettingsTab = 'pve' | 'pbs' | 'system' | 'urls' | 'security' | 'diagnostics';
+type SettingsTab = 'pve' | 'pbs' | 'docker' | 'system' | 'urls' | 'security' | 'diagnostics';
 
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
@@ -120,6 +121,7 @@ const Settings: Component = () => {
   const activeTab = () => {
     const path = location.pathname;
     if (path.includes('/settings/pbs')) return 'pbs';
+    if (path.includes('/settings/docker')) return 'docker';
     if (path.includes('/settings/system')) return 'system';
     if (path.includes('/settings/security')) return 'security';
     if (path.includes('/settings/diagnostics')) return 'diagnostics';
@@ -231,6 +233,11 @@ const Settings: Component = () => {
       id: 'pbs',
       label: 'PBS Nodes',
       icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4',
+    },
+    {
+      id: 'docker',
+      label: 'Docker',
+      icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
     },
     {
       id: 'system',
@@ -2064,6 +2071,11 @@ const Settings: Component = () => {
                   </div>
                 </Show>
               </div>
+            </Show>
+
+            {/* Docker Tab */}
+            <Show when={activeTab() === 'docker'}>
+              <DockerAgents />
             </Show>
 
             {/* System Settings Tab */}

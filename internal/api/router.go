@@ -89,10 +89,12 @@ func (r *Router) setupRoutes() {
 	guestMetadataHandler := NewGuestMetadataHandler(r.config.DataPath)
 	configHandlers := NewConfigHandlers(r.config, r.monitor, r.reloadFunc, r.wsHub, guestMetadataHandler)
 	updateHandlers := NewUpdateHandlers(r.updateManager)
+	dockerAgentHandlers := NewDockerAgentHandlers(r.monitor, r.wsHub)
 
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
+	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, dockerAgentHandlers.HandleReport))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
@@ -811,6 +813,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/system/settings/update", systemSettingsHandler.HandleUpdateSystemSettings)
 	// Old API token endpoints removed - now using /api/security/regenerate-token
 
+	// Docker agent download endpoints
+	r.mux.HandleFunc("/install-docker-agent.sh", r.handleDownloadInstallScript)
+	r.mux.HandleFunc("/download/pulse-docker-agent", r.handleDownloadAgent)
+	r.mux.HandleFunc("/api/agent/version", r.handleAgentVersion)
+
 	// WebSocket endpoint
 	r.mux.HandleFunc("/ws", r.handleWebSocket)
 
@@ -1027,7 +1034,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if strings.HasPrefix(req.URL.Path, "/api/") ||
 			strings.HasPrefix(req.URL.Path, "/ws") ||
 			strings.HasPrefix(req.URL.Path, "/socket.io/") ||
-			req.URL.Path == "/simple-stats" {
+			strings.HasPrefix(req.URL.Path, "/download/") ||
+			req.URL.Path == "/simple-stats" ||
+			req.URL.Path == "/install-docker-agent.sh" {
 			// Use the mux for API and special routes
 			r.mux.ServeHTTP(w, req)
 		} else {
@@ -1674,6 +1683,24 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		Version:   versionInfo.Version,
 		BuildTime: versionInfo.Build,
 		GoVersion: runtime.Version(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleAgentVersion returns the current Docker agent version for update checks
+func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Current agent version - matches the version in internal/dockeragent/agent.go
+	const currentAgentVersion = "0.1.0"
+
+	response := AgentVersionResponse{
+		Version: currentAgentVersion,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -2422,4 +2449,26 @@ func (r *Router) forwardUpdateProgress() {
 			Str("message", status.Message).
 			Msg("Update progress")
 	}
+}
+
+// handleDownloadInstallScript serves the Docker agent installation script
+func (r *Router) handleDownloadInstallScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	scriptPath := "/opt/pulse/scripts/install-docker-agent.sh"
+	http.ServeFile(w, req, scriptPath)
+}
+
+// handleDownloadAgent serves the Docker agent binary
+func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	binaryPath := "/opt/pulse/pulse-docker-agent"
+	http.ServeFile(w, req, binaryPath)
 }

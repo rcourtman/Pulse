@@ -179,6 +179,97 @@ func (c Container) ToFrontend() ContainerFrontend {
 	return ct
 }
 
+// ToFrontend converts a DockerHost to DockerHostFrontend
+func (d DockerHost) ToFrontend() DockerHostFrontend {
+	h := DockerHostFrontend{
+		ID:               d.ID,
+		AgentID:          d.AgentID,
+		Hostname:         d.Hostname,
+		DisplayName:      d.DisplayName,
+		MachineID:        d.MachineID,
+		OS:               d.OS,
+		KernelVersion:    d.KernelVersion,
+		Architecture:     d.Architecture,
+		DockerVersion:    d.DockerVersion,
+		CPUs:             d.CPUs,
+		TotalMemoryBytes: d.TotalMemoryBytes,
+		UptimeSeconds:    d.UptimeSeconds,
+		Status:           d.Status,
+		LastSeen:         d.LastSeen.Unix() * 1000,
+		IntervalSeconds:  d.IntervalSeconds,
+		AgentVersion:     d.AgentVersion,
+		Containers:       make([]DockerContainerFrontend, len(d.Containers)),
+	}
+
+	if h.DisplayName == "" {
+		h.DisplayName = h.Hostname
+	}
+
+	for i, ct := range d.Containers {
+		h.Containers[i] = ct.ToFrontend()
+	}
+
+	return h
+}
+
+// ToFrontend converts a DockerContainer to DockerContainerFrontend
+func (c DockerContainer) ToFrontend() DockerContainerFrontend {
+	container := DockerContainerFrontend{
+		ID:            c.ID,
+		Name:          c.Name,
+		Image:         c.Image,
+		State:         c.State,
+		Status:        c.Status,
+		Health:        c.Health,
+		CPUPercent:    c.CPUPercent,
+		MemoryUsage:   c.MemoryUsage,
+		MemoryLimit:   c.MemoryLimit,
+		MemoryPercent: c.MemoryPercent,
+		UptimeSeconds: c.UptimeSeconds,
+		RestartCount:  c.RestartCount,
+		ExitCode:      c.ExitCode,
+		CreatedAt:     c.CreatedAt.Unix() * 1000,
+		Labels:        c.Labels,
+	}
+
+	if c.StartedAt != nil {
+		ms := c.StartedAt.Unix() * 1000
+		container.StartedAt = &ms
+	}
+
+	if c.FinishedAt != nil {
+		ms := c.FinishedAt.Unix() * 1000
+		container.FinishedAt = &ms
+	}
+
+	if len(c.Ports) > 0 {
+		ports := make([]DockerContainerPortFrontend, len(c.Ports))
+		for i, port := range c.Ports {
+			ports[i] = DockerContainerPortFrontend{
+				PrivatePort: port.PrivatePort,
+				PublicPort:  port.PublicPort,
+				Protocol:    port.Protocol,
+				IP:          port.IP,
+			}
+		}
+		container.Ports = ports
+	}
+
+	if len(c.Networks) > 0 {
+		networks := make([]DockerContainerNetworkFrontend, len(c.Networks))
+		for i, net := range c.Networks {
+			networks[i] = DockerContainerNetworkFrontend{
+				Name: net.Name,
+				IPv4: net.IPv4,
+				IPv6: net.IPv6,
+			}
+		}
+		container.Networks = networks
+	}
+
+	return container
+}
+
 // ToFrontend converts Storage to StorageFrontend
 func (s Storage) ToFrontend() StorageFrontend {
 	return StorageFrontend{

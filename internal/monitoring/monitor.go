@@ -21,6 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -129,6 +130,168 @@ func safeFloat(val float64) float64 {
 		return 0
 	}
 	return val
+}
+
+const (
+	dockerConnectionPrefix       = "docker-"
+	dockerOfflineGraceMultiplier = 4
+	dockerMinimumHealthWindow    = 30 * time.Second
+	dockerMaximumHealthWindow    = 10 * time.Minute
+)
+
+// ApplyDockerReport ingests a docker agent report into the shared state.
+func (m *Monitor) ApplyDockerReport(report agentsdocker.Report) (models.DockerHost, error) {
+	identifier := strings.TrimSpace(report.AgentKey())
+	if identifier == "" {
+		return models.DockerHost{}, fmt.Errorf("docker report missing agent identifier")
+	}
+
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	if hostname == "" {
+		return models.DockerHost{}, fmt.Errorf("docker report missing hostname")
+	}
+
+	timestamp := report.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+
+	agentID := strings.TrimSpace(report.Agent.ID)
+	if agentID == "" {
+		agentID = identifier
+	}
+
+	displayName := strings.TrimSpace(report.Host.Name)
+	if displayName == "" {
+		displayName = hostname
+	}
+
+	containers := make([]models.DockerContainer, 0, len(report.Containers))
+	for _, payload := range report.Containers {
+		container := models.DockerContainer{
+			ID:            payload.ID,
+			Name:          payload.Name,
+			Image:         payload.Image,
+			State:         payload.State,
+			Status:        payload.Status,
+			Health:        payload.Health,
+			CPUPercent:    safeFloat(payload.CPUPercent),
+			MemoryUsage:   payload.MemoryUsageBytes,
+			MemoryLimit:   payload.MemoryLimitBytes,
+			MemoryPercent: safeFloat(payload.MemoryPercent),
+			UptimeSeconds: payload.UptimeSeconds,
+			RestartCount:  payload.RestartCount,
+			ExitCode:      payload.ExitCode,
+			CreatedAt:     payload.CreatedAt,
+			StartedAt:     payload.StartedAt,
+			FinishedAt:    payload.FinishedAt,
+		}
+
+		if len(payload.Ports) > 0 {
+			ports := make([]models.DockerContainerPort, len(payload.Ports))
+			for i, port := range payload.Ports {
+				ports[i] = models.DockerContainerPort{
+					PrivatePort: port.PrivatePort,
+					PublicPort:  port.PublicPort,
+					Protocol:    port.Protocol,
+					IP:          port.IP,
+				}
+			}
+			container.Ports = ports
+		}
+
+		if len(payload.Labels) > 0 {
+			labels := make(map[string]string, len(payload.Labels))
+			for k, v := range payload.Labels {
+				labels[k] = v
+			}
+			container.Labels = labels
+		}
+
+		if len(payload.Networks) > 0 {
+			networks := make([]models.DockerContainerNetworkLink, len(payload.Networks))
+			for i, net := range payload.Networks {
+				networks[i] = models.DockerContainerNetworkLink{
+					Name: net.Name,
+					IPv4: net.IPv4,
+					IPv6: net.IPv6,
+				}
+			}
+			container.Networks = networks
+		}
+
+		containers = append(containers, container)
+	}
+
+	host := models.DockerHost{
+		ID:               identifier,
+		AgentID:          agentID,
+		Hostname:         hostname,
+		DisplayName:      displayName,
+		MachineID:        strings.TrimSpace(report.Host.MachineID),
+		OS:               report.Host.OS,
+		KernelVersion:    report.Host.KernelVersion,
+		Architecture:     report.Host.Architecture,
+		DockerVersion:    report.Host.DockerVersion,
+		CPUs:             report.Host.TotalCPU,
+		TotalMemoryBytes: report.Host.TotalMemoryBytes,
+		UptimeSeconds:    report.Host.UptimeSeconds,
+		Status:           "online",
+		LastSeen:         timestamp,
+		IntervalSeconds:  report.Agent.IntervalSeconds,
+		AgentVersion:     report.Agent.Version,
+		Containers:       containers,
+	}
+
+	m.state.UpsertDockerHost(host)
+	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
+
+	if m.alertManager != nil {
+		m.alertManager.CheckDockerHost(host)
+	}
+
+	log.Debug().
+		Str("dockerHost", host.Hostname).
+		Int("containers", len(containers)).
+		Msg("Docker host report processed")
+
+	return host, nil
+}
+
+// evaluateDockerAgents updates health for Docker hosts based on last report time.
+func (m *Monitor) evaluateDockerAgents(now time.Time) {
+	hosts := m.state.GetDockerHosts()
+	for _, host := range hosts {
+		interval := host.IntervalSeconds
+		if interval <= 0 {
+			interval = int(dockerMinimumHealthWindow / time.Second)
+		}
+
+		window := time.Duration(interval) * time.Second * dockerOfflineGraceMultiplier
+		if window < dockerMinimumHealthWindow {
+			window = dockerMinimumHealthWindow
+		} else if window > dockerMaximumHealthWindow {
+			window = dockerMaximumHealthWindow
+		}
+
+		healthy := !host.LastSeen.IsZero() && now.Sub(host.LastSeen) <= window
+		key := dockerConnectionPrefix + host.ID
+		m.state.SetConnectionHealth(key, healthy)
+		hostCopy := host
+		if healthy {
+			hostCopy.Status = "online"
+			m.state.SetDockerHostStatus(host.ID, "online")
+			if m.alertManager != nil {
+				m.alertManager.HandleDockerHostOnline(hostCopy)
+			}
+		} else {
+			hostCopy.Status = "offline"
+			m.state.SetDockerHostStatus(host.ID, "offline")
+			if m.alertManager != nil {
+				m.alertManager.HandleDockerHostOffline(hostCopy)
+			}
+		}
+	}
 }
 
 // sortContent sorts comma-separated content values for consistent display
@@ -771,6 +934,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	for {
 		select {
 		case <-pollTicker.C:
+			m.evaluateDockerAgents(time.Now())
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				go m.checkMockAlerts()
@@ -791,7 +955,8 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.PBSBackups)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
-			wsHub.BroadcastState(state)
+			// Convert to frontend format before broadcasting (converts time.Time to int64, etc.)
+			wsHub.BroadcastState(state.ToFrontend())
 
 		case <-ctx.Done():
 			log.Info().Msg("Monitoring loop stopped")
@@ -3477,7 +3642,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 	m.mu.RUnlock()
 
 	if hub != nil {
-		hub.BroadcastState(m.GetState())
+		hub.BroadcastState(m.GetState().ToFrontend())
 	}
 
 	if !enable && ctx != nil && hub != nil {
