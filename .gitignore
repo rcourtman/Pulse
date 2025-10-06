@@ -52,12 +52,17 @@ pulse-fixes*.tar.gz
 # This is auto-generated, DO NOT EDIT
 internal/api/frontend-modern/
 
-# Claude-specific files
+# AI assistant files (local development environment docs)
 CLAUDE.md
 .claude*
 claude-*
 fix-claude-*
 backend
+AGENTS.md
+AI_DEVELOPMENT.md
+.ai-coordination/
+scripts/pulse-watchdog.sh
+pulse-watchdog.log
 
 # Release process files
 CHANGELOG.md

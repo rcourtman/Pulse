@@ -523,8 +523,8 @@ export const DockerHosts: Component<DockerHostsProps> = (props) => {
                           onClick={() => toggleHostSelection(host.id)}
                           class={`w-full text-left px-4 py-3 transition-colors ${
                             isSelected()
-                              ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600 dark:border-blue-400'
-                              : 'hover:bg-gray-50 dark:hover:bg-gray-700/30 border-l-4 border-transparent'
+                              ? 'bg-blue-100 dark:bg-blue-900/40'
+                              : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
                           }`}
                         >
                           <div class="flex items-center justify-between mb-1">
