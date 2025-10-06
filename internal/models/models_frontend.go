@@ -52,10 +52,10 @@ type VMFrontend struct {
 	OSVersion         string                  `json:"osVersion,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
-	NetIn             int64                   `json:"netin"`     // Maps to NetworkIn
-	NetOut            int64                   `json:"netout"`    // Maps to NetworkOut
-	DiskRead          int64                   `json:"diskread"`  // Maps to DiskRead
-	DiskWrite         int64                   `json:"diskwrite"` // Maps to DiskWrite
+	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
+	NetOut            int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
+	DiskRead          int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
+	DiskWrite         int64                   `json:"diskWrite"`  // Maps to DiskWrite (camelCase for frontend)
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
 	LastBackup        int64                   `json:"lastBackup,omitempty"` // Unix timestamp
@@ -80,10 +80,10 @@ type ContainerFrontend struct {
 	MaxMem     int64   `json:"maxmem"`           // Maps to Memory.Total
 	DiskObj    *Disk   `json:"disk,omitempty"`   // Full disk object
 	Disks      []Disk  `json:"disks,omitempty"`  // Individual filesystem/disk usage
-	NetIn      int64   `json:"netin"`            // Maps to NetworkIn
-	NetOut     int64   `json:"netout"`           // Maps to NetworkOut
-	DiskRead   int64   `json:"diskread"`         // Maps to DiskRead
-	DiskWrite  int64   `json:"diskwrite"`        // Maps to DiskWrite
+	NetIn      int64   `json:"networkIn"`        // Maps to NetworkIn (camelCase for frontend)
+	NetOut     int64   `json:"networkOut"`       // Maps to NetworkOut (camelCase for frontend)
+	DiskRead   int64   `json:"diskRead"`         // Maps to DiskRead (camelCase for frontend)
+	DiskWrite  int64   `json:"diskWrite"`        // Maps to DiskWrite (camelCase for frontend)
 	Uptime     int64   `json:"uptime"`
 	Template   bool    `json:"template"`
 	LastBackup int64   `json:"lastBackup,omitempty"` // Unix timestamp
