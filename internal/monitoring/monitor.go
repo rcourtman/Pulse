@@ -1379,11 +1379,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Capture previous memory metrics so we can preserve them if detailed status fails
 	prevState := m.GetState()
 	prevNodeMemory := make(map[string]models.Memory)
+	prevInstanceNodes := make([]models.Node, 0)
 	for _, existingNode := range prevState.Nodes {
 		if existingNode.Instance != instanceName {
 			continue
 		}
 		prevNodeMemory[existingNode.ID] = existingNode.Memory
+		prevInstanceNodes = append(prevInstanceNodes, existingNode)
 	}
 
 	// Convert to models
@@ -1619,6 +1621,27 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		modelNodes = append(modelNodes, modelNode)
 	}
 
+	if len(modelNodes) == 0 && len(prevInstanceNodes) > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("previousCount", len(prevInstanceNodes)).
+			Msg("No Proxmox nodes returned this cycle - preserving previous state")
+
+		// Mark connection health as degraded to reflect polling failure
+		m.state.SetConnectionHealth(instanceName, false)
+
+		preserved := make([]models.Node, 0, len(prevInstanceNodes))
+		for _, prevNode := range prevInstanceNodes {
+			nodeCopy := prevNode
+			nodeCopy.Status = "offline"
+			nodeCopy.ConnectionHealth = "error"
+			nodeCopy.Uptime = 0
+			nodeCopy.CPU = 0
+			preserved = append(preserved, nodeCopy)
+		}
+		modelNodes = preserved
+	}
+
 	// Update state first so we have nodes available
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
 
@@ -1815,11 +1838,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			}
 		}
 
-		// Record node metrics history
-		now := time.Now()
-		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
-		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
-		m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+		if modelNodes[i].Status == "online" {
+			// Record node metrics history only for online nodes
+			now := time.Now()
+			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
+			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
+		}
 
 		// Check thresholds for alerts
 		m.alertManager.CheckNode(modelNodes[i])
