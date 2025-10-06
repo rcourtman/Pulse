@@ -1253,6 +1253,15 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	instanceName := dockerInstanceName(host)
 	resourceType := "Docker Container"
 
+	overrideConfig, hasOverride := m.config.Overrides[resourceID]
+	if hasOverride && overrideConfig.Disabled {
+		// Alerts disabled via override; clear any existing alerts and skip evaluation.
+		m.clearDockerContainerStateAlert(resourceID)
+		m.clearDockerContainerHealthAlert(resourceID)
+		m.clearDockerContainerMetricAlerts(resourceID)
+		return
+	}
+
 	state := strings.ToLower(strings.TrimSpace(container.State))
 	if state == "" {
 		state = strings.ToLower(strings.TrimSpace(container.Status))
@@ -1265,8 +1274,8 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 		m.clearDockerContainerStateAlert(resourceID)
 
 		thresholds := m.config.GuestDefaults
-		if override, exists := m.config.Overrides[resourceID]; exists {
-			thresholds = m.applyThresholdOverride(thresholds, override)
+		if hasOverride {
+			thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
 		}
 
 		if thresholds.CPU != nil {
