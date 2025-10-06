@@ -397,6 +397,22 @@ export function ResourceTable(props: ResourceTableProps) {
                                   {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
                                 </button>
                               </Show>
+                              <Show
+                                when={resource.type === 'dockerHost' && props.onToggleNodeConnectivity}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => props.onToggleNodeConnectivity?.(resource.id)}
+                                  class={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                                    resource.disableConnectivity
+                                      ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+                                      : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+                                  }`}
+                                  title="Toggle connectivity alerts for this Docker host"
+                                >
+                                  {resource.disableConnectivity ? 'Offline Alerts Off' : 'Offline Alerts On'}
+                                </button>
+                              </Show>
                               <Show when={resource.type === 'storage'}>
                                 <button
                                   type="button"
