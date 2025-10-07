@@ -475,14 +475,14 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <Show when={props.nodeType === 'pve'}>
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons */}
-                              <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+                              <div class="flex gap-2">
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
-                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
                                     formData().setupMode === 'auto'
-                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
                                   Quick Setup
@@ -490,10 +490,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
-                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
                                     formData().setupMode === 'manual'
-                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
                                   Manual Setup
@@ -945,14 +945,14 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           <Show when={props.nodeType === 'pbs'}>
                             <div class="space-y-3 text-xs">
                               {/* Tab buttons for PBS */}
-                              <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+                              <div class="flex gap-2">
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'auto')}
-                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
                                     formData().setupMode === 'auto' || !formData().setupMode
-                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
                                   Quick Setup
@@ -960,10 +960,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={() => updateField('setupMode', 'manual')}
-                                  class={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
                                     formData().setupMode === 'manual'
-                                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                   }`}
                                 >
                                   Manual Setup

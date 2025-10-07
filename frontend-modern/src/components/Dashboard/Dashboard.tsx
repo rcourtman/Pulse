@@ -852,7 +852,7 @@ export function Dashboard(props: DashboardProps) {
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                     <th
-                      class="pl-6 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                      class="pl-4 pr-2 py-1 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[200px] cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                       onClick={() => handleSort('name')}
                       onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                       tabindex="0"
