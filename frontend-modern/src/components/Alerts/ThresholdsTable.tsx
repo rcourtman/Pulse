@@ -178,13 +178,28 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     if (value <= 0) return 'Off';
 
     // Percentage-based metrics
-    if (metric === 'cpu' || metric === 'memory' || metric === 'disk' || metric === 'usage') {
+    if (
+      metric === 'cpu' ||
+      metric === 'memory' ||
+      metric === 'disk' ||
+      metric === 'usage' ||
+      metric === 'memoryWarnPct' ||
+      metric === 'memoryCriticalPct'
+    ) {
       return `${value}%`;
     }
 
     // Temperature in Celsius
     if (metric === 'temperature') {
       return `${value}°C`;
+    }
+
+    if (metric === 'restartWindow') {
+      return `${value}s`;
+    }
+
+    if (metric === 'restartCount') {
+      return String(value);
     }
 
     // MB/s metrics
@@ -438,13 +453,14 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         const resourceId = `docker:${host.id}/${containerId}`;
         const override = overridesMap.get(resourceId);
 
+        const defaults = props.dockerDefaults as Record<string, number | undefined>;
         const hasCustomThresholds =
           override?.thresholds &&
           Object.keys(override.thresholds).some((key) => {
             const k = key as keyof typeof override.thresholds;
             return (
               override.thresholds[k] !== undefined &&
-              override.thresholds[k] !== (props.guestDefaults as any)[k]
+              override.thresholds[k] !== defaults?.[k as keyof typeof defaults]
             );
           });
 
@@ -480,7 +496,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           disabled: override?.disabled || false,
           disableConnectivity: override?.disableConnectivity || false,
           thresholds: override?.thresholds || {},
-          defaults: props.guestDefaults,
+          defaults: props.dockerDefaults,
           hostId: host.id,
           image: container.image,
         };
@@ -512,7 +528,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           disabled: override.disabled || false,
           disableConnectivity: override.disableConnectivity || false,
           thresholds: override.thresholds || {},
-          defaults: props.guestDefaults,
+          defaults: props.dockerDefaults,
         });
       });
 
@@ -1384,108 +1400,6 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         </Show>
 
         <Show when={activeTab() === 'docker'}>
-          {/* Docker Global Settings */}
-          <Card padding="none">
-            <div class="p-4 pb-2">
-              <SectionHeader
-                title="Docker global settings"
-                description="Container behavior and policy thresholds"
-                size="sm"
-              />
-            </div>
-            <div class="p-4 pt-2">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    Restart Count:
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={props.dockerDefaults.restartCount}
-                    onInput={(e) => {
-                      const value = parseInt(e.currentTarget.value, 10);
-                      props.setDockerDefaults((prev) => ({ ...prev, restartCount: Number.isNaN(value) ? 3 : value }));
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">restarts to trigger alert</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    Restart Window:
-                  </label>
-                  <input
-                    type="number"
-                    min="60"
-                    max="1800"
-                    step="60"
-                    value={props.dockerDefaults.restartWindow}
-                    onInput={(e) => {
-                      const value = parseInt(e.currentTarget.value, 10);
-                      props.setDockerDefaults((prev) => ({ ...prev, restartWindow: Number.isNaN(value) ? 300 : value }));
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">seconds</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    Memory Limit Warn:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={props.dockerDefaults.memoryWarnPct}
-                    onInput={(e) => {
-                      const value = parseInt(e.currentTarget.value, 10);
-                      props.setDockerDefaults((prev) => ({ ...prev, memoryWarnPct: Number.isNaN(value) ? 90 : value }));
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">% of container limit</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    Memory Limit Critical:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={props.dockerDefaults.memoryCriticalPct}
-                    onInput={(e) => {
-                      const value = parseInt(e.currentTarget.value, 10);
-                      props.setDockerDefaults((prev) => ({ ...prev, memoryCriticalPct: Number.isNaN(value) ? 95 : value }));
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">% of container limit</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    Health Checks:
-                  </label>
-                  <span class="text-xs text-green-600 dark:text-green-400 font-medium">Always Enabled</span>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">(monitor container health status)</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                    OOM Detection:
-                  </label>
-                  <span class="text-xs text-green-600 dark:text-green-400 font-medium">Always Enabled</span>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">(alert on exit code 137)</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
@@ -1534,14 +1448,37 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
-                globalDefaults={{ cpu: props.dockerDefaults.cpu, memory: props.dockerDefaults.memory }}
+                globalDefaults={{
+                  cpu: props.dockerDefaults.cpu,
+                  memory: props.dockerDefaults.memory,
+                  restartCount: props.dockerDefaults.restartCount,
+                  restartWindow: props.dockerDefaults.restartWindow,
+                  memoryWarnPct: props.dockerDefaults.memoryWarnPct,
+                  memoryCriticalPct: props.dockerDefaults.memoryCriticalPct,
+                }}
                 setGlobalDefaults={(value) => {
-                  if (typeof value === 'function') {
-                    const newValue = value({ cpu: props.dockerDefaults.cpu, memory: props.dockerDefaults.memory });
-                    props.setDockerDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
-                  } else {
-                    props.setDockerDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
-                  }
+                  const current = {
+                    cpu: props.dockerDefaults.cpu,
+                    memory: props.dockerDefaults.memory,
+                    restartCount: props.dockerDefaults.restartCount,
+                    restartWindow: props.dockerDefaults.restartWindow,
+                    memoryWarnPct: props.dockerDefaults.memoryWarnPct,
+                    memoryCriticalPct: props.dockerDefaults.memoryCriticalPct,
+                  };
+                  const next =
+                    typeof value === 'function'
+                      ? value(current)
+                      : { ...current, ...value };
+
+                  props.setDockerDefaults((prev) => ({
+                    ...prev,
+                    cpu: next.cpu ?? prev.cpu,
+                    memory: next.memory ?? prev.memory,
+                    restartCount: next.restartCount ?? prev.restartCount,
+                    restartWindow: next.restartWindow ?? prev.restartWindow,
+                    memoryWarnPct: next.memoryWarnPct ?? prev.memoryWarnPct,
+                    memoryCriticalPct: next.memoryCriticalPct ?? prev.memoryCriticalPct,
+                  }));
                 }}
                 setHasUnsavedChanges={props.setHasUnsavedChanges}
                 globalDisableFlag={props.disableAllDockerContainers}
