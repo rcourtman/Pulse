@@ -1,7 +1,6 @@
 import { createSignal, Show, For, createMemo, createEffect, onMount } from 'solid-js';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
-import { CustomRulesTab } from '@/components/Alerts/CustomRulesTab';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import type { RawOverrideConfig } from '@/types/alerts';
 import { Card } from '@/components/shared/Card';
@@ -19,13 +18,7 @@ import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, State, VM, Container, DockerHost, DockerContainer } from '@/types/api';
 import { useNavigate, useLocation } from '@solidjs/router';
 
-type AlertTab =
-  | 'overview'
-  | 'thresholds'
-  | 'destinations'
-  | 'schedule'
-  | 'history'
-  | 'custom-rules';
+type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
 // Store reference interfaces
 interface DestinationsRef {
@@ -162,7 +155,6 @@ export function Alerts() {
     destinations: 'destinations',
     schedule: 'schedule',
     history: 'history',
-    'custom-rules': 'custom-rules',
   };
 
   const pathForTab = (tab: AlertTab) => {
@@ -186,7 +178,15 @@ export function Alerts() {
     const entry = (Object.entries(tabSegments) as [AlertTab, string][])
       .find(([, value]) => value === segment);
 
-    return entry ? entry[0] : 'overview';
+    if (entry) {
+      return entry[0];
+    }
+
+    if (segment === 'custom-rules') {
+      return 'thresholds';
+    }
+
+    return 'overview';
   };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
@@ -215,7 +215,6 @@ export function Alerts() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
-
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
@@ -819,36 +818,45 @@ export function Alerts() {
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
-  const tabs: { id: AlertTab; label: string; icon: string }[] = [
+  const tabIcons: Record<AlertTab, string> = {
+    overview:
+      'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+    thresholds: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+    destinations:
+      'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+    schedule:
+      'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+    history: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+  };
+
+  const tabGroups: {
+    id: 'status' | 'configuration';
+    label: string;
+    items: { id: AlertTab; label: string }[];
+  }[] = [
     {
-      id: 'overview',
-      label: 'Overview',
-      icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+      id: 'status',
+      label: 'Status',
+      items: [
+        { id: 'overview', label: 'Overview' },
+        { id: 'history', label: 'History' },
+      ],
     },
     {
-      id: 'thresholds',
-      label: 'Thresholds',
-      icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
-    },
-    {
-      id: 'destinations',
-      label: 'Notifications',
-      icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
-    },
-    {
-      id: 'schedule',
-      label: 'Schedule',
-      icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-    },
-    {
-      id: 'history',
-      label: 'History',
-      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+      id: 'configuration',
+      label: 'Configuration',
+      items: [
+        { id: 'thresholds', label: 'Thresholds' },
+        { id: 'destinations', label: 'Notifications' },
+        { id: 'schedule', label: 'Schedule' },
+      ],
     },
   ];
 
+  const flatTabs = tabGroups.flatMap((group) => group.items);
+
   return (
-    <div class="space-y-6">
+    <div class="space-y-4">
       {/* Header with better styling */}
       <Card padding="md">
         <SectionHeader
@@ -1008,36 +1016,74 @@ export function Alerts() {
         </Card>
       </Show>
 
-      {/* Tab Navigation - modern style */}
-      <Card padding="none">
-        <div class="p-1">
-          <div class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto">
-            <For each={tabs}>
-              {(tab) => (
-                <button
-                  type="button"
-                  class={`flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                    activeTab() === tab.id
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-                  onClick={() => handleTabChange(tab.id)}
-                >
-                  {tab.label}
-                </button>
+      <Card padding="none" class="lg:flex">
+        <div class="hidden lg:inline-block lg:w-72 border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
+          <div class="sticky top-24 space-y-6 px-5 py-6">
+            <For each={tabGroups}>
+              {(group) => (
+                <div class="space-y-2">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {group.label}
+                  </p>
+                  <div class="space-y-1.5">
+                    <For each={group.items}>
+                      {(item) => (
+                        <button
+                          type="button"
+                          aria-current={activeTab() === item.id ? 'page' : undefined}
+                          class={`flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                            activeTab() === item.id
+                              ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                          }`}
+                          onClick={() => handleTabChange(item.id)}
+                        >
+                          <span class="truncate">{item.label}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </div>
               )}
             </For>
           </div>
         </div>
-        <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-        {/* Tab Content */}
-        <div class="p-3 sm:p-6">
-          <Show when={activeTab() === 'overview'}>
-            <OverviewTab
-              overrides={overrides()}
-              activeAlerts={activeAlerts}
-              updateAlert={updateAlert}
+        <div class="flex-1">
+          <Show when={flatTabs.length > 0}>
+            <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+              <div class="p-1">
+                <div
+                  class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
+                  style="-webkit-overflow-scrolling: touch;"
+                >
+                  <For each={flatTabs}>
+                    {(tab) => (
+                      <button
+                        type="button"
+                        class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                          activeTab() === tab.id
+                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                        }`}
+                        onClick={() => handleTabChange(tab.id)}
+                      >
+                        {tab.label}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </Show>
+
+          {/* Tab Content */}
+          <div class="p-3 sm:p-6">
+            <Show when={activeTab() === 'overview'}>
+              <OverviewTab
+                overrides={overrides()}
+                activeAlerts={activeAlerts}
+                updateAlert={updateAlert}
               showQuickTip={showQuickTip}
               dismissQuickTip={dismissQuickTip}
               showAcknowledged={showAcknowledged}
@@ -1122,15 +1168,7 @@ export function Alerts() {
           <Show when={activeTab() === 'history'}>
             <HistoryTab />
           </Show>
-
-          {/* Custom Rules Tab */}
-          <Show when={activeTab() === 'custom-rules'}>
-            <CustomRulesTab
-              rules={[]}
-              onUpdateRules={() => {}}
-              onHasChanges={setHasUnsavedChanges}
-            />
-          </Show>
+          </div>
         </div>
       </Card>
     </div>
