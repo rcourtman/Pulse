@@ -1942,16 +1942,11 @@ function ScheduleTab(props: ScheduleTabProps) {
 
   return (
     <div class="space-y-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <SectionHeader
-          title="Notification Schedule"
-          description="Control when alerts are allowed to fire and how they are grouped."
-          size="md"
-        />
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <button
           type="button"
           onClick={resetToDefaults}
-          class="inline-flex items-center gap-1 self-start rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          class="inline-flex items-center gap-1 self-start rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 sm:self-auto"
           title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
         >
           <svg
@@ -2860,13 +2855,6 @@ function HistoryTab() {
 
   return (
     <div class="space-y-4">
-      {/* Main section header */}
-      <SectionHeader
-        title="Alert History"
-        description="View past and active alerts with trends and filtering options."
-        size="md"
-      />
-
       {/* Alert Trends Mini-Chart */}
       <Card padding="md">
         <div class="mb-3 flex items-start justify-between gap-3">
