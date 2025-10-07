@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -159,8 +160,15 @@ func (h *AlertHandlers) UnacknowledgeAlert(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Extract alert ID by removing the suffix
-	alertID := strings.TrimSuffix(path, suffix)
+	// Extract alert ID by removing the suffix and decoding encoded characters
+	encodedID := strings.TrimSuffix(path, suffix)
+	alertID, err := url.PathUnescape(encodedID)
+	if err != nil {
+		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
 	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).
@@ -223,8 +231,15 @@ func (h *AlertHandlers) AcknowledgeAlert(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Extract alert ID by removing the suffix
-	alertID := strings.TrimSuffix(path, suffix)
+	// Extract alert ID by removing the suffix and decoding encoded characters
+	encodedID := strings.TrimSuffix(path, suffix)
+	alertID, err := url.PathUnescape(encodedID)
+	if err != nil {
+		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
 	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).
@@ -295,8 +310,15 @@ func (h *AlertHandlers) ClearAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract alert ID by removing the suffix
-	alertID := strings.TrimSuffix(path, suffix)
+	// Extract alert ID by removing the suffix and decoding encoded characters
+	encodedID := strings.TrimSuffix(path, suffix)
+	alertID, err := url.PathUnescape(encodedID)
+	if err != nil {
+		log.Error().Err(err).Str("encodedID", encodedID).Msg("Failed to decode alert ID")
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
 	if !validateAlertID(alertID) {
 		log.Error().
 			Str("path", r.URL.Path).

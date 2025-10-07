@@ -139,6 +139,31 @@ const (
 	dockerMaximumHealthWindow    = 10 * time.Minute
 )
 
+// RemoveDockerHost removes a docker host from the shared state and clears related alerts.
+func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return models.DockerHost{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, removed := m.state.RemoveDockerHost(hostID)
+	if !removed {
+		return models.DockerHost{}, fmt.Errorf("docker host %s not found", hostID)
+	}
+
+	m.state.RemoveConnectionHealth(dockerConnectionPrefix + hostID)
+	if m.alertManager != nil {
+		m.alertManager.HandleDockerHostOnline(host)
+	}
+
+	log.Info().
+		Str("dockerHost", host.Hostname).
+		Str("dockerHostID", hostID).
+		Msg("Docker host removed from state")
+
+	return host, nil
+}
+
 // ApplyDockerReport ingests a docker agent report into the shared state.
 func (m *Monitor) ApplyDockerReport(report agentsdocker.Report) (models.DockerHost, error) {
 	identifier := strings.TrimSpace(report.AgentKey())

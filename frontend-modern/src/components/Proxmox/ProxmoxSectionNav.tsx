@@ -1,5 +1,6 @@
 import type { Component, JSX } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 
 type ProxmoxSection = 'overview' | 'storage' | 'backups';
 
@@ -18,12 +19,7 @@ const sections: Array<{
     id: 'overview',
     label: 'Overview',
     path: '/proxmox/overview',
-    icon: () => (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-        <polyline points="9 22 9 12 15 12 15 22"></polyline>
-      </svg>
-    ),
+    icon: () => <ProxmoxIcon class="w-3.5 h-3.5" />,
   },
   {
     id: 'storage',

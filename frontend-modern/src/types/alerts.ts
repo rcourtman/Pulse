@@ -29,6 +29,7 @@ export interface AlertThresholds {
 export type RawOverrideConfig = AlertThresholds & {
   disabled?: boolean;
   disableConnectivity?: boolean;
+  // NOTE: To disable individual metrics, set threshold to -1
 };
 
 export interface CustomAlertRule {

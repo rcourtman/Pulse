@@ -227,15 +227,33 @@ type CustomAlertRule struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// DockerThresholdConfig represents Docker-specific alert thresholds
+type DockerThresholdConfig struct {
+	CPU               HysteresisThreshold `json:"cpu"`               // CPU usage % threshold (default: 80%)
+	Memory            HysteresisThreshold `json:"memory"`            // Memory usage % threshold (default: 85%)
+	RestartCount      int                 `json:"restartCount"`      // Number of restarts to trigger alert (default: 3)
+	RestartWindow     int                 `json:"restartWindow"`     // Time window in seconds for restart loop detection (default: 300 = 5min)
+	MemoryWarnPct     int                 `json:"memoryWarnPct"`     // Memory limit % to trigger warning (default: 90)
+	MemoryCriticalPct int                 `json:"memoryCriticalPct"` // Memory limit % to trigger critical (default: 95)
+}
+
 // AlertConfig represents the complete alert configuration
 type AlertConfig struct {
 	Enabled        bool                       `json:"enabled"`
 	GuestDefaults  ThresholdConfig            `json:"guestDefaults"`
 	NodeDefaults   ThresholdConfig            `json:"nodeDefaults"`
 	StorageDefault HysteresisThreshold        `json:"storageDefault"`
+	DockerDefaults DockerThresholdConfig      `json:"dockerDefaults"`
 	Overrides      map[string]ThresholdConfig `json:"overrides"` // keyed by resource ID
 	CustomRules    []CustomAlertRule          `json:"customRules,omitempty"`
 	Schedule       ScheduleConfig             `json:"schedule"`
+	// Global disable flags per resource type
+	DisableAllNodes            bool `json:"disableAllNodes"`            // Disable all alerts for Proxmox nodes
+	DisableAllGuests           bool `json:"disableAllGuests"`           // Disable all alerts for VMs/containers
+	DisableAllStorage          bool `json:"disableAllStorage"`          // Disable all alerts for storage
+	DisableAllPBS              bool `json:"disableAllPBS"`              // Disable all alerts for PBS servers
+	DisableAllDockerHosts      bool `json:"disableAllDockerHosts"`      // Disable all alerts for Docker hosts
+	DisableAllDockerContainers bool `json:"disableAllDockerContainers"` // Disable all alerts for Docker containers
 	// New configuration options
 	MinimumDelta      float64        `json:"minimumDelta"`      // Minimum % change to trigger new alert
 	SuppressionWindow int            `json:"suppressionWindow"` // Minutes to suppress duplicate alerts
@@ -281,6 +299,8 @@ type Manager struct {
 	offlineConfirmations map[string]int // Track consecutive offline counts for all resources
 	dockerOfflineCount   map[string]int // Track consecutive offline counts for Docker hosts
 	dockerStateConfirm   map[string]int // Track consecutive state confirmations for Docker containers
+	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
+	dockerLastExitCode    map[string]int // Track last exit code for OOM detection
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 }
@@ -289,6 +309,13 @@ type ackRecord struct {
 	acknowledged bool
 	user         string
 	time         time.Time
+}
+
+type dockerRestartRecord struct {
+	count       int
+	lastCount   int
+	times       []time.Time // Track restart times for loop detection
+	lastChecked time.Time
 }
 
 // NewManager creates a new alert manager
@@ -305,9 +332,11 @@ func NewManager() *Manager {
 		pendingAlerts:        make(map[string]time.Time),
 		nodeOfflineCount:     make(map[string]int),
 		offlineConfirmations: make(map[string]int),
-		dockerOfflineCount:   make(map[string]int),
-		dockerStateConfirm:   make(map[string]int),
-		ackState:             make(map[string]ackRecord),
+		dockerOfflineCount:    make(map[string]int),
+		dockerStateConfirm:    make(map[string]int),
+		dockerRestartTracking: make(map[string]*dockerRestartRecord),
+		dockerLastExitCode:    make(map[string]int),
+		ackState:              make(map[string]ackRecord),
 		config: AlertConfig{
 			Enabled: true,
 			GuestDefaults: ThresholdConfig{
@@ -325,6 +354,14 @@ func NewManager() *Manager {
 				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
 				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 			},
+		DockerDefaults: DockerThresholdConfig{
+			CPU:               HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory:            HysteresisThreshold{Trigger: 85, Clear: 80},
+			RestartCount:      3,
+			RestartWindow:     300, // 5 minutes
+			MemoryWarnPct:     90,
+			MemoryCriticalPct: 95,
+		},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
@@ -449,6 +486,26 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		config.StorageDefault.Clear = 80
 	}
 
+	// Initialize Docker defaults if missing/zero
+	if config.DockerDefaults.CPU.Trigger <= 0 {
+		config.DockerDefaults.CPU = HysteresisThreshold{Trigger: 80, Clear: 75}
+	}
+	if config.DockerDefaults.Memory.Trigger <= 0 {
+		config.DockerDefaults.Memory = HysteresisThreshold{Trigger: 85, Clear: 80}
+	}
+	if config.DockerDefaults.RestartCount <= 0 {
+		config.DockerDefaults.RestartCount = 3
+	}
+	if config.DockerDefaults.RestartWindow <= 0 {
+		config.DockerDefaults.RestartWindow = 300 // 5 minutes
+	}
+	if config.DockerDefaults.MemoryWarnPct <= 0 {
+		config.DockerDefaults.MemoryWarnPct = 90
+	}
+	if config.DockerDefaults.MemoryCriticalPct <= 0 {
+		config.DockerDefaults.MemoryCriticalPct = 95
+	}
+
 	// Ensure minimums for other important fields
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -507,7 +564,12 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		}
 
-		if alert.Type == "docker-host-offline" || strings.HasPrefix(alertID, "docker-container-health-") || strings.HasPrefix(alertID, "docker-container-state-") {
+		if alert.Type == "docker-host-offline" ||
+		   strings.HasPrefix(alertID, "docker-container-health-") ||
+		   strings.HasPrefix(alertID, "docker-container-state-") ||
+		   strings.HasPrefix(alertID, "docker-container-restart-loop-") ||
+		   strings.HasPrefix(alertID, "docker-container-oom-") ||
+		   strings.HasPrefix(alertID, "docker-container-memory-limit-") {
 			// Non-metric Docker alerts are not governed by thresholds
 			continue
 		}
@@ -855,6 +917,11 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		log.Debug().Msg("CheckGuest: alerts disabled globally")
 		return
 	}
+	if m.config.DisableAllGuests {
+		m.mu.RUnlock()
+		log.Debug().Msg("CheckGuest: all guest alerts disabled")
+		return
+	}
 	m.mu.RUnlock()
 
 	var guestID, name, node, guestType, status string
@@ -979,7 +1046,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		Interface("thresholds", thresholds).
 		Msg("Checking guest thresholds")
 
-	// Check thresholds
+	// Check thresholds (checkMetric will skip if threshold is nil or <= 0)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "cpu", cpu, thresholds.CPU, nil)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "memory", memUsage, thresholds.Memory, nil)
 	m.checkMetric(guestID, name, node, instanceName, guestType, "disk", diskUsage, thresholds.Disk, nil)
@@ -1046,7 +1113,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		}
 	}
 
-	// Check I/O metrics (convert bytes/s to MB/s)
+	// Check I/O metrics (convert bytes/s to MB/s) - checkMetric will skip if threshold is nil or <= 0
 	if thresholds.DiskRead != nil && thresholds.DiskRead.Trigger > 0 {
 		m.checkMetric(guestID, name, node, instanceName, guestType, "diskRead", float64(diskRead)/1024/1024, thresholds.DiskRead, nil)
 	}
@@ -1068,6 +1135,10 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.mu.RUnlock()
 		return
 	}
+	if m.config.DisableAllNodes {
+		m.mu.RUnlock()
+		return
+	}
 	thresholds := m.config.NodeDefaults
 	if override, exists := m.config.Overrides[node.ID]; exists {
 		thresholds = m.applyThresholdOverride(thresholds, override)
@@ -1082,7 +1153,7 @@ func (m *Manager) CheckNode(node models.Node) {
 		m.clearNodeOfflineAlert(node)
 	}
 
-	// Check each metric (only if node is online)
+	// Check each metric (only if node is online) - checkMetric will skip if threshold is nil or <= 0
 	if node.Status != "offline" {
 		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "cpu", node.CPU*100, thresholds.CPU, nil)
 		m.checkMetric(node.ID, node.Name, node.Name, node.Instance, "Node", "memory", node.Memory.Usage, thresholds.Memory, nil)
@@ -1104,6 +1175,10 @@ func (m *Manager) CheckNode(node models.Node) {
 func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	m.mu.RLock()
 	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	if m.config.DisableAllPBS {
 		m.mu.RUnlock()
 		return
 	}
@@ -1168,7 +1243,7 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 	}
 
-	// Check metrics only if PBS is online
+	// Check metrics only if PBS is online - checkMetric will skip if threshold is nil or <= 0
 	if pbs.Status != "offline" {
 		// PBS CPU is already a percentage
 		m.checkMetric(pbs.ID, pbs.Name, pbs.Host, pbs.Name, "PBS", "cpu", pbs.CPU, cpuThreshold, nil)
@@ -1232,8 +1307,12 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
+	disableAllHosts := m.config.DisableAllDockerHosts
 	m.mu.RUnlock()
 	if !alertsEnabled {
+		return
+	}
+	if disableAllHosts {
 		return
 	}
 
@@ -1248,12 +1327,21 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 }
 
 func (m *Manager) evaluateDockerContainer(host models.DockerHost, container models.DockerContainer, resourceID string) {
+	m.mu.RLock()
+	disableAllContainers := m.config.DisableAllDockerContainers
+	m.mu.RUnlock()
+	if disableAllContainers {
+		return
+	}
+
 	containerName := dockerContainerDisplayName(container)
 	nodeName := strings.TrimSpace(host.Hostname)
 	instanceName := dockerInstanceName(host)
 	resourceType := "Docker Container"
 
+	m.mu.RLock()
 	overrideConfig, hasOverride := m.config.Overrides[resourceID]
+	m.mu.RUnlock()
 	if hasOverride && overrideConfig.Disabled {
 		// Alerts disabled via override; clear any existing alerts and skip evaluation.
 		m.clearDockerContainerStateAlert(resourceID)
@@ -1273,7 +1361,11 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	} else {
 		m.clearDockerContainerStateAlert(resourceID)
 
-		thresholds := m.config.GuestDefaults
+		// Use Docker-specific defaults for containers
+		thresholds := ThresholdConfig{
+			CPU:    &m.config.DockerDefaults.CPU,
+			Memory: &m.config.DockerDefaults.Memory,
+		}
 		if hasOverride {
 			thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
 		}
@@ -1320,6 +1412,11 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	}
 
 	m.checkDockerContainerHealth(host, container, resourceID, containerName, instanceName, nodeName)
+
+	// Docker-specific checks
+	m.checkDockerContainerRestartLoop(host, container, resourceID, containerName, instanceName, nodeName)
+	m.checkDockerContainerOOMKill(host, container, resourceID, containerName, instanceName, nodeName)
+	m.checkDockerContainerMemoryLimit(host, container, resourceID, containerName, instanceName, nodeName)
 }
 
 // HandleDockerHostOnline clears offline tracking and alerts for a Docker host.
@@ -1584,6 +1681,267 @@ func (m *Manager) clearDockerContainerHealthAlert(resourceID string) {
 	m.clearAlert(alertID)
 }
 
+// checkDockerContainerRestartLoop detects containers stuck in a restart loop
+func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+	now := time.Now()
+
+	// Get config values with defaults
+	restartThreshold := m.config.DockerDefaults.RestartCount
+	if restartThreshold == 0 {
+		restartThreshold = 3 // Default: 3 restarts
+	}
+	timeWindow := m.config.DockerDefaults.RestartWindow
+	if timeWindow == 0 {
+		timeWindow = 300 // Default: 5 minutes (300 seconds)
+	}
+
+	m.mu.Lock()
+
+	record, exists := m.dockerRestartTracking[resourceID]
+	if !exists {
+		record = &dockerRestartRecord{
+			count:       container.RestartCount,
+			lastCount:   container.RestartCount,
+			times:       []time.Time{},
+			lastChecked: now,
+		}
+		m.dockerRestartTracking[resourceID] = record
+		m.mu.Unlock()
+		return
+	}
+
+	// If restart count increased, track it
+	if container.RestartCount > record.lastCount {
+		newRestarts := container.RestartCount - record.lastCount
+		for i := 0; i < newRestarts; i++ {
+			record.times = append(record.times, now)
+		}
+		record.lastCount = container.RestartCount
+	}
+
+	// Clean up old restart times outside the window
+	cutoff := now.Add(-time.Duration(timeWindow) * time.Second)
+	var recentRestarts []time.Time
+	for _, t := range record.times {
+		if t.After(cutoff) {
+			recentRestarts = append(recentRestarts, t)
+		}
+	}
+	record.times = recentRestarts
+	record.lastChecked = now
+
+	recentCount := len(record.times)
+	m.mu.Unlock()
+
+	// Check if we have a restart loop
+	if recentCount > restartThreshold {
+		level := AlertLevelCritical
+
+		alert := &Alert{
+			ID:           alertID,
+			Type:         "docker-container-restart-loop",
+			Level:        level,
+			ResourceID:   resourceID,
+			ResourceName: containerName,
+			Node:         nodeName,
+			Instance:     instanceName,
+			Message:      fmt.Sprintf("Docker container '%s' has restarted %d times in the last %d minutes (restart loop detected)", containerName, recentCount, timeWindow/60),
+			StartTime:    now,
+			LastSeen:     now,
+			Metadata: map[string]interface{}{
+				"hostId":        host.ID,
+				"hostName":      host.DisplayName,
+				"containerId":   container.ID,
+				"containerName": containerName,
+				"image":         container.Image,
+				"state":         container.State,
+				"status":        container.Status,
+				"restartCount":  container.RestartCount,
+				"recentRestarts": recentCount,
+			},
+		}
+
+		m.mu.Lock()
+		if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+			alert.StartTime = existing.StartTime
+		}
+		m.preserveAlertState(alertID, alert)
+		m.activeAlerts[alertID] = alert
+		m.recentAlerts[alertID] = alert
+		m.historyManager.AddAlert(*alert)
+		m.dispatchAlert(alert, false)
+		m.mu.Unlock()
+
+		log.Warn().
+			Str("container", containerName).
+			Str("host", host.DisplayName).
+			Int("restarts", recentCount).
+			Msg("Docker container restart loop detected")
+	} else {
+		// Clear alert if restart loop has stopped
+		m.clearAlert(alertID)
+	}
+}
+
+// checkDockerContainerOOMKill detects when a container was killed due to out of memory
+func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
+
+	// Exit code 137 means the container was killed by SIGKILL, often due to OOM
+	// Only alert if the container exited (not running) with exit code 137
+	state := strings.ToLower(strings.TrimSpace(container.State))
+	if (state == "exited" || state == "dead") && container.ExitCode == 137 {
+		m.mu.Lock()
+		lastExitCode, tracked := m.dockerLastExitCode[resourceID]
+
+		// Only alert if this is a new OOM kill (exit code changed to 137)
+		if !tracked || lastExitCode != 137 {
+			m.dockerLastExitCode[resourceID] = 137
+			m.mu.Unlock()
+
+			level := AlertLevelCritical
+
+			alert := &Alert{
+				ID:           alertID,
+				Type:         "docker-container-oom-kill",
+				Level:        level,
+				ResourceID:   resourceID,
+				ResourceName: containerName,
+				Node:         nodeName,
+				Instance:     instanceName,
+				Message:      fmt.Sprintf("Docker container '%s' was killed due to out of memory (OOM)", containerName),
+				StartTime:    time.Now(),
+				LastSeen:     time.Now(),
+				Metadata: map[string]interface{}{
+					"hostId":           host.ID,
+					"hostName":         host.DisplayName,
+					"containerId":      container.ID,
+					"containerName":    containerName,
+					"image":            container.Image,
+					"state":            container.State,
+					"status":           container.Status,
+					"exitCode":         container.ExitCode,
+					"memoryUsageBytes": container.MemoryUsage,
+					"memoryLimitBytes": container.MemoryLimit,
+				},
+			}
+
+			m.mu.Lock()
+			if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+				alert.StartTime = existing.StartTime
+			}
+			m.preserveAlertState(alertID, alert)
+			m.activeAlerts[alertID] = alert
+			m.recentAlerts[alertID] = alert
+			m.historyManager.AddAlert(*alert)
+			m.dispatchAlert(alert, false)
+			m.mu.Unlock()
+
+			log.Error().
+				Str("container", containerName).
+				Str("host", host.DisplayName).
+				Int64("memoryUsage", container.MemoryUsage).
+				Int64("memoryLimit", container.MemoryLimit).
+				Msg("Docker container OOM killed")
+		} else {
+			m.mu.Unlock()
+		}
+	} else {
+		// Update last exit code if it changed
+		if container.ExitCode != 0 {
+			m.mu.Lock()
+			m.dockerLastExitCode[resourceID] = container.ExitCode
+			m.mu.Unlock()
+		}
+		// Clear OOM alert if container is running or exited with different code
+		m.clearAlert(alertID)
+	}
+}
+
+// checkDockerContainerMemoryLimit alerts when container approaches its memory limit
+func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
+	// Only check if container is running and has a memory limit
+	state := strings.ToLower(strings.TrimSpace(container.State))
+	if state != "running" || container.MemoryLimit <= 0 {
+		return
+	}
+
+	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
+
+	// Get config values with defaults
+	warnThreshold := float64(m.config.DockerDefaults.MemoryWarnPct)
+	if warnThreshold == 0 {
+		warnThreshold = 90.0 // Default: 90%
+	}
+	criticalThreshold := float64(m.config.DockerDefaults.MemoryCriticalPct)
+	if criticalThreshold == 0 {
+		criticalThreshold = 95.0 // Default: 95%
+	}
+
+	// Calculate percentage of limit used
+	limitPercent := (float64(container.MemoryUsage) / float64(container.MemoryLimit)) * 100
+
+	if limitPercent >= warnThreshold {
+		level := AlertLevelWarning
+		if limitPercent >= criticalThreshold {
+			level = AlertLevelCritical
+		}
+
+		alert := &Alert{
+			ID:           alertID,
+			Type:         "docker-container-memory-limit",
+			Level:        level,
+			ResourceID:   resourceID,
+			ResourceName: containerName,
+			Node:         nodeName,
+			Instance:     instanceName,
+			Message:      fmt.Sprintf("Docker container '%s' is using %.1f%% of its memory limit (%d MB / %d MB)", containerName, limitPercent, container.MemoryUsage/(1024*1024), container.MemoryLimit/(1024*1024)),
+			StartTime:    time.Now(),
+			LastSeen:     time.Now(),
+			Metadata: map[string]interface{}{
+				"hostId":           host.ID,
+				"hostName":         host.DisplayName,
+				"containerId":      container.ID,
+				"containerName":    containerName,
+				"image":            container.Image,
+				"memoryUsageBytes": container.MemoryUsage,
+				"memoryLimitBytes": container.MemoryLimit,
+				"limitPercent":     limitPercent,
+			},
+		}
+
+		m.mu.Lock()
+		if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
+			alert.StartTime = existing.StartTime
+			existing.LastSeen = time.Now()
+			existing.Level = level
+			existing.Message = alert.Message
+			existing.Metadata = alert.Metadata
+			m.mu.Unlock()
+			return
+		}
+		m.preserveAlertState(alertID, alert)
+		m.activeAlerts[alertID] = alert
+		m.recentAlerts[alertID] = alert
+		m.historyManager.AddAlert(*alert)
+		m.dispatchAlert(alert, false)
+		m.mu.Unlock()
+
+		log.Warn().
+			Str("container", containerName).
+			Str("host", host.DisplayName).
+			Float64("limitPercent", limitPercent).
+			Msg("Docker container approaching memory limit")
+	} else {
+		// Clear alert if below warning threshold minus 5% (hysteresis)
+		clearThreshold := warnThreshold - 5
+		if limitPercent < clearThreshold {
+			m.clearAlert(alertID)
+		}
+	}
+}
+
 func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ...string) {
 	if len(metrics) == 0 {
 		metrics = []string{"cpu", "memory"}
@@ -1651,6 +2009,10 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.RUnlock()
 		return
 	}
+	if m.config.DisableAllStorage {
+		m.mu.RUnlock()
+		return
+	}
 
 	// Check if there's an override for this storage device
 	override, hasOverride := m.config.Overrides[storage.ID]
@@ -1709,6 +2071,7 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		Bool("hasOverride", hasOverride).
 		Msg("Checking storage thresholds")
 
+	// Check usage if storage is online - checkMetric will skip if threshold is nil or <= 0
 	if storage.Status != "offline" && storage.Status != "unavailable" && storage.Usage > 0 {
 		m.checkMetric(storage.ID, storage.Name, storage.Node, storage.Instance, "Storage", "usage", storage.Usage, &threshold, nil)
 	}
@@ -3657,6 +4020,19 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 
 	removedCount := 0
 	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+
+		// Skip alerts that are not tied to Proxmox nodes. Docker and PBS resources use
+		// synthetic node identifiers that won't appear in the Proxmox node list, so we
+		// must preserve their alerts here.
+		if strings.HasPrefix(alertID, "docker-") || strings.HasPrefix(alert.ResourceID, "docker:") {
+			continue
+		}
+		if strings.HasPrefix(alertID, "pbs-") || alert.Type == "pbs-offline" {
+			continue
+		}
 		// Use the Node field from the alert itself, which is more reliable
 		node := alert.Node
 

@@ -4,8 +4,9 @@ import {
   createContext,
   useContext,
   createEffect,
-  onMount,
+  createMemo,
   onCleanup,
+  onMount,
   getOwner,
   runWithOwner,
 } from 'solid-js';
@@ -35,6 +36,8 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
+import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { DockerIcon } from '@/components/icons/DockerIcon';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -537,8 +540,6 @@ function App() {
                         dataUpdated={dataUpdated}
                         lastUpdateText={lastUpdateText}
                         versionInfo={versionInfo}
-                        darkMode={darkMode}
-                        toggleDarkMode={toggleDarkMode}
                         hasAuth={hasAuth}
                         needsAuth={needsAuth}
                         proxyAuthInfo={proxyAuthInfo}
@@ -576,7 +577,10 @@ function App() {
       <Route path="/backups" component={() => <Navigate href="/proxmox/backups" />} />
       <Route path="/docker" component={() => <DockerHosts hosts={state().dockerHosts} />} />
       <Route path="/alerts/*" component={Alerts} />
-      <Route path="/settings/*" component={Settings} />
+      <Route
+        path="/settings/*"
+        component={() => <Settings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
+      />
     </Router>
   );
 }
@@ -588,8 +592,6 @@ function AppLayout(props: {
   dataUpdated: () => boolean;
   lastUpdateText: () => string;
   versionInfo: () => VersionInfo | null;
-  darkMode: () => boolean;
-  toggleDarkMode: () => void;
   hasAuth: () => boolean;
   needsAuth: () => boolean;
   proxyAuthInfo: () => { username?: string; logoutURL?: string } | null;
@@ -599,39 +601,45 @@ function AppLayout(props: {
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [dockerTabPreference, setDockerTabPreference] = createSignal(true);
+  const PLATFORM_SEEN_STORAGE_KEY = 'pulse-platforms-seen';
 
-  const DOCKER_VISIBILITY_EVENT = 'pulse:docker-tab-visibility';
-  const DOCKER_PREFERENCE_KEY = 'pulse-show-docker-tab';
-
-  const readDockerPreference = () => {
-    if (typeof window === 'undefined') return true;
-    const stored = window.localStorage.getItem(DOCKER_PREFERENCE_KEY);
-    return stored !== 'false';
+  const readSeenPlatforms = (): Record<string, boolean> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const stored = window.localStorage.getItem(PLATFORM_SEEN_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Record<string, boolean>;
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to parse stored platform visibility preferences', error);
+    }
+    return {};
   };
 
-  onMount(() => {
-    setDockerTabPreference(readDockerPreference());
+  const [seenPlatforms, setSeenPlatforms] = createSignal<Record<string, boolean>>(readSeenPlatforms());
 
-    const refreshPreference = (value?: boolean) => {
-      if (typeof value === 'boolean') {
-        setDockerTabPreference(value);
-        return;
+  const persistSeenPlatforms = (map: Record<string, boolean>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(PLATFORM_SEEN_STORAGE_KEY, JSON.stringify(map));
+    } catch (error) {
+      console.warn('Failed to persist platform visibility preferences', error);
+    }
+  };
+
+  const markPlatformSeen = (platformId: string) => {
+    setSeenPlatforms((current) => {
+      if (current[platformId]) {
+        return current;
       }
-      setDockerTabPreference(readDockerPreference());
-    };
-
-    const handler = (event: Event) => {
-      if (event instanceof CustomEvent && typeof event.detail?.value === 'boolean') {
-        refreshPreference(event.detail.value);
-      } else {
-        refreshPreference();
-      }
-    };
-
-    window.addEventListener(DOCKER_VISIBILITY_EVENT, handler);
-    return () => window.removeEventListener(DOCKER_VISIBILITY_EVENT, handler);
-  });
+      const updated = { ...current, [platformId]: true };
+      persistSeenPlatforms(updated);
+      return updated;
+    });
+  };
 
   // Determine active tab from current path
   const getActiveTab = () => {
@@ -642,13 +650,61 @@ function AppLayout(props: {
     if (path.startsWith('/settings')) return 'settings';
     return 'proxmox';
   };
+  const hasDockerHosts = createMemo(() => (props.state().dockerHosts?.length ?? 0) > 0);
+  const hasProxmoxHosts = createMemo(
+    () =>
+      (props.state().nodes?.length ?? 0) > 0 ||
+      (props.state().vms?.length ?? 0) > 0 ||
+      (props.state().containers?.length ?? 0) > 0,
+  );
 
-  const shouldShowDockerTab = () => {
-    const hosts = props.state().dockerHosts || [];
-    if (hosts.length > 0) {
-      return true;
+  createEffect(() => {
+    if (hasDockerHosts()) {
+      markPlatformSeen('docker');
     }
-    return dockerTabPreference();
+  });
+
+  createEffect(() => {
+    if (hasProxmoxHosts()) {
+      markPlatformSeen('proxmox');
+    }
+  });
+
+  const platformTabs = createMemo(() => {
+    return [
+      {
+        id: 'proxmox' as const,
+        label: 'Proxmox',
+        route: '/proxmox/overview',
+        settingsRoute: '/settings',
+        tooltip: 'Monitor Proxmox clusters and nodes',
+        enabled: hasProxmoxHosts() || !!seenPlatforms()['proxmox'],
+        live: hasProxmoxHosts(),
+        icon: (
+          <ProxmoxIcon class="w-4 h-4 shrink-0" />
+        ),
+      },
+      {
+        id: 'docker' as const,
+        label: 'Docker',
+        route: '/docker',
+        settingsRoute: '/settings/docker',
+        tooltip: 'Monitor Docker hosts and containers',
+        enabled: hasDockerHosts() || !!seenPlatforms()['docker'],
+        live: hasDockerHosts(),
+        icon: (
+          <DockerIcon class="w-4 h-4 shrink-0" />
+        ),
+      },
+    ];
+  });
+
+  const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {
+    if (platform.enabled) {
+      navigate(platform.route);
+    } else {
+      navigate(platform.settingsRoute);
+    }
   };
 
   return (
@@ -692,44 +748,58 @@ function AppLayout(props: {
           </Show>
         </div>
         <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
-          <button
-            onClick={props.toggleDarkMode}
-            class="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none transition-colors"
-            title={props.darkMode() ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            <Show
-              when={props.darkMode()}
-              fallback={
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                  />
-                </svg>
-              }
+          <div class="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/alerts')}
+              class={`p-2 rounded-md transition-colors focus:outline-none ${
+                location.pathname.startsWith('/alerts')
+                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+              title="View alerts"
             >
               <svg
-                class="h-5 w-5"
-                fill="none"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
+                fill="none"
                 stroke="currentColor"
                 stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                />
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
-            </Show>
-          </button>
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              class={`p-2 rounded-md transition-colors focus:outline-none relative ${
+                location.pathname.startsWith('/settings')
+                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+              title="Settings"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <Show when={updateStore.isUpdateVisible()}>
+                <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              </Show>
+            </button>
+          </div>
           <div class="flex items-center gap-2">
             <div
               class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
@@ -808,104 +878,42 @@ function AppLayout(props: {
         class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide"
         role="tablist"
       >
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'proxmox'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/proxmox/overview')}
-          role="tab"
-          title="Proxmox overview, storage, and backups"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-          </svg>
-          <span>Proxmox</span>
-        </div>
-        <Show when={shouldShowDockerTab()}>
-          <div
-            class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-              getActiveTab() === 'docker'
-                ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-            }`}
-            onClick={() => navigate('/docker')}
-            role="tab"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338 0-.676.03-1.01.07-.458-1.515-1.877-2.352-3.173-2.352-1.604 0-2.832 1.125-3.254 1.828a.18.18 0 01-.142.084H1.101a.17.17 0 00-.17.171c0 1.047.134 3.528 1.82 5.416.819.915 2.096 2.055 4.563 2.434.766.117 1.582.176 2.427.176 1.066 0 2.14-.118 3.153-.35.88-.202 1.72-.5 2.497-.885.28-.14.53-.295.776-.458.986-.656 1.732-1.5 2.24-2.542.507.362 1.07.546 1.657.546.452 0 .908-.117 1.328-.346.922-.506 1.4-1.528 1.4-2.98 0-.156-.047-.31-.129-.438"/>
-            </svg>
-            <span>Docker</span>
-          </div>
-        </Show>
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${
-            getActiveTab() === 'alerts'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/alerts')}
-          role="tab"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          <span>Alerts</span>
-        </div>
-        <div
-          class={`tab px-2 sm:px-3 py-1.5 cursor-pointer text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors relative ${
-            getActiveTab() === 'settings'
-              ? 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent'
-          }`}
-          onClick={() => navigate('/settings')}
-          role="tab"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-          <span>Settings</span>
-          <Show when={updateStore.isUpdateVisible()}>
-            <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          </Show>
-        </div>
+        <For each={platformTabs()}>
+          {(platform) => {
+            const isActive = () => getActiveTab() === platform.id;
+            const disabled = () => !platform.enabled;
+            const className = () => {
+              if (isActive()) {
+                return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
+              }
+              if (disabled()) {
+                return 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-60 border-transparent';
+              }
+              return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
+            };
+
+            const title = () =>
+              disabled()
+                ? `${platform.label} is not configured yet. Click to open settings.`
+                : platform.tooltip;
+
+            return (
+              <div
+                class={`tab px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
+                role="tab"
+                aria-disabled={disabled()}
+                onClick={() => handlePlatformClick(platform)}
+                title={title()}
+              >
+                {platform.icon}
+                <span>{platform.label}</span>
+                <Show when={disabled() && !platform.live}>
+                  <span class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">Add host</span>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
       </div>
 
       {/* Main Content */}

@@ -472,10 +472,10 @@ export function Alerts() {
       cpu: 80,
       memory: 85,
       disk: 90,
-      diskRead: 0,
-      diskWrite: 0,
-      networkIn: 0,
-      networkOut: 0,
+      diskRead: -1,
+      diskWrite: -1,
+      networkIn: -1,
+      networkOut: -1,
     });
     setGuestDisableConnectivity(false);
     setNodeDefaults({
@@ -517,10 +517,10 @@ export function Alerts() {
           cpu: getTriggerValue(config.guestDefaults.cpu) ?? 80,
           memory: getTriggerValue(config.guestDefaults.memory) ?? 85,
           disk: getTriggerValue(config.guestDefaults.disk) ?? 90,
-          diskRead: getTriggerValue(config.guestDefaults.diskRead) ?? 0,
-          diskWrite: getTriggerValue(config.guestDefaults.diskWrite) ?? 0,
-          networkIn: getTriggerValue(config.guestDefaults.networkIn) ?? 0,
-          networkOut: getTriggerValue(config.guestDefaults.networkOut) ?? 0,
+          diskRead: getTriggerValue(config.guestDefaults.diskRead) ?? -1,
+          diskWrite: getTriggerValue(config.guestDefaults.diskWrite) ?? -1,
+          networkIn: getTriggerValue(config.guestDefaults.networkIn) ?? -1,
+          networkOut: getTriggerValue(config.guestDefaults.networkOut) ?? -1,
         });
         setGuestDisableConnectivity(Boolean(config.guestDefaults.disableConnectivity));
       } else {
@@ -533,6 +533,17 @@ export function Alerts() {
           memory: getTriggerValue(config.nodeDefaults.memory) ?? 85,
           disk: getTriggerValue(config.nodeDefaults.disk) ?? 90,
           temperature: getTriggerValue(config.nodeDefaults.temperature) ?? 80,
+        });
+      }
+
+      if (config.dockerDefaults) {
+        setDockerDefaults({
+          cpu: getTriggerValue(config.dockerDefaults.cpu) ?? 80,
+          memory: getTriggerValue(config.dockerDefaults.memory) ?? 85,
+          restartCount: config.dockerDefaults.restartCount ?? 3,
+          restartWindow: config.dockerDefaults.restartWindow ?? 300,
+          memoryWarnPct: config.dockerDefaults.memoryWarnPct ?? 90,
+          memoryCriticalPct: config.dockerDefaults.memoryCriticalPct ?? 95,
         });
       }
 
@@ -557,6 +568,20 @@ export function Alerts() {
           pbs: config.timeThreshold,
         });
       }
+
+      // Load global disable flags
+      setDisableAllNodes(config.disableAllNodes ?? false);
+      setDisableAllGuests(config.disableAllGuests ?? false);
+      setDisableAllStorage(config.disableAllStorage ?? false);
+      setDisableAllPBS(config.disableAllPBS ?? false);
+      setDisableAllDockerHosts(config.disableAllDockerHosts ?? false);
+      setDisableAllDockerContainers(config.disableAllDockerContainers ?? false);
+
+      // Load global disable offline alerts flags
+      setDisableAllNodesOffline(config.disableAllNodesOffline ?? false);
+      setDisableAllGuestsOffline(config.disableAllGuestsOffline ?? false);
+      setDisableAllPBSOffline(config.disableAllPBSOffline ?? false);
+      setDisableAllDockerHostsOffline(config.disableAllDockerHostsOffline ?? false);
 
       setRawOverridesConfig(config.overrides || {});
 
@@ -748,10 +773,10 @@ export function Alerts() {
     cpu: 80,
     memory: 85,
     disk: 90,
-    diskRead: 0,
-    diskWrite: 0,
-    networkIn: 0,
-    networkOut: 0,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
   });
   const [guestDisableConnectivity, setGuestDisableConnectivity] = createSignal(false);
 
@@ -762,6 +787,15 @@ export function Alerts() {
     temperature: 80,
   });
 
+  const [dockerDefaults, setDockerDefaults] = createSignal({
+    cpu: 80,
+    memory: 85,
+    restartCount: 3,
+    restartWindow: 300,
+    memoryWarnPct: 90,
+    memoryCriticalPct: 95,
+  });
+
   const [storageDefault, setStorageDefault] = createSignal(85);
   const [timeThreshold, setTimeThreshold] = createSignal(0); // Legacy
   const [timeThresholds, setTimeThresholds] = createSignal({
@@ -770,6 +804,20 @@ export function Alerts() {
     storage: 30,
     pbs: 30,
   });
+
+  // Global disable flags per resource type
+  const [disableAllNodes, setDisableAllNodes] = createSignal(false);
+  const [disableAllGuests, setDisableAllGuests] = createSignal(false);
+  const [disableAllStorage, setDisableAllStorage] = createSignal(false);
+  const [disableAllPBS, setDisableAllPBS] = createSignal(false);
+  const [disableAllDockerHosts, setDisableAllDockerHosts] = createSignal(false);
+  const [disableAllDockerContainers, setDisableAllDockerContainers] = createSignal(false);
+
+  // Global disable offline alerts flags
+  const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(false);
+  const [disableAllGuestsOffline, setDisableAllGuestsOffline] = createSignal(false);
+  const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
+  const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
 
   const tabs: { id: AlertTab; label: string; icon: string }[] = [
     {
@@ -846,6 +894,18 @@ export function Alerts() {
 
                     const alertConfig = {
                       enabled: true,
+                      // Global disable flags per resource type
+                      disableAllNodes: disableAllNodes(),
+                      disableAllGuests: disableAllGuests(),
+                      disableAllStorage: disableAllStorage(),
+                      disableAllPBS: disableAllPBS(),
+                      disableAllDockerHosts: disableAllDockerHosts(),
+                      disableAllDockerContainers: disableAllDockerContainers(),
+                      // Global disable offline alerts flags
+                      disableAllNodesOffline: disableAllNodesOffline(),
+                      disableAllGuestsOffline: disableAllGuestsOffline(),
+                      disableAllPBSOffline: disableAllPBSOffline(),
+                      disableAllDockerHostsOffline: disableAllDockerHostsOffline(),
                       guestDefaults: {
                         cpu: createHysteresisThreshold(guestDefaults().cpu),
                         memory: createHysteresisThreshold(guestDefaults().memory),
@@ -861,6 +921,14 @@ export function Alerts() {
                         memory: createHysteresisThreshold(nodeDefaults().memory),
                         disk: createHysteresisThreshold(nodeDefaults().disk),
                         temperature: createHysteresisThreshold(nodeDefaults().temperature),
+                      },
+                      dockerDefaults: {
+                        cpu: createHysteresisThreshold(dockerDefaults().cpu),
+                        memory: createHysteresisThreshold(dockerDefaults().memory),
+                        restartCount: dockerDefaults().restartCount,
+                        restartWindow: dockerDefaults().restartWindow,
+                        memoryWarnPct: dockerDefaults().memoryWarnPct,
+                        memoryCriticalPct: dockerDefaults().memoryCriticalPct,
                       },
                       storageDefault: createHysteresisThreshold(storageDefault()),
                       minimumDelta: 2.0,
@@ -991,6 +1059,8 @@ export function Alerts() {
               setGuestDisableConnectivity={setGuestDisableConnectivity}
               nodeDefaults={nodeDefaults}
               setNodeDefaults={setNodeDefaults}
+              dockerDefaults={dockerDefaults}
+              setDockerDefaults={setDockerDefaults}
               storageDefault={storageDefault}
               setStorageDefault={setStorageDefault}
               timeThreshold={timeThreshold}
@@ -999,7 +1069,28 @@ export function Alerts() {
               setTimeThresholds={setTimeThresholds}
               activeAlerts={activeAlerts}
               setHasUnsavedChanges={setHasUnsavedChanges}
+              hasUnsavedChanges={hasUnsavedChanges}
               removeAlerts={removeAlerts}
+              disableAllNodes={disableAllNodes}
+              setDisableAllNodes={setDisableAllNodes}
+              disableAllGuests={disableAllGuests}
+              setDisableAllGuests={setDisableAllGuests}
+              disableAllStorage={disableAllStorage}
+              setDisableAllStorage={setDisableAllStorage}
+              disableAllPBS={disableAllPBS}
+              setDisableAllPBS={setDisableAllPBS}
+              disableAllDockerHosts={disableAllDockerHosts}
+              setDisableAllDockerHosts={setDisableAllDockerHosts}
+              disableAllDockerContainers={disableAllDockerContainers}
+              setDisableAllDockerContainers={setDisableAllDockerContainers}
+              disableAllNodesOffline={disableAllNodesOffline}
+              setDisableAllNodesOffline={setDisableAllNodesOffline}
+              disableAllGuestsOffline={disableAllGuestsOffline}
+              setDisableAllGuestsOffline={setDisableAllGuestsOffline}
+              disableAllPBSOffline={disableAllPBSOffline}
+              setDisableAllPBSOffline={setDisableAllPBSOffline}
+              disableAllDockerHostsOffline={disableAllDockerHostsOffline}
+              setDisableAllDockerHostsOffline={setDisableAllDockerHostsOffline}
             />
           </Show>
 
@@ -1397,6 +1488,7 @@ interface ThresholdsTabProps {
   state: State;
   guestDefaults: () => Record<string, number>;
   nodeDefaults: () => Record<string, number>;
+  dockerDefaults: () => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
   storageDefault: () => number;
   timeThreshold: () => number;
   timeThresholds: () => { guest: number; node: number; storage: number; pbs: number };
@@ -1410,6 +1502,9 @@ interface ThresholdsTabProps {
   setNodeDefaults: (
     value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
+  setDockerDefaults: (
+    value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
+  ) => void;
   setStorageDefault: (value: number) => void;
   setTimeThreshold: (value: number) => void;
   setTimeThresholds: (value: { guest: number; node: number; storage: number; pbs: number }) => void;
@@ -1417,7 +1512,30 @@ interface ThresholdsTabProps {
   setRawOverridesConfig: (value: Record<string, RawOverrideConfig>) => void;
   activeAlerts: Record<string, Alert>;
   setHasUnsavedChanges: (value: boolean) => void;
+  hasUnsavedChanges: () => boolean;
   removeAlerts: (predicate: (alert: Alert) => boolean) => void;
+  // Global disable flags
+  disableAllNodes: () => boolean;
+  setDisableAllNodes: (value: boolean) => void;
+  disableAllGuests: () => boolean;
+  setDisableAllGuests: (value: boolean) => void;
+  disableAllStorage: () => boolean;
+  setDisableAllStorage: (value: boolean) => void;
+  disableAllPBS: () => boolean;
+  setDisableAllPBS: (value: boolean) => void;
+  disableAllDockerHosts: () => boolean;
+  setDisableAllDockerHosts: (value: boolean) => void;
+  disableAllDockerContainers: () => boolean;
+  setDisableAllDockerContainers: (value: boolean) => void;
+  // Global disable offline alerts flags
+  disableAllNodesOffline: () => boolean;
+  setDisableAllNodesOffline: (value: boolean) => void;
+  disableAllGuestsOffline: () => boolean;
+  setDisableAllGuestsOffline: (value: boolean) => void;
+  disableAllPBSOffline: () => boolean;
+  setDisableAllPBSOffline: (value: boolean) => void;
+  disableAllDockerHostsOffline: () => boolean;
+  setDisableAllDockerHostsOffline: (value: boolean) => void;
 }
 
 function ThresholdsTab(props: ThresholdsTabProps) {
@@ -1439,6 +1557,8 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setGuestDisableConnectivity={props.setGuestDisableConnectivity}
       nodeDefaults={props.nodeDefaults()}
       setNodeDefaults={props.setNodeDefaults}
+      dockerDefaults={props.dockerDefaults()}
+      setDockerDefaults={props.setDockerDefaults}
       storageDefault={props.storageDefault}
       setStorageDefault={props.setStorageDefault}
       timeThreshold={props.timeThreshold}
@@ -1448,6 +1568,26 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       setHasUnsavedChanges={props.setHasUnsavedChanges}
       activeAlerts={props.activeAlerts}
       removeAlerts={props.removeAlerts}
+      disableAllNodes={props.disableAllNodes}
+      setDisableAllNodes={props.setDisableAllNodes}
+      disableAllGuests={props.disableAllGuests}
+      setDisableAllGuests={props.setDisableAllGuests}
+      disableAllStorage={props.disableAllStorage}
+      setDisableAllStorage={props.setDisableAllStorage}
+      disableAllPBS={props.disableAllPBS}
+      setDisableAllPBS={props.setDisableAllPBS}
+      disableAllDockerHosts={props.disableAllDockerHosts}
+      setDisableAllDockerHosts={props.setDisableAllDockerHosts}
+      disableAllDockerContainers={props.disableAllDockerContainers}
+      setDisableAllDockerContainers={props.setDisableAllDockerContainers}
+      disableAllNodesOffline={props.disableAllNodesOffline}
+      setDisableAllNodesOffline={props.setDisableAllNodesOffline}
+      disableAllGuestsOffline={props.disableAllGuestsOffline}
+      setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
+      disableAllPBSOffline={props.disableAllPBSOffline}
+      setDisableAllPBSOffline={props.setDisableAllPBSOffline}
+      disableAllDockerHostsOffline={props.disableAllDockerHostsOffline}
+      setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
     />
   );
 }
