@@ -112,7 +112,12 @@ type NodeConfigWithStatus = NodeConfig & {
   status: 'connected' | 'disconnected' | 'error' | 'pending';
 };
 
-const Settings: Component = () => {
+interface SettingsProps {
+  darkMode: () => boolean;
+  toggleDarkMode: () => void;
+}
+
+const Settings: Component<SettingsProps> = (props) => {
   const { state, connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2111,6 +2116,32 @@ const Settings: Component = () => {
                         <li>• Settings persist unless overridden by env vars</li>
                       </ul>
                     </div>
+                  </div>
+                </Card>
+
+                <Card padding="lg" class="space-y-3">
+                  <SectionHeader
+                    title="Appearance"
+                    description="Switch between light and dark themes. Stored per device and synced to the server when authenticated."
+                    size="sm"
+                    align="left"
+                  />
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                      <p class="font-medium text-gray-900 dark:text-gray-100">Dark mode</p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Toggle to match your environment. Pulse remembers this preference on each browser.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={props.darkMode()}
+                      onChange={(event) => {
+                        const desired = (event.currentTarget as HTMLInputElement).checked;
+                        if (desired !== props.darkMode()) {
+                          props.toggleDarkMode();
+                        }
+                      }}
+                    />
                   </div>
                 </Card>
 

@@ -60,6 +60,11 @@ export function createWebSocketStore(url: string) {
   const [recentlyResolved, setRecentlyResolved] = createStore<Record<string, ResolvedAlert>>({});
   const [updateProgress, setUpdateProgress] = createSignal<unknown>(null);
 
+  // Track consecutive empty dockerHost payloads so we can tolerate transient
+  // blanks without spamming the UI.
+  let consecutiveEmptyDockerUpdates = 0;
+  let hasReceivedNonEmptyDockerHosts = false;
+
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
 
@@ -136,6 +141,8 @@ export function createWebSocketStore(url: string) {
       setReconnecting(false); // Clear reconnecting state
       reconnectAttempt = 0; // Reset reconnect attempts on successful connection
       isReconnecting = false;
+      consecutiveEmptyDockerUpdates = 0;
+      hasReceivedNonEmptyDockerHosts = false;
 
       // Start heartbeat to keep connection alive
       if (heartbeatInterval) {
@@ -239,8 +246,32 @@ export function createWebSocketStore(url: string) {
             if (message.data.dockerHosts !== undefined && message.data.dockerHosts !== null) {
               // Only update if dockerHosts is present and not null
               if (Array.isArray(message.data.dockerHosts)) {
-                console.log('[WebSocket] Updating dockerHosts:', message.data.dockerHosts.length, 'hosts');
-                setState('dockerHosts', message.data.dockerHosts);
+                const incomingHosts = message.data.dockerHosts;
+                const currentHosts = state.dockerHosts ?? [];
+
+                if (incomingHosts.length === 0) {
+                  consecutiveEmptyDockerUpdates += 1;
+
+                  const shouldApplyEmptyState =
+                    !hasReceivedNonEmptyDockerHosts ||
+                    consecutiveEmptyDockerUpdates >= 3 ||
+                    message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE;
+
+                  if (shouldApplyEmptyState) {
+                    console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
+                    setState('dockerHosts', incomingHosts);
+                  } else {
+                    console.debug(
+                      '[WebSocket] Skipping transient empty dockerHosts payload',
+                      consecutiveEmptyDockerUpdates,
+                    );
+                  }
+                } else {
+                  consecutiveEmptyDockerUpdates = 0;
+                  hasReceivedNonEmptyDockerHosts = true;
+                  console.log('[WebSocket] Updating dockerHosts:', incomingHosts.length, 'hosts');
+                  setState('dockerHosts', incomingHosts);
+                }
               } else {
                 console.warn('[WebSocket] Received non-array dockerHosts:', typeof message.data.dockerHosts);
               }

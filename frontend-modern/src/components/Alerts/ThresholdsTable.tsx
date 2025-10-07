@@ -1,4 +1,8 @@
 import { createSignal, createMemo, Show, For, onMount, onCleanup } from 'solid-js';
+
+// Workaround for eslint false-positive when `For` is used only in JSX
+const __ensureForUsage = For;
+void __ensureForUsage;
 import type {
   VM,
   Container,
@@ -10,7 +14,7 @@ import type {
   DockerContainer,
 } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
-import { ResourceTable, Resource } from './ResourceTable';
+import { ResourceTable, Resource, GroupHeaderMeta } from './ResourceTable';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
@@ -78,6 +82,10 @@ interface ThresholdsTableProps {
   setNodeDefaults: (
     value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
+  dockerDefaults: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number };
+  setDockerDefaults: (
+    value: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number } | ((prev: { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }) => { cpu: number; memory: number; restartCount: number; restartWindow: number; memoryWarnPct: number; memoryCriticalPct: number }),
+  ) => void;
   storageDefault: () => number;
   setStorageDefault: (value: number) => void;
   timeThreshold: () => number;
@@ -87,6 +95,28 @@ interface ThresholdsTableProps {
   setHasUnsavedChanges: (value: boolean) => void;
   activeAlerts?: Record<string, Alert>;
   removeAlerts?: (predicate: (alert: Alert) => boolean) => void;
+  // Global disable flags
+  disableAllNodes: () => boolean;
+  setDisableAllNodes: (value: boolean) => void;
+  disableAllGuests: () => boolean;
+  setDisableAllGuests: (value: boolean) => void;
+  disableAllStorage: () => boolean;
+  setDisableAllStorage: (value: boolean) => void;
+  disableAllPBS: () => boolean;
+  setDisableAllPBS: (value: boolean) => void;
+  disableAllDockerHosts: () => boolean;
+  setDisableAllDockerHosts: (value: boolean) => void;
+  disableAllDockerContainers: () => boolean;
+  setDisableAllDockerContainers: (value: boolean) => void;
+  // Global disable offline alerts flags
+  disableAllNodesOffline: () => boolean;
+  setDisableAllNodesOffline: (value: boolean) => void;
+  disableAllGuestsOffline: () => boolean;
+  setDisableAllGuestsOffline: (value: boolean) => void;
+  disableAllPBSOffline: () => boolean;
+  setDisableAllPBSOffline: (value: boolean) => void;
+  disableAllDockerHostsOffline: () => boolean;
+  setDisableAllDockerHostsOffline: (value: boolean) => void;
 }
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
@@ -96,7 +126,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     Record<string, number | undefined>
   >({});
   const [activeTab, setActiveTab] = createSignal<'proxmox' | 'docker'>('proxmox');
-
   let searchInputRef: HTMLInputElement | undefined;
 
   // Set up keyboard shortcuts
@@ -202,18 +231,35 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
+      const displayName = node.displayName?.trim() || node.name;
+      const rawName = node.name;
+      // Build a best-effort management URL for the node
+      const hostValue = node.host?.trim() || rawName;
+      const normalizedHost = hostValue.startsWith('http://') || hostValue.startsWith('https://')
+        ? hostValue
+        : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+
       return {
         id: node.id,
-        name: node.name,
+        name: displayName,
+        displayName,
+        rawName,
+        host: normalizedHost,
         type: 'node' as const,
         resourceType: 'Node',
         status: node.status,
+        uptime: node.uptime,
+        cpu: node.cpu,
+        memory: node.memory?.usage,
         hasOverride: hasCustomThresholds || false,
         disabled: false,
         disableConnectivity: override?.disableConnectivity || false,
-        thresholds: override?.thresholds || {},
-        defaults: props.nodeDefaults,
-      };
+       thresholds: override?.thresholds || {},
+       defaults: props.nodeDefaults,
+        clusterName: node.isClusterMember ? node.clusterName?.trim() : undefined,
+        isClusterMember: node.isClusterMember ?? false,
+        instance: node.instance,
+      } satisfies Resource;
     });
 
     if (search) {
@@ -418,18 +464,8 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     resources?.filter((resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity)
       .length ?? 0;
 
-  const sectionRefs: Record<string, HTMLDivElement | undefined> = {};
-  const registerSection = (key: string) => (el: HTMLDivElement) => {
-    if (el) {
-      sectionRefs[key] = el;
-    }
-  };
-
-  const scrollToSection = (key: string) => {
-    const el = sectionRefs[key];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const registerSection = (_key: string) => (_el: HTMLDivElement | null) => {
+    /* no-op placeholder for future scroll restoration */
   };
 
   // Process guests with their overrides and group by node
@@ -511,6 +547,41 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
   const guestsFlat = createMemo<Resource[]>(() =>
     Object.values(guestsGroupedByNode() ?? {}).flat(),
   );
+
+  const guestGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
+    const meta: Record<string, GroupHeaderMeta> = {};
+    const nodeLookup = new Map((props.nodes ?? []).map((node) => [node.name, node]));
+
+    Object.keys(guestsGroupedByNode() ?? {}).forEach((nodeName) => {
+      const node = nodeLookup.get(nodeName);
+      if (!node) {
+        return;
+      }
+
+      const displayName = node.displayName?.trim() || node.name;
+      const hostValue = node.host?.trim();
+      let host: string | undefined;
+      if (hostValue && hostValue !== '') {
+        host = hostValue.startsWith('http')
+          ? hostValue
+          : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+      } else if (node.name) {
+        host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
+      }
+
+      meta[nodeName] = {
+        type: 'node',
+        displayName,
+        rawName: node.name,
+        host,
+        status: node.status,
+        clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
+        isClusterMember: node.isClusterMember ?? false,
+      };
+    });
+
+    return meta;
+  });
 
   // Process PBS servers with their overrides
   const pbsServersWithOverrides = createMemo<Resource[]>((prev = []) => {
@@ -1002,559 +1073,6 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
   return (
     <div class="space-y-6">
-      {/* Global Settings Section */}
-      <Card padding="none">
-        <div class="p-4">
-          <SectionHeader
-            title="Global default thresholds"
-            description="Default thresholds that apply to all resources unless overridden"
-            size="md"
-          />
-        </div>
-
-        <div class="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-          {/* Threshold inputs in a responsive layout */}
-          <div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Default thresholds for all resources. Individual resources can override these values
-            below.
-            <span class="ml-2 text-blue-600 dark:text-blue-400">
-              Enter 0 or -1 to disable specific alerts.
-            </span>
-          </p>
-          <Show when={props.dockerHosts.length > 0}>
-            <p class="text-xs text-blue-600 dark:text-blue-400 mb-4">
-              Docker containers inherit these guest defaults. Adjust them here to change the
-              baseline for Docker workloads.
-            </p>
-          </Show>
-          <div class="space-y-4">
-              <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
-                  VMs & Containers
-                </h4>
-                <div class="flex items-center gap-3 mb-3">
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    Powered-off alerts
-                  </span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!props.guestDisableConnectivity}
-                      onChange={(e) => {
-                        const enabled = e.currentTarget.checked;
-                        props.setGuestDisableConnectivity(!enabled);
-                        props.setHasUnsavedChanges(true);
-                        if (!enabled) {
-                          props.removeAlerts?.((alert) => alert.type === 'powered-off');
-                        }
-                      }}
-                      class="sr-only peer"
-                    />
-                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                  <span
-                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      props.guestDisableConnectivity
-                        ? 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-100'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
-                    }`}
-                  >
-                    {props.guestDisableConnectivity ? 'Off' : 'On'}
-                  </span>
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                  Turn this off if you routinely power guests down and don’t want warnings.
-                </p>
-
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div class="space-y-1">
-                    <label
-                      for="guest-cpu"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>CPU</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="guest-cpu"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.guestDefaults.cpu ?? 0}
-                      title="Enter 0 or -1 to disable CPU alerts"
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          cpu: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-memory"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Memory</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="guest-memory"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.guestDefaults.memory ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          memory: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-disk"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Disk</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="guest-disk"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.guestDefaults.disk ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          disk: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-disk-read"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Disk Read</span>
-                      <span class="text-[10px] font-normal text-gray-400">MB/s</span>
-                    </label>
-                    <input
-                      id="guest-disk-read"
-                      type="number"
-                      min="-1"
-                      max="10000"
-                      value={props.guestDefaults.diskRead ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          diskRead: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-disk-write"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Disk Write</span>
-                      <span class="text-[10px] font-normal text-gray-400">MB/s</span>
-                    </label>
-                    <input
-                      id="guest-disk-write"
-                      type="number"
-                      min="-1"
-                      max="10000"
-                      value={props.guestDefaults.diskWrite ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          diskWrite: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-network-in"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Net In</span>
-                      <span class="text-[10px] font-normal text-gray-400">MB/s</span>
-                    </label>
-                    <input
-                      id="guest-network-in"
-                      type="number"
-                      min="-1"
-                      max="10000"
-                      value={props.guestDefaults.networkIn ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          networkIn: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="guest-network-out"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Net Out</span>
-                      <span class="text-[10px] font-normal text-gray-400">MB/s</span>
-                    </label>
-                    <input
-                      id="guest-network-out"
-                      type="number"
-                      min="-1"
-                      max="10000"
-                      value={props.guestDefaults.networkOut ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setGuestDefaults((prev) => ({
-                          ...prev,
-                          networkOut: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
-                  Proxmox Nodes
-                </h4>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div class="space-y-1">
-                    <label
-                      for="node-cpu"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>CPU</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="node-cpu"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.nodeDefaults.cpu ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setNodeDefaults((prev) => ({
-                          ...prev,
-                          cpu: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="node-memory"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Memory</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="node-memory"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.nodeDefaults.memory ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setNodeDefaults((prev) => ({
-                          ...prev,
-                          memory: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="node-disk"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Disk</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="node-disk"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.nodeDefaults.disk ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setNodeDefaults((prev) => ({
-                          ...prev,
-                          disk: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div class="space-y-1">
-                    <label
-                      for="node-temperature"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Temperature</span>
-                      <span class="text-[10px] font-normal text-gray-400">°C</span>
-                    </label>
-                    <input
-                      id="node-temperature"
-                      type="number"
-                      min="-1"
-                      max="150"
-                      value={props.nodeDefaults.temperature ?? 0}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setNodeDefaults((prev) => ({
-                          ...prev,
-                          temperature: Number.isNaN(value) ? 0 : value,
-                        }));
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 p-3">
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
-                  Storage
-                </h4>
-                <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  <div class="space-y-1">
-                    <label
-                      for="storage-usage"
-                      class="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center justify-between"
-                    >
-                      <span>Usage</span>
-                      <span class="text-[10px] font-normal text-gray-400">%</span>
-                    </label>
-                    <input
-                      id="storage-usage"
-                      type="number"
-                      min="-1"
-                      max="100"
-                      value={props.storageDefault()}
-                      onInput={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10);
-                        props.setStorageDefault(Number.isNaN(value) ? 0 : value);
-                        props.setHasUnsavedChanges(true);
-                      }}
-                      class="w-full px-3 py-1.5 text-sm text-center border border-gray-300 dark:border-gray-600 rounded
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Alert delay settings per resource type */}
-          <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-            <div class="mb-2">
-              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                Alert Delay (seconds above threshold before triggering)
-              </h4>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
-                    VMs/Containers:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="300"
-                    value={props.timeThresholds().guest}
-                    onInput={(e) => {
-                      props.setTimeThresholds({
-                        ...props.timeThresholds(),
-                        guest: parseInt(e.currentTarget.value) || 0,
-                      });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
-                    Nodes:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="300"
-                    value={props.timeThresholds().node}
-                    onInput={(e) => {
-                      props.setTimeThresholds({
-                        ...props.timeThresholds(),
-                        node: parseInt(e.currentTarget.value) || 0,
-                      });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">
-                    Storage:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="300"
-                    value={props.timeThresholds().storage}
-                    onInput={(e) => {
-                      props.setTimeThresholds({
-                        ...props.timeThresholds(),
-                        storage: parseInt(e.currentTarget.value) || 0,
-                      });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-gray-500 dark:text-gray-400 min-w-[80px]">PBS:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="300"
-                    value={props.timeThresholds().pbs}
-                    onInput={(e) => {
-                      props.setTimeThresholds({
-                        ...props.timeThresholds(),
-                        pbs: parseInt(e.currentTarget.value) || 0,
-                      });
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-14 px-1 py-0.5 text-xs text-center border border-gray-300 dark:border-gray-600 rounded
-                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Reset button row */}
-            <div class="flex justify-end pt-2">
-              <button
-                onClick={() => {
-                  props.setGuestDefaults({
-                    cpu: 80,
-                    memory: 85,
-                    disk: 90,
-                    diskRead: 150,
-                    diskWrite: 150,
-                    networkIn: 200,
-                    networkOut: 200,
-                  });
-                  props.setGuestDisableConnectivity(false);
-                  props.setNodeDefaults({
-                    cpu: 80,
-                    memory: 85,
-                    disk: 90,
-                    temperature: 80,
-                  });
-                  props.setStorageDefault(85);
-                  props.setTimeThreshold(0);
-                  props.setTimeThresholds({ guest: 10, node: 15, storage: 30, pbs: 30 });
-                  props.setHasUnsavedChanges(true);
-                }}
-                class="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                title="Reset all values to factory defaults"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Reset defaults
-              </button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tab Navigation */}
-      <div class="border-b border-gray-200 dark:border-gray-700">
-        <nav class="-mb-px flex gap-8" aria-label="Tabs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab() === 'proxmox'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-          >
-            Proxmox / PBS
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab() === 'docker'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-          >
-            Docker
-          </button>
-        </nav>
-      </div>
-
       {/* Search Bar */}
       <div class="relative">
         <input
@@ -1563,12 +1081,10 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           placeholder="Search resources..."
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full px-4 py-2 pl-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
-                 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          class="w-full pl-10 pr-10 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
         <svg
-          class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"
+          class="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -1598,6 +1114,34 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
         </Show>
       </div>
 
+      {/* Tab Navigation */}
+      <div class="border-b border-gray-200 dark:border-gray-700">
+        <nav class="-mb-px flex gap-8" aria-label="Tabs">
+          <button
+            type="button"
+            onClick={() => setActiveTab('proxmox')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab() === 'proxmox'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Proxmox / PBS
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('docker')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab() === 'docker'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Docker
+          </button>
+        </nav>
+      </div>
+
       <div class="space-y-6">
         <Show when={activeTab() === 'proxmox'}>
           <Show when={hasSection('nodes')}>
@@ -1612,12 +1156,21 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
                 onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDefaults={props.nodeDefaults}
+                setGlobalDefaults={props.setNodeDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllNodes}
+                onToggleGlobalDisable={() => props.setDisableAllNodes(!props.disableAllNodes())}
+                globalDisableOfflineFlag={props.disableAllNodesOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllNodesOffline(!props.disableAllNodesOffline())}
               />
             </div>
           </Show>
@@ -1635,11 +1188,24 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
                 onToggleDisabled={toggleDisabled}
+                showOfflineAlertsColumn={false}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDefaults={{ usage: props.storageDefault() }}
+                setGlobalDefaults={(value) => {
+                  if (typeof value === 'function') {
+                    const newValue = value({ usage: props.storageDefault() });
+                    props.setStorageDefault(newValue.usage ?? 85);
+                  } else {
+                    props.setStorageDefault(value.usage ?? 85);
+                  }
+                }}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllStorage}
+                onToggleGlobalDisable={() => props.setDisableAllStorage(!props.disableAllStorage())}
               />
             </div>
           </Show>
@@ -1656,12 +1222,28 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
                 onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDefaults={{ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory }}
+                setGlobalDefaults={(value) => {
+                  if (typeof value === 'function') {
+                    const newValue = value({ cpu: props.nodeDefaults.cpu, memory: props.nodeDefaults.memory });
+                    props.setNodeDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
+                  } else {
+                    props.setNodeDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
+                  }
+                }}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllPBS}
+                onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
+                globalDisableOfflineFlag={props.disableAllPBSOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
               />
             </div>
           </Show>
@@ -1671,6 +1253,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
               <ResourceTable
                 title="VMs & Containers"
                 groupedResources={guestsGroupedByNode()}
+                groupHeaderMeta={guestGroupHeaderMeta()}
                 columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No VMs or containers match the current filters."
@@ -1679,17 +1262,128 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
                 onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDefaults={props.guestDefaults}
+                setGlobalDefaults={props.setGuestDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllGuests}
+                onToggleGlobalDisable={() => props.setDisableAllGuests(!props.disableAllGuests())}
+                globalDisableOfflineFlag={props.disableAllGuestsOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllGuestsOffline(!props.disableAllGuestsOffline())}
               />
             </div>
           </Show>
         </Show>
 
         <Show when={activeTab() === 'docker'}>
+          {/* Docker Global Settings */}
+          <Card padding="none">
+            <div class="p-4 pb-2">
+              <SectionHeader
+                title="Docker global settings"
+                description="Container behavior and policy thresholds"
+                size="sm"
+              />
+            </div>
+            <div class="p-4 pt-2">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    Restart Count:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={props.dockerDefaults.restartCount}
+                    onInput={(e) => {
+                      const value = parseInt(e.currentTarget.value, 10);
+                      props.setDockerDefaults((prev) => ({ ...prev, restartCount: Number.isNaN(value) ? 3 : value }));
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                  />
+                  <span class="text-xs text-gray-500 dark:text-gray-400">restarts to trigger alert</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    Restart Window:
+                  </label>
+                  <input
+                    type="number"
+                    min="60"
+                    max="1800"
+                    step="60"
+                    value={props.dockerDefaults.restartWindow}
+                    onInput={(e) => {
+                      const value = parseInt(e.currentTarget.value, 10);
+                      props.setDockerDefaults((prev) => ({ ...prev, restartWindow: Number.isNaN(value) ? 300 : value }));
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                  />
+                  <span class="text-xs text-gray-500 dark:text-gray-400">seconds</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    Memory Limit Warn:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={props.dockerDefaults.memoryWarnPct}
+                    onInput={(e) => {
+                      const value = parseInt(e.currentTarget.value, 10);
+                      props.setDockerDefaults((prev) => ({ ...prev, memoryWarnPct: Number.isNaN(value) ? 90 : value }));
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                  />
+                  <span class="text-xs text-gray-500 dark:text-gray-400">% of container limit</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    Memory Limit Critical:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={props.dockerDefaults.memoryCriticalPct}
+                    onInput={(e) => {
+                      const value = parseInt(e.currentTarget.value, 10);
+                      props.setDockerDefaults((prev) => ({ ...prev, memoryCriticalPct: Number.isNaN(value) ? 95 : value }));
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    class="w-16 px-2 py-1 text-xs text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                  />
+                  <span class="text-xs text-gray-500 dark:text-gray-400">% of container limit</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    Health Checks:
+                  </label>
+                  <span class="text-xs text-green-600 dark:text-green-400 font-medium">Always Enabled</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">(monitor container health status)</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-xs font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
+                    OOM Detection:
+                  </label>
+                  <span class="text-xs text-green-600 dark:text-green-400 font-medium">Always Enabled</span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">(alert on exit code 137)</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Show when={hasSection('dockerHosts')}>
             <div ref={registerSection('dockerHosts')} class="scroll-mt-24">
               <ResourceTable
@@ -1702,12 +1396,18 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onSaveEdit={saveEdit}
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
                 onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDisableFlag={props.disableAllDockerHosts}
+                onToggleGlobalDisable={() => props.setDisableAllDockerHosts(!props.disableAllDockerHosts())}
+                globalDisableOfflineFlag={props.disableAllDockerHostsOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllDockerHostsOffline(!props.disableAllDockerHostsOffline())}
               />
             </div>
           </Show>
@@ -1725,11 +1425,24 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onCancelEdit={cancelEdit}
                 onRemoveOverride={removeOverride}
                 onToggleDisabled={toggleDisabled}
+                showOfflineAlertsColumn={false}
                 editingId={editingId}
                 editingThresholds={editingThresholds}
                 setEditingThresholds={setEditingThresholds}
                 formatMetricValue={formatMetricValue}
                 hasActiveAlert={hasActiveAlert}
+                globalDefaults={{ cpu: props.dockerDefaults.cpu, memory: props.dockerDefaults.memory }}
+                setGlobalDefaults={(value) => {
+                  if (typeof value === 'function') {
+                    const newValue = value({ cpu: props.dockerDefaults.cpu, memory: props.dockerDefaults.memory });
+                    props.setDockerDefaults((prev) => ({ ...prev, cpu: newValue.cpu ?? prev.cpu, memory: newValue.memory ?? prev.memory }));
+                  } else {
+                    props.setDockerDefaults((prev) => ({ ...prev, cpu: value.cpu ?? prev.cpu, memory: value.memory ?? prev.memory }));
+                  }
+                }}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllDockerContainers}
+                onToggleGlobalDisable={() => props.setDisableAllDockerContainers(!props.disableAllDockerContainers())}
               />
             </div>
           </Show>

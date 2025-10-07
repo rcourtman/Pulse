@@ -1,60 +1,89 @@
-import { JSX, mergeProps, splitProps } from 'solid-js';
+import { JSX } from 'solid-js';
 
-export type ToggleProps = {
-  label?: JSX.Element;
-  description?: JSX.Element;
-  containerClass?: string;
-} & JSX.InputHTMLAttributes<HTMLInputElement>;
+type ToggleSize = 'xs' | 'sm' | 'md';
 
-export function Toggle(props: ToggleProps) {
-  const merged = mergeProps({ containerClass: '' }, props);
-  const [local, rest] = splitProps(merged, [
-    'label',
-    'description',
-    'containerClass',
-    'class',
-    'disabled',
-  ]);
+interface ToggleChangeEvent {
+  currentTarget: {
+    checked: boolean;
+  };
+}
 
-  const isDisabled = () => Boolean(local.disabled);
-  const isChecked = () => {
-    const value = rest.checked as unknown;
-    if (typeof value === 'function') {
-      try {
-        return Boolean((value as () => unknown)());
-      } catch {
-        return false;
-      }
-    }
-    return Boolean(value);
+interface BaseToggleProps {
+  checked: boolean;
+  disabled?: boolean;
+  onToggle?: () => void;
+  onChange?: (event: ToggleChangeEvent) => void;
+  size?: ToggleSize;
+  class?: string;
+  title?: string;
+  ariaLabel?: string;
+  checkedClass?: string;
+  uncheckedClass?: string;
+  disabledClass?: string;
+  knobClass?: string;
+}
+
+const sizeConfig: Record<ToggleSize, { track: string; knob: string; translate: string }> = {
+  xs: { track: 'h-4 w-8', knob: 'h-3 w-3', translate: '14px' },
+  sm: { track: 'h-5 w-10', knob: 'h-4 w-4', translate: '18px' },
+  md: { track: 'h-6 w-11', knob: 'h-5 w-5', translate: '20px' },
+};
+
+export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
+  const size = props.size ?? 'sm';
+  const config = sizeConfig[size];
+  const isDisabled = () => Boolean(props.disabled);
+  const checkedClass = props.checkedClass ?? 'bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70';
+  const uncheckedClass = props.uncheckedClass ?? 'bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70';
+  const disabledClass = props.disabledClass ?? 'bg-slate-400/60 border-slate-500/70 dark:bg-slate-600/60 dark:border-slate-600/70 cursor-not-allowed opacity-60';
+  const knobBase = props.knobClass ?? 'bg-white shadow';
+
+  const handleClick = () => {
+    if (isDisabled()) return;
+    const next = !props.checked;
+    props.onToggle?.();
+    props.onChange?.({ currentTarget: { checked: next } });
   };
 
   return (
-    <label
-      class={`flex items-center gap-3 ${local.containerClass ?? ''} ${local.class ?? ''}`.trim()}
+    <button
+      type="button"
+      class={`relative inline-flex ${config.track} items-center justify-start rounded-full border transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 ${
+        isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
+      } ${props.class ?? ''}`.trim()}
+      onClick={handleClick}
+      disabled={props.disabled}
+      title={props.title}
+      aria-pressed={props.checked ? 'true' : 'false'}
+      aria-label={props.ariaLabel}
     >
       <span
-        class={`relative inline-flex h-6 w-11 flex-shrink-0 items-center ${isDisabled() ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-      >
-        <input type="checkbox" class="sr-only" disabled={local.disabled} {...rest} />
-        <span
-          class={`absolute inset-0 rounded-full transition ${
-            isChecked()
-              ? 'bg-blue-600 dark:bg-blue-500'
-              : isDisabled()
-                ? 'bg-gray-300 dark:bg-gray-600'
-                : 'bg-gray-200 dark:bg-gray-700'
-          }`}
-        />
-        <span
-          class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform dark:bg-gray-100"
-          style={{ transform: isChecked() ? 'translateX(20px)' : 'translateX(0)' }}
-        />
-      </span>
-      {(local.label || local.description) && (
+        class={`absolute left-[3px] inline-block ${config.knob} rounded-full transition-transform duration-200 ${knobBase} ${
+          isDisabled() ? 'opacity-85' : ''
+        } ${props.checked ? '' : ''}`}
+        style={{ transform: props.checked ? `translateX(${config.translate})` : 'translateX(0)' }}
+      />
+    </button>
+  );
+}
+
+interface LabeledToggleProps extends BaseToggleProps {
+  label?: JSX.Element;
+  description?: JSX.Element;
+  containerClass?: string;
+}
+
+export function Toggle(props: LabeledToggleProps) {
+  const size = props.size ?? 'md';
+  return (
+    <label class={`flex items-center gap-3 ${props.containerClass ?? ''}`.trim()}>
+      <TogglePrimitive {...props} size={size} />
+      {(props.label || props.description) && (
         <span class="flex flex-col text-sm text-gray-700 dark:text-gray-300">
-          {local.label}
-          <span class="text-xs text-gray-500 dark:text-gray-400">{local.description}</span>
+          {props.label}
+          {props.description && (
+            <span class="text-xs text-gray-500 dark:text-gray-400">{props.description}</span>
+          )}
         </span>
       )}
     </label>

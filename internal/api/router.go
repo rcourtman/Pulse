@@ -95,6 +95,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
 	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, dockerAgentHandlers.HandleReport))
+	r.mux.HandleFunc("/api/agents/docker/hosts/", RequireAdmin(r.config, dockerAgentHandlers.HandleDeleteHost))
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/storage/", r.handleStorage)
 	r.mux.HandleFunc("/api/storage-charts", r.handleStorageCharts)
