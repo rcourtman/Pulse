@@ -493,9 +493,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                     checked={!resource.disabled}
                                     disabled={props.globalDisableFlag?.()}
                                     onToggle={() => !props.globalDisableFlag?.() && props.onToggleDisabled?.(resource.id)}
-                                    checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                                    uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
-                                    disabledClass="bg-slate-400/60 border-slate-500/70 dark:bg-slate-600/60 dark:border-slate-600/70 cursor-not-allowed opacity-60"
                                     class="my-[1px]"
                                     title={
                                       props.globalDisableFlag?.()
@@ -852,9 +849,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                   checked={!resource.disabled}
                                   disabled={props.globalDisableFlag?.()}
                                   onToggle={() => !props.globalDisableFlag?.() && props.onToggleDisabled?.(resource.id)}
-                                  checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                                  uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
-                                  disabledClass="bg-slate-400/60 border-slate-500/70 dark:bg-slate-600/60 dark:border-slate-600/70 cursor-not-allowed opacity-60"
                                   class="my-[1px]"
                                   title={
                                     props.globalDisableFlag?.()
