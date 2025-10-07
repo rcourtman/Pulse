@@ -860,16 +860,16 @@ function AppLayout(props: {
               const isActive = () => getActiveTab() === platform.id;
               const disabled = () => !platform.enabled;
               const baseClasses =
-                'tab relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium flex items-center gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
+                'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
 
               const className = () => {
                 if (isActive()) {
-                  return `${baseClasses} -mb-px bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b-0 shadow-sm font-semibold`;
+                  return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                 }
                 if (disabled()) {
                   return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
                 }
-                return `${baseClasses} text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
               };
 
               const title = () =>
@@ -895,41 +895,39 @@ function AppLayout(props: {
             }}
           </For>
         </div>
-        <div
-          class="flex items-end gap-1 ml-4 pl-4 border-l border-gray-300/70 dark:border-gray-700/70"
-          role="group"
-          aria-label="System"
-        >
-          <For each={utilityTabs()}>
-            {(tab) => {
-              const isActive = () => getActiveTab() === tab.id;
-              const baseClasses =
-                'tab relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium flex items-center gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
+        <div class="flex items-end gap-2 ml-auto" role="group" aria-label="System">
+          <div class="flex items-end gap-1 pl-3 sm:pl-4">
+            <For each={utilityTabs()}>
+              {(tab) => {
+                const isActive = () => getActiveTab() === tab.id;
+                const baseClasses =
+                  'tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
 
               const className = () => {
                 if (isActive()) {
-                  return `${baseClasses} -mb-px bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b-0 shadow-sm font-semibold`;
+                  return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                 }
-                return `${baseClasses} text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
               };
 
-              return (
-                <div
-                  class={className()}
-                  role="tab"
-                  aria-disabled={false}
-                  onClick={() => handleUtilityClick(tab)}
-                  title={tab.tooltip}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                  <Show when={tab.badge === 'update'}>
-                    <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                  </Show>
-                </div>
-              );
-            }}
-          </For>
+                return (
+                  <div
+                    class={className()}
+                    role="tab"
+                    aria-disabled={false}
+                    onClick={() => handleUtilityClick(tab)}
+                    title={tab.tooltip}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                    <Show when={tab.badge === 'update'}>
+                      <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
         </div>
       </div>
 
