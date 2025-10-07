@@ -850,15 +850,8 @@ function AppLayout(props: {
         role="tablist"
         aria-label="Primary navigation"
       >
-        <div
-          class="flex flex-col gap-1 shrink-0"
-          role="group"
-          aria-label="Infrastructure"
-        >
-          <span class="px-2 text-[10px] font-medium tracking-wide uppercase text-gray-500 dark:text-gray-400">
-            Infrastructure
-          </span>
-          <div class="flex">
+        <div class="flex shrink-0" role="group" aria-label="Infrastructure">
+          <div class="flex gap-0.5">
             <For each={platformTabs()}>
               {(platform) => {
                 const isActive = () => getActiveTab() === platform.id;
@@ -898,14 +891,11 @@ function AppLayout(props: {
           </div>
         </div>
         <div
-          class="flex flex-col gap-1 shrink-0 pl-4 ml-4 border-l border-gray-300 dark:border-gray-700"
+          class="flex shrink-0 pl-4 ml-4 border-l border-gray-300 dark:border-gray-700"
           role="group"
           aria-label="System"
         >
-          <span class="px-2 text-[10px] font-medium tracking-wide uppercase text-gray-500 dark:text-gray-400">
-            System
-          </span>
-          <div class="flex">
+          <div class="flex gap-0.5">
             <For each={utilityTabs()}>
               {(tab) => {
                 const isActive = () => getActiveTab() === tab.id;
