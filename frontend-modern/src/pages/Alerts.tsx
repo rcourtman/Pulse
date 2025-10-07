@@ -1973,15 +1973,23 @@ function ScheduleTab(props: ScheduleTabProps) {
 
   return (
     <div class="space-y-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+            Alert scheduling
+          </h3>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Configure when and how alerts are delivered
+          </p>
+        </div>
         <button
           type="button"
           onClick={resetToDefaults}
-          class="inline-flex items-center gap-1 self-start rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 sm:self-auto"
+          class="inline-flex items-center gap-2 self-start rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
         >
           <svg
-            class="h-3 w-3"
+            class="h-4 w-4"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -1993,11 +2001,11 @@ function ScheduleTab(props: ScheduleTabProps) {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Reset defaults
+          Reset to defaults
         </button>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-2">
+      <div class="grid gap-6 xl:grid-cols-2">
         {/* Quiet Hours */}
         <SettingsPanel
           title="Quiet hours"
