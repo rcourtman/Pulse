@@ -1,5 +1,6 @@
 import { For, Show, createSignal } from 'solid-js';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -265,48 +266,7 @@ export function ResourceTable(props: ResourceTableProps) {
     titleDisabled?: string;
     titleWhenDisabled?: string;
   }) => {
-    const {
-      isEnabled,
-      disabled = false,
-      size = 'sm',
-      onToggle,
-      labelEnabled = 'Enabled',
-      labelDisabled = 'Disabled',
-      titleEnabled,
-      titleDisabled,
-      titleWhenDisabled,
-    } = config;
-
-    const basePadding = size === 'md' ? 'px-2.5 py-1' : 'px-2 py-0.5';
-    const baseClasses = `inline-flex items-center justify-center ${basePadding} text-xs font-semibold rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400`;
-    const stateClasses = isEnabled
-      ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/50 hover:bg-emerald-500/15 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-400/40'
-      : 'bg-rose-500/10 text-rose-700 border-rose-500/50 hover:bg-rose-500/15 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/40';
-    const disabledClasses = disabled
-      ? 'opacity-60 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
-      : '';
-
-    const title = disabled
-      ? titleWhenDisabled ?? titleDisabled ?? titleEnabled ?? ''
-      : isEnabled
-        ? titleEnabled ?? ''
-        : titleDisabled ?? '';
-
-    return (
-      <button
-        type="button"
-        class={`${baseClasses} ${stateClasses} ${disabledClasses}`.trim()}
-        onClick={() => {
-          if (disabled) return;
-          onToggle?.();
-        }}
-        disabled={disabled}
-        aria-pressed={isEnabled}
-        title={title}
-      >
-        {isEnabled ? labelEnabled : labelDisabled}
-      </button>
-    );
+    return <StatusBadge {...config} />;
   };
 
   return (
@@ -1108,35 +1068,15 @@ export function ResourceTable(props: ResourceTableProps) {
                                 {(() => {
                                   const disabledGlobally = props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.();
                                   const isEnabled = !(resource.disableConnectivity || props.globalDisableOfflineFlag?.());
-                                  const label = isEnabled ? 'Enabled' : 'Disabled';
-                                  const baseClasses =
-                                    'inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400';
-                                  const stateClasses = isEnabled
-                                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/50 hover:bg-emerald-500/15 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-400/40'
-                                    : 'bg-rose-500/10 text-rose-700 border-rose-500/50 hover:bg-rose-500/15 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/40';
-                                  const disabledClasses = disabledGlobally
-                                    ? 'opacity-60 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
-                                    : '';
                                   return (
-                                    <button
-                                      type="button"
-                                      class={`${baseClasses} ${stateClasses} ${disabledClasses}`.trim()}
-                                      onClick={() => {
-                                        if (disabledGlobally) return;
-                                        props.onToggleNodeConnectivity?.(resource.id);
-                                      }}
+                                    <StatusBadge
+                                      isEnabled={isEnabled}
                                       disabled={disabledGlobally}
-                                      aria-pressed={isEnabled}
-                                      title={
-                                        disabledGlobally
-                                          ? 'Offline alerts controlled globally'
-                                          : isEnabled
-                                            ? 'Offline alerts enabled. Click to disable for this resource.'
-                                            : 'Offline alerts disabled. Click to enable for this resource.'
-                                      }
-                                    >
-                                      {label}
-                                    </button>
+                                      onToggle={() => props.onToggleNodeConnectivity?.(resource.id)}
+                                      titleEnabled="Offline alerts enabled. Click to disable for this resource."
+                                      titleDisabled="Offline alerts disabled. Click to enable for this resource."
+                                      titleWhenDisabled="Offline alerts controlled globally"
+                                    />
                                   );
                                 })()}
                               </Show>
