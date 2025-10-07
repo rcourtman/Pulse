@@ -510,23 +510,25 @@ const Storage: Component = () => {
 
       {/* Tab Toggle */}
       <div class="mb-4">
-        <nav class="flex space-x-8" aria-label="Tabs">
+        <nav class="flex items-center gap-4" aria-label="Storage tabs">
           <button
             onClick={() => setTabView('pools')}
-            class={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+            type="button"
+            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
               tabView() === 'pools'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+                : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
             }`}
           >
             Storage Pools
           </button>
           <button
             onClick={() => setTabView('disks')}
-            class={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+            type="button"
+            class={`inline-flex items-center px-2 sm:px-3 py-1 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
               tabView() === 'disks'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+                : 'hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
             }`}
           >
             Physical Disks
@@ -955,8 +957,8 @@ const Storage: Component = () => {
                               const firstCellClass = createMemo(() => {
                                 if (viewMode() === 'node') {
                                   return showAlertHighlight()
-                                    ? 'p-0.5 pl-6 pr-1.5'
-                                    : 'p-0.5 pl-5 pr-1.5';
+                                    ? 'p-0.5 pl-7 pr-1.5'
+                                    : 'p-0.5 pl-8 pr-1.5';
                                 }
                                 return showAlertHighlight() ? 'p-0.5 pl-3 pr-1.5' : 'p-0.5 pl-3 pr-1.5';
                               });

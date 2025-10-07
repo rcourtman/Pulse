@@ -883,6 +883,7 @@ export function Alerts() {
   ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
 
   return (
     <div class="space-y-4">
@@ -1045,38 +1046,68 @@ export function Alerts() {
         </Card>
       </Show>
 
-      <Card padding="none" class="lg:flex">
-        <div class="hidden lg:inline-block lg:w-72 border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
-          <div class="sticky top-24 space-y-6 px-5 py-6">
-            <For each={tabGroups}>
-              {(group) => (
-                <div class="space-y-2">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    {group.label}
-                  </p>
-                  <div class="space-y-1.5">
-                    <For each={group.items}>
-                      {(item) => (
-                        <button
-                          type="button"
-                          aria-current={activeTab() === item.id ? 'page' : undefined}
-                          class={`flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            activeTab() === item.id
-                              ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
-                          }`}
-                          onClick={() => handleTabChange(item.id)}
-                        >
-                          <span class="truncate">{item.label}</span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              )}
-            </For>
+      <Card padding="none" class="relative lg:flex">
+        <Show when={!sidebarCollapsed()}>
+          <div class="hidden lg:flex lg:flex-col w-72 relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
+            <button
+              type="button"
+              class="hidden lg:flex absolute top-24 right-0 translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+              onClick={() => setSidebarCollapsed(true)}
+              aria-label="Collapse alerts navigation"
+              aria-expanded="true"
+              aria-controls="alerts-sidebar-menu"
+            >
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <div class="sticky top-24 px-5 py-6 space-y-6">
+              <div id="alerts-sidebar-menu" class="space-y-6">
+                <For each={tabGroups}>
+                  {(group) => (
+                    <div class="space-y-2">
+                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        {group.label}
+                      </p>
+                      <div class="space-y-1.5">
+                        <For each={group.items}>
+                          {(item) => (
+                            <button
+                              type="button"
+                              aria-current={activeTab() === item.id ? 'page' : undefined}
+                              class={`flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                                activeTab() === item.id
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                              }`}
+                              onClick={() => handleTabChange(item.id)}
+                            >
+                              <span class="truncate">{item.label}</span>
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
           </div>
-        </div>
+        </Show>
+        <Show when={sidebarCollapsed()}>
+          <button
+            type="button"
+            class="hidden lg:flex absolute top-24 left-0 -translate-x-1/2 transform z-20 h-6 w-6 items-center justify-center rounded-full border border-gray-300/80 dark:border-gray-600/80 bg-white/90 dark:bg-gray-900/90 shadow-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-400/80 hover:shadow-md transition-all duration-150"
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Expand alerts navigation"
+            aria-expanded="false"
+            aria-controls="alerts-sidebar-menu"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        </Show>
 
         <div class="flex-1">
           <Show when={flatTabs.length > 0}>

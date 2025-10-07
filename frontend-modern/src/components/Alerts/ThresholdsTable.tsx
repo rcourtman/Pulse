@@ -1116,7 +1116,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
       {/* Tab Navigation */}
       <div class="border-b border-gray-200 dark:border-gray-700">
-        <nav class="-mb-px flex gap-8" aria-label="Tabs">
+        <nav class="-mb-px flex gap-6" aria-label="Tabs">
           <button
             type="button"
             onClick={() => setActiveTab('proxmox')}
