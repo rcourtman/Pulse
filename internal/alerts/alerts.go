@@ -41,6 +41,8 @@ type Alert struct {
 	AckTime      *time.Time             `json:"ackTime,omitempty"`
 	AckUser      string                 `json:"ackUser,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	// Notification tracking
+	LastNotified *time.Time `json:"lastNotified,omitempty"` // Last time notification was sent
 	// Escalation tracking
 	LastEscalation  int         `json:"lastEscalation,omitempty"`  // Last escalation level notified
 	EscalationTimes []time.Time `json:"escalationTimes,omitempty"` // Times when escalations were sent
@@ -57,6 +59,11 @@ func (a *Alert) Clone() *Alert {
 	if a.AckTime != nil {
 		t := *a.AckTime
 		clone.AckTime = &t
+	}
+
+	if a.LastNotified != nil {
+		t := *a.LastNotified
+		clone.LastNotified = &t
 	}
 
 	if len(a.EscalationTimes) > 0 {
@@ -751,6 +758,13 @@ func (m *Manager) ReevaluateGuestAlert(guest interface{}, guestID string) {
 		// If threshold is disabled or doesn't exist, clear the alert
 		if threshold == nil || threshold.Trigger <= 0 {
 			m.clearAlertNoLock(alertID)
+			// Also clear any pending alert for this metric
+			if _, isPending := m.pendingAlerts[alertID]; isPending {
+				delete(m.pendingAlerts, alertID)
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Cleared pending alert - threshold disabled")
+			}
 			log.Info().
 				Str("alertID", alertID).
 				Str("metric", metricType).
@@ -900,6 +914,26 @@ func (m *Manager) isInQuietHours() bool {
 	}
 
 	return false
+}
+
+// shouldNotifyAfterCooldown checks if enough time has passed since the last notification
+// Returns true if notification should be sent, false if still in cooldown period
+func (m *Manager) shouldNotifyAfterCooldown(alert *Alert) bool {
+	// If cooldown is 0 or negative, always allow notifications
+	if m.config.Schedule.Cooldown <= 0 {
+		return true
+	}
+
+	// If this is the first notification, allow it
+	if alert.LastNotified == nil {
+		return true
+	}
+
+	// Check if enough time has passed
+	cooldownDuration := time.Duration(m.config.Schedule.Cooldown) * time.Minute
+	timeSinceLastNotification := time.Since(*alert.LastNotified)
+
+	return timeSinceLastNotification >= cooldownDuration
 }
 
 // GetConfig returns the current alert configuration
@@ -2542,6 +2576,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				// Notify callback
 				if m.onAlert != nil {
 					log.Info().Str("alertID", alertID).Msg("Calling onAlert callback")
+					now := time.Now()
+					alert.LastNotified = &now
 					m.dispatchAlert(alert, true)
 				} else {
 					log.Warn().Msg("No onAlert callback set!")
@@ -2568,10 +2604,40 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Update level if needed
+			oldLevel := existingAlert.Level
 			if value >= threshold.Trigger+10 {
 				existingAlert.Level = AlertLevelCritical
 			} else {
 				existingAlert.Level = AlertLevelWarning
+			}
+
+			// Check if we should re-notify based on cooldown period
+			shouldRenotify := false
+			if m.shouldNotifyAfterCooldown(existingAlert) {
+				shouldRenotify = true
+				log.Debug().
+					Str("alertID", alertID).
+					Dur("cooldown", time.Duration(m.config.Schedule.Cooldown)*time.Minute).
+					Msg("Cooldown period has passed, will re-notify")
+			} else if oldLevel != existingAlert.Level && existingAlert.Level == AlertLevelCritical {
+				// Always re-notify if alert escalated to critical
+				shouldRenotify = true
+				log.Debug().
+					Str("alertID", alertID).
+					Msg("Alert escalated to critical, will re-notify despite cooldown")
+			}
+
+			// Send re-notification if appropriate
+			if shouldRenotify && !m.isInQuietHours() {
+				if m.onAlert != nil {
+					log.Info().
+						Str("alertID", alertID).
+						Str("level", string(existingAlert.Level)).
+						Msg("Re-notifying for existing alert")
+					now := time.Now()
+					existingAlert.LastNotified = &now
+					m.dispatchAlert(existingAlert, false) // false = not a new alert
+				}
 			}
 		}
 	} else {
@@ -3391,6 +3457,24 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	for id, suppressUntil := range m.suppressedUntil {
 		if now.After(suppressUntil) {
 			delete(m.suppressedUntil, id)
+		}
+	}
+
+	// Clean up old rate limit entries (older than 1 hour)
+	cutoff := now.Add(-1 * time.Hour)
+	for alertID, times := range m.alertRateLimit {
+		var recentTimes []time.Time
+		for _, t := range times {
+			if t.After(cutoff) {
+				recentTimes = append(recentTimes, t)
+			}
+		}
+		if len(recentTimes) == 0 {
+			// No recent alerts, remove the entry entirely
+			delete(m.alertRateLimit, alertID)
+		} else {
+			// Update with only recent times
+			m.alertRateLimit[alertID] = recentTimes
 		}
 	}
 }
