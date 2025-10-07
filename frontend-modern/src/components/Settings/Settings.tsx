@@ -104,6 +104,37 @@ interface DiscoveryScanStatus {
 
 type SettingsTab = 'pve' | 'pbs' | 'docker' | 'system' | 'urls' | 'security' | 'diagnostics';
 
+const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
+  pve: {
+    title: 'Proxmox VE',
+    description: 'Connect clusters, manage nodes, and control discovery for Proxmox VE.',
+  },
+  pbs: {
+    title: 'Proxmox Backup Server',
+    description: 'Add and maintain Proxmox Backup Server endpoints used for snapshot and archive monitoring.',
+  },
+  docker: {
+    title: 'Docker Agents',
+    description: 'Configure Docker hosts, agent tokens, and polling behaviour for container insights.',
+  },
+  system: {
+    title: 'System Settings',
+    description: 'Adjust Pulse core behaviour, discovery preferences, and software update cadence.',
+  },
+  urls: {
+    title: 'Guest URLs',
+    description: 'Define per-guest deep links to console, dashboards, or third-party tooling.',
+  },
+  security: {
+    title: 'Security & Access',
+    description: 'Manage authentication, API tokens, exports, and other security posture tooling.',
+  },
+  diagnostics: {
+    title: 'Diagnostics',
+    description: 'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
+  },
+};
+
 // Node with UI-specific fields
 type NodeConfigWithStatus = NodeConfig & {
   hasPassword?: boolean;
@@ -136,6 +167,12 @@ const Settings: Component<SettingsProps> = (props) => {
   const setActiveTab = (tab: SettingsTab) => {
     navigate(`/settings/${tab}`);
   };
+
+  const headerMeta = () =>
+    SETTINGS_HEADER_META[activeTab()] ?? {
+      title: 'Settings',
+      description: 'Manage Pulse configuration.',
+    };
 
   // Redirect /settings to /settings/pve on initial load
   createEffect(() => {
@@ -1024,8 +1061,8 @@ const Settings: Component<SettingsProps> = (props) => {
         {/* Header with better styling */}
         <Card padding="md">
           <SectionHeader
-            title="Configuration settings"
-            description="Manage Proxmox nodes and system configuration"
+            title={headerMeta().title}
+            description={headerMeta().description}
             size="lg"
           />
         </Card>
