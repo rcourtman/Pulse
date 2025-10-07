@@ -23,7 +23,6 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
-
 // Type definitions
 interface DiscoveredServer {
   ip: string;
@@ -228,43 +227,37 @@ const Settings: Component<SettingsProps> = (props) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const tabs: { id: SettingsTab; label: string; icon: string }[] = [
+  const tabGroups: {
+    id: 'proxmox' | 'docker' | 'administration';
+    label: string;
+    items: { id: SettingsTab; label: string }[];
+  }[] = [
     {
-      id: 'pve',
-      label: 'PVE Nodes',
-      icon: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
-    },
-    {
-      id: 'pbs',
-      label: 'PBS Nodes',
-      icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4',
+      id: 'proxmox',
+      label: 'Proxmox',
+      items: [
+        { id: 'pve', label: 'Proxmox VE nodes' },
+        { id: 'pbs', label: 'Proxmox Backup Server' },
+        { id: 'urls', label: 'Guest URLs' },
+      ],
     },
     {
       id: 'docker',
       label: 'Docker',
-      icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+      items: [{ id: 'docker', label: 'Docker hosts' }],
     },
     {
-      id: 'system',
-      label: 'System',
-      icon: 'M12 4v16m4-11h4m-4 6h4M8 9H4m4 6H4',
-    },
-    {
-      id: 'urls',
-      label: 'Guest URLs',
-      icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
-    },
-    {
-      id: 'security',
-      label: 'Security',
-      icon: 'M12 2L3.5 7v6c0 4.67 3.5 9.03 8.5 10 5-.97 8.5-5.33 8.5-10V7L12 2z',
-    },
-    {
-      id: 'diagnostics',
-      label: 'Diagnostics',
-      icon: 'M3 3v18h18m-10-8l3-3 3 3 4-4',
+      id: 'administration',
+      label: 'Administration',
+      items: [
+        { id: 'system', label: 'System' },
+        { id: 'security', label: 'Security' },
+        { id: 'diagnostics', label: 'Diagnostics' },
+      ],
     },
   ];
+
+  const flatTabs = tabGroups.flatMap((group) => group.items);
 
   // Function to load nodes
   const loadNodes = async () => {
@@ -1083,43 +1076,77 @@ const Settings: Component<SettingsProps> = (props) => {
           </div>
         </Show>
 
-        {/* Tab Navigation - modern style */}
-        <Card padding="none">
-          <div class="p-1">
-            <div
-              class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto scrollbar-hide"
-              style="-webkit-overflow-scrolling: touch;"
-            >
-              <For each={tabs}>
-                {(tab) => (
-                  <button
-                    type="button"
-                    class={`flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                      activeTab() === tab.id
-                        ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
-                    onClick={() => setActiveTab(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
+        <Card padding="none" class="lg:flex">
+          <div class="hidden lg:inline-block lg:w-72 border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top">
+            <div class="sticky top-24 space-y-6 px-5 py-6">
+              <For each={tabGroups}>
+                {(group) => (
+                  <div class="space-y-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {group.label}
+                    </p>
+                    <div class="space-y-1.5">
+                      <For each={group.items}>
+                        {(item) => (
+                          <button
+                            type="button"
+                            aria-current={activeTab() === item.id ? 'page' : undefined}
+                            class={`flex w-full items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                              activeTab() === item.id
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
+                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                            }`}
+                            onClick={() => setActiveTab(item.id)}
+                          >
+                            <span class="truncate">{item.label}</span>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
                 )}
               </For>
             </div>
           </div>
-          <div class="border-t border-gray-200 dark:border-gray-700"></div>
 
-          {/* Tab Content */}
-          <div class="p-3 sm:p-6">
-            {/* PVE Nodes Tab */}
-            <Show when={activeTab() === 'pve'}>
-              <div class="space-y-4">
-                <Show when={!initialLoadComplete()}>
-                  <div class="flex items-center justify-center py-8">
-                    <span class="text-gray-500">Loading configuration...</span>
+          <div class="flex-1">
+            <Show when={flatTabs.length > 0}>
+              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+                <div class="p-1">
+                  <div
+                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto scrollbar-hide"
+                    style="-webkit-overflow-scrolling: touch;"
+                  >
+                    <For each={flatTabs}>
+                      {(tab) => (
+                        <button
+                          type="button"
+                          class={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                            activeTab() === tab.id
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                          }`}
+                          onClick={() => setActiveTab(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      )}
+                    </For>
                   </div>
-                </Show>
-                <Show when={initialLoadComplete()}>
+                </div>
+              </div>
+            </Show>
+
+            <div class="p-3 sm:p-6">
+                {/* PVE Nodes Tab */}
+                <Show when={activeTab() === 'pve'}>
+                  <div class="space-y-4">
+                    <Show when={!initialLoadComplete()}>
+                      <div class="flex items-center justify-center py-8">
+                        <span class="text-gray-500">Loading configuration...</span>
+                      </div>
+                    </Show>
+                    <Show when={initialLoadComplete()}>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                     <SectionHeader title="Proxmox VE nodes" size="md" class="flex-1" />
                     <div class="flex flex-wrap gap-2 items-center justify-end">
@@ -3761,7 +3788,10 @@ const Settings: Component<SettingsProps> = (props) => {
               />
             </Show>
           </div>
+          </div>
         </Card>
+
+      </div>
 
         {/* Node Modal - Use separate modals for PVE and PBS to ensure clean state */}
         <Show when={showNodeModal() && currentNodeType() === 'pve'}>
@@ -3885,7 +3915,6 @@ const Settings: Component<SettingsProps> = (props) => {
             }}
           />
         </Show>
-      </div>
       {/* Export Dialog */}
       <Show when={showExportDialog()}>
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
