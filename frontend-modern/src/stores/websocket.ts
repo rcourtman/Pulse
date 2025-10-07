@@ -351,7 +351,8 @@ export function createWebSocketStore(url: string) {
                 setActiveAlerts(id, alert);
               });
 
-              // Updated activeAlerts
+              // Updated activeAlerts - also sync to state for badge count
+              setState('activeAlerts', message.data.activeAlerts);
             }
             // Sync recently resolved alerts
             if (message.data.recentlyResolved !== undefined) {
