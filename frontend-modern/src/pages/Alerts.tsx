@@ -20,6 +20,29 @@ import { useNavigate, useLocation } from '@solidjs/router';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
+const ALERT_HEADER_META: Record<AlertTab, { title: string; description: string }> = {
+  overview: {
+    title: 'Alerts Overview',
+    description: 'Monitor active alerts, acknowledgements, and recent status changes across platforms.',
+  },
+  thresholds: {
+    title: 'Alert Thresholds',
+    description: 'Tune resource thresholds and override rules for nodes, guests, and containers.',
+  },
+  destinations: {
+    title: 'Notification Destinations',
+    description: 'Configure email, webhooks, and escalation paths for alert delivery.',
+  },
+  schedule: {
+    title: 'Maintenance Schedule',
+    description: 'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.',
+  },
+  history: {
+    title: 'Alert History',
+    description: 'Review previously triggered alerts and their resolution timeline.',
+  },
+};
+
 // Store reference interfaces
 interface DestinationsRef {
   emailConfig?: () => EmailConfig;
@@ -190,6 +213,12 @@ export function Alerts() {
   };
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
+
+  const headerMeta = () =>
+    ALERT_HEADER_META[activeTab()] ?? {
+      title: 'Alerts',
+      description: 'Manage alerting configuration.',
+    };
 
   createEffect(() => {
     const currentPath = location.pathname;
@@ -860,8 +889,8 @@ export function Alerts() {
       {/* Header with better styling */}
       <Card padding="md">
         <SectionHeader
-          title="Alert configuration"
-          description="Configure monitoring thresholds and notification settings"
+          title={headerMeta().title}
+          description={headerMeta().description}
           size="lg"
         />
       </Card>
