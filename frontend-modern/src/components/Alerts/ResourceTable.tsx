@@ -84,6 +84,110 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const [activeMetricInput, setActiveMetricInput] = createSignal<{ resourceId: string; metric: string } | null>(null);
 
+  const normalizeMetricKey = (column: string): string => {
+    const key = column.trim().toLowerCase();
+    const mapped = (
+      new Map<string, string>([
+        ['cpu %', 'cpu'],
+        ['memory %', 'memory'],
+        ['disk %', 'disk'],
+        ['disk r mb/s', 'diskRead'],
+        ['disk w mb/s', 'diskWrite'],
+        ['net in mb/s', 'networkIn'],
+        ['net out mb/s', 'networkOut'],
+        ['usage %', 'usage'],
+        ['temp °c', 'temperature'],
+        ['temperature °c', 'temperature'],
+        ['temperature', 'temperature'],
+        ['restart count', 'restartCount'],
+        ['restart window', 'restartWindow'],
+        ['restart window (s)', 'restartWindow'],
+        ['memory warn %', 'memoryWarnPct'],
+        ['memory critical %', 'memoryCriticalPct'],
+      ])
+    ).get(key);
+    if (mapped) {
+      return mapped;
+    }
+
+    return key
+      .replace(' %', '')
+      .replace(' °c', '')
+      .replace(' mb/s', '')
+      .replace('disk r', 'diskRead')
+      .replace('disk w', 'diskWrite')
+      .replace('net in', 'networkIn')
+      .replace('net out', 'networkOut');
+  };
+
+  const metricBounds = (metric: string): { min: number; max: number } => {
+    if (metric === 'temperature') {
+      return { min: -1, max: 150 };
+    }
+    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+      return { min: -1, max: 10000 };
+    }
+    if (['cpu', 'memory', 'disk', 'usage', 'memoryWarnPct', 'memoryCriticalPct'].includes(metric)) {
+      return { min: -1, max: 100 };
+    }
+    if (metric === 'restartCount') {
+      return { min: -1, max: 50 };
+    }
+    if (metric === 'restartWindow') {
+      return { min: -1, max: 86400 };
+    }
+    return { min: -1, max: 10000 };
+  };
+
+  const getEnabledDefaultValue = (metric: string): number => {
+    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+      return 100;
+    }
+    if (metric === 'temperature') {
+      return 80;
+    }
+    if (metric === 'restartCount') {
+      return 3;
+    }
+    if (metric === 'restartWindow') {
+      return 300;
+    }
+    if (metric === 'memoryWarnPct') {
+      return 90;
+    }
+    if (metric === 'memoryCriticalPct') {
+      return 95;
+    }
+    return 80;
+  };
+
+  const resourceSupportsMetric = (resourceType: string | undefined, metric: string): boolean => {
+    if (!resourceType) return true;
+    if (
+      resourceType === 'node' &&
+      ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)
+    ) {
+      return false;
+    }
+    if (resourceType === 'pbs') {
+      return ['cpu', 'memory'].includes(metric);
+    }
+    if (resourceType === 'storage') {
+      return metric === 'usage';
+    }
+    if (resourceType === 'dockerContainer') {
+      return [
+        'cpu',
+        'memory',
+        'restartCount',
+        'restartWindow',
+        'memoryWarnPct',
+        'memoryCriticalPct',
+      ].includes(metric);
+    }
+    return true;
+  };
+
   const renderGroupHeader = (groupKey: string, meta?: GroupHeaderMeta) => {
     if (!meta || meta.type !== 'node') {
       return <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{groupKey}</span>;
@@ -271,42 +375,8 @@ export function ResourceTable(props: ResourceTableProps) {
                 </td>
                 <For each={props.columns}>
                   {(column) => {
-                    const normalizedColumn = column.trim().toLowerCase();
-                    const metric = (
-                      {
-                        'cpu %': 'cpu',
-                        'memory %': 'memory',
-                        'disk %': 'disk',
-                        'disk r mb/s': 'diskRead',
-                        'disk w mb/s': 'diskWrite',
-                        'net in mb/s': 'networkIn',
-                        'net out mb/s': 'networkOut',
-                        'usage %': 'usage',
-                        'temp °c': 'temperature',
-                        'temperature °c': 'temperature',
-                        temperature: 'temperature',
-                      } as Record<string, string>
-                    )[normalizedColumn]
-                      ?? normalizedColumn
-                        .replace(' %', '')
-                        .replace(' °c', '')
-                        .replace(' mb/s', '')
-                        .replace('disk r', 'diskRead')
-                        .replace('disk w', 'diskWrite')
-                        .replace('net in', 'networkIn')
-                        .replace('net out', 'networkOut');
-
-                    // Get default value when enabling a disabled metric
-                    const getEnabledDefault = (m: string): number => {
-                      if (m.includes('Read') || m.includes('Write') || m.includes('In') || m.includes('Out')) {
-                        return 100; // 100 MB/s for I/O metrics
-                      }
-                      if (m === 'temperature') {
-                        return 80; // 80°C for temperature
-                      }
-                      return 80; // 80% for percentage metrics
-                    };
-
+                    const metric = normalizeMetricKey(column);
+                    const bounds = metricBounds(metric);
                     const val = () => props.globalDefaults?.[metric] ?? 0;
                     const isOff = () => val() === -1;
 
@@ -315,17 +385,8 @@ export function ResourceTable(props: ResourceTableProps) {
                         <div class="relative flex justify-center">
                           <input
                             type="number"
-                            min="-1"
-                            max={
-                              metric === 'temperature'
-                                ? 150
-                                : metric.includes('Read') ||
-                                  metric.includes('Write') ||
-                                  metric.includes('In') ||
-                                  metric.includes('Out')
-                                  ? 10000
-                                  : 100
-                            }
+                            min={bounds.min}
+                            max={bounds.max}
                             value={isOff() ? '' : val()}
                             placeholder={isOff() ? 'Off' : ''}
                             disabled={isOff()}
@@ -354,10 +415,9 @@ export function ResourceTable(props: ResourceTableProps) {
                               class="absolute inset-0 w-full rounded cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                               onClick={() => {
                                 if (!props.setGlobalDefaults) return;
-                                const enabledValue = getEnabledDefault(metric);
                                 props.setGlobalDefaults((prev) => ({
                                   ...prev,
-                                  [metric]: enabledValue,
+                                  [metric]: getEnabledDefaultValue(metric),
                                 }));
                                 props.setHasUnsavedChanges?.(true);
                               }}
@@ -549,53 +609,11 @@ export function ResourceTable(props: ResourceTableProps) {
                             </Show>
                           </td>
                           {/* Metric columns - dynamically rendered based on resource type */}
-                          <For each={props.columns}>
+                            <For each={props.columns}>
                               {(column) => {
-                                const normalizedColumn = column.trim().toLowerCase();
-                                const metric = (
-                                  {
-                                    'cpu %': 'cpu',
-                                    'memory %': 'memory',
-                                    'disk %': 'disk',
-                                    'disk r mb/s': 'diskRead',
-                                    'disk w mb/s': 'diskWrite',
-                                    'net in mb/s': 'networkIn',
-                                    'net out mb/s': 'networkOut',
-                                    'usage %': 'usage',
-                                    'temp °c': 'temperature',
-                                    'temperature °c': 'temperature',
-                                    temperature: 'temperature',
-                                  } as Record<string, string>
-                                )[normalizedColumn]
-                                  ?? normalizedColumn
-                                    .replace(' %', '')
-                                    .replace(' °c', '')
-                                    .replace(' mb/s', '')
-                                    .replace('disk r', 'diskRead')
-                                    .replace('disk w', 'diskWrite')
-                                    .replace('net in', 'networkIn')
-                                    .replace('net out', 'networkOut');
-
-                                // Check if this metric applies to this resource type
-                                const showMetric = () => {
-                                  if (
-                                    resource.type === 'node' &&
-                                    ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
-                                      metric,
-                                    )
-                                  ) {
-                                    return false;
-                                  }
-                                  if (resource.type === 'pbs') {
-                                    // PBS only has CPU and Memory metrics
-                                    return ['cpu', 'memory'].includes(metric);
-                                  }
-                                  if (resource.type === 'storage') {
-                                    return metric === 'usage';
-                                  }
-                                  return true;
-                                };
-
+                                const metric = normalizeMetricKey(column);
+                                const showMetric = () => resourceSupportsMetric(resource.type, metric);
+                                const bounds = metricBounds(metric);
                                 const isDisabled = () => thresholds()?.[metric] === -1;
 
                                 const openMetricEditor = (e: MouseEvent) => {
@@ -636,19 +654,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                         }
                                       >
                                       <div class="flex items-center justify-center">
-                                        <input
-                                          type="number"
-                                          min="-1"
-                                          max={
-                                            metric === 'temperature'
-                                              ? 200
-                                              : metric.includes('disk') ||
-                                                  metric.includes('memory') ||
-                                                  metric.includes('cpu') ||
-                                                  metric === 'usage'
-                                                ? 100
-                                                : 10000
-                                          }
+                                       <input
+                                         type="number"
+                                          min={bounds.min}
+                                          max={bounds.max}
                                           value={thresholds()?.[metric] ?? ''}
                                           placeholder={isDisabled() ? 'Off' : ''}
                                           ref={(el) => {
