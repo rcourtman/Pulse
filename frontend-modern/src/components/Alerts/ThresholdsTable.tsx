@@ -208,6 +208,76 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   };
 
   // Process nodes with their overrides
+const getFriendlyNodeName = (value: string, clusterName?: string): string => {
+  if (!value) return value;
+
+  const clusterLower = clusterName?.toLowerCase().trim();
+
+  const normalizeToken = (token?: string | null): string => {
+    if (!token) return '';
+    let result = token.replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim();
+    if (clusterLower) {
+      result = result
+        .split(' ')
+        .filter((part) => part.toLowerCase() !== clusterLower)
+        .join(' ')
+        .trim();
+    }
+    if (!result) return '';
+    const firstWord = result.split(/\s+/)[0] || result;
+    const withoutDomain = firstWord.includes('.') ? firstWord.split('.')[0] ?? firstWord : firstWord;
+    return withoutDomain.trim();
+  };
+
+  const parentheticalMatch = value.match(/\(([^)]+)\)/);
+  const parentheticalRaw = parentheticalMatch?.[1]?.trim();
+
+  let base = normalizeToken(value);
+  if (!base) {
+    base = value.trim();
+  }
+
+  const parenthetical = normalizeToken(parentheticalRaw);
+  if (parenthetical && parenthetical.toLowerCase() !== base.toLowerCase()) {
+    return parenthetical;
+  }
+
+  return base;
+};
+
+const buildNodeHeaderMeta = (node: Node) => {
+  const originalDisplayName = node.displayName?.trim() || node.name;
+  const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
+  const hostValue = node.host?.trim();
+  let host: string | undefined;
+  if (hostValue && hostValue !== '') {
+    host = hostValue.startsWith('http')
+      ? hostValue
+      : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+  } else if (node.name) {
+    host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
+  }
+
+  const headerMeta: GroupHeaderMeta = {
+    type: 'node',
+    displayName: friendlyName,
+    rawName: originalDisplayName,
+    host,
+    status: node.status,
+    clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
+    isClusterMember: node.isClusterMember ?? false,
+  };
+
+  const keys = new Set<string>();
+  [node.name, originalDisplayName, friendlyName].forEach((value) => {
+    if (value && value.trim()) {
+      keys.add(value.trim());
+    }
+  });
+
+  return { headerMeta, keys };
+};
+
   const nodesWithOverrides = createMemo<Resource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
     if (editingId()) {
@@ -231,8 +301,10 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      const displayName = node.displayName?.trim() || node.name;
+      const originalDisplayName = node.displayName?.trim() || node.name;
+      const friendlyName = getFriendlyNodeName(originalDisplayName, node.clusterName);
       const rawName = node.name;
+      const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
       const hostValue = node.host?.trim() || rawName;
       const normalizedHost = hostValue.startsWith('http://') || hostValue.startsWith('https://')
@@ -241,9 +313,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
       return {
         id: node.id,
-        name: displayName,
-        displayName,
-        rawName,
+        name: sanitizedName,
+        displayName: sanitizedName,
+        rawName: originalDisplayName,
         host: normalizedHost,
         type: 'node' as const,
         resourceType: 'Node',
@@ -550,36 +622,12 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
   const guestGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
-    const nodeLookup = new Map((props.nodes ?? []).map((node) => [node.name, node]));
-
-    Object.keys(guestsGroupedByNode() ?? {}).forEach((nodeName) => {
-      const node = nodeLookup.get(nodeName);
-      if (!node) {
-        return;
-      }
-
-      const displayName = node.displayName?.trim() || node.name;
-      const hostValue = node.host?.trim();
-      let host: string | undefined;
-      if (hostValue && hostValue !== '') {
-        host = hostValue.startsWith('http')
-          ? hostValue
-          : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
-      } else if (node.name) {
-        host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
-      }
-
-      meta[nodeName] = {
-        type: 'node',
-        displayName,
-        rawName: node.name,
-        host,
-        status: node.status,
-        clusterName: node.isClusterMember ? node.clusterName?.trim() || 'Cluster' : undefined,
-        isClusterMember: node.isClusterMember ?? false,
-      };
+    (props.nodes ?? []).forEach((node) => {
+      const { headerMeta, keys } = buildNodeHeaderMeta(node);
+      keys.forEach((key) => {
+        meta[key] = headerMeta;
+      });
     });
-
     return meta;
   });
 
@@ -689,6 +737,23 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
     }
     return storageDevices;
   }, []);
+
+  const storageGroupedByNode = createMemo<Record<string, Resource[]>>(() => {
+    const grouped: Record<string, Resource[]> = {};
+    storageWithOverrides().forEach((storage) => {
+      const key = storage.node?.trim() || 'Unassigned';
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(storage);
+    });
+
+    Object.values(grouped).forEach((resources) => {
+      resources.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    return grouped;
+  });
 
   const summaryItems = createMemo(() => {
     try {
@@ -1175,11 +1240,44 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
             </div>
           </Show>
 
+          <Show when={hasSection('guests')}>
+            <div ref={registerSection('guests')} class="scroll-mt-24">
+              <ResourceTable
+                title="VMs & Containers"
+                groupedResources={guestsGroupedByNode()}
+                groupHeaderMeta={guestGroupHeaderMeta()}
+                columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
+                activeAlerts={props.activeAlerts}
+                emptyMessage="No VMs or containers match the current filters."
+                onEdit={startEditing}
+                onSaveEdit={saveEdit}
+                onCancelEdit={cancelEdit}
+                onRemoveOverride={removeOverride}
+                onToggleDisabled={toggleDisabled}
+                onToggleNodeConnectivity={toggleNodeConnectivity}
+                showOfflineAlertsColumn={true}
+                editingId={editingId}
+                editingThresholds={editingThresholds}
+                setEditingThresholds={setEditingThresholds}
+                formatMetricValue={formatMetricValue}
+                hasActiveAlert={hasActiveAlert}
+                globalDefaults={props.guestDefaults}
+                setGlobalDefaults={props.setGuestDefaults}
+                setHasUnsavedChanges={props.setHasUnsavedChanges}
+                globalDisableFlag={props.disableAllGuests}
+                onToggleGlobalDisable={() => props.setDisableAllGuests(!props.disableAllGuests())}
+                globalDisableOfflineFlag={props.disableAllGuestsOffline}
+                onToggleGlobalDisableOffline={() => props.setDisableAllGuestsOffline(!props.disableAllGuestsOffline())}
+              />
+            </div>
+          </Show>
+
           <Show when={hasSection('storage')}>
             <div ref={registerSection('storage')} class="scroll-mt-24">
               <ResourceTable
                 title="Storage Devices"
-                resources={storageWithOverrides()}
+                groupedResources={storageGroupedByNode()}
+                groupHeaderMeta={guestGroupHeaderMeta()}
                 columns={['Usage %']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No storage devices match the current filters."
@@ -1244,38 +1342,6 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 onToggleGlobalDisable={() => props.setDisableAllPBS(!props.disableAllPBS())}
                 globalDisableOfflineFlag={props.disableAllPBSOffline}
                 onToggleGlobalDisableOffline={() => props.setDisableAllPBSOffline(!props.disableAllPBSOffline())}
-              />
-            </div>
-          </Show>
-
-          <Show when={hasSection('guests')}>
-            <div ref={registerSection('guests')} class="scroll-mt-24">
-              <ResourceTable
-                title="VMs & Containers"
-                groupedResources={guestsGroupedByNode()}
-                groupHeaderMeta={guestGroupHeaderMeta()}
-                columns={['CPU %', 'Memory %', 'Disk %', 'Disk R MB/s', 'Disk W MB/s', 'Net In MB/s', 'Net Out MB/s']}
-                activeAlerts={props.activeAlerts}
-                emptyMessage="No VMs or containers match the current filters."
-                onEdit={startEditing}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onRemoveOverride={removeOverride}
-                onToggleDisabled={toggleDisabled}
-                onToggleNodeConnectivity={toggleNodeConnectivity}
-                showOfflineAlertsColumn={true}
-                editingId={editingId}
-                editingThresholds={editingThresholds}
-                setEditingThresholds={setEditingThresholds}
-                formatMetricValue={formatMetricValue}
-                hasActiveAlert={hasActiveAlert}
-                globalDefaults={props.guestDefaults}
-                setGlobalDefaults={props.setGuestDefaults}
-                setHasUnsavedChanges={props.setHasUnsavedChanges}
-                globalDisableFlag={props.disableAllGuests}
-                onToggleGlobalDisable={() => props.setDisableAllGuests(!props.disableAllGuests())}
-                globalDisableOfflineFlag={props.disableAllGuestsOffline}
-                onToggleGlobalDisableOffline={() => props.setDisableAllGuestsOffline(!props.disableAllGuestsOffline())}
               />
             </div>
           </Show>
