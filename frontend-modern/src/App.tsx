@@ -702,7 +702,8 @@ function AppLayout(props: {
   });
 
   const utilityTabs = createMemo(() => {
-    const activeAlertCount = props.state().activeAlerts?.length ?? 0;
+    const allAlerts = props.state().activeAlerts || [];
+    const activeAlertCount = allAlerts.filter((a: any) => !a.acknowledged).length;
     return [
       {
         id: 'alerts' as const,
@@ -922,12 +923,22 @@ function AppLayout(props: {
                     title={tab.tooltip}
                   >
                     {tab.icon}
-                    <span>{tab.label}</span>
-                    <Show when={tab.count !== undefined && tab.count > 0}>
-                      <span class="ml-1 px-1.5 py-0.5 min-w-[1.25rem] text-[10px] font-semibold leading-none text-center bg-red-500 text-white rounded-full">
-                        {tab.count}
-                      </span>
-                    </Show>
+                    <span class="flex items-center gap-1.5">
+                      <span>{tab.label}</span>
+                      {tab.id === 'alerts' && (
+                        <>
+                          {(tab.count !== undefined && tab.count > 0) ? (
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                              {tab.count}
+                            </span>
+                          ) : (
+                            <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </>
+                      )}
+                    </span>
                     <Show when={tab.badge === 'update'}>
                       <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                     </Show>
