@@ -38,6 +38,8 @@ import { createTooltipSystem } from './components/shared/Tooltip';
 import type { State } from '@/types/api';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { DockerIcon } from '@/components/icons/DockerIcon';
+import { AlertsIcon } from '@/components/icons/AlertsIcon';
+import { SettingsGearIcon } from '@/components/icons/SettingsGearIcon';
 
 // Enhanced store type with proper typing
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
@@ -707,6 +709,7 @@ function AppLayout(props: {
         route: '/alerts',
         tooltip: 'Review active alerts and automation rules',
         badge: null as 'update' | null,
+        icon: <AlertsIcon class="w-4 h-4 shrink-0" />,
       },
       {
         id: 'settings' as const,
@@ -714,6 +717,7 @@ function AppLayout(props: {
         route: '/settings',
         tooltip: 'Configure Pulse preferences and integrations',
         badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
+        icon: <SettingsGearIcon class="w-4 h-4 shrink-0" />,
       },
     ];
   });
@@ -846,83 +850,82 @@ function AppLayout(props: {
 
       {/* Tabs */}
       <div
-        class="tabs flex items-end gap-6 mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide"
+        class="tabs flex items-end gap-2 mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide"
         role="tablist"
         aria-label="Primary navigation"
       >
-        <div class="flex shrink-0" role="group" aria-label="Infrastructure">
-          <div class="flex gap-0.5">
-            <For each={platformTabs()}>
-              {(platform) => {
-                const isActive = () => getActiveTab() === platform.id;
-                const disabled = () => !platform.enabled;
-                const className = () => {
-                  if (isActive()) {
-                    return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
-                  }
-                  if (disabled()) {
-                    return 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-60 border-transparent';
-                  }
-                  return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
-                };
+        <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
+          <For each={platformTabs()}>
+            {(platform) => {
+              const isActive = () => getActiveTab() === platform.id;
+              const disabled = () => !platform.enabled;
+              const baseClasses =
+                'tab relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium flex items-center gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
 
-                const title = () =>
-                  disabled()
-                    ? `${platform.label} is not configured yet. Click to open settings.`
-                    : platform.tooltip;
+              const className = () => {
+                if (isActive()) {
+                  return `${baseClasses} -mb-px bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b-0 shadow-sm font-semibold`;
+                }
+                if (disabled()) {
+                  return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
+                }
+                return `${baseClasses} text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+              };
 
-                return (
-                  <div
-                    class={`tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
-                    role="tab"
-                    aria-disabled={disabled()}
-                    onClick={() => handlePlatformClick(platform)}
-                    title={title()}
-                  >
-                    {platform.icon}
-                    <span>{platform.label}</span>
-                    <Show when={disabled() && !platform.live}>
-                      <span class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">Add host</span>
-                    </Show>
-                  </div>
-                );
-              }}
-            </For>
-          </div>
+              const title = () =>
+                disabled()
+                  ? `${platform.label} is not configured yet. Click to open settings.`
+                  : platform.tooltip;
+
+              return (
+                <div
+                  class={className()}
+                  role="tab"
+                  aria-disabled={disabled()}
+                  onClick={() => handlePlatformClick(platform)}
+                  title={title()}
+                >
+                  {platform.icon}
+                  <span>{platform.label}</span>
+                  <Show when={disabled() && !platform.live}>
+                    <span class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">Add host</span>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
         </div>
-        <div
-          class="flex shrink-0 pl-4 ml-4 border-l border-gray-300 dark:border-gray-700"
-          role="group"
-          aria-label="System"
-        >
-          <div class="flex gap-0.5">
-            <For each={utilityTabs()}>
-              {(tab) => {
-                const isActive = () => getActiveTab() === tab.id;
-                const className = () => {
-                  if (isActive()) {
-                    return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
-                  }
-                  return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
-                };
+        <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
+          <For each={utilityTabs()}>
+            {(tab) => {
+              const isActive = () => getActiveTab() === tab.id;
+              const baseClasses =
+                'tab relative px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium flex items-center gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap';
 
-                return (
-                  <div
-                    class={`tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
-                    role="tab"
-                    aria-disabled={false}
-                    onClick={() => handleUtilityClick(tab)}
-                    title={tab.tooltip}
-                  >
-                    <span>{tab.label}</span>
-                    <Show when={tab.badge === 'update'}>
-                      <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                    </Show>
-                  </div>
-                );
-              }}
-            </For>
-          </div>
+              const className = () => {
+                if (isActive()) {
+                  return `${baseClasses} -mb-px bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b-0 shadow-sm font-semibold`;
+                }
+                return `${baseClasses} text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+              };
+
+              return (
+                <div
+                  class={className()}
+                  role="tab"
+                  aria-disabled={false}
+                  onClick={() => handleUtilityClick(tab)}
+                  title={tab.tooltip}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                  <Show when={tab.badge === 'update'}>
+                    <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
         </div>
       </div>
 

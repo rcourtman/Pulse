@@ -203,7 +203,7 @@ export function GuestRow(props: GuestRowProps) {
   // Get first cell styling
   const firstCellClass = createMemo(() => {
     const base = 'py-0.5 pr-2 whitespace-nowrap relative';
-    const indent = 'pl-5';
+    const indent = 'pl-6';
     return `${base} ${indent}`;
   });
 

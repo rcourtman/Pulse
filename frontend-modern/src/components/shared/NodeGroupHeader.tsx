@@ -17,7 +17,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
     <tr class="bg-gray-50 dark:bg-gray-900/40">
       <td
         colspan={props.colspan}
-        class="py-1 pr-2 pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+        class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
       >
         <div
           class={`flex flex-wrap items-center gap-3 ${
