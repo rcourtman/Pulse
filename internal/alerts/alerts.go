@@ -295,12 +295,12 @@ type Manager struct {
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Offline confirmation tracking
-	nodeOfflineCount     map[string]int // Track consecutive offline counts for nodes (legacy)
-	offlineConfirmations map[string]int // Track consecutive offline counts for all resources
-	dockerOfflineCount   map[string]int // Track consecutive offline counts for Docker hosts
-	dockerStateConfirm   map[string]int // Track consecutive state confirmations for Docker containers
+	nodeOfflineCount      map[string]int                  // Track consecutive offline counts for nodes (legacy)
+	offlineConfirmations  map[string]int                  // Track consecutive offline counts for all resources
+	dockerOfflineCount    map[string]int                  // Track consecutive offline counts for Docker hosts
+	dockerStateConfirm    map[string]int                  // Track consecutive state confirmations for Docker containers
 	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
-	dockerLastExitCode    map[string]int // Track last exit code for OOM detection
+	dockerLastExitCode    map[string]int                  // Track last exit code for OOM detection
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 }
@@ -322,16 +322,16 @@ type dockerRestartRecord struct {
 func NewManager() *Manager {
 	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
 	m := &Manager{
-		activeAlerts:         make(map[string]*Alert),
-		historyManager:       NewHistoryManager(alertsDir),
-		escalationStop:       make(chan struct{}),
-		alertRateLimit:       make(map[string][]time.Time),
-		recentAlerts:         make(map[string]*Alert),
-		suppressedUntil:      make(map[string]time.Time),
-		recentlyResolved:     make(map[string]*ResolvedAlert),
-		pendingAlerts:        make(map[string]time.Time),
-		nodeOfflineCount:     make(map[string]int),
-		offlineConfirmations: make(map[string]int),
+		activeAlerts:          make(map[string]*Alert),
+		historyManager:        NewHistoryManager(alertsDir),
+		escalationStop:        make(chan struct{}),
+		alertRateLimit:        make(map[string][]time.Time),
+		recentAlerts:          make(map[string]*Alert),
+		suppressedUntil:       make(map[string]time.Time),
+		recentlyResolved:      make(map[string]*ResolvedAlert),
+		pendingAlerts:         make(map[string]time.Time),
+		nodeOfflineCount:      make(map[string]int),
+		offlineConfirmations:  make(map[string]int),
 		dockerOfflineCount:    make(map[string]int),
 		dockerStateConfirm:    make(map[string]int),
 		dockerRestartTracking: make(map[string]*dockerRestartRecord),
@@ -354,14 +354,14 @@ func NewManager() *Manager {
 				Disk:        &HysteresisThreshold{Trigger: 90, Clear: 85},
 				Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75}, // Warning at 80°C, clear at 75°C
 			},
-		DockerDefaults: DockerThresholdConfig{
-			CPU:               HysteresisThreshold{Trigger: 80, Clear: 75},
-			Memory:            HysteresisThreshold{Trigger: 85, Clear: 80},
-			RestartCount:      3,
-			RestartWindow:     300, // 5 minutes
-			MemoryWarnPct:     90,
-			MemoryCriticalPct: 95,
-		},
+			DockerDefaults: DockerThresholdConfig{
+				CPU:               HysteresisThreshold{Trigger: 80, Clear: 75},
+				Memory:            HysteresisThreshold{Trigger: 85, Clear: 80},
+				RestartCount:      3,
+				RestartWindow:     300, // 5 minutes
+				MemoryWarnPct:     90,
+				MemoryCriticalPct: 95,
+			},
 			StorageDefault:    HysteresisThreshold{Trigger: 85, Clear: 80},
 			MinimumDelta:      2.0, // 2% minimum change
 			SuppressionWindow: 5,   // 5 minutes
@@ -565,11 +565,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		}
 
 		if alert.Type == "docker-host-offline" ||
-		   strings.HasPrefix(alertID, "docker-container-health-") ||
-		   strings.HasPrefix(alertID, "docker-container-state-") ||
-		   strings.HasPrefix(alertID, "docker-container-restart-loop-") ||
-		   strings.HasPrefix(alertID, "docker-container-oom-") ||
-		   strings.HasPrefix(alertID, "docker-container-memory-limit-") {
+			strings.HasPrefix(alertID, "docker-container-health-") ||
+			strings.HasPrefix(alertID, "docker-container-state-") ||
+			strings.HasPrefix(alertID, "docker-container-restart-loop-") ||
+			strings.HasPrefix(alertID, "docker-container-oom-") ||
+			strings.HasPrefix(alertID, "docker-container-memory-limit-") {
 			// Non-metric Docker alerts are not governed by thresholds
 			continue
 		}
@@ -1437,6 +1437,18 @@ func (m *Manager) HandleDockerHostOnline(host models.DockerHost) {
 	}
 }
 
+// HandleDockerHostRemoved clears all alerts and tracking when a Docker host is deleted.
+func (m *Manager) HandleDockerHostRemoved(host models.DockerHost) {
+	if host.ID == "" {
+		return
+	}
+
+	// Reuse the online handler to clear offline alerts and tracking.
+	m.HandleDockerHostOnline(host)
+	// Drop any container alerts and host-scoped tracking entries.
+	m.clearDockerHostContainerAlerts(host.ID)
+}
+
 // HandleDockerHostOffline raises an alert when a Docker host stops reporting.
 func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	if host.ID == "" {
@@ -1750,14 +1762,14 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 			StartTime:    now,
 			LastSeen:     now,
 			Metadata: map[string]interface{}{
-				"hostId":        host.ID,
-				"hostName":      host.DisplayName,
-				"containerId":   container.ID,
-				"containerName": containerName,
-				"image":         container.Image,
-				"state":         container.State,
-				"status":        container.Status,
-				"restartCount":  container.RestartCount,
+				"hostId":         host.ID,
+				"hostName":       host.DisplayName,
+				"containerId":    container.ID,
+				"containerName":  containerName,
+				"image":          container.Image,
+				"state":          container.State,
+				"status":         container.Status,
+				"restartCount":   container.RestartCount,
 				"recentRestarts": recentCount,
 			},
 		}
@@ -1993,6 +2005,16 @@ func (m *Manager) clearDockerHostContainerAlerts(hostID string) {
 	for resourceID := range m.dockerStateConfirm {
 		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.dockerStateConfirm, resourceID)
+		}
+	}
+	for resourceID := range m.dockerRestartTracking {
+		if strings.HasPrefix(resourceID, prefix) {
+			delete(m.dockerRestartTracking, resourceID)
+		}
+	}
+	for resourceID := range m.dockerLastExitCode {
+		if strings.HasPrefix(resourceID, prefix) {
+			delete(m.dockerLastExitCode, resourceID)
 		}
 	}
 	m.mu.Unlock()

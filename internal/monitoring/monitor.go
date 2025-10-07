@@ -148,18 +148,25 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 
 	host, removed := m.state.RemoveDockerHost(hostID)
 	if !removed {
-		return models.DockerHost{}, fmt.Errorf("docker host %s not found", hostID)
+		log.Debug().Str("dockerHostID", hostID).Msg("Docker host not present in state during removal; proceeding to clear alerts")
+		host = models.DockerHost{
+			ID:          hostID,
+			Hostname:    hostID,
+			DisplayName: hostID,
+		}
 	}
 
 	m.state.RemoveConnectionHealth(dockerConnectionPrefix + hostID)
 	if m.alertManager != nil {
-		m.alertManager.HandleDockerHostOnline(host)
+		m.alertManager.HandleDockerHostRemoved(host)
+		m.SyncAlertState()
 	}
 
 	log.Info().
 		Str("dockerHost", host.Hostname).
 		Str("dockerHostID", hostID).
-		Msg("Docker host removed from state")
+		Bool("removed", removed).
+		Msg("Docker host removed and alerts cleared")
 
 	return host, nil
 }
@@ -1203,6 +1210,10 @@ func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 // syncAlertsToState copies the latest alert manager data into the shared state snapshot.
 // This keeps WebSocket broadcasts aligned with in-memory acknowledgement updates.
 func (m *Monitor) syncAlertsToState() {
+	if m.pruneStaleDockerAlerts() {
+		log.Debug().Msg("Pruned stale docker alerts during sync")
+	}
+
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	modelAlerts := make([]models.Alert, 0, len(activeAlerts))
 	for _, alert := range activeAlerts {
@@ -1238,6 +1249,78 @@ func (m *Monitor) syncAlertsToState() {
 // SyncAlertState is the exported wrapper used by APIs that mutate alerts outside the poll loop.
 func (m *Monitor) SyncAlertState() {
 	m.syncAlertsToState()
+}
+
+// pruneStaleDockerAlerts removes docker alerts that reference hosts no longer present in state.
+func (m *Monitor) pruneStaleDockerAlerts() bool {
+	if m.alertManager == nil {
+		return false
+	}
+
+	hosts := m.state.GetDockerHosts()
+	knownHosts := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		id := strings.TrimSpace(host.ID)
+		if id != "" {
+			knownHosts[id] = struct{}{}
+		}
+	}
+
+	if len(knownHosts) == 0 {
+		// Still allow stale entries to be cleared if no hosts remain.
+	}
+
+	active := m.alertManager.GetActiveAlerts()
+	processed := make(map[string]struct{})
+	cleared := false
+
+	for _, alert := range active {
+		var hostID string
+
+		switch {
+		case alert.Type == "docker-host-offline":
+			hostID = strings.TrimPrefix(alert.ID, "docker-host-offline-")
+		case strings.HasPrefix(alert.ResourceID, "docker:"):
+			resource := strings.TrimPrefix(alert.ResourceID, "docker:")
+			if idx := strings.Index(resource, "/"); idx >= 0 {
+				hostID = resource[:idx]
+			} else {
+				hostID = resource
+			}
+		default:
+			continue
+		}
+
+		hostID = strings.TrimSpace(hostID)
+		if hostID == "" {
+			continue
+		}
+
+		if _, known := knownHosts[hostID]; known {
+			continue
+		}
+		if _, alreadyCleared := processed[hostID]; alreadyCleared {
+			continue
+		}
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: alert.ResourceName,
+			Hostname:    alert.Node,
+		}
+		if host.DisplayName == "" {
+			host.DisplayName = hostID
+		}
+		if host.Hostname == "" {
+			host.Hostname = hostID
+		}
+
+		m.alertManager.HandleDockerHostRemoved(host)
+		processed[hostID] = struct{}{}
+		cleared = true
+	}
+
+	return cleared
 }
 
 // pollConcurrent polls all instances concurrently

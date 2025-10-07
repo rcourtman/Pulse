@@ -86,16 +86,17 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   };
 
   const currentProvider = () => providers().find((p) => p.name === props.config.provider);
+  const instructionBoxClass = "mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200";
 
   return (
     <div class="space-y-4 text-sm overflow-hidden">
-      <div class="grid w-full gap-2 sm:grid-cols-[150px_1fr] sm:items-center">
-        <label class={`${labelClass()} sm:text-right`}>Email provider</label>
+      <div class={formField}>
+        <label class={labelClass()}>Email provider</label>
         <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           <select
             value={props.config.provider}
             onChange={(e) => handleProviderChange(e.currentTarget.value)}
-            class={`${controlClass('px-2 py-1.5')} sm:w-auto sm:min-w-[160px]`}
+            class={`${controlClass('px-2 py-1.5')} sm:w-auto sm:min-w-[180px]`}
           >
             <option value="">Manual configuration</option>
             <For each={providers()}>
@@ -131,13 +132,15 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             {showInstructions() ? 'Hide setup instructions' : 'Show setup instructions'}
           </button>
           <Show when={showInstructions()}>
-            <div class="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+            <div class={instructionBoxClass}>
               {currentProvider()!.instructions}
             </div>
           </Show>
         </div>
-        <div class="hidden w-full sm:block sm:border-l-2 sm:border-blue-300 sm:pl-3 sm:text-xs sm:leading-relaxed sm:text-blue-800 dark:sm:border-blue-700 dark:sm:text-blue-200">
-          {currentProvider()!.instructions}
+        <div class="hidden w-full sm:block">
+          <div class={instructionBoxClass}>
+            {currentProvider()!.instructions}
+          </div>
         </div>
       </Show>
 
