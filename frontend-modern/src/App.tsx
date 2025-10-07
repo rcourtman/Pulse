@@ -702,6 +702,7 @@ function AppLayout(props: {
   });
 
   const utilityTabs = createMemo(() => {
+    const activeAlertCount = props.state().activeAlerts?.length ?? 0;
     return [
       {
         id: 'alerts' as const,
@@ -709,6 +710,7 @@ function AppLayout(props: {
         route: '/alerts',
         tooltip: 'Review active alerts and automation rules',
         badge: null as 'update' | null,
+        count: activeAlertCount,
         icon: <AlertsIcon class="w-4 h-4 shrink-0" />,
       },
       {
@@ -717,6 +719,7 @@ function AppLayout(props: {
         route: '/settings',
         tooltip: 'Configure Pulse preferences and integrations',
         badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
+        count: undefined,
         icon: <SettingsGearIcon class="w-4 h-4 shrink-0" />,
       },
     ];
@@ -920,6 +923,11 @@ function AppLayout(props: {
                   >
                     {tab.icon}
                     <span>{tab.label}</span>
+                    <Show when={tab.count !== undefined && tab.count > 0}>
+                      <span class="ml-1 px-1.5 py-0.5 min-w-[1.25rem] text-[10px] font-semibold leading-none text-center bg-red-500 text-white rounded-full">
+                        {tab.count}
+                      </span>
+                    </Show>
                     <Show when={tab.badge === 'update'}>
                       <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                     </Show>
