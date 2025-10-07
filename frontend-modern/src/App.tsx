@@ -895,7 +895,11 @@ function AppLayout(props: {
             }}
           </For>
         </div>
-        <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
+        <div
+          class="flex items-end gap-1 ml-4 pl-4 border-l border-gray-300/70 dark:border-gray-700/70"
+          role="group"
+          aria-label="System"
+        >
           <For each={utilityTabs()}>
             {(tab) => {
               const isActive = () => getActiveTab() === tab.id;
