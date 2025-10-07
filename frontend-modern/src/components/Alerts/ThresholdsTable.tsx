@@ -351,7 +351,8 @@ const buildNodeHeaderMeta = (node: Node) => {
     const seen = new Set<string>();
 
     const hosts = (props.dockerHosts ?? []).map((host) => {
-      const displayName = host.displayName?.trim() || host.hostname || host.id;
+      const originalName = host.displayName?.trim() || host.hostname || host.id;
+      const friendlyName = getFriendlyNodeName(originalName);
       const override = overridesMap.get(host.id);
       const disableConnectivity = override?.disableConnectivity || false;
       const status = host.status || (host.lastSeen ? 'online' : 'offline');
@@ -360,7 +361,9 @@ const buildNodeHeaderMeta = (node: Node) => {
 
       return {
         id: host.id,
-        name: displayName,
+        name: friendlyName,
+        displayName: friendlyName,
+        rawName: originalName,
         type: 'dockerHost' as const,
         resourceType: 'Docker Host',
         node: host.hostname,
@@ -377,10 +380,13 @@ const buildNodeHeaderMeta = (node: Node) => {
     (props.overrides() ?? [])
       .filter((override) => override.type === 'dockerHost' && !seen.has(override.id))
       .forEach((override) => {
-        const name = override.name || override.id;
+        const originalName = override.name || override.id;
+        const friendlyName = getFriendlyNodeName(originalName);
         hosts.push({
           id: override.id,
-          name,
+          name: friendlyName,
+          displayName: friendlyName,
+          rawName: originalName,
           type: 'dockerHost',
           resourceType: 'Docker Host',
           node: override.node || '',
@@ -423,7 +429,9 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
 
     (props.dockerHosts ?? []).forEach((host) => {
       const hostLabel = host.displayName?.trim() || host.hostname || host.id;
+      const friendlyHostName = getFriendlyNodeName(hostLabel);
       const hostLabelLower = hostLabel.toLowerCase();
+      const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
       (host.containers || []).forEach((container) => {
         const containerId = container.id || normalizeContainerName(container);
@@ -451,19 +459,21 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           !search ||
           containerNameLower.includes(search) ||
           hostLabelLower.includes(search) ||
+          friendlyHostNameLower.includes(search) ||
           imageLower.includes(search);
         if (!matchesSearch) {
           return;
         }
 
         const status = container.state || container.status || 'unknown';
+        const groupKey = friendlyHostName || hostLabel;
 
         const resource: Resource = {
           id: resourceId,
           name: containerName,
           type: 'dockerContainer',
           resourceType: 'Docker Container',
-          node: hostLabel,
+          node: groupKey,
           instance: host.hostname,
           status,
           hasOverride,
@@ -475,10 +485,10 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
           image: container.image,
         };
 
-        if (!groups[hostLabel]) {
-          groups[hostLabel] = [];
+        if (!groups[groupKey]) {
+          groups[groupKey] = [];
         }
-        groups[hostLabel].push(resource);
+        groups[groupKey].push(resource);
         seen.add(resourceId);
       });
     });
@@ -531,6 +541,32 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
   const totalDockerContainers = createMemo(() =>
     (props.dockerHosts ?? []).reduce((sum, host) => sum + (host.containers?.length ?? 0), 0),
   );
+
+  const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
+    const meta: Record<string, GroupHeaderMeta> = {};
+    (props.dockerHosts ?? []).forEach((host) => {
+      const originalName = host.displayName?.trim() || host.hostname || host.id;
+      const friendlyName = getFriendlyNodeName(originalName);
+      const headerMeta: GroupHeaderMeta = {
+        displayName: friendlyName,
+        rawName: originalName,
+        status: host.status || (host.lastSeen ? 'online' : 'offline'),
+      };
+
+      [friendlyName, originalName, host.hostname, host.id]
+        .filter((key): key is string => Boolean(key && key.trim()))
+        .forEach((key) => {
+          meta[key.trim()] = headerMeta;
+        });
+    });
+
+    meta['Unassigned Docker Containers'] = {
+      displayName: 'Unassigned Docker Containers',
+      status: 'unknown',
+    };
+
+    return meta;
+  });
 
   const countOverrides = (resources: Resource[] | undefined) =>
     resources?.filter((resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity)
@@ -1483,6 +1519,7 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
               <ResourceTable
                 title="Docker Containers"
                 groupedResources={dockerContainersGroupedByHost()}
+                groupHeaderMeta={dockerHostGroupMeta()}
                 columns={['CPU %', 'Memory %']}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No Docker containers match the current filters."
