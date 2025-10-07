@@ -308,7 +308,7 @@ export function ResourceTable(props: ResourceTableProps) {
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {/* Global Defaults Row */}
             <Show when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}>
-              <tr class={`bg-blue-50 dark:bg-blue-900/20 border-b-2 border-blue-200 dark:border-blue-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
+              <tr class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}>
                 <td class="p-1 px-2 text-center align-middle">
                   <Show when={props.onToggleGlobalDisable} fallback={<span class="text-sm text-gray-400">-</span>}>
                     <div class="flex items-center justify-center">
@@ -319,8 +319,6 @@ export function ResourceTable(props: ResourceTableProps) {
                           props.onToggleGlobalDisable?.();
                           props.setHasUnsavedChanges?.(true);
                         }}
-                        checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                        uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
                         class="my-[1px]"
                         title="Global alerts toggle - disable all alerts for this resource type"
                         ariaLabel="Global alerts toggle"
@@ -329,7 +327,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   </Show>
                 </td>
                 <td class="p-1 px-2">
-                  <span class="text-sm font-bold text-blue-700 dark:text-blue-300">
+                  <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     Global Defaults
                   </span>
                 </td>
@@ -362,10 +360,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                 props.setHasUnsavedChanges(true);
                               }
                             }}
-                            class={`w-16 px-2 py-0.5 text-xs text-center border rounded ${
+                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
                               isOff()
                                 ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
-                                : 'border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             }`}
                             title={isOff() ? 'Click to enable this metric' : ''}
                           />
