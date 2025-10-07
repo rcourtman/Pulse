@@ -699,12 +699,35 @@ function AppLayout(props: {
     ];
   });
 
+  const utilityTabs = createMemo(() => {
+    return [
+      {
+        id: 'alerts' as const,
+        label: 'Alerts',
+        route: '/alerts',
+        tooltip: 'Review active alerts and automation rules',
+        badge: null as 'update' | null,
+      },
+      {
+        id: 'settings' as const,
+        label: 'Settings',
+        route: '/settings',
+        tooltip: 'Configure Pulse preferences and integrations',
+        badge: updateStore.isUpdateVisible() ? ('update' as const) : null,
+      },
+    ];
+  });
+
   const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {
     if (platform.enabled) {
       navigate(platform.route);
     } else {
       navigate(platform.settingsRoute);
     }
+  };
+
+  const handleUtilityClick = (tab: ReturnType<typeof utilityTabs>[number]) => {
+    navigate(tab.route);
   };
 
   return (
@@ -748,58 +771,6 @@ function AppLayout(props: {
           </Show>
         </div>
         <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
-          <div class="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/alerts')}
-              class={`p-2 rounded-md transition-colors focus:outline-none ${
-                location.pathname.startsWith('/alerts')
-                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              title="View alerts"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-            </button>
-            <button
-              onClick={() => navigate('/settings')}
-              class={`p-2 rounded-md transition-colors focus:outline-none relative ${
-                location.pathname.startsWith('/settings')
-                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              title="Settings"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              <Show when={updateStore.isUpdateVisible()}>
-                <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              </Show>
-            </button>
-          </div>
           <div class="flex items-center gap-2">
             <div
               class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
@@ -875,45 +846,94 @@ function AppLayout(props: {
 
       {/* Tabs */}
       <div
-        class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide"
+        class="tabs flex items-end gap-6 mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar-hide"
         role="tablist"
+        aria-label="Primary navigation"
       >
-        <For each={platformTabs()}>
-          {(platform) => {
-            const isActive = () => getActiveTab() === platform.id;
-            const disabled = () => !platform.enabled;
-            const className = () => {
-              if (isActive()) {
-                return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
-              }
-              if (disabled()) {
-                return 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-60 border-transparent';
-              }
-              return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
-            };
+        <div
+          class="flex flex-col gap-1 shrink-0"
+          role="group"
+          aria-label="Infrastructure"
+        >
+          <span class="px-2 text-[10px] font-medium tracking-wide uppercase text-gray-500 dark:text-gray-400">
+            Infrastructure
+          </span>
+          <div class="flex">
+            <For each={platformTabs()}>
+              {(platform) => {
+                const isActive = () => getActiveTab() === platform.id;
+                const disabled = () => !platform.enabled;
+                const className = () => {
+                  if (isActive()) {
+                    return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
+                  }
+                  if (disabled()) {
+                    return 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-60 border-transparent';
+                  }
+                  return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
+                };
 
-            const title = () =>
-              disabled()
-                ? `${platform.label} is not configured yet. Click to open settings.`
-                : platform.tooltip;
+                const title = () =>
+                  disabled()
+                    ? `${platform.label} is not configured yet. Click to open settings.`
+                    : platform.tooltip;
 
-            return (
-              <div
-                class={`tab px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
-                role="tab"
-                aria-disabled={disabled()}
-                onClick={() => handlePlatformClick(platform)}
-                title={title()}
-              >
-                {platform.icon}
-                <span>{platform.label}</span>
-                <Show when={disabled() && !platform.live}>
-                  <span class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">Add host</span>
-                </Show>
-              </div>
-            );
-          }}
-        </For>
+                return (
+                  <div
+                    class={`tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
+                    role="tab"
+                    aria-disabled={disabled()}
+                    onClick={() => handlePlatformClick(platform)}
+                    title={title()}
+                  >
+                    {platform.icon}
+                    <span>{platform.label}</span>
+                    <Show when={disabled() && !platform.live}>
+                      <span class="ml-1 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">Add host</span>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </div>
+        <div
+          class="flex flex-col gap-1 shrink-0 pl-4 ml-4 border-l border-gray-300 dark:border-gray-700"
+          role="group"
+          aria-label="System"
+        >
+          <span class="px-2 text-[10px] font-medium tracking-wide uppercase text-gray-500 dark:text-gray-400">
+            System
+          </span>
+          <div class="flex">
+            <For each={utilityTabs()}>
+              {(tab) => {
+                const isActive = () => getActiveTab() === tab.id;
+                const className = () => {
+                  if (isActive()) {
+                    return 'active bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 -mb-px text-blue-600 dark:text-blue-500';
+                  }
+                  return 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-transparent';
+                };
+
+                return (
+                  <div
+                    class={`tab relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-t flex items-center gap-1 sm:gap-1.5 transition-colors ${className()}`}
+                    role="tab"
+                    aria-disabled={false}
+                    onClick={() => handleUtilityClick(tab)}
+                    title={tab.tooltip}
+                  >
+                    <span>{tab.label}</span>
+                    <Show when={tab.badge === 'update'}>
+                      <span class="ml-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </div>
       </div>
 
       {/* Main Content */}
