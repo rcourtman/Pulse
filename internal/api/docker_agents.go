@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -65,5 +66,36 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker agent response")
+	}
+}
+
+// HandleDeleteHost removes a docker host and its containers from the shared state.
+func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only DELETE is allowed", nil)
+		return
+	}
+
+	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
+	hostID := strings.TrimSpace(trimmedPath)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		return
+	}
+
+	host, err := h.monitor.RemoveDockerHost(hostID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusNotFound, "docker_host_not_found", err.Error(), nil)
+		return
+	}
+
+	go h.wsHub.BroadcastState(h.monitor.GetState().ToFrontend())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success": true,
+		"hostId":  host.ID,
+		"message": "Docker host removed",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize docker host removal response")
 	}
 }

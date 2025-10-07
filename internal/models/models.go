@@ -741,6 +741,23 @@ func (s *State) UpsertDockerHost(host DockerHost) {
 	s.LastUpdate = time.Now()
 }
 
+// RemoveDockerHost removes a docker host by ID and returns the removed host.
+func (s *State) RemoveDockerHost(hostID string) (DockerHost, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.DockerHosts {
+		if host.ID == hostID {
+			// Remove the host while preserving slice order
+			s.DockerHosts = append(s.DockerHosts[:i], s.DockerHosts[i+1:]...)
+			s.LastUpdate = time.Now()
+			return host, true
+		}
+	}
+
+	return DockerHost{}, false
+}
+
 // SetDockerHostStatus updates the status of a docker host if present.
 func (s *State) SetDockerHostStatus(hostID, status string) bool {
 	s.mu.Lock()
@@ -1062,6 +1079,13 @@ func (s *State) SetConnectionHealth(instanceID string, healthy bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ConnectionHealth[instanceID] = healthy
+}
+
+// RemoveConnectionHealth removes a connection health entry if it exists.
+func (s *State) RemoveConnectionHealth(instanceID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.ConnectionHealth, instanceID)
 }
 
 // UpdatePBSBackups updates PBS backups for a specific instance

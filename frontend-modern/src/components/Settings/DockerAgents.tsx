@@ -3,7 +3,8 @@ import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
-import { Toggle } from '@/components/shared/Toggle';
+import { MonitoringAPI } from '@/api/monitoring';
+import { notificationStore } from '@/stores/notifications';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -11,32 +12,7 @@ export const DockerAgents: Component = () => {
 
   const dockerHosts = () => state.dockerHosts || [];
 
-  const STORAGE_KEY = 'pulse-show-docker-tab';
-  const readPreference = () => {
-    if (typeof window === 'undefined') return true;
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored !== 'false';
-  };
-
-  const [showDockerTab, setShowDockerTab] = createSignal(readPreference());
-
-  const persistPreference = (value: boolean) => {
-    setShowDockerTab(value);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, value ? 'true' : 'false');
-      window.dispatchEvent(
-        new CustomEvent('pulse:docker-tab-visibility', {
-          detail: { value },
-        }),
-      );
-    }
-  };
-
-  createEffect(() => {
-    if (dockerHosts().length > 0 && !showDockerTab()) {
-      persistPreference(true);
-    }
-  });
+  const [removingHostId, setRemovingHostId] = createSignal<string | null>(null);
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -110,6 +86,30 @@ WantedBy=multi-user.target`;
     }
   };
 
+  const isRemovingHost = (hostId: string) => removingHostId() === hostId;
+
+  const handleRemoveHost = async (hostId: string, displayName: string) => {
+    if (isRemovingHost(hostId)) return;
+
+    const confirmed = window.confirm(
+      `Remove Docker host "${displayName}"? This clears it from Pulse until the agent reports again.`,
+    );
+    if (!confirmed) return;
+
+    setRemovingHostId(hostId);
+
+    try {
+      await MonitoringAPI.deleteDockerHost(hostId);
+      notificationStore.success(`Removed Docker host ${displayName}`, 3500);
+    } catch (error) {
+      console.error('Failed to remove Docker host', error);
+      const message = error instanceof Error ? error.message : 'Failed to remove Docker host';
+      notificationStore.error(message, 8000);
+    } finally {
+      setRemovingHostId(null);
+    }
+  };
+
   return (
     <div class="space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -122,27 +122,6 @@ WantedBy=multi-user.target`;
           {showInstructions() ? 'Hide' : 'Show'} deployment instructions
         </button>
       </div>
-
-      <Card class="space-y-3" padding="lg">
-        <SectionHeader
-          title="Docker tab visibility"
-          description="Hide the Docker tab if you don’t plan to monitor container hosts. We’ll show it automatically once an agent reports in."
-          size="sm"
-          align="left"
-        />
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex-1 text-sm text-gray-600 dark:text-gray-400">
-            Show Docker tab in navigation
-          </div>
-          <Toggle
-            checked={showDockerTab()}
-            onChange={(event) => persistPreference((event.currentTarget as HTMLInputElement).checked)}
-          />
-        </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          Preference is saved per browser. Hiding the tab won’t stop existing Docker hosts from reporting metrics.
-        </p>
-      </Card>
 
       {/* Deployment Instructions */}
       <Show when={showInstructions()}>
@@ -315,6 +294,7 @@ WantedBy=multi-user.target`;
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Docker Version</th>
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Agent Version</th>
                     <th class="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Last Seen</th>
+                    <th class="py-3 px-4" />
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -322,6 +302,7 @@ WantedBy=multi-user.target`;
                     {(host) => {
                       const isOnline = host.status?.toLowerCase() === 'online';
                       const runningContainers = host.containers?.filter(c => c.state?.toLowerCase() === 'running').length || 0;
+                      const displayName = host.displayName || host.hostname || host.id;
 
                       return (
                         <tr class={`${isOnline ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
@@ -371,6 +352,16 @@ WantedBy=multi-user.target`;
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                               {host.lastSeen ? formatAbsoluteTime(host.lastSeen) : '—'}
                             </div>
+                          </td>
+                          <td class="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              class="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => handleRemoveHost(host.id, displayName)}
+                              disabled={isRemovingHost(host.id)}
+                            >
+                              {isRemovingHost(host.id) ? 'Removing…' : 'Remove'}
+                            </button>
                           </td>
                         </tr>
                       );
