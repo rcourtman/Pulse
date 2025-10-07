@@ -1434,7 +1434,14 @@ const dockerContainersGroupedByHost = createMemo<Record<string, Resource[]>>((pr
                 title="Docker Containers"
                 groupedResources={dockerContainersGroupedByHost()}
                 groupHeaderMeta={dockerHostGroupMeta()}
-                columns={['CPU %', 'Memory %']}
+                columns={[
+                  'CPU %',
+                  'Memory %',
+                  'Restart Count',
+                  'Restart Window (s)',
+                  'Memory Warn %',
+                  'Memory Critical %',
+                ]}
                 activeAlerts={props.activeAlerts}
                 emptyMessage="No Docker containers match the current filters."
                 onEdit={startEditing}
