@@ -17,10 +17,6 @@ interface BaseToggleProps {
   class?: string;
   title?: string;
   ariaLabel?: string;
-  checkedClass?: string;
-  uncheckedClass?: string;
-  disabledClass?: string;
-  knobClass?: string;
 }
 
 const sizeConfig: Record<ToggleSize, { track: string; knob: string; translate: string }> = {
@@ -33,10 +29,10 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const size = props.size ?? 'sm';
   const config = sizeConfig[size];
   const isDisabled = () => Boolean(props.disabled);
-  const checkedClass = props.checkedClass ?? 'bg-blue-500 dark:bg-blue-500';
-  const uncheckedClass = props.uncheckedClass ?? 'bg-gray-300 dark:bg-gray-600';
-  const disabledClass = props.disabledClass ?? 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-60';
-  const knobBase = props.knobClass ?? 'bg-white shadow-md';
+  const checkedClass = 'bg-blue-500 dark:bg-blue-500';
+  const uncheckedClass = 'bg-gray-300 dark:bg-gray-600';
+  const disabledClass = 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-60';
+  const knobBase = 'bg-white shadow-md';
 
   const handleClick = () => {
     if (isDisabled()) return;
