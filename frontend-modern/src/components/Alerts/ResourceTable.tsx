@@ -107,9 +107,6 @@ export function ResourceTable(props: ResourceTableProps) {
             </a>
           )}
         </Show>
-        <Show when={meta.rawName && meta.rawName !== meta.displayName}>
-          <span class="text-xs text-gray-500 dark:text-gray-400">({meta.rawName})</span>
-        </Show>
         <Show when={meta.clusterName}>
           <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
               {meta.clusterName}
@@ -153,6 +150,61 @@ export function ResourceTable(props: ResourceTableProps) {
     );
   };
 
+  const renderToggleBadge = (config: {
+    isEnabled: boolean;
+    disabled?: boolean;
+    size?: 'sm' | 'md';
+    onToggle?: () => void;
+    labelEnabled?: string;
+    labelDisabled?: string;
+    titleEnabled?: string;
+    titleDisabled?: string;
+    titleWhenDisabled?: string;
+  }) => {
+    const {
+      isEnabled,
+      disabled = false,
+      size = 'sm',
+      onToggle,
+      labelEnabled = 'Enabled',
+      labelDisabled = 'Disabled',
+      titleEnabled,
+      titleDisabled,
+      titleWhenDisabled,
+    } = config;
+
+    const basePadding = size === 'md' ? 'px-2.5 py-1' : 'px-2 py-0.5';
+    const baseClasses = `inline-flex items-center justify-center ${basePadding} text-xs font-semibold rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400`;
+    const stateClasses = isEnabled
+      ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/50 hover:bg-emerald-500/15 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-400/40'
+      : 'bg-rose-500/10 text-rose-700 border-rose-500/50 hover:bg-rose-500/15 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/40';
+    const disabledClasses = disabled
+      ? 'opacity-60 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
+      : '';
+
+    const title = disabled
+      ? titleWhenDisabled ?? titleDisabled ?? titleEnabled ?? ''
+      : isEnabled
+        ? titleEnabled ?? ''
+        : titleDisabled ?? '';
+
+    return (
+      <button
+        type="button"
+        class={`${baseClasses} ${stateClasses} ${disabledClasses}`.trim()}
+        onClick={() => {
+          if (disabled) return;
+          onToggle?.();
+        }}
+        disabled={disabled}
+        aria-pressed={isEnabled}
+        title={title}
+      >
+        {isEnabled ? labelEnabled : labelDisabled}
+      </button>
+    );
+  };
+
   return (
     <Card
       padding="none"
@@ -171,9 +223,6 @@ export function ResourceTable(props: ResourceTableProps) {
               </th>
               <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Resource
-              </th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Type
               </th>
               <For each={props.columns}>
                 {(column) => (
@@ -215,7 +264,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     </div>
                   </Show>
                 </td>
-                <td class="p-1 px-2" colspan="2">
+                <td class="p-1 px-2">
                   <span class="text-sm font-bold text-blue-700 dark:text-blue-300">
                     Global Defaults
                   </span>
@@ -325,21 +374,19 @@ export function ResourceTable(props: ResourceTableProps) {
                 <Show when={props.showOfflineAlertsColumn}>
                   <td class="p-1 px-2 text-center align-middle">
                     <Show when={props.onToggleGlobalDisableOffline} fallback={<span class="text-sm text-gray-400">-</span>}>
-                      <div class="flex items-center justify-center">
-                        <TogglePrimitive
-                          size="sm"
-                          checked={!props.globalDisableOfflineFlag?.()}
-                          onToggle={() => {
+                      {(() => {
+                        const offlineDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                        return renderToggleBadge({
+                          isEnabled: !offlineDisabled,
+                          size: 'md',
+                          onToggle: () => {
                             props.onToggleGlobalDisableOffline?.();
                             props.setHasUnsavedChanges?.(true);
-                          }}
-                          checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                          uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
-                          class="my-[1px]"
-                          title="Global offline alerts toggle"
-                          ariaLabel="Global offline alerts toggle"
-                        />
-                      </div>
+                          },
+                          titleEnabled: 'Offline alerts currently enabled globally. Click to disable.',
+                          titleDisabled: 'Offline alerts currently disabled globally. Click to enable.',
+                        });
+                      })()}
                     </Show>
                   </td>
                 </Show>
@@ -362,7 +409,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       {/* Node group header */}
                       <tr class="bg-gray-50 dark:bg-gray-700/50">
                         <td
-                          colspan={props.columns.length + (props.showOfflineAlertsColumn ? 5 : 4)}
+                          colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
                           class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400"
                         >
                           {renderGroupHeader(nodeName, headerMeta)}
@@ -452,15 +499,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                 >
                                   {resource.name}
                                 </span>
-                                <Show when={'vmid' in resource && resource.vmid}>
-                                  <span class="text-xs text-gray-500">({resource.vmid})</span>
-                                </Show>
-                                <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
-                                  <span class="text-xs text-gray-500">on {resource.node}</span>
-                                </Show>
-                                <Show when={resource.type === 'guest' && 'node' in resource && resource.node}>
-                                  <span class="text-xs text-gray-500">on {resource.node}</span>
-                                </Show>
                                 <Show when={resource.hasOverride || resource.disableConnectivity}>
                                   <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
                                     Custom
@@ -473,7 +511,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                   <span
                                     class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                   >
-                                    {resource.displayName || resource.name}
+                                    {resource.type === 'node'
+                                      ? resource.name
+                                      : resource.displayName || resource.name}
                                   </span>
                                 }>
                                   {(host) => (
@@ -489,12 +529,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                       }`}
                                       title={`Open ${resource.displayName || resource.name} web interface`}
                                     >
-                                      {resource.displayName || resource.name}
+                                      {resource.type === 'node'
+                                        ? resource.name
+                                        : resource.displayName || resource.name}
                                     </a>
                                   )}
-                                </Show>
-                                <Show when={resource.rawName && resource.rawName !== resource.displayName}>
-                                  <span class="text-xs text-gray-500 dark:text-gray-400">({resource.rawName})</span>
                                 </Show>
                                 <Show when={resource.clusterName}>
                                   <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -509,29 +548,8 @@ export function ResourceTable(props: ResourceTableProps) {
                               </div>
                             </Show>
                           </td>
-                          <td class="p-1 px-2">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                resource.type === 'pbs'
-                                  ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                                  : resource.type === 'node'
-                                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                                    : resource.type === 'storage'
-                                      ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                      : resource.type === 'dockerHost'
-                                        ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300'
-                                        : resource.type === 'dockerContainer'
-                                          ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
-                                          : resource.resourceType === 'VM'
-                                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                            : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                              }`}
-                            >
-                              {resource.resourceType}
-                            </span>
-                          </td>
-                            {/* Metric columns - dynamically rendered based on resource type */}
-                            <For each={props.columns}>
+                          {/* Metric columns - dynamically rendered based on resource type */}
+                          <For each={props.columns}>
                               {(column) => {
                                 const normalizedColumn = column.trim().toLowerCase();
                                 const metric = (
@@ -686,33 +704,24 @@ export function ResourceTable(props: ResourceTableProps) {
                             <Show when={props.showOfflineAlertsColumn}>
                               <td class="p-1 px-2 text-center align-middle">
                                 <Show when={props.onToggleNodeConnectivity}>
-                                  <TogglePrimitive
-                                    size="sm"
-                                    checked={!resource.disableConnectivity}
-                                    disabled={props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.()}
-                                    onToggle={() =>
-                                      !props.globalDisableFlag?.() &&
-                                      !props.globalDisableOfflineFlag?.() &&
-                                      props.onToggleNodeConnectivity?.(resource.id)
-                                    }
-                                    checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                                    uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
-                                    disabledClass="bg-slate-400/60 border-slate-500/70 dark:bg-slate-600/60 dark:border-slate-600/70 cursor-not-allowed opacity-60"
-                                    class="mx-auto my-[1px]"
-                                    title={
-                                      props.globalDisableFlag?.()
-                                        ? 'Alerts disabled globally'
-                                        : props.globalDisableOfflineFlag?.()
-                                          ? 'Offline alerts disabled globally'
-                                          : resource.disableConnectivity
-                                            ? 'Offline alerts disabled for this resource'
-                                            : 'Offline alerts enabled'
-                                    }
-                                    ariaLabel={resource.disableConnectivity ? 'Offline alerts disabled for this resource' : 'Offline alerts enabled for this resource'}
-                                  />
-                                </Show>
-                              </td>
-                            </Show>
+                                {(() => {
+                                  const disabledGlobally = props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.();
+                                  const globalOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
+                                  return renderToggleBadge({
+                                    isEnabled: !globalOfflineDisabled && !resource.disableConnectivity,
+                                    disabled: disabledGlobally,
+                                    onToggle: () => {
+                                      if (disabledGlobally) return;
+                                      props.onToggleNodeConnectivity?.(resource.id);
+                                    },
+                                    titleEnabled: 'Offline alerts enabled. Click to disable for this resource.',
+                                    titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
+                                    titleWhenDisabled: 'Offline alerts controlled globally',
+                                  });
+                                })()}
+                              </Show>
+                            </td>
+                          </Show>
 
                             {/* Actions column */}
                             <td class="p-1 px-2">
@@ -900,15 +909,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                 >
                                   {resource.name}
                                 </span>
-                                <Show when={'vmid' in resource && resource.vmid}>
-                                  <span class="text-xs text-gray-500">({resource.vmid})</span>
-                                </Show>
-                                <Show when={resource.type === 'storage' && 'node' in resource && resource.node}>
-                                  <span class="text-xs text-gray-500">on {resource.node}</span>
-                                </Show>
-                                <Show when={resource.type === 'guest' && 'node' in resource && resource.node}>
-                                  <span class="text-xs text-gray-500">on {resource.node}</span>
-                                </Show>
                                 <Show when={resource.hasOverride || resource.disableConnectivity}>
                                   <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
                                     Custom
@@ -921,7 +921,9 @@ export function ResourceTable(props: ResourceTableProps) {
                                   <span
                                     class={`text-sm font-medium ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
                                   >
-                                    {resource.displayName || resource.name}
+                                    {resource.type === 'node'
+                                      ? resource.name
+                                      : resource.displayName || resource.name}
                                   </span>
                                 }>
                                   {(host) => (
@@ -937,12 +939,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                       }`}
                                       title={`Open ${resource.displayName || resource.name} web interface`}
                                     >
-                                      {resource.displayName || resource.name}
+                                      {resource.type === 'node'
+                                        ? resource.name
+                                        : resource.displayName || resource.name}
                                     </a>
                                   )}
-                                </Show>
-                                <Show when={resource.rawName && resource.rawName !== resource.displayName}>
-                                  <span class="text-xs text-gray-500 dark:text-gray-400">({resource.rawName})</span>
                                 </Show>
                                 <Show when={resource.clusterName}>
                                   <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -956,27 +957,6 @@ export function ResourceTable(props: ResourceTableProps) {
                                 </Show>
                               </div>
                             </Show>
-                          </td>
-                          <td class="p-1 px-2">
-                            <span
-                              class={`inline-block px-1.5 py-0.5 text-xs font-medium rounded ${
-                                resource.type === 'pbs'
-                                  ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                                  : resource.type === 'node'
-                                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                                    : resource.type === 'storage'
-                                      ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                      : resource.type === 'dockerHost'
-                                        ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300'
-                                        : resource.type === 'dockerContainer'
-                                          ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
-                                          : resource.resourceType === 'VM'
-                                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                                            : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                              }`}
-                            >
-                              {resource.resourceType}
-                            </span>
                           </td>
                           {/* Metric columns - dynamically rendered based on resource type */}
                           <For each={props.columns}>
@@ -1116,35 +1096,43 @@ export function ResourceTable(props: ResourceTableProps) {
                           <Show when={props.showOfflineAlertsColumn}>
                             <td class="p-1 px-2 text-center align-middle">
                               <Show when={props.onToggleNodeConnectivity}>
-                                <div class="flex items-center justify-center">
-                                  <TogglePrimitive
-                                    size="sm"
-                                    checked={!resource.disableConnectivity}
-                                    disabled={props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.()}
-                                    onToggle={() =>
-                                      !props.globalDisableFlag?.() &&
-                                      !props.globalDisableOfflineFlag?.() &&
-                                      props.onToggleNodeConnectivity?.(resource.id)
-                                    }
-                                    checkedClass="bg-emerald-500/80 border-emerald-600/70 dark:bg-emerald-500/60 dark:border-emerald-500/70"
-                                    uncheckedClass="bg-rose-500/80 border-rose-600/70 dark:bg-rose-500/60 dark:border-rose-500/70"
-                                    disabledClass="bg-slate-400/60 border-slate-500/70 dark:bg-slate-600/60 dark:border-slate-600/70 cursor-not-allowed opacity-60"
-                                    class="my-[1px]"
-                                    title={
-                                      props.globalDisableFlag?.()
-                                        ? 'Alerts disabled globally'
-                                        : props.globalDisableOfflineFlag?.()
-                                          ? 'Offline alerts disabled globally'
-                                          : resource.disableConnectivity
-                                            ? 'Offline alerts disabled for this resource'
-                                            : 'Offline alerts enabled'
-                                    }
-                                    ariaLabel={resource.disableConnectivity ? 'Offline alerts disabled for this resource' : 'Offline alerts enabled for this resource'}
-                                  />
-                                </div>
+                                {(() => {
+                                  const disabledGlobally = props.globalDisableFlag?.() || props.globalDisableOfflineFlag?.();
+                                  const isEnabled = !(resource.disableConnectivity || props.globalDisableOfflineFlag?.());
+                                  const label = isEnabled ? 'Enabled' : 'Disabled';
+                                  const baseClasses =
+                                    'inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400';
+                                  const stateClasses = isEnabled
+                                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/50 hover:bg-emerald-500/15 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-400/40'
+                                    : 'bg-rose-500/10 text-rose-700 border-rose-500/50 hover:bg-rose-500/15 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/40';
+                                  const disabledClasses = disabledGlobally
+                                    ? 'opacity-60 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
+                                    : '';
+                                  return (
+                                    <button
+                                      type="button"
+                                      class={`${baseClasses} ${stateClasses} ${disabledClasses}`.trim()}
+                                      onClick={() => {
+                                        if (disabledGlobally) return;
+                                        props.onToggleNodeConnectivity?.(resource.id);
+                                      }}
+                                      disabled={disabledGlobally}
+                                      aria-pressed={isEnabled}
+                                      title={
+                                        disabledGlobally
+                                          ? 'Offline alerts controlled globally'
+                                          : isEnabled
+                                            ? 'Offline alerts enabled. Click to disable for this resource.'
+                                            : 'Offline alerts disabled. Click to enable for this resource.'
+                                      }
+                                    >
+                                      {label}
+                                    </button>
+                                  );
+                                })()}
                               </Show>
-                            </td>
-                          </Show>
+                          </td>
+                        </Show>
 
                           {/* Actions column */}
                           <td class="p-1 px-2">
@@ -1241,7 +1229,7 @@ export function ResourceTable(props: ResourceTableProps) {
               >
                 <tr>
                   <td
-                    colspan={props.columns.length + (props.showOfflineAlertsColumn ? 5 : 4)}
+                    colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
                     class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                   >
                     No {props.title.toLowerCase()} found
@@ -1252,7 +1240,7 @@ export function ResourceTable(props: ResourceTableProps) {
             <Show when={!hasRows()}>
               <tr>
                 <td
-                  colspan={props.columns.length + (props.showOfflineAlertsColumn ? 5 : 4)}
+                  colspan={props.columns.length + (props.showOfflineAlertsColumn ? 4 : 3)}
                   class="px-4 py-6 text-sm text-center text-gray-500 dark:text-gray-400"
                 >
                   {props.emptyMessage || 'No resources available.'}
