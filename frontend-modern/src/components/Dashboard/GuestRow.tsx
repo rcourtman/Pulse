@@ -144,6 +144,84 @@ export function GuestRow(props: GuestRowProps) {
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
   const showGuestMetrics = createMemo(() => shouldDisplayGuestMetrics(props.guest, parentOnline()));
+  const lockLabel = createMemo(() => (props.guest.lock || '').trim());
+
+  const statusInfo = createMemo(() => {
+    if (parentOnline() === false) {
+      return {
+        label: 'Node offline',
+        pillClass: 'bg-gray-200 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300',
+        dotClass: 'bg-gray-400',
+        tooltip: 'Parent node is offline. Status information may be stale until the node returns.',
+      };
+    }
+
+    const rawStatus = (props.guest.status || '').toLowerCase();
+
+    if (rawStatus === 'running') {
+      return {
+        label: 'Running',
+        pillClass: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+        dotClass: 'bg-green-500',
+        tooltip: 'Guest is running normally.',
+      };
+    }
+
+    if (['stopped', 'shutdown', 'off'].includes(rawStatus)) {
+      return {
+        label: 'Stopped',
+        pillClass: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        dotClass: 'bg-red-500',
+        tooltip: 'Guest is powered off.',
+      };
+    }
+
+    if (['paused'].includes(rawStatus)) {
+      return {
+        label: 'Paused',
+        pillClass: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+        dotClass: 'bg-yellow-500',
+        tooltip: 'Guest execution is paused in Proxmox.',
+      };
+    }
+
+    if (['suspended', 'suspending', 'hibernated', 'hibernating'].includes(rawStatus)) {
+      return {
+        label: 'Suspended',
+        pillClass: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+        dotClass: 'bg-sky-500',
+        tooltip: 'Guest is suspended and can be resumed.',
+      };
+    }
+
+    if (['starting', 'prelaunch', 'booting', 'migrating', 'resuming'].includes(rawStatus)) {
+      return {
+        label: 'Starting',
+        pillClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+        dotClass: 'bg-blue-500',
+        tooltip: 'Guest is in the process of starting.',
+      };
+    }
+
+    if (['stopping', 'halting', 'shutting-down', 'shutting down'].includes(rawStatus)) {
+      return {
+        label: 'Stopping',
+        pillClass: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+        dotClass: 'bg-orange-500',
+        tooltip: 'Guest is shutting down.',
+      };
+    }
+
+    const label =
+      rawStatus.length > 0 ? `${rawStatus.charAt(0).toUpperCase()}${rawStatus.slice(1)}` : 'Unknown';
+
+    return {
+      label,
+      pillClass: 'bg-gray-200 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300',
+      dotClass: 'bg-gray-500',
+      tooltip: rawStatus.length > 0 ? `Guest status: ${label}` : 'Guest status is not available yet.',
+    };
+  });
 
   // Get helpful tooltip for disk status
   const getDiskStatusTooltip = () => {
@@ -280,6 +358,26 @@ export function GuestRow(props: GuestRowProps) {
         </div>
       </td>
 
+      {/* Status */}
+      <td class="py-0.5 px-2 whitespace-nowrap">
+        <div class="flex items-center gap-2" title={statusInfo().tooltip}>
+          <span
+            class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusInfo().pillClass}`}
+          >
+            <span class={`h-2 w-2 rounded-full ${statusInfo().dotClass}`} aria-hidden="true" />
+            {statusInfo().label}
+          </span>
+          <Show when={lockLabel()}>
+            <span
+              class="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:bg-gray-700/60 dark:text-gray-300"
+              title={`Guest is locked (${lockLabel()})`}
+            >
+              Lock: {lockLabel()}
+            </span>
+          </Show>
+        </div>
+      </td>
+
       {/* VMID */}
       <td class="py-0.5 px-2 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 align-middle">
         {props.guest.vmid}
@@ -387,7 +485,7 @@ export function GuestRow(props: GuestRowProps) {
           }`}
           aria-hidden={!isRunning() || props.parentNodeOnline === false}
         >
-          <td class="px-4 py-2" colSpan={11}>
+          <td class="px-4 py-2" colSpan={12}>
             <div
               class={`flex flex-wrap gap-3 justify-start ${
                 drawerDisabled() ? 'opacity-50 saturate-75 pointer-events-none' : ''
