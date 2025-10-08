@@ -191,26 +191,41 @@ const DockerContainerRow: Component<{
   });
 
   // Match GuestRow styling with alert highlighting
-  const showAlertHighlight = createMemo(() => alertStyles()?.hasUnacknowledgedAlert ?? false);
+  const hasUnacknowledgedAlert = createMemo(
+    () => alertStyles()?.hasUnacknowledgedAlert ?? false,
+  );
+  const hasAcknowledgedOnlyAlert = createMemo(
+    () => alertStyles()?.hasAcknowledgedOnlyAlert ?? false,
+  );
+  const showAlertHighlight = createMemo(
+    () => hasUnacknowledgedAlert() || hasAcknowledgedOnlyAlert(),
+  );
   const alertAccentColor = createMemo(() => {
     if (!showAlertHighlight()) return undefined;
-    const severity = alertStyles()?.severity;
-    return severity === 'critical' ? '#ef4444' : '#eab308';
+    if (hasUnacknowledgedAlert()) {
+      const severity = alertStyles()?.severity;
+      return severity === 'critical' ? '#ef4444' : '#eab308';
+    }
+    return '#9ca3af';
   });
 
   const rowClass = () => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
     const severity = alertStyles()?.severity;
-    const alertBg = showAlertHighlight()
+    const alertBg = hasUnacknowledgedAlert()
       ? severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
       : '';
-    const defaultHover = showAlertHighlight() ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+    const defaultHover = hasUnacknowledgedAlert()
+      ? ''
+      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     const clickable = hasDrawerContent() ? 'cursor-pointer' : '';
-    const expanded = drawerOpen() && !showAlertHighlight() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+    const expanded = drawerOpen() && !hasUnacknowledgedAlert()
+      ? 'bg-gray-50 dark:bg-gray-800/40'
+      : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   };
 

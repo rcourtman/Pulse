@@ -74,7 +74,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
               ? 'border-red-500'
               : alertStyles.hasUnacknowledgedAlert
                 ? 'border-orange-500'
-                : 'border-gray-200 dark:border-gray-700'
+                : alertStyles.hasAcknowledgedOnlyAlert
+                  ? 'border-gray-400 dark:border-gray-600'
+                  : 'border-gray-200 dark:border-gray-700'
         } border transition-all cursor-pointer hover:scale-[1.01]`}
         onClick={props.onClick}
       >
@@ -120,11 +122,6 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
         <Show when={alertStyles.hasUnacknowledgedAlert}>
           <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
         </Show>
-        <Show when={!alertStyles.hasUnacknowledgedAlert && alertStyles.hasAcknowledgedOnlyAlert}>
-          <span class="text-[9px] px-1 py-0.5 rounded-full font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-            Ack
-          </span>
-        </Show>
 
         {/* Metrics */}
         <div class="flex gap-4 text-xs font-mono">
@@ -160,7 +157,9 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
             ? 'border-red-500'
             : alertStyles.hasUnacknowledgedAlert
               ? 'border-orange-500'
-              : 'border-gray-200 dark:border-gray-700'
+              : alertStyles.hasAcknowledgedOnlyAlert
+                ? 'border-gray-400 dark:border-gray-600'
+                : 'border-gray-200 dark:border-gray-700'
       } cursor-pointer transition-all hover:scale-[1.02]`}
       onClick={props.onClick}
     >
@@ -199,11 +198,6 @@ const CompactNodeCard: Component<CompactNodeCardProps> = (props) => {
           </Show>
           <Show when={alertStyles.hasUnacknowledgedAlert}>
             <AlertIndicator severity={alertStyles.severity} alerts={unacknowledgedNodeAlerts()} />
-          </Show>
-          <Show when={!alertStyles.hasUnacknowledgedAlert && alertStyles.hasAcknowledgedOnlyAlert}>
-            <span class="text-[9px] px-1 py-0.5 rounded-full font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-              Ack
-            </span>
           </Show>
         </div>
         <span class="text-xs text-gray-500 dark:text-gray-400">

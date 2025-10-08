@@ -175,12 +175,18 @@ export function GuestRow(props: GuestRowProps) {
     }
   };
 
-  const showAlertHighlight = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);
+  const hasUnacknowledgedAlert = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);
   const hasAcknowledgedOnlyAlert = createMemo(() => !!props.alertStyles?.hasAcknowledgedOnlyAlert);
+  const showAlertHighlight = createMemo(
+    () => hasUnacknowledgedAlert() || hasAcknowledgedOnlyAlert(),
+  );
 
   const alertAccentColor = createMemo(() => {
     if (!showAlertHighlight()) return undefined;
-    return props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
+    if (hasUnacknowledgedAlert()) {
+      return props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
+    }
+    return '#9ca3af';
   });
 
   const drawerDisabled = createMemo(() => !isRunning());
@@ -189,15 +195,19 @@ export function GuestRow(props: GuestRowProps) {
   const rowClass = createMemo(() => {
     const base = 'transition-all duration-200 relative';
     const hover = 'hover:shadow-sm';
-    const alertBg = showAlertHighlight()
+    const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
       : '';
-    const defaultHover = showAlertHighlight() ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+    const defaultHover = hasUnacknowledgedAlert()
+      ? ''
+      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     const clickable = canShowDrawer() ? 'cursor-pointer' : '';
-    const expanded = drawerOpen() && !showAlertHighlight() ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+    const expanded = drawerOpen() && !hasUnacknowledgedAlert()
+      ? 'bg-gray-50 dark:bg-gray-800/40'
+      : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming} ${clickable} ${expanded}`;
   });
 
@@ -258,11 +268,6 @@ export function GuestRow(props: GuestRowProps) {
             />
           </div>
 
-          <Show when={hasAcknowledgedOnlyAlert()}>
-            <span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-              Ack
-            </span>
-          </Show>
           <Show when={lockLabel()}>
             <span
               class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
