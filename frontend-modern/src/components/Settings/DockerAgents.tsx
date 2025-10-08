@@ -1,10 +1,11 @@
-import { Component, createEffect, createSignal, Show, For } from 'solid-js';
+import { Component, createSignal, Show, For, onCleanup, onMount } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { notificationStore } from '@/stores/notifications';
+import type { SecurityStatus } from '@/types/config';
 
 export const DockerAgents: Component = () => {
   const { state } = useWebSocket();
@@ -13,6 +14,8 @@ export const DockerAgents: Component = () => {
   const dockerHosts = () => state.dockerHosts || [];
 
   const [removingHostId, setRemovingHostId] = createSignal<string | null>(null);
+  const [apiToken, setApiToken] = createSignal<string | null>(null);
+  const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
 
   const pulseUrl = () => {
     if (typeof window !== 'undefined') {
@@ -26,9 +29,61 @@ export const DockerAgents: Component = () => {
 
   const TOKEN_PLACEHOLDER = '<api-token>';
 
+  onMount(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const readToken = () => window.localStorage.getItem('apiToken');
+    const currentToken = readToken();
+    if (currentToken) {
+      setApiToken(currentToken);
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'apiToken') {
+        setApiToken(event.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    onCleanup(() => window.removeEventListener('storage', handleStorage));
+
+    const fetchSecurityStatus = async () => {
+      try {
+        const response = await fetch('/api/security/status', { credentials: 'include' });
+        if (response.ok) {
+          const data = (await response.json()) as SecurityStatus;
+          setSecurityStatus(data);
+        }
+      } catch (err) {
+        console.error('Failed to load security status', err);
+      }
+    };
+    fetchSecurityStatus();
+  });
+
+  const requiresToken = () => {
+    const status = securityStatus();
+    if (status) {
+      return status.requiresAuth || status.apiTokenConfigured;
+    }
+    return true;
+  };
+
+  const tokenArgument = () => {
+    if (!requiresToken()) {
+      return ' --token disabled';
+    }
+    const token = apiToken();
+    return token ? ` --token '${token}'` : ` --token ${TOKEN_PLACEHOLDER}`;
+  };
+
+  const tokenAvailable = () => requiresToken() && Boolean(apiToken());
+
   const getInstallCommand = () => {
     const url = pulseUrl();
-    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url} --token ${TOKEN_PLACEHOLDER}`;
+    return `curl -fsSL ${url}/install-docker-agent.sh | bash -s -- --url ${url}${tokenArgument()}`;
   };
 
   const getUninstallCommand = () => {
@@ -37,6 +92,7 @@ export const DockerAgents: Component = () => {
   };
 
   const getSystemdService = () => {
+    const token = requiresToken() ? apiToken() ?? TOKEN_PLACEHOLDER : 'disabled';
     return `[Unit]
 Description=Pulse Docker Agent
 After=network-online.target docker.service
@@ -44,8 +100,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=PULSE_TOKEN=${TOKEN_PLACEHOLDER}
-ExecStart=/usr/local/bin/pulse-docker-agent --url ${pulseUrl()} --interval 30s
+ExecStart=/usr/local/bin/pulse-docker-agent --url ${pulseUrl()} --token ${token} --interval 30s
 Restart=always
 RestartSec=5s
 User=root
@@ -155,8 +210,23 @@ WantedBy=multi-user.target`;
               <code class="text-sm text-green-400 font-mono">{getInstallCommand()}</code>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              Replace <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with the API token from{' '}
-              <span class="font-medium">Settings → Security</span>. The script downloads the agent, creates a systemd service, and starts monitoring automatically.
+              <Show
+                when={requiresToken()}
+                fallback={<span>Authentication is disabled, so Pulse runs the agent without an API token.</span>}
+              >
+                <Show
+                  when={tokenAvailable()}
+                  fallback={
+                    <>
+                      Replace <code class="px-1 bg-gray-100 dark:bg-gray-800 rounded">{TOKEN_PLACEHOLDER}</code> with the API token from{' '}
+                      <span class="font-medium">Settings → Security</span>.
+                    </>
+                  }
+                >
+                  <span>Your stored API token is pre-filled. Review the command before running to keep the token secure.</span>
+                </Show>
+              </Show>{' '}
+              The script downloads the agent, creates a systemd service, and starts monitoring automatically.
             </p>
           </div>
 
